@@ -9,8 +9,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 // ════════════════════════════════════════════════════════════════════
 
 // ── BACKEND COMPARTIDO (idéntico a la app de V+V) ───────────────────
-const SUPA_URL = "https://mvrznqpvreeskbmbaclg.supabase.co";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12cnpucXB2cmVlc2tibWJhY2xnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMTE4NjUsImV4cCI6MjA5MTU4Nzg2NX0.rOn31fHnUhMaAsAMUgEUwIwOMFNhLLLnW4L8rMNIGcE";
+const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
+const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
 
 const storage = {

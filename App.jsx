@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
 // ── SUPABASE CONFIG ─────────────────────────────────────────────
-const SUPA_URL = "https://mvrznqpvreeskbmbaclg.supabase.co";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12cnpucXB2cmVlc2tibWJhY2xnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMTE4NjUsImV4cCI6MjA5MTU4Nzg2NX0.rOn31fHnUhMaAsAMUgEUwIwOMFNhLLLnW4L8rMNIGcE";
+const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
+const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
 
 // Storage adapter: Supabase (cloud) con fallback a localStorage
@@ -111,6 +111,33 @@ async function uploadFoto(dataUrl, carpeta, nombre) {
     const path = `${carpeta}/${nombre || uid()}`;
     const remoteUrl = await mediaStorage.upload(path, dataUrl);
     return remoteUrl || dataUrl; // fallback a base64 si falla
+}
+// Comprime/redimensiona una imagen (dataURL) para que pese poco antes de subirla.
+// Una foto de celular de 4-8 MB queda en ~200-400 KB. Esto hace la subida confiable
+// y evita inflar la base de datos si llegara a caer a base64.
+function compressImage(dataUrl, maxDim = 1600, quality = 0.7) {
+    return new Promise((resolve) => {
+        try {
+            if (!dataUrl || !dataUrl.startsWith("data:image")) { resolve(dataUrl); return; }
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    let { width, height } = img;
+                    if (width > maxDim || height > maxDim) {
+                        if (width >= height) { height = Math.round(height * maxDim / width); width = maxDim; }
+                        else { width = Math.round(width * maxDim / height); height = maxDim; }
+                    }
+                    const canvas = document.createElement("canvas");
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL("image/jpeg", quality));
+                } catch { resolve(dataUrl); }
+            };
+            img.onerror = () => resolve(dataUrl);
+            img.src = dataUrl;
+        } catch { resolve(dataUrl); }
+    });
 }
 // Si la URL trae ?sync=, esta carga prioriza SIEMPRE la nube (trae lo último cargado)
 const FORCE_CLOUD = (() => { try { return new URLSearchParams(window.location.search).has("sync"); } catch { return false; } })();
@@ -811,9 +838,10 @@ function RegistroVisitas({ visitas, onUpdate, licId }) {
         setCargando(true);
         const nuevas = await Promise.all(files.map(async f => {
             const dataUrl = await toDataUrl(f);
+            const comprimida = await compressImage(dataUrl);
             const fotoId = uid();
             // Subir al bucket Supabase Storage
-            const url = await uploadFoto(dataUrl, `proyectoes/${licId || 'general'}`, fotoId);
+            const url = await uploadFoto(comprimida, `proyectoes/${licId || 'general'}`, fotoId);
             return {
                 id: fotoId,
                 url,
@@ -1285,22 +1313,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         setShowNew(false);
     }
     function upd(id, patch) {
-        setObras(p => p.map(o => {
-            if (o.id !== id) return o;
-            const updated = { ...o, ...patch };
-            // Si el patch incluye fotos o archivos, guardarlos en su propia key inmediatamente
-            if (patch.fotos !== undefined) {
-                const key = `bco_fotos_${id}`;
-                try { localStorage.setItem(key, JSON.stringify(patch.fotos)); } catch { }
-                storage.set(key, JSON.stringify(patch.fotos)).catch(() => { });
-            }
-            if (patch.archivos !== undefined) {
-                const key = `bco_archs_${id}`;
-                try { localStorage.setItem(key, JSON.stringify(patch.archivos)); } catch { }
-                storage.set(key, JSON.stringify(patch.archivos)).catch(() => { });
-            }
-            return updated;
-        }));
+        setObras(p => p.map(o => o.id === id ? { ...o, ...patch } : o));
     }
     async function handleFoto(e) {
         if (!detail) return;
@@ -1308,13 +1321,16 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         if (!files.length) return;
         const nuevas = await Promise.all(files.map(async f => {
             const dataUrl = await toDataUrl(f);
+            const comprimida = await compressImage(dataUrl);
             const fotoId = uid();
             // Subir al bucket — devuelve URL pública o base64 como fallback
-            const url = await uploadFoto(dataUrl, `obras/${detail.id}`, fotoId);
+            const url = await uploadFoto(comprimida, `obras/${detail.id}`, fotoId);
             return { id: fotoId, url, nombre: f.name, fecha: new Date().toLocaleDateString("es-AR") };
         }));
+        const fallaron = nuevas.some(n => !mediaStorage.isRemoteUrl(n.url));
         upd(detail.id, { fotos: [...(detail.fotos || []), ...nuevas] });
         e.target.value = "";
+        if (fallaron) alert("⚠ Las fotos quedaron guardadas en este dispositivo, pero NO se pudieron subir a la nube. Para que se sincronicen entre dispositivos y se vean en la app de Belfast, falta configurar el bucket de fotos 'bco-media' en Supabase (crearlo, hacerlo público y darle permisos). Mirá las instrucciones que te pasó la app.");
     }
     async function handleArch(e) {
         if (!detail) return;
