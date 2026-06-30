@@ -1,0 +1,22 @@
+V+V Construcciones — Deploy (versión plana, todo en la raíz)
+
+POR QUÉ FALLÓ ANTES: a GitHub no llegaron todos los archivos (Vercel transformó
+solo 3 módulos en vez de 34). Faltaban App.jsx / Cliente.jsx. Esta versión no usa
+subcarpetas para que la subida sea simple y completa.
+
+CÓMO SUBIRLO BIEN A GITHUB:
+1. Descomprimí este ZIP. Vas a ver 9 archivos sueltos (App.jsx, Cliente.jsx,
+   index.html, cliente.html, main-vv.jsx, main-cliente.jsx, global.css,
+   package.json, vite.config.js).
+2. En tu repo de GitHub: "Add file -> Upload files".
+3. Seleccioná los 9 archivos JUNTOS y soltálos. Confirmá que aparezcan los 9
+   en la lista antes de confirmar (sobre todo App.jsx y Cliente.jsx).
+4. "Commit changes".
+5. Vercel reconstruye solo. Esta vez debe decir "34 modules transformed".
+
+URLs al terminar:
+- V+V:     https://tu-proyecto.vercel.app/
+- Cliente: https://tu-proyecto.vercel.app/cliente.html
+
+NOTA: si en el repo te quedó una carpeta vieja "src", podés borrarla; no molesta,
+pero conviene dejar el repo limpio.
