@@ -627,7 +627,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
         // Avisar pedidos de MATERIALES nuevos y dejar listo el WhatsApp al jefe de obra
         const rmp = await storage.get("vv_matpedidos");
         if (rmp?.value) {
-          const mps = JSON.parse(rmp.value).filter(p => p.de === "vv");
+          const mps = JSON.parse(rmp.value).filter(p => p.de !== "cliente");
           if (matSeen.current === null) matSeen.current = new Set(mps.map(p => p.id));
           else {
             const nuevosMat = mps.filter(p => !matSeen.current.has(p.id));
@@ -988,14 +988,14 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
     if (phone) { const clean = String(phone).replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : ("549" + clean); return `https://wa.me/${num}?text=${t}`; }
     return `https://wa.me/?text=${t}`;
   }
-  const lista = (matpedidos || []).filter(p => p.de === "vv").sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const lista = (matpedidos || []).filter(p => p.de !== "cliente").sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "16px 20px" }}>
       <Eyebrow T={T}>Pedidos de materiales de V+V</Eyebrow>
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px", lineHeight: 1.55 }}>Todavía no recibiste pedidos de materiales.<br />Cuando V+V cargue uno, aparece acá.</div>}
       {lista.map(p => { const jefes = [...(contactos || []).filter(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()), ...(personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim())]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${p.leido ? T.border : "#EF4444"}`, background: p.leido ? T.card : "#FFFBEB" }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{nomObra(p.obra_id)} · {p.fecha}{!p.leido && <span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: "#EF4444", borderRadius: 5, padding: "2px 7px" }}>NUEVO</span>}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{nomObra(p.obra_id)} · {p.fecha}<span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.de === "vv" ? "V+V" : (p.empresa || "Contratista")}</span>{!p.leido && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, color: "#fff", background: "#EF4444", borderRadius: 5, padding: "2px 7px" }}>NUEVO</span>}</div>
           <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n")}</div>
           {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 5, fontStyle: "italic" }}>{p.nota}</div>}
         </div>
@@ -1156,7 +1156,7 @@ function ClienteApp() {
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
-  const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length;
+  const unreadMat = (matpedidos || []).filter(p => p.de !== "cliente" && !p.leido).length;
   const lastPed = useRef(null);
   const lastForms = useRef(null);
   const [toast, setToast] = useState(null);
