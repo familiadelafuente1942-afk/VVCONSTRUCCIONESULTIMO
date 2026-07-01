@@ -427,7 +427,7 @@ function Toast({ T, toast }) {
 const NAV = [{ id: "asistente", label: "Asistente IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "obras", label: "Obra", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
-function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, onPedidos }) {
+function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], onPedidos }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
@@ -529,7 +529,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
             nuevosMat.forEach(p => matSeen.current.add(p.id));
             for (const p of nuevosMat) {
               const obraN = obras.find(o => o.id === p.obra_id)?.nombre || "obra";
-              const jefe = (personal || []).find(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim());
+              const jefe = (contactos || []).find(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()) || (personal || []).find(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim());
               const lines = p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n");
               const txt = `*Pedido de materiales* — ${obraN}\nFecha: ${p.fecha}\n\n${lines}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
               const t = encodeURIComponent(txt);
@@ -674,14 +674,18 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
 }
 
 // ── PANTALLA: PERSONAL (cliente) ─────────────────────────────────────
-function PersonalScreen({ T, cfg, personal, setPersonal, obras }) {
+function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], setContactos }) {
   const [cargar, setCargar] = useState(false);
   const [sitio, setSitio] = useState("");
   const [sel, setSel] = useState([]);
   const [filtroObra, setFiltroObra] = useState("");
   const [nomina, setNomina] = useState(null);
   const [detalle, setDetalle] = useState(null);
+  const [cForm, setCForm] = useState(null);
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
+  function nuevoC() { setCForm({ nombre: "", rol: "Jefe de obra", obra_id: obras[0]?.id || "", telefono: "" }); }
+  function guardarC() { if (!cForm.nombre.trim() || !cForm.telefono.trim()) { alert("Poné al menos nombre y teléfono."); return; } if (cForm.id) setContactos(p => (p || []).map(x => x.id === cForm.id ? cForm : x)); else setContactos(p => [...(p || []), { ...cForm, id: uid() + Date.now() }]); setCForm(null); }
+  function borrarC(id) { if (confirm("¿Eliminar este contacto?")) setContactos(p => (p || []).filter(x => x.id !== id)); }
   const diasHasta = (s) => { if (!s) return null; const [d, m, y] = s.split("/"); return Math.ceil((new Date(`20${y}`, m - 1, d) - new Date()) / 86400000); };
   const lista = personal.filter(p => !filtroObra || p.obra_id === filtroObra);
   const sitios = [...new Set(obras.map(o => o.nombre))];
@@ -699,6 +703,18 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras }) {
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "16px 20px" }}>
+      <Eyebrow T={T}>Contactos para WhatsApp (jefes de obra)</Eyebrow>
+      <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.55, marginBottom: 10 }}>Tu agenda propia de Belfast. Estos teléfonos los usa la app para reenviar los pedidos de materiales por WhatsApp.</div>
+      {(contactos || []).map(c => (<Card T={T} key={c.id} style={{ padding: 12, marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#25D366", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>📲</div>
+          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{c.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{c.rol || "—"} · {nomObra(c.obra_id)} · {c.telefono}</div></div>
+          <button onClick={() => setCForm(c)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+          <button onClick={() => borrarC(c.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, width: 30, height: 30, fontSize: 13, cursor: "pointer" }}>✕</button>
+        </div>
+      </Card>))}
+      <button onClick={nuevoC} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, marginBottom: 20, cursor: "pointer" }}>＋ Agregar contacto de WhatsApp</button>
+      <Eyebrow T={T}>Personal de obra (V+V)</Eyebrow>
       <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14 }}>Personal de V+V Construcciones. Desde acá podés cargar trabajadores al barrio/sitio para tramitar el acceso.</div>
       <button onClick={() => { setCargar(true); setNomina(null); }} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, marginBottom: 16 }}>＋ Cargar personal a un sitio</button>
       {personal.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 18px" }}>V+V todavía no cargó personal.</div>}
@@ -758,10 +774,24 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras }) {
         </>}
       </div>
     </div>}
+
+    {cForm && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={() => setCForm(null)}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 1180, margin: "0 auto", padding: "20px", maxHeight: "88vh", overflowY: "auto", animation: "up .25s ease" }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 14 }}>{cForm.id ? "Editar contacto" : "Nuevo contacto de WhatsApp"}</div>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Nombre</label>
+        <input value={cForm.nombre} onChange={e => setCForm({ ...cForm, nombre: e.target.value })} placeholder="Ej: Juan Pérez" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }} />
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Rol</label>
+        <input value={cForm.rol} onChange={e => setCForm({ ...cForm, rol: e.target.value })} placeholder="Jefe de obra" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }} />
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Obra</label>
+        <select value={cForm.obra_id} onChange={e => setCForm({ ...cForm, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }}><option value="">Sin obra</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Teléfono (WhatsApp)</label>
+        <input value={cForm.telefono} onChange={e => setCForm({ ...cForm, telefono: e.target.value })} placeholder="Ej: 11 5555 4444" type="tel" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 4px" }} />
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 14 }}>Con característica (ej. 11 para CABA/GBA). La app le antepone el código de país.</div>
+        <PBtn T={T} full onClick={guardarC}>{cForm.id ? "Guardar cambios" : "Agregar contacto"}</PBtn>
+      </div>
+    </div>}
   </div>);
 }
-
-// ── PANTALLA: INFORMES TÉCNICOS (cliente, solo lectura) ──────────────
 function InformesScreen({ T, obras, formularios = [] }) {
   const [filtro, setFiltro] = useState("");
   const [open, setOpen] = useState(null);
@@ -826,7 +856,7 @@ function FormulariosScreen({ T, obras, formularios = [] }) {
   </div>);
 }
 
-function MaterialesScreen({ T, cfg, obras, personal = [], matpedidos = [], setMatpedidos }) {
+function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matpedidos = [], setMatpedidos }) {
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const [waFor, setWaFor] = useState(null);
   function levantar(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, leido: true, leidoFecha: hoyStr() } : x)); }
@@ -844,7 +874,7 @@ function MaterialesScreen({ T, cfg, obras, personal = [], matpedidos = [], setMa
     <div style={{ padding: "16px 20px" }}>
       <Eyebrow T={T}>Pedidos de materiales de V+V</Eyebrow>
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px", lineHeight: 1.55 }}>Todavía no recibiste pedidos de materiales.<br />Cuando V+V cargue uno, aparece acá.</div>}
-      {lista.map(p => { const jefes = (personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim()); return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${p.leido ? T.border : "#EF4444"}`, background: p.leido ? T.card : "#FFFBEB" }}>
+      {lista.map(p => { const jefes = [...(contactos || []).filter(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()), ...(personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim())]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${p.leido ? T.border : "#EF4444"}`, background: p.leido ? T.card : "#FFFBEB" }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{nomObra(p.obra_id)} · {p.fecha}{!p.leido && <span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: "#EF4444", borderRadius: 5, padding: "2px 7px" }}>NUEVO</span>}</div>
           <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n")}</div>
@@ -1005,6 +1035,7 @@ function ClienteApp() {
   const [gestion] = useStored("vv_gestion", {});
   const [formularios] = useStored("vv_formularios", []);
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
+  const [contactos, setContactos] = useStored("cliente_contactos", []);
   const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length;
   const lastPed = useRef(null);
   const lastForms = useRef(null);
@@ -1134,11 +1165,11 @@ function ClienteApp() {
       {screen === "obras" && <WebClientHero T={T} cfg={cfg} obras={obras} />}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} onPedidos={() => setScreen("pedidos")} />}
+          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} onPedidos={() => setScreen("pedidos")} />}
           {screen === "obras" && <ObrasScreen T={T} obras={obras} tareas={tareas} cfg={cfg} formularios={formularios} />}
-          {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} />}
+          {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
-          {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} matpedidos={matpedidos} setMatpedidos={setMatpedidos} />}
+          {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} />}
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} />}

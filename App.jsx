@@ -2005,7 +2005,7 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nombre}</div>
-              <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {obraNom(obras, p.obra_id)}</div>
+              <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {obraNom(obras, p.obra_id)}{p.telefono ? ` · 📲 ${p.telefono}` : ""}</div>
               {(p.sitios || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{p.sitios.map((s, i) => <span key={i} style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", background: "#ECFDF5", borderRadius: 5, padding: "2px 6px" }}>✓ {s.sitio}</span>)}</div>}
             </div>
             {vc > 0
@@ -2080,7 +2080,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const cn = cfg?.clienteNombre || "el cliente";
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)})`).join("\n");
     const li = lics.map(l => `· ${l.nombre} (${l.estado}, ${l.monto || "s/monto"}, ${l.sector})`).join("\n");
-    const pe = personal.map(p => `· ${p.nombre} — ${p.rol} en ${obraNom(obras, p.obra_id)}`).join("\n");
+    const pe = personal.map(p => `· ${p.nombre} — ${p.rol} en ${obraNom(obras, p.obra_id)}${p.telefono ? ` (WhatsApp ${p.telefono})` : ""}`).join("\n");
     const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "vv" ? "enviado a" : "recibido de"} ${p.de === "vv" ? cn : cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
     const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional. Tus capacidades:
@@ -2096,6 +2096,7 @@ REGLA CLAVE de comunicación:
 - Si te piden mandar un MENSAJE a ${cn} (a la persona/empresa, para su pantalla de Mensajes) → usá "enviar_mensaje".
 - "crear_pedido" es solo para pedidos formales de definiciones o documentación.
 - Si te piden PEDIR o CARGAR MATERIALES (ej: "necesito 50 bolsas de cemento y 20 hierros del 8 para Castores", "cargá un pedido de materiales de…"), usá "pedido_materiales" con la lista de items (nombre, cantidad, unidad) y la obra. Se carga solo en el registro "Pedido de materiales" y se le envía a ${cn}. Ideal para dictarlo desde el celular sin abrir el formulario. Si no aclaran la obra, usá la que mencionen o preguntá cuál.
+- Si te piden MANDAR UN WHATSAPP a alguien del personal (ej: "mandale un WhatsApp al jefe de obra de Castores que…"), usá "whatsapp" con la persona/rol, la obra si ayuda, y el texto. Uso los teléfonos cargados en Personal. Te dejo el botón de WhatsApp listo para enviar.
 Nunca digas que no podés comunicarte: SÍ podés.
 
 OBRAS:\n${ob || "(sin obras)"}
@@ -2115,6 +2116,7 @@ PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} 
 {"tipo":"enviar_mensaje","texto":"el mensaje para ${cn}"}
 {"tipo":"preguntar_ia","texto":"la consulta para la IA de ${cn}"}
 {"tipo":"pedido_materiales","obra":"nombre de la obra","items":[{"nombre":"Cemento","cantidad":"50","unidad":"bolsas"},{"nombre":"Hierro del 8","cantidad":"20","unidad":"u"}],"nota":"opcional"}
+{"tipo":"whatsapp","persona":"nombre o rol de la persona (ej: jefe de obra)","obra":"opcional: obra para ubicarlo","texto":"el mensaje a enviar por WhatsApp"}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: todos los de esa obra"}
 Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el bloque. La acción se ejecuta cuando el usuario la confirma.`;
   }
@@ -2130,7 +2132,19 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     const r = await callAI(next, buildSystem(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(r);
     let extra = {};
-    if (accion) { const res = await ejecutarAccion(accion, "vv", { setPedidos: db.setPedidos, personal: db.personal, setPersonal: db.setPersonal, obras: db.obras, setMensajes: db.setMensajes, setMatpedidos: db.setMatpedidos }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
+    if (accion && accion.tipo === "whatsapp") {
+      const pers = db.personal || [];
+      const q = String(accion.persona || accion.rol || "").toLowerCase();
+      const obraId = accion.obra ? (db.obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase()))?.id : null;
+      let per = q ? pers.find(p => (p.nombre || "").toLowerCase().includes(q)) : null;
+      if (!per && obraId) per = pers.find(p => p.obra_id === obraId && (p.telefono || "").trim());
+      if (!per && q) per = pers.find(p => (p.rol || "").toLowerCase().includes(q) && (p.telefono || "").trim());
+      const t = encodeURIComponent(accion.texto || "");
+      let url, label, res;
+      if (per && (per.telefono || "").trim()) { const clean = String(per.telefono).replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : ("549" + clean); url = `https://wa.me/${num}?text=${t}`; label = `Enviar a ${per.nombre}`; res = `WhatsApp listo para ${per.nombre}${per.telefono ? " (" + per.telefono + ")" : ""}.`; }
+      else { url = `https://wa.me/?text=${t}`; label = "Abrir WhatsApp"; res = per ? `${per.nombre} no tiene teléfono cargado en Personal. Abrí WhatsApp y elegí el contacto.` : "No encontré a esa persona con teléfono en Personal. Cargale el WhatsApp o elegí el contacto."; }
+      extra = { accionDone: true, accionResultado: res, waLink: url, waLabel: label };
+    } else if (accion) { const res = await ejecutarAccion(accion, "vv", { setPedidos: db.setPedidos, personal: db.personal, setPersonal: db.setPersonal, obras: db.obras, setMensajes: db.setMensajes, setMatpedidos: db.setMatpedidos }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
     setMsgs([...next, { role: "assistant", content: limpio, ...extra }]); setLoading(false);
   }
   // ── Canal directo IA↔IA: muestra lo que consulta/responde la otra IA y responde solo ──
@@ -2208,6 +2222,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       </div>}
       {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
         <div style={{ maxWidth: "84%", background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{m.content}</div>
+        {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
         {m.accion && !m.accionDone && !m.accionDescartada && <div style={{ maxWidth: "84%", marginTop: 7, background: T.al, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 13px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Acción propuesta</div>
           <div style={{ fontSize: 12.5, color: T.text, marginBottom: 10 }}>{accionLabel(m.accion)}</div>
@@ -2910,7 +2925,7 @@ async function ejecutarAccion(accion, miSide, ctx){
   }
   return null;
 }
-function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="preguntar_ia") return `Consultar a la IA de la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="pedido_materiales") return `Pedido de materiales → Belfast: ${(a.items||[]).map(it=>`${it.cantidad||""} ${it.unidad||""} ${it.nombre}`.trim()).join(", ").slice(0,70)}`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
+function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="preguntar_ia") return `Consultar a la IA de la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="pedido_materiales") return `Pedido de materiales → Belfast: ${(a.items||[]).map(it=>`${it.cantidad||""} ${it.unidad||""} ${it.nombre}`.trim()).join(", ").slice(0,70)}`; if(a.tipo==="whatsapp") return `WhatsApp a ${a.persona||a.rol||"contacto"}: “${(a.texto||"").slice(0,50)}”`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
 
 function PedidosView({ db, cfg, apiKey, onBack }) {
   const { pedidos, setPedidos, obras } = db;
