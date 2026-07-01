@@ -477,6 +477,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
   const pedSeen = useRef(null);
+  const matSeen = useRef(null);
   useEffect(() => {
     const iv = setInterval(async () => {
       try {
@@ -518,6 +519,27 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
             if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(p => ({ role: "assistant", content: `📥 Te llegó un pedido de V+V: "${p.asunto}"${p.detalle ? " — " + p.detalle : ""}${p.prioridad === "alta" ? " ⚠ URGENTE" : ""}. Está en Pedidos. Decime si querés que lo responda.` }))]);
           }
         }
+        // Avisar pedidos de MATERIALES nuevos y dejar listo el WhatsApp al jefe de obra
+        const rmp = await storage.get("vv_matpedidos");
+        if (rmp?.value) {
+          const mps = JSON.parse(rmp.value).filter(p => p.de === "vv");
+          if (matSeen.current === null) matSeen.current = new Set(mps.map(p => p.id));
+          else {
+            const nuevosMat = mps.filter(p => !matSeen.current.has(p.id));
+            nuevosMat.forEach(p => matSeen.current.add(p.id));
+            for (const p of nuevosMat) {
+              const obraN = obras.find(o => o.id === p.obra_id)?.nombre || "obra";
+              const jefe = (personal || []).find(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim());
+              const lines = p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n");
+              const txt = `*Pedido de materiales* — ${obraN}\nFecha: ${p.fecha}\n\n${lines}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
+              const t = encodeURIComponent(txt);
+              const clean = jefe ? String(jefe.telefono).replace(/\D/g, "") : "";
+              const num = clean ? (clean.startsWith("54") ? clean : ("549" + clean)) : "";
+              const url = num ? `https://wa.me/${num}?text=${t}` : `https://wa.me/?text=${t}`;
+              setMsgs(prev => [...prev, { role: "assistant", content: `📲 Llegó un pedido de materiales para ${obraN}.${jefe ? ` Te lo dejo listo para reenviar al jefe de obra ${jefe.nombre} por WhatsApp:` : ` Te lo dejo listo para reenviar por WhatsApp (elegí el contacto):`}`, waLink: url, waLabel: jefe ? `Enviar a ${jefe.nombre}` : "Abrir WhatsApp" }]);
+            }
+          }
+        }
       } catch { }
     }, 6000);
     return () => clearInterval(iv);
@@ -536,6 +558,8 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
           <div style={{ maxWidth: "84%", background: m.role === "user" ? T.accent : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{m.content}</div>
+          {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
+          {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
           {m.accion && !m.accionDone && !m.accionDescartada && <div style={{ maxWidth: "84%", marginTop: 7, background: T.bg, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 13px" }}>
             <div style={{ fontSize: 10.5, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Acción propuesta</div>
             <div style={{ fontSize: 12.5, color: T.text, marginBottom: 10 }}>{accionLabel(m.accion)}</div>
@@ -802,22 +826,42 @@ function FormulariosScreen({ T, obras, formularios = [] }) {
   </div>);
 }
 
-function MaterialesScreen({ T, obras, matpedidos = [], setMatpedidos }) {
+function MaterialesScreen({ T, cfg, obras, personal = [], matpedidos = [], setMatpedidos }) {
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
+  const [waFor, setWaFor] = useState(null);
   function levantar(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, leido: true, leidoFecha: hoyStr() } : x)); }
+  function waText(p) {
+    const lines = p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
+    return `*Pedido de materiales* — ${nomObra(p.obra_id)}\nFecha: ${p.fecha}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
+  }
+  function waLink(text, phone) {
+    const t = encodeURIComponent(text);
+    if (phone) { const clean = String(phone).replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : ("549" + clean); return `https://wa.me/${num}?text=${t}`; }
+    return `https://wa.me/?text=${t}`;
+  }
   const lista = (matpedidos || []).filter(p => p.de === "vv").sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "16px 20px" }}>
       <Eyebrow T={T}>Pedidos de materiales de V+V</Eyebrow>
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px", lineHeight: 1.55 }}>Todavía no recibiste pedidos de materiales.<br />Cuando V+V cargue uno, aparece acá.</div>}
-      {lista.map(p => (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${p.leido ? T.border : "#EF4444"}`, background: p.leido ? T.card : "#FFFBEB" }}>
+      {lista.map(p => { const jefes = (personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim()); return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${p.leido ? T.border : "#EF4444"}`, background: p.leido ? T.card : "#FFFBEB" }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{nomObra(p.obra_id)} · {p.fecha}{!p.leido && <span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: "#EF4444", borderRadius: 5, padding: "2px 7px" }}>NUEVO</span>}</div>
-          <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5 }}>{p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n")}</div>
+          <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n")}</div>
           {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 5, fontStyle: "italic" }}>{p.nota}</div>}
         </div>
-        {!p.leido ? <button onClick={() => levantar(p.id)} style={{ width: "100%", marginTop: 11, background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>Levantar / marcar recibido</button> : <div style={{ fontSize: 10.5, fontWeight: 700, color: "#16A34A", marginTop: 8 }}>✓ Levantado{p.leidoFecha ? " · " + p.leidoFecha : ""}</div>}
-      </Card>))}
+        <div style={{ display: "flex", gap: 8, marginTop: 11 }}>
+          {!p.leido && <button onClick={() => levantar(p.id)} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>Levantar</button>}
+          <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar por WhatsApp</button>
+        </div>
+        {p.leido && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#16A34A", marginTop: 8 }}>✓ Levantado{p.leidoFecha ? " · " + p.leidoFecha : ""}</div>}
+        {waFor === p.id && <div style={{ marginTop: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
+          {jefes.map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => setWaFor(null)} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}>📲 {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
+          <a href={waLink(waText(p))} target="_blank" rel="noreferrer" onClick={() => setWaFor(null)} style={{ display: "block", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Elegir contacto de WhatsApp…</a>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>Se abre WhatsApp con el pedido ya escrito. Los jefes de obra con teléfono cargado aparecen arriba.</div>
+        </div>}
+      </Card>); })}
     </div>
   </div>);
 }
@@ -1094,7 +1138,7 @@ function ClienteApp() {
           {screen === "obras" && <ObrasScreen T={T} obras={obras} tareas={tareas} cfg={cfg} formularios={formularios} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
-          {screen === "materiales" && <MaterialesScreen T={T} obras={obras} matpedidos={matpedidos} setMatpedidos={setMatpedidos} />}
+          {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} matpedidos={matpedidos} setMatpedidos={setMatpedidos} />}
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} />}

@@ -2095,6 +2095,7 @@ REGLA CLAVE de comunicación:
 - BANCOS DE DATOS CONECTADOS (MUY IMPORTANTE): tu app y la de ${cn} son dos bancos de datos conectados por las IA. Si te piden un DATO (de una obra, personal, avance, documento, etc.) que NO figura en tus datos de arriba, NO respondas "no lo tengo": usá "preguntar_ia" para que la IA de ${cn} lo busque en SU app y te lo pase. Avisale al usuario "no lo tengo acá, se lo consulto a la IA de ${cn}". (OJO: para información EXTERNA o actual —precios, normativa, proveedores— usá la BÚSQUEDA WEB, no preguntar_ia.)
 - Si te piden mandar un MENSAJE a ${cn} (a la persona/empresa, para su pantalla de Mensajes) → usá "enviar_mensaje".
 - "crear_pedido" es solo para pedidos formales de definiciones o documentación.
+- Si te piden PEDIR o CARGAR MATERIALES (ej: "necesito 50 bolsas de cemento y 20 hierros del 8 para Castores", "cargá un pedido de materiales de…"), usá "pedido_materiales" con la lista de items (nombre, cantidad, unidad) y la obra. Se carga solo en el registro "Pedido de materiales" y se le envía a ${cn}. Ideal para dictarlo desde el celular sin abrir el formulario. Si no aclaran la obra, usá la que mencionen o preguntá cuál.
 Nunca digas que no podés comunicarte: SÍ podés.
 
 OBRAS:\n${ob || "(sin obras)"}
@@ -2113,6 +2114,7 @@ PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} 
 {"tipo":"resolver_pedido","pedido_id":"ID_EXACTO"}
 {"tipo":"enviar_mensaje","texto":"el mensaje para ${cn}"}
 {"tipo":"preguntar_ia","texto":"la consulta para la IA de ${cn}"}
+{"tipo":"pedido_materiales","obra":"nombre de la obra","items":[{"nombre":"Cemento","cantidad":"50","unidad":"bolsas"},{"nombre":"Hierro del 8","cantidad":"20","unidad":"u"}],"nota":"opcional"}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: todos los de esa obra"}
 Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el bloque. La acción se ejecuta cuando el usuario la confirma.`;
   }
@@ -2128,7 +2130,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     const r = await callAI(next, buildSystem(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(r);
     let extra = {};
-    if (accion) { const res = await ejecutarAccion(accion, "vv", { setPedidos: db.setPedidos, personal: db.personal, setPersonal: db.setPersonal, obras: db.obras, setMensajes: db.setMensajes }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
+    if (accion) { const res = await ejecutarAccion(accion, "vv", { setPedidos: db.setPedidos, personal: db.personal, setPersonal: db.setPersonal, obras: db.obras, setMensajes: db.setMensajes, setMatpedidos: db.setMatpedidos }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
     setMsgs([...next, { role: "assistant", content: limpio, ...extra }]); setLoading(false);
   }
   // ── Canal directo IA↔IA: muestra lo que consulta/responde la otra IA y responde solo ──
@@ -2894,9 +2896,21 @@ async function ejecutarAccion(accion, miSide, ctx){
     const next=[...arr,msg]; try{ localStorage.setItem("ia_dialogo",JSON.stringify(next)); }catch{} await storage.set("ia_dialogo",JSON.stringify(next)).catch(()=>{});
     return "Le pasé tu consulta directo a la IA de la otra empresa. Te muestro acá la respuesta apenas conteste.";
   }
+  if(accion.tipo==="pedido_materiales"){
+    const obs=ctx.obras||[];
+    const obra_id=accion.obra_id||(accion.obra?obs.find(o=>(o.nombre||"").toLowerCase().includes(String(accion.obra).toLowerCase()))?.id:"")||(obs[0]?.id||"");
+    const items=Array.isArray(accion.items)?accion.items.filter(it=>it&&(it.nombre||"").trim()).map(it=>({nombre:String(it.nombre).trim(),cantidad:it.cantidad!=null?String(it.cantidad):"",unidad:it.unidad?String(it.unidad):"u"})):[];
+    if(!items.length) return "No pude leer los materiales. Decime qué necesitás (material y cantidad) y de qué obra.";
+    const p={ id:uid()+Date.now(), obra_id, items, nota:accion.nota||"", fecha:hoyStr(), ts:Date.now(), de:"vv", leido:false, leidoFecha:"" };
+    let arr=[]; try{const r=await storage.get("vv_matpedidos"); if(r?.value) arr=JSON.parse(r.value);}catch{}
+    const next=[p,...arr]; try{ localStorage.setItem("vv_matpedidos",JSON.stringify(next)); }catch{} await storage.set("vv_matpedidos",JSON.stringify(next)).catch(()=>{});
+    if(ctx.setMatpedidos) ctx.setMatpedidos(next);
+    const resumen=items.map(it=>`${it.cantidad} ${it.unidad} ${it.nombre}`.trim()).join(", ");
+    return `Pedido de materiales cargado y enviado a Belfast (${obraNom(obs,obra_id)}): ${resumen}. Le queda como no leído hasta que lo levante.`;
+  }
   return null;
 }
-function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="preguntar_ia") return `Consultar a la IA de la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
+function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="preguntar_ia") return `Consultar a la IA de la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="pedido_materiales") return `Pedido de materiales → Belfast: ${(a.items||[]).map(it=>`${it.cantidad||""} ${it.unidad||""} ${it.nombre}`.trim()).join(", ").slice(0,70)}`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
 
 function PedidosView({ db, cfg, apiKey, onBack }) {
   const { pedidos, setPedidos, obras } = db;
