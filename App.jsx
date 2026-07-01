@@ -2231,13 +2231,24 @@ function SubcontratosView({ db, onBack }) {
 
 // ── INFORMES IA ──────────────────────────────────────────────────────
 function InformesView({ db, apiKey, onBack }) {
-  const { obras, setObras } = db;
+  const { obras, setObras, setMensajes } = db;
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   const [filtro, setFiltro] = useState("");
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(null);
   const [nuevo, setNuevo] = useState(null);
   const fileRef = useRef(null);
+  async function enviarABelfast(inf) {
+    if (!inf) return;
+    const resumen = (inf.texto || "").slice(0, 500);
+    const msg = { id: uid() + Date.now(), from: "vv", texto: `📄 Informe de obra — ${inf.obra}\n${inf.titulo || ""}${resumen ? "\n\n" + resumen : ""}`, fecha: hoyStr(), ts: Date.now(), archivos: inf.archivos || [] };
+    let arr = []; try { const r = await storage.get("vv_mensajes"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+    const next = [...arr, msg]; try { localStorage.setItem("vv_mensajes", JSON.stringify(next)); } catch { } await storage.set("vv_mensajes", JSON.stringify(next)).catch(() => { });
+    if (setMensajes) setMensajes(next);
+    setObras(p => p.map(x => x.id === inf.obra_id ? { ...x, informes: (x.informes || []).map(i => i.id === inf.id ? { ...i, enviado: true, enviadoFecha: hoyStr() } : i) } : x));
+    setOpen(o => o ? { ...o, enviado: true } : o);
+    alert("✓ Informe enviado a Belfast.\n\nLe llega a Mensajes y ya lo ve en su pestaña Informes.");
+  }
   const todos = obras.flatMap(o => (o.informes || []).map(inf => ({ ...inf, obra: o.nombre, obra_id: o.id }))).filter(inf => !filtro || inf.obra_id === filtro).sort((a, b) => (b.id > a.id ? 1 : -1));
   async function generar() {
     const o = obras.find(x => x.id === obraId); if (!o) return; setLoading(true);
@@ -2273,7 +2284,7 @@ function InformesView({ db, apiKey, onBack }) {
       {todos.length === 0 && <EmptyMsg>Sin informes para esta obra.</EmptyMsg>}
       {todos.map(inf => (<RowItem key={inf.id} onClick={() => setOpen(inf)} onDelete={() => setObras(p => p.map(x => x.id === inf.obra_id ? { ...x, informes: x.informes.filter(i => i.id !== inf.id) } : x))}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{inf.titulo || "Informe"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{inf.obra} · {inf.fecha}{(inf.archivos || []).length ? ` · ${inf.archivos.length} adj.` : ""}</div></div>
+          <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{inf.titulo || "Informe"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{inf.obra} · {inf.fecha}{(inf.archivos || []).length ? ` · ${inf.archivos.length} adj.` : ""}{inf.enviado ? " · ✓ enviado a Belfast" : ""}</div></div>
           <Badge color={inf.tipo === "ia" ? "#8B5CF6" : "#3B82F6"} bg={inf.tipo === "ia" ? "#F5F3FF" : "#EFF6FF"}>{inf.tipo === "ia" ? "IA" : "Técnico"}</Badge>
         </div>
       </RowItem>))}
@@ -2282,6 +2293,8 @@ function InformesView({ db, apiKey, onBack }) {
       <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 8 }}>{open.titulo || "Informe"}</div>
       {open.texto && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "14px 15px", fontSize: 12.5, color: T.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{open.texto}</div>}
       {(open.archivos || []).map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 8, fontSize: 13, fontWeight: 700, color: T.accent }}>📎 {a.nombre}</a>)}
+      <button onClick={() => enviarABelfast(open)} style={{ width: "100%", marginTop: 16, background: open.enviado ? T.al : T.navy, color: open.enviado ? T.accent : "#fff", border: open.enviado ? `1px solid ${T.accent}` : "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", borderBottom: open.enviado ? undefined : `2px solid ${BRASS}` }}>{open.enviado ? "✓ Enviado a Belfast · reenviar" : "📤 Enviar a Belfast"}</button>
+      <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center", marginTop: 8, lineHeight: 1.5 }}>Los informes ya aparecen solos en la pestaña Informes de Belfast. Con este botón, además le llega un aviso a Mensajes.</div>
     </Sheet>}
     {nuevo && <Sheet title="Nuevo informe técnico" onClose={() => setNuevo(null)}>
       <Field label="Obra"><Sel value={nuevo.obra_id} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
