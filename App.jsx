@@ -2099,6 +2099,70 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
   const bottomRef = useRef(null);
   const recRef = useRef(null);
   const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const cnDeb = cfg?.clienteSigla || cfg?.clienteNombre || "Belfast";
+  const DEBATE_MAX = 18;
+  const [debateOpen, setDebateOpen] = useState(false);
+  const [debateTema, setDebateTema] = useState("");
+  const [debateActive, setDebateActive] = useState(false);
+  const debateBusy = useRef(false);
+  const debateSeen = useRef(0);
+  async function saveDebate(deb) { try { localStorage.setItem("ia_debate", JSON.stringify(deb)); } catch { } await storage.set("ia_debate", JSON.stringify(deb)).catch(() => { }); }
+  async function runDebateTurn() {
+    if (debateBusy.current || !apiKey) return;
+    debateBusy.current = true;
+    try {
+      const r = await storage.get("ia_debate"); const deb = r?.value ? JSON.parse(r.value) : null;
+      if (!deb || !deb.active) { setDebateActive(false); debateBusy.current = false; return; }
+      if ((deb.turnos || []).length >= deb.maxTurnos) { deb.active = false; await saveDebate(deb); setDebateActive(false); debateBusy.current = false; return; }
+      const last = deb.turnos[deb.turnos.length - 1];
+      const myTurn = deb.turnos.length === 0 ? deb.startedBy === "vv" : last.from !== "vv";
+      if (!myTurn) { debateBusy.current = false; return; }
+      const convo = deb.turnos.map(t => `${t.from === "vv" ? "V+V" : cnDeb}: ${t.texto}`).join("\n");
+      const sysD = `Sos la IA de V+V Construcciones en una CHARLA TÉCNICA con la IA de ${cnDeb} sobre: "${deb.tema}". Es colaborativa: ambas suman y profundizan (no discuten). Aportá EL SIGUIENTE turno: información nueva y concreta, profundizá un aspecto no tocado, y cerrá con un gancho o pregunta para que la otra IA siga. NO repitas lo ya dicho. Español rioplatense, tono técnico de construcción. Máximo 3-4 oraciones.`;
+      const userD = deb.turnos.length === 0 ? `Arrancá la charla técnica sobre "${deb.tema}".` : `Charla hasta ahora:\n${convo}\n\nDá tu siguiente intervención.`;
+      const resp = await callAI([{ role: "user", content: userD }], sysD, apiKey, false);
+      const r2 = await storage.get("ia_debate"); const deb2 = r2?.value ? JSON.parse(r2.value) : deb;
+      if (!deb2.active) { setDebateActive(false); debateBusy.current = false; return; }
+      deb2.turnos = [...(deb2.turnos || []), { from: "vv", texto: (resp || "").trim(), ts: Date.now() }];
+      if (deb2.turnos.length >= deb2.maxTurnos) deb2.active = false;
+      await saveDebate(deb2);
+    } catch { }
+    debateBusy.current = false;
+  }
+  async function startDebate() {
+    const tema = debateTema.trim(); if (!tema) return;
+    if (!apiKey) { alert("Configurá la API Key en Más → Configuración para usar el debate."); return; }
+    const deb = { active: true, tema, turnos: [], maxTurnos: DEBATE_MAX, startedBy: "vv", ts: Date.now() };
+    await saveDebate(deb); debateSeen.current = 0; setDebateActive(true); setDebateOpen(false); setDebateTema("");
+    setMsgs(prev => [...prev, { role: "assistant", content: `🎙 Debate técnico iniciado con la IA de ${cnDeb}: "${tema}". Dejá las dos apps abiertas y mirá cómo se van respondiendo en vivo.`, debate: true }]);
+    runDebateTurn();
+  }
+  async function stopDebate() {
+    const r = await storage.get("ia_debate"); const deb = r?.value ? JSON.parse(r.value) : null;
+    if (deb) { deb.active = false; await saveDebate(deb); }
+    setDebateActive(false); setMsgs(prev => [...prev, { role: "assistant", content: "🎙 Debate frenado.", debate: true }]);
+  }
+  useEffect(() => {
+    const iv = setInterval(async () => {
+      try {
+        const r = await storage.get("ia_debate"); const deb = r?.value ? JSON.parse(r.value) : null;
+        if (!deb) return;
+        if ((deb.turnos || []).length > debateSeen.current) {
+          const nuevos = deb.turnos.slice(debateSeen.current); debateSeen.current = deb.turnos.length;
+          setMsgs(prev => [...prev, ...nuevos.map(t => ({ role: "assistant", content: `🎙 IA ${t.from === "vv" ? "V+V" : cnDeb}: ${t.texto}`, debate: true }))]);
+          if (deb.active) setDebateActive(true);
+          if (!deb.active && (deb.turnos || []).length >= deb.maxTurnos) setMsgs(prev => [...prev, { role: "assistant", content: "🎙 Debate finalizado.", debate: true }]);
+        }
+        if (deb.active && (deb.turnos || []).length < deb.maxTurnos) {
+          const last = deb.turnos[deb.turnos.length - 1];
+          const myTurn = deb.turnos.length === 0 ? deb.startedBy === "vv" : last.from !== "vv";
+          if (myTurn) runDebateTurn();
+        }
+        setDebateActive(!!deb.active);
+      } catch { }
+    }, 7000);
+    return () => clearInterval(iv);
+  }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, loading]);
 
@@ -2289,8 +2353,18 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     <div style={{ borderTop: `1px solid ${T.border}`, background: T.card, padding: "10px 14px 14px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <button onClick={() => setUseSearch(s => !s)} style={{ background: useSearch ? T.al : T.bg, color: useSearch ? T.accent : T.muted, border: `1px solid ${useSearch ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🌐 Buscar en internet {useSearch ? "ON" : "OFF"}</button>
+        {debateActive ? <button onClick={stopDebate} style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Frenar debate</button>
+          : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.navy : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.navy : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🎙 Debate IA</button>}
         {msgs.length > 0 && <button onClick={() => setMsgs([])} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginLeft: "auto" }}>Limpiar</button>}
       </div>
+      {debateOpen && !debateActive && <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 8 }}>
+        <div style={{ fontSize: 11.5, color: T.sub, marginBottom: 8, lineHeight: 1.5 }}>Charla técnica entre las dos IA (~3 min, {DEBATE_MAX} turnos). Dales un tema y mirá cómo se responden en vivo en las dos apps.</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input value={debateTema} onChange={e => setDebateTema(e.target.value)} onKeyDown={e => { if (e.key === "Enter") startDebate(); }} placeholder="Tema (ej: Steel Frame)" style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} />
+          <button onClick={startDebate} disabled={!debateTema.trim()} style={{ background: debateTema.trim() ? T.navy : T.border, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "10px 16px", fontSize: 12.5, fontWeight: 700, cursor: debateTema.trim() ? "pointer" : "default" }}>Iniciar</button>
+        </div>
+      </div>}
+      {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}>🎙 Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
         {sttOk && <button onClick={toggleVoz} style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#EF4444" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#EF4444" : T.border}`, fontSize: 16, cursor: "pointer", flexShrink: 0, animation: escuchando ? "pulse 1s infinite" : "none" }}>🎤</button>}
         <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={escuchando ? "Escuchando…" : "Escribí o usá el micrófono…"} rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
