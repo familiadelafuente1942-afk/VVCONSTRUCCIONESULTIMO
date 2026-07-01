@@ -81,22 +81,36 @@ function useStored(key, def) {
 }
 
 // Llamada al modelo (usa la API Key cargada en la app de V+V, leída del backend compartido)
-async function callAI(msgs, sys, apiKey) {
+async function callAI(msgs, sys, apiKey, useSearch = false) {
   msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
   const body = { model: "claude-sonnet-4-6", max_tokens: 1500, messages: msgs };
   if (sys) body.system = sys;
-  try {
+  if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 5, user_location: { type: "approximate", city: "Buenos Aires", region: "Buenos Aires", country: "AR", timezone: "America/Argentina/Buenos_Aires" } }];
+  async function doFetch(b) {
     try {
-      const rp = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (rp.ok) { const d = await rp.json(); return d.content?.filter(b => b.type === "text").map(b => b.text).join("") || "Sin respuesta."; }
-      if (rp.status !== 404) { try { const e = await rp.json(); return e.error?.message || `Error ${rp.status}`; } catch { return `Error ${rp.status}`; } }
+      const rp = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+      if (rp.ok) return { ok: true, data: await rp.json() };
+      if (rp.status !== 404) { try { const e = await rp.json(); return { ok: false, err: e.error?.message || `Error ${rp.status}` }; } catch { return { ok: false, err: `Error ${rp.status}` }; } }
     } catch { /* sin proxy: modo directo */ }
-    if (!apiKey) return "⚠ El asistente todavía no está disponible. Configurá la IA (API Key en la app de V+V, o el proxy en Vercel).";
+    if (!apiKey) return { ok: false, err: "⚠ El asistente todavía no está disponible. Configurá la IA (API Key en la app de V+V, o el proxy en Vercel)." };
     const headers = { "Content-Type": "application/json", "anthropic-dangerous-direct-browser-access": "true", "anthropic-version": "2023-06-01", "x-api-key": apiKey };
-    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(body) });
-    if (!r.ok) { let m = "Error de conexión."; try { const d = await r.json(); m = d.error?.message || `Error ${r.status}`; } catch { } return m; }
-    const d = await r.json();
-    return d.content?.filter(b => b.type === "text").map(b => b.text).join("") || "Sin respuesta.";
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(b) });
+    if (!r.ok) { let m = "Error de conexión."; try { const d = await r.json(); m = d.error?.message || `Error ${r.status}`; } catch { } return { ok: false, err: m }; }
+    return { ok: true, data: await r.json() };
+  }
+  try {
+    const res = await doFetch(body);
+    if (!res.ok) return res.err;
+    let d = res.data;
+    if (d.error) return `Error: ${d.error.message || "Sin respuesta."}`;
+    let guard = 0;
+    while (d.stop_reason === "pause_turn" && guard < 4) {
+      guard++;
+      const cont = await doFetch({ ...body, messages: [...msgs, { role: "assistant", content: d.content }] });
+      if (!cont.ok || cont.data?.error) break;
+      d = cont.data;
+    }
+    return (d.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim() || "Sin respuesta.";
   } catch (e) { return `Error de conexión: ${e.message || ""}`; }
 }
 
@@ -123,9 +137,16 @@ async function ejecutarAccion(accion, miSide, ctx) {
     let n = 0; const next = arr.map(p => { if (incluir(p)) { n++; const sitios = (p.sitios || []).filter(s => s.sitio !== sitio); return { ...p, sitios: [...sitios, { sitio, fecha: f }] }; } return p; });
     ctx.setPersonal(next); return `Cargué ${n} trabajador(es) al sitio “${sitio}”.`;
   }
+  if (accion.tipo === "enviar_mensaje") {
+    const msg = { id: uid() + Date.now(), from: miSide, texto: accion.texto || "", fecha: hoyStr(), ts: Date.now(), archivos: [] };
+    let arr = []; try { const r = await storage.get("vv_mensajes"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+    const next = [...arr, msg]; try { localStorage.setItem("vv_mensajes", JSON.stringify(next)); } catch { } await storage.set("vv_mensajes", JSON.stringify(next)).catch(() => { });
+    if (ctx.setMensajes) ctx.setMensajes(next);
+    return "Mensaje enviado a V+V (aparece en Mensajes).";
+  }
   return null;
 }
-function accionLabel(a) { if (!a) return ""; if (a.tipo === "crear_pedido") return `Crear pedido → ${a.para === "cliente" ? "V+V/Cliente" : "V+V"}: “${a.asunto || ""}”`; if (a.tipo === "responder_pedido") return "Responder pedido"; if (a.tipo === "resolver_pedido") return "Marcar pedido como resuelto"; if (a.tipo === "cargar_personal") return `Cargar personal al sitio “${a.sitio || ""}”${a.obra ? ` (obra ${a.obra})` : a.personal && a.personal !== "todos" ? ` (${Array.isArray(a.personal) ? a.personal.join(", ") : a.personal})` : " (todos)"}`; return a.tipo; }
+function accionLabel(a) { if (!a) return ""; if (a.tipo === "crear_pedido") return `Crear pedido → ${a.para === "cliente" ? "V+V/Cliente" : "V+V"}: “${a.asunto || ""}”`; if (a.tipo === "responder_pedido") return "Responder pedido"; if (a.tipo === "resolver_pedido") return "Marcar pedido como resuelto"; if (a.tipo === "enviar_mensaje") return `Enviar mensaje a V+V: “${(a.texto || "").slice(0, 60)}”`; if (a.tipo === "cargar_personal") return `Cargar personal al sitio “${a.sitio || ""}”${a.obra ? ` (obra ${a.obra})` : a.personal && a.personal !== "todos" ? ` (${Array.isArray(a.personal) ? a.personal.join(", ") : a.personal})` : " (todos)"}`; return a.tipo; }
 
 const ESTADOS = { pendiente: { l: "Pendiente", c: "#94A3B8", b: "#F8FAFC" }, curso: { l: "En curso", c: "#10B981", b: "#ECFDF5" }, pausada: { l: "Pausada", c: "#F59E0B", b: "#FFFBEB" }, terminada: { l: "Terminada", c: "#6366F1", b: "#EEF2FF" } };
 const BRASS = "#B0894F";
@@ -284,6 +305,7 @@ function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivo
     <div style={{ width: 36, height: 36, borderRadius: 8, background: mine ? "#EAEEF3" : T.bg, color: mine ? T.accent : T.muted, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>📄</div>
     <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.nombre || "archivo"}</div><div style={{ fontSize: 11, color: T.muted }}>{a.fecha || a.obra || ""}</div></div>
     {a.url && <a href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ background: T.bg, color: T.accent, borderRadius: 7, padding: "7px 11px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Abrir</a>}
+    {mine && <button onClick={() => { if (confirm("¿Eliminar este archivo?")) setArchivosCliente(p => (p || []).filter(x => x.id !== a.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: 7, padding: "7px 9px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>}
   </div>);
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <div style={{ padding: "16px 20px" }}>
@@ -308,7 +330,7 @@ function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivo
 }
 
 // ── PANTALLA: MENSAJES ───────────────────────────────────────────────
-function MensajesScreen({ T, cfg, obras, mensajes, enviar }) {
+function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje }) {
   const [input, setInput] = useState("");
   const [adj, setAdj] = useState([]);
   const [obraAdj, setObraAdj] = useState("");
@@ -325,7 +347,7 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar }) {
             {m.texto}
             {(m.archivos || []).map((a, j) => <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}>📎 {a.nombre}</a>)}
           </div>
-          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{mine ? "Vos" : "V+V"} · {m.fecha}</div>
+          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{mine ? "Vos" : "V+V"} · {m.fecha}{mine && m.id && borrarMensaje && <span onClick={() => borrarMensaje(m.id)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
         </div>
       </div>); })}
       <div ref={bottomRef} />
@@ -396,10 +418,10 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "Asistente IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "obras", label: "Obra", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }];
+const NAV = [{ id: "asistente", label: "Asistente IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "obras", label: "Obra", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
-function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, onPedidos }) {
+function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, onPedidos }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
@@ -410,11 +432,14 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)})`).join("\n");
     const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "cliente" ? "enviado a V+V" : "recibido de V+V"}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
     const per = (personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${(p.sitios || []).length ? ` [cargado en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n");
-    return `Sos el AGENTE de ${cfg.nombre} en contacto con V+V Construcciones (ejecuta la obra). Español rioplatense, claro y cordial. Gestionás PEDIDOS y la CARGA DE PERSONAL a los sitios/barrios (vos tramitás el acceso del personal a los barrios privados).
+    const msj = (mensajes || []).slice(-8).map(m => `· ${m.from === "cliente" ? "Nosotros" : "V+V"}: ${(m.texto || "").slice(0, 110)}`).join("\n");
+    return `Sos el ASISTENTE de ${cfg.nombre} (comitente), en contacto con V+V Construcciones (la empresa que ejecuta la obra). Español rioplatense, claro y cordial. Estás CONECTADO a los mismos datos y al asistente de V+V: comparten la base de datos en tiempo real (obras, personal, pedidos, mensajes); ves lo que carga la otra empresa y ellos ven lo que cargás vos. Podés: informar sobre el avance de las obras, GESTIONAR PEDIDOS con V+V, ENVIARLE MENSAJES directos a V+V (les aparecen en su pantalla de Mensajes), cargar PERSONAL a los sitios/barrios (vos tramitás el acceso a los barrios privados), y BUSCAR EN INTERNET información actual (normativa, código de edificación, proveedores, precios, datos de empresas) cuando te lo pidan o cuando el dato no esté en la app. Priorizá fuentes argentinas y citá la fuente.
 
 OBRAS:\n${ob || "(sin obras)"}
 
 PERSONAL:\n${per || "(sin personal)"}
+
+MENSAJES RECIENTES con V+V:\n${msj || "(sin mensajes)"}
 
 PEDIDOS ABIERTOS (con id):\n${ped || "(ninguno)"}
 
@@ -422,13 +447,14 @@ PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ
 {"tipo":"crear_pedido","para":"vv","asunto":"...","detalle":"...","prioridad":"alta|media|baja","obra":"nombre de la obra de la que se trata"}
 {"tipo":"responder_pedido","pedido_id":"ID","texto":"..."}
 {"tipo":"resolver_pedido","pedido_id":"ID"}
+{"tipo":"enviar_mensaje","texto":"el mensaje para V+V"}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: cargar todos los de esa obra"}
 Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   }
   async function send(texto) {
     const c = (texto ?? input).trim(); if (!c || loading) return;
     setInput(""); const next = [...msgs, { role: "user", content: c }]; setMsgs(next); setLoading(true);
-    const r = await callAI(next, sys(), apiKey);
+    const r = await callAI(next, sys(), apiKey, true);
     const { limpio, accion } = parseAccion(r);
     setMsgs([...next, { role: "assistant", content: limpio, accion }]); setLoading(false);
   }
@@ -489,6 +515,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   function crear() { if (!nuevo.asunto?.trim()) return; aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: miSide, para: "vv", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }), ...arr]); setNuevo(null); }
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
   function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
+  function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
   async function responderIA(p) { setIaLoad(true); const hist = p.hilo.map(h => `${h.de === miSide ? cfg.nombre : "V+V"}: ${h.texto}`).join("\n"); const sys = `Sos el agente de ${cfg.nombre} respondiendo a V+V Construcciones. Redactá una respuesta breve y concreta (español rioplatense) al último mensaje. Solo el texto.`; const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey); setReply(r); setIaLoad(false); }
   const Pill = (k, l) => <button key={k} onClick={() => setFiltro(k)} style={{ flex: 1, padding: "8px", borderRadius: T.rsm, border: `1px solid ${filtro === k ? T.accent : T.border}`, background: filtro === k ? "#EAEEF3" : T.card, color: filtro === k ? T.accent : T.sub, fontSize: 12, fontWeight: 700 }}>{l}</button>;
 
@@ -524,6 +551,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
           {cur.obra_id && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: T.accent, background: "#EAEEF3", borderRadius: 6, padding: "4px 10px", marginTop: 8 }}>🏗 Obra: {nomObra(cur.obra_id)}</div>}
           <div style={{ fontSize: 11.5, color: T.muted, marginTop: 6 }}>{cur.de === miSide ? "Enviado a V+V" : "Recibido de V+V"} · {cur.fecha} · prioridad {cur.prioridad}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 12 }}>{Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700 }}>{v.l}</button>)}</div>
+          <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
         </Card>
         <Eyebrow T={T}>Hilo</Eyebrow>
         {cur.hilo.map((h, i) => { const mine = h.de === miSide; return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
@@ -760,11 +788,11 @@ function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unread
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
       <div style={{ background: T.navy, color: "#fff" }}>
-        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "6px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.22em", textTransform: "uppercase", color: BRASS }}>Panel de Cliente</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <button onClick={() => setScreen("pedidos")} style={{ position: "relative", background: "none", border: "none", color: screen === "pedidos" ? "#fff" : "rgba(255,255,255,.7)", fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0 }}>Pedidos{pendientes > 0 && <span style={{ position: "absolute", top: -6, right: -12, background: "#EF4444", color: "#fff", borderRadius: 8, minWidth: 14, height: 14, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{pendientes}</span>}</button>
-            <button onClick={() => setScreen("ajustes")} title="Ajustes" style={{ background: "none", border: "none", color: screen === "ajustes" ? "#fff" : "rgba(255,255,255,.7)", fontSize: 14, cursor: "pointer", padding: 0, lineHeight: 1 }}>⚙</button>
+        <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", padding: "6px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: BRASS, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>Panel de Cliente</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+            <button onClick={() => setScreen("pedidos")} style={{ position: "relative", background: "none", border: "none", color: screen === "pedidos" ? "#fff" : "rgba(255,255,255,.75)", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>Pedidos{pendientes > 0 && <span style={{ position: "absolute", top: -6, right: -11, background: "#EF4444", color: "#fff", borderRadius: 8, minWidth: 14, height: 14, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{pendientes}</span>}</button>
+            <button onClick={() => setScreen("ajustes")} title="Ajustes" style={{ background: "none", border: "none", color: screen === "ajustes" ? "#fff" : "rgba(255,255,255,.75)", fontSize: 16, cursor: "pointer", padding: 0, lineHeight: 1 }}>⚙</button>
           </div>
         </div>
       </div>
@@ -919,6 +947,12 @@ function ClienteApp() {
     if (r?.value) { try { actual = JSON.parse(r.value); } catch { } }
     const next = [...actual, msg]; lastCount.current = next.length; setMensajes(next); return next;
   }
+  async function borrarMensaje(id) {
+    if (!id || !confirm("¿Eliminar este mensaje? Se borra para las dos empresas.")) return;
+    const r = await storage.get("vv_mensajes"); let actual = mensajes;
+    if (r?.value) { try { actual = JSON.parse(r.value); } catch { } }
+    const next = actual.filter(m => m.id !== id); lastCount.current = next.length; setMensajes(next);
+  }
   // Guarda los archivos dentro de la obra elegida (visible para V+V dentro de la obra)
   async function agregarAObra(obraId, files) {
     if (!obraId || !files?.length) return;
@@ -946,7 +980,7 @@ function ClienteApp() {
     if (obraId && archivos?.length) { await agregarAObra(obraId, archivos); await acuseRecibo(obraId, archivos); }
   }
 
-  return (<div style={{ width: "100%", height: "100dvh", background: LUXE_BG }}>
+  return (<div style={{ width: "100%", maxWidth: "100vw", height: "100dvh", background: LUXE_BG, overflowX: "hidden" }}>
     <style>{css}</style>
     <Toast T={T} toast={toast} />
     <div style={{ width: "100%", height: "100dvh", background: "transparent", display: "flex", flexDirection: "column", position: "relative", color: T.text, overflow: "hidden" }}>
@@ -954,14 +988,14 @@ function ClienteApp() {
       {screen === "obras" && <WebClientHero T={T} cfg={cfg} obras={obras} />}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} onPedidos={() => setScreen("pedidos")} />}
+          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} onPedidos={() => setScreen("pedidos")} />}
           {screen === "obras" && <ObrasScreen T={T} obras={obras} tareas={tareas} cfg={cfg} formularios={formularios} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} />}
-          {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} />}
+          {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} />}
           {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} />}
         </div>
       </div>

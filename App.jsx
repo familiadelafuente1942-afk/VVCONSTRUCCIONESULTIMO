@@ -1622,14 +1622,14 @@ function MIcon({ id }){
 }
 
 const MAS_TILES = [
+  { id:"personal", label:"Personal" },
+  { id:"documentacion", label:"Documentación" },
   { id:"cliente", label:"Panel cliente" },
   { id:"pedidos", label:"Pedidos" },
   { id:"gestion", label:"Plan de gestión" },
-  { id:"formularios", label:"Formularios" },
-  { id:"mensajes", label:"Mensajes" },
   { id:"proyectos", label:"Proyectos", go:"proyectos" },
   { id:"seguimiento", label:"Seguimiento" }, { id:"materiales", label:"Materiales" },
-  { id:"subcontratos", label:"Subcontratos" }, { id:"informes", label:"Informes técnicos" },
+  { id:"subcontratos", label:"Subcontratos" },
   { id:"gantt", label:"Gantt" }, { id:"contactos", label:"Contactos" },
   { id:"proveedores", label:"Proveedores" }, { id:"vigilancia", label:"Vigilancia" },
   { id:"presentismo", label:"Presentismo" }, { id:"archivos", label:"Archivos" },
@@ -1638,6 +1638,62 @@ const MAS_TILES = [
   { id:"dias", label:"Días trabajados" }, { id:"alertas", label:"Alertas WA" },
 ];
 
+function DocumentacionView({ db, cfg, onBack }) {
+  const documentacion = db.documentacion || [];
+  const setDocumentacion = db.setDocumentacion;
+  const CATS = ["Planillas modelo", "Formularios modelo", "Contratos / Legal", "Instructivos", "Certificados modelo", "Otros"];
+  const [cat, setCat] = useState(CATS[0]);
+  const [subiendo, setSubiendo] = useState(false);
+  const inputRef = useRef(null);
+  async function subir(e) {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    setSubiendo(true);
+    const nuevos = [];
+    for (const f of files) {
+      const data = await toDataUrl(f);
+      const url = await uploadFoto(data, "documentacion", `${Date.now()}_${f.name.replace(/[^\w.\-]+/g, "_")}`);
+      nuevos.push({ id: uid(), nombre: f.name, url, cat, fecha: hoyStr() });
+    }
+    setDocumentacion(p => [...nuevos, ...(p || [])]);
+    setSubiendo(false);
+    e.target.value = "";
+    if (nuevos.some(n => !mediaStorage.isRemoteUrl(n.url))) alert("⚠ El archivo quedó guardado en este dispositivo pero no se pudo subir a la nube. Revisá el bucket de fotos en Supabase.");
+  }
+  function borrar(id) { if (confirm("¿Eliminar este documento?")) setDocumentacion(p => (p || []).filter(x => x.id !== id)); }
+  const porCat = CATS.map(c => ({ c, items: documentacion.filter(d => d.cat === c) })).filter(g => g.items.length);
+  return (
+    <div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
+      <PageHead title="Documentación" sub="Modelos de planillas y archivos de uso" back onBack={onBack} />
+      <div style={{ padding: "0 16px" }}>
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Subir modelo / archivo</div>
+          <label style={{ fontSize: 11, color: T.muted }}>Categoría</label>
+          <select value={cat} onChange={e => setCat(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text, margin: "6px 0 12px" }}>{CATS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          <input ref={inputRef} type="file" multiple onChange={subir} style={{ display: "none" }} />
+          <button onClick={() => inputRef.current && inputRef.current.click()} disabled={subiendo} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>{subiendo ? "Subiendo…" : "＋ Elegir archivo(s)"}</button>
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>Sirve para PDF, Word, Excel, imágenes. Quedan disponibles para todo el equipo y se sincronizan entre dispositivos.</div>
+        </div>
+        {porCat.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 18px", lineHeight: 1.55 }}>Todavía no hay documentos.<br />Subí acá los modelos de planillas, formularios y archivos que están usando.</div>}
+        {porCat.map(g => (
+          <div key={g.c} style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{g.c} ({g.items.length})</div>
+            {g.items.map(d => (
+              <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 7 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</div>
+                  <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{d.fecha}</div>
+                </div>
+                <a href={d.url} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a>
+                <button onClick={() => borrar(d.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
   if (sub === "config") return <MasConfig cfg={cfg} setCfg={setCfg} onBack={()=>setSub(null)} />;
   if (sub) {
@@ -1661,6 +1717,8 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "dias": return <DiasView {...P} />;
       case "alertas": return <AlertasWaView {...P} />;
       case "cliente": return <ClientePanel {...P} />;
+      case "personal": return <PersonalView personal={db.personal} setPersonal={db.setPersonal} obras={db.obras} cfg={cfg} />;
+      case "documentacion": return <DocumentacionView db={db} cfg={cfg} onBack={back} />;
       case "pedidos": return <PedidosView {...P} />;
       case "gestion": return <GestionView {...P} />;
       case "formularios": return <FormulariosView {...P} />;
@@ -1967,17 +2025,19 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, loading]);
 
   function buildSystem() {
-    const { obras, lics, personal, pedidos } = db;
+    const { obras, lics, personal, pedidos, mensajes } = db;
     const cn = cfg?.clienteNombre || "el cliente";
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)})`).join("\n");
     const li = lics.map(l => `· ${l.nombre} (${l.estado}, ${l.monto || "s/monto"}, ${l.sector})`).join("\n");
     const pe = personal.map(p => `· ${p.nombre} — ${p.rol} en ${obraNom(obras, p.obra_id)}`).join("\n");
     const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "vv" ? "enviado a" : "recibido de"} ${p.de === "vv" ? cn : cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
+    const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional. Tus capacidades:
 1) BUSCAR EN INTERNET (tenés la herramienta de búsqueda web activa): conseguir proveedores y contactos (corralones, ferreterías, alquiler de equipos, hormigón, áridos), precios de materiales, normativa y código de edificación de CABA/Buenos Aires, teléfonos, direcciones, datos de empresas, o cualquier información actual. Cuando te pidan algo que no está en la app o que cambia seguido, BUSCÁ en internet (no digas que no podés). Priorizá fuentes argentinas; al dar proveedores listá nombre, zona, contacto/teléfono y link, y citá la fuente.
 2) Conocés los datos de la app y respondés sobre obras, personal, proyectos y pedidos.
 3) Redactás notas, mails y mensajes.
 4) Sos el agente de mensajería con ${cn} y GESTIONÁS PEDIDOS (temas a resolver con la otra empresa): podés crear pedidos, responderlos y marcarlos resueltos.
+5) ESTÁS CONECTADO con la app y el asistente de ${cn}: comparten la misma base de datos en tiempo real (obras, personal, pedidos, mensajes). Todo lo que carguen o pregunten de un lado, se ve del otro. Podés ENVIARLE UN MENSAJE directo a ${cn} (les aparece en su pantalla de Mensajes) y ellos te responden.
 
 OBRAS:\n${ob || "(sin obras)"}
 
@@ -1987,16 +2047,19 @@ PERSONAL:\n${pe || "(sin personal)"}
 
 PEDIDOS ABIERTOS (con su id):\n${ped || "(ninguno)"}
 
-PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} (pedir definiciones, solicitar documentación, plantear o responder un tema, cerrar un pedido), respondé en lenguaje natural y AGREGÁ AL FINAL un único bloque entre \`\`\`accion y \`\`\` con JSON válido, una de estas formas:
+MENSAJES RECIENTES con ${cn}:\n${msgs || "(sin mensajes)"}
+
+PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} (pedir definiciones, solicitar documentación, plantear o responder un tema, cerrar un pedido, o mandarle un mensaje), respondé en lenguaje natural y AGREGÁ AL FINAL un único bloque entre \`\`\`accion y \`\`\` con JSON válido, una de estas formas:
 {"tipo":"crear_pedido","para":"cliente","asunto":"...","detalle":"...","prioridad":"alta|media|baja","obra":"nombre de la obra de la que se trata"}
 {"tipo":"responder_pedido","pedido_id":"ID_EXACTO","texto":"..."}
 {"tipo":"resolver_pedido","pedido_id":"ID_EXACTO"}
+{"tipo":"enviar_mensaje","texto":"el mensaje para ${cn}"}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: todos los de esa obra"}
 Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el bloque. La acción se ejecuta cuando el usuario la confirma.`;
   }
   async function confirmAccion(idx) {
     const m = msgs[idx]; if (!m?.accion) return;
-    const res = await ejecutarAccion(m.accion, "vv", { setPedidos: db.setPedidos, personal: db.personal, setPersonal: db.setPersonal, obras: db.obras });
+    const res = await ejecutarAccion(m.accion, "vv", { setPedidos: db.setPedidos, personal: db.personal, setPersonal: db.setPersonal, obras: db.obras, setMensajes: db.setMensajes });
     setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accionDone: true, accionResultado: res || "Acción ejecutada." } : x));
   }
   function descartarAccion(idx) { setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accion: null, accionDescartada: true } : x)); }
@@ -2685,9 +2748,16 @@ async function ejecutarAccion(accion, miSide, ctx){
     let n=0; const next=arr.map(p=>{ if(incluir(p)){ n++; const sitios=(p.sitios||[]).filter(s=>s.sitio!==sitio); return {...p,sitios:[...sitios,{sitio,fecha:f}]}; } return p; });
     ctx.setPersonal(next); return `Cargué ${n} trabajador(es) al sitio “${sitio}”.`;
   }
+  if(accion.tipo==="enviar_mensaje"){
+    const msg={ id:uid()+Date.now(), from:miSide, texto:accion.texto||"", fecha:hoyStr(), ts:Date.now(), archivos:[] };
+    let arr=[]; try{const r=await storage.get("vv_mensajes"); if(r?.value) arr=JSON.parse(r.value);}catch{}
+    const next=[...arr,msg]; try{ localStorage.setItem("vv_mensajes",JSON.stringify(next)); }catch{} await storage.set("vv_mensajes",JSON.stringify(next)).catch(()=>{});
+    if(ctx.setMensajes) ctx.setMensajes(next);
+    return "Mensaje enviado a la otra empresa (aparece en Mensajes).";
+  }
   return null;
 }
-function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
+function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
 
 function PedidosView({ db, cfg, apiKey, onBack }) {
   const { pedidos, setPedidos, obras } = db;
@@ -2708,6 +2778,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   function crear() { if (!nuevo.asunto?.trim()) return; aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: miSide, para: "cliente", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }), ...arr]); setNuevo(null); }
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
   function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
+  function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
   async function responderIA(p) {
     setIaLoad(true);
     const hist = p.hilo.map(h => `${h.de === miSide ? "Nosotros (V+V)" : otroNom}: ${h.texto}`).join("\n");
@@ -2761,6 +2832,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
         <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
           {Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{v.l}</button>)}
         </div>
+        <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
       </Card>
       <Eyebrow>Hilo</Eyebrow>
       {cur.hilo.map((h, i) => { const mine = persp(h); return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
@@ -2826,7 +2898,7 @@ function FormulariosView({ db, cfg, onBack }) {
   const RG = ({ value, onChange, opts }) => <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>{opts.map(o => <button key={o} onClick={() => onChange(value === o ? "" : o)} style={{ padding: "4px 8px", borderRadius: 6, border: `1px solid ${value === o ? T.accent : T.border}`, background: value === o ? T.accent : T.card, color: value === o ? "#fff" : T.sub, fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{o}</button>)}</div>;
 
   function nuevo(tpl) { setEd({ id: uid(), tplId: tpl.id, obra_id: obraPick, fecha: hoyStr(), nro: "", resp: {}, obs: {}, textos: {}, interferencias: [], rubros: [], lineas: [{ info: "", resp: "" }], resultado: "" }); setPick(false); }
-  function guardar(compartir) { const item = compartir ? { ...ed, compartido: true, compartidoFecha: hoyStr() } : { ...ed }; const exists = list.some(x => x.id === item.id); setFormularios(exists ? list.map(x => x.id === item.id ? item : x) : [item, ...list]); setEd(null); }
+  function guardar(compartir) { const item = compartir ? { ...ed, compartido: true, compartidoFecha: hoyStr() } : { ...ed }; const exists = list.some(x => x.id === item.id); setFormularios(exists ? list.map(x => x.id === item.id ? item : x) : [item, ...list]); setEd(null); if (compartir) { const o = obras.find(x => x.id === item.obra_id); alert(`✓ Formulario compartido con ${cfg?.clienteSigla || "Belfast"}.\n\nLo va a ver en la pestaña "Informes" y dentro de la obra ${o?.nombre ? `"${o.nombre}"` : "seleccionada"}.`); } }
   function crearPedidoDesdeNota() { const o = obras.find(x => x.id === ed.obra_id); const det = (ed.lineas || []).filter(l => l.info?.trim()).map((l, i) => `${i + 1}. ${l.info}`).join("\n"); aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: "vv", para: "cliente", asunto: `Nota de pedido — ${o?.nombre || "obra"}`, detalle: (ed.textos.intro || "") + (det ? "\n\n" + det : ""), prioridad: "media", obra_id: ed.obra_id }), ...arr]); }
 
   if (ed) {
@@ -3087,6 +3159,12 @@ function MensajesVVView({ db, cfg, onBack }) {
     if (r?.value) { try { actual = JSON.parse(r.value); } catch { } }
     const next = [...actual, msg]; lastRef.current = next.length; setMensajes(next); setInput(""); setAdj([]);
   }
+  async function borrarMsg(id) {
+    if (!id || !confirm("¿Eliminar este mensaje? Se borra para las dos empresas.")) return;
+    const r = await storage.get("vv_mensajes"); let actual = mensajes;
+    if (r?.value) { try { actual = JSON.parse(r.value); } catch { } }
+    const next = actual.filter(m => m.id !== id); lastRef.current = next.length; setMensajes(next);
+  }
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
     <SubHead id="mensajes" label="Mensajes" sub={`Chat con ${cn}`} onBack={onBack} />
     {clienteArchivos.length > 0 && <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "9px 16px", display: "flex", gap: 7, overflowX: "auto" }}>
@@ -3100,7 +3178,7 @@ function MensajesVVView({ db, cfg, onBack }) {
           <div style={{ background: mine ? T.navy : T.card, color: mine ? "#fff" : T.text, border: mine ? "none" : `1px solid ${T.border}`, borderRadius: mine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "10px 13px", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>
             {m.texto}{(m.archivos || []).map((a, j) => <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}>📎 {a.nombre}</a>)}
           </div>
-          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{mine ? "V+V" : cn} · {m.fecha}</div>
+          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{mine ? "V+V" : cn} · {m.fecha}{mine && m.id && <span onClick={() => borrarMsg(m.id)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
         </div>
       </div>); })}
       <div ref={bottomRef} />
@@ -3188,7 +3266,7 @@ function ClientePanel({ db, cfg, onBack }) {
           {isOpen && <div style={{ marginTop: 12 }}>
             {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 7 }}>Avance fotográfico</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{o.fotos.slice(0, 6).map((f, i) => <img key={i} src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}` }} />)}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{o.fotos.slice(0, 6).map((f, i) => <div key={i} style={{ position: "relative" }}><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} />{i === 5 && o.fotos.length > 6 && <div style={{ position: "absolute", inset: 0, background: "rgba(15,27,45,.62)", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 15, fontWeight: 800 }}>+{o.fotos.length - 6}</div>}</div>)}</div>
             </div>}
             {ts.length > 0 && <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 7 }}>Cronograma</div>
@@ -3215,8 +3293,9 @@ const LUXE_BG = "radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px) 0
 const LUXE_HERO = "radial-gradient(620px 220px at 86% 0%, rgba(176,137,79,0.20), transparent 60%), linear-gradient(135deg,#101C2C 0%,#17283c 100%)";
 const WEB_NAV = [
   { id:"chat", label:"Asistente IA" }, { id:"dashboard", label:"Inicio" },
-  { id:"obras", label:"Obras" }, { id:"personal", label:"Personal" },
-  { id:"cargar", label:"Cargar" }, { id:"mas", label:"Más" },
+  { id:"obras", label:"Obras" }, { id:"mensajes", label:"Mensajes" },
+  { id:"informes", label:"Informes" }, { id:"formularios", label:"Formularios" },
+  { id:"mas", label:"Más" },
 ];
 function WebHeader({ cfg, view, go, pendientes }) {
   const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const tieneLogo = l1 || l2;
@@ -3299,6 +3378,7 @@ function App() {
   const [camaras, setCamaras] = useStoredState("vv_camaras", []);
   const [gestion, setGestion] = useStoredState("vv_gestion", {});
   const [formularios, setFormularios] = useStoredState("vv_formularios", []);
+  const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
   const [mensajes, setMensajes] = useStoredState("vv_mensajes", []);
   const [pedidos, setPedidos] = useStoredState("vv_pedidos", []);
   const [clienteArchivos] = useStoredState("cliente_archivos", []);
@@ -3308,7 +3388,7 @@ function App() {
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
-    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_formularios", setFormularios], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
+    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
     const iv = setInterval(async () => {
       for (const [key, setter] of stores) {
         try {
@@ -3325,7 +3405,7 @@ function App() {
   }, []);
   const requireAuth = (fn) => fn();
   const go = (v)=>{ setView(v); };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
@@ -3343,6 +3423,9 @@ function App() {
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
             {view==="chat" && <ChatIA db={db} cfg={cfg} apiKey={cfg.apiKey} msgs={chatMsgs} setMsgs={setChatMsgs} />}
             {view==="mas" && <MasView cfg={cfg} setCfg={setCfg} sub={masSub} setSub={setMasSub} goView={go} db={db} apiKey={cfg.apiKey} />}
+            {view==="informes" && <InformesView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
+            {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
+            {view==="mensajes" && <MensajesVVView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
           </div>
         </div>
         <WebFooter cfg={cfg} />
