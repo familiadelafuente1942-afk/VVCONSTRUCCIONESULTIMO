@@ -3128,7 +3128,7 @@ function FormulariosView({ db, cfg, onBack }) {
           <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{tpl?.nombre || "Formulario"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{obraNom(obras, f.obra_id)} · {f.fecha}{f.nro ? ` · N° ${f.nro}` : ""}</div><div style={{ fontSize: 10.5, fontWeight: 700, color: f.compartido ? "#16A34A" : T.muted, marginTop: 3 }}>{f.compartido ? `✓ Compartido con ${cfg?.clienteSigla || "Belfast"}` : "Borrador (no compartido)"}</div></div>
           {f.resultado ? <Badge color={f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#F59E0B" : "#16A34A"} bg={f.resultado.includes("NO APTO") ? "#FEF2F2" : f.resultado.includes("OBSERV") ? "#FFFBEB" : "#ECFDF5"}>{f.resultado.replace(" PARA INICIO", "")}</Badge> : <span style={{ color: T.muted, fontSize: 16 }}>›</span>}
         </div>
-        <button onClick={() => setFormularios(list.filter(x => x.id !== f.id))} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginTop: 4 }}>Eliminar</button>
+        <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Eliminar este formulario (${tpl?.nombre || "Formulario"} · ${obraNom(obras, f.obra_id)})?${f.compartido ? "\n\nOJO: está compartido — también se borra en Belfast." : ""}`)) setFormularios(list.filter(x => x.id !== f.id)); }} style={{ marginTop: 10, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar formulario</button>
       </Card>); })}
     </div>
     <AddFab onClick={() => setPick(true)} label="Formulario" />
