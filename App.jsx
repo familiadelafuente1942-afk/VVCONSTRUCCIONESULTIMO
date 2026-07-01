@@ -1623,6 +1623,7 @@ function MIcon({ id }){
 
 const MAS_TILES = [
   { id:"personal", label:"Personal" },
+  { id:"matpedidos", label:"Pedido de materiales" },
   { id:"documentacion", label:"Documentación" },
   { id:"cliente", label:"Panel cliente" },
   { id:"pedidos", label:"Pedidos" },
@@ -1694,6 +1695,55 @@ function DocumentacionView({ db, cfg, onBack }) {
     </div>
   );
 }
+function MatPedidosView({ db, cfg, onBack }) {
+  const { obras, matpedidos = [], setMatpedidos } = db;
+  const cn = cfg?.clienteSigla || cfg?.clienteNombre || "Belfast";
+  const [form, setForm] = useState(null);
+  function nuevo() { setForm({ obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u" }], nota: "" }); }
+  function addItem() { setForm(f => ({ ...f, items: [...f.items, { nombre: "", cantidad: "", unidad: "u" }] })); }
+  function setItem(i, k, v) { setForm(f => ({ ...f, items: f.items.map((it, j) => j === i ? { ...it, [k]: v } : it) })); }
+  function delItem(i) { setForm(f => ({ ...f, items: f.items.filter((_, j) => j !== i) })); }
+  function guardar() {
+    const items = (form.items || []).filter(it => (it.nombre || "").trim());
+    if (!items.length) { alert("Agregá al menos un material."); return; }
+    const p = { id: uid() + Date.now(), obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), ts: Date.now(), de: "vv", leido: false, leidoFecha: "" };
+    setMatpedidos(prev => [p, ...(prev || [])]); setForm(null);
+    alert(`✓ Pedido de materiales enviado a ${cn}. Le queda como NO LEÍDO hasta que lo levante.`);
+  }
+  function borrar(id) { if (confirm("¿Eliminar este pedido de materiales?")) setMatpedidos(prev => (prev || []).filter(x => x.id !== id)); }
+  const lista = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
+    <SubHead id="materiales" label="Pedido de materiales" sub={`Registro · enviado a ${cn}`} onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>＋ Nuevo pedido de materiales</button>
+      {lista.length === 0 && <EmptyMsg>Sin pedidos de materiales todavía.</EmptyMsg>}
+      {lista.map(p => (<Card key={p.id} style={{ padding: 13, marginBottom: 9 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{obraNom(obras, p.obra_id) || "Sin obra"} · {p.fecha}</div>
+            <div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}>{p.items.map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(" · ")}</div>
+            {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, fontStyle: "italic" }}>{p.nota}</div>}
+            <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 6, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado por ${cn}${p.leidoFecha ? " · " + p.leidoFecha : ""}` : `● No leído por ${cn}`}</div>
+          </div>
+          <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+        </div>
+      </Card>))}
+    </div>
+    {form && <Sheet title="Nuevo pedido de materiales" onClose={() => setForm(null)}>
+      <Field label="Obra"><Sel value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", margin: "6px 0 8px" }}>Materiales</div>
+      {form.items.map((it, i) => (<div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
+        <input value={it.nombre} onChange={e => setItem(i, "nombre", e.target.value)} placeholder="Material" style={{ flex: 2, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px", fontSize: 13, color: T.text }} />
+        <input value={it.cantidad} onChange={e => setItem(i, "cantidad", e.target.value)} placeholder="Cant." type="number" style={{ width: 62, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 13, color: T.text }} />
+        <input value={it.unidad} onChange={e => setItem(i, "unidad", e.target.value)} placeholder="u" style={{ width: 54, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 13, color: T.text }} />
+        {form.items.length > 1 && <button onClick={() => delItem(i)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer" }}>✕</button>}
+      </div>))}
+      <button onClick={addItem} style={{ background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>＋ Agregar material</button>
+      <Field label="Nota (opcional)"><textarea value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} rows={2} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} /></Field>
+      <PBtn full onClick={guardar} style={{ marginTop: 6 }}>Enviar pedido a {cn}</PBtn>
+    </Sheet>}
+  </div>);
+}
 function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
   if (sub === "config") return <MasConfig cfg={cfg} setCfg={setCfg} onBack={()=>setSub(null)} />;
   if (sub) {
@@ -1719,6 +1769,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "cliente": return <ClientePanel {...P} />;
       case "personal": return <PersonalView personal={db.personal} setPersonal={db.setPersonal} obras={db.obras} cfg={cfg} />;
       case "documentacion": return <DocumentacionView db={db} cfg={cfg} onBack={back} />;
+      case "matpedidos": return <MatPedidosView db={db} cfg={cfg} onBack={back} />;
       case "pedidos": return <PedidosView {...P} />;
       case "gestion": return <GestionView {...P} />;
       case "formularios": return <FormulariosView {...P} />;
@@ -2086,6 +2137,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre})`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
+  const pedSeen = useRef(null);
   useEffect(() => {
     const iv = setInterval(async () => {
       try {
@@ -2114,6 +2166,18 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           arr2.push({ id: uid() + Date.now(), from: "vv", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
           try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
           await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
+        }
+        // Avisar en el chat los pedidos nuevos que le llegan a V+V
+        const rp = await storage.get("vv_pedidos");
+        if (rp?.value) {
+          const peds = JSON.parse(rp.value);
+          const incoming = peds.filter(p => p.para === "vv" && p.de !== "vv");
+          if (pedSeen.current === null) pedSeen.current = new Set(incoming.map(p => p.id));
+          else {
+            const nuevos = incoming.filter(p => !pedSeen.current.has(p.id));
+            nuevos.forEach(p => pedSeen.current.add(p.id));
+            if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(p => ({ role: "assistant", content: `📥 Te llegó un pedido de ${cnIA}: "${p.asunto}"${p.detalle ? " — " + p.detalle : ""}${p.prioridad === "alta" ? " ⚠ URGENTE" : ""}. Está en Pedidos. Decime si querés que lo responda.` }))]);
+          }
         }
       } catch { }
     }, 6000);
@@ -3454,6 +3518,7 @@ function App() {
   const [gestion, setGestion] = useStoredState("vv_gestion", {});
   const [formularios, setFormularios] = useStoredState("vv_formularios", []);
   const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
+  const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
   const [mensajes, setMensajes] = useStoredState("vv_mensajes", []);
   const [pedidos, setPedidos] = useStoredState("vv_pedidos", []);
   const [clienteArchivos] = useStoredState("cliente_archivos", []);
@@ -3463,7 +3528,7 @@ function App() {
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
-    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
+    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
     const iv = setInterval(async () => {
       for (const [key, setter] of stores) {
         try {
@@ -3480,7 +3545,7 @@ function App() {
   }, []);
   const requireAuth = (fn) => fn();
   const go = (v)=>{ setView(v); };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>

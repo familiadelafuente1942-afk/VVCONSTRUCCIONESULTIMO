@@ -424,7 +424,7 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "Asistente IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "obras", label: "Obra", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "asistente", label: "Asistente IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "obras", label: "Obra", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
 function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, onPedidos }) {
@@ -476,6 +476,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   ctxRef.current = `OBRAS:\n${(obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)})`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${(p.sitios || []).length ? ` [en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
+  const pedSeen = useRef(null);
   useEffect(() => {
     const iv = setInterval(async () => {
       try {
@@ -504,6 +505,18 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
           arr2.push({ id: uid() + Date.now(), from: "cliente", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
           try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
           await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
+        }
+        // Avisar en el chat los pedidos nuevos que le llegan al cliente
+        const rp = await storage.get("vv_pedidos");
+        if (rp?.value) {
+          const peds = JSON.parse(rp.value);
+          const incoming = peds.filter(p => p.para === "cliente" && p.de !== "cliente");
+          if (pedSeen.current === null) pedSeen.current = new Set(incoming.map(p => p.id));
+          else {
+            const nuevos = incoming.filter(p => !pedSeen.current.has(p.id));
+            nuevos.forEach(p => pedSeen.current.add(p.id));
+            if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(p => ({ role: "assistant", content: `📥 Te llegó un pedido de V+V: "${p.asunto}"${p.detalle ? " — " + p.detalle : ""}${p.prioridad === "alta" ? " ⚠ URGENTE" : ""}. Está en Pedidos. Decime si querés que lo responda.` }))]);
+          }
         }
       } catch { }
     }, 6000);
@@ -789,6 +802,25 @@ function FormulariosScreen({ T, obras, formularios = [] }) {
   </div>);
 }
 
+function MaterialesScreen({ T, obras, matpedidos = [], setMatpedidos }) {
+  const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
+  function levantar(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, leido: true, leidoFecha: hoyStr() } : x)); }
+  const lista = (matpedidos || []).filter(p => p.de === "vv").sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
+    <div style={{ padding: "16px 20px" }}>
+      <Eyebrow T={T}>Pedidos de materiales de V+V</Eyebrow>
+      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px", lineHeight: 1.55 }}>Todavía no recibiste pedidos de materiales.<br />Cuando V+V cargue uno, aparece acá.</div>}
+      {lista.map(p => (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${p.leido ? T.border : "#EF4444"}`, background: p.leido ? T.card : "#FFFBEB" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{nomObra(p.obra_id)} · {p.fecha}{!p.leido && <span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: "#EF4444", borderRadius: 5, padding: "2px 7px" }}>NUEVO</span>}</div>
+          <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5 }}>{p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n")}</div>
+          {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 5, fontStyle: "italic" }}>{p.nota}</div>}
+        </div>
+        {!p.leido ? <button onClick={() => levantar(p.id)} style={{ width: "100%", marginTop: 11, background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>Levantar / marcar recibido</button> : <div style={{ fontSize: 10.5, fontWeight: 700, color: "#16A34A", marginTop: 8 }}>✓ Levantado{p.leidoFecha ? " · " + p.leidoFecha : ""}</div>}
+      </Card>))}
+    </div>
+  </div>);
+}
 function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6) n++; } return n; }
 function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaReal || new Date(); const dias = diasHabiles(fechaSolic, fin); const desvio = dias - plazo; let estado; if (fechaReal || cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo"; else estado = desvio <= 0 ? "En plazo" : "Vencido"; return { dias, desvio, estado, retraso: Math.max(0, desvio) }; }
 const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "#ECFDF5" }, "En plazo": { c: "#3B82F6", b: "#EFF6FF" }, "Fuera de plazo": { c: "#F59E0B", b: "#FFFBEB" }, "Vencido": { c: "#EF4444", b: "#FEF2F2" } };
@@ -854,8 +886,8 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion }) {
 }
 
 // ── SHELL WEB INSTITUCIONAL (Cliente) ────────────────────────────────
-function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unreadForms }) {
-  const badge = (id) => (id === "mensajes" ? unread : id === "formularios" ? (unreadForms || 0) : id === "pedidos" ? pendientes : 0);
+function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unreadForms, unreadMat }) {
+  const badge = (id) => (id === "mensajes" ? unread : id === "formularios" ? (unreadForms || 0) : id === "pedidos" ? pendientes : id === "materiales" ? (unreadMat || 0) : 0);
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
       <div style={{ background: T.navy, color: "#fff" }}>
@@ -928,6 +960,8 @@ function ClienteApp() {
   const [personal, setPersonal] = useStored("vv_personal", []);
   const [gestion] = useStored("vv_gestion", {});
   const [formularios] = useStored("vv_formularios", []);
+  const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
+  const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length;
   const lastPed = useRef(null);
   const lastForms = useRef(null);
   const [toast, setToast] = useState(null);
@@ -939,8 +973,9 @@ function ClienteApp() {
   useEffect(() => {
     let alive = true;
     async function tick() {
-      const [rm, ro, rp, rf] = await Promise.all([storage.get("vv_mensajes"), storage.get("vv_obras"), storage.get("vv_pedidos"), storage.get("vv_formularios")]);
+      const [rm, ro, rp, rf, rmp] = await Promise.all([storage.get("vv_mensajes"), storage.get("vv_obras"), storage.get("vv_pedidos"), storage.get("vv_formularios"), storage.get("vv_matpedidos")]);
       if (!alive) return;
+      if (rmp?.value) { try { const mp = JSON.parse(rmp.value); setMatpedidos(prev => JSON.stringify(mp) !== JSON.stringify(prev) ? mp : prev); } catch { } }
       if (rm?.value) {
         try {
           const arr = JSON.parse(rm.value);
@@ -1051,7 +1086,7 @@ function ClienteApp() {
     <style>{css}</style>
     <Toast T={T} toast={toast} />
     <div style={{ width: "100%", height: "100dvh", background: "transparent", display: "flex", flexDirection: "column", position: "relative", color: T.text, overflow: "hidden" }}>
-      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={setScreen} unread={unread} pendientes={pedidos.filter(p => p.para === "cliente" && p.estado !== "resuelto").length} unreadForms={unreadForms} />
+      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={setScreen} unread={unread} pendientes={pedidos.filter(p => p.para === "cliente" && p.estado !== "resuelto").length} unreadForms={unreadForms} unreadMat={unreadMat} />
       {screen === "obras" && <WebClientHero T={T} cfg={cfg} obras={obras} />}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
@@ -1059,6 +1094,7 @@ function ClienteApp() {
           {screen === "obras" && <ObrasScreen T={T} obras={obras} tareas={tareas} cfg={cfg} formularios={formularios} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
+          {screen === "materiales" && <MaterialesScreen T={T} obras={obras} matpedidos={matpedidos} setMatpedidos={setMatpedidos} />}
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} />}
