@@ -1352,13 +1352,12 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
             const dataUrl = await toDataUrl(f);
             const vidId = uid();
             const url = await uploadFoto(dataUrl, `obras/${detail.id}/videos`, vidId);
+            if (!mediaStorage.isRemoteUrl(url)) { alert(`El video "${f.name}" NO se pudo subir a la nube, así que no lo guardo (guardarlo local rompería la sincronización de la app). Revisá que el bucket 'bco-media' de Supabase exista, sea público y tenga permisos, y volvé a intentar.`); continue; }
             nuevos.push({ id: vidId, url, nombre: f.name, fecha: new Date().toLocaleDateString("es-AR") });
         }
         e.target.value = "";
         if (!nuevos.length) return;
-        const fallaron = nuevos.some(n => !mediaStorage.isRemoteUrl(n.url));
         upd(detail.id, { videos: [...(detail.videos || []), ...nuevos] });
-        if (fallaron) alert("⚠ El video quedó en este dispositivo pero NO se pudo subir a la nube (bucket 'bco-media' en Supabase). Así no se ve en Belfast ni en otros dispositivos.");
     }
     async function handleArch(e) {
         if (!detail) return;
