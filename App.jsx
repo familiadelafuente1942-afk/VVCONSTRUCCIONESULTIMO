@@ -2082,7 +2082,8 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   }
   // ── Canal directo IA↔IA: muestra lo que consulta/responde la otra IA y responde solo ──
   const cnIA = cfg?.clienteNombre || "el cliente";
-  const sysRef = useRef(null); sysRef.current = buildSystem;
+  const ctxRef = useRef("");
+  ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre})`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
   useEffect(() => {
@@ -2099,7 +2100,8 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         if (pend) {
           arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           await storage.set("ia_dialogo", JSON.stringify(arr)).catch(() => { });
-          const resp = await callAI([{ role: "user", content: `La IA de ${cnIA} te consultó esto: "${pend.texto}". Si tenés el dato en tu información, respondé breve, concreto y cordial como asistente de V+V Construcciones (solo el texto). Si NO tenés ese dato en tus datos, respondé ÚNICAMENTE con la palabra: NO_DATO` }], sysRef.current ? sysRef.current() : "", apiKeyRef.current, false);
+          const sysResp = `Sos el asistente de datos de V+V Construcciones. ESTOS SON TUS DATOS:\n${ctxRef.current}\n\nRespondé la consulta usando SOLO estos datos, breve y concreto (español rioplatense). Si el dato NO está en tus datos, respondé ÚNICAMENTE con la palabra NO_DATO. Nunca inventes. No agregues bloques de acción ni JSON.`;
+          const resp = await callAI([{ role: "user", content: `Consulta de la IA de ${cnIA}: "${pend.texto}"` }], sysResp, apiKeyRef.current, false);
           let arr2 = []; try { const r2 = await storage.get("ia_dialogo"); if (r2?.value) arr2 = JSON.parse(r2.value); } catch { }
           arr2 = arr2.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           let textoResp = resp;

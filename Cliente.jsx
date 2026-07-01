@@ -472,7 +472,8 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   async function confirmAccion(idx) { const m = msgs[idx]; if (!m?.accion) return; const res = await ejecutarAccion(m.accion, "cliente", { setPedidos, personal, setPersonal, obras }); setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accionDone: true, accionResultado: res || "Acción ejecutada." } : x)); }
   function descartarAccion(idx) { setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accion: null, accionDescartada: true } : x)); }
   // ── Canal directo IA↔IA: muestra lo que consulta/responde V+V y responde solo ──
-  const sysRef = useRef(null); sysRef.current = sys;
+  const ctxRef = useRef("");
+  ctxRef.current = `OBRAS:\n${(obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)})`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${(p.sitios || []).length ? ` [en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
   useEffect(() => {
@@ -489,7 +490,8 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
         if (pend) {
           arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           await storage.set("ia_dialogo", JSON.stringify(arr)).catch(() => { });
-          const resp = await callAI([{ role: "user", content: `La IA de V+V te consultó esto: "${pend.texto}". Si tenés el dato en tu información, respondé breve, concreto y cordial como asistente de ${cfg.nombre} (solo el texto). Si NO tenés ese dato en tus datos, respondé ÚNICAMENTE con la palabra: NO_DATO` }], sysRef.current ? sysRef.current() : "", apiKeyRef.current, false);
+          const sysResp = `Sos el asistente de datos de ${cfg.nombre}. ESTOS SON TUS DATOS:\n${ctxRef.current}\n\nRespondé la consulta usando SOLO estos datos, breve y concreto (español rioplatense). Si el dato NO está en tus datos, respondé ÚNICAMENTE con la palabra NO_DATO. Nunca inventes. No agregues bloques de acción ni JSON.`;
+          const resp = await callAI([{ role: "user", content: `Consulta de la IA de V+V: "${pend.texto}"` }], sysResp, apiKeyRef.current, false);
           let arr2 = []; try { const r2 = await storage.get("ia_dialogo"); if (r2?.value) arr2 = JSON.parse(r2.value); } catch { }
           arr2 = arr2.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           let textoResp = resp;
