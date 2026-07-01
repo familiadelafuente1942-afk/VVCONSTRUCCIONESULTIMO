@@ -484,8 +484,11 @@ PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: cargar todos los de esa obra"}
 {"tipo":"whatsapp","persona":"nombre o rol del jefe de obra/contacto","obra":"opcional","texto":"el mensaje a enviar por WhatsApp"}
 REGLA WhatsApp: si te piden MANDAR UN WHATSAPP a un jefe de obra o contacto, usá "whatsapp". Uso tu agenda (Personal → Contactos) y el personal de la obra. Te dejo el botón de WhatsApp listo para enviar.
-REGLA: si te piden PREGUNTARLE/PEDIRLE/CONSULTARLE algo a LA IA / EL ASISTENTE de V+V (o que "la IA de V+V" haga/pase algo), usá "preguntar_ia" (va directo a la otra IA, que responde sola). Si es un mensaje para V+V (su pantalla de Mensajes), usá "enviar_mensaje".
-BANCOS DE DATOS CONECTADOS: tu app y la de V+V son dos bancos conectados. PERO PRIMERO respondé con TUS datos (obras, personal, pedidos): la mayoría de las preguntas las contestás vos directo. SOLO usá "preguntar_ia" si (a) el usuario te pide explícitamente preguntarle a la IA de V+V, o (b) el dato REALMENTE no está en tus datos y solo lo tendría V+V. No mandes a la otra IA cosas que ya tenés ni info de internet (para eso, búsqueda web). Ante la duda, respondé vos.
+REGLA CLAVE — elegí bien la acción:
+- CANAL IA↔IA ("preguntar_ia"): SIEMPRE que involucre a la IA / el asistente de V+V o esperes que te devuelvan un DATO. Ejemplos: "preguntale a la IA de V+V…", "pedile a la IA de V+V…", "pedícelo/pedíselo a la IA…", "consultale al asistente de V+V…", "que la IA de V+V te pase/averigüe…". OJO: "pedile/pedícelo A LA IA" es SIEMPRE este canal (preguntar_ia), NO un crear_pedido. Va directo a la otra IA, que responde sola. ESTE es el canal entre las dos IA.
+- CONVENCIÓN DEL USUARIO (IMPORTANTE): por defecto, cuando el usuario diga "pedile", "pedido", "pedícelo", "pedíselo" o "pedir" algo, SE REFIERE a consultarle a la IA de V+V → usá "preguntar_ia". Solo usá "crear_pedido" si el usuario aclara EXPLÍCITAMENTE que quiere un "pedido formal", una "nota de pedido" o documentación oficial.
+- MENSAJE A LA PERSONA ("enviar_mensaje"): SOLO para un aviso/recado que lea un HUMANO de V+V en Mensajes, sin esperar datos. Ej: "avisale a V+V que…". Si dudás y mencionan "la IA/el asistente" o quieren respuesta con datos → preguntar_ia.
+BANCOS DE DATOS CONECTADOS: primero respondé con TUS datos. Usá "preguntar_ia" si te lo piden o si el dato realmente no está y solo lo tendría V+V. Para info de internet, búsqueda web.
 Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   }
   async function send(texto) {
