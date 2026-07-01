@@ -1008,12 +1008,13 @@ function RegistroVisitas({ visitas, onUpdate, licId }) {
 }
 
 // ── OBRAS: TABS ──────────────────────────────────────────────────────
-function TabFotos({ detail, upd, fileRef, handleFoto, apiKey, cfg }) {
+function TabFotos({ detail, upd, fileRef, handleFoto, videoRef, handleVideo, apiKey, cfg }) {
     const [loadingIA, setLoadingIA] = useState(false);
     const [informe, setInforme] = useState('');
     const [selFotos, setSelFotos] = useState([]);
     const [modoSel, setModoSel] = useState(false);
     const fotos = detail.fotos || [];
+    const videos = detail.videos || [];
 
     function toggleSel(id) { setSelFotos(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); }
 
@@ -1052,8 +1053,10 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
 
     return (<div>
         <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleFoto} style={{ display: "none" }} />
+        <input ref={videoRef} type="file" accept="video/*" multiple onChange={handleVideo} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
             <PBtn onClick={() => fileRef.current?.click()} style={{ flex: 1, padding: "11px 0", fontSize: 13 }}>{t(cfg, 'obras_agregar_fotos')}</PBtn>
+            <button onClick={() => videoRef.current?.click()} style={{ background: T.accentLight, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>🎥 Video</button>
             {fotos.length > 0 && <button onClick={() => { setModoSel(v => !v); setSelFotos([]); }} style={{ background: modoSel ? T.accent : T.accentLight, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12, fontWeight: 700, color: modoSel ? "#fff" : T.accent, cursor: "pointer", flexShrink: 0 }}>
                 {modoSel ? "Cancelar" : "Seleccionar"}
             </button>}
@@ -1077,6 +1080,13 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
                     </div>);
                 })}
             </div>}
+        {videos.length > 0 && <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Videos ({videos.length})</div>
+            {videos.map(v => <div key={v.id} style={{ marginBottom: 10, borderRadius: T.rsm, overflow: "hidden", border: `1px solid ${T.border}` }}>
+                <video src={v.url} controls playsInline style={{ width: "100%", display: "block", background: "#000" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", background: T.card }}><span style={{ fontSize: 10.5, color: T.muted }}>{v.nombre || "video"} · {v.fecha}</span><button onClick={() => upd(detail.id, { videos: videos.filter(x => x.id !== v.id) })} style={{ background: "none", border: "none", color: "#EF4444", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar</button></div>
+            </div>)}
+        </div>}
         {informe && (<Card style={{ padding: "14px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} /><span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Informe IA generado</span></div>
@@ -1297,7 +1307,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
     const [tab, setTab] = useState("info");
     const [form, setForm] = useState({ nombre: "", ap: defaultAp, sector: "", estado: "pendiente", avance: 0, inicio: "", cierre: "" });
     const [newObs, setNewObs] = useState("");
-    const fileRef = useRef(null); const archRef = useRef(null);
+    const fileRef = useRef(null); const archRef = useRef(null); const videoRef = useRef(null);
     const detail = detailId ? obras.find(o => o.id === detailId) : null;
 
     // Actualizar form.ap si cambian las UBICS
@@ -1331,6 +1341,24 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         upd(detail.id, { fotos: [...(detail.fotos || []), ...nuevas] });
         e.target.value = "";
         if (fallaron) alert("⚠ Las fotos quedaron guardadas en este dispositivo, pero NO se pudieron subir a la nube. Para que se sincronicen entre dispositivos y se vean en la app de Belfast, falta configurar el bucket de fotos 'bco-media' en Supabase (crearlo, hacerlo público y darle permisos). Mirá las instrucciones que te pasó la app.");
+    }
+    async function handleVideo(e) {
+        if (!detail) return;
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        const nuevos = [];
+        for (const f of files) {
+            if (f.size > 60 * 1024 * 1024) { alert(`El video "${f.name}" pesa ${(f.size / 1048576).toFixed(0)} MB. Subí videos de hasta ~60 MB (grabá más corto o en menor calidad).`); continue; }
+            const dataUrl = await toDataUrl(f);
+            const vidId = uid();
+            const url = await uploadFoto(dataUrl, `obras/${detail.id}/videos`, vidId);
+            nuevos.push({ id: vidId, url, nombre: f.name, fecha: new Date().toLocaleDateString("es-AR") });
+        }
+        e.target.value = "";
+        if (!nuevos.length) return;
+        const fallaron = nuevos.some(n => !mediaStorage.isRemoteUrl(n.url));
+        upd(detail.id, { videos: [...(detail.videos || []), ...nuevos] });
+        if (fallaron) alert("⚠ El video quedó en este dispositivo pero NO se pudo subir a la nube (bucket 'bco-media' en Supabase). Así no se ve en Belfast ni en otros dispositivos.");
     }
     async function handleArch(e) {
         if (!detail) return;
@@ -1406,7 +1434,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                         {[...detail.obs].reverse().map(o => (<Card key={o.id} style={{ padding: "12px 14px", marginBottom: 8 }}><div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{o.txt}</div><div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>{o.fecha}</div></Card>))}
                         {detail.obs.length === 0 && <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_notas')}</div>}
                     </div>)}
-                    {tab === "fotos" && (<TabFotos detail={detail} upd={upd} fileRef={fileRef} handleFoto={handleFoto} apiKey={apiKey} cfg={cfg} />)}
+                    {tab === "fotos" && (<TabFotos detail={detail} upd={upd} fileRef={fileRef} handleFoto={handleFoto} videoRef={videoRef} handleVideo={handleVideo} apiKey={apiKey} cfg={cfg} />)}
                     {tab === "archivos" && (<div>
                         <input ref={archRef} type="file" accept=".pdf,.xlsx,.xls,.docx,.doc" multiple onChange={handleArch} style={{ display: "none" }} />
                         <PBtn full onClick={() => archRef.current?.click()} style={{ marginBottom: 14 }}>{t(cfg, 'obras_agregar_arch')}</PBtn>
@@ -2076,7 +2104,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, loading]);
 
   function buildSystem() {
-    const { obras, lics, personal, pedidos, mensajes } = db;
+    const { obras, lics, personal, pedidos, mensajes, formularios, documentacion, archivosGen, tareas, matpedidos, materiales, subcontratos, proveedores, herramientas } = db;
     const cn = cfg?.clienteNombre || "el cliente";
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)})`).join("\n");
     const li = lics.map(l => `· ${l.nombre} (${l.estado}, ${l.monto || "s/monto"}, ${l.sector})`).join("\n");
@@ -2108,6 +2136,28 @@ PERSONAL:\n${pe || "(sin personal)"}
 PEDIDOS ABIERTOS (con su id):\n${ped || "(ninguno)"}
 
 MENSAJES RECIENTES con ${cn}:\n${msgs || "(sin mensajes)"}
+
+FORMULARIOS:\n${(formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obraNom(obras, f.obra_id)} (${f.fecha}${f.resultado ? ", " + f.resultado : ""}${f.compartido ? ", compartido con " + cn : ", borrador"})`).join("\n") || "(sin formularios)"}
+
+ARCHIVOS:\n${[...(archivosGen || []).map(a => `· ${a.nombre} (general)`), ...obras.flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (obra ${o.nombre})`))].join("\n") || "(sin archivos)"}
+
+DOCUMENTACIÓN (modelos):\n${(documentacion || []).map(d => `· ${d.nombre} [${d.cat}]`).join("\n") || "(sin documentación)"}
+
+FOTOS E INFORMES POR OBRA:\n${obras.map(o => `· ${o.nombre}: ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes`).join("\n") || "(sin obras)"}
+
+TAREAS / CRONOGRAMA:\n${(tareas || []).map(t => `· ${t.nombre} — ${obraNom(obras, t.obra_id)} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}
+
+PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obraNom(obras, p.obra_id)} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")} — ${p.leido ? "levantado por " + cn : "no leído"}`).join("\n") || "(sin pedidos de materiales)"}
+
+MATERIALES:\n${(materiales || []).slice(0, 40).map(m => `· ${m.nombre || m.item || JSON.stringify(m)}`).join("\n") || "(sin materiales)"}
+
+SUBCONTRATOS:\n${(subcontratos || []).map(s => `· ${s.nombre || s.rubro || ""}${s.empresa ? " — " + s.empresa : ""}`).join("\n") || "(sin subcontratos)"}
+
+PROVEEDORES:\n${(proveedores || []).map(p => `· ${p.nombre || ""}${p.rubro ? " (" + p.rubro + ")" : ""}${p.telefono ? " tel " + p.telefono : ""}`).join("\n") || "(sin proveedores)"}
+
+HERRAMIENTAS:\n${(herramientas || []).map(h => `· ${h.nombre || ""}${h.obra_id ? " — " + obraNom(obras, h.obra_id) : ""}`).join("\n") || "(sin herramientas)"}
+
+Tenés acceso COMPLETO a todos estos datos de la app. Cuando te pidan un DATO PUNTUAL (un número, fecha, cantidad, teléfono, monto, cuántas fotos/videos, etc.), buscalo en estos datos y dá el valor EXACTO. No digas "no lo tengo" si el dato figura arriba. Respondé cualquier consulta sobre obras, avances, montos, fotos, videos, informes, formularios, archivos, documentación, tareas, materiales, subcontratos, proveedores, herramientas, personal y pedidos usando esta información. (Las fotos no las "ves", pero sabés cuántas hay y de qué obra; para verlas remití a la obra.)
 
 PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} (pedir definiciones, solicitar documentación, plantear o responder un tema, cerrar un pedido, o mandarle un mensaje), respondé en lenguaje natural y AGREGÁ AL FINAL un único bloque entre \`\`\`accion y \`\`\` con JSON válido, una de estas formas:
 {"tipo":"crear_pedido","para":"cliente","asunto":"...","detalle":"...","prioridad":"alta|media|baja","obra":"nombre de la obra de la que se trata"}
@@ -2150,7 +2200,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   // ── Canal directo IA↔IA: muestra lo que consulta/responde la otra IA y responde solo ──
   const cnIA = cfg?.clienteNombre || "el cliente";
   const ctxRef = useRef("");
-  ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre})`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}`;
+  ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(db.formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obraNom(db.obras, f.obra_id)} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${[...(db.archivosGen || []).map(a => `· ${a.nombre}`), ...(db.obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`))].join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(db.tareas || []).map(t => `· ${t.nombre} — ${obraNom(db.obras, t.obra_id)} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(db.matpedidos || []).map(p => `· ${obraNom(db.obras, p.obra_id)}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
   const pedSeen = useRef(null);

@@ -284,6 +284,7 @@ function ObrasScreen({ T, obras, tareas, cfg, formularios = [] }) {
           {(ts.length > 0 || ult || (o.fotos || []).length > 0 || forms.length > 0) && <button onClick={() => setOpen(isOpen ? null : o.id)} style={{ width: "100%", marginTop: 12, background: "none", border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, color: T.accent }}>{isOpen ? "Ocultar detalle ▲" : `Ver detalle${forms.length ? ` · ${forms.length} formulario${forms.length > 1 ? "s" : ""}` : ""} ▼`}</button>}
           {isOpen && <div style={{ marginTop: 12 }}>
             {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({o.fotos.length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{o.fotos.map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
+            {(o.videos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Videos ({o.videos.length})</div>{o.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", borderRadius: 6, marginBottom: 8, background: "#000", display: "block" }} />)}</div>}
             {ts.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Cronograma</div>{ts.map(t => <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}><span style={{ flex: 1, fontSize: 12, color: T.text }}>{t.nombre}</span><div style={{ width: 70, height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${t.avance || 0}%`, background: BRASS }} /></div><span style={{ fontSize: 11, fontWeight: 700, color: T.muted, width: 32, textAlign: "right" }}>{t.avance || 0}%</span></div>)}</div>}
             {ult && <div><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Último informe · {ult.fecha}</div><div style={{ background: T.bg, borderRadius: T.rsm, padding: "11px 13px", fontSize: 12, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{ult.texto}</div></div>}
             {forms.length > 0 && <div style={{ marginTop: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Formularios recibidos de V+V</div>{forms.map(f => { const tpl = FORM_TPLS.find(t => t.id === f.tplId); return (<div key={f.id} onClick={() => setVerForm({ f, tpl, obra: o.nombre })} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}><div style={{ minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{tpl?.nombre || "Formulario"}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{f.fecha}{f.nro ? ` · N° ${f.nro}` : ""}{f.compartidoFecha ? ` · compartido ${f.compartidoFecha}` : ""}</div></div>{f.resultado ? <span style={{ fontSize: 9.5, fontWeight: 800, color: f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#B45309" : "#16A34A", flexShrink: 0 }}>{f.resultado.replace(" PARA INICIO", "")}</span> : <span style={{ color: T.accent, fontWeight: 700, fontSize: 11 }}>Ver →</span>}</div>); })}</div>}
@@ -438,7 +439,7 @@ function Toast({ T, toast }) {
 const NAV = [{ id: "asistente", label: "Asistente IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "obras", label: "Obra", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
-function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], onPedidos }) {
+function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
@@ -459,6 +460,20 @@ PERSONAL:\n${per || "(sin personal)"}
 MENSAJES RECIENTES con V+V:\n${msj || "(sin mensajes)"}
 
 PEDIDOS ABIERTOS (con id):\n${ped || "(ninguno)"}
+
+FORMULARIOS:\n${(formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obras.find(o => o.id === f.obra_id)?.nombre || "—"} (${f.fecha}${f.resultado ? ", " + f.resultado : ""}${f.compartido ? ", compartido" : ", borrador"})`).join("\n") || "(sin formularios)"}
+
+ARCHIVOS DE OBRA:\n${obras.flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (obra ${o.nombre})`)).join("\n") || "(sin archivos)"}
+
+DOCUMENTACIÓN (modelos):\n${(documentacion || []).map(d => `· ${d.nombre} [${d.cat}]`).join("\n") || "(sin documentación)"}
+
+FOTOS E INFORMES POR OBRA:\n${obras.map(o => `· ${o.nombre}: ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes`).join("\n") || "(sin obras)"}
+
+TAREAS / CRONOGRAMA:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find(o => o.id === t.obra_id)?.nombre || "—"} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}
+
+PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")} — ${p.leido ? "levantado" : "no leído"}`).join("\n") || "(sin pedidos de materiales)"}
+
+Tenés acceso COMPLETO a todos estos datos (obras, avances, montos, fotos, informes, formularios, archivos, documentación, tareas, materiales, personal, contactos, pedidos). Cuando te pidan un DATO PUNTUAL, buscalo y dá el valor EXACTO; no digas "no lo tengo" si está arriba. Las fotos y videos no los "ves", pero sabés cuántos hay y de qué obra.
 
 PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ AL FINAL un bloque entre \`\`\`accion y \`\`\` con JSON, una de:
 {"tipo":"crear_pedido","para":"vv","asunto":"...","detalle":"...","prioridad":"alta|media|baja","obra":"nombre de la obra de la que se trata"}
@@ -498,7 +513,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   function descartarAccion(idx) { setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accion: null, accionDescartada: true } : x)); }
   // ── Canal directo IA↔IA: muestra lo que consulta/responde V+V y responde solo ──
   const ctxRef = useRef("");
-  ctxRef.current = `OBRAS:\n${(obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)})`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${(p.sitios || []).length ? ` [en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}`;
+  ctxRef.current = `OBRAS:\n${(obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${(p.sitios || []).length ? ` [en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obras.find(o => o.id === f.obra_id)?.nombre || "—"} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${(obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`)).join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find(o => o.id === t.obra_id)?.nombre || "—"} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
   const pedSeen = useRef(null);
@@ -1062,6 +1077,7 @@ function ClienteApp() {
   const [formularios] = useStored("vv_formularios", []);
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
   const [contactos, setContactos] = useStored("cliente_contactos", []);
+  const [documentacion] = useStored("vv_documentacion", []);
   const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length;
   const lastPed = useRef(null);
   const lastForms = useRef(null);
@@ -1191,7 +1207,7 @@ function ClienteApp() {
       {screen === "obras" && <WebClientHero T={T} cfg={cfg} obras={obras} />}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} onPedidos={() => setScreen("pedidos")} />}
+          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} />}
           {screen === "obras" && <ObrasScreen T={T} obras={obras} tareas={tareas} cfg={cfg} formularios={formularios} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
