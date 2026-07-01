@@ -1723,9 +1723,19 @@ function DocumentacionView({ db, cfg, onBack }) {
   );
 }
 function MatPedidosView({ db, cfg, onBack }) {
-  const { obras, matpedidos = [], setMatpedidos } = db;
+  const { obras, matpedidos = [], setMatpedidos, personal = [] } = db;
   const cn = cfg?.clienteSigla || cfg?.clienteNombre || "Belfast";
   const [form, setForm] = useState(null);
+  const [waFor, setWaFor] = useState(null);
+  function waText(p) {
+    const lines = p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
+    return `*Pedido de materiales* — ${obraNom(obras, p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n(Enviado desde V+V Construcciones)`;
+  }
+  function waLink(text, phone) {
+    const t = encodeURIComponent(text);
+    if (phone) { const clean = String(phone).replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : ("549" + clean); return `https://wa.me/${num}?text=${t}`; }
+    return `https://wa.me/?text=${t}`;
+  }
   function nuevo() { setForm({ obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u" }], nota: "" }); }
   function addItem() { setForm(f => ({ ...f, items: [...f.items, { nombre: "", cantidad: "", unidad: "u" }] })); }
   function setItem(i, k, v) { setForm(f => ({ ...f, items: f.items.map((it, j) => j === i ? { ...it, [k]: v } : it) })); }
@@ -1744,7 +1754,7 @@ function MatPedidosView({ db, cfg, onBack }) {
     <div style={{ padding: "16px 20px" }}>
       <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>＋ Nuevo pedido de materiales</button>
       {lista.length === 0 && <EmptyMsg>Sin pedidos de materiales todavía.</EmptyMsg>}
-      {lista.map(p => (<Card key={p.id} style={{ padding: 13, marginBottom: 9 }}>
+      {lista.map(p => { const jefes = (personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim()); return (<Card key={p.id} style={{ padding: 13, marginBottom: 9 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{obraNom(obras, p.obra_id) || "Sin obra"} · {p.fecha}{p.de === "contratista" && <span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.empresa || "Contratista"}</span>}</div>
@@ -1754,7 +1764,14 @@ function MatPedidosView({ db, cfg, onBack }) {
           </div>
           <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
-      </Card>))}
+        <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 10, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar por WhatsApp a los jefes de obra</button>
+        {waFor === p.id && <div style={{ marginTop: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
+          {jefes.map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => setWaFor(null)} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}>📲 {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
+          <a href={waLink(waText(p))} target="_blank" rel="noreferrer" onClick={() => setWaFor(null)} style={{ display: "block", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Elegir contacto de WhatsApp…</a>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>Los jefes de obra con teléfono cargado (en Personal) aparecen arriba para enviar directo.</div>
+        </div>}
+      </Card>); })}
     </div>
     {form && <Sheet title="Nuevo pedido de materiales" onClose={() => setForm(null)}>
       <Field label="Obra"><Sel value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
