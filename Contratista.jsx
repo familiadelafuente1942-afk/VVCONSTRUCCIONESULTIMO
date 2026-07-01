@@ -82,6 +82,11 @@ export default function ContratistaApp() {
     alert("✓ Pedido enviado. Le llega a V+V y a Belfast.");
   }
 
+  async function borrar(id) {
+    if (!confirm("¿Eliminar este pedido de materiales? También se quita en V+V y Belfast.")) return;
+    const r = await storage.get("vv_matpedidos"); let arr = []; if (r?.value) { try { arr = JSON.parse(r.value); } catch { } }
+    await persistMat(arr.filter(x => x.id !== id));
+  }
   const obraNom = id => obras.find(o => o.id === id)?.nombre || "—";
   const lista = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
@@ -118,7 +123,10 @@ export default function ContratistaApp() {
         </div>
         <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n")}</div>
         {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, fontStyle: "italic" }}>{p.nota}</div>}
-        <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 7, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado${p.leidoFecha ? " · " + p.leidoFecha : ""}` : "● Pendiente"}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 7, gap: 8 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado${p.leidoFecha ? " · " + p.leidoFecha : ""}` : "● Pendiente"}</div>
+          {mio && !p.leido && <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Eliminar</button>}
+        </div>
       </div>); })}
     </div>
 
