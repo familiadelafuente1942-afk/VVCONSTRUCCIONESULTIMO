@@ -37,6 +37,8 @@ export default function ContratistaApp() {
   const [tmpEmpresa, setTmpEmpresa] = useState("");
   const [obras, setObras] = useState([]);
   const [matpedidos, setMatpedidos] = useState([]);
+  const [personal, setPersonal] = useState([]);
+  const [waFor, setWaFor] = useState(null);
   const [form, setForm] = useState(null);
   const [editEmpresa, setEditEmpresa] = useState(false);
   const lastWrite = useRef(0);
@@ -45,9 +47,10 @@ export default function ContratistaApp() {
     let alive = true;
     async function pull() {
       try {
-        const [ro, rm] = await Promise.all([storage.get("vv_obras"), storage.get("vv_matpedidos")]);
+        const [ro, rm, rp] = await Promise.all([storage.get("vv_obras"), storage.get("vv_matpedidos"), storage.get("vv_personal")]);
         if (!alive) return;
         if (ro?.value) { try { setObras(JSON.parse(ro.value)); } catch { } }
+        if (rp?.value) { try { setPersonal(JSON.parse(rp.value)); } catch { } }
         if (rm?.value && Date.now() - lastWrite.current > 4000) { try { const mp = JSON.parse(rm.value); setMatpedidos(prev => JSON.stringify(mp) !== JSON.stringify(prev) ? mp : prev); } catch { } }
       } catch { }
     }
@@ -78,8 +81,8 @@ export default function ContratistaApp() {
     if (!items.length) { alert("Agregá al menos un material."); return; }
     const p = { id: uid() + Date.now(), obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), ts: Date.now(), de: "contratista", empresa, leido: false, leidoFecha: "" };
     const r = await storage.get("vv_matpedidos"); let arr = []; if (r?.value) { try { arr = JSON.parse(r.value); } catch { } }
-    await persistMat([p, ...arr]); setForm(null);
-    alert("✓ Pedido enviado. Le llega a V+V y a Belfast.");
+    await persistMat([p, ...arr]); setForm(null); setWaFor(p.id);
+    alert("✓ Pedido enviado a V+V y Belfast. Ahora podés mandarlo por WhatsApp al encargado de obra (abajo).");
   }
 
   async function borrar(id) {
@@ -88,6 +91,20 @@ export default function ContratistaApp() {
     await persistMat(arr.filter(x => x.id !== id));
   }
   const obraNom = id => obras.find(o => o.id === id)?.nombre || "—";
+  function waText(p) {
+    const lines = p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
+    return `*Pedido de materiales* — ${obraNom(p.obra_id)}\nFecha: ${p.fecha}\nContratista: ${p.empresa || empresa}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.`;
+  }
+  function waLink(text, phone) {
+    const t = encodeURIComponent(text);
+    if (phone) { const clean = String(phone).replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : ("549" + clean); return `https://wa.me/${num}?text=${t}`; }
+    return `https://wa.me/?text=${t}`;
+  }
+  function encargados(obra_id) { return (personal || []).filter(pe => pe.obra_id === obra_id && (pe.telefono || "").trim()); }
+  async function marcarEnviado(id, quien) {
+    const r = await storage.get("vv_matpedidos"); let arr = []; if (r?.value) { try { arr = JSON.parse(r.value); } catch { } }
+    await persistMat(arr.map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: quien || (empresa) } : x));
+  }
   const lista = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
   if (!empresa || editEmpresa) {
@@ -127,6 +144,14 @@ export default function ContratistaApp() {
           <div style={{ fontSize: 10.5, fontWeight: 700, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado${p.leidoFecha ? " · " + p.leidoFecha : ""}` : "● Pendiente"}</div>
           {mio && !p.leido && <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Eliminar</button>}
         </div>
+        {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 6 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
+        <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 9, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Mandar por WhatsApp al encargado</button>
+        {waFor === p.id && <div style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
+          {encargados(p.obra_id).map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}>📲 {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
+          <a href={waLink(waText(p))} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Elegir contacto…</a>
+          {encargados(p.obra_id).length === 0 && <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>No hay encargado con teléfono cargado para esta obra. Usá "Elegir contacto" o pedile a V+V que cargue el teléfono del encargado.</div>}
+        </div>}
       </div>); })}
     </div>
 

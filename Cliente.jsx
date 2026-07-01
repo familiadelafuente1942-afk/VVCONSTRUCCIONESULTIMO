@@ -979,9 +979,10 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const [waFor, setWaFor] = useState(null);
   function levantar(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, leido: true, leidoFecha: hoyStr() } : x)); }
+  function marcarEnviado(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
   function waText(p) {
     const lines = p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
-    return `*Pedido de materiales* — ${nomObra(p.obra_id)}\nFecha: ${p.fecha}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
+    return `*Pedido de materiales* — ${nomObra(p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
   }
   function waLink(text, phone) {
     const t = encodeURIComponent(text);
@@ -1004,10 +1005,11 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
           <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar por WhatsApp</button>
         </div>
         {p.leido && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#16A34A", marginTop: 8 }}>✓ Levantado{p.leidoFecha ? " · " + p.leidoFecha : ""}</div>}
+        {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 5 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
         {waFor === p.id && <div style={{ marginTop: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
-          {jefes.map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => setWaFor(null)} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}>📲 {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
-          <a href={waLink(waText(p))} target="_blank" rel="noreferrer" onClick={() => setWaFor(null)} style={{ display: "block", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Elegir contacto de WhatsApp…</a>
+          {jefes.map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}>📲 {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
+          <a href={waLink(waText(p))} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Elegir contacto de WhatsApp…</a>
           <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>Se abre WhatsApp con el pedido ya escrito. Los jefes de obra con teléfono cargado aparecen arriba.</div>
         </div>}
       </Card>); })}
