@@ -452,7 +452,7 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
   const debateSeen = useRef(0);
   async function saveDebate(deb) { try { localStorage.setItem("ia_debate", JSON.stringify(deb)); } catch { } await storage.set("ia_debate", JSON.stringify(deb)).catch(() => { }); }
   async function runDebateTurn() {
-    if (debateBusy.current || !apiKey) return;
+    if (debateBusy.current) return;
     debateBusy.current = true;
     try {
       const r = await storage.get("ia_debate"); const deb = r?.value ? JSON.parse(r.value) : null;
@@ -475,7 +475,6 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
   }
   async function startDebate() {
     const tema = debateTema.trim(); if (!tema) return;
-    if (!apiKey) { alert("Falta la API Key de V+V para usar el debate."); return; }
     const deb = { active: true, tema, turnos: [], maxTurnos: DEBATE_MAX, startedBy: "cliente", ts: Date.now() };
     await saveDebate(deb); debateSeen.current = 0; setDebateActive(true); setDebateOpen(false); setDebateTema("");
     setMsgs(prev => [...prev, { role: "assistant", content: `🎙 Debate técnico iniciado con la IA de V+V: "${tema}". Dejá las dos apps abiertas y mirá cómo se van respondiendo en vivo.`, debate: true }]);
