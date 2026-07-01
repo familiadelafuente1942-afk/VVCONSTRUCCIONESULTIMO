@@ -144,9 +144,15 @@ async function ejecutarAccion(accion, miSide, ctx) {
     if (ctx.setMensajes) ctx.setMensajes(next);
     return "Mensaje enviado a V+V (aparece en Mensajes).";
   }
+  if (accion.tipo === "preguntar_ia") {
+    const msg = { id: uid() + Date.now(), from: miSide, texto: accion.texto || "", tipo: "q", answered: false, fecha: hoyStr(), ts: Date.now() };
+    let arr = []; try { const r = await storage.get("ia_dialogo"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+    const next = [...arr, msg]; try { localStorage.setItem("ia_dialogo", JSON.stringify(next)); } catch { } await storage.set("ia_dialogo", JSON.stringify(next)).catch(() => { });
+    return "Le pasé tu consulta directo a la IA de V+V. Te muestro acá la respuesta apenas conteste.";
+  }
   return null;
 }
-function accionLabel(a) { if (!a) return ""; if (a.tipo === "crear_pedido") return `Crear pedido → ${a.para === "cliente" ? "V+V/Cliente" : "V+V"}: “${a.asunto || ""}”`; if (a.tipo === "responder_pedido") return "Responder pedido"; if (a.tipo === "resolver_pedido") return "Marcar pedido como resuelto"; if (a.tipo === "enviar_mensaje") return `Enviar mensaje a V+V: “${(a.texto || "").slice(0, 60)}”`; if (a.tipo === "cargar_personal") return `Cargar personal al sitio “${a.sitio || ""}”${a.obra ? ` (obra ${a.obra})` : a.personal && a.personal !== "todos" ? ` (${Array.isArray(a.personal) ? a.personal.join(", ") : a.personal})` : " (todos)"}`; return a.tipo; }
+function accionLabel(a) { if (!a) return ""; if (a.tipo === "crear_pedido") return `Crear pedido → ${a.para === "cliente" ? "V+V/Cliente" : "V+V"}: “${a.asunto || ""}”`; if (a.tipo === "responder_pedido") return "Responder pedido"; if (a.tipo === "resolver_pedido") return "Marcar pedido como resuelto"; if (a.tipo === "enviar_mensaje") return `Enviar mensaje a V+V: “${(a.texto || "").slice(0, 60)}”`; if (a.tipo === "preguntar_ia") return `Consultar a la IA de V+V: “${(a.texto || "").slice(0, 60)}”`; if (a.tipo === "cargar_personal") return `Cargar personal al sitio “${a.sitio || ""}”${a.obra ? ` (obra ${a.obra})` : a.personal && a.personal !== "todos" ? ` (${Array.isArray(a.personal) ? a.personal.join(", ") : a.personal})` : " (todos)"}`; return a.tipo; }
 
 const ESTADOS = { pendiente: { l: "Pendiente", c: "#94A3B8", b: "#F8FAFC" }, curso: { l: "En curso", c: "#10B981", b: "#ECFDF5" }, pausada: { l: "Pausada", c: "#F59E0B", b: "#FFFBEB" }, terminada: { l: "Terminada", c: "#6366F1", b: "#EEF2FF" } };
 const BRASS = "#B0894F";
@@ -401,7 +407,7 @@ function AjustesScreen({ T, cfg, setCfg }) {
       </div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 29-06b</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 01-07-IA</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -448,7 +454,10 @@ PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ
 {"tipo":"responder_pedido","pedido_id":"ID","texto":"..."}
 {"tipo":"resolver_pedido","pedido_id":"ID"}
 {"tipo":"enviar_mensaje","texto":"el mensaje para V+V"}
+{"tipo":"preguntar_ia","texto":"la consulta para la IA de V+V"}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: cargar todos los de esa obra"}
+REGLA: si te piden PREGUNTARLE/PEDIRLE/CONSULTARLE algo a LA IA / EL ASISTENTE de V+V (o que "la IA de V+V" haga/pase algo), usá "preguntar_ia" (va directo a la otra IA, que responde sola). Si es un mensaje para V+V (su pantalla de Mensajes), usá "enviar_mensaje".
+BANCOS DE DATOS CONECTADOS (MUY IMPORTANTE): tu app y la de V+V son dos bancos de datos conectados por las IA. Si te piden un DATO (de una obra, personal, avance, documento, etc.) que NO figura en tus datos, NO respondas "no lo tengo": usá "preguntar_ia" para que la IA de V+V lo busque en SU app y te lo pase. Avisá "no lo tengo acá, se lo consulto a la IA de V+V". (Para info EXTERNA o actual —precios, normativa, proveedores— usá la BÚSQUEDA WEB, no preguntar_ia.)
 Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   }
   async function send(texto) {
@@ -462,6 +471,42 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   }
   async function confirmAccion(idx) { const m = msgs[idx]; if (!m?.accion) return; const res = await ejecutarAccion(m.accion, "cliente", { setPedidos, personal, setPersonal, obras }); setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accionDone: true, accionResultado: res || "Acción ejecutada." } : x)); }
   function descartarAccion(idx) { setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accion: null, accionDescartada: true } : x)); }
+  // ── Canal directo IA↔IA: muestra lo que consulta/responde V+V y responde solo ──
+  const sysRef = useRef(null); sysRef.current = sys;
+  const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
+  const iaSeen = useRef(-1);
+  useEffect(() => {
+    const iv = setInterval(async () => {
+      try {
+        const r = await storage.get("ia_dialogo"); if (!r?.value) return;
+        let arr = JSON.parse(r.value);
+        if (iaSeen.current < 0) iaSeen.current = arr.length;
+        else if (arr.length > iaSeen.current) {
+          const nuevos = arr.slice(iaSeen.current); iaSeen.current = arr.length;
+          setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "cliente" ? cfg.nombre : "V+V"} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
+        }
+        const pend = arr.find(m => m.from !== "cliente" && m.tipo === "q" && !m.answered);
+        if (pend) {
+          arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
+          await storage.set("ia_dialogo", JSON.stringify(arr)).catch(() => { });
+          const resp = await callAI([{ role: "user", content: `La IA de V+V te consultó esto: "${pend.texto}". Si tenés el dato en tu información, respondé breve, concreto y cordial como asistente de ${cfg.nombre} (solo el texto). Si NO tenés ese dato en tus datos, respondé ÚNICAMENTE con la palabra: NO_DATO` }], sysRef.current ? sysRef.current() : "", apiKeyRef.current, false);
+          let arr2 = []; try { const r2 = await storage.get("ia_dialogo"); if (r2?.value) arr2 = JSON.parse(r2.value); } catch { }
+          arr2 = arr2.map(m => m.id === pend.id ? { ...m, answered: true } : m);
+          let textoResp = resp;
+          if ((resp || "").trim().toUpperCase().startsWith("NO_DATO")) {
+            let peds = []; try { const rp = await storage.get("vv_pedidos"); if (rp?.value) peds = JSON.parse(rp.value); } catch { }
+            const np = nuevoPedido({ de: pend.from, para: "cliente", asunto: `[URGENTE] Consulta de la IA de V+V`, detalle: pend.texto, prioridad: "alta", obra_id: "" });
+            const pedsNext = [np, ...peds]; try { localStorage.setItem("vv_pedidos", JSON.stringify(pedsNext)); } catch { } await storage.set("vv_pedidos", JSON.stringify(pedsNext)).catch(() => { });
+            textoResp = `No tengo ese dato en la app de ${cfg.nombre}. Lo derivé al personal de ${cfg.nombre} como URGENTE (quedó en Pedidos). Respondemos apenas lo tengan.`;
+          }
+          arr2.push({ id: uid() + Date.now(), from: "cliente", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
+          try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
+          await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
+        }
+      } catch { }
+    }, 6000);
+    return () => clearInterval(iv);
+  }, []);
   const QUICK = ["¿Cómo viene el avance de cada obra?", "Cargá al personal de [obra] al barrio…", "¿Hay pedidos sin resolver?"];
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
     {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", borderBottom: "1px solid #FECACA", padding: "11px 16px", cursor: "pointer", flexShrink: 0 }}>
@@ -864,7 +909,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 29-06b</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 01-07-IA</span>
     </div>
   </div>);
 }

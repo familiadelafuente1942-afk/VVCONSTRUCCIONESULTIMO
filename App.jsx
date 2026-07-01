@@ -1823,7 +1823,7 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <input value={cfg.apiKey||""} onChange={e=>setCfg(p=>({...p,apiKey:e.target.value}))} placeholder="sk-ant-..." style={{ width:"100%", background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", fontSize:13, color:T.text }} />
       <div style={{ marginTop:20 }}><Eyebrow>Actualizaciones</Eyebrow></div>
       <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"13px 14px" }}>
-        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 29-06b</b></div>
+        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 01-07-IA</b></div>
         <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Trae la última versión y todo lo último cargado (fotos, archivos, pedidos y cambios de cualquier dispositivo). Limpia la caché.</div>
         <button onClick={()=>{ try{ if(window.caches) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))); }catch(e){} location.replace(location.pathname+"?sync="+Date.now()); }} style={{ width:"100%", background:T.accent, color:"#fff", border:"none", borderRadius:T.rsm, padding:"12px", fontSize:13.5, fontWeight:700, cursor:"pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -2039,7 +2039,12 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
 4) Sos el agente de mensajería con ${cn} y GESTIONÁS PEDIDOS (temas a resolver con la otra empresa): podés crear pedidos, responderlos y marcarlos resueltos.
 5) ESTÁS CONECTADO con la app y el asistente de ${cn}: comparten la misma base de datos en tiempo real (obras, personal, pedidos, mensajes). Todo lo que carguen o pregunten de un lado, se ve del otro. Podés ENVIARLE UN MENSAJE directo a ${cn} (les aparece en su pantalla de Mensajes) y ellos te responden. NUNCA digas que no podés comunicarte con ${cn} ni con su asistente: SÍ podés, mandando un mensaje.
 
-REGLA CLAVE: si el usuario te pide COMUNICARTE, HABLAR, AVISAR, DECIRLE algo, PREGUNTARLE algo o MANDAR UN MENSAJE a ${cn} o a su asistente, usá SIEMPRE la acción "enviar_mensaje" (se envía directo, al toque). NO uses "crear_pedido" para eso. "crear_pedido" es solo para pedidos formales de definiciones o documentación.
+REGLA CLAVE de comunicación:
+- Si te piden PREGUNTARLE, PEDIRLE, CONSULTARLE algo a LA IA / EL ASISTENTE de ${cn}, o que "la IA de ${cn}" haga/pase/averigüe algo → usá "preguntar_ia". Va DIRECTO a la otra IA, que responde sola y la respuesta te aparece acá.
+- BANCOS DE DATOS CONECTADOS (MUY IMPORTANTE): tu app y la de ${cn} son dos bancos de datos conectados por las IA. Si te piden un DATO (de una obra, personal, avance, documento, etc.) que NO figura en tus datos de arriba, NO respondas "no lo tengo": usá "preguntar_ia" para que la IA de ${cn} lo busque en SU app y te lo pase. Avisale al usuario "no lo tengo acá, se lo consulto a la IA de ${cn}". (OJO: para información EXTERNA o actual —precios, normativa, proveedores— usá la BÚSQUEDA WEB, no preguntar_ia.)
+- Si te piden mandar un MENSAJE a ${cn} (a la persona/empresa, para su pantalla de Mensajes) → usá "enviar_mensaje".
+- "crear_pedido" es solo para pedidos formales de definiciones o documentación.
+Nunca digas que no podés comunicarte: SÍ podés.
 
 OBRAS:\n${ob || "(sin obras)"}
 
@@ -2056,6 +2061,7 @@ PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} 
 {"tipo":"responder_pedido","pedido_id":"ID_EXACTO","texto":"..."}
 {"tipo":"resolver_pedido","pedido_id":"ID_EXACTO"}
 {"tipo":"enviar_mensaje","texto":"el mensaje para ${cn}"}
+{"tipo":"preguntar_ia","texto":"la consulta para la IA de ${cn}"}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: todos los de esa obra"}
 Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el bloque. La acción se ejecuta cuando el usuario la confirma.`;
   }
@@ -2074,6 +2080,43 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     if (accion) { const res = await ejecutarAccion(accion, "vv", { setPedidos: db.setPedidos, personal: db.personal, setPersonal: db.setPersonal, obras: db.obras, setMensajes: db.setMensajes }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
     setMsgs([...next, { role: "assistant", content: limpio, ...extra }]); setLoading(false);
   }
+  // ── Canal directo IA↔IA: muestra lo que consulta/responde la otra IA y responde solo ──
+  const cnIA = cfg?.clienteNombre || "el cliente";
+  const sysRef = useRef(null); sysRef.current = buildSystem;
+  const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
+  const iaSeen = useRef(-1);
+  useEffect(() => {
+    const iv = setInterval(async () => {
+      try {
+        const r = await storage.get("ia_dialogo"); if (!r?.value) return;
+        let arr = JSON.parse(r.value);
+        if (iaSeen.current < 0) iaSeen.current = arr.length;
+        else if (arr.length > iaSeen.current) {
+          const nuevos = arr.slice(iaSeen.current); iaSeen.current = arr.length;
+          setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "vv" ? "V+V" : cnIA} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
+        }
+        const pend = arr.find(m => m.from !== "vv" && m.tipo === "q" && !m.answered);
+        if (pend) {
+          arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
+          await storage.set("ia_dialogo", JSON.stringify(arr)).catch(() => { });
+          const resp = await callAI([{ role: "user", content: `La IA de ${cnIA} te consultó esto: "${pend.texto}". Si tenés el dato en tu información, respondé breve, concreto y cordial como asistente de V+V Construcciones (solo el texto). Si NO tenés ese dato en tus datos, respondé ÚNICAMENTE con la palabra: NO_DATO` }], sysRef.current ? sysRef.current() : "", apiKeyRef.current, false);
+          let arr2 = []; try { const r2 = await storage.get("ia_dialogo"); if (r2?.value) arr2 = JSON.parse(r2.value); } catch { }
+          arr2 = arr2.map(m => m.id === pend.id ? { ...m, answered: true } : m);
+          let textoResp = resp;
+          if ((resp || "").trim().toUpperCase().startsWith("NO_DATO")) {
+            let peds = []; try { const rp = await storage.get("vv_pedidos"); if (rp?.value) peds = JSON.parse(rp.value); } catch { }
+            const np = nuevoPedido({ de: pend.from, para: "vv", asunto: `[URGENTE] Consulta de la IA de ${cnIA}`, detalle: pend.texto, prioridad: "alta", obra_id: "" });
+            const pedsNext = [np, ...peds]; try { localStorage.setItem("vv_pedidos", JSON.stringify(pedsNext)); } catch { } await storage.set("vv_pedidos", JSON.stringify(pedsNext)).catch(() => { });
+            textoResp = `No tengo ese dato en la app de V+V. Lo derivé al personal de V+V como URGENTE (quedó en Pedidos). Te respondemos apenas lo tengan.`;
+          }
+          arr2.push({ id: uid() + Date.now(), from: "vv", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
+          try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
+          await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
+        }
+      } catch { }
+    }, 6000);
+    return () => clearInterval(iv);
+  }, []);
   function toggleVoz() {
     if (!sttOk) return;
     if (escuchando) { recRef.current?.stop(); setEscuchando(false); return; }
@@ -2779,9 +2822,15 @@ async function ejecutarAccion(accion, miSide, ctx){
     if(ctx.setMensajes) ctx.setMensajes(next);
     return "Mensaje enviado a la otra empresa (aparece en Mensajes).";
   }
+  if(accion.tipo==="preguntar_ia"){
+    const msg={ id:uid()+Date.now(), from:miSide, texto:accion.texto||"", tipo:"q", answered:false, fecha:hoyStr(), ts:Date.now() };
+    let arr=[]; try{const r=await storage.get("ia_dialogo"); if(r?.value) arr=JSON.parse(r.value);}catch{}
+    const next=[...arr,msg]; try{ localStorage.setItem("ia_dialogo",JSON.stringify(next)); }catch{} await storage.set("ia_dialogo",JSON.stringify(next)).catch(()=>{});
+    return "Le pasé tu consulta directo a la IA de la otra empresa. Te muestro acá la respuesta apenas conteste.";
+  }
   return null;
 }
-function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
+function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="preguntar_ia") return `Consultar a la IA de la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
 
 function PedidosView({ db, cfg, apiKey, onBack }) {
   const { pedidos, setPedidos, obras } = db;
@@ -3378,7 +3427,7 @@ function WebFooter({ cfg }) {
   return (<div style={{ background:T.navy, color:"rgba(255,255,255,.55)", flexShrink:0, borderTop:`2px solid ${BRASS}` }}>
     <div style={{ maxWidth:1180, margin:"0 auto", padding:"11px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, fontSize:11 }}>
       <span style={{ fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,.8)" }}>V+V CONSTRUCCIONES</span>
-      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 29-06b</span>
+      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 01-07-IA</span>
     </div>
   </div>);
 }
