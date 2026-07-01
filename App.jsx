@@ -2037,7 +2037,9 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
 2) Conocés los datos de la app y respondés sobre obras, personal, proyectos y pedidos.
 3) Redactás notas, mails y mensajes.
 4) Sos el agente de mensajería con ${cn} y GESTIONÁS PEDIDOS (temas a resolver con la otra empresa): podés crear pedidos, responderlos y marcarlos resueltos.
-5) ESTÁS CONECTADO con la app y el asistente de ${cn}: comparten la misma base de datos en tiempo real (obras, personal, pedidos, mensajes). Todo lo que carguen o pregunten de un lado, se ve del otro. Podés ENVIARLE UN MENSAJE directo a ${cn} (les aparece en su pantalla de Mensajes) y ellos te responden.
+5) ESTÁS CONECTADO con la app y el asistente de ${cn}: comparten la misma base de datos en tiempo real (obras, personal, pedidos, mensajes). Todo lo que carguen o pregunten de un lado, se ve del otro. Podés ENVIARLE UN MENSAJE directo a ${cn} (les aparece en su pantalla de Mensajes) y ellos te responden. NUNCA digas que no podés comunicarte con ${cn} ni con su asistente: SÍ podés, mandando un mensaje.
+
+REGLA CLAVE: si el usuario te pide COMUNICARTE, HABLAR, AVISAR, DECIRLE algo, PREGUNTARLE algo o MANDAR UN MENSAJE a ${cn} o a su asistente, usá SIEMPRE la acción "enviar_mensaje" (se envía directo, al toque). NO uses "crear_pedido" para eso. "crear_pedido" es solo para pedidos formales de definiciones o documentación.
 
 OBRAS:\n${ob || "(sin obras)"}
 
@@ -2068,7 +2070,9 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     setInput(""); const next = [...msgs, { role: "user", content: c }]; setMsgs(next); setLoading(true);
     const r = await callAI(next, buildSystem(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(r);
-    setMsgs([...next, { role: "assistant", content: limpio, accion }]); setLoading(false);
+    let extra = {};
+    if (accion) { const res = await ejecutarAccion(accion, "vv", { setPedidos: db.setPedidos, personal: db.personal, setPersonal: db.setPersonal, obras: db.obras, setMensajes: db.setMensajes }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
+    setMsgs([...next, { role: "assistant", content: limpio, ...extra }]); setLoading(false);
   }
   function toggleVoz() {
     if (!sttOk) return;
@@ -2251,19 +2255,21 @@ function InformesView({ db, apiKey, onBack }) {
   }
   const todos = obras.flatMap(o => (o.informes || []).map(inf => ({ ...inf, obra: o.nombre, obra_id: o.id }))).filter(inf => !filtro || inf.obra_id === filtro).sort((a, b) => (b.id > a.id ? 1 : -1));
   async function generar() {
-    const o = obras.find(x => x.id === obraId); if (!o) return; setLoading(true);
+    const o = obras.find(x => x.id === obraId) || obras[0]; if (!o) { alert("Primero creá una obra."); return; } setLoading(true);
     const sys = "Sos inspector técnico de V+V Construcciones. Redactás informes de avance profesionales en español rioplatense.";
     const prompt = `Redactá un informe técnico de avance para la obra "${o.nombre}" (${o.sector}). Estado: ${o.estado}, avance ${o.avance}%, inicio ${o.inicio}, cierre estimado ${o.cierre}. Incluí: situación general, trabajos ejecutados, pendientes, alertas y conclusión.`;
     const r = await callAI([{ role: "user", content: prompt }], sys, apiKey, false);
     const inf = { id: uid() + Date.now(), fecha: hoyStr(), titulo: "Informe de avance (IA)", texto: r, tipo: "ia", archivos: [] };
-    setObras(p => p.map(x => x.id === obraId ? { ...x, informes: [...(x.informes || []), inf] } : x));
-    setLoading(false); setOpen({ ...inf, obra: o.nombre });
+    setObras(p => p.map(x => x.id === o.id ? { ...x, informes: [...(x.informes || []), inf] } : x));
+    setLoading(false); setOpen({ ...inf, obra: o.nombre, obra_id: o.id });
   }
   async function addArch(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await toDataUrl(f); const url = await uploadFoto(data, "informes", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url }); } setNuevo(p => ({ ...p, archivos: [...(p.archivos || []), ...nuevos] })); e.target.value = ""; }
   function guardarManual() {
-    if (!nuevo.titulo?.trim() && !nuevo.texto?.trim()) return;
+    if (!nuevo.titulo?.trim() && !nuevo.texto?.trim()) { alert("Escribí al menos un título o el detalle del informe."); return; }
+    const targetId = nuevo.obra_id || obras[0]?.id;
+    if (!targetId) { alert("Primero creá una obra para poder guardar el informe."); return; }
     const inf = { id: uid() + Date.now(), fecha: hoyStr(), titulo: nuevo.titulo || "Informe técnico", texto: nuevo.texto || "", tipo: "tecnico", archivos: nuevo.archivos || [] };
-    setObras(p => p.map(x => x.id === nuevo.obra_id ? { ...x, informes: [...(x.informes || []), inf] } : x));
+    setObras(p => p.map(x => x.id === targetId ? { ...x, informes: [...(x.informes || []), inf] } : x));
     setNuevo(null);
   }
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
@@ -2274,7 +2280,7 @@ function InformesView({ db, apiKey, onBack }) {
         <Field label="Obra"><Sel value={obraId} onChange={e => setObraId(e.target.value)}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
         <div style={{ display: "flex", gap: 8 }}>
           <PBtn onClick={generar} disabled={loading} style={{ flex: 1 }}>{loading ? "Generando…" : "Generar con IA"}</PBtn>
-          <button onClick={() => setNuevo({ obra_id: obraId, titulo: "", texto: "", archivos: [] })} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>＋ Informe manual</button>
+          <button onClick={() => setNuevo({ obra_id: obraId || obras[0]?.id || "", titulo: "", texto: "", archivos: [] })} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>＋ Informe manual</button>
         </div>
       </Card>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -2529,9 +2535,14 @@ function PresentismoView({ db, onBack }) {
 
 // ── ARCHIVOS ─────────────────────────────────────────────────────────
 function ArchivosView({ db, onBack }) {
-  const { obras, archivosGen, setArchivosGen } = db;
+  const { obras, archivosGen, setArchivosGen, setObras } = db;
   const ref = useRef(null);
-  const obraArch = obras.flatMap(o => (o.archivos || []).map(a => ({ ...a, obra: o.nombre })));
+  const obraArch = obras.flatMap(o => (o.archivos || []).map(a => ({ ...a, obra: o.nombre, obra_id: o.id })));
+  function borrarObraArch(a) {
+    if (!confirm("¿Eliminar este archivo de la obra?")) return;
+    const k = a.id || a.url || a.nombre;
+    setObras(p => p.map(x => x.id === a.obra_id ? { ...x, archivos: (x.archivos || []).filter(f => (f.id || f.url || f.nombre) !== k) } : x));
+  }
   async function subir(e) {
     const files = Array.from(e.target.files); if (!files.length) return;
     const nuevos = await Promise.all(files.map(async f => ({ id: uid(), nombre: f.name, url: await toDataUrl(f), fecha: hoyStr() })));
@@ -2550,7 +2561,7 @@ function ArchivosView({ db, onBack }) {
           </a>
         </RowItem>))}</>}
       {obraArch.length > 0 && <div style={{ marginTop: 16 }}><Eyebrow>De obras</Eyebrow>
-        {obraArch.map((a, i) => (<RowItem key={i}><div style={{ display: "flex", alignItems: "center", gap: 11 }}><div style={{ width: 36, height: 36, borderRadius: 8, background: T.bg, color: T.muted, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><MIcon id="archivos" /></div><div><div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{a.nombre || "archivo"}</div><div style={{ fontSize: 11, color: T.muted }}>{a.obra}</div></div></div></RowItem>))}
+        {obraArch.map((a, i) => (<RowItem key={i} onDelete={() => borrarObraArch(a)}>{a.url ? <a href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 11 }}><div style={{ width: 36, height: 36, borderRadius: 8, background: T.bg, color: T.muted, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><MIcon id="archivos" /></div><div><div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{a.nombre || "archivo"}</div><div style={{ fontSize: 11, color: T.muted }}>{a.obra}</div></div></a> : <div style={{ display: "flex", alignItems: "center", gap: 11 }}><div style={{ width: 36, height: 36, borderRadius: 8, background: T.bg, color: T.muted, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><MIcon id="archivos" /></div><div><div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{a.nombre || "archivo"}</div><div style={{ fontSize: 11, color: T.muted }}>{a.obra}</div></div></div>}</RowItem>))}
       </div>}
       {archivosGen.length === 0 && obraArch.length === 0 && <EmptyMsg>Sin archivos cargados.</EmptyMsg>}
     </div>
