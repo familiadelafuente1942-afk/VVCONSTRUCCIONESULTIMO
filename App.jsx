@@ -1066,7 +1066,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
                 `Sos un inspector de obras de obras para V+V Construcciones. Analizás fotos y generás informes técnicos precisos y profesionales en español rioplatense. Si identificás materiales o trabajos, podés buscar precios actualizados en internet para incluir estimaciones de costo.`,
                 apiKey, true);
             setInforme(r);
-            const nuevoInf = { id: uid(), titulo: `Análisis IA — ${new Date().toLocaleDateString('es-AR')}`, tipo: 'diario', fecha: new Date().toLocaleDateString('es-AR'), notas: 'Generado automáticamente por IA a partir de fotos', nombre: 'informe_ia.txt', ext: 'IA', url: 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(r))), size: '—', cargado: new Date().toLocaleDateString('es-AR') };
+            const nuevoInf = { id: uid(), ts: Date.now(), titulo: `Análisis IA — ${new Date().toLocaleDateString('es-AR')}`, tipo: 'diario', fecha: new Date().toLocaleDateString('es-AR'), notas: 'Generado automáticamente por IA a partir de fotos', nombre: 'informe_ia.txt', ext: 'IA', url: 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(r))), size: '—', cargado: new Date().toLocaleDateString('es-AR') };
             upd(detail.id, { informes: [nuevoInf, ...(detail.informes || [])] });
         } catch (e) { setInforme('Error al analizar: ' + e.message); }
         setLoadingIA(false); setModoSel(false); setSelFotos([]);
@@ -1138,7 +1138,7 @@ function TabInformes({ detail, upd }) {
         for (const f of files) {
             const url = await toDataUrl(f);
             nuevos.push({
-                id: uid(), titulo: form.titulo || f.name.replace(/\.[^.]+$/, ''),
+                id: uid(), ts: Date.now(), titulo: form.titulo || f.name.replace(/\.[^.]+$/, ''),
                 tipo: form.tipo || subTab, fecha: form.fecha || new Date().toLocaleDateString('es-AR'),
                 notas: form.notas, nombre: f.name, ext: f.name.split('.').pop().toUpperCase(),
                 url, size: (f.size / 1024).toFixed(0) + 'KB', cargado: new Date().toLocaleDateString('es-AR'),
@@ -2236,6 +2236,12 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
       const sysD = `Sos la IA de V+V Construcciones en una CHARLA TÉCNICA con la IA de ${cnDeb} sobre: "${deb.tema}". Es colaborativa: ambas suman y profundizan (no discuten). Aportá EL SIGUIENTE turno: información nueva y concreta, profundizá un aspecto no tocado, y cerrá con un gancho o pregunta para que la otra IA siga. NO repitas lo ya dicho. Español rioplatense, tono técnico de construcción. Máximo 3-4 oraciones.`;
       const userD = deb.turnos.length === 0 ? `Arrancá la charla técnica sobre "${deb.tema}".` : `Charla hasta ahora:\n${convo}\n\nDá tu siguiente intervención.`;
       const resp = await callAI([{ role: "user", content: userD }], sysD, apiKey, false);
+      if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(resp || ""))) {
+        const rE = await storage.get("ia_debate"); const debE = rE?.value ? JSON.parse(rE.value) : deb;
+        debE.active = false; await saveDebate(debE); setDebateActive(false);
+        setMsgs(prev => [...prev, { role: "assistant", content: "🎙 Debate frenado: no hay crédito de API disponible. Recargá créditos en console.anthropic.com y volvé a intentar.", debate: true }]);
+        debateBusy.current = false; return;
+      }
       const r2 = await storage.get("ia_debate"); const deb2 = r2?.value ? JSON.parse(r2.value) : deb;
       if (!deb2.active) { setDebateActive(false); debateBusy.current = false; return; }
       deb2.turnos = [...(deb2.turnos || []), { from: "vv", texto: (resp || "").trim(), ts: Date.now() }];
@@ -2433,6 +2439,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           const resp = await callAI([{ role: "user", content: `Consulta de la IA de ${cnIA}: "${pend.texto}"` }], sysResp, apiKeyRef.current, false);
           let arr2 = []; try { const r2 = await storage.get("ia_dialogo"); if (r2?.value) arr2 = JSON.parse(r2.value); } catch { }
           arr2 = arr2.map(m => m.id === pend.id ? { ...m, answered: true } : m);
+          if (/credit balance|too low to access|purchase credits|is too low/i.test(String(resp||""))) { iaBusy.current=false; return; }
           let textoResp = resp;
           if ((resp || "").trim().toUpperCase().startsWith("NO_DATO")) {
             let peds = []; try { const rp = await storage.get("vv_pedidos"); if (rp?.value) peds = JSON.parse(rp.value); } catch { }
@@ -2664,7 +2671,7 @@ function InformesView({ db, apiKey, onBack }) {
     const sys = "Sos inspector técnico de V+V Construcciones. Redactás informes de avance profesionales en español rioplatense.";
     const prompt = `Redactá un informe técnico de avance para la obra "${o.nombre}" (${o.sector}). Estado: ${o.estado}, avance ${o.avance}%, inicio ${o.inicio}, cierre estimado ${o.cierre}. Incluí: situación general, trabajos ejecutados, pendientes, alertas y conclusión.`;
     const r = await callAI([{ role: "user", content: prompt }], sys, apiKey, false);
-    const inf = { id: uid() + Date.now(), fecha: hoyStr(), titulo: "Informe de avance (IA)", texto: r, tipo: "ia", archivos: [] };
+    const inf = { id: uid() + Date.now(), ts: Date.now(), fecha: hoyStr(), titulo: "Informe de avance (IA)", texto: r, tipo: "ia", archivos: [] };
     setObras(p => p.map(x => x.id === o.id ? { ...x, informes: [...(x.informes || []), inf] } : x));
     setLoading(false); setOpen({ ...inf, obra: o.nombre, obra_id: o.id });
   }
@@ -2673,7 +2680,7 @@ function InformesView({ db, apiKey, onBack }) {
     if (!nuevo.titulo?.trim() && !nuevo.texto?.trim()) { alert("Escribí al menos un título o el detalle del informe."); return; }
     const targetId = nuevo.obra_id || obras[0]?.id;
     if (!targetId) { alert("Primero creá una obra para poder guardar el informe."); return; }
-    const inf = { id: uid() + Date.now(), fecha: hoyStr(), titulo: nuevo.titulo || "Informe técnico", texto: nuevo.texto || "", tipo: "tecnico", archivos: nuevo.archivos || [] };
+    const inf = { id: uid() + Date.now(), ts: Date.now(), fecha: hoyStr(), titulo: nuevo.titulo || "Informe técnico", texto: nuevo.texto || "", tipo: "tecnico", archivos: nuevo.archivos || [] };
     setObras(p => p.map(x => x.id === targetId ? { ...x, informes: [...(x.informes || []), inf] } : x));
     setNuevo(null);
   }
@@ -3894,13 +3901,14 @@ function App() {
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
   const unreadMat = (matpedidos || []).filter(p => p.de !== "vv" && (p.ts || 0) > (seen.materiales || 0)).length;
+  const unreadInformes = (obras || []).flatMap(o => o.informes || []).filter(inf => (inf.ts || 0) > (seen.informes || 0)).length;
   const pendVV = pedidos.filter(p => p.para === "vv" && p.estado !== "resuelto").length;
-  const navBadges = { mensajes: unreadMensajes, mas: pendVV + unreadMat };
+  const navBadges = { mensajes: unreadMensajes, informes: unreadInformes, mas: pendVV + unreadMat };
   useEffect(() => {
-    const total = unreadMensajes + pendVV + unreadMat;
+    const total = unreadMensajes + pendVV + unreadMat + unreadInformes;
     try { if ("setAppBadge" in navigator) { if (total > 0) navigator.setAppBadge(total); else navigator.clearAppBadge && navigator.clearAppBadge(); } } catch { }
-  }, [unreadMensajes, pendVV, unreadMat]);
-  const go = (v)=>{ setView(v); if (v === "mensajes") markSeen("mensajes"); if (v === "mas") markSeen("materiales"); };
+  }, [unreadMensajes, pendVV, unreadMat, unreadInformes]);
+  const go = (v)=>{ setView(v); if (v === "mensajes") markSeen("mensajes"); if (v === "mas") markSeen("materiales"); if (v === "informes") markSeen("informes"); };
   const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos };
 
   return (
