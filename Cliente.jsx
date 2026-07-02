@@ -516,6 +516,12 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
       const sysD = `Sos la IA de ${cfg.nombre} en una CHARLA TÉCNICA con la IA de V+V Construcciones sobre: "${deb.tema}". Es colaborativa: ambas suman y profundizan (no discuten). Aportá EL SIGUIENTE turno: información nueva y concreta, profundizá un aspecto no tocado, y cerrá con un gancho o pregunta para que la otra IA siga. NO repitas lo ya dicho. Español rioplatense, tono técnico de construcción. Máximo 3-4 oraciones.`;
       const userD = deb.turnos.length === 0 ? `Arrancá la charla técnica sobre "${deb.tema}".` : `Charla hasta ahora:\n${convo}\n\nDá tu siguiente intervención.`;
       const resp = await callAI([{ role: "user", content: userD }], sysD, apiKey, false);
+      if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(resp || ""))) {
+        const rE = await storage.get("ia_debate"); const debE = rE?.value ? JSON.parse(rE.value) : deb;
+        debE.active = false; await saveDebate(debE); setDebateActive(false);
+        setMsgs(prev => [...prev, { role: "assistant", content: "🎙 Debate frenado: no hay crédito de API disponible. Recargá créditos en console.anthropic.com y volvé a intentar.", debate: true }]);
+        debateBusy.current = false; return;
+      }
       const r2 = await storage.get("ia_debate"); const deb2 = r2?.value ? JSON.parse(r2.value) : deb;
       if (!deb2.active) { setDebateActive(false); debateBusy.current = false; return; }
       deb2.turnos = [...(deb2.turnos || []), { from: "cliente", texto: (resp || "").trim(), ts: Date.now() }];
@@ -682,6 +688,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
           const resp = await callAI([{ role: "user", content: `Consulta de la IA de V+V: "${pend.texto}"` }], sysResp, apiKeyRef.current, false);
           let arr2 = []; try { const r2 = await storage.get("ia_dialogo"); if (r2?.value) arr2 = JSON.parse(r2.value); } catch { }
           arr2 = arr2.map(m => m.id === pend.id ? { ...m, answered: true } : m);
+          if (/credit balance|too low to access|purchase credits|is too low/i.test(String(resp||""))) { iaBusy.current=false; return; }
           let textoResp = resp;
           if ((resp || "").trim().toUpperCase().startsWith("NO_DATO")) {
             let peds = []; try { const rp = await storage.get("vv_pedidos"); if (rp?.value) peds = JSON.parse(rp.value); } catch { }
@@ -1170,8 +1177,8 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion }) {
 }
 
 // ── SHELL WEB INSTITUCIONAL (Cliente) ────────────────────────────────
-function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unreadForms, unreadMat }) {
-  const badge = (id) => (id === "mensajes" ? unread : id === "formularios" ? (unreadForms || 0) : id === "pedidos" ? pendientes : id === "materiales" ? (unreadMat || 0) : 0);
+function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unreadForms, unreadMat, unreadInf }) {
+  const badge = (id) => (id === "mensajes" ? unread : id === "formularios" ? (unreadForms || 0) : id === "pedidos" ? pendientes : id === "materiales" ? (unreadMat || 0) : id === "informes" ? (unreadInf || 0) : 0);
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
       <div style={{ background: T.navy, color: "#fff" }}>
@@ -1254,11 +1261,19 @@ function ClienteApp() {
   const [toast, setToast] = useState(null);
   const [unread, setUnread] = useState(0);
   const [unreadForms, setUnreadForms] = useState(0);
+  // Persistente: recuerda lo visto aunque se cierre la app → badge aunque haya llegado con la app cerrada.
+  const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("cliente_seen") || "{}"); } catch { return {}; } });
+  function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("cliente_seen", JSON.stringify(n)); } catch { } return n; }); }
+  const unreadMsg = (mensajes || []).filter(m => m.from && m.from !== "cliente" && (m.ts || 0) > (seen.mensajes || 0)).length;
+  const unreadInf = (obras || []).flatMap(o => o.informes || []).filter(i => (i.ts || 0) > (seen.informes || 0)).length;
+  const unreadForm = (formularios || []).filter(f => f.compartido && (f.ts || 0) > (seen.formularios || 0)).length;
+  useEffect(() => { try { if (!localStorage.getItem("cliente_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, formularios: now, materiales: now }; localStorage.setItem("cliente_seen", JSON.stringify(init)); setSeen(init); } } catch { } }, []);
   useEffect(() => { initPush("belfast"); }, []);
+  useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   useEffect(() => {
-    const total = (unread || 0) + (unreadForms || 0) + (unreadMat || 0) + pendPed;
+    const total = unreadMsg + unreadForm + unreadInf + (unreadMat || 0) + pendPed;
     try { if ("setAppBadge" in navigator) { if (total > 0) navigator.setAppBadge(total); else navigator.clearAppBadge && navigator.clearAppBadge(); } } catch { }
-  }, [unread, unreadForms, unreadMat, pendPed]);
+  }, [unreadMsg, unreadForm, unreadInf, unreadMat, pendPed]);
   const lastCount = useRef(null);
 
   // Polling de mensajes y datos cada 8s → avisos en pantalla
@@ -1332,7 +1347,7 @@ function ClienteApp() {
   }, []);
 
   const screenRef = useRef(screen);
-  useEffect(() => { screenRef.current = screen; if (screen === "mensajes") setUnread(0); if (screen === "formularios") setUnreadForms(0); }, [screen]);
+  useEffect(() => { screenRef.current = screen; if (screen === "mensajes") { setUnread(0); markSeen("mensajes"); } if (screen === "formularios") { setUnreadForms(0); markSeen("formularios"); } if (screen === "informes") markSeen("informes"); }, [screen]);
   const cfgRef = useRef(cfg); useEffect(() => { cfgRef.current = cfg; }, [cfg]);
   const vvCfgRef = useRef(vvCfg); useEffect(() => { vvCfgRef.current = vvCfg; }, [vvCfg]);
 
@@ -1378,7 +1393,7 @@ function ClienteApp() {
     <style>{css}</style>
     <Toast T={T} toast={toast} />
     <div style={{ width: "100%", height: "100dvh", background: "transparent", display: "flex", flexDirection: "column", position: "relative", color: T.text, overflow: "hidden" }}>
-      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={setScreen} unread={unread} pendientes={pedidos.filter(p => p.para === "cliente" && p.estado !== "resuelto").length} unreadForms={unreadForms} unreadMat={unreadMat} />
+      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={setScreen} unread={unreadMsg} pendientes={pedidos.filter(p => p.para === "cliente" && p.estado !== "resuelto").length} unreadForms={unreadForm} unreadMat={unreadMat} unreadInf={unreadInf} />
       {screen === "obras" && <WebClientHero T={T} cfg={cfg} obras={obras} />}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>

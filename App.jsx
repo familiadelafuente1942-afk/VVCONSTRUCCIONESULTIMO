@@ -3354,7 +3354,7 @@ function FormulariosView({ db, cfg, onBack }) {
   const RG = ({ value, onChange, opts }) => <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>{opts.map(o => <button key={o} onClick={() => onChange(value === o ? "" : o)} style={{ padding: "4px 8px", borderRadius: 6, border: `1px solid ${value === o ? T.accent : T.border}`, background: value === o ? T.accent : T.card, color: value === o ? "#fff" : T.sub, fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{o}</button>)}</div>;
 
   function nuevo(tpl) { setEd({ id: uid(), tplId: tpl.id, obra_id: obraPick, fecha: hoyStr(), nro: "", resp: {}, obs: {}, textos: {}, interferencias: [], rubros: [], lineas: [{ info: "", resp: "" }], resultado: "" }); setPick(false); }
-  function guardar(compartir) { const item = compartir ? { ...ed, compartido: true, compartidoFecha: hoyStr() } : { ...ed }; const exists = list.some(x => x.id === item.id); setFormularios(exists ? list.map(x => x.id === item.id ? item : x) : [item, ...list]); setEd(null); if (compartir) { const o = obras.find(x => x.id === item.obra_id); alert(`✓ Formulario compartido con ${cfg?.clienteSigla || "Belfast"}.\n\nLo va a ver en la pestaña "Informes" y dentro de la obra ${o?.nombre ? `"${o.nombre}"` : "seleccionada"}.`); } }
+  function guardar(compartir) { const item = compartir ? { ...ed, compartido: true, compartidoFecha: hoyStr(), ts: Date.now() } : { ...ed, ts: ed.ts || Date.now() }; const exists = list.some(x => x.id === item.id); setFormularios(exists ? list.map(x => x.id === item.id ? item : x) : [item, ...list]); setEd(null); if (compartir) { const o = obras.find(x => x.id === item.obra_id); alert(`✓ Formulario compartido con ${cfg?.clienteSigla || "Belfast"}.\n\nLo va a ver en la pestaña "Informes" y dentro de la obra ${o?.nombre ? `"${o.nombre}"` : "seleccionada"}.`); } }
   function crearPedidoDesdeNota() { const o = obras.find(x => x.id === ed.obra_id); const det = (ed.lineas || []).filter(l => l.info?.trim()).map((l, i) => `${i + 1}. ${l.info}`).join("\n"); aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: "vv", para: "cliente", asunto: `Nota de pedido — ${o?.nombre || "obra"}`, detalle: (ed.textos.intro || "") + (det ? "\n\n" + det : ""), prioridad: "media", obra_id: ed.obra_id }), ...arr]); }
 
   if (ed) {
@@ -3896,7 +3896,10 @@ function App() {
     return () => clearInterval(iv);
   }, []);
   const requireAuth = (fn) => fn();
+  useEffect(() => { try { if (!localStorage.getItem("vv_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, materiales: now }; localStorage.setItem("vv_seen", JSON.stringify(init)); setSeen(init); } } catch { } }, []);
   useEffect(() => { initPush("vv"); }, []);
+  useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
+  useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
