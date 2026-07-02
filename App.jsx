@@ -490,14 +490,15 @@ const NAV_DEFS = [
     { id: "mas", tk: "nav_mas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.5 12a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm6 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm6 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" /></svg> },
 ];
 
-function BottomNav({ view, setView, alerts, cfg }) {
+function BottomNav({ view, setView, alerts, cfg, badges = {} }) {
     return (<nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", padding: "6px 0 max(8px,env(safe-area-inset-bottom))", zIndex: 100, boxShadow: "0 -2px 16px rgba(0,0,0,.06)" }}>
         {NAV_DEFS.map(n => {
-            const active = view === n.id; const badge = n.id === "dashboard" && alerts.length > 0; const label = t(cfg, n.tk); return (
+            const active = view === n.id; const badge = n.id === "dashboard" && alerts.length > 0; const cnt = badges[n.id] || 0; const label = t(cfg, n.tk); return (
                 <button key={n.id} onClick={() => setView(n.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "none", border: "none", color: n.id === "cargar" ? "#fff" : active ? "var(--accent,#1D4ED8)" : T.muted, padding: "4px 0", position: "relative" }}>
                     {n.id === "cargar" ? <div style={{ width: 46, height: 46, borderRadius: "50%", background: "var(--accent,#1D4ED8)", display: "flex", alignItems: "center", justifyContent: "center", marginTop: -16, boxShadow: "0 4px 14px rgba(0,0,0,.25)", border: `3px solid ${T.card}` }}>{n.icon}</div> : n.icon}
                     <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, color: n.id === "cargar" ? "var(--accent,#1D4ED8)" : undefined }}>{label}</span>
                     {badge && <div style={{ position: "absolute", top: 4, right: "calc(50% - 12px)", width: 7, height: 7, borderRadius: "50%", background: "#EF4444", border: `1.5px solid ${T.card}` }} />}
+                    {cnt > 0 && <div style={{ position: "absolute", top: -1, right: "calc(50% - 20px)", minWidth: 16, height: 16, padding: "0 4px", borderRadius: 8, background: "#EF4444", color: "#fff", fontSize: 9.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${T.card}` }}>{cnt > 99 ? "99+" : cnt}</div>}
                 </button>
             );
         })}
@@ -1307,7 +1308,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
     const [tab, setTab] = useState("info");
     const [form, setForm] = useState({ nombre: "", ap: defaultAp, sector: "", estado: "pendiente", avance: 0, inicio: "", cierre: "" });
     const [newObs, setNewObs] = useState("");
-    const fileRef = useRef(null); const archRef = useRef(null); const videoRef = useRef(null);
+    const fileRef = useRef(null); const archRef = useRef(null); const videoRef = useRef(null); const planoRef = useRef(null);
     const detail = detailId ? obras.find(o => o.id === detailId) : null;
 
     // Actualizar form.ap si cambian las UBICS
@@ -1341,6 +1342,22 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         upd(detail.id, { fotos: [...(detail.fotos || []), ...nuevas] });
         e.target.value = "";
         if (fallaron) alert("⚠ Las fotos quedaron guardadas en este dispositivo, pero NO se pudieron subir a la nube. Para que se sincronicen entre dispositivos y se vean en la app de Belfast, falta configurar el bucket de fotos 'bco-media' en Supabase (crearlo, hacerlo público y darle permisos). Mirá las instrucciones que te pasó la app.");
+    }
+    async function handlePlano(e) {
+        if (!detail) return;
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        const nuevos = [];
+        for (const f of files) {
+            const dataUrl = await toDataUrl(f);
+            const url = await uploadFoto(dataUrl, `planos/${detail.id}`, `${Date.now()}_${(f.name || "plano").replace(/\W+/g, "_")}`);
+            if (!mediaStorage.isRemoteUrl(url)) { alert(`El plano "${f.name}" NO se pudo subir a la nube (bucket 'bco-media' en Supabase). No lo guardo local para no romper la sincronización.`); continue; }
+            const ext = (f.name.split(".").pop() || "").toLowerCase();
+            nuevos.push({ id: uid(), nombre: f.name, url, fecha: new Date().toLocaleDateString("es-AR"), from: "vv", tipo: ext });
+        }
+        e.target.value = "";
+        if (!nuevos.length) return;
+        upd(detail.id, { planos: [...(detail.planos || []), ...nuevos] });
     }
     async function handleVideo(e) {
         if (!detail) return;
@@ -1383,7 +1400,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                     <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#1D4ED8)", marginTop: 10 }} />
                 </div>
                 <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, display: "flex", overflowX: "auto" }}>
-                    {[[`info`, t(cfg, 'obras_info')], [`obs`, t(cfg, 'obras_notas')], [`fotos`, t(cfg, 'obras_fotos')], [`archivos`, t(cfg, 'obras_archivos')], [`informes`, 'Informes'], [`gastos`, 'Gastos']].map(([id, label]) => (
+                    {[[`info`, t(cfg, 'obras_info')], [`obs`, t(cfg, 'obras_notas')], [`fotos`, t(cfg, 'obras_fotos')], [`planos`, 'Planos'], [`archivos`, t(cfg, 'obras_archivos')], [`informes`, 'Informes'], [`gastos`, 'Gastos']].map(([id, label]) => (
                         <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#1D4ED8)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
                     ))}
                 </div>
@@ -1434,6 +1451,17 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                         {detail.obs.length === 0 && <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_notas')}</div>}
                     </div>)}
                     {tab === "fotos" && (<TabFotos detail={detail} upd={upd} fileRef={fileRef} handleFoto={handleFoto} videoRef={videoRef} handleVideo={handleVideo} apiKey={apiKey} cfg={cfg} />)}
+                    {tab === "planos" && (<div>
+                        <input ref={planoRef} type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={handlePlano} style={{ display: "none" }} />
+                        <button onClick={() => planoRef.current && planoRef.current.click()} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}`, marginBottom: 14 }}>＋ Subir plano (PDF / CAD)</button>
+                        {(detail.planos || []).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "22px 16px", lineHeight: 1.5 }}>Sin planos cargados.<br />Subí acá los planos de la obra (PDF, DWG, DXF…). Belfast también los ve y los puede subir.</div>}
+                        {(detail.planos || []).map(p => <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 7 }}>
+                            <div style={{ width: 34, height: 34, borderRadius: 8, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>📐</div>
+                            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{p.nombre}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}</div></div>
+                            <a href={p.url} target="_blank" rel="noreferrer" download={p.nombre} style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a>
+                            <button onClick={() => upd(detail.id, { planos: (detail.planos || []).filter(x => x.id !== p.id) })} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+                        </div>)}
+                    </div>)}
                     {tab === "archivos" && (<div>
                         <input ref={archRef} type="file" accept=".pdf,.xlsx,.xls,.docx,.doc" multiple onChange={handleArch} style={{ display: "none" }} />
                         <PBtn full onClick={() => archRef.current?.click()} style={{ marginBottom: 14 }}>{t(cfg, 'obras_agregar_arch')}</PBtn>
@@ -1940,9 +1968,9 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <input type="range" min="44" max="200" value={cfg.logoSize||100} onChange={e=>setCfg(p=>({...p,logoSize:Number(e.target.value)}))} style={{ width:"100%", accentColor:T.accent }} />
       <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:T.muted, marginTop:2 }}><span>Chico</span><span>Grande</span></div>
       <div style={{ marginTop:20 }}><Eyebrow>Comunicación entre IA</Eyebrow></div>
-      <div onClick={()=>setCfg(prev=>({ ...prev, iaAuto: prev.iaAuto===false ? true : false }))} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:T.card, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", cursor:"pointer", marginBottom:6 }}>
-        <div style={{ minWidth:0, paddingRight:12 }}><div style={{ fontSize:13.5, fontWeight:700, color:T.text }}>Respuesta automática entre IA</div><div style={{ fontSize:11, color:T.muted, marginTop:2, lineHeight:1.45 }}>Si está ON, cuando le pedís algo a la IA de la otra empresa, la otra IA responde sola. Si lo apagás, no gasta créditos respondiendo en segundo plano.</div></div>
-        <div style={{ width:44, height:26, borderRadius:13, background: cfg.iaAuto===false ? T.border : "#16A34A", position:"relative", flexShrink:0, transition:"background .2s" }}><div style={{ position:"absolute", top:3, left: cfg.iaAuto===false ? 3 : 21, width:20, height:20, borderRadius:"50%", background:"#fff", transition:"left .2s" }} /></div>
+      <div onClick={()=>setCfg(prev=>({ ...prev, iaAuto: !prev.iaAuto }))} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:T.card, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", cursor:"pointer", marginBottom:6 }}>
+        <div style={{ minWidth:0, paddingRight:12 }}><div style={{ fontSize:13.5, fontWeight:700, color:T.text }}>Respuesta automática entre IA {cfg.iaAuto===true ? "" : "(en stand by)"}</div><div style={{ fontSize:11, color:T.muted, marginTop:2, lineHeight:1.45 }}>Por defecto está APAGADA para no gastar créditos: las IA no se hablan solas. Prendela solo si querés que, cuando le pidas algo a la IA de la otra empresa, la otra responda sola. El debate entre IA funciona igual, prendido o apagado esto.</div></div>
+        <div style={{ width:44, height:26, borderRadius:13, background: cfg.iaAuto===true ? "#16A34A" : T.border, position:"relative", flexShrink:0, transition:"background .2s" }}><div style={{ position:"absolute", top:3, left: cfg.iaAuto===true ? 21 : 3, width:20, height:20, borderRadius:"50%", background:"#fff", transition:"left .2s" }} /></div>
       </div>
       <div style={{ marginTop:20 }}><Eyebrow>Panel de cliente</Eyebrow></div>
       <div style={{ fontSize:11.5, color:T.muted, marginBottom:9, lineHeight:1.5 }}>Nombre que aparece en el Panel de cliente y en la app del cliente.</div>
@@ -2255,6 +2283,7 @@ REGLA CLAVE de comunicación — elegí bien la acción:
 - Si te piden PEDIR o CARGAR MATERIALES (ej: "necesito 50 bolsas de cemento y 20 hierros del 8 para Castores", "cargá un pedido de materiales de…"), usá "pedido_materiales" con la lista de items (nombre, cantidad, unidad) y la obra. Se carga solo en el registro "Pedido de materiales" y se le envía a ${cn}. Ideal para dictarlo desde el celular sin abrir el formulario. Si no aclaran la obra, usá la que mencionen o preguntá cuál.
 - Si te piden MANDAR UN WHATSAPP a alguien del personal (ej: "mandale un WhatsApp al jefe de obra de Castores que…"), usá "whatsapp" con la persona/rol, la obra si ayuda, y el texto. Uso los teléfonos cargados en Personal. Te dejo el botón de WhatsApp listo para enviar.
 - Si te piden VER, MANDAR o PASAR FOTOS o VIDEOS de una obra (ej: "mandame la última foto de Castores", "pasame las fotos de Golf", "mandame el último video de A 37"), usá "traer_fotos" con la obra y la cantidad (1 = la última, o el número que pidan). Poné videos:true si piden videos. Las fotos/videos aparecen directo en el chat para verlas, descargarlas o compartirlas.
+- Si te piden un PLANO (PDF o CAD) de una obra (ej: "necesito el plano de replanteo de platea de Castores 475", "pasame el plano de estructura de Golf"), usá "traer_plano" con la obra y "buscar" (palabras clave del plano). El plano aparece en el chat para abrir o descargar. Los planos los suben Belfast y V+V en cada obra.
 Nunca digas que no podés comunicarte: SÍ podés.
 
 OBRAS:\n${ob || "(sin obras)"}
@@ -2274,6 +2303,8 @@ ARCHIVOS:\n${[...(archivosGen || []).map(a => `· ${a.nombre} (general)`), ...ob
 DOCUMENTACIÓN (modelos):\n${(documentacion || []).map(d => `· ${d.nombre} [${d.cat}]`).join("\n") || "(sin documentación)"}
 
 FOTOS E INFORMES POR OBRA:\n${obras.map(o => `· ${o.nombre}: ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes`).join("\n") || "(sin obras)"}
+
+PLANOS POR OBRA:\n${obras.map(o => (o.planos||[]).length ? `· ${o.nombre}: ${(o.planos||[]).map(p=>p.nombre).join(", ")}` : null).filter(Boolean).join("\n") || "(sin planos cargados)"}
 
 TAREAS / CRONOGRAMA:\n${(tareas || []).map(t => `· ${t.nombre} — ${obraNom(obras, t.obra_id)} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}
 
@@ -2298,6 +2329,7 @@ PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} 
 {"tipo":"pedido_materiales","obra":"nombre de la obra","items":[{"nombre":"Cemento","cantidad":"50","unidad":"bolsas"},{"nombre":"Hierro del 8","cantidad":"20","unidad":"u"}],"nota":"opcional"}
 {"tipo":"whatsapp","persona":"nombre o rol de la persona (ej: jefe de obra)","obra":"opcional: obra para ubicarlo","texto":"el mensaje a enviar por WhatsApp"}
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
+{"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano (ej: replanteo platea)"}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: todos los de esa obra"}
 Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el bloque. La acción se ejecuta cuando el usuario la confirma.`;
   }
@@ -2313,7 +2345,19 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     const r = await callAI(next, buildSystem(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(r);
     let extra = {};
-    if (accion && accion.tipo === "traer_fotos") {
+    if (accion && accion.tipo === "traer_plano") {
+      const obs = db.obras || [];
+      const target = accion.obra ? obs.find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : obs[0];
+      const planos = (target && target.planos) || [];
+      const kw = String(accion.buscar || "").toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      let match = kw.length ? planos.filter(p => kw.some(w => (p.nombre || "").toLowerCase().includes(w))) : planos;
+      let res, docs;
+      if (!target) { res = "No encontré esa obra. Decime el nombre exacto."; docs = []; }
+      else if (!planos.length) { res = `${target.nombre} no tiene planos cargados todavía. Pedile a Belfast (o cargalo vos) en la obra → pestaña Planos.`; docs = []; }
+      else if (!match.length) { res = `No encontré un plano que coincida con "${accion.buscar}" en ${target.nombre}. Te dejo todos los que hay:`; docs = planos.map(p => ({ nombre: p.nombre, url: p.url })); }
+      else { res = `Acá tenés ${match.length === 1 ? "el plano" : "los planos"} de ${target.nombre}${accion.buscar ? ` (${accion.buscar})` : ""}:`; docs = match.map(p => ({ nombre: p.nombre, url: p.url })); }
+      extra = { accionDone: true, accionResultado: res, docs };
+    } else if (accion && accion.tipo === "traer_fotos") {
       const obs = db.obras || [];
       const target = accion.obra ? obs.find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : obs[0];
       const tipoMedia = accion.videos ? "videos" : "fotos";
@@ -2359,7 +2403,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "vv" ? "V+V" : cnIA} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
         }
         const pend = arr.find(m => m.from !== "vv" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
-        if (pend && !iaBusy.current && cfg?.iaAuto !== false) {
+        if (pend && !iaBusy.current && cfg?.iaAuto === true) {
           iaBusy.current = true;
           try {
           arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
@@ -2421,8 +2465,8 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
         <div style={{ maxWidth: "84%", background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{m.content}</div>
         {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
-        {m.media && m.media.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.mediaTipo === "videos"
-          ? m.media.map((u, i) => <video key={i} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000", display: "block" }} />)
+        {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
+        {m.media && m.media.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.mediaTipo === "videos"          ? m.media.map((u, i) => <video key={i} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000", display: "block" }} />)
           : <div style={{ display: "grid", gridTemplateColumns: m.media.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>{m.media.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" download style={{ display: "block" }}><img src={u} alt="" style={{ width: "100%", borderRadius: 10, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div>}
           <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Tocá {m.mediaTipo === "videos" ? "el video" : "la foto"} para abrir en grande o descargar/compartir.</div>
         </div>}
@@ -3140,7 +3184,7 @@ async function ejecutarAccion(accion, miSide, ctx){
   }
   return null;
 }
-function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="preguntar_ia") return `Consultar a la IA de la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="pedido_materiales") return `Pedido de materiales → Belfast: ${(a.items||[]).map(it=>`${it.cantidad||""} ${it.unidad||""} ${it.nombre}`.trim()).join(", ").slice(0,70)}`; if(a.tipo==="whatsapp") return `WhatsApp a ${a.persona||a.rol||"contacto"}: “${(a.texto||"").slice(0,50)}”`; if(a.tipo==="traer_fotos") return `Traer ${a.videos?"videos":"fotos"} de ${a.obra||"la obra"}`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
+function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="preguntar_ia") return `Consultar a la IA de la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="pedido_materiales") return `Pedido de materiales → Belfast: ${(a.items||[]).map(it=>`${it.cantidad||""} ${it.unidad||""} ${it.nombre}`.trim()).join(", ").slice(0,70)}`; if(a.tipo==="whatsapp") return `WhatsApp a ${a.persona||a.rol||"contacto"}: “${(a.texto||"").slice(0,50)}”`; if(a.tipo==="traer_fotos") return `Traer ${a.videos?"videos":"fotos"} de ${a.obra||"la obra"}`; if(a.tipo==="traer_plano") return `Traer plano ${a.buscar?`"${a.buscar}" `:""}de ${a.obra||"la obra"}`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
 
 function PedidosView({ db, cfg, apiKey, onBack }) {
   const { pedidos, setPedidos, obras } = db;
@@ -3681,10 +3725,10 @@ const WEB_NAV = [
   { id:"informes", label:"Informes" }, { id:"formularios", label:"Formularios" },
   { id:"mas", label:"Más" },
 ];
-function WebHeader({ cfg, view, go, pendientes }) {
+function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
   const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const tieneLogo = l1 || l2;
   const lh = Math.min(Math.max(cfg?.logoSize || 42, 30), 64);
-  const badgeOn = (id) => (pendientes > 0 && (id === "dashboard" || id === "mas"));
+  const cnt = (id) => (badges[id] || 0);
   return (
     <header style={{ position:"sticky", top:0, zIndex:200, flexShrink:0 }}>
       <div style={{ background:T.navy, color:"#fff" }}>
@@ -3705,7 +3749,7 @@ function WebHeader({ cfg, view, go, pendientes }) {
           {WEB_NAV.map(n=>{ const active=view===n.id; return (
             <button key={n.id} onClick={()=>go(n.id)} style={{ position:"relative", background:"none", border:"none", padding:"9px 14px", fontSize:13, fontWeight:active?800:600, color:active?T.accent:T.sub, letterSpacing:"0.02em", borderBottom:`2px solid ${active?BRASS:"transparent"}`, whiteSpace:"nowrap", cursor:"pointer" }}>
               {n.label}
-              {badgeOn(n.id) && <span style={{ position:"absolute", top:3, right:2, background:"#EF4444", color:"#fff", borderRadius:9, minWidth:16, height:16, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px" }}>{pendientes}</span>}
+              {cnt(n.id) > 0 && <span style={{ position:"absolute", top:3, right:2, background:"#EF4444", color:"#fff", borderRadius:9, minWidth:16, height:16, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px" }}>{cnt(n.id) > 99 ? "99+" : cnt(n.id)}</span>}
             </button>
           ); })}
         </nav>
@@ -3770,6 +3814,40 @@ function App() {
   const [chatMsgs, setChatMsgs] = useStoredState("vv_chat", []);
   const [detailObraId, setDetailObraId] = useState(null);
   const [masSub, setMasSub] = useState(null);
+  // Recordatorio diario: pedidos/materiales sin responder en el día generan un aviso en Mensajes (para V+V y Belfast). No usa IA/créditos.
+  useEffect(() => {
+    async function chequear() {
+      try {
+        const hoy = hoyStr();
+        let peds = []; try { const r = await storage.get("vv_pedidos"); if (r?.value) peds = JSON.parse(r.value); } catch { }
+        let mats = []; try { const r = await storage.get("vv_matpedidos"); if (r?.value) mats = JSON.parse(r.value); } catch { }
+        const dia = 20 * 60 * 60 * 1000;
+        const pendPeds = peds.filter(p => p.estado !== "resuelto" && (Date.now() - (p.ts || 0) > dia) && p.recordatorioFecha !== hoy);
+        const pendMats = mats.filter(p => !p.leido && (Date.now() - (p.ts || 0) > dia) && p.recordatorioFecha !== hoy);
+        if (!pendPeds.length && !pendMats.length) return;
+        let msgs = []; try { const r = await storage.get("vv_mensajes"); if (r?.value) msgs = JSON.parse(r.value); } catch { }
+        const nuevos = [];
+        for (const p of pendPeds) {
+          const quien = p.para === "cliente" ? (cfg?.clienteSigla || "Belfast") : "V+V";
+          nuevos.push({ id: uid() + Date.now() + Math.random(), from: "sistema", recordatorio: true, texto: `⏰ RECORDATORIO: el pedido "${p.asunto || "sin asunto"}" sigue SIN RESPONDER. Le corresponde a ${quien} atenderlo. (Está pendiente desde ${p.fecha || "hace más de un día"}.)`, fecha: hoy, ts: Date.now() });
+        }
+        for (const p of pendMats) {
+          nuevos.push({ id: uid() + Date.now() + Math.random(), from: "sistema", recordatorio: true, texto: `⏰ RECORDATORIO: hay un pedido de materiales SIN LEVANTAR${p.empresa ? " de " + p.empresa : ""} (${p.fecha || ""}). Por favor gestionarlo.`, fecha: hoy, ts: Date.now() });
+        }
+        const pedsNext = peds.map(p => pendPeds.some(x => x.id === p.id) ? { ...p, recordatorioFecha: hoy } : p);
+        const matsNext = mats.map(p => pendMats.some(x => x.id === p.id) ? { ...p, recordatorioFecha: hoy } : p);
+        const msgsNext = [...msgs, ...nuevos];
+        try { localStorage.setItem("vv_mensajes", JSON.stringify(msgsNext)); } catch { }
+        await storage.set("vv_mensajes", JSON.stringify(msgsNext)).catch(() => { });
+        if (pendPeds.length) await storage.set("vv_pedidos", JSON.stringify(pedsNext)).catch(() => { });
+        if (pendMats.length) await storage.set("vv_matpedidos", JSON.stringify(matsNext)).catch(() => { });
+        setMensajes(msgsNext);
+      } catch { }
+    }
+    const t = setTimeout(chequear, 8000);
+    const iv = setInterval(chequear, 60 * 60 * 1000);
+    return () => { clearTimeout(t); clearInterval(iv); };
+  }, []);
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
@@ -3789,7 +3867,17 @@ function App() {
     return () => clearInterval(iv);
   }, []);
   const requireAuth = (fn) => fn();
-  const go = (v)=>{ setView(v); };
+  const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
+  function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
+  const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
+  const unreadMat = (matpedidos || []).filter(p => p.de !== "vv" && (p.ts || 0) > (seen.materiales || 0)).length;
+  const pendVV = pedidos.filter(p => p.para === "vv" && p.estado !== "resuelto").length;
+  const navBadges = { mensajes: unreadMensajes, mas: pendVV + unreadMat };
+  useEffect(() => {
+    const total = unreadMensajes + pendVV + unreadMat;
+    try { if ("setAppBadge" in navigator) { if (total > 0) navigator.setAppBadge(total); else navigator.clearAppBadge && navigator.clearAppBadge(); } } catch { }
+  }, [unreadMensajes, pendVV, unreadMat]);
+  const go = (v)=>{ setView(v); if (v === "mensajes") markSeen("mensajes"); if (v === "mas") markSeen("materiales"); };
   const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos };
 
   return (
@@ -3797,7 +3885,7 @@ function App() {
       <style>{css}</style>
       <style>{buildThemeCSS(cfg)}</style>
       <div style={{ width:"100%", height:"100dvh", background:"transparent", display:"flex", flexDirection:"column", position:"relative", color:"var(--text,#131C2B)", fontFamily:"var(--font,'Inter'),sans-serif", overflow:"hidden" }}>
-        <WebHeader cfg={cfg} view={view} go={(v)=>{ setView(v); if(v==="mas") setMasSub(null); }} pendientes={pedidos.filter(p=>p.para==="vv"&&p.estado!=="resuelto").length} />
+        <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadges} />
         {view==="dashboard" && <WebHero cfg={cfg} obras={obras} personal={personal} />}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
