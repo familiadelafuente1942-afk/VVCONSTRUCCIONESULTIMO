@@ -2113,12 +2113,17 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
       <FieldRow>
         <Field label="Empresa"><TInput value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></Field>
         <Field label="WhatsApp"><TInput value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="549114..." /></Field>
+        <FieldRow>
+          <Field label="DNI"><TInput value={form.dni || ""} onChange={e => setForm({ ...form, dni: e.target.value })} placeholder="30.123.456" /></Field>
+          <Field label="CUIL"><TInput value={form.cuil || ""} onChange={e => setForm({ ...form, cuil: e.target.value })} placeholder="20-30123456-3" /></Field>
+        </FieldRow>
       </FieldRow>
       <PBtn full onClick={guardar} style={{ marginTop: 6 }}>{form.id ? "Guardar cambios" : "Agregar trabajador"}</PBtn>
     </Sheet>}
 
     {detalle && <Sheet title={detalle.nombre} onClose={() => setDetalle(null)}>
-      <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 14 }}>{detalle.rol} · {detalle.empresa} · {obraNom(obras, detalle.obra_id)}</div>
+      <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 6 }}>{detalle.rol} · {detalle.empresa} · {obraNom(obras, detalle.obra_id)}</div>
+      {(detalle.dni || detalle.cuil || detalle.telefono) && <div style={{ fontSize: 12.5, color: T.text, marginBottom: 14, lineHeight: 1.6 }}>{detalle.dni ? `DNI: ${detalle.dni}` : ""}{detalle.dni && (detalle.cuil || detalle.telefono) ? "  ·  " : ""}{detalle.cuil ? `CUIL: ${detalle.cuil}` : ""}{detalle.cuil && detalle.telefono ? "  ·  " : ""}{detalle.telefono ? `Tel: ${detalle.telefono}` : ""}</div>}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         {detalle.telefono && <a href={waLink(detalle.telefono, "")} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: "center", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>WhatsApp</a>}
         <button onClick={() => { setForm(detalle); setDetalle(null); }} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Editar datos</button>
@@ -2231,7 +2236,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const cn = cfg?.clienteNombre || "el cliente";
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)})`).join("\n");
     const li = lics.map(l => `· ${l.nombre} (${l.estado}, ${l.monto || "s/monto"}, ${l.sector})`).join("\n");
-    const pe = personal.map(p => `· ${p.nombre} — ${p.rol} en ${obraNom(obras, p.obra_id)}${p.telefono ? ` (WhatsApp ${p.telefono})` : ""}`).join("\n");
+    const pe = personal.map(p => `· ${p.nombre} — ${p.rol || ""} en ${obraNom(obras, p.obra_id)}${p.empresa ? ` [${p.empresa}]` : ""}${p.telefono ? ` · WhatsApp ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.adjuntos || []).length ? ` · ${p.adjuntos.length} adjunto(s)` : ""}`).join("\n");
     const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "vv" ? "enviado a" : "recibido de"} ${p.de === "vv" ? cn : cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
     const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional. Tus capacidades:
@@ -2249,6 +2254,7 @@ REGLA CLAVE de comunicación — elegí bien la acción:
 - "crear_pedido" es solo para pedidos formales de definiciones o documentación.
 - Si te piden PEDIR o CARGAR MATERIALES (ej: "necesito 50 bolsas de cemento y 20 hierros del 8 para Castores", "cargá un pedido de materiales de…"), usá "pedido_materiales" con la lista de items (nombre, cantidad, unidad) y la obra. Se carga solo en el registro "Pedido de materiales" y se le envía a ${cn}. Ideal para dictarlo desde el celular sin abrir el formulario. Si no aclaran la obra, usá la que mencionen o preguntá cuál.
 - Si te piden MANDAR UN WHATSAPP a alguien del personal (ej: "mandale un WhatsApp al jefe de obra de Castores que…"), usá "whatsapp" con la persona/rol, la obra si ayuda, y el texto. Uso los teléfonos cargados en Personal. Te dejo el botón de WhatsApp listo para enviar.
+- Si te piden VER, MANDAR o PASAR FOTOS o VIDEOS de una obra (ej: "mandame la última foto de Castores", "pasame las fotos de Golf", "mandame el último video de A 37"), usá "traer_fotos" con la obra y la cantidad (1 = la última, o el número que pidan). Poné videos:true si piden videos. Las fotos/videos aparecen directo en el chat para verlas, descargarlas o compartirlas.
 Nunca digas que no podés comunicarte: SÍ podés.
 
 OBRAS:\n${ob || "(sin obras)"}
@@ -2291,6 +2297,7 @@ PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} 
 {"tipo":"preguntar_ia","texto":"la consulta para la IA de ${cn}"}
 {"tipo":"pedido_materiales","obra":"nombre de la obra","items":[{"nombre":"Cemento","cantidad":"50","unidad":"bolsas"},{"nombre":"Hierro del 8","cantidad":"20","unidad":"u"}],"nota":"opcional"}
 {"tipo":"whatsapp","persona":"nombre o rol de la persona (ej: jefe de obra)","obra":"opcional: obra para ubicarlo","texto":"el mensaje a enviar por WhatsApp"}
+{"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: todos los de esa obra"}
 Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el bloque. La acción se ejecuta cuando el usuario la confirma.`;
   }
@@ -2306,7 +2313,19 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     const r = await callAI(next, buildSystem(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(r);
     let extra = {};
-    if (accion && accion.tipo === "whatsapp") {
+    if (accion && accion.tipo === "traer_fotos") {
+      const obs = db.obras || [];
+      const target = accion.obra ? obs.find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : obs[0];
+      const tipoMedia = accion.videos ? "videos" : "fotos";
+      const cant = Math.max(1, Math.min(accion.cantidad || 3, 12));
+      const media = ((target && target[tipoMedia]) || []).slice(-cant).reverse();
+      const urls = media.map(f => f.url || f).filter(Boolean);
+      let res;
+      if (!target) res = "No encontré esa obra. Decime el nombre exacto.";
+      else if (!urls.length) res = `${target.nombre} no tiene ${tipoMedia} cargadas todavía.`;
+      else res = `Acá tenés ${urls.length === 1 ? (tipoMedia === "videos" ? "el último video" : "la última foto") : `${urls.length} ${tipoMedia}`} de ${target.nombre}:`;
+      extra = { accionDone: true, accionResultado: res, media: urls, mediaTipo: tipoMedia };
+    } else if (accion && accion.tipo === "whatsapp") {
       const pers = db.personal || [];
       const q = String(accion.persona || accion.rol || "").toLowerCase();
       const obraId = accion.obra ? (db.obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase()))?.id : null;
@@ -2324,7 +2343,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   // ── Canal directo IA↔IA: muestra lo que consulta/responde la otra IA y responde solo ──
   const cnIA = cfg?.clienteNombre || "el cliente";
   const ctxRef = useRef("");
-  ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(db.formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obraNom(db.obras, f.obra_id)} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${[...(db.archivosGen || []).map(a => `· ${a.nombre}`), ...(db.obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`))].join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(db.tareas || []).map(t => `· ${t.nombre} — ${obraNom(db.obras, t.obra_id)} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(db.matpedidos || []).map(p => `· ${obraNom(db.obras, p.obra_id)}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}`;
+  ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}${p.dni ? " DNI " + p.dni : ""}${p.cuil ? " CUIL " + p.cuil : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(db.formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obraNom(db.obras, f.obra_id)} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${[...(db.archivosGen || []).map(a => `· ${a.nombre}`), ...(db.obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`))].join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(db.tareas || []).map(t => `· ${t.nombre} — ${obraNom(db.obras, t.obra_id)} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(db.matpedidos || []).map(p => `· ${obraNom(db.obras, p.obra_id)}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
   const iaBusy = useRef(false);
@@ -2402,6 +2421,11 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
         <div style={{ maxWidth: "84%", background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{m.content}</div>
         {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
+        {m.media && m.media.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.mediaTipo === "videos"
+          ? m.media.map((u, i) => <video key={i} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000", display: "block" }} />)
+          : <div style={{ display: "grid", gridTemplateColumns: m.media.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>{m.media.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" download style={{ display: "block" }}><img src={u} alt="" style={{ width: "100%", borderRadius: 10, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div>}
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Tocá {m.mediaTipo === "videos" ? "el video" : "la foto"} para abrir en grande o descargar/compartir.</div>
+        </div>}
         {m.accion && !m.accionDone && !m.accionDescartada && <div style={{ maxWidth: "84%", marginTop: 7, background: T.al, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 13px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Acción propuesta</div>
           <div style={{ fontSize: 12.5, color: T.text, marginBottom: 10 }}>{accionLabel(m.accion)}</div>
@@ -3116,7 +3140,7 @@ async function ejecutarAccion(accion, miSide, ctx){
   }
   return null;
 }
-function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="preguntar_ia") return `Consultar a la IA de la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="pedido_materiales") return `Pedido de materiales → Belfast: ${(a.items||[]).map(it=>`${it.cantidad||""} ${it.unidad||""} ${it.nombre}`.trim()).join(", ").slice(0,70)}`; if(a.tipo==="whatsapp") return `WhatsApp a ${a.persona||a.rol||"contacto"}: “${(a.texto||"").slice(0,50)}”`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
+function accionLabel(a){ if(!a) return ""; if(a.tipo==="crear_pedido") return `Crear pedido → ${a.para==="vv"?"V+V":"Cliente"}: “${a.asunto||""}”`; if(a.tipo==="responder_pedido") return "Responder pedido"; if(a.tipo==="resolver_pedido") return "Marcar pedido como resuelto"; if(a.tipo==="enviar_mensaje") return `Enviar mensaje a la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="preguntar_ia") return `Consultar a la IA de la otra empresa: “${(a.texto||"").slice(0,60)}”`; if(a.tipo==="pedido_materiales") return `Pedido de materiales → Belfast: ${(a.items||[]).map(it=>`${it.cantidad||""} ${it.unidad||""} ${it.nombre}`.trim()).join(", ").slice(0,70)}`; if(a.tipo==="whatsapp") return `WhatsApp a ${a.persona||a.rol||"contacto"}: “${(a.texto||"").slice(0,50)}”`; if(a.tipo==="traer_fotos") return `Traer ${a.videos?"videos":"fotos"} de ${a.obra||"la obra"}`; if(a.tipo==="cargar_personal") return `Cargar personal al sitio “${a.sitio||""}”${a.obra?` (obra ${a.obra})`:a.personal&&a.personal!=="todos"?` (${Array.isArray(a.personal)?a.personal.join(", "):a.personal})`:" (todos)"}`; return a.tipo; }
 
 function PedidosView({ db, cfg, apiKey, onBack }) {
   const { pedidos, setPedidos, obras } = db;
