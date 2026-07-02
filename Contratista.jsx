@@ -8,6 +8,26 @@ import React, { useState, useEffect, useRef } from "react";
 // ════════════════════════════════════════════════════════════════════
 
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
+const ONESIGNAL_APP_ID = ""; // ← Pegá acá tu App ID de OneSignal (después de crear la app en OneSignal)
+function initPush(appTag) {
+  if (!ONESIGNAL_APP_ID || typeof window === "undefined") return;
+  try {
+    if (document.getElementById("onesignal-sdk")) return;
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    const s = document.createElement("script");
+    s.id = "onesignal-sdk"; s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"; s.defer = true;
+    document.head.appendChild(s);
+    window.OneSignalDeferred.push(async function (OneSignal) {
+      try { await OneSignal.init({ appId: ONESIGNAL_APP_ID, allowLocalhostAsSecureOrigin: true }); } catch (e) {}
+      try { await OneSignal.User.addTag("app", appTag); } catch (e) {}
+      try { OneSignal.Slidedown.promptPush(); } catch (e) {}
+    });
+  } catch (e) {}
+}
+async function pushNotify(title, message, app, url) {
+  try { await fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "" }) }); } catch (e) {}
+}
+
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
 const storage = {
@@ -42,6 +62,8 @@ export default function ContratistaApp() {
   const [form, setForm] = useState(null);
   const [editEmpresa, setEditEmpresa] = useState(false);
   const lastWrite = useRef(0);
+
+  useEffect(() => { initPush("contratista"); }, []);
 
   useEffect(() => {
     let alive = true;
@@ -82,6 +104,7 @@ export default function ContratistaApp() {
     const p = { id: uid() + Date.now(), obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), ts: Date.now(), de: "contratista", empresa, leido: false, leidoFecha: "" };
     const r = await storage.get("vv_matpedidos"); let arr = []; if (r?.value) { try { arr = JSON.parse(r.value); } catch { } }
     await persistMat([p, ...arr]); setForm(null); setWaFor(p.id);
+    pushNotify("Nuevo pedido de materiales", `${empresa}: ${items.map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ").slice(0, 90)}`, "");
     alert("✓ Pedido enviado a V+V y Belfast. Ahora podés mandarlo por WhatsApp al encargado de obra (abajo).");
   }
 

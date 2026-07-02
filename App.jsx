@@ -2,6 +2,26 @@ import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
 // ── SUPABASE CONFIG ─────────────────────────────────────────────
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
+const ONESIGNAL_APP_ID = ""; // ← Pegá acá tu App ID de OneSignal (después de crear la app en OneSignal)
+function initPush(appTag) {
+  if (!ONESIGNAL_APP_ID || typeof window === "undefined") return;
+  try {
+    if (document.getElementById("onesignal-sdk")) return;
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    const s = document.createElement("script");
+    s.id = "onesignal-sdk"; s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"; s.defer = true;
+    document.head.appendChild(s);
+    window.OneSignalDeferred.push(async function (OneSignal) {
+      try { await OneSignal.init({ appId: ONESIGNAL_APP_ID, allowLocalhostAsSecureOrigin: true }); } catch (e) {}
+      try { await OneSignal.User.addTag("app", appTag); } catch (e) {}
+      try { OneSignal.Slidedown.promptPush(); } catch (e) {}
+    });
+  } catch (e) {}
+}
+async function pushNotify(title, message, app, url) {
+  try { await fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "" }) }); } catch (e) {}
+}
+
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
 
@@ -1810,6 +1830,7 @@ function MatPedidosView({ db, cfg, onBack }) {
     if (!items.length) { alert("Agregá al menos un material."); return; }
     const p = { id: uid() + Date.now(), obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), ts: Date.now(), de: "vv", leido: false, leidoFecha: "" };
     setMatpedidos(prev => [p, ...(prev || [])]); setForm(null);
+    pushNotify("Nuevo pedido de materiales", `V+V · ${obraNom(obras, form.obra_id)}: ${items.map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ").slice(0, 80)}`, "belfast");
     alert(`✓ Pedido de materiales enviado a ${cn}. Le queda como NO LEÍDO hasta que lo levante.`);
   }
   function borrar(id) { if (confirm("¿Eliminar este pedido de materiales?")) setMatpedidos(prev => (prev || []).filter(x => x.id !== id)); }
@@ -3145,7 +3166,7 @@ async function ejecutarAccion(accion, miSide, ctx){
   const setPedidos = ctx.setPedidos;
   if(!accion||!accion.tipo) return null;
   const otro = miSide==="vv" ? "cliente":"vv";
-  if(accion.tipo==="crear_pedido"){ const para=(accion.para==="vv"||accion.para==="cliente")?accion.para:otro; const obs=ctx.obras||[]; const obra_id=accion.obra_id||(accion.obra?obs.find(o=>(o.nombre||"").toLowerCase().includes(String(accion.obra).toLowerCase()))?.id:"")||""; const p=nuevoPedido({de:miSide,para,asunto:accion.asunto,detalle:accion.detalle,prioridad:accion.prioridad,obra_id}); await aplicarPedidos(setPedidos,arr=>[p,...arr]); return `Pedido creado y enviado: “${p.asunto}”.`; }
+  if(accion.tipo==="crear_pedido"){ const para=(accion.para==="vv"||accion.para==="cliente")?accion.para:otro; const obs=ctx.obras||[]; const obra_id=accion.obra_id||(accion.obra?obs.find(o=>(o.nombre||"").toLowerCase().includes(String(accion.obra).toLowerCase()))?.id:"")||""; const p=nuevoPedido({de:miSide,para,asunto:accion.asunto,detalle:accion.detalle,prioridad:accion.prioridad,obra_id}); await aplicarPedidos(setPedidos,arr=>[p,...arr]); try{ pushNotify("Nuevo pedido", `${miSide==="vv"?"V+V":"Belfast"}: ${p.asunto}`, para==="vv"?"vv":"belfast"); }catch(e){} return `Pedido creado y enviado: “${p.asunto}”.`; }
   if(accion.tipo==="responder_pedido"){ const f=hoyStr(),ts=Date.now(); await aplicarPedidos(setPedidos,arr=>arr.map(x=>x.id===accion.pedido_id?{...x,estado:"respondido",hilo:[...x.hilo,{de:miSide,texto:accion.texto||"",fecha:f,ts,porIA:false}]}:x)); return "Respuesta enviada."; }
   if(accion.tipo==="resolver_pedido"){ await aplicarPedidos(setPedidos,arr=>arr.map(x=>x.id===accion.pedido_id?{...x,estado:"resuelto"}:x)); return "Pedido marcado como resuelto."; }
   if(accion.tipo==="cargar_personal"){
@@ -3162,6 +3183,7 @@ async function ejecutarAccion(accion, miSide, ctx){
     let arr=[]; try{const r=await storage.get("vv_mensajes"); if(r?.value) arr=JSON.parse(r.value);}catch{}
     const next=[...arr,msg]; try{ localStorage.setItem("vv_mensajes",JSON.stringify(next)); }catch{} await storage.set("vv_mensajes",JSON.stringify(next)).catch(()=>{});
     if(ctx.setMensajes) ctx.setMensajes(next);
+    try{ pushNotify("Nuevo mensaje", `${miSide==="vv"?"V+V":"Belfast"}: ${(accion.texto||"").slice(0,80)}`, miSide==="vv"?"belfast":"vv"); }catch(e){}
     return "Mensaje enviado a la otra empresa (aparece en Mensajes).";
   }
   if(accion.tipo==="preguntar_ia"){
@@ -3867,6 +3889,7 @@ function App() {
     return () => clearInterval(iv);
   }, []);
   const requireAuth = (fn) => fn();
+  useEffect(() => { initPush("vv"); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;

@@ -10,6 +10,26 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 
 // ── BACKEND COMPARTIDO (idéntico a la app de V+V) ───────────────────
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
+const ONESIGNAL_APP_ID = ""; // ← Pegá acá tu App ID de OneSignal (después de crear la app en OneSignal)
+function initPush(appTag) {
+  if (!ONESIGNAL_APP_ID || typeof window === "undefined") return;
+  try {
+    if (document.getElementById("onesignal-sdk")) return;
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    const s = document.createElement("script");
+    s.id = "onesignal-sdk"; s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"; s.defer = true;
+    document.head.appendChild(s);
+    window.OneSignalDeferred.push(async function (OneSignal) {
+      try { await OneSignal.init({ appId: ONESIGNAL_APP_ID, allowLocalhostAsSecureOrigin: true }); } catch (e) {}
+      try { await OneSignal.User.addTag("app", appTag); } catch (e) {}
+      try { OneSignal.Slidedown.promptPush(); } catch (e) {}
+    });
+  } catch (e) {}
+}
+async function pushNotify(title, message, app, url) {
+  try { await fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "" }) }); } catch (e) {}
+}
+
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
 
@@ -125,7 +145,7 @@ async function ejecutarAccion(accion, miSide, ctx) {
   const setPedidos = ctx.setPedidos;
   if (!accion || !accion.tipo) return null;
   const otro = miSide === "vv" ? "cliente" : "vv";
-  if (accion.tipo === "crear_pedido") { const para = (accion.para === "vv" || accion.para === "cliente") ? accion.para : otro; const obs = ctx.obras || []; const obra_id = accion.obra_id || (accion.obra ? obs.find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase()))?.id : "") || ""; const p = nuevoPedido({ de: miSide, para, asunto: accion.asunto, detalle: accion.detalle, prioridad: accion.prioridad, obra_id }); await aplicarPedidos(setPedidos, arr => [p, ...arr]); return `Pedido creado y enviado: “${p.asunto}”.`; }
+  if (accion.tipo === "crear_pedido") { const para = (accion.para === "vv" || accion.para === "cliente") ? accion.para : otro; const obs = ctx.obras || []; const obra_id = accion.obra_id || (accion.obra ? obs.find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase()))?.id : "") || ""; const p = nuevoPedido({ de: miSide, para, asunto: accion.asunto, detalle: accion.detalle, prioridad: accion.prioridad, obra_id }); await aplicarPedidos(setPedidos, arr => [p, ...arr]); try{ pushNotify("Nuevo pedido", `Belfast: ${p.asunto}`, "vv"); }catch(e){} return `Pedido creado y enviado: “${p.asunto}”.`; }
   if (accion.tipo === "responder_pedido") { const f = hoyStr(), ts = Date.now(); await aplicarPedidos(setPedidos, arr => arr.map(x => x.id === accion.pedido_id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto: accion.texto || "", fecha: f, ts, porIA: false }] } : x)); return "Respuesta enviada."; }
   if (accion.tipo === "resolver_pedido") { await aplicarPedidos(setPedidos, arr => arr.map(x => x.id === accion.pedido_id ? { ...x, estado: "resuelto" } : x)); return "Pedido marcado como resuelto."; }
   if (accion.tipo === "cargar_personal") {
@@ -142,6 +162,7 @@ async function ejecutarAccion(accion, miSide, ctx) {
     let arr = []; try { const r = await storage.get("vv_mensajes"); if (r?.value) arr = JSON.parse(r.value); } catch { }
     const next = [...arr, msg]; try { localStorage.setItem("vv_mensajes", JSON.stringify(next)); } catch { } await storage.set("vv_mensajes", JSON.stringify(next)).catch(() => { });
     if (ctx.setMensajes) ctx.setMensajes(next);
+    try{ pushNotify("Nuevo mensaje", `Belfast: ${(accion.texto||"").slice(0,80)}`, "vv"); }catch(e){}
     return "Mensaje enviado a V+V (aparece en Mensajes).";
   }
   if (accion.tipo === "preguntar_ia") {
@@ -1233,6 +1254,7 @@ function ClienteApp() {
   const [toast, setToast] = useState(null);
   const [unread, setUnread] = useState(0);
   const [unreadForms, setUnreadForms] = useState(0);
+  useEffect(() => { initPush("belfast"); }, []);
   useEffect(() => {
     const total = (unread || 0) + (unreadForms || 0) + (unreadMat || 0) + pendPed;
     try { if ("setAppBadge" in navigator) { if (total > 0) navigator.setAppBadge(total); else navigator.clearAppBadge && navigator.clearAppBadge(); } } catch { }
