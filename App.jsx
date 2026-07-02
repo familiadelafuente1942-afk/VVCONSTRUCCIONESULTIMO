@@ -1666,13 +1666,49 @@ const MAS_TILES = [
   { id:"dias", label:"Días trabajados" }, { id:"alertas", label:"Alertas WA" },
 ];
 
+function Adjuntos({ items = [], onChange }) {
+  const fRef = useRef(null); const aRef = useRef(null);
+  const [sub, setSub] = useState(false);
+  async function up(e, tipo) {
+    const files = Array.from(e.target.files); if (!files.length) return;
+    setSub(true); const nuevos = [];
+    for (const f of files) {
+      const data = await toDataUrl(f);
+      const url = await uploadFoto(data, "adjuntos", `${Date.now()}_${(f.name || "arch").replace(/[^\w.\-]+/g, "_")}`);
+      nuevos.push({ id: uid(), nombre: f.name || "archivo", url, tipo, fecha: hoyStr() });
+    }
+    onChange([...(items || []), ...nuevos]); setSub(false); e.target.value = "";
+    if (nuevos.some(n => !mediaStorage.isRemoteUrl(n.url))) alert("⚠ Quedó guardado en este dispositivo pero no se pudo subir a la nube. Revisá el bucket 'bco-media' en Supabase para que se sincronice y lo vean todos.");
+  }
+  function del(id) { onChange((items || []).filter(x => x.id !== id)); }
+  const fotos = (items || []).filter(a => a.tipo === "foto");
+  const arch = (items || []).filter(a => a.tipo !== "foto");
+  return (<div style={{ marginTop: 8 }}>
+    <input ref={fRef} type="file" accept="image/*" multiple onChange={e => up(e, "foto")} style={{ display: "none" }} />
+    <input ref={aRef} type="file" multiple onChange={e => up(e, "archivo")} style={{ display: "none" }} />
+    <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Fotos y archivos{(items || []).length ? ` (${(items || []).length})` : ""}</div>
+    <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+      <button onClick={() => fRef.current && fRef.current.click()} disabled={sub} style={{ flex: 1, background: T.al, color: T.accent, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📷 Foto</button>
+      <button onClick={() => aRef.current && aRef.current.click()} disabled={sub} style={{ flex: 1, background: T.al, color: T.accent, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📎 Archivo</button>
+    </div>
+    {sub && <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 8 }}>Subiendo…</div>}
+    {fotos.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 8 }}>{fotos.map(a => (<div key={a.id} style={{ position: "relative" }}><a href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a><button onClick={() => del(a.id)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(0,0,0,.6)", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 11, cursor: "pointer" }}>✕</button></div>))}</div>}
+    {arch.map(a => (<div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>📎 {a.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{a.fecha}</div></div><a href={a.url} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a><button onClick={() => del(a.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button></div>))}
+  </div>);
+}
 function DocumentacionView({ db, cfg, onBack }) {
   const documentacion = db.documentacion || [];
   const setDocumentacion = db.setDocumentacion;
-  const CATS = ["Planillas modelo", "Formularios modelo", "Contratos / Legal", "Instructivos", "Certificados modelo", "Otros"];
+  const CATS = ["Planillas modelo", "Formularios modelo", "Contratos / Legal", "Instructivos", "Certificados modelo", "Planos", "Presupuestos", "Certificaciones", "Notas de pedido", "Actas", "Otros"];
+  const usadas = [...new Set((db.documentacion || []).map(d => d.cat).filter(Boolean))];
+  const allCats = [...CATS, ...usadas.filter(c => !CATS.includes(c))];
   const [cat, setCat] = useState(CATS[0]);
   const [subiendo, setSubiendo] = useState(false);
   const inputRef = useRef(null);
+  function onCatChange(e) {
+    if (e.target.value === "__new__") { const n = prompt("Nombre de la nueva carpeta:"); if (n && n.trim()) setCat(n.trim()); return; }
+    setCat(e.target.value);
+  }
   async function subir(e) {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -1689,15 +1725,15 @@ function DocumentacionView({ db, cfg, onBack }) {
     if (nuevos.some(n => !mediaStorage.isRemoteUrl(n.url))) alert("⚠ El archivo quedó guardado en este dispositivo pero no se pudo subir a la nube. Revisá el bucket de fotos en Supabase.");
   }
   function borrar(id) { if (confirm("¿Eliminar este documento?")) setDocumentacion(p => (p || []).filter(x => x.id !== id)); }
-  const porCat = CATS.map(c => ({ c, items: documentacion.filter(d => d.cat === c) })).filter(g => g.items.length);
+  const porCat = allCats.map(c => ({ c, items: documentacion.filter(d => d.cat === c) })).filter(g => g.items.length);
   return (
     <div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
       <PageHead title="Documentación" sub="Modelos de planillas y archivos de uso" back onBack={onBack} />
       <div style={{ padding: "0 16px" }}>
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Subir modelo / archivo</div>
-          <label style={{ fontSize: 11, color: T.muted }}>Categoría</label>
-          <select value={cat} onChange={e => setCat(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text, margin: "6px 0 12px" }}>{CATS.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          <label style={{ fontSize: 11, color: T.muted }}>Carpeta</label>
+          <select value={cat} onChange={onCatChange} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text, margin: "6px 0 12px" }}>{allCats.map(c => <option key={c} value={c}>{c}</option>)}<option value="__new__">＋ Nueva carpeta…</option></select>
           <input ref={inputRef} type="file" multiple onChange={subir} style={{ display: "none" }} />
           <button onClick={() => inputRef.current && inputRef.current.click()} disabled={subiendo} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>{subiendo ? "Subiendo…" : "＋ Elegir archivo(s)"}</button>
           <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>Sirve para PDF, Word, Excel, imágenes. Quedan disponibles para todo el equipo y se sincronizan entre dispositivos.</div>
@@ -1903,6 +1939,11 @@ function MasConfig({ cfg, setCfg, onBack }) {
       </div>
       <input type="range" min="44" max="200" value={cfg.logoSize||100} onChange={e=>setCfg(p=>({...p,logoSize:Number(e.target.value)}))} style={{ width:"100%", accentColor:T.accent }} />
       <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:T.muted, marginTop:2 }}><span>Chico</span><span>Grande</span></div>
+      <div style={{ marginTop:20 }}><Eyebrow>Comunicación entre IA</Eyebrow></div>
+      <div onClick={()=>setCfg(prev=>({ ...prev, iaAuto: prev.iaAuto===false ? true : false }))} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:T.card, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", cursor:"pointer", marginBottom:6 }}>
+        <div style={{ minWidth:0, paddingRight:12 }}><div style={{ fontSize:13.5, fontWeight:700, color:T.text }}>Respuesta automática entre IA</div><div style={{ fontSize:11, color:T.muted, marginTop:2, lineHeight:1.45 }}>Si está ON, cuando le pedís algo a la IA de la otra empresa, la otra IA responde sola. Si lo apagás, no gasta créditos respondiendo en segundo plano.</div></div>
+        <div style={{ width:44, height:26, borderRadius:13, background: cfg.iaAuto===false ? T.border : "#16A34A", position:"relative", flexShrink:0, transition:"background .2s" }}><div style={{ position:"absolute", top:3, left: cfg.iaAuto===false ? 3 : 21, width:20, height:20, borderRadius:"50%", background:"#fff", transition:"left .2s" }} /></div>
+      </div>
       <div style={{ marginTop:20 }}><Eyebrow>Panel de cliente</Eyebrow></div>
       <div style={{ fontSize:11.5, color:T.muted, marginBottom:9, lineHeight:1.5 }}>Nombre que aparece en el Panel de cliente y en la app del cliente.</div>
       <input value={cfg.clienteNombre||""} onChange={e=>setCfg(p=>({...p,clienteNombre:e.target.value}))} placeholder="Belfast Construction Management" style={{ width:"100%", background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", fontSize:13, color:T.text, marginBottom:8 }} />
@@ -2099,6 +2140,7 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
           </div>}
         </div>);
       })}
+      <div style={{ marginTop: 16 }}><Adjuntos items={detalle.adjuntos} onChange={next => { setPersonal(p => p.map(x => x.id === detalle.id ? { ...x, adjuntos: next } : x)); setDetalle(d => ({ ...d, adjuntos: next })); }} /></div>
       <button onClick={() => borrar(detalle.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Eliminar trabajador</button>
     </Sheet>}
   </div>);
@@ -2285,6 +2327,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(db.formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obraNom(db.obras, f.obra_id)} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${[...(db.archivosGen || []).map(a => `· ${a.nombre}`), ...(db.obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`))].join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(db.tareas || []).map(t => `· ${t.nombre} — ${obraNom(db.obras, t.obra_id)} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(db.matpedidos || []).map(p => `· ${obraNom(db.obras, p.obra_id)}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
+  const iaBusy = useRef(false);
   const pedSeen = useRef(null);
   useEffect(() => {
     const iv = setInterval(async () => {
@@ -2296,8 +2339,10 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           const nuevos = arr.slice(iaSeen.current); iaSeen.current = arr.length;
           setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "vv" ? "V+V" : cnIA} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
         }
-        const pend = arr.find(m => m.from !== "vv" && m.tipo === "q" && !m.answered);
-        if (pend) {
+        const pend = arr.find(m => m.from !== "vv" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
+        if (pend && !iaBusy.current && cfg?.iaAuto !== false) {
+          iaBusy.current = true;
+          try {
           arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           await storage.set("ia_dialogo", JSON.stringify(arr)).catch(() => { });
           const sysResp = `Sos el asistente de datos de V+V Construcciones. ESTOS SON TUS DATOS:\n${ctxRef.current}\n\nRespondé la consulta usando SOLO estos datos, breve y concreto (español rioplatense). Si el dato NO está en tus datos, respondé ÚNICAMENTE con la palabra NO_DATO. Nunca inventes. No agregues bloques de acción ni JSON.`;
@@ -2314,6 +2359,8 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           arr2.push({ id: uid() + Date.now(), from: "vv", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
           try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
           await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
+          } catch { }
+          iaBusy.current = false;
         }
         // Avisar en el chat los pedidos nuevos que le llegan a V+V
         const rp = await storage.get("vv_pedidos");
@@ -2432,7 +2479,7 @@ function MaterialesView({ db, onBack }) {
   const [form, setForm] = useState(null);
   const items = materiales.filter(m => m.obra_id === obraId);
   const total = items.reduce((a, m) => a + (Number(m.cantidad) || 0) * (Number(m.precio) || 0), 0);
-  function guardar() { if (!form.nombre?.trim()) return; setMateriales(p => [...p, { ...form, id: uid(), obra_id: obraId }]); setForm(null); }
+  function guardar() { if (!form.nombre?.trim()) return; if (form.id) setMateriales(p => p.map(x => x.id === form.id ? form : x)); else setMateriales(p => [...p, { ...form, id: uid(), obra_id: obraId }]); setForm(null); }
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="materiales" label="Materiales" sub="Cómputo por obra" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
@@ -2442,22 +2489,23 @@ function MaterialesView({ db, onBack }) {
         <span style={{ fontSize: 19, fontWeight: 800, color: "#fff" }}>{money(total)}</span>
       </div>
       {items.length === 0 && <EmptyMsg>Sin materiales cargados para esta obra.</EmptyMsg>}
-      {items.map(m => (<RowItem key={m.id} onDelete={() => setMateriales(p => p.filter(x => x.id !== m.id))}>
+      {items.map(m => (<RowItem key={m.id} onClick={() => setForm(m)} onDelete={() => setMateriales(p => p.filter(x => x.id !== m.id))}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <div><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{m.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{m.cantidad} {m.unidad} × {money(m.precio)}</div></div>
+          <div><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{m.nombre}{(m.adjuntos || []).length ? <span style={{ marginLeft: 6, fontSize: 10.5, color: T.muted }}>📎{(m.adjuntos || []).length}</span> : ""}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{m.cantidad} {m.unidad} × {money(m.precio)}</div></div>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{money((Number(m.cantidad) || 0) * (Number(m.precio) || 0))}</div>
         </div>
       </RowItem>))}
     </div>
     <AddFab onClick={() => setForm({ nombre: "", cantidad: "", unidad: "u", precio: "" })} label="Material" />
-    {form && <Sheet title="Nuevo material" onClose={() => setForm(null)}>
+    {form && <Sheet title={form.id ? "Material" : "Nuevo material"} onClose={() => setForm(null)}>
       <Field label="Material"><TInput value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Cemento Portland" /></Field>
       <FieldRow>
         <Field label="Cantidad"><TInput type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} /></Field>
         <Field label="Unidad"><TInput value={form.unidad} onChange={e => setForm({ ...form, unidad: e.target.value })} placeholder="u, m², bolsa…" /></Field>
       </FieldRow>
       <Field label="Precio unitario ($)"><TInput type="number" value={form.precio} onChange={e => setForm({ ...form, precio: e.target.value })} /></Field>
-      <PBtn full onClick={guardar} style={{ marginTop: 6 }}>Agregar material</PBtn>
+      <Adjuntos items={form.adjuntos} onChange={next => setForm({ ...form, adjuntos: next })} />
+      <PBtn full onClick={guardar} style={{ marginTop: 10 }}>{form.id ? "Guardar" : "Agregar material"}</PBtn>
     </Sheet>}
   </div>);
 }
@@ -2948,7 +2996,8 @@ function HerramientasView({ db, onBack }) {
         <Field label="Estado"><Sel value={form.estado} onChange={e => setForm({ ...form, estado: e.target.value })}>{est.map(x => <option key={x.id} value={x.id}>{x.id}</option>)}</Sel></Field>
       </FieldRow>
       <Field label="Obra / ubicación"><Sel value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}><option value="">Depósito</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
-      <PBtn full onClick={guardar} style={{ marginTop: 6 }}>{form.id ? "Guardar" : "Agregar"}</PBtn>
+      <Adjuntos items={form.adjuntos} onChange={next => setForm({ ...form, adjuntos: next })} />
+      <PBtn full onClick={guardar} style={{ marginTop: 10 }}>{form.id ? "Guardar" : "Agregar"}</PBtn>
     </Sheet>}
   </div>);
 }
@@ -3251,6 +3300,7 @@ function FormulariosView({ db, cfg, onBack }) {
           <div style={{ fontSize: 13, fontWeight: 800, color: T.accent, marginBottom: 8 }}>Resultado / Evaluación</div>
           {tpl.resultado.map(r => <button key={r} onClick={() => set({ resultado: r })} style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", marginBottom: 6, borderRadius: 8, border: `1px solid ${ed.resultado === r ? T.accent : T.border}`, background: ed.resultado === r ? T.al : T.card, color: ed.resultado === r ? T.accent : T.text, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{ed.resultado === r ? "● " : "○ "}{r}</button>)}
         </Card>}
+        <Card style={{ padding: 13, marginBottom: 11 }}><Adjuntos items={ed.adjuntos} onChange={next => set({ adjuntos: next })} /></Card>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => guardar(false)} style={{ flex: 1, background: T.card, color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Guardar borrador</button>
           <PBtn onClick={() => guardar(true)} style={{ flex: 1.4 }}>Guardar y compartir con {cfg?.clienteSigla || "Belfast"}</PBtn>

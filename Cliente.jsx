@@ -414,6 +414,11 @@ function AjustesScreen({ T, cfg, setCfg }) {
         <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>Responder pedidos automáticamente con IA</div><div style={{ fontSize: 11, color: T.muted, marginTop: 2, lineHeight: 1.5 }}>El asistente contesta solo los pedidos de V+V (hasta {PEDIDO_MAX_IA} idas y vueltas). Consume tu cuota de API.</div></div>
         <div style={{ width: 44, height: 26, borderRadius: 14, background: cfg.autoIA ? "#16A34A" : T.border, position: "relative", flexShrink: 0, transition: "background .2s" }}><div style={{ position: "absolute", top: 3, left: cfg.autoIA ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} /></div>
       </div>
+      <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Comunicación entre IA</label></div>
+      <div onClick={() => setCfg(prev => ({ ...prev, iaAuto: prev.iaAuto === false ? true : false }))} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", cursor: "pointer" }}>
+        <div style={{ minWidth: 0, paddingRight: 12 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>Respuesta automática entre IA</div><div style={{ fontSize: 11, color: T.muted, marginTop: 2, lineHeight: 1.45 }}>Si está ON, cuando le pedís algo a la IA de V+V, responde sola. Apagalo para no gastar créditos en segundo plano.</div></div>
+        <div style={{ width: 44, height: 26, borderRadius: 13, background: cfg.iaAuto === false ? T.border : "#16A34A", position: "relative", flexShrink: 0 }}><div style={{ position: "absolute", top: 3, left: cfg.iaAuto === false ? 3 : 21, width: 20, height: 20, borderRadius: "50%", background: "#fff" }} /></div>
+      </div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Contraseña del resumen económico</label></div>
       <input value={cfg.ecoPin || ""} onChange={e => setCfg(p => ({ ...p, ecoPin: e.target.value }))} placeholder="2025" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text, margin: "6px 0 4px" }} />
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
@@ -581,6 +586,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   ctxRef.current = `OBRAS:\n${(obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${(p.sitios || []).length ? ` [en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obras.find(o => o.id === f.obra_id)?.nombre || "—"} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${(obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`)).join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find(o => o.id === t.obra_id)?.nombre || "—"} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
+  const iaBusy = useRef(false);
   const pedSeen = useRef(null);
   const matSeen = useRef(null);
   useEffect(() => {
@@ -593,8 +599,10 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
           const nuevos = arr.slice(iaSeen.current); iaSeen.current = arr.length;
           setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "cliente" ? cfg.nombre : "V+V"} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
         }
-        const pend = arr.find(m => m.from !== "cliente" && m.tipo === "q" && !m.answered);
-        if (pend) {
+        const pend = arr.find(m => m.from !== "cliente" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
+        if (pend && !iaBusy.current && cfg?.iaAuto !== false) {
+          iaBusy.current = true;
+          try {
           arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           await storage.set("ia_dialogo", JSON.stringify(arr)).catch(() => { });
           const sysResp = `Sos el asistente de datos de ${cfg.nombre}. ESTOS SON TUS DATOS:\n${ctxRef.current}\n\nRespondé la consulta usando SOLO estos datos, breve y concreto (español rioplatense). Si el dato NO está en tus datos, respondé ÚNICAMENTE con la palabra NO_DATO. Nunca inventes. No agregues bloques de acción ni JSON.`;
@@ -611,6 +619,8 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
           arr2.push({ id: uid() + Date.now(), from: "cliente", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
           try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
           await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
+          } catch { }
+          iaBusy.current = false;
         }
         // Avisar en el chat los pedidos nuevos que le llegan al cliente
         const rp = await storage.get("vv_pedidos");
