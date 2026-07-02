@@ -1990,8 +1990,8 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:T.muted, marginTop:2 }}><span>Chico</span><span>Grande</span></div>
       <div style={{ marginTop:20 }}><Eyebrow>Comunicación entre IA</Eyebrow></div>
       <div onClick={()=>setCfg(prev=>({ ...prev, iaAuto: !prev.iaAuto }))} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:T.card, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", cursor:"pointer", marginBottom:6 }}>
-        <div style={{ minWidth:0, paddingRight:12 }}><div style={{ fontSize:13.5, fontWeight:700, color:T.text }}>Respuesta automática entre IA {cfg.iaAuto===true ? "" : "(en stand by)"}</div><div style={{ fontSize:11, color:T.muted, marginTop:2, lineHeight:1.45 }}>Por defecto está APAGADA para no gastar créditos: las IA no se hablan solas. Prendela solo si querés que, cuando le pidas algo a la IA de la otra empresa, la otra responda sola. El debate entre IA funciona igual, prendido o apagado esto.</div></div>
-        <div style={{ width:44, height:26, borderRadius:13, background: cfg.iaAuto===true ? "#16A34A" : T.border, position:"relative", flexShrink:0, transition:"background .2s" }}><div style={{ position:"absolute", top:3, left: cfg.iaAuto===true ? 21 : 3, width:20, height:20, borderRadius:"50%", background:"#fff", transition:"left .2s" }} /></div>
+        <div style={{ minWidth:0, paddingRight:12 }}><div style={{ fontSize:13.5, fontWeight:700, color:T.text }}>Respuesta automática entre IA {cfg.iaAuto===false ? "(apagada)" : ""}</div><div style={{ fontSize:11, color:T.muted, marginTop:2, lineHeight:1.45 }}>Prendida: cuando le pedís algo a la IA de la otra empresa (“pedile a la IA de Belfast…”), la otra responde sola. Es segura: responde una vez y se frena si no hay crédito. Apagala solo si querés silencio total entre las IA.</div></div>
+        <div style={{ width:44, height:26, borderRadius:13, background: cfg.iaAuto===false ? T.border : "#16A34A", position:"relative", flexShrink:0, transition:"background .2s" }}><div style={{ position:"absolute", top:3, left: cfg.iaAuto===false ? 3 : 21, width:20, height:20, borderRadius:"50%", background:"#fff", transition:"left .2s" }} /></div>
       </div>
       <div style={{ marginTop:20 }}><Eyebrow>Panel de cliente</Eyebrow></div>
       <div style={{ fontSize:11.5, color:T.muted, marginBottom:9, lineHeight:1.5 }}>Nombre que aparece en el Panel de cliente y en la app del cliente.</div>
@@ -2430,7 +2430,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "vv" ? "V+V" : cnIA} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
         }
         const pend = arr.find(m => m.from !== "vv" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
-        if (pend && !iaBusy.current && cfg?.iaAuto === true) {
+        if (pend && !iaBusy.current && cfg?.iaAuto !== false) {
           iaBusy.current = true;
           try {
           arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);

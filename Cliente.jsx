@@ -462,8 +462,8 @@ function AjustesScreen({ T, cfg, setCfg }) {
       </div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Comunicación entre IA</label></div>
       <div onClick={() => setCfg(prev => ({ ...prev, iaAuto: !prev.iaAuto }))} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", cursor: "pointer" }}>
-        <div style={{ minWidth: 0, paddingRight: 12 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>Respuesta automática entre IA {cfg.iaAuto === true ? "" : "(en stand by)"}</div><div style={{ fontSize: 11, color: T.muted, marginTop: 2, lineHeight: 1.45 }}>Por defecto está APAGADA para no gastar créditos. Prendela solo si querés que la IA de V+V responda sola cuando le pedís algo. El debate entre IA funciona igual.</div></div>
-        <div style={{ width: 44, height: 26, borderRadius: 13, background: cfg.iaAuto === true ? "#16A34A" : T.border, position: "relative", flexShrink: 0 }}><div style={{ position: "absolute", top: 3, left: cfg.iaAuto === true ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff" }} /></div>
+        <div style={{ minWidth: 0, paddingRight: 12 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>Respuesta automática entre IA {cfg.iaAuto === false ? "(apagada)" : ""}</div><div style={{ fontSize: 11, color: T.muted, marginTop: 2, lineHeight: 1.45 }}>Prendida: cuando le pedís algo a la IA de V+V, responde sola. Es segura: responde una vez y se frena si no hay crédito. Apagala solo si querés silencio total.</div></div>
+        <div style={{ width: 44, height: 26, borderRadius: 13, background: cfg.iaAuto === false ? T.border : "#16A34A", position: "relative", flexShrink: 0 }}><div style={{ position: "absolute", top: 3, left: cfg.iaAuto === false ? 3 : 21, width: 20, height: 20, borderRadius: "50%", background: "#fff" }} /></div>
       </div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Contraseña del resumen económico</label></div>
       <input value={cfg.ecoPin || ""} onChange={e => setCfg(p => ({ ...p, ecoPin: e.target.value }))} placeholder="2025" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text, margin: "6px 0 4px" }} />
@@ -679,7 +679,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
           setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "cliente" ? cfg.nombre : "V+V"} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
         }
         const pend = arr.find(m => m.from !== "cliente" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
-        if (pend && !iaBusy.current && cfg?.iaAuto === true) {
+        if (pend && !iaBusy.current && cfg?.iaAuto !== false) {
           iaBusy.current = true;
           try {
           arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
