@@ -62,8 +62,11 @@ export default function MiAsistente() {
   const [pinStored, setPinStored] = useState(null);
   const [pinInput, setPinInput] = useState("");
   const [pinNew, setPinNew] = useState(false);
+  const [trust, setTrust] = useState(true);
   const [db, setDb] = useState({ obras: [], personal: [], pedidos: [], matpedidos: [], mensajes: [], formularios: [], documentacion: [] });
   const [pagos, setPagos] = useState([]);
+  const [perfil, setPerfil] = useState("");
+  const chatWrite = useRef(0);
   const [archivos, setArchivos] = useState([]);
   const [agenda, setAgenda] = useState([]);
   const [subiendoArch, setSubiendoArch] = useState(false);
@@ -73,6 +76,7 @@ export default function MiAsistente() {
   const [modelos, setModelos] = useState([]);
   const [modeloSel, setModeloSel] = useState("");
   const modeloRef = useRef(null);
+  const chatFileRef = useRef(null);
   const modelo = (modelos || []).find(m => m.id === modeloSel) || null;
   const CFG_DEF = { titulo: "Mi Asistente", eyebrow: "Privado · Sebastián", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813", fondoUrl: "", fondoOp: 14, serif: true, escala: 100, iconoUrl: "", iconoColor: "#22463A" };
   const [cfg, setCfg] = useState(() => { try { return { ...CFG_DEF, ...JSON.parse(localStorage.getItem("sebastian_cfg") || "{}") }; } catch { return CFG_DEF; } });
@@ -104,7 +108,7 @@ export default function MiAsistente() {
   const scrollRef = useRef(null);
   const iaWait = useRef(null);
 
-  useEffect(() => { (async () => { const r = await storage.get("miasistente_pin"); if (r?.value) setPinStored(r.value); else setPinNew(true); })(); }, []);
+  useEffect(() => { (async () => { const r = await storage.get("miasistente_pin"); if (r?.value) { setPinStored(r.value); try { if (localStorage.getItem("miasistente_trust") === "1") { setPinOk(true); return; } } catch { } } else setPinNew(true); })(); }, []);
 
   useEffect(() => {
     if (!pinOk) return;
@@ -126,6 +130,21 @@ export default function MiAsistente() {
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [msgs, busy]);
 
+  // Memoria persistente: carga el historial del chat y el perfil al abrir.
+  useEffect(() => {
+    if (!pinOk) return;
+    (async () => {
+      try { const r = await storage.get("sebastian_chat"); if (r?.value) { const arr = JSON.parse(r.value); if (Array.isArray(arr) && arr.length) setMsgs(arr); } } catch { }
+      try { const rp = await storage.get("sebastian_perfil"); if (rp?.value) setPerfil(rp.value); } catch { }
+    })();
+  }, [pinOk]);
+  // Guarda el historial del chat cada vez que cambia (así no se pierde al cerrar).
+  useEffect(() => {
+    if (!pinOk) return;
+    const t = setTimeout(() => { try { localStorage.setItem("sebastian_chat", JSON.stringify(msgs.slice(-120))); } catch { } storage.set("sebastian_chat", JSON.stringify(msgs.slice(-120))).catch(() => { }); }, 700);
+    return () => clearTimeout(t);
+  }, [msgs, pinOk]);
+
   // Recordatorio: avisa en el chat por los eventos de mañana (un día antes).
   useEffect(() => {
     if (!pinOk) return;
@@ -145,6 +164,7 @@ export default function MiAsistente() {
   }, [pinOk]);
 
   function entrar() {
+    try { localStorage.setItem("miasistente_trust", trust ? "1" : "0"); } catch { }
     if (pinNew) { const p = pinInput.trim(); if (p.length < 4) { alert("El PIN tiene que tener al menos 4 dígitos."); return; } storage.set("miasistente_pin", p); setPinStored(p); setPinNew(false); setPinOk(true); setPinInput(""); return; }
     if (pinInput === pinStored) { setPinOk(true); setPinInput(""); } else { alert("PIN incorrecto."); setPinInput(""); }
   }
@@ -160,7 +180,12 @@ export default function MiAsistente() {
     const totalPend = (pagos || []).filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
     const ag = (agenda || []).slice(0, 30).map(e => `· ${e.fecha}${e.hora ? " " + e.hora : ""} — ${e.titulo}${e.nota ? " (" + e.nota + ")" : ""}`).join("\n") || "(agenda vacía)";
     const arch = (archivos || []).slice(0, 40).map(f => `· [${f.categoria}] ${f.nombre}`).join("\n") || "(sin archivos)";
-    return `Sos el asistente personal y privado de Sebastián (Presidente de V+V Construcciones). Hablás en español rioplatense (vos), claro y directo. Tenés acceso a TODOS los datos internos de V+V y a la agenda de pagos personal de Sebastián. Cuando te piden un dato puntual (un DNI, un teléfono, el estado de una obra, cuánto se le pagó a alguien), buscalo y respondé el valor EXACTO; nunca digas que no lo tenés si está acá abajo.
+    return `Sos el asistente personal y privado de Sebastián (Presidente de V+V Construcciones). Hablás en español rioplatense (vos), claro y directo. Tenés memoria: recordás lo que Sebastián te contó (está en "SOBRE SEBASTIÁN") y el historial de esta conversación. Tratalo con cercanía y empatía, como alguien que lo conoce.
+
+SOBRE SEBASTIÁN (lo que me fue contando; usalo para conocerlo y no volver a preguntar lo que ya sé):
+${perfil || "(todavía no cargué datos personales; cuando me cuente algo durable sobre él, lo recuerdo)"}
+
+Tenés acceso a TODOS los datos internos de V+V y a la agenda de pagos personal de Sebastián. Cuando te piden un dato puntual (un DNI, un teléfono, el estado de una obra, cuánto se le pagó a alguien), buscalo y respondé el valor EXACTO; nunca digas que no lo tenés si está acá abajo.
 
 OBRAS:
 ${obrasTxt}
@@ -189,6 +214,7 @@ ${arch}
 Además podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
 <<ACCION>>{...}<<FIN>>
 Acciones:
+{"tipo":"recordar","dato":"lo que hay que recordar de Sebastián (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
 {"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
@@ -197,6 +223,7 @@ Acciones:
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano"}
 Reglas:
+- "recordar" SIEMPRE que Sebastián te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora.
 - "cargar_pago" cuando Sebastián dice algo como "cargá un pago a Humberto en Castores 475 de 50000" o "anotá que le pagué a Juan 30 lucas en efectivo". Interpretá monto (50000, "50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método (efectivo/transferencia) de lo que diga. Si no aclara estado, poné pendiente.
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
@@ -225,6 +252,18 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     await storage.set("sebastian_pagos", JSON.stringify(next)).catch(() => { });
   }
   async function persistArch(next) { setArchivos(next); await storage.set("sebastian_archivos", JSON.stringify(next)).catch(() => { }); }
+  async function subirEnChat(e) {
+    const files = Array.from(e.target.files); if (!files.length) return; e.target.value = "";
+    for (const f of files) {
+      const data = await fileToDataUrl(f);
+      const url = await subirBucket(data, f.name);
+      if (!url) { setMsgs(prev => [...prev, { role: "assistant", content: `No pude subir "${f.name}" a la nube. Revisá el bucket 'bco-media' en Supabase.` }]); continue; }
+      const esImg = /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(f.name);
+      const item = { id: uid() + Date.now(), nombre: f.name, url, categoria: esImg ? "Fotos" : "Chat", ext: (f.name.split(".").pop() || "").toUpperCase(), fecha: hoyStr(), ts: Date.now() };
+      setArchivos(prev => { const n = [item, ...(prev || [])]; storage.set("sebastian_archivos", JSON.stringify(n)).catch(() => { }); return n; });
+      setMsgs(prev => [...prev, { role: "user", content: `📎 Subí: ${f.name}`, ...(esImg ? { media: [url], mediaTipo: "fotos" } : { docs: [{ nombre: f.name, url }] }) }, { role: "assistant", content: `✅ Guardado en Archivos${esImg ? " → Fotos" : ""}: ${f.name}. Ya lo tengo disponible.` }]);
+    }
+  }
   async function persistAgenda(next) { setAgenda(next); await storage.set("sebastian_agenda", JSON.stringify(next)).catch(() => { }); }
   async function subirArchivos(e) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
@@ -339,9 +378,16 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     const t = input.trim(); if (!t || busy) return;
     const nm = [...msgs, { role: "user", content: t }];
     setMsgs(nm); setInput(""); setBusy(true);
-    const resp = await callAI(nm.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, content: m.content })), buildSystem(), apiKey, useSearch);
+    const hist = nm.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, content: m.content })).slice(-40);
+    const resp = await callAI(hist, buildSystem(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(resp);
     let extra = {};
+    if (accion && accion.tipo === "recordar") {
+      const nuevoPerfil = (perfil ? perfil + "\n" : "") + "· " + (accion.dato || "").trim();
+      setPerfil(nuevoPerfil); try { localStorage.setItem("sebastian_perfil", nuevoPerfil); } catch { } storage.set("sebastian_perfil", nuevoPerfil).catch(() => { });
+      setMsgs(prev => [...prev, { role: "assistant", content: limpio || `Anotado, me lo guardo 👍` }]);
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "agendar") {
       const ev = agendarEvento(accion);
       setMsgs(prev => [...prev, { role: "assistant", content: `📅 Agendado: ${ev.titulo} — ${ev.fecha}${ev.hora ? " " + ev.hora : ""}${ev.nota ? `\n${ev.nota}` : ""}.${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Agenda.` }]);
@@ -397,7 +443,8 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         <div style={{ fontSize: 10, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>Privado · Sebastián</div>
         <div style={{ fontFamily: T.serif, fontSize: 27, fontWeight: 600, color: T.text, margin: "8px 0 8px" }}>Mi Asistente</div>
         <div style={{ fontSize: 13, color: T.sub, marginBottom: 22, lineHeight: 1.5 }}>{pinNew ? "Definí un PIN. Solo lo sabés vos; te lo voy a pedir cada vez que entres." : "Ingresá tu PIN para continuar."}</div>
-        <input value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, ""))} onKeyDown={e => { if (e.key === "Enter") entrar(); }} type="password" inputMode="numeric" placeholder="••••" autoFocus style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "14px", fontSize: 22, letterSpacing: "0.3em", textAlign: "center", color: T.text, marginBottom: 14, boxSizing: "border-box" }} />
+        <input value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, ""))} onKeyDown={e => { if (e.key === "Enter") entrar(); }} type="password" inputMode="numeric" placeholder="••••" autoFocus style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "14px", fontSize: 22, letterSpacing: "0.3em", textAlign: "center", color: T.text, marginBottom: 12, boxSizing: "border-box" }} />
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: T.sub, marginBottom: 16, cursor: "pointer" }}><input type="checkbox" checked={trust} onChange={e => setTrust(e.target.checked)} /> No pedir el PIN en este dispositivo</label>
         <button onClick={entrar} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "14px", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer" }}>{pinNew ? "Crear PIN y entrar" : "Entrar"}</button>
       </div>
     </div>);
@@ -436,6 +483,8 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "chat" && <div style={{ padding: "10px 14px 14px", paddingBottom: "max(14px, env(safe-area-inset-bottom))", borderTop: `1px solid ${T.border}`, background: T.bg }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.sub, cursor: "pointer" }}><input type="checkbox" checked={useSearch} onChange={e => setUseSearch(e.target.checked)} /> Buscar en internet</label>
+        <input ref={chatFileRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.dwg,.dxf" multiple onChange={subirEnChat} style={{ display: "none" }} />
+        <button onClick={() => chatFileRef.current && chatFileRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📎 Foto / archivo</button>
         <input ref={modeloRef} type="file" accept=".docx" onChange={subirModelo} style={{ display: "none" }} />
         <button onClick={() => modeloRef.current && modeloRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📄 Subir modelo</button>
         {modelo && <span style={{ fontSize: 10.5, color: T.muted }}>Modelo activo: {modelo.nombre}</span>}
