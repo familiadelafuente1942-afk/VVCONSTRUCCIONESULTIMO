@@ -214,6 +214,7 @@ ${arch}
 Además podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
 <<ACCION>>{...}<<FIN>>
 Acciones:
+{"tipo":"crear_obra","nombre":"Nombre de la obra","direccion":"opcional","estado":"En curso","avance":0}
 {"tipo":"recordar","dato":"lo que hay que recordar de Sebastián (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
 {"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
@@ -223,6 +224,7 @@ Acciones:
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano"}
 Reglas:
+- "crear_obra" cuando dice "cargá una obra nueva", "agregá la obra X", "abrí una obra en tal dirección". Poné el nombre y lo que aclare (dirección, estado).
 - "recordar" SIEMPRE que Sebastián te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora.
 - "cargar_pago" cuando Sebastián dice algo como "cargá un pago a Humberto en Castores 475 de 50000" o "anotá que le pagué a Juan 30 lucas en efectivo". Interpretá monto (50000, "50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método (efectivo/transferencia) de lo que diga. Si no aclara estado, poné pendiente.
@@ -286,11 +288,29 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     if (!obraEdit) return;
     (async () => {
       let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
-      const next = arr.map(o => o.id === obraEdit.id ? { ...o, nombre: obraEdit.nombre, estado: obraEdit.estado, avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion } : o);
+      let next;
+      if (obraEdit._new) {
+        if (!(obraEdit.nombre || "").trim()) { alert("Poné un nombre de obra."); return; }
+        const nueva = { id: uid() + Date.now(), nombre: obraEdit.nombre.trim(), estado: obraEdit.estado || "En curso", avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [] };
+        next = [nueva, ...arr];
+      } else {
+        next = arr.map(o => o.id === obraEdit.id ? { ...o, nombre: obraEdit.nombre, estado: obraEdit.estado, avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion } : o);
+      }
       try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
       await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
       setDb(d => ({ ...d, obras: next })); setObraEdit(null);
     })();
+  }
+  function crearObra(a) {
+    const nueva = { id: uid() + Date.now(), nombre: a.nombre || a.obra || "Obra nueva", estado: a.estado || "En curso", avance: Number(a.avance) || 0, direccion: a.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [] };
+    (async () => {
+      let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+      const next = [nueva, ...arr];
+      try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
+      await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
+      setDb(d => ({ ...d, obras: next }));
+    })();
+    return nueva;
   }
   function cargarSDK() { return new Promise((resolve) => { if (window.XLSX) return resolve(window.XLSX); const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; s.onload = () => resolve(window.XLSX); s.onerror = () => resolve(null); document.head.appendChild(s); }); }
   async function exportarExcel() {
@@ -382,6 +402,11 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     const resp = await callAI(hist, buildSystem(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(resp);
     let extra = {};
+    if (accion && accion.tipo === "crear_obra") {
+      const o = crearObra(accion);
+      setMsgs(prev => [...prev, { role: "assistant", content: `🏗 Obra creada: ${o.nombre}${o.direccion ? ` · ${o.direccion}` : ""} (${o.estado}). Ya la ven V+V y todo el equipo.${limpio ? "\n\n" + limpio : ""}` }]);
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "recordar") {
       const nuevoPerfil = (perfil ? perfil + "\n" : "") + "· " + (accion.dato || "").trim();
       setPerfil(nuevoPerfil); try { localStorage.setItem("sebastian_perfil", nuevoPerfil); } catch { } storage.set("sebastian_perfil", nuevoPerfil).catch(() => { });
@@ -465,7 +490,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "archivos" && <ArchivosBody archivos={archivos} cat={catArch} setCat={setCatArch} archRef={archRef} subir={subirArchivos} subiendo={subiendoArch} borrar={(id) => persistArch((archivos || []).filter(a => a.id !== id))} />}
     {vista === "modelos" && <ModelosBody modelos={modelos} sel={modeloSel} setSel={setModeloSel} subir={() => modeloRef.current && modeloRef.current.click()} borrar={(id) => { const next = (modelos || []).filter(m => m.id !== id); setModelos(next); if (modeloSel === id) setModeloSel(next[0]?.id || ""); storage.set("sebastian_modelos", JSON.stringify(next)).catch(() => { }); }} />}
-    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} />}
+    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "" })} />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
     {vista === "chat" && <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}>
@@ -588,8 +613,22 @@ function ArchivosBody({ archivos, cat, setCat, archRef, subir, subiendo, borrar 
   </div>);
 }
 
-function ObrasBody({ obras, obraEdit, setObraEdit, guardar }) {
+function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva }) {
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    {obraEdit && obraEdit._new && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Nueva obra</div>
+      <input value={obraEdit.nombre || ""} onChange={e => setObraEdit({ ...obraEdit, nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <input value={obraEdit.direccion || ""} onChange={e => setObraEdit({ ...obraEdit, direccion: e.target.value })} placeholder="Dirección (opcional)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
+        <input value={obraEdit.estado || ""} onChange={e => setObraEdit({ ...obraEdit, estado: e.target.value })} placeholder="Estado" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
+        <input value={obraEdit.avance != null ? obraEdit.avance : ""} onChange={e => setObraEdit({ ...obraEdit, avance: e.target.value })} placeholder="Avance %" type="number" style={{ width: 100, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
+      </div>
+      <div style={{ display: "flex", gap: 7 }}>
+        <button onClick={() => setObraEdit(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+        <button onClick={guardar} style={{ flex: 1.4, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Crear obra</button>
+      </div>
+    </div>}
+    {!(obraEdit && obraEdit._new) && <button onClick={onNueva} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Cargar nueva obra</button>}
     {(obras || []).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px" }}>No hay obras cargadas.</div>}
     {(obras || []).map(o => (<div key={o.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "13px", marginBottom: 9 }}>
       {obraEdit && obraEdit.id === o.id ? (<div>
