@@ -2427,7 +2427,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         if (iaSeen.current < 0) iaSeen.current = arr.length;
         else if (arr.length > iaSeen.current) {
           const nuevos = arr.slice(iaSeen.current); iaSeen.current = arr.length;
-          setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "vv" ? "V+V" : cnIA} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
+          setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 ${m.from === "vv" ? "IA V+V" : m.from === "sebastian" ? "Tita (asistente de Sebastián)" : m.from === "nicolas" ? "Asistente de Nicolás" : "IA " + cnIA} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
         }
         const pend = arr.find(m => m.from !== "vv" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
         if (pend && !iaBusy.current && cfg?.iaAuto !== false) {
@@ -2436,14 +2436,14 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           await storage.set("ia_dialogo", JSON.stringify(arr)).catch(() => { });
           const sysResp = `Sos el asistente de datos de V+V Construcciones. ESTOS SON TUS DATOS:\n${ctxRef.current}\n\nRespondé la consulta usando SOLO estos datos, breve y concreto (español rioplatense). Si el dato NO está en tus datos, respondé ÚNICAMENTE con la palabra NO_DATO. Nunca inventes. No agregues bloques de acción ni JSON.`;
-          const resp = await callAI([{ role: "user", content: `Consulta de la IA de ${cnIA}: "${pend.texto}"` }], sysResp, apiKeyRef.current, false);
+          const resp = await callAI([{ role: "user", content: `Te consulta ${pend.from === "sebastian" ? "TITA, la asistente personal de Sebastián (el Presidente de V+V). NO es un cliente: es de la casa, tratala con confianza" : pend.from === "nicolas" ? "la asistente personal de Nicolás (CEO de V+V). NO es un cliente: es de la casa" : "la IA de " + cnIA}: "${pend.texto}"` }], sysResp, apiKeyRef.current, false);
           let arr2 = []; try { const r2 = await storage.get("ia_dialogo"); if (r2?.value) arr2 = JSON.parse(r2.value); } catch { }
           arr2 = arr2.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           if (/credit balance|too low to access|purchase credits|is too low/i.test(String(resp||""))) { iaBusy.current=false; return; }
           let textoResp = resp;
           if ((resp || "").trim().toUpperCase().startsWith("NO_DATO")) {
             let peds = []; try { const rp = await storage.get("vv_pedidos"); if (rp?.value) peds = JSON.parse(rp.value); } catch { }
-            const np = nuevoPedido({ de: pend.from, para: "vv", asunto: `[URGENTE] Consulta de la IA de ${cnIA}`, detalle: pend.texto, prioridad: "alta", obra_id: "" });
+            const np = nuevoPedido({ de: pend.from, para: "vv", asunto: `[URGENTE] Consulta de ${pend.from === "sebastian" ? "Tita (asistente de Sebastián)" : pend.from === "nicolas" ? "asistente de Nicolás" : "la IA de " + cnIA}`, detalle: pend.texto, prioridad: "alta", obra_id: "" });
             const pedsNext = [np, ...peds]; try { localStorage.setItem("vv_pedidos", JSON.stringify(pedsNext)); } catch { } await storage.set("vv_pedidos", JSON.stringify(pedsNext)).catch(() => { });
             textoResp = `No tengo ese dato en la app de V+V. Lo derivé al personal de V+V como URGENTE (quedó en Pedidos). Te respondemos apenas lo tengan.`;
           }
