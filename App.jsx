@@ -2209,6 +2209,8 @@ function DocUpload({ onPick }) {
 function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [chatAdj, setChatAdj] = useState([]);
+  const chatFileRef = useRef(null);
   const [useSearch, setUseSearch] = useState(true);
   const [escuchando, setEscuchando] = useState(false);
   const bottomRef = useRef(null);
@@ -2296,6 +2298,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional. Tus capacidades:
 1) BUSCAR EN INTERNET (tenés la herramienta de búsqueda web activa): conseguir proveedores y contactos (corralones, ferreterías, alquiler de equipos, hormigón, áridos), precios de materiales, normativa y código de edificación de CABA/Buenos Aires, teléfonos, direcciones, datos de empresas, o cualquier información actual. Cuando te pidan algo que no está en la app o que cambia seguido, BUSCÁ en internet (no digas que no podés). Priorizá fuentes argentinas; al dar proveedores listá nombre, zona, contacto/teléfono y link, y citá la fuente.
+1b) ANALIZAR ARCHIVOS ADJUNTOS: el usuario puede adjuntarte FOTOS y PDF (con el 📎) para que los leas y analices. Si te mandan una PÓLIZA o NÓMINA de seguro, leela y extraé los datos de CADA PERSONA de forma ordenada: nombre y apellido, DNI/CUIL, y lo que figure (categoría, ART/aseguradora, N° de póliza, vigencia, suma asegurada). Devolvé una lista clara persona por persona. Si te piden, compará con el Personal cargado en la app y marcá quién está y quién falta. También podés analizar remitos, facturas, planos o cualquier foto de obra.
 2) Conocés los datos de la app y respondés sobre obras, personal, proyectos y pedidos.
 3) Redactás notas, mails y mensajes.
 4) Sos el agente de mensajería con ${cn} y GESTIONÁS PEDIDOS (temas a resolver con la otra empresa): podés crear pedidos, responderlos y marcarlos resueltos.
@@ -2366,10 +2369,34 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accionDone: true, accionResultado: res || "Acción ejecutada." } : x));
   }
   function descartarAccion(idx) { setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accion: null, accionDescartada: true } : x)); }
+  async function addChatAdj(e) {
+    const files = Array.from(e.target.files); if (!files.length) return; e.target.value = "";
+    const nuevos = [];
+    for (const f of files) {
+      const esImg = /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp)$/i.test(f.name);
+      const esPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+      if (!esImg && !esPdf) { alert(`"${f.name}": la IA solo puede analizar imágenes (foto) y PDF. Convertí el archivo a PDF o foto.`); continue; }
+      if (f.size > 3 * 1024 * 1024) { alert(`"${f.name}" es muy pesado (más de 3MB). Sacale una foto más chica, o si es PDF mandá menos páginas. Así la IA lo puede procesar.`); continue; }
+      const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+      const data = String(dataUrl).split(",")[1];
+      const mediaType = esImg ? ((dataUrl.match(/data:(.*?);/) || [])[1] || "image/jpeg") : "application/pdf";
+      nuevos.push({ nombre: f.name, kind: esImg ? "image" : "document", mediaType, data, dataUrl });
+    }
+    if (nuevos.length) setChatAdj(p => [...p, ...nuevos]);
+  }
   async function send(texto) {
-    const c = (texto ?? input).trim(); if (!c || loading) return;
-    setInput(""); const next = [...msgs, { role: "user", content: c }]; setMsgs(next); setLoading(true);
-    const r = await callAI(next, buildSystem(), apiKey, useSearch);
+    const c = (texto ?? input).trim(); if ((!c && chatAdj.length === 0) || loading) return;
+    const adj = chatAdj; setChatAdj([]);
+    setInput(""); const next = [...msgs, { role: "user", content: c || (adj.length ? "(archivo adjunto)" : ""), adjIA: adj.map(a => ({ nombre: a.nombre, kind: a.kind, dataUrl: a.dataUrl })) }]; setMsgs(next); setLoading(true);
+    const apiMsgs = next.map((m, i) => {
+      if (i === next.length - 1 && adj.length) {
+        const blocks = [{ type: "text", text: c || "Analizá este archivo/foto y contame qué es y sus datos clave." }];
+        for (const a of adj) blocks.push(a.kind === "image" ? { type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } } : { type: "document", source: { type: "base64", media_type: "application/pdf", data: a.data } });
+        return { role: "user", content: blocks };
+      }
+      return { role: m.role, content: typeof m.content === "string" ? m.content : m.content };
+    });
+    const r = await callAI(apiMsgs, buildSystem(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(r);
     let extra = {};
     if (accion && accion.tipo === "traer_plano") {
@@ -2492,6 +2519,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       </div>}
       {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
         <div style={{ maxWidth: "84%", background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{m.content}</div>
+        {m.adjIA && m.adjIA.length > 0 && <div style={{ marginTop: 6, maxWidth: "84%", display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>{m.adjIA.map((a, j) => a.kind === "image" ? <img key={j} src={a.dataUrl} alt="" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}` }} /> : <span key={j} style={{ background: T.al, color: T.accent, borderRadius: 8, padding: "8px 11px", fontSize: 11.5, fontWeight: 700 }}>📄 {a.nombre.slice(0, 24)}</span>)}</div>}
         {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
         {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
         {m.media && m.media.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.mediaTipo === "videos"          ? m.media.map((u, i) => <video key={i} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000", display: "block" }} />)
@@ -2526,10 +2554,13 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         </div>
       </div>}
       {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}>🎙 Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
+      {chatAdj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{chatAdj.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "🖼" : "📄"} {a.nombre.slice(0, 22)} <span onClick={() => setChatAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+        <input ref={chatFileRef} type="file" accept="image/*,.pdf" multiple onChange={addChatAdj} style={{ display: "none" }} />
+        <button onClick={() => chatFileRef.current?.click()} title="Adjuntar foto o PDF para analizar" style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.accent, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>📎</button>
         {sttOk && <button onClick={toggleVoz} style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#EF4444" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#EF4444" : T.border}`, fontSize: 16, cursor: "pointer", flexShrink: 0, animation: escuchando ? "pulse 1s infinite" : "none" }}>🎤</button>}
-        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={escuchando ? "Escuchando…" : "Escribí o usá el micrófono…"} rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
-        <button onClick={() => send()} disabled={loading || !input.trim()} style={{ width: 42, height: 42, borderRadius: T.rsm, background: input.trim() && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, cursor: input.trim() ? "pointer" : "default", flexShrink: 0 }}>↑</button>
+        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={escuchando ? "Escuchando…" : "Escribí, adjuntá 📎 o usá el micrófono…"} rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        <button onClick={() => send()} disabled={loading || (!input.trim() && chatAdj.length === 0)} style={{ width: 42, height: 42, borderRadius: T.rsm, background: (input.trim() || chatAdj.length) && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, cursor: (input.trim() || chatAdj.length) ? "pointer" : "default", flexShrink: 0 }}>↑</button>
       </div>
       {!apiKey && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center", marginTop: 7 }}>Cargá tu API Key en Más → Configuración para activar la IA.</div>}
     </div>
