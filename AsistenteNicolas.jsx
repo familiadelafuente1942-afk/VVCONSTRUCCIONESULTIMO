@@ -66,6 +66,7 @@ export default function AsistenteNicolas() {
   const [db, setDb] = useState({ obras: [], personal: [], pedidos: [], matpedidos: [], mensajes: [], formularios: [], documentacion: [] });
   const [pagos, setPagos] = useState([]);
   const [perfil, setPerfil] = useState("");
+  const [gastos, setGastos] = useState([]);
   const chatWrite = useRef(0);
   const [archivos, setArchivos] = useState([]);
   const [ultimasFotos, setUltimasFotos] = useState([]);
@@ -105,6 +106,10 @@ export default function AsistenteNicolas() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [useSearch, setUseSearch] = useState(false);
+  const [escuchando, setEscuchando] = useState(false);
+  const [vozOn, setVozOn] = useState(false);
+  const recRef = useRef(null);
+  const lastSpokeRef = useRef(-1);
   const apiKey = "";
   const scrollRef = useRef(null);
   const iaWait = useRef(null);
@@ -121,15 +126,26 @@ export default function AsistenteNicolas() {
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
       setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("nicolas_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
-      const [ra, rag] = await Promise.all([storage.get("nicolas_archivos"), storage.get("nicolas_agenda")]);
-      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); }
+      const [ra, rag, rg] = await Promise.all([storage.get("nicolas_archivos"), storage.get("nicolas_agenda"), storage.get("nicolas_gastos")]);
+      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); }
       if (!modelos.length) { const rmod = await storage.get("nicolas_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
       const rc = await storage.get("nicolas_cfg"); if (alive && rc?.value) { try { const c = JSON.parse(rc.value); setCfg(prev => JSON.stringify({ ...CFG_DEF, ...c }) !== JSON.stringify(prev) ? { ...CFG_DEF, ...c } : prev); } catch { } }
     }
     pull(); const iv = setInterval(pull, 8000); return () => { alive = false; clearInterval(iv); };
   }, [pinOk]);
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [msgs, busy]);
+  const scrollBottom = () => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight + 99999; };
+  const scrollBottomHard = () => { try { requestAnimationFrame(scrollBottom); } catch { } [0, 60, 160, 320, 600, 1000].forEach(d => setTimeout(scrollBottom, d)); };
+  useEffect(() => { scrollBottomHard(); }, [msgs, busy]);
+  useEffect(() => { if (vista === "chat") scrollBottomHard(); }, [vista]);
+  useEffect(() => {
+    const h = () => { if (document.visibilityState !== "hidden") scrollBottomHard(); };
+    document.addEventListener("visibilitychange", h); window.addEventListener("focus", h); window.addEventListener("pageshow", h); window.addEventListener("resize", h);
+    return () => { document.removeEventListener("visibilitychange", h); window.removeEventListener("focus", h); window.removeEventListener("pageshow", h); window.removeEventListener("resize", h); };
+  }, []);
+  // Voz: leer en voz alta las respuestas nuevas cuando está activado.
+  useEffect(() => { if (vozOn) { lastSpokeRef.current = msgs.length - 1; } else { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { } } }, [vozOn]);
+  useEffect(() => { if (!vozOn) return; const i = msgs.length - 1; const last = msgs[i]; if (last && last.role === "assistant" && i > lastSpokeRef.current) { lastSpokeRef.current = i; hablar(last.content); } }, [msgs, vozOn]);
 
   // Memoria persistente: carga el historial del chat y el perfil al abrir.
   useEffect(() => {
@@ -170,6 +186,29 @@ export default function AsistenteNicolas() {
     if (pinInput === pinStored) { setPinOk(true); setPinInput(""); } else { alert("PIN incorrecto."); setPinInput(""); }
   }
 
+  function hablar(texto) {
+    try {
+      const synth = window.speechSynthesis; if (!synth || !texto) return;
+      synth.cancel();
+      const limpio = String(texto).replace(/[*_#>`~]/g, "").replace(/\s+/g, " ").trim().slice(0, 650);
+      const u = new SpeechSynthesisUtterance(limpio);
+      u.lang = "es-AR"; u.rate = 1; u.pitch = 1;
+      const vs = synth.getVoices() || []; const es = vs.find(v => /es[-_]AR/i.test(v.lang)) || vs.find(v => /^es/i.test(v.lang)); if (es) u.voice = es;
+      synth.speak(u);
+    } catch { }
+  }
+  function dictar() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert("Este teléfono no permite dictar desde la app. Tocá el cuadro de texto y usá el micrófono del teclado (dictado del iPhone)."); return; }
+    if (escuchando && recRef.current) { try { recRef.current.stop(); } catch { } return; }
+    let rec; try { rec = new SR(); } catch { alert("No pude activar el micrófono."); return; }
+    rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = false;
+    let base = input ? input + " " : "";
+    rec.onresult = (e) => { let fin = "", inter = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else inter += t; } setInput((base + fin + inter).replace(/\s+/g, " ").trimStart()); if (fin) base += fin; };
+    rec.onend = () => { setEscuchando(false); recRef.current = null; };
+    rec.onerror = () => { setEscuchando(false); recRef.current = null; };
+    recRef.current = rec; setEscuchando(true); try { rec.start(); } catch { setEscuchando(false); }
+  }
   function buildSystem() {
     const o = db.obras || [];
     const obrasTxt = o.map(x => `· ${x.nombre}${x.estado ? ` (${x.estado})` : ""}${x.avance != null ? ` — avance ${x.avance}%` : ""} — ${(x.fotos || []).length} fotos, ${(x.videos || []).length} videos, ${(x.planos || []).length} planos, ${(x.informes || []).length} informes`).join("\n") || "(sin obras)";
@@ -178,6 +217,10 @@ export default function AsistenteNicolas() {
     const peds = (db.pedidos || []).map(p => `· [${p.estado || "abierto"}] ${p.asunto} (de ${p.de} → ${p.para})`).join("\n") || "(sin pedidos)";
     const mats = (db.matpedidos || []).map(p => `· ${obraNom(o, p.obra_id)} (${p.de === "vv" ? "V+V" : p.de === "cliente" ? "Belfast" : p.empresa || "contratista"}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}${p.leido ? " ✓levantado" : " ●pendiente"}`).join("\n") || "(sin pedidos de materiales)";
     const pg = (pagos || []).slice(0, 40).map(p => `· ${p.fecha} — ${p.persona} $${(p.monto || 0).toLocaleString("es-AR")} (${p.obra || "sin obra"}) [${p.estado}${p.metodo ? ", " + p.metodo : ""}]`).join("\n") || "(sin pagos cargados)";
+    const hoyG = hoyStr(); const mesG = hoyG.slice(3);
+    const gs = (gastos || []).slice(0, 40).map(g => `· ${g.fecha} — ${g.concepto} $${(g.monto || 0).toLocaleString("es-AR")}`).join("\n") || "(sin gastos)";
+    const totDia = (gastos || []).filter(g => g.fecha === hoyG).reduce((a, g) => a + (g.monto || 0), 0);
+    const totMes = (gastos || []).filter(g => (g.fecha || "").slice(3) === mesG).reduce((a, g) => a + (g.monto || 0), 0);
     const totalPend = (pagos || []).filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
     const ag = (agenda || []).slice(0, 30).map(e => `· ${e.fecha}${e.hora ? " " + e.hora : ""} — ${e.titulo}${e.nota ? " (" + e.nota + ")" : ""}`).join("\n") || "(agenda vacía)";
     const arch = (archivos || []).slice(0, 40).map(f => `· [${f.categoria}] ${f.nombre}`).join("\n") || "(sin archivos)";
@@ -206,6 +249,9 @@ ${mats}
 AGENDA DE PAGOS (personal de Nicolás) — pendiente total $${totalPend.toLocaleString("es-AR")}:
 ${pg}
 
+GASTOS DIARIOS (generales) — hoy $${totDia.toLocaleString("es-AR")}, este mes $${totMes.toLocaleString("es-AR")}:
+${gs}
+
 MI AGENDA (eventos/citas):
 ${ag}
 
@@ -219,6 +265,7 @@ Acciones:
 {"tipo":"crear_obra","nombre":"Nombre de la obra","direccion":"opcional","estado":"En curso","avance":0}
 {"tipo":"recordar","dato":"lo que hay que recordar de Nicolás (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
+{"tipo":"cargar_gasto","concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"}
 {"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
 {"tipo":"whatsapp","persona":"Valeria","texto":"el mensaje a enviar por WhatsApp"}
@@ -230,6 +277,7 @@ Reglas:
 - "crear_obra" cuando dice "cargá una obra nueva", "agregá la obra X", "abrí una obra en tal dirección". Poné el nombre y lo que aclare (dirección, estado).
 - "recordar" SIEMPRE que Nicolás te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora.
+- "cargar_gasto" cuando dice "cargá un gasto de nafta de 15000", "anotá un gasto de comida 8000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto). No lleva obra.
 - "cargar_pago" cuando Nicolás dice algo como "cargá un pago a Humberto en Castores 475 de 50000" o "anotá que le pagué a Juan 30 lucas en efectivo". Interpretá monto (50000, "50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método (efectivo/transferencia) de lo que diga. Si no aclara estado, poné pendiente.
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Nicolás subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
 - "whatsapp" cuando dice "mandale un mensaje a X que…" o "escribile a X". Uso los teléfonos de Personal; le dejo el WhatsApp listo para enviar con un toque.
@@ -257,6 +305,15 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     await storage.set("nicolas_pagos", JSON.stringify(next)).catch(() => { });
   }
   async function persistArch(next) { setArchivos(next); await storage.set("nicolas_archivos", JSON.stringify(next)).catch(() => { }); }
+  async function persistGastos(next) { setGastos(next); try { localStorage.setItem("nicolas_gastos", JSON.stringify(next)); } catch { } await storage.set("nicolas_gastos", JSON.stringify(next)).catch(() => { }); }
+  function cargarGasto(a) { const g = { id: uid() + Date.now(), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }; persistGastos([g, ...(gastos || [])]); return g; }
+  async function exportarGastosExcel() {
+    const lista = (gastos || []); if (!lista.length) { alert("No hay gastos para exportar."); return; }
+    const filas = lista.map(g => ({ Fecha: g.fecha, Concepto: g.concepto, Monto: g.monto }));
+    const XLSX = await cargarSDK();
+    if (XLSX) { const ws = XLSX.utils.json_to_sheet(filas); ws["!cols"] = [{ wch: 10 }, { wch: 30 }, { wch: 12 }]; const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Gastos"); XLSX.writeFile(wb, `Gastos_${hoyStr().replace(/\//g, "-")}.xlsx`); }
+    else { const cab = ["Fecha", "Concepto", "Monto"]; const csv = "\uFEFF" + [cab.join(";"), ...filas.map(r => cab.map(c => `"${String(r[c] ?? "").replace(/"/g, '""')}"`).join(";"))].join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `Gastos_${hoyStr().replace(/\//g, "-")}.csv`; a.click(); }
+  }
   async function subirEnChat(e) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = "";
     for (const f of files) {
@@ -441,6 +498,11 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (ok) setMsgs(prev => [...prev, { role: "assistant", content: `✅ PDF generado y descargado: "${accion.titulo || "documento"}". Buscalo en tus Descargas.` }]);
       setBusy(false); return;
     }
+    if (accion && accion.tipo === "cargar_gasto") {
+      const g = cargarGasto(accion);
+      setMsgs(prev => [...prev, { role: "assistant", content: `💸 Gasto cargado: ${g.concepto} · $${g.monto.toLocaleString("es-AR")} (${g.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Gastos.` }]);
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "cargar_pago") {
       const p = cargarPago(accion);
       setMsgs(prev => [...prev, { role: "assistant", content: `✅ Pago cargado: ${p.persona || "—"}${p.monto ? ` · $${p.monto.toLocaleString("es-AR")}` : ""}${p.obra ? ` · ${p.obra}` : ""} · ${p.estado}${p.metodo ? ` · ${p.metodo}` : ""} (${p.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Pagos y lo podés exportar a Excel.` }]);
@@ -492,50 +554,56 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     </div>);
   }
 
-  return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
+  return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"}</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v6 · gastos</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
-      <div style={{ display: "flex", gap: 2, marginTop: 12, overflowX: "auto" }}>
-        {[["chat", "💬 Chat"], ["pagos", "💵 Pagos"], ["agenda", "📅 Agenda"], ["archivos", "📁 Archivos"], ["modelos", "📄 Modelos"], ["obras", "🏗 Obras"], ["ajustes", "⚙ Ajustes"]].map(([id, lb]) => <button key={id} onClick={() => setVista(id)} style={{ background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: vista === id ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 700, padding: "8px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>{lb}{id === "pagos" && (pagos || []).length ? ` (${pagos.length})` : ""}{id === "archivos" && (archivos || []).length ? ` (${archivos.length})` : ""}{id === "agenda" && (agenda || []).length ? ` (${agenda.length})` : ""}{id === "modelos" && (modelos || []).length ? ` (${modelos.length})` : ""}</button>)}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
+        {[["chat", "💬 Chat"], ["pagos", "💵 Pagos"], ["gastos", "💸 Gastos"], ["agenda", "📅 Agenda"], ["archivos", "📁 Archivos"], ["modelos", "📄 Modelos"], ["obras", "🏗 Obras"], ["ajustes", "⚙ Ajustes"]].map(([id, lb]) => <button key={id} onClick={() => setVista(id)} style={{ background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: vista === id ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 700, padding: "8px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>{lb}{id === "pagos" && (pagos || []).length ? ` (${pagos.length})` : ""}{id === "gastos" && (gastos || []).length ? ` (${gastos.length})` : ""}{id === "archivos" && (archivos || []).length ? ` (${archivos.length})` : ""}{id === "agenda" && (agenda || []).length ? ` (${agenda.length})` : ""}{id === "modelos" && (modelos || []).length ? ` (${modelos.length})` : ""}</button>)}
       </div>
     </div>
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: (cfg.escala || 100) / 100 }}>
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} />}
+    {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "archivos" && <ArchivosBody archivos={archivos} cat={catArch} setCat={setCatArch} archRef={archRef} subir={subirArchivos} subiendo={subiendoArch} borrar={(id) => persistArch((archivos || []).filter(a => a.id !== id))} />}
     {vista === "modelos" && <ModelosBody modelos={modelos} sel={modeloSel} setSel={setModeloSel} subir={() => modeloRef.current && modeloRef.current.click()} borrar={(id) => { const next = (modelos || []).filter(m => m.id !== id); setModelos(next); if (modeloSel === id) setModeloSel(next[0]?.id || ""); storage.set("nicolas_modelos", JSON.stringify(next)).catch(() => { }); }} />}
     {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "" })} />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
-    {vista === "chat" && <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}>
+    <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
+    <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "16px 16px 8px" }}>
       {msgs.map((m, i) => (<div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 12 }}>
-        <div style={{ maxWidth: "88%" }}>
-          <div style={{ background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: 14, padding: "11px 14px", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.content}</div>
+        <div style={{ maxWidth: "88%", minWidth: 0 }}>
+          <div style={{ background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: 14, padding: "11px 14px", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "anywhere" }}>{m.content}</div>
+          {m.role === "assistant" && m.content && m.content.length > 8 && <button onClick={() => hablar(m.content)} title="Escuchar" style={{ marginTop: 4, background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: "2px 0" }}>🔊 Escuchar</button>}
           {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
           {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8 }}>{m.docs.map((d, j) => <a key={j} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.navy, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: BRASS, fontWeight: 700, fontSize: 11.5 }}>Abrir ↗</span></a>)}</div>}
-          {m.media && m.media.length > 0 && <div style={{ marginTop: 8 }}>{m.mediaTipo === "videos" ? m.media.map((u, j) => <video key={j} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000" }} />) : <div style={{ display: "grid", gridTemplateColumns: m.media.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>{m.media.map((u, j) => <a key={j} href={u} target="_blank" rel="noreferrer" download><img src={u} alt="" style={{ width: "100%", borderRadius: 10, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div>}</div>}
+          {m.media && m.media.length > 0 && <div style={{ marginTop: 8 }}>{m.mediaTipo === "videos" ? m.media.map((u, j) => <video key={j} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000" }} />) : <div style={{ display: "grid", gridTemplateColumns: m.media.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>{m.media.map((u, j) => <a key={j} href={u} target="_blank" rel="noreferrer" download><img src={u} alt="" onLoad={scrollBottom} style={{ width: "100%", borderRadius: 10, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div>}</div>}
         </div>
       </div>))}
       {busy && <div style={{ color: T.muted, fontSize: 13, padding: "4px 6px" }}>Pensando…</div>}
-    </div>}
+    </div>
 
-    {vista === "chat" && <div style={{ padding: "10px 14px 14px", paddingBottom: "max(14px, env(safe-area-inset-bottom))", borderTop: `1px solid ${T.border}`, background: T.bg }}>
+    <div style={{ padding: "10px 14px 14px", paddingBottom: "max(14px, env(safe-area-inset-bottom))", borderTop: `1px solid ${T.border}`, background: T.bg }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.sub, cursor: "pointer" }}><input type="checkbox" checked={useSearch} onChange={e => setUseSearch(e.target.checked)} /> Buscar en internet</label>
         <input ref={chatFileRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.dwg,.dxf" multiple onChange={subirEnChat} style={{ display: "none" }} />
         <button onClick={() => chatFileRef.current && chatFileRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📎 Foto / archivo</button>
         <input ref={modeloRef} type="file" accept=".docx" onChange={subirModelo} style={{ display: "none" }} />
         <button onClick={() => modeloRef.current && modeloRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📄 Subir modelo</button>
+        <button onClick={() => setVozOn(v => !v)} style={{ background: vozOn ? T.accent : "none", border: `1px solid ${vozOn ? T.accent : T.border}`, color: vozOn ? "#fff" : T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>🔊 Voz {vozOn ? "activada" : ""}</button>
         {modelo && <span style={{ fontSize: 10.5, color: T.muted }}>Modelo activo: {modelo.nombre}</span>}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder="Escribí tu consulta…" style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
+        <button onClick={dictar} title="Hablar" style={{ background: escuchando ? "#DC2626" : T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, color: escuchando ? "#fff" : T.accent, borderRadius: 12, padding: "0 15px", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>🎤</button>
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : "Escribí o tocá el micrófono…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
         <button onClick={enviar} disabled={busy || !input.trim()} style={{ background: (busy || !input.trim()) ? T.border : T.accent, color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", fontSize: 14, fontWeight: 600, letterSpacing: "0.03em", cursor: (busy || !input.trim()) ? "default" : "pointer" }}>Enviar</button>
       </div>
-    </div>}
+    </div>
+    </div>
     </div>
   </div>);
 }
@@ -704,6 +772,11 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
   const Color = ({ k }) => (<input type="color" value={cfg[k]} onChange={e => setC(k, e.target.value)} style={{ width: 40, height: 30, border: `1px solid ${T.border}`, borderRadius: 8, background: "none", cursor: "pointer", padding: 0 }} />);
   const Sec = ({ t }) => (<div style={{ fontSize: 10.5, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.12em", margin: "18px 0 2px" }}>{t}</div>);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "10px 16px 30px" }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px", margin: "6px 0 6px" }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 3 }}>Actualizar la app</div>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.45 }}>Trae la última versión con los cambios nuevos, sin borrar ni reinstalar nada.</div>
+      <button onClick={async () => { try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch { } window.location.replace(window.location.pathname + "?v=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>🔄 Actualizar a la última versión</button>
+    </div>
     <Sec t="Estilos rápidos" />
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 4px" }}>
       {PRESETS.map(p => <button key={p.n} onClick={() => saveCfg({ ...cfg, accent: p.accent, navy: p.navy, bg: p.bg, card: p.card, text: p.text })} style={{ display: "flex", alignItems: "center", gap: 7, background: T.card, border: `1px solid ${T.border}`, borderRadius: 20, padding: "6px 12px 6px 8px", cursor: "pointer" }}>
@@ -748,5 +821,33 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
     <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>Para que tome el ícono nuevo en iPhone/iPad: subilo acá, después en Safari tocá Compartir → “Agregar a pantalla de inicio”. Usá una imagen cuadrada (ideal 512×512).</div>
 
     <button onClick={() => { if (confirm("¿Volver al estilo original?")) saveCfg({ ...CFG_DEF, iconoUrl: cfg.iconoUrl }); }} style={{ width: "100%", marginTop: 22, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Restablecer estilo original</button>
+  </div>);
+}
+
+function GastosBody({ gastos, onAdd, exportar, borrar }) {
+  const [f, setF] = React.useState({ concepto: "", monto: "" });
+  const lista = (gastos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const hoy = hoyStr(); const mes = hoy.slice(3);
+  const totDia = lista.filter(g => g.fecha === hoy).reduce((a, g) => a + (g.monto || 0), 0);
+  const totMes = lista.filter(g => (g.fecha || "").slice(3) === mes).reduce((a, g) => a + (g.monto || 0), 0);
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo gasto</div>
+      <input value={f.concepto} onChange={e => setF({ ...f, concepto: e.target.value })} placeholder="Concepto (nafta, comida, ferretería…)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <div style={{ display: "flex", gap: 7 }}>
+        <input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
+        <button onClick={() => { if (!f.concepto.trim() || !f.monto) { alert("Poné concepto y monto."); return; } onAdd({ concepto: f.concepto, monto: f.monto }); setF({ concepto: "", monto: "" }); }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>＋</button>
+      </div>
+    </div>
+    <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Hoy</div><div style={{ fontFamily: T.serif, fontSize: 20, fontWeight: 600, color: T.text, marginTop: 3 }}>${totDia.toLocaleString("es-AR")}</div></div>
+      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Este mes</div><div style={{ fontFamily: T.serif, fontSize: 20, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totMes.toLocaleString("es-AR")}</div></div>
+    </div>
+    <button onClick={exportar} style={{ width: "100%", background: "none", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>Exportar Excel</button>
+    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Sin gastos.<br />Desde el Chat: <span style={{ color: T.sub }}>"cargá un gasto de nafta de 15000"</span></div>}
+    {lista.map(g => (<div key={g.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+      <div style={{ minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{g.concepto} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(g.monto || 0).toLocaleString("es-AR")}</span></div><div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{g.fecha}</div></div>
+      <button onClick={() => borrar(g.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+    </div>))}
   </div>);
 }
