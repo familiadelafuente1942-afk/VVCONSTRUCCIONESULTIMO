@@ -322,7 +322,7 @@ async function callAI(msgs, sys, apiKey, useSearch = false) {
     msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
     const body = {
         model: "claude-sonnet-4-6",
-        max_tokens: useSearch ? 3000 : 1500,
+        max_tokens: useSearch ? 4096 : 4096,
         messages: msgs,
     };
     if (sys) body.system = sys;
@@ -2362,7 +2362,7 @@ PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} 
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano (ej: replanteo platea)"}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: todos los de esa obra"}
 {"tipo":"agregar_personal","personas":[{"nombre":"Juan Pérez","dni":"20345678","cuil":"20-20345678-9","rol":"Oficial","empresa":"","telefono":"","obra":"Castores 475","aseguradora":"","poliza":"","vigencia":""}]}
-REGLA ESPECIAL NÓMINA/PERSONAL: cuando el usuario te adjunte una nómina, póliza o lista de gente y te pida CARGARLA/SUBIRLA al listado de Personal, LEÉ el documento y devolvé SIEMPRE un bloque "agregar_personal" con TODAS las personas y sus datos (nombre completo obligatorio; DNI, CUIL, rol, empresa, aseguradora, N° póliza y vigencia si figuran). NO te limites a listarlas en el texto: incluí SÍ o SÍ el bloque de acción, porque es lo único que las carga de verdad. Se ejecuta directo.
+REGLA ESPECIAL NÓMINA/PERSONAL: cuando el usuario te adjunte una nómina, póliza o lista de gente y te pida CARGARLA/SUBIRLA al listado de Personal, LEÉ el documento y devolvé SIEMPRE un bloque "agregar_personal" con TODAS las personas y sus datos (nombre completo obligatorio; DNI, CUIL, rol, empresa, aseguradora, N° póliza y vigencia si figuran). En el TEXTO sé BREVE (ej: "Cargo estas 14 personas al Personal:") y NO repitas toda la lista larga en el texto — la lista completa va DENTRO del bloque de acción. Incluí SÍ o SÍ el bloque de acción con TODAS las personas, porque es lo único que las carga de verdad. Se ejecuta directo.
 Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el bloque. La acción se ejecuta cuando el usuario la confirma.`;
   }
   async function confirmAccion(idx) {
@@ -2526,7 +2526,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-    <PageHead eyebrow="Inteligencia" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} />
+    <PageHead eyebrow="Inteligencia · nómina v2" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} />
     <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -3213,7 +3213,7 @@ function AlertasWaView({ db, onBack }) {
 // ── PEDIDOS / SEGUIMIENTO (agente entre empresas) ────────────────────
 const PEDIDO_ESTADOS = { abierto:{l:"Abierto",c:"#F59E0B",b:"#FFFBEB"}, en_proceso:{l:"En proceso",c:"#3B82F6",b:"#EFF6FF"}, respondido:{l:"Respondido",c:"#8B5CF6",b:"#F5F3FF"}, resuelto:{l:"Resuelto",c:"#16A34A",b:"#ECFDF5"} };
 const PEDIDO_MAX_IA = 4; // tope de intercambios automáticos IA↔IA por pedido
-function parseAccion(texto){ const m=(texto||"").match(/```accion\s*([\s\S]*?)```/i); if(!m) return {limpio:texto,accion:null}; let a=null; try{a=JSON.parse(m[1].trim());}catch{} return {limpio:(texto.replace(m[0],"").trim()||"Listo."),accion:a}; }
+function parseAccion(texto){ const t=texto||""; let m=t.match(/```accion\s*([\s\S]*?)```/i)||t.match(/```accion\s*([\s\S]*)$/i); if(!m) return {limpio:texto,accion:null}; let raw=m[1].trim(); let a=null; try{a=JSON.parse(raw);}catch{ const i=raw.indexOf("{"),j=raw.lastIndexOf("}"); if(i>=0&&j>i){ try{a=JSON.parse(raw.slice(i,j+1));}catch{} } } return {limpio:(t.replace(m[0],"").trim()||"Listo."),accion:a}; }
 function nuevoPedido({de,para,asunto,detalle,prioridad,obra_id}){ const f=hoyStr(),ts=Date.now(); return {id:uid()+ts, de, para, asunto:asunto||"(sin asunto)", estado:"abierto", prioridad:prioridad||"media", obra_id:obra_id||"", fecha:f, ts, iaTurns:0, hilo:[{de,texto:detalle||asunto||"",fecha:f,ts,porIA:false}]}; }
 async function aplicarPedidos(setPedidos, fn){ let arr=[]; try{const r=await storage.get("vv_pedidos"); if(r?.value) arr=JSON.parse(r.value);}catch{} const next=fn(arr.slice()); setPedidos(next); return next; }
 async function ejecutarAccion(accion, miSide, ctx){
