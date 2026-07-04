@@ -2361,6 +2361,8 @@ PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} 
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano (ej: replanteo platea)"}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: todos los de esa obra"}
+{"tipo":"agregar_personal","personas":[{"nombre":"Juan Pérez","dni":"20345678","cuil":"20-20345678-9","rol":"Oficial","empresa":"","telefono":"","obra":"Castores 475","aseguradora":"","poliza":"","vigencia":""}]}
+REGLA ESPECIAL NÓMINA/PERSONAL: cuando el usuario te adjunte una nómina, póliza o lista de gente y te pida CARGARLA/SUBIRLA al listado de Personal, LEÉ el documento y devolvé SIEMPRE un bloque "agregar_personal" con TODAS las personas y sus datos (nombre completo obligatorio; DNI, CUIL, rol, empresa, aseguradora, N° póliza y vigencia si figuran). NO te limites a listarlas en el texto: incluí SÍ o SÍ el bloque de acción, porque es lo único que las carga de verdad. Se ejecuta directo.
 Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el bloque. La acción se ejecuta cuando el usuario la confirma.`;
   }
   async function confirmAccion(idx) {
@@ -2435,6 +2437,21 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       if (per && (per.telefono || "").trim()) { const clean = String(per.telefono).replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : ("549" + clean); url = `https://wa.me/${num}?text=${t}`; label = `Enviar a ${per.nombre}`; res = `WhatsApp listo para ${per.nombre}${per.telefono ? " (" + per.telefono + ")" : ""}.`; }
       else { url = `https://wa.me/?text=${t}`; label = "Abrir WhatsApp"; res = per ? `${per.nombre} no tiene teléfono cargado en Personal. Abrí WhatsApp y elegí el contacto.` : "No encontré a esa persona con teléfono en Personal. Cargale el WhatsApp o elegí el contacto."; }
       extra = { accionDone: true, accionResultado: res, waLink: url, waLabel: label };
+    } else if (accion && accion.tipo === "agregar_personal") {
+      const nuevos = Array.isArray(accion.personas) ? accion.personas : [];
+      let arr = []; try { const rr = await storage.get("vv_personal"); if (rr?.value) arr = JSON.parse(rr.value); } catch { }
+      const obs = db.obras || []; let add = 0, dup = 0;
+      for (const p of nuevos) {
+        const nombre = String(p.nombre || "").trim(); if (!nombre) continue;
+        if (arr.find(x => (x.nombre || "").toLowerCase() === nombre.toLowerCase() || (p.dni && x.dni && String(x.dni) === String(p.dni)))) { dup++; continue; }
+        const obra = p.obra ? obs.find(o => (o.nombre || "").toLowerCase().includes(String(p.obra).toLowerCase())) : null;
+        arr.push({ id: uid() + Date.now() + Math.floor(Math.random() * 999), nombre, rol: p.rol || "", empresa: p.empresa || "", telefono: p.telefono || "", dni: p.dni || "", cuil: p.cuil || "", obra_id: obra?.id || "", aseguradora: p.aseguradora || "", poliza: p.poliza || "", vigencia: p.vigencia || "", adjuntos: [] });
+        add++;
+      }
+      try { localStorage.setItem("vv_personal", JSON.stringify(arr)); } catch { }
+      await storage.set("vv_personal", JSON.stringify(arr)).catch(() => { });
+      if (db.setPersonal) db.setPersonal(arr);
+      extra = { accionDone: true, accionResultado: add ? `✅ Cargué ${add} persona(s) al listado de Personal${dup ? ` (${dup} ya estaban)` : ""}. Andá a la pestaña Personal para verlas.` : `No agregué a nadie: ${dup ? "ya estaban todos cargados" : "no pude leer nombres en el archivo. Probá con una foto/PDF más nítido"}.` };
     } else if (accion) { const res = await ejecutarAccion(accion, "vv", { setPedidos: db.setPedidos, personal: db.personal, setPersonal: db.setPersonal, obras: db.obras, setMensajes: db.setMensajes, setMatpedidos: db.setMatpedidos }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
     setMsgs([...next, { role: "assistant", content: limpio, ...extra }]); setLoading(false);
   }
