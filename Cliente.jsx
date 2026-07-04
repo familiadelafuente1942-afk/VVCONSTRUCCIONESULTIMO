@@ -1177,8 +1177,8 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion }) {
 }
 
 // ── SHELL WEB INSTITUCIONAL (Cliente) ────────────────────────────────
-function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unreadForms, unreadMat, unreadInf }) {
-  const badge = (id) => (id === "mensajes" ? unread : id === "formularios" ? (unreadForms || 0) : id === "pedidos" ? pendientes : id === "materiales" ? (unreadMat || 0) : id === "informes" ? (unreadInf || 0) : 0);
+function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unreadForms, unreadMat, unreadInf, unreadIA }) {
+  const badge = (id) => (id === "mensajes" ? unread : id === "formularios" ? (unreadForms || 0) : id === "pedidos" ? pendientes : id === "materiales" ? (unreadMat || 0) : id === "informes" ? (unreadInf || 0) : id === "asistente" ? (unreadIA || 0) : 0);
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
       <div style={{ background: T.navy, color: "#fff" }}>
@@ -1267,11 +1267,14 @@ function ClienteApp() {
   const unreadMsg = (mensajes || []).filter(m => m.from && m.from !== "cliente" && (m.ts || 0) > (seen.mensajes || 0)).length;
   const unreadInf = (obras || []).flatMap(o => o.informes || []).filter(i => (i.ts || 0) > (seen.informes || 0)).length;
   const unreadForm = (formularios || []).filter(f => f.compartido && (f.ts || 0) > (seen.formularios || 0)).length;
-  useEffect(() => { try { if (!localStorage.getItem("cliente_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, formularios: now, materiales: now }; localStorage.setItem("cliente_seen", JSON.stringify(init)); setSeen(init); } } catch { } }, []);
+  const [iaDialogo, setIaDialogo] = useState([]);
+  useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 5000); return () => { alive = false; clearInterval(iv); }; }, []);
+  const unreadIA = (iaDialogo || []).filter(m => m.from && m.from !== "cliente" && m.tipo === "q" && (m.ts || 0) > (seen.ia || 0)).length;
+  useEffect(() => { try { if (!localStorage.getItem("cliente_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, formularios: now, materiales: now, ia: now }; localStorage.setItem("cliente_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("cliente_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("cliente_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
   useEffect(() => { initPush("belfast"); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   useEffect(() => {
-    const total = unreadMsg + unreadForm + unreadInf + (unreadMat || 0) + pendPed;
+    const total = unreadMsg + unreadForm + unreadInf + (unreadMat || 0) + pendPed + unreadIA;
     try { if ("setAppBadge" in navigator) { if (total > 0) navigator.setAppBadge(total); else navigator.clearAppBadge && navigator.clearAppBadge(); } } catch { }
   }, [unreadMsg, unreadForm, unreadInf, unreadMat, pendPed]);
   const lastCount = useRef(null);
@@ -1347,7 +1350,7 @@ function ClienteApp() {
   }, []);
 
   const screenRef = useRef(screen);
-  useEffect(() => { screenRef.current = screen; if (screen === "mensajes") { setUnread(0); markSeen("mensajes"); } if (screen === "formularios") { setUnreadForms(0); markSeen("formularios"); } if (screen === "informes") markSeen("informes"); }, [screen]);
+  useEffect(() => { screenRef.current = screen; if (screen === "mensajes") { setUnread(0); markSeen("mensajes"); } if (screen === "formularios") { setUnreadForms(0); markSeen("formularios"); } if (screen === "informes") markSeen("informes"); if (screen === "asistente") markSeen("ia"); }, [screen]);
   const cfgRef = useRef(cfg); useEffect(() => { cfgRef.current = cfg; }, [cfg]);
   const vvCfgRef = useRef(vvCfg); useEffect(() => { vvCfgRef.current = vvCfg; }, [vvCfg]);
 
@@ -1393,7 +1396,7 @@ function ClienteApp() {
     <style>{css}</style>
     <Toast T={T} toast={toast} />
     <div style={{ width: "100%", height: "100dvh", background: "transparent", display: "flex", flexDirection: "column", position: "relative", color: T.text, overflow: "hidden" }}>
-      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={setScreen} unread={unreadMsg} pendientes={pedidos.filter(p => p.para === "cliente" && p.estado !== "resuelto").length} unreadForms={unreadForm} unreadMat={unreadMat} unreadInf={unreadInf} />
+      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={setScreen} unread={unreadMsg} pendientes={pedidos.filter(p => p.para === "cliente" && p.estado !== "resuelto").length} unreadForms={unreadForm} unreadMat={unreadMat} unreadInf={unreadInf} unreadIA={unreadIA} />
       {screen === "obras" && <WebClientHero T={T} cfg={cfg} obras={obras} />}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>

@@ -2104,6 +2104,9 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
   const [form, setForm] = useState(null);       // null | {} para nuevo
   const [detalle, setDetalle] = useState(null);  // trabajador en detalle
   const fotoRef = useRef(null);
+  const obraIdsDe = (p) => (p?.obra_ids && p.obra_ids.length) ? p.obra_ids : (p?.obra_id ? [p.obra_id] : []);
+  const obrasNombres = (p) => { const ns = obraIdsDe(p).map(id => obraNom(obras, id)).filter(n => n && n !== "—"); return ns.length ? ns.join(", ") : "Sin asignar"; };
+  const toggleObra = (oid) => { const cur = obraIdsDe(form); const next = cur.includes(oid) ? cur.filter(x => x !== oid) : [...cur, oid]; setForm({ ...form, obra_ids: next, obra_id: next[0] || "" }); };
 
   function guardar() {
     if (!form?.nombre?.trim()) return;
@@ -2141,7 +2144,7 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nombre}</div>
-              <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {obraNom(obras, p.obra_id)}{p.telefono ? ` · 📲 ${p.telefono}` : ""}</div>
+              <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {obrasNombres(p)}{p.telefono ? ` · 📲 ${p.telefono}` : ""}</div>
               {(p.sitios || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{p.sitios.map((s, i) => <span key={i} style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", background: "#ECFDF5", borderRadius: 5, padding: "2px 6px" }}>✓ {s.sitio}</span>)}</div>}
             </div>
             {vc > 0
@@ -2157,8 +2160,13 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
       <Field label="Nombre y apellido"><TInput value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Juan Pérez" /></Field>
       <FieldRow>
         <Field label="Rol"><Sel value={form.rol} onChange={e => setForm({ ...form, rol: e.target.value })}>{ROLES.map(r => <option key={r}>{r}</option>)}</Sel></Field>
-        <Field label="Obra"><Sel value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}><option value="">Sin asignar</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       </FieldRow>
+      <Field label="Obras asignadas (tocá para elegir varias)">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+          {obras.length === 0 && <span style={{ fontSize: 12, color: T.muted }}>No hay obras cargadas.</span>}
+          {obras.map(o => { const on = obraIdsDe(form).includes(o.id); return <span key={o.id} onClick={() => toggleObra(o.id)} style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 700, padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? T.accent : T.border}`, background: on ? T.accent : T.card, color: on ? "#fff" : T.sub }}>{on ? "✓ " : ""}{o.nombre}</span>; })}
+        </div>
+      </Field>
       <FieldRow>
         <Field label="Empresa"><TInput value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></Field>
         <Field label="WhatsApp"><TInput value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="549114..." /></Field>
@@ -2293,7 +2301,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const cn = cfg?.clienteNombre || "el cliente";
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)})`).join("\n");
     const li = lics.map(l => `· ${l.nombre} (${l.estado}, ${l.monto || "s/monto"}, ${l.sector})`).join("\n");
-    const pe = personal.map(p => `· ${p.nombre} — ${p.rol || ""} en ${obraNom(obras, p.obra_id)}${p.empresa ? ` [${p.empresa}]` : ""}${p.telefono ? ` · WhatsApp ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.adjuntos || []).length ? ` · ${p.adjuntos.length} adjunto(s)` : ""}`).join("\n");
+    const pe = personal.map(p => `· ${p.nombre} — ${p.rol || ""} en ${((p.obra_ids && p.obra_ids.length) ? p.obra_ids : (p.obra_id ? [p.obra_id] : [])).map(id => obraNom(obras, id)).filter(n => n && n !== "—").join(", ") || "sin obra asignada"}${p.empresa ? ` [${p.empresa}]` : ""}${p.telefono ? ` · WhatsApp ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.adjuntos || []).length ? ` · ${p.adjuntos.length} adjunto(s)` : ""}`).join("\n");
     const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "vv" ? "enviado a" : "recibido de"} ${p.de === "vv" ? cn : cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
     const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional. Tus capacidades:
@@ -2444,8 +2452,9 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       for (const p of nuevos) {
         const nombre = String(p.nombre || "").trim(); if (!nombre) continue;
         if (arr.find(x => (x.nombre || "").toLowerCase() === nombre.toLowerCase() || (p.dni && x.dni && String(x.dni) === String(p.dni)))) { dup++; continue; }
-        const obra = p.obra ? obs.find(o => (o.nombre || "").toLowerCase().includes(String(p.obra).toLowerCase())) : null;
-        arr.push({ id: uid() + Date.now() + Math.floor(Math.random() * 999), nombre, rol: p.rol || "", empresa: p.empresa || "", telefono: p.telefono || "", dni: p.dni || "", cuil: p.cuil || "", obra_id: obra?.id || "", aseguradora: p.aseguradora || "", poliza: p.poliza || "", vigencia: p.vigencia || "", adjuntos: [] });
+        const nombresObras = Array.isArray(p.obras) ? p.obras : (p.obra ? [p.obra] : []);
+        const ids = nombresObras.map(nm => obs.find(o => (o.nombre || "").toLowerCase().includes(String(nm).toLowerCase()))?.id).filter(Boolean);
+        arr.push({ id: uid() + Date.now() + Math.floor(Math.random() * 999), nombre, rol: p.rol || "", empresa: p.empresa || "", telefono: p.telefono || "", dni: p.dni || "", cuil: p.cuil || "", obra_id: ids[0] || "", obra_ids: ids, aseguradora: p.aseguradora || "", poliza: p.poliza || "", vigencia: p.vigencia || "", adjuntos: [] });
         add++;
       }
       try { localStorage.setItem("vv_personal", JSON.stringify(arr)); } catch { }
@@ -2526,7 +2535,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-    <PageHead eyebrow="Inteligencia · nómina v2" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} />
+    <PageHead eyebrow="Inteligencia · v4 badge" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} />
     <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -3944,22 +3953,25 @@ function App() {
     return () => clearInterval(iv);
   }, []);
   const requireAuth = (fn) => fn();
-  useEffect(() => { try { if (!localStorage.getItem("vv_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, materiales: now }; localStorage.setItem("vv_seen", JSON.stringify(init)); setSeen(init); } } catch { } }, []);
+  useEffect(() => { try { if (!localStorage.getItem("vv_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, materiales: now, ia: now }; localStorage.setItem("vv_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("vv_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("vv_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
   useEffect(() => { initPush("vv"); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
+  const [iaDialogo, setIaDialogo] = useState([]);
+  useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 5000); return () => { alive = false; clearInterval(iv); }; }, []);
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
   const unreadMat = (matpedidos || []).filter(p => p.de !== "vv" && (p.ts || 0) > (seen.materiales || 0)).length;
   const unreadInformes = (obras || []).flatMap(o => o.informes || []).filter(inf => (inf.ts || 0) > (seen.informes || 0)).length;
+  const unreadIA = (iaDialogo || []).filter(m => m.from && m.from !== "vv" && m.tipo === "q" && (m.ts || 0) > (seen.ia || 0)).length;
   const pendVV = pedidos.filter(p => p.para === "vv" && p.estado !== "resuelto").length;
-  const navBadges = { mensajes: unreadMensajes, informes: unreadInformes, mas: pendVV + unreadMat };
+  const navBadges = { mensajes: unreadMensajes, informes: unreadInformes, chat: unreadIA, mas: pendVV + unreadMat };
   useEffect(() => {
-    const total = unreadMensajes + pendVV + unreadMat + unreadInformes;
+    const total = unreadMensajes + pendVV + unreadMat + unreadInformes + unreadIA;
     try { if ("setAppBadge" in navigator) { if (total > 0) navigator.setAppBadge(total); else navigator.clearAppBadge && navigator.clearAppBadge(); } } catch { }
-  }, [unreadMensajes, pendVV, unreadMat, unreadInformes]);
-  const go = (v)=>{ setView(v); if (v === "mensajes") markSeen("mensajes"); if (v === "mas") markSeen("materiales"); if (v === "informes") markSeen("informes"); };
+  }, [unreadMensajes, pendVV, unreadMat, unreadInformes, unreadIA]);
+  const go = (v)=>{ setView(v); if (v === "mensajes") markSeen("mensajes"); if (v === "mas") markSeen("materiales"); if (v === "informes") markSeen("informes"); if (v === "chat") markSeen("ia"); };
   const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos };
 
   return (
