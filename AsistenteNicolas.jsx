@@ -70,6 +70,7 @@ export default function AsistenteNicolas() {
   const chatWrite = useRef(0);
   const [archivos, setArchivos] = useState([]);
   const [ultimasFotos, setUltimasFotos] = useState([]);
+  const [adjPend, setAdjPend] = useState([]);
   const [agenda, setAgenda] = useState([]);
   const [subiendoArch, setSubiendoArch] = useState(false);
   const [catArch, setCatArch] = useState("Presupuestos");
@@ -320,16 +321,33 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
   async function subirEnChat(e) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = "";
+    const pend = [];
     for (const f of files) {
-      const data = await fileToDataUrl(f);
-      const url = await subirBucket(data, f.name);
-      if (!url) { setMsgs(prev => [...prev, { role: "assistant", content: `No pude subir "${f.name}" a la nube. Revisá el bucket 'bco-media' en Supabase.` }]); continue; }
       const esImg = /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(f.name);
-      const item = { id: uid() + Date.now(), nombre: f.name, url, categoria: esImg ? "Fotos" : "Chat", ext: (f.name.split(".").pop() || "").toUpperCase(), fecha: hoyStr(), ts: Date.now() };
+      const esPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+      const esHoja = /\.(xlsx|xls|csv|tsv)$/i.test(f.name) || /spreadsheet|excel|csv/.test(f.type);
+      const dataUrl = await fileToDataUrl(f);
+      const url = await subirBucket(dataUrl, f.name);
+      const item = { id: uid() + Date.now(), nombre: f.name, url: url || "", categoria: esImg ? "Fotos" : esHoja ? "Planillas" : "Chat", ext: (f.name.split(".").pop() || "").toUpperCase(), fecha: hoyStr(), ts: Date.now() };
       setArchivos(prev => { const n = [item, ...(prev || [])]; storage.set("nicolas_archivos", JSON.stringify(n)).catch(() => { }); return n; });
-      if (esImg) setUltimasFotos(prev => [{ url, nombre: f.name }, ...prev].slice(0, 12));
-      setMsgs(prev => [...prev, { role: "user", content: `📎 Subí: ${f.name}`, ...(esImg ? { media: [url], mediaTipo: "fotos" } : { docs: [{ nombre: f.name, url }] }) }, { role: "assistant", content: esImg ? `✅ Guardada en Archivos → Fotos: ${f.name}. ¿A qué obra la subo? Decime, por ejemplo: "subila a Castores 475".` : `✅ Guardado en Archivos: ${f.name}. Ya lo tengo disponible.` }]);
+      if (esImg && url) setUltimasFotos(prev => [{ url, nombre: f.name }, ...prev].slice(0, 12));
+      if (esImg || esPdf) {
+        if (f.size > 3 * 1024 * 1024) { setMsgs(prev => [...prev, { role: "assistant", content: `"${f.name}" pesa más de 3MB; achicá la foto o mandá el PDF con menos páginas.` }]); continue; }
+        const b64 = String(dataUrl).split(",")[1];
+        const mediaType = esImg ? ((dataUrl.match(/data:(.*?);/) || [])[1] || "image/jpeg") : "application/pdf";
+        pend.push({ nombre: f.name, kind: esImg ? "image" : "document", data: b64, mediaType });
+        setMsgs(prev => [...prev, { role: "user", content: `📎 ${f.name}`, ...(esImg ? { media: [url || dataUrl], mediaTipo: "fotos" } : { docs: [{ nombre: f.name, url: url || "" }] }) }]);
+      } else if (esHoja) {
+        const XLSX = await cargarSDK(); let texto = "";
+        if (XLSX) { try { const buf = await f.arrayBuffer(); const wb = XLSX.read(buf, { type: "array" }); for (const sn of wb.SheetNames) { texto += `\n--- Hoja: ${sn} ---\n` + XLSX.utils.sheet_to_csv(wb.Sheets[sn]); } texto = texto.slice(0, 12000); } catch { texto = ""; } }
+        if (!texto.trim()) { setMsgs(prev => [...prev, { role: "assistant", content: `No pude leer la planilla "${f.name}". Probá guardándola como PDF.` }]); continue; }
+        pend.push({ nombre: f.name, kind: "texto", texto: `Contenido de la planilla "${f.name}" (CSV):\n${texto}` });
+        setMsgs(prev => [...prev, { role: "user", content: `📎 ${f.name} (planilla)`, docs: [{ nombre: f.name, url: url || "" }] }]);
+      } else {
+        setMsgs(prev => [...prev, { role: "assistant", content: `Guardé "${f.name}" en Archivos, pero para analizarlo necesito foto, PDF o planilla (Excel/CSV).` }]);
+      }
     }
+    if (pend.length) { setAdjPend(prev => [...prev, ...pend]); setMsgs(prev => [...prev, { role: "assistant", content: "Listo, lo tengo cargado. Decime qué querés que haga (leerlo, sacar los datos, resumirlo, etc.)." }]); }
   }
   async function persistAgenda(next) { setAgenda(next); await storage.set("nicolas_agenda", JSON.stringify(next)).catch(() => { }); }
   async function subirArchivos(e) {
@@ -460,10 +478,17 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
 
   async function enviar() {
-    const t = input.trim(); if (!t || busy) return;
-    const nm = [...msgs, { role: "user", content: t }];
+    const t = input.trim(); if ((!t && adjPend.length === 0) || busy) return;
+    const adj = adjPend; setAdjPend([]);
+    const nm = t ? [...msgs, { role: "user", content: t }] : [...msgs];
     setMsgs(nm); setInput(""); setBusy(true);
     const hist = nm.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, content: m.content })).slice(-40);
+    if (adj.length) {
+      const textos = adj.filter(a => a.kind === "texto").map(a => a.texto).join("\n\n");
+      const blocks = [{ type: "text", text: (t || "Analizá lo que te adjunté y decime lo que corresponda.") + (textos ? "\n\n" + textos : "") }];
+      for (const a of adj) { if (a.kind === "image") blocks.push({ type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } }); else if (a.kind === "document") blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: a.data } }); }
+      if (hist.length && hist[hist.length - 1].role === "user") hist[hist.length - 1] = { role: "user", content: blocks }; else hist.push({ role: "user", content: blocks });
+    }
     const resp = await callAI(hist, buildSystem(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(resp);
     let extra = {};
@@ -561,7 +586,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v8 · badge</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v9 · planilla</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
@@ -601,10 +626,11 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         <button onClick={() => setVozOn(v => !v)} style={{ background: vozOn ? T.accent : "none", border: `1px solid ${vozOn ? T.accent : T.border}`, color: vozOn ? "#fff" : T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>🔊 Voz {vozOn ? "activada" : ""}</button>
         {modelo && <span style={{ fontSize: 10.5, color: T.muted }}>Modelo activo: {modelo.nombre}</span>}
       </div>
+      {adjPend.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adjPend.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "🖼" : a.kind === "texto" ? "📊" : "📄"} {a.nombre.slice(0, 22)} <span onClick={() => setAdjPend(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={dictar} title="Hablar" style={{ background: escuchando ? "#DC2626" : T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, color: escuchando ? "#fff" : T.accent, borderRadius: 12, padding: "0 15px", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>🎤</button>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : "Escribí o tocá el micrófono…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
-        <button onClick={enviar} disabled={busy || !input.trim()} style={{ background: (busy || !input.trim()) ? T.border : T.accent, color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", fontSize: 14, fontWeight: 600, letterSpacing: "0.03em", cursor: (busy || !input.trim()) ? "default" : "pointer" }}>Enviar</button>
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : adjPend.length ? "Preguntá algo sobre lo que adjuntaste…" : "Escribí o tocá el micrófono…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
+        <button onClick={enviar} disabled={busy || (!input.trim() && adjPend.length === 0)} style={{ background: (busy || (!input.trim() && adjPend.length === 0)) ? T.border : T.accent, color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", fontSize: 14, fontWeight: 600, letterSpacing: "0.03em", cursor: (busy || (!input.trim() && adjPend.length === 0)) ? "default" : "pointer" }}>Enviar</button>
       </div>
     </div>
     </div>
