@@ -2304,7 +2304,16 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const pe = personal.map(p => `· ${p.nombre} — ${p.rol || ""} en ${((p.obra_ids && p.obra_ids.length) ? p.obra_ids : (p.obra_id ? [p.obra_id] : [])).map(id => obraNom(obras, id)).filter(n => n && n !== "—").join(", ") || "sin obra asignada"}${p.empresa ? ` [${p.empresa}]` : ""}${p.telefono ? ` · WhatsApp ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.adjuntos || []).length ? ` · ${p.adjuntos.length} adjunto(s)` : ""}`).join("\n");
     const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "vv" ? "enviado a" : "recibido de"} ${p.de === "vv" ? cn : cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
     const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
-    return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional. Tus capacidades:
+    return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional.
+
+IMPORTANTE — QUIÉN ES QUIÉN (no los confundas NUNCA):
+· V+V Construcciones = tu empresa, la casa. Sebastián es el Presidente; Nicolás Arcussi es el CEO / Director de Operaciones.
+· ${cn} = el CLIENTE, una empresa EXTERNA (el comitente/mandante). Cuando decís "el cliente" o "${cn}" te referís a esta empresa de afuera.
+· "Tita" = la asistente personal de Sebastián. Es de V+V, de la casa, INTERNA. Tita NO es ${cn}, NO es el cliente, NO es una empresa externa.
+· "Asistente de Nicolás" = la asistente personal de Nicolás. También es de V+V, de la casa, interna. Tampoco es el cliente.
+Si Tita o la asistente de Nicolás te escriben o consultan algo, son GENTE DE LA CASA (V+V): tratalos con confianza, nunca como si fueran ${cn} ni un cliente externo. Solo ${cn} es "el cliente".
+
+Tus capacidades:
 1) BUSCAR EN INTERNET (tenés la herramienta de búsqueda web activa): conseguir proveedores y contactos (corralones, ferreterías, alquiler de equipos, hormigón, áridos), precios de materiales, normativa y código de edificación de CABA/Buenos Aires, teléfonos, direcciones, datos de empresas, o cualquier información actual. Cuando te pidan algo que no está en la app o que cambia seguido, BUSCÁ en internet (no digas que no podés). Priorizá fuentes argentinas; al dar proveedores listá nombre, zona, contacto/teléfono y link, y citá la fuente.
 1b) ANALIZAR ARCHIVOS ADJUNTOS: el usuario puede adjuntarte FOTOS y PDF (con el 📎) para que los leas y analices. Si te mandan una PÓLIZA o NÓMINA de seguro, leela y extraé los datos de CADA PERSONA de forma ordenada: nombre y apellido, DNI/CUIL, y lo que figure (categoría, ART/aseguradora, N° de póliza, vigencia, suma asegurada). Devolvé una lista clara persona por persona. Si te piden, compará con el Personal cargado en la app y marcá quién está y quién falta. También podés analizar remitos, facturas, planos o cualquier foto de obra.
 2) Conocés los datos de la app y respondés sobre obras, personal, proyectos y pedidos.
@@ -2488,7 +2497,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           try {
           arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           await storage.set("ia_dialogo", JSON.stringify(arr)).catch(() => { });
-          const sysResp = `Sos el asistente de datos de V+V Construcciones. ESTOS SON TUS DATOS:\n${ctxRef.current}\n\nRespondé la consulta usando SOLO estos datos, breve y concreto (español rioplatense). Si el dato NO está en tus datos, respondé ÚNICAMENTE con la palabra NO_DATO. Nunca inventes. No agregues bloques de acción ni JSON.`;
+          const sysResp = `Sos el asistente de datos de V+V Construcciones. Quien te consulta suele ser Tita (asistente personal de Sebastián) o la asistente de Nicolás: son de V+V, de la casa, NO son el cliente ni una empresa externa. ESTOS SON TUS DATOS:\n${ctxRef.current}\n\nRespondé la consulta usando SOLO estos datos, breve y concreto (español rioplatense). Si el dato NO está en tus datos, respondé ÚNICAMENTE con la palabra NO_DATO. Nunca inventes. No agregues bloques de acción ni JSON.`;
           const resp = await callAI([{ role: "user", content: `Te consulta ${pend.from === "sebastian" ? "TITA, la asistente personal de Sebastián (el Presidente de V+V). NO es un cliente: es de la casa, tratala con confianza" : pend.from === "nicolas" ? "la asistente personal de Nicolás (CEO de V+V). NO es un cliente: es de la casa" : "la IA de " + cnIA}: "${pend.texto}"` }], sysResp, apiKeyRef.current, false);
           let arr2 = []; try { const r2 = await storage.get("ia_dialogo"); if (r2?.value) arr2 = JSON.parse(r2.value); } catch { }
           arr2 = arr2.map(m => m.id === pend.id ? { ...m, answered: true } : m);
@@ -2535,7 +2544,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-    <PageHead eyebrow="Inteligencia · v4 badge" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} />
+    <PageHead eyebrow="Inteligencia · v5 quien" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} />
     <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
