@@ -357,6 +357,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
   async function persistAgenda(next) { setAgenda(next); await storage.set("nicolas_agenda", JSON.stringify(next)).catch(() => { }); }
   async function persistContactos(next) { setContactos(next); try { localStorage.setItem("nicolas_contactos", JSON.stringify(next)); } catch { } await storage.set("nicolas_contactos", JSON.stringify(next)).catch(() => { }); }
+  async function persistCamaras(next) { setCamaras(next); try { localStorage.setItem("vv_camaras", JSON.stringify(next)); } catch { } await storage.set("vv_camaras", JSON.stringify(next)).catch(() => { }); }
   async function subirArchivos(e) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
     const nuevos = [];
@@ -621,7 +622,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v15 · boton-pago</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v16 · camaras</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
@@ -632,7 +633,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
-    {vista === "camaras" && <CamarasBody camaras={camaras} />}
+    {vista === "camaras" && <CamarasBody camaras={camaras} onSave={persistCamaras} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "archivos" && <ArchivosBody archivos={archivos} cat={catArch} setCat={setCatArch} archRef={archRef} subir={subirArchivos} subiendo={subiendoArch} borrar={(id) => persistArch((archivos || []).filter(a => a.id !== id))} />}
     {vista === "modelos" && <ModelosBody modelos={modelos} sel={modeloSel} setSel={setModeloSel} subir={() => modeloRef.current && modeloRef.current.click()} borrar={(id) => { const next = (modelos || []).filter(m => m.id !== id); setModelos(next); if (modeloSel === id) setModeloSel(next[0]?.id || ""); storage.set("nicolas_modelos", JSON.stringify(next)).catch(() => { }); }} />}
@@ -991,10 +992,30 @@ function CamaraMini({ cam }) {
   </div>);
 }
 
-function CamarasBody({ camaras }) {
+function CamarasBody({ camaras, onSave }) {
   const lista = camaras || [];
+  const [form, setForm] = React.useState(null);
+  function guardar() { if (!form.nombre?.trim() || !form.url?.trim()) { alert("Poné un nombre y la URL de la cámara."); return; } const arr = form.id ? lista.map(c => c.id === form.id ? form : c) : [...lista, { ...form, id: uid() + Date.now() }]; onSave(arr); setForm(null); }
+  function borrar(id) { if (confirm("¿Borrar esta cámara?")) onSave(lista.filter(c => c.id !== id)); }
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
-    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px", lineHeight: 1.7 }}>No hay cámaras configuradas todavía.<br />Se cargan desde la app de <b>V+V</b> (Vigilancia → Cámaras), con la URL del stream. Una vez cargadas, las ves acá.</div>}
-    {lista.map(c => <CamaraMini key={c.id} cam={c} />)}
+    {!form && <button onClick={() => setForm({ nombre: "", url: "", tipo: "snapshot" })} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Agregar cámara</button>}
+    {form && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>{form.id ? "Editar cámara" : "Nueva cámara"}</div>
+      <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Nombre (ej: Castores - Frente)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <input value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="URL del stream o embed (https://…)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 10 }}>
+        <option value="snapshot">Foto que se refresca (JPG/snapshot)</option>
+        <option value="hls">Video en vivo (HLS .m3u8)</option>
+        <option value="iframe">Página / embed web (iframe)</option>
+        <option value="mjpeg">MJPEG</option>
+      </select>
+      <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Necesitás una URL web de la cámara (snapshot JPG, HLS .m3u8 o embed). Las que solo andan por RTSP o por la app del fabricante no se pueden mostrar acá.</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setForm(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+        <button onClick={guardar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+      </div>
+    </div>}
+    {lista.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.7 }}>No hay cámaras todavía.<br />Tocá "＋ Agregar cámara" y pegá la URL del stream.</div>}
+    {lista.map(c => <div key={c.id} style={{ position: "relative" }}><CamaraMini cam={c} /><div style={{ position: "absolute", top: 8, right: 10, display: "flex", gap: 6 }}><button onClick={() => setForm(c)} style={{ background: "rgba(0,0,0,.5)", border: "none", color: "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✎</button><button onClick={() => borrar(c.id)} style={{ background: "rgba(0,0,0,.5)", border: "none", color: "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✕</button></div></div>)}
   </div>);
 }
