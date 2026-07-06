@@ -96,6 +96,25 @@ export default function ContratistaApp() {
 
   function nuevo() { setForm({ obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u" }], nota: "", fecha_pedido: new Date().toISOString().slice(0, 10), fecha_necesita: "" }); }
   function fmtISO(iso) { if (!iso) return ""; const [y, m, d] = String(iso).split("-"); return d && m && y ? `${d}/${m}/${y}` : iso; }
+  function icsEntrega(p) {
+    const dia = String(p.fecha_necesita || "").replace(/-/g, ""); if (dia.length !== 8) return "";
+    const esc = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+    const obra = obraNom(p.obra_id);
+    const items = (p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ");
+    const dtstamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    const L = [
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//V+V//Contratista//ES", "CALSCALE:GREGORIAN",
+      "BEGIN:VEVENT", `UID:${p.id}@vvcontratista`, `DTSTAMP:${dtstamp}`,
+      `DTSTART:${dia}T080000`, `DTEND:${dia}T090000`,
+      `SUMMARY:${esc("Entrega materiales — " + obra)}`,
+      `DESCRIPTION:${esc("Pedido de " + (p.empresa || "") + "\n" + items + (p.nota ? "\nNota: " + p.nota : ""))}`,
+      `LOCATION:${esc(obra)}`,
+      "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Recordatorio: entrega de materiales mañana", "TRIGGER:-P1D", "END:VALARM",
+      "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Entrega de materiales hoy", "TRIGGER:-PT1H", "END:VALARM",
+      "END:VEVENT", "END:VCALENDAR"
+    ];
+    return "data:text/calendar;charset=utf-8," + encodeURIComponent(L.join("\r\n"));
+  }
   function addItem() { setForm(f => ({ ...f, items: [...f.items, { nombre: "", cantidad: "", unidad: "u" }] })); }
   function setItem(i, k, v) { setForm(f => ({ ...f, items: f.items.map((it, j) => j === i ? { ...it, [k]: v } : it) })); }
   function delItem(i) { setForm(f => ({ ...f, items: f.items.filter((_, j) => j !== i) })); }
@@ -164,7 +183,10 @@ export default function ContratistaApp() {
         </div>
         <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n")}</div>
         {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, fontStyle: "italic" }}>{p.nota}</div>}
-        {p.fecha_necesita && <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 7, background: T.al, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700 }}>📅 Necesito en obra: {fmtISO(p.fecha_necesita)}</div>}
+        {p.fecha_necesita && <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700 }}>📅 Necesito en obra: {fmtISO(p.fecha_necesita)}</div>
+          <a href={icsEntrega(p)} download={`Entrega-${obraNom(p.obra_id).replace(/[^\w]/g, "_")}.ics`} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.navy, color: "#fff", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}>🔔 Agendar + alerta</a>
+        </div>}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 7, gap: 8 }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado${p.leidoFecha ? " · " + p.leidoFecha : ""}` : "● Pendiente"}</div>
           {mio && !p.leido && <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Eliminar</button>}
