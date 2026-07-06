@@ -2545,7 +2545,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v8 nav" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v9 avance" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -3815,9 +3815,73 @@ function ClientePanel({ db, cfg, onBack }) {
 // ── SHELL WEB INSTITUCIONAL (V+V) ────────────────────────────────────
 const LUXE_BG = "radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px) 0 0/22px 22px, radial-gradient(1100px 520px at 50% -8%, rgba(176,137,79,0.13), transparent 62%), linear-gradient(180deg,#0b141f 0%,#0a1019 100%)";
 const LUXE_HERO = "radial-gradient(620px 220px at 86% 0%, rgba(176,137,79,0.20), transparent 60%), linear-gradient(135deg,#101C2C 0%,#17283c 100%)";
+function AvanceView({ obras, avance, setAvance, apiKey }) {
+  const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState("");
+  const fileRef = React.useRef(null);
+  const obra = obras.find(o => o.id === obraId);
+  const historial = ((avance || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  async function onFoto(e) {
+    const f = e.target.files?.[0]; if (!f) return; e.target.value = "";
+    if (!obraId) { alert("Elegí una obra primero."); return; }
+    setBusy(true); setStatus("Subiendo y analizando la foto… (unos segundos)");
+    try {
+      const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+      const comp = await compressImage(dataUrl, 1600, 0.7);
+      const b64 = String(comp).split(",")[1];
+      const mediaType = (String(comp).match(/data:(.*?);/) || [])[1] || "image/jpeg";
+      const url = await uploadFoto(comp, "avance", uid() + ".jpg");
+      const prev = historial[0];
+      const fechaHoy = hoyStr();
+      const sys = "Sos un inspector de obra civil en Argentina. Analizás fotos de avance de obra con criterio técnico. Sos honesto: el porcentaje es una ESTIMACIÓN visual, no una medición exacta. Escribí claro y breve, en español rioplatense (vos).";
+      const instruc = prev
+        ? `Foto de la obra "${obra?.nombre || ""}" de hoy (${fechaHoy}).\n\nESTADO ANTERIOR (${prev.fecha}):\n${prev.descripcion}\n\nHacé DOS cosas:\n1) ESTADO ACTUAL: describí en 3-5 renglones qué se ve hoy (estructura, mampostería, revoques, contrapisos, instalaciones, aberturas, terminaciones — lo que aplique).\n2) AVANCE: compará con el estado anterior. Qué se avanzó, qué falta, un % ESTIMADO de avance de la obra, y ALERTAS si no ves progreso esperable o algo raro.\nFormato EXACTO:\nESTADO ACTUAL: ...\nAVANCE: ...`
+        : `Foto de la obra "${obra?.nombre || ""}" de hoy (${fechaHoy}). Es la PRIMERA foto (línea de base). Describí el ESTADO ACTUAL en 3-5 renglones (estructura, mampostería, revoques, instalaciones, aberturas, terminaciones — lo que aplique) y estimá un % de avance general.\nFormato EXACTO:\nESTADO ACTUAL: ...`;
+      const content = [{ type: "image", source: { type: "base64", media_type: mediaType, data: b64 } }, { type: "text", text: instruc }];
+      const resp = await callAI([{ role: "user", content }], sys, apiKey, false);
+      let descripcion = resp, avanceTxt = "";
+      const mA = resp.match(/AVANCE:\s*([\s\S]*)$/i);
+      const mE = resp.match(/ESTADO ACTUAL:\s*([\s\S]*?)(?:AVANCE:|$)/i);
+      if (mE) descripcion = mE[1].trim();
+      if (mA) avanceTxt = mA[1].trim();
+      const item = { id: uid() + Date.now(), fecha: fechaHoy, ts: Date.now(), descripcion, avance: avanceTxt, fotoUrl: url || comp };
+      setAvance(prevAv => ({ ...(prevAv || {}), [obraId]: [item, ...((prevAv || {})[obraId] || [])] }));
+      setStatus("");
+    } catch (err) { setStatus("Hubo un error al analizar la foto. Fijate que tengas crédito de API y probá de nuevo."); }
+    setBusy(false);
+  }
+  return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Seguimiento visual" title="Avance de obra" sub="Subí una foto y la IA compara el avance con la anterior" /></div>
+    <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 28px", minHeight: 0 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
+      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, margin: "6px 0 14px" }}>
+        {obras.length === 0 && <option value="">No hay obras</option>}
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onFoto} style={{ display: "none" }} />
+      <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Analizando…" : "📷 Tomar / subir foto de hoy"}</button>
+      {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
+      <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: sacá la foto siempre desde el mismo lugar y ángulo para que la comparación sea más precisa. El % es una estimación visual, no una medición exacta.</div>
+      {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
+      {historial.map((h, idx) => (<div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
+        {h.fotoUrl && <img src={h.fotoUrl} alt="" style={{ width: "100%", maxHeight: 260, objectFit: "cover", display: "block" }} />}
+        <div style={{ padding: "12px 14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{h.fecha}{idx === 0 ? "  ·  última" : ""}</div>
+            {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
+          </div>
+          {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>📈 Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
+          <div style={{ fontSize: 10, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Estado</div>
+          <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.descripcion}</div>
+        </div>
+      </div>))}
+    </div>
+  </div>);
+}
 const WEB_NAV = [
   { id:"chat", label:"Asistente IA" }, { id:"dashboard", label:"Inicio" },
-  { id:"obras", label:"Obras" }, { id:"mensajes", label:"Mensajes" },
+  { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" }, { id:"mensajes", label:"Mensajes" },
   { id:"informes", label:"Informes" }, { id:"formularios", label:"Formularios" },
   { id:"mas", label:"Más" },
 ];
@@ -3900,6 +3964,7 @@ function App() {
   const [archivosGen, setArchivosGen] = useStoredState("vv_archivos", []);
   const [vigilancia, setVigilancia] = useStoredState("vv_vigilancia", []);
   const [camaras, setCamaras] = useStoredState("vv_camaras", []);
+  const [avance, setAvance] = useStoredState("vv_avance", {});
   const [gestion, setGestion] = useStoredState("vv_gestion", {});
   const [formularios, setFormularios] = useStoredState("vv_formularios", []);
   const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
@@ -3947,7 +4012,7 @@ function App() {
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
-    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
+    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
     let alive = true;
     const pullAll = async () => {
       for (const [key, setter] of stores) {
@@ -4002,6 +4067,7 @@ function App() {
             {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
+            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
             {view==="chat" && <ChatIA db={db} cfg={cfg} apiKey={cfg.apiKey} msgs={chatMsgs} setMsgs={setChatMsgs} />}
