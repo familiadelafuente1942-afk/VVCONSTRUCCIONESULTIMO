@@ -2222,6 +2222,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
   const [useSearch, setUseSearch] = useState(true);
   const [escuchando, setEscuchando] = useState(false);
   const bottomRef = useRef(null);
+  const scrollRef = useRef(null);
   const recRef = useRef(null);
   const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
   const cnDeb = cfg?.clienteSigla || cfg?.clienteNombre || "Belfast";
@@ -2294,7 +2295,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     return () => clearInterval(iv);
   }, []);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, loading]);
+  useEffect(() => { const el = scrollRef.current; if (!el) return; const go = () => { el.scrollTop = el.scrollHeight; }; go(); [60, 160, 320, 600].forEach(t => setTimeout(go, t)); requestAnimationFrame(go); }, [msgs, loading]);
 
   function buildSystem() {
     const { obras, lics, personal, pedidos, mensajes, formularios, documentacion, archivosGen, tareas, matpedidos, materiales, subcontratos, proveedores, herramientas } = db;
@@ -2543,9 +2544,9 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   }
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
-  return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-    <PageHead eyebrow="Inteligencia · v5 quien" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} />
-    <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
+  return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v8 nav" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -2574,7 +2575,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       {loading && <div style={{ display: "flex", gap: 5, padding: "6px 4px" }}>{[0, 1, 2].map(i => <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: T.muted, animation: "pulse 1s infinite", animationDelay: `${i * .15}s` }} />)}</div>}
       <div ref={bottomRef} />
     </div>
-    <div style={{ borderTop: `1px solid ${T.border}`, background: T.card, padding: "10px 14px 14px" }}>
+    <div style={{ flexShrink: 0, borderTop: `1px solid ${T.border}`, background: T.card, padding: "10px 14px 14px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <button onClick={() => setUseSearch(s => !s)} style={{ background: useSearch ? T.al : T.bg, color: useSearch ? T.accent : T.muted, border: `1px solid ${useSearch ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🌐 Buscar en internet {useSearch ? "ON" : "OFF"}</button>
         {debateActive ? <button onClick={stopDebate} style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Frenar debate</button>
@@ -3293,7 +3294,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   const fileRef = useRef(null);
   async function addAdj(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await toDataUrl(f); const url = await uploadFoto(data, "pedidos", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url, img: f.type.startsWith("image/") }); } setAdj(p => [...p, ...nuevos]); e.target.value = ""; }
 
-  useEffect(() => { const iv = setInterval(async () => { try { const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch {} }, 5000); return () => clearInterval(iv); }, []);
+  useEffect(() => { const pull = async () => { try { const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch {} }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
 
   const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : p.de === miSide);
   const cur = open ? pedidos.find(p => p.id === open) : null;
@@ -3840,9 +3841,9 @@ function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
                 <div style={{ lineHeight:1.2, textAlign:"left" }}><div style={{ fontSize:15, fontWeight:800, color:T.text, letterSpacing:"0.08em", textTransform:"uppercase" }}>V+V Construcciones</div><div style={{ fontSize:8.5, color:T.muted, letterSpacing:"0.18em", textTransform:"uppercase", marginTop:2 }}>Subcontratista de obra</div></div></>}
           </div>
         </div>
-        <nav style={{ maxWidth:1180, margin:"0 auto", padding:"4px 24px 0", display:"flex", gap:2, justifyContent:"center", overflowX:"auto" }}>
+        <nav style={{ maxWidth:1180, margin:"0 auto", padding:"4px 12px 0", display:"flex", gap:2, justifyContent:"center", flexWrap:"wrap" }}>
           {WEB_NAV.map(n=>{ const active=view===n.id; return (
-            <button key={n.id} onClick={()=>go(n.id)} style={{ position:"relative", background:"none", border:"none", padding:"9px 14px", fontSize:13, fontWeight:active?800:600, color:active?T.accent:T.sub, letterSpacing:"0.02em", borderBottom:`2px solid ${active?BRASS:"transparent"}`, whiteSpace:"nowrap", cursor:"pointer" }}>
+            <button key={n.id} onClick={()=>go(n.id)} style={{ position:"relative", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, fontWeight:active?800:600, color:active?T.accent:T.sub, letterSpacing:"0.02em", borderBottom:`2px solid ${active?BRASS:"transparent"}`, whiteSpace:"nowrap", cursor:"pointer" }}>
               {n.label}
               {cnt(n.id) > 0 && <span style={{ position:"absolute", top:3, right:2, background:"#EF4444", color:"#fff", borderRadius:9, minWidth:16, height:16, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px" }}>{cnt(n.id) > 99 ? "99+" : cnt(n.id)}</span>}
             </button>
@@ -3947,7 +3948,8 @@ function App() {
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
     const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
-    const iv = setInterval(async () => {
+    let alive = true;
+    const pullAll = async () => {
       for (const [key, setter] of stores) {
         try {
           if (Date.now() - (lastWrite[key] || 0) < 6000) continue; // recién editado acá: no tocar
@@ -3955,11 +3957,16 @@ function App() {
           if (!r?.value) continue;
           const localRaw = storage.getLocal(key)?.value;
           if (r.value === localRaw) continue; // sin cambios
-          setter(JSON.parse(r.value)); // adoptar lo último de la nube
+          if (alive) setter(JSON.parse(r.value)); // adoptar lo último de la nube
         } catch { }
       }
-    }, 5000);
-    return () => clearInterval(iv);
+    };
+    pullAll();
+    const iv = setInterval(pullAll, 4000);
+    const onVis = () => { if (document.visibilityState === "visible") pullAll(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", pullAll);
+    return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pullAll); };
   }, []);
   const requireAuth = (fn) => fn();
   useEffect(() => { try { if (!localStorage.getItem("vv_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, materiales: now, ia: now }; localStorage.setItem("vv_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("vv_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("vv_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
@@ -3968,7 +3975,7 @@ function App() {
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   const [iaDialogo, setIaDialogo] = useState([]);
-  useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 5000); return () => { alive = false; clearInterval(iv); }; }, []);
+  useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
   const unreadMat = (matpedidos || []).filter(p => p.de !== "vv" && (p.ts || 0) > (seen.materiales || 0)).length;

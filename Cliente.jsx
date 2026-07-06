@@ -669,7 +669,8 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   const pedSeen = useRef(null);
   const matSeen = useRef(null);
   useEffect(() => {
-    const iv = setInterval(async () => {
+    let alive = true;
+    const tick = async () => {
       try {
         const r = await storage.get("ia_dialogo"); if (!r?.value) return;
         let arr = JSON.parse(r.value);
@@ -736,8 +737,13 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
           }
         }
       } catch { }
-    }, 6000);
-    return () => clearInterval(iv);
+    };
+    tick();
+    const iv = setInterval(tick, 4000);
+    const onVis = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", tick);
+    return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", tick); };
   }, []);
   const QUICK = ["¿Cómo viene el avance de cada obra?", "Cargá al personal de [obra] al barrio…", "¿Hay pedidos sin resolver?"];
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -808,7 +814,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   const [iaLoad, setIaLoad] = useState(false);
   const fileRef = useRef(null);
   async function addAdj(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url, img: f.type.startsWith("image/") }); } setAdj(p => [...p, ...nuevos]); e.target.value = ""; }
-  useEffect(() => { const iv = setInterval(async () => { try { const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch { } }, 8000); return () => clearInterval(iv); }, []);
+  useEffect(() => { const pull = async () => { try { const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : p.de === miSide);
   const cur = open ? pedidos.find(p => p.id === open) : null;
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "";
@@ -1194,9 +1200,9 @@ function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unread
                 <div style={{ lineHeight: 1.2, textAlign: "left" }}><div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: "0.04em" }}>{cfg.nombre}</div><div style={{ fontSize: 8.5, color: T.muted, letterSpacing: "0.16em", textTransform: "uppercase", marginTop: 2 }}>Seguimiento de obra</div></div></>}
           </div>
         </div>
-        <nav style={{ maxWidth: 1180, margin: "0 auto", padding: "4px 24px 0", display: "flex", gap: 2, justifyContent: "center", overflowX: "auto" }}>
+        <nav style={{ maxWidth: 1180, margin: "0 auto", padding: "4px 12px 0", display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
           {NAV.map(n => { const active = screen === n.id; return (
-            <button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", background: "none", border: "none", padding: "9px 14px", fontSize: 13, fontWeight: active ? 800 : 600, color: active ? T.accent : T.sub, borderBottom: `2px solid ${active ? BRASS : "transparent"}`, whiteSpace: "nowrap", cursor: "pointer" }}>
+            <button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", background: "none", border: "none", padding: "9px 12px", fontSize: 12.5, fontWeight: active ? 800 : 600, color: active ? T.accent : T.sub, borderBottom: `2px solid ${active ? BRASS : "transparent"}`, whiteSpace: "nowrap", cursor: "pointer" }}>
               {n.label}
               {badge(n.id) > 0 && <span style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{badge(n.id)}</span>}
             </button>); })}
@@ -1268,7 +1274,7 @@ function ClienteApp() {
   const unreadInf = (obras || []).flatMap(o => o.informes || []).filter(i => (i.ts || 0) > (seen.informes || 0)).length;
   const unreadForm = (formularios || []).filter(f => f.compartido && (f.ts || 0) > (seen.formularios || 0)).length;
   const [iaDialogo, setIaDialogo] = useState([]);
-  useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 5000); return () => { alive = false; clearInterval(iv); }; }, []);
+  useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   const unreadIA = (iaDialogo || []).filter(m => m.from && m.from !== "cliente" && m.tipo === "q" && (m.ts || 0) > (seen.ia || 0)).length;
   useEffect(() => { try { if (!localStorage.getItem("cliente_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, formularios: now, materiales: now, ia: now }; localStorage.setItem("cliente_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("cliente_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("cliente_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
   useEffect(() => { initPush("belfast"); }, []);
