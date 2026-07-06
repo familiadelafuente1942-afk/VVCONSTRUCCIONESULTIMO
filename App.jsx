@@ -321,7 +321,8 @@ function getMediaType(d) { const m = d.match(/data:([^;]+);/); return m ? m[1] :
 async function callAI(msgs, sys, apiKey, useSearch = false) {
     msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
     const body = {
-        model: "claude-sonnet-4-6",
+        model: "claude-sonnet-5",
+        thinking: { type: "disabled" },
         max_tokens: useSearch ? 4096 : 4096,
         messages: msgs,
     };
@@ -2545,7 +2546,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v9 avance" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v11 avance-galeria" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -3859,7 +3860,7 @@ function AvanceView({ obras, avance, setAvance, apiKey }) {
         {obras.length === 0 && <option value="">No hay obras</option>}
         {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
       </select>
-      <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onFoto} style={{ display: "none" }} />
+      <input ref={fileRef} type="file" accept="image/*" onChange={onFoto} style={{ display: "none" }} />
       <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Analizando…" : "📷 Tomar / subir foto de hoy"}</button>
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: sacá la foto siempre desde el mismo lugar y ángulo para que la comparación sea más precisa. El % es una estimación visual, no una medición exacta.</div>
