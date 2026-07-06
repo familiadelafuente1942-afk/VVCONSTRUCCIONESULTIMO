@@ -66,8 +66,13 @@ export default function MiAsistente() {
   const [db, setDb] = useState({ obras: [], personal: [], pedidos: [], matpedidos: [], mensajes: [], formularios: [], documentacion: [] });
   const [pagos, setPagos] = useState([]);
   const [perfil, setPerfil] = useState("");
+  const [gastos, setGastos] = useState([]);
   const chatWrite = useRef(0);
   const [archivos, setArchivos] = useState([]);
+  const [contactos, setContactos] = useState([]);
+  const [camaras, setCamaras] = useState([]);
+  const [ultimasFotos, setUltimasFotos] = useState([]);
+  const [adjPend, setAdjPend] = useState([]);
   const [agenda, setAgenda] = useState([]);
   const [subiendoArch, setSubiendoArch] = useState(false);
   const [catArch, setCatArch] = useState("Presupuestos");
@@ -98,12 +103,18 @@ export default function MiAsistente() {
   async function subirIcono(e) { const f = e.target.files[0]; if (!f) return; e.target.value = ""; const data = await fileToDataUrl(f); setC("iconoUrl", data); }
   async function subirFondo(e) { const f = e.target.files[0]; if (!f) return; e.target.value = ""; const data = await fileToDataUrl(f); const url = await subirBucket(data, f.name) || data; setC("fondoUrl", url); }
   const [vista, setVista] = useState("chat");
+  const chatSeen = useRef(0);
+  const [chatUnread, setChatUnread] = useState(0);
   const [filtroObra, setFiltroObra] = useState("");
   const pagosWrite = useRef(0);
   const [msgs, setMsgs] = useState([{ role: "assistant", content: "Hola Sebastián 👋 Soy tu asistente personal. Tengo acceso a todos los datos de V+V. Preguntame lo que quieras: un DNI, el estado de una obra, la última foto de Castores, un plano, o pedime que le consulte algo a la IA de V+V." }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [useSearch, setUseSearch] = useState(false);
+  const [escuchando, setEscuchando] = useState(false);
+  const [vozOn, setVozOn] = useState(false);
+  const recRef = useRef(null);
+  const lastSpokeRef = useRef(-1);
   const apiKey = "";
   const scrollRef = useRef(null);
   const iaWait = useRef(null);
@@ -120,15 +131,26 @@ export default function MiAsistente() {
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
       setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
-      const [ra, rag] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda")]);
-      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); }
+      const [ra, rag, rg, rcon, rcam] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras")]);
+      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); }
       if (!modelos.length) { const rmod = await storage.get("sebastian_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
       const rc = await storage.get("sebastian_cfg"); if (alive && rc?.value) { try { const c = JSON.parse(rc.value); setCfg(prev => JSON.stringify({ ...CFG_DEF, ...c }) !== JSON.stringify(prev) ? { ...CFG_DEF, ...c } : prev); } catch { } }
     }
-    pull(); const iv = setInterval(pull, 8000); return () => { alive = false; clearInterval(iv); };
+    pull(); const iv = setInterval(pull, 5000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); };
   }, [pinOk]);
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [msgs, busy]);
+  const scrollBottom = () => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight + 99999; };
+  const scrollBottomHard = () => { try { requestAnimationFrame(scrollBottom); } catch { } [0, 60, 160, 320, 600, 1000].forEach(d => setTimeout(scrollBottom, d)); };
+  useEffect(() => { scrollBottomHard(); }, [msgs, busy]);
+  useEffect(() => { if (vista === "chat") scrollBottomHard(); }, [vista]);
+  useEffect(() => {
+    const h = () => { if (document.visibilityState !== "hidden") scrollBottomHard(); };
+    document.addEventListener("visibilitychange", h); window.addEventListener("focus", h); window.addEventListener("pageshow", h); window.addEventListener("resize", h);
+    return () => { document.removeEventListener("visibilitychange", h); window.removeEventListener("focus", h); window.removeEventListener("pageshow", h); window.removeEventListener("resize", h); };
+  }, []);
+  // Voz: leer en voz alta las respuestas nuevas cuando está activado.
+  useEffect(() => { if (vozOn) { lastSpokeRef.current = msgs.length - 1; } else { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { } } }, [vozOn]);
+  useEffect(() => { if (!vozOn) return; const i = msgs.length - 1; const last = msgs[i]; if (last && last.role === "assistant" && i > lastSpokeRef.current) { lastSpokeRef.current = i; hablar(last.content); } }, [msgs, vozOn]);
 
   // Memoria persistente: carga el historial del chat y el perfil al abrir.
   useEffect(() => {
@@ -145,6 +167,8 @@ export default function MiAsistente() {
     return () => clearTimeout(t);
   }, [msgs, pinOk]);
 
+  // Globito rojo en Chat: mensajes nuevos del asistente mientras estás en otra solapa.
+  useEffect(() => { if (vista === "chat") { chatSeen.current = msgs.length; setChatUnread(0); } else { const u = msgs.slice(chatSeen.current).filter(m => m.role === "assistant").length; setChatUnread(u); } }, [msgs, vista]);
   // Recordatorio: avisa en el chat por los eventos de mañana (un día antes).
   useEffect(() => {
     if (!pinOk) return;
@@ -169,6 +193,29 @@ export default function MiAsistente() {
     if (pinInput === pinStored) { setPinOk(true); setPinInput(""); } else { alert("PIN incorrecto."); setPinInput(""); }
   }
 
+  function hablar(texto) {
+    try {
+      const synth = window.speechSynthesis; if (!synth || !texto) return;
+      synth.cancel();
+      const limpio = String(texto).replace(/[*_#>`~]/g, "").replace(/\s+/g, " ").trim().slice(0, 650);
+      const u = new SpeechSynthesisUtterance(limpio);
+      u.lang = "es-AR"; u.rate = 1; u.pitch = 1;
+      const vs = synth.getVoices() || []; const es = vs.find(v => /es[-_]AR/i.test(v.lang)) || vs.find(v => /^es/i.test(v.lang)); if (es) u.voice = es;
+      synth.speak(u);
+    } catch { }
+  }
+  function dictar() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert("Este teléfono no permite dictar desde la app. Tocá el cuadro de texto y usá el micrófono del teclado (dictado del iPhone)."); return; }
+    if (escuchando && recRef.current) { try { recRef.current.stop(); } catch { } return; }
+    let rec; try { rec = new SR(); } catch { alert("No pude activar el micrófono."); return; }
+    rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = false;
+    let base = input ? input + " " : "";
+    rec.onresult = (e) => { let fin = "", inter = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else inter += t; } setInput((base + fin + inter).replace(/\s+/g, " ").trimStart()); if (fin) base += fin; };
+    rec.onend = () => { setEscuchando(false); recRef.current = null; };
+    rec.onerror = () => { setEscuchando(false); recRef.current = null; };
+    recRef.current = rec; setEscuchando(true); try { rec.start(); } catch { setEscuchando(false); }
+  }
   function buildSystem() {
     const o = db.obras || [];
     const obrasTxt = o.map(x => `· ${x.nombre}${x.estado ? ` (${x.estado})` : ""}${x.avance != null ? ` — avance ${x.avance}%` : ""} — ${(x.fotos || []).length} fotos, ${(x.videos || []).length} videos, ${(x.planos || []).length} planos, ${(x.informes || []).length} informes`).join("\n") || "(sin obras)";
@@ -177,9 +224,14 @@ export default function MiAsistente() {
     const peds = (db.pedidos || []).map(p => `· [${p.estado || "abierto"}] ${p.asunto} (de ${p.de} → ${p.para})`).join("\n") || "(sin pedidos)";
     const mats = (db.matpedidos || []).map(p => `· ${obraNom(o, p.obra_id)} (${p.de === "vv" ? "V+V" : p.de === "cliente" ? "Belfast" : p.empresa || "contratista"}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}${p.leido ? " ✓levantado" : " ●pendiente"}`).join("\n") || "(sin pedidos de materiales)";
     const pg = (pagos || []).slice(0, 40).map(p => `· ${p.fecha} — ${p.persona} $${(p.monto || 0).toLocaleString("es-AR")} (${p.obra || "sin obra"}) [${p.estado}${p.metodo ? ", " + p.metodo : ""}]`).join("\n") || "(sin pagos cargados)";
+    const hoyG = hoyStr(); const mesG = hoyG.slice(3);
+    const gs = (gastos || []).slice(0, 40).map(g => `· ${g.fecha} — ${g.concepto} $${(g.monto || 0).toLocaleString("es-AR")}`).join("\n") || "(sin gastos)";
+    const totDia = (gastos || []).filter(g => g.fecha === hoyG).reduce((a, g) => a + (g.monto || 0), 0);
+    const totMes = (gastos || []).filter(g => (g.fecha || "").slice(3) === mesG).reduce((a, g) => a + (g.monto || 0), 0);
     const totalPend = (pagos || []).filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
     const ag = (agenda || []).slice(0, 30).map(e => `· ${e.fecha}${e.hora ? " " + e.hora : ""} — ${e.titulo}${e.nota ? " (" + e.nota + ")" : ""}`).join("\n") || "(agenda vacía)";
     const arch = (archivos || []).slice(0, 40).map(f => `· [${f.categoria}] ${f.nombre}`).join("\n") || "(sin archivos)";
+    const con = (contactos || []).slice(0, 60).map(c => `· ${c.nombre}${c.telefono ? ` · WhatsApp ${c.telefono}` : ""}${c.email ? ` · ${c.email}` : ""}${c.alias ? ` · alias ${c.alias}` : ""}${c.nota ? ` (${c.nota})` : ""}`).join("\n") || "(sin contactos favoritos)";
     return `Sos el asistente personal y privado de Sebastián (Presidente de V+V Construcciones). Hablás en español rioplatense (vos), claro y directo. Tenés memoria: recordás lo que Sebastián te contó (está en "SOBRE SEBASTIÁN") y el historial de esta conversación. Tratalo con cercanía y empatía, como alguien que lo conoce.
 
 SOBRE SEBASTIÁN (lo que me fue contando; usalo para conocerlo y no volver a preguntar lo que ya sé):
@@ -205,18 +257,29 @@ ${mats}
 AGENDA DE PAGOS (personal de Sebastián) — pendiente total $${totalPend.toLocaleString("es-AR")}:
 ${pg}
 
+GASTOS DIARIOS (generales) — hoy $${totDia.toLocaleString("es-AR")}, este mes $${totMes.toLocaleString("es-AR")}:
+${gs}
+
 MI AGENDA (eventos/citas):
 ${ag}
 
 MIS ARCHIVOS GUARDADOS:
 ${arch}
 
+MIS CONTACTOS FAVORITOS (usá estos para WhatsApp, mail y pagos cuando nombre a alguien de acá):
+${con}
+
 Además podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
 <<ACCION>>{...}<<FIN>>
 Acciones:
+{"tipo":"pagar_mp","para":"Héctor","monto":300,"alias":"opcional alias/CVU si lo sabés"}
+{"tipo":"mandar_mail","para":"Héctor","email":"opcional si lo sabés","asunto":"...","cuerpo":"texto del mail redactado"}
+{"tipo":"como_llego","destino":"dirección o lugar (ej: Aeroparque, o Av. Corrientes 1234 CABA)"}
+{"tipo":"foto_a_obra","obra":"Castores 475","cantidad":12}
 {"tipo":"crear_obra","nombre":"Nombre de la obra","direccion":"opcional","estado":"En curso","avance":0}
 {"tipo":"recordar","dato":"lo que hay que recordar de Sebastián (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
+{"tipo":"cargar_gasto","concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"}
 {"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
 {"tipo":"whatsapp","persona":"Valeria","texto":"el mensaje a enviar por WhatsApp"}
@@ -224,10 +287,15 @@ Acciones:
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano"}
 Reglas:
+- "pagar_mp" cuando Sebastián quiere PAGARLE o MANDARLE PLATA a alguien AHORA: "pagale a Héctor 300", "hacele un pago a X", "transferile a X", "mandale $Y a X", "pagale por Mercado Pago". Esto ABRE Mercado Pago con un botón para que confirme el pago (ninguna app paga sola). Si sabés el alias/CVU de la persona, incluilo. IMPORTANTE: si el pedido es "pagale/mandale plata a X", usá SIEMPRE pagar_mp (NO cargar_pago).
+- "mandar_mail" cuando dice "mandale un mail a X que…" o "escribile un mail a X". Redactá un asunto y un cuerpo profesional y claro; se abre el mail listo para enviar. Si no sabés el email, dejalo vacío (él elige el contacto).
+- "como_llego" cuando Sebastián pregunta cuánto tarda, cuánto hay, cómo llegar o la distancia a un lugar (ej: "¿cuánto tardo hasta el Aeroparque?", "¿cómo llego a Castores 475?", "¿cuánto hay hasta Pilar?"). Poné el destino. El sistema toma su ubicación GPS, estima el tiempo y le deja un botón a Google Maps. Si el destino es una obra, usá su dirección si la sabés.
+- "foto_a_obra" cuando Sebastián sube una o varias fotos por el chat y te dice a qué obra van (ej: "subila a Castores 475", "estas fotos son de Golf 2-93", "mandalas a la obra A 37"). Tomo las últimas fotos que subió y las cargo en las fotos de esa obra (las ve V+V).
 - "crear_obra" cuando dice "cargá una obra nueva", "agregá la obra X", "abrí una obra en tal dirección". Poné el nombre y lo que aclare (dirección, estado).
 - "recordar" SIEMPRE que Sebastián te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora.
-- "cargar_pago" cuando Sebastián dice algo como "cargá un pago a Humberto en Castores 475 de 50000" o "anotá que le pagué a Juan 30 lucas en efectivo". Interpretá monto (50000, "50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método (efectivo/transferencia) de lo que diga. Si no aclara estado, poné pendiente.
+- "cargar_gasto" cuando dice "cargá un gasto de nafta de 15000", "anotá un gasto de comida 8000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto). No lleva obra.
+- "cargar_pago" SOLO para REGISTRAR/ANOTAR en la planilla de Pagos un pago (no mueve plata): "anotá/registrá/cargá un pago a Humberto en Castores 475 de 50000", "anotá que le pagué a Juan 30 lucas". Palabras clave: anotá, registrá, cargá. Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método. Si el pedido es "pagale/mandale plata a X" (sin decir anotar/registrar), NO uses esto: usá pagar_mp.
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
 - "whatsapp" cuando dice "mandale un mensaje a X que…" o "escribile a X". Uso los teléfonos de Personal; le dejo el WhatsApp listo para enviar con un toque.
 - "preguntar_ia" solo si pide expresamente consultar a la IA de V+V.
@@ -254,19 +322,48 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     await storage.set("sebastian_pagos", JSON.stringify(next)).catch(() => { });
   }
   async function persistArch(next) { setArchivos(next); await storage.set("sebastian_archivos", JSON.stringify(next)).catch(() => { }); }
+  async function persistGastos(next) { setGastos(next); try { localStorage.setItem("sebastian_gastos", JSON.stringify(next)); } catch { } await storage.set("sebastian_gastos", JSON.stringify(next)).catch(() => { }); }
+  function cargarGasto(a) { const g = { id: uid() + Date.now(), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }; persistGastos([g, ...(gastos || [])]); return g; }
+  async function exportarGastosExcel() {
+    const lista = (gastos || []); if (!lista.length) { alert("No hay gastos para exportar."); return; }
+    const filas = lista.map(g => ({ Fecha: g.fecha, Concepto: g.concepto, Monto: g.monto }));
+    const XLSX = await cargarSDK();
+    if (XLSX) { const ws = XLSX.utils.json_to_sheet(filas); ws["!cols"] = [{ wch: 10 }, { wch: 30 }, { wch: 12 }]; const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Gastos"); XLSX.writeFile(wb, `Gastos_${hoyStr().replace(/\//g, "-")}.xlsx`); }
+    else { const cab = ["Fecha", "Concepto", "Monto"]; const csv = "\uFEFF" + [cab.join(";"), ...filas.map(r => cab.map(c => `"${String(r[c] ?? "").replace(/"/g, '""')}"`).join(";"))].join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `Gastos_${hoyStr().replace(/\//g, "-")}.csv`; a.click(); }
+  }
   async function subirEnChat(e) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = "";
+    const pend = [];
     for (const f of files) {
-      const data = await fileToDataUrl(f);
-      const url = await subirBucket(data, f.name);
-      if (!url) { setMsgs(prev => [...prev, { role: "assistant", content: `No pude subir "${f.name}" a la nube. Revisá el bucket 'bco-media' en Supabase.` }]); continue; }
       const esImg = /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(f.name);
-      const item = { id: uid() + Date.now(), nombre: f.name, url, categoria: esImg ? "Fotos" : "Chat", ext: (f.name.split(".").pop() || "").toUpperCase(), fecha: hoyStr(), ts: Date.now() };
+      const esPdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+      const esHoja = /\.(xlsx|xls|csv|tsv)$/i.test(f.name) || /spreadsheet|excel|csv/.test(f.type);
+      const dataUrl = await fileToDataUrl(f);
+      const url = await subirBucket(dataUrl, f.name);
+      const item = { id: uid() + Date.now(), nombre: f.name, url: url || "", categoria: esImg ? "Fotos" : esHoja ? "Planillas" : "Chat", ext: (f.name.split(".").pop() || "").toUpperCase(), fecha: hoyStr(), ts: Date.now() };
       setArchivos(prev => { const n = [item, ...(prev || [])]; storage.set("sebastian_archivos", JSON.stringify(n)).catch(() => { }); return n; });
-      setMsgs(prev => [...prev, { role: "user", content: `📎 Subí: ${f.name}`, ...(esImg ? { media: [url], mediaTipo: "fotos" } : { docs: [{ nombre: f.name, url }] }) }, { role: "assistant", content: `✅ Guardado en Archivos${esImg ? " → Fotos" : ""}: ${f.name}. Ya lo tengo disponible.` }]);
+      if (esImg && url) setUltimasFotos(prev => [{ url, nombre: f.name }, ...prev].slice(0, 12));
+      if (esImg || esPdf) {
+        if (f.size > 3 * 1024 * 1024) { setMsgs(prev => [...prev, { role: "assistant", content: `"${f.name}" pesa más de 3MB; achicá la foto o mandá el PDF con menos páginas para que lo pueda leer.` }]); continue; }
+        const b64 = String(dataUrl).split(",")[1];
+        const mediaType = esImg ? ((dataUrl.match(/data:(.*?);/) || [])[1] || "image/jpeg") : "application/pdf";
+        pend.push({ nombre: f.name, kind: esImg ? "image" : "document", data: b64, mediaType });
+        setMsgs(prev => [...prev, { role: "user", content: `📎 ${f.name}`, ...(esImg ? { media: [url || dataUrl], mediaTipo: "fotos" } : { docs: [{ nombre: f.name, url: url || "" }] }) }]);
+      } else if (esHoja) {
+        const XLSX = await cargarSDK(); let texto = "";
+        if (XLSX) { try { const buf = await f.arrayBuffer(); const wb = XLSX.read(buf, { type: "array" }); for (const sn of wb.SheetNames) { texto += `\n--- Hoja: ${sn} ---\n` + XLSX.utils.sheet_to_csv(wb.Sheets[sn]); } texto = texto.slice(0, 12000); } catch { texto = ""; } }
+        if (!texto.trim()) { setMsgs(prev => [...prev, { role: "assistant", content: `No pude leer la planilla "${f.name}". Probá guardándola como PDF y subila de nuevo.` }]); continue; }
+        pend.push({ nombre: f.name, kind: "texto", texto: `Contenido de la planilla "${f.name}" (CSV):\n${texto}` });
+        setMsgs(prev => [...prev, { role: "user", content: `📎 ${f.name} (planilla)`, docs: [{ nombre: f.name, url: url || "" }] }]);
+      } else {
+        setMsgs(prev => [...prev, { role: "assistant", content: `Guardé "${f.name}" en Archivos, pero para analizarlo necesito foto, PDF o planilla (Excel/CSV).` }]);
+      }
     }
+    if (pend.length) { setAdjPend(prev => [...prev, ...pend]); setMsgs(prev => [...prev, { role: "assistant", content: "Listo, lo tengo cargado. Decime qué querés que haga (leerlo, sacar los datos, resumirlo, cargar el personal, etc.)." }]); }
   }
   async function persistAgenda(next) { setAgenda(next); await storage.set("sebastian_agenda", JSON.stringify(next)).catch(() => { }); }
+  async function persistContactos(next) { setContactos(next); try { localStorage.setItem("sebastian_contactos", JSON.stringify(next)); } catch { } await storage.set("sebastian_contactos", JSON.stringify(next)).catch(() => { }); }
+  async function persistCamaras(next) { setCamaras(next); try { localStorage.setItem("vv_camaras", JSON.stringify(next)); } catch { } await storage.set("vv_camaras", JSON.stringify(next)).catch(() => { }); }
   async function subirArchivos(e) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
     const nuevos = [];
@@ -379,6 +476,18 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setMsgs(prev => [...prev, { role: "assistant", content: `📄 Guardé el modelo "${f.name}" en tu biblioteca. Quedó seleccionado. Cuando pidas un presupuesto, sigo ese formato. Podés guardar varios y elegir cuál usar en la solapa Modelos.` }]);
     } catch { alert("No pude leer el Word."); }
   }
+  function getGPS() { return new Promise((resolve) => { if (!navigator.geolocation) return resolve(null); navigator.geolocation.getCurrentPosition(p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }), () => resolve(null), { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }); }); }
+  async function comoLlego(destino) {
+    const dest = String(destino || "").trim(); if (!dest) return;
+    setMsgs(prev => [...prev, { role: "assistant", content: "Tomando tu ubicación… (aceptá el permiso de GPS si te lo pide)" }]);
+    const pos = await getGPS();
+    const mapsUrl = pos ? `https://www.google.com/maps/dir/?api=1&origin=${pos.lat},${pos.lng}&destination=${encodeURIComponent(dest)}&travelmode=driving` : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+    if (!pos) { setMsgs(prev => [...prev, { role: "assistant", content: `No pude tomar tu ubicación (revisá el permiso de GPS del navegador). Igual te dejo la ruta hasta ${dest} para verla en el mapa:`, mapUrl: mapsUrl, mapLabel: `Cómo llegar a ${dest}` }]); return; }
+    let est = "";
+    try { est = await callAI([{ role: "user", content: `Estimá el tiempo APROXIMADO de viaje en auto desde las coordenadas ${pos.lat},${pos.lng} hasta "${dest}" (Argentina). Buscá la distancia/ruta en internet si hace falta. Respondé en 1-2 frases: distancia aprox y tiempo aprox en minutos, aclarando que es una estimación sin tráfico en vivo. Nada más.` }], "Sos un asistente que estima tiempos de viaje en Argentina. Breve y claro (vos).", apiKey, true); } catch { }
+    if (!est || /error|no puedo|no dispong/i.test(est)) est = `Te dejo la ruta hasta ${dest}. Tocá el botón para ver el tiempo exacto con tráfico.`;
+    setMsgs(prev => [...prev, { role: "assistant", content: `🚗 ${est}`, mapUrl: mapsUrl, mapLabel: "Ver ruta y tiempo real en Google Maps" }]);
+  }
   async function preguntarIA(texto) {
     // Publica la consulta en el canal compartido; la IA de V+V la responde sola.
     let arr = []; try { const r = await storage.get("ia_dialogo"); if (r?.value) arr = JSON.parse(r.value); } catch { }
@@ -395,13 +504,53 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
 
   async function enviar() {
-    const t = input.trim(); if (!t || busy) return;
-    const nm = [...msgs, { role: "user", content: t }];
+    const t = input.trim(); if ((!t && adjPend.length === 0) || busy) return;
+    const adj = adjPend; setAdjPend([]);
+    const nm = t ? [...msgs, { role: "user", content: t }] : [...msgs];
     setMsgs(nm); setInput(""); setBusy(true);
     const hist = nm.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, content: m.content })).slice(-40);
+    if (adj.length) {
+      const textos = adj.filter(a => a.kind === "texto").map(a => a.texto).join("\n\n");
+      const blocks = [{ type: "text", text: (t || "Analizá lo que te adjunté y decime lo que corresponda.") + (textos ? "\n\n" + textos : "") }];
+      for (const a of adj) { if (a.kind === "image") blocks.push({ type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } }); else if (a.kind === "document") blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: a.data } }); }
+      if (hist.length && hist[hist.length - 1].role === "user") hist[hist.length - 1] = { role: "user", content: blocks }; else hist.push({ role: "user", content: blocks });
+    }
     const resp = await callAI(hist, buildSystem(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(resp);
     let extra = {};
+    if (accion && accion.tipo === "pagar_mp") {
+      const q = String(accion.para || "").toLowerCase();
+      const fav = (contactos || []).find(c => (c.nombre || "").toLowerCase().includes(q));
+      const per = fav || (db.personal || []).find(x => (x.nombre || "").toLowerCase().includes(q));
+      const monto = Number(String(accion.monto).replace(/[^\d.-]/g, "")) || 0;
+      const alias = accion.alias || fav?.alias || per?.aliasmp || per?.alias || "";
+      setMsgs(prev => [...prev, { role: "assistant", content: `💳 Pago preparado: ${accion.para || "—"}${monto ? ` · $${monto.toLocaleString("es-AR")}` : ""}.${alias ? `\nAlias/CVU: ${alias}` : ""}\n\nAbrí Mercado Pago y confirmá el pago vos (por seguridad, ninguna app puede pagar sola con tu plata).` }, { role: "assistant", content: "", mpUrl: "https://www.mercadopago.com.ar/", mpLabel: `Abrir Mercado Pago` }]);
+      setBusy(false); return;
+    }
+    if (accion && accion.tipo === "mandar_mail") {
+      const q = String(accion.para || "").toLowerCase();
+      const fav = (contactos || []).find(c => (c.nombre || "").toLowerCase().includes(q));
+      const per = fav || (db.personal || []).find(x => (x.nombre || "").toLowerCase().includes(q));
+      const email = accion.email || fav?.email || per?.email || "";
+      const asunto = accion.asunto || ""; const cuerpo = accion.cuerpo || "";
+      const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+      setMsgs(prev => [...prev, { role: "assistant", content: `✉️ Mail listo para ${accion.para || email || "el contacto"}${email ? "" : " (al abrir, elegí el contacto en tu app de mail)"}:\nAsunto: ${asunto}\n\n${cuerpo}`, mailUrl: mailto, mailLabel: `Enviar mail${accion.para ? ` a ${accion.para}` : ""}` }]);
+      setBusy(false); return;
+    }
+    if (accion && accion.tipo === "como_llego") { await comoLlego(accion.destino); setBusy(false); return; }
+    if (accion && accion.tipo === "foto_a_obra") {
+      const target = accion.obra ? (db.obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : null;
+      const fotos = (ultimasFotos || []).slice(0, accion.cantidad || 12);
+      if (!target) { setMsgs(prev => [...prev, { role: "assistant", content: "No encontré esa obra. Decime el nombre exacto." }]); setBusy(false); return; }
+      if (!fotos.length) { setMsgs(prev => [...prev, { role: "assistant", content: "No tengo fotos recién subidas para mandar. Subí la foto con 📎 y después decime a qué obra va." }]); setBusy(false); return; }
+      let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+      const nuevas = fotos.map(f => ({ id: uid() + Date.now() + Math.random(), url: f.url, fecha: hoyStr(), from: "sebastian", nota: "" }));
+      const next = arr.map(o => o.id === target.id ? { ...o, fotos: [...nuevas, ...(o.fotos || [])] } : o);
+      try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { } await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
+      setDb(d => ({ ...d, obras: next })); setUltimasFotos([]);
+      setMsgs(prev => [...prev, { role: "assistant", content: `📸 Subí ${nuevas.length === 1 ? "la foto" : nuevas.length + " fotos"} a la obra ${target.nombre}. Ya las ve V+V en las fotos de esa obra.${limpio ? "\n\n" + limpio : ""}` }]);
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "crear_obra") {
       const o = crearObra(accion);
       setMsgs(prev => [...prev, { role: "assistant", content: `🏗 Obra creada: ${o.nombre}${o.direccion ? ` · ${o.direccion}` : ""} (${o.estado}). Ya la ven V+V y todo el equipo.${limpio ? "\n\n" + limpio : ""}` }]);
@@ -424,16 +573,24 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (ok) setMsgs(prev => [...prev, { role: "assistant", content: `✅ PDF generado y descargado: "${accion.titulo || "documento"}". Buscalo en tus Descargas.` }]);
       setBusy(false); return;
     }
+    if (accion && accion.tipo === "cargar_gasto") {
+      const g = cargarGasto(accion);
+      setMsgs(prev => [...prev, { role: "assistant", content: `💸 Gasto cargado: ${g.concepto} · $${g.monto.toLocaleString("es-AR")} (${g.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Gastos.` }]);
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "cargar_pago") {
       const p = cargarPago(accion);
       setMsgs(prev => [...prev, { role: "assistant", content: `✅ Pago cargado: ${p.persona || "—"}${p.monto ? ` · $${p.monto.toLocaleString("es-AR")}` : ""}${p.obra ? ` · ${p.obra}` : ""} · ${p.estado}${p.metodo ? ` · ${p.metodo}` : ""} (${p.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Pagos y lo podés exportar a Excel.` }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "whatsapp") {
-      const per = (db.personal || []).find(x => (x.nombre || "").toLowerCase().includes(String(accion.persona || "").toLowerCase()) && (x.telefono || "").trim());
+      const q = String(accion.persona || "").toLowerCase();
+      const fav = (contactos || []).find(c => (c.nombre || "").toLowerCase().includes(q) && (c.telefono || "").trim());
+      const per = fav || (db.personal || []).find(x => (x.nombre || "").toLowerCase().includes(q) && (x.telefono || "").trim());
       const tel = per?.telefono; const clean = tel ? String(tel).replace(/\D/g, "") : ""; const num = clean ? (clean.startsWith("54") ? clean : "549" + clean) : "";
       const link = `https://wa.me/${num}?text=${encodeURIComponent(accion.texto || "")}`;
-      setMsgs(prev => [...prev, { role: "assistant", content: limpio || `Te dejé listo el WhatsApp para ${accion.persona || "el contacto"}${per ? "" : " (no encontré su teléfono en Personal, elegí el contacto a mano)"}:`, waLink: link, waLabel: `Enviar a ${accion.persona || "contacto"}` }]);
+      if (num) { try { window.open(link, "_blank"); } catch { } }
+      setMsgs(prev => [...prev, { role: "assistant", content: limpio || (num ? `Abriendo WhatsApp para ${accion.persona || "el contacto"}… si no se abrió solo, tocá el botón:` : `Preparé el WhatsApp, pero no encontré el teléfono de ${accion.persona || "el contacto"} en Favoritos ni en Personal. Tocá el botón y elegí el contacto:`), waLink: link, waLabel: num ? `Abrir WhatsApp de ${accion.persona || "contacto"}` : "Abrir WhatsApp" }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "preguntar_ia") {
@@ -475,52 +632,80 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     </div>);
   }
 
-  return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
+  return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"}</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v19 · tabs-texto</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
-      <div style={{ display: "flex", gap: 2, marginTop: 12, overflowX: "auto" }}>
-        {[["chat", "💬 Chat"], ["pagos", "💵 Pagos"], ["agenda", "📅 Agenda"], ["archivos", "📁 Archivos"], ["modelos", "📄 Modelos"], ["obras", "🏗 Obras"], ["ajustes", "⚙ Ajustes"]].map(([id, lb]) => <button key={id} onClick={() => setVista(id)} style={{ background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: vista === id ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 700, padding: "8px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>{lb}{id === "pagos" && (pagos || []).length ? ` (${pagos.length})` : ""}{id === "archivos" && (archivos || []).length ? ` (${archivos.length})` : ""}{id === "agenda" && (agenda || []).length ? ` (${agenda.length})` : ""}{id === "modelos" && (modelos || []).length ? ` (${modelos.length})` : ""}</button>)}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["gastos", "Gastos"], ["agenda", "Agenda"], ["archivos", "Archivos"], ["modelos", "Modelos"], ["obras", "Obras"], ["contactos", "Contactos"], ["camaras", "Cámaras"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const cnt = id === "pagos" ? (pagos || []).length : id === "gastos" ? (gastos || []).length : id === "archivos" ? (archivos || []).length : id === "agenda" ? (agenda || []).length : id === "modelos" ? (modelos || []).length : id === "contactos" ? (contactos || []).length : id === "camaras" ? (camaras || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: vista === id ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
       </div>
     </div>
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: (cfg.escala || 100) / 100 }}>
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} />}
+    {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} />}
+    {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
+    {vista === "camaras" && <CamarasBody camaras={camaras} onSave={persistCamaras} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "archivos" && <ArchivosBody archivos={archivos} cat={catArch} setCat={setCatArch} archRef={archRef} subir={subirArchivos} subiendo={subiendoArch} borrar={(id) => persistArch((archivos || []).filter(a => a.id !== id))} />}
     {vista === "modelos" && <ModelosBody modelos={modelos} sel={modeloSel} setSel={setModeloSel} subir={() => modeloRef.current && modeloRef.current.click()} borrar={(id) => { const next = (modelos || []).filter(m => m.id !== id); setModelos(next); if (modeloSel === id) setModeloSel(next[0]?.id || ""); storage.set("sebastian_modelos", JSON.stringify(next)).catch(() => { }); }} />}
     {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "" })} />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
-    {vista === "chat" && <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px" }}>
+    <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
+    <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "16px 16px 8px" }}>
       {msgs.map((m, i) => (<div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 12 }}>
-        <div style={{ maxWidth: "88%" }}>
-          <div style={{ background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: 14, padding: "11px 14px", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.content}</div>
+        <div style={{ maxWidth: "88%", minWidth: 0 }}>
+          <div style={{ background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: 14, padding: "11px 14px", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "anywhere" }}>{m.content}</div>
+          {m.role === "assistant" && m.content && m.content.length > 8 && <button onClick={() => hablar(m.content)} title="Escuchar" style={{ marginTop: 4, background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: "2px 0" }}>🔊 Escuchar</button>}
           {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
+          {m.mapUrl && <a href={m.mapUrl} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#1A73E8", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>🗺 {m.mapLabel || "Ver en Google Maps"}</a>}
+          {m.mpUrl && <a href={m.mpUrl} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#009EE3", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>💳 {m.mpLabel || "Abrir Mercado Pago"}</a>}
+          {m.mailUrl && <a href={m.mailUrl} style={{ display: "inline-block", marginTop: 8, background: "#EA4335", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>✉️ {m.mailLabel || "Enviar mail"}</a>}
           {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8 }}>{m.docs.map((d, j) => <a key={j} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.navy, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: BRASS, fontWeight: 700, fontSize: 11.5 }}>Abrir ↗</span></a>)}</div>}
-          {m.media && m.media.length > 0 && <div style={{ marginTop: 8 }}>{m.mediaTipo === "videos" ? m.media.map((u, j) => <video key={j} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000" }} />) : <div style={{ display: "grid", gridTemplateColumns: m.media.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>{m.media.map((u, j) => <a key={j} href={u} target="_blank" rel="noreferrer" download><img src={u} alt="" style={{ width: "100%", borderRadius: 10, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div>}</div>}
+          {m.media && m.media.length > 0 && <div style={{ marginTop: 8 }}>{m.mediaTipo === "videos" ? m.media.map((u, j) => <video key={j} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000" }} />) : <div style={{ display: "grid", gridTemplateColumns: m.media.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>{m.media.map((u, j) => <a key={j} href={u} target="_blank" rel="noreferrer" download><img src={u} alt="" onLoad={scrollBottom} style={{ width: "100%", borderRadius: 10, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div>}</div>}
         </div>
       </div>))}
       {busy && <div style={{ color: T.muted, fontSize: 13, padding: "4px 6px" }}>Pensando…</div>}
-    </div>}
+    </div>
 
-    {vista === "chat" && <div style={{ padding: "10px 14px 14px", paddingBottom: "max(14px, env(safe-area-inset-bottom))", borderTop: `1px solid ${T.border}`, background: T.bg }}>
+    <div style={{ padding: "10px 14px 14px", paddingBottom: "max(14px, env(safe-area-inset-bottom))", borderTop: `1px solid ${T.border}`, background: T.bg }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.sub, cursor: "pointer" }}><input type="checkbox" checked={useSearch} onChange={e => setUseSearch(e.target.checked)} /> Buscar en internet</label>
         <input ref={chatFileRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.dwg,.dxf" multiple onChange={subirEnChat} style={{ display: "none" }} />
         <button onClick={() => chatFileRef.current && chatFileRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📎 Foto / archivo</button>
         <input ref={modeloRef} type="file" accept=".docx" onChange={subirModelo} style={{ display: "none" }} />
         <button onClick={() => modeloRef.current && modeloRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📄 Subir modelo</button>
+        <button onClick={() => setVozOn(v => !v)} style={{ background: vozOn ? T.accent : "none", border: `1px solid ${vozOn ? T.accent : T.border}`, color: vozOn ? "#fff" : T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>🔊 Voz {vozOn ? "activada" : ""}</button>
         {modelo && <span style={{ fontSize: 10.5, color: T.muted }}>Modelo activo: {modelo.nombre}</span>}
       </div>
+      {adjPend.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adjPend.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "🖼" : a.kind === "texto" ? "📊" : "📄"} {a.nombre.slice(0, 22)} <span onClick={() => setAdjPend(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder="Escribí tu consulta…" style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
-        <button onClick={enviar} disabled={busy || !input.trim()} style={{ background: (busy || !input.trim()) ? T.border : T.accent, color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", fontSize: 14, fontWeight: 600, letterSpacing: "0.03em", cursor: (busy || !input.trim()) ? "default" : "pointer" }}>Enviar</button>
+        <button onClick={dictar} title="Hablar" style={{ background: escuchando ? "#DC2626" : T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, color: escuchando ? "#fff" : T.accent, borderRadius: 12, padding: "0 15px", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>🎤</button>
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : adjPend.length ? "Preguntá algo sobre lo que adjuntaste…" : "Escribí o tocá el micrófono…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
+        <button onClick={enviar} disabled={busy || (!input.trim() && adjPend.length === 0)} style={{ background: (busy || (!input.trim() && adjPend.length === 0)) ? T.border : T.accent, color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", fontSize: 14, fontWeight: 600, letterSpacing: "0.03em", cursor: (busy || (!input.trim() && adjPend.length === 0)) ? "default" : "pointer" }}>Enviar</button>
       </div>
-    </div>}
+    </div>
+    </div>
     </div>
   </div>);
+}
+
+function Icono({ n, size = 20 }) {
+  const p = {
+    chat: <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z" />,
+    pagos: <React.Fragment><line x1="12" y1="2" x2="12" y2="22" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></React.Fragment>,
+    gastos: <React.Fragment><polyline points="23 18 13.5 8.5 8.5 13.5 1 6" /><polyline points="17 18 23 18 23 12" /></React.Fragment>,
+    agenda: <React.Fragment><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></React.Fragment>,
+    archivos: <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />,
+    modelos: <React.Fragment><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></React.Fragment>,
+    obras: <React.Fragment><line x1="3" y1="21" x2="21" y2="21" /><path d="M6 21V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v16" /><path d="M14 21V10h3a1 1 0 0 1 1 1v10" /><line x1="9" y1="8" x2="10.5" y2="8" /><line x1="9" y1="12" x2="10.5" y2="12" /></React.Fragment>,
+    ajustes: <React.Fragment><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></React.Fragment>,
+    contactos: <React.Fragment><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></React.Fragment>,
+    camaras: <React.Fragment><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></React.Fragment>,
+  };
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>{p[n] || null}</svg>;
 }
 
 function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }) {
@@ -529,6 +714,7 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }
   const totalPend = lista.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
   const totalPag = lista.filter(p => p.estado === "pagado").reduce((a, p) => a + (p.monto || 0), 0);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <a href="https://www.mercadopago.com.ar/" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#009EE3", color: "#fff", borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 700, textDecoration: "none", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,158,227,.3)" }}>💳 Pagar por Mercado Pago</a>
     <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
       <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 16, color: T.text }}>
         <option value="">Todas las obras</option>
@@ -687,6 +873,11 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
   const Color = ({ k }) => (<input type="color" value={cfg[k]} onChange={e => setC(k, e.target.value)} style={{ width: 40, height: 30, border: `1px solid ${T.border}`, borderRadius: 8, background: "none", cursor: "pointer", padding: 0 }} />);
   const Sec = ({ t }) => (<div style={{ fontSize: 10.5, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.12em", margin: "18px 0 2px" }}>{t}</div>);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "10px 16px 30px" }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px", margin: "6px 0 6px" }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 3 }}>Actualizar la app</div>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.45 }}>Trae la última versión con los cambios nuevos, sin borrar ni reinstalar nada.</div>
+      <button onClick={async () => { try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch { } window.location.replace(window.location.pathname + "?v=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>🔄 Actualizar a la última versión</button>
+    </div>
     <Sec t="Estilos rápidos" />
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 4px" }}>
       {PRESETS.map(p => <button key={p.n} onClick={() => saveCfg({ ...cfg, accent: p.accent, navy: p.navy, bg: p.bg, card: p.card, text: p.text })} style={{ display: "flex", alignItems: "center", gap: 7, background: T.card, border: `1px solid ${T.border}`, borderRadius: 20, padding: "6px 12px 6px 8px", cursor: "pointer" }}>
@@ -731,5 +922,114 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
     <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>Para que tome el ícono nuevo en iPhone/iPad: subilo acá, después en Safari tocá Compartir → “Agregar a pantalla de inicio”. Usá una imagen cuadrada (ideal 512×512).</div>
 
     <button onClick={() => { if (confirm("¿Volver al estilo original?")) saveCfg({ ...CFG_DEF, iconoUrl: cfg.iconoUrl }); }} style={{ width: "100%", marginTop: 22, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Restablecer estilo original</button>
+  </div>);
+}
+
+function GastosBody({ gastos, onAdd, exportar, borrar }) {
+  const [f, setF] = React.useState({ concepto: "", monto: "" });
+  const lista = (gastos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const hoy = hoyStr(); const mes = hoy.slice(3);
+  const totDia = lista.filter(g => g.fecha === hoy).reduce((a, g) => a + (g.monto || 0), 0);
+  const totMes = lista.filter(g => (g.fecha || "").slice(3) === mes).reduce((a, g) => a + (g.monto || 0), 0);
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <a href="https://www.mercadopago.com.ar/" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#009EE3", color: "#fff", borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 700, textDecoration: "none", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,158,227,.3)" }}>💳 Pagar por Mercado Pago</a>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo gasto</div>
+      <input value={f.concepto} onChange={e => setF({ ...f, concepto: e.target.value })} placeholder="Concepto (nafta, comida, ferretería…)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <div style={{ display: "flex", gap: 7 }}>
+        <input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
+        <button onClick={() => { if (!f.concepto.trim() || !f.monto) { alert("Poné concepto y monto."); return; } onAdd({ concepto: f.concepto, monto: f.monto }); setF({ concepto: "", monto: "" }); }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>＋</button>
+      </div>
+    </div>
+    <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Hoy</div><div style={{ fontFamily: T.serif, fontSize: 20, fontWeight: 600, color: T.text, marginTop: 3 }}>${totDia.toLocaleString("es-AR")}</div></div>
+      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Este mes</div><div style={{ fontFamily: T.serif, fontSize: 20, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totMes.toLocaleString("es-AR")}</div></div>
+    </div>
+    <button onClick={exportar} style={{ width: "100%", background: "none", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>Exportar Excel</button>
+    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Sin gastos.<br />Desde el Chat: <span style={{ color: T.sub }}>"cargá un gasto de nafta de 15000"</span></div>}
+    {lista.map(g => (<div key={g.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+      <div style={{ minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{g.concepto} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(g.monto || 0).toLocaleString("es-AR")}</span></div><div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{g.fecha}</div></div>
+      <button onClick={() => borrar(g.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+    </div>))}
+  </div>);
+}
+
+function ContactosBody({ contactos, onSave }) {
+  const [form, setForm] = React.useState(null);
+  const lista = (contactos || []).slice().sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+  function guardar() { if (!form.nombre?.trim()) { alert("Poné al menos el nombre."); return; } const arr = form.id ? lista.map(c => c.id === form.id ? form : c) : [...lista, { ...form, id: uid() + Date.now() }]; onSave(arr); setForm(null); }
+  function borrar(id) { if (confirm("¿Borrar este contacto?")) onSave(lista.filter(c => c.id !== id)); }
+  const waLink = (c) => { const clean = String(c.telefono || "").replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : "549" + clean; return `https://wa.me/${num}`; };
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    {!form && <button onClick={() => setForm({ nombre: "", telefono: "", email: "", alias: "", nota: "" })} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Nuevo contacto favorito</button>}
+    {form && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>{form.id ? "Editar contacto" : "Nuevo contacto"}</div>
+      {[["nombre", "Nombre y apellido"], ["telefono", "WhatsApp (ej: 1145678900)"], ["email", "Email (opcional)"], ["alias", "Alias/CVU Mercado Pago (opcional)"], ["nota", "Nota (ej: proveedor de hierro)"]].map(([k, ph]) => <input key={k} value={form[k] || ""} onChange={e => setForm({ ...form, [k]: e.target.value })} placeholder={ph} inputMode={k === "telefono" ? "tel" : "text"} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />)}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setForm(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+        <button onClick={guardar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+      </div>
+    </div>}
+    {lista.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Sin contactos favoritos.<br />Cargalos y después decime: <span style={{ color: T.sub }}>"mandale un WhatsApp a Enrico"</span>.</div>}
+    {lista.map(c => (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{c.nombre}</div>
+          <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2, lineHeight: 1.5 }}>{c.telefono ? `📲 ${c.telefono}` : ""}{c.email ? `${c.telefono ? " · " : ""}✉️ ${c.email}` : ""}{c.alias ? ` · 💳 ${c.alias}` : ""}{c.nota ? <div style={{ color: T.muted }}>{c.nota}</div> : null}</div>
+        </div>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          {c.telefono && <a href={waLink(c)} target="_blank" rel="noreferrer" style={{ background: "#25D366", color: "#fff", borderRadius: 8, padding: "6px 9px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>WA</a>}
+          <button onClick={() => setForm(c)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "6px 9px", fontSize: 12, cursor: "pointer" }}>✎</button>
+          <button onClick={() => borrar(c.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer" }}>✕</button>
+        </div>
+      </div>
+    </div>))}
+  </div>);
+}
+
+function CamaraMini({ cam }) {
+  const [tick, setTick] = React.useState(0);
+  const [err, setErr] = React.useState(false);
+  React.useEffect(() => { setErr(false); if (cam.tipo !== "snapshot") return; const iv = setInterval(() => setTick(t => t + 1), 5000); return () => clearInterval(iv); }, [cam.tipo, cam.url]);
+  const src = cam.tipo === "snapshot" ? (cam.url + (cam.url.includes("?") ? "&" : "?") + "_t=" + tick) : cam.url;
+  return (<div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", background: "#12100C" }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: "#fff" }}>● {cam.nombre || "Cámara"}</div>
+      {cam.url && <a href={cam.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#fff", opacity: .75, textDecoration: "none" }}>Abrir ↗</a>}
+    </div>
+    <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", background: "#0a0f17" }}>
+      {cam.tipo === "iframe" ? <iframe src={cam.url} title={cam.nombre} style={{ width: "100%", height: "100%", border: "none" }} allow="autoplay; fullscreen" />
+        : cam.tipo === "hls" ? <video src={cam.url} controls playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", background: "#000" }} onError={() => setErr(true)} />
+          : cam.url ? <img src={src} alt={cam.nombre} style={{ width: "100%", height: "100%", objectFit: "cover", display: err ? "none" : "block" }} onError={() => setErr(true)} onLoad={() => setErr(false)} /> : null}
+      {(err || !cam.url) && <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.6)", fontSize: 11.5, textAlign: "center", padding: 16, gap: 6 }}><div style={{ fontSize: 22 }}>📹</div><div>No se pudo mostrar la cámara acá.<br />Tocá "Abrir ↗" para verla, o revisá la URL en la app de V+V.</div></div>}
+    </div>
+  </div>);
+}
+
+function CamarasBody({ camaras, onSave }) {
+  const lista = camaras || [];
+  const [form, setForm] = React.useState(null);
+  function guardar() { if (!form.nombre?.trim() || !form.url?.trim()) { alert("Poné un nombre y la URL de la cámara."); return; } const arr = form.id ? lista.map(c => c.id === form.id ? form : c) : [...lista, { ...form, id: uid() + Date.now() }]; onSave(arr); setForm(null); }
+  function borrar(id) { if (confirm("¿Borrar esta cámara?")) onSave(lista.filter(c => c.id !== id)); }
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    {!form && <button onClick={() => setForm({ nombre: "", url: "", tipo: "snapshot" })} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Agregar cámara</button>}
+    {form && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>{form.id ? "Editar cámara" : "Nueva cámara"}</div>
+      <input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Nombre (ej: Castores - Frente)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <input value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="URL del stream o embed (https://…)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 10 }}>
+        <option value="snapshot">Foto que se refresca (JPG/snapshot)</option>
+        <option value="hls">Video en vivo (HLS .m3u8)</option>
+        <option value="iframe">Página / embed web (iframe)</option>
+        <option value="mjpeg">MJPEG</option>
+      </select>
+      <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Necesitás una URL web de la cámara (snapshot JPG, HLS .m3u8 o embed). Las que solo andan por RTSP o por la app del fabricante no se pueden mostrar acá.</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setForm(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+        <button onClick={guardar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+      </div>
+    </div>}
+    {lista.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.7 }}>No hay cámaras todavía.<br />Tocá "＋ Agregar cámara" y pegá la URL del stream.</div>}
+    {lista.map(c => <div key={c.id} style={{ position: "relative" }}><CamaraMini cam={c} /><div style={{ position: "absolute", top: 8, right: 10, display: "flex", gap: 6 }}><button onClick={() => setForm(c)} style={{ background: "rgba(0,0,0,.5)", border: "none", color: "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✎</button><button onClick={() => borrar(c.id)} style={{ background: "rgba(0,0,0,.5)", border: "none", color: "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✕</button></div></div>)}
   </div>);
 }
