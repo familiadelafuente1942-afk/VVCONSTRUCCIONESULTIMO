@@ -103,7 +103,7 @@ function useStored(key, def) {
 // Llamada al modelo (usa la API Key cargada en la app de V+V, leída del backend compartido)
 async function callAI(msgs, sys, apiKey, useSearch = false) {
   msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
-  const body = { model: "claude-sonnet-4-6", max_tokens: 1500, messages: msgs };
+  const body = { model: "claude-sonnet-5", max_tokens: 4096, thinking: { type: "disabled" }, messages: msgs };
   if (sys) body.system = sys;
   if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 5, user_location: { type: "approximate", city: "Buenos Aires", region: "Buenos Aires", country: "AR", timezone: "America/Argentina/Buenos_Aires" } }];
   async function doFetch(b) {
