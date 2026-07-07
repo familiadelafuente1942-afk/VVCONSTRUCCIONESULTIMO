@@ -536,7 +536,7 @@ function Dashboard({ lics, obras, personal, alerts, setView, setDetailObraId, re
             <div style={{ fontSize: 20, fontWeight: 800, color: "#fff" }}>{t(cfg, 'dash_titulo')}</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginTop: 4 }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginTop: 16 }}>
-                {[{ l: t(cfg, 'dash_proyectoes'), v: lics.filter(l => !["adjudicada", "descartada"].includes(l.estado)).length, c: "#7E9CB8" }, { l: t(cfg, 'dash_obras_activas'), v: obras.filter(o => o.estado === "curso").length, c: "#5E8C7B" }, { l: t(cfg, 'dash_alertas'), v: alerts.length, c: "#B0894F" }, { l: t(cfg, 'dash_personal'), v: personal.length, c: "#8A8FA3" }].map(k => (
+                {[{ l: t(cfg, 'dash_proyectoes'), v: lics.filter(l => !["adjudicada", "descartada"].includes(l.estado)).length, c: "#7E9CB8" }, { l: t(cfg, 'dash_obras_activas'), v: obras.filter(o => o.estado === "curso").length, c: "#5E8C7B" }, { l: t(cfg, 'dash_personal'), v: personal.length, c: "#8A8FA3" }].map(k => (
                     <div key={k.l} style={{ background: "rgba(255,255,255,.08)", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
                         <div style={{ fontSize: 22, fontWeight: 800, color: k.c }}>{k.v}</div>
                         <div style={{ fontSize: 9, color: "rgba(255,255,255,.5)", marginTop: 2, lineHeight: 1.3 }}>{k.l}</div>
@@ -552,37 +552,6 @@ function Dashboard({ lics, obras, personal, alerts, setView, setDetailObraId, re
                     <div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{pendObras ? `Obras: ${pendObras}` : "Tocá para ver"} →</div>
                 </div>
             </div>}
-            {alerts.length > 0 && (<div style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Alertas ({alerts.length})</div>
-                    <button onClick={() => setView("seguimiento")} style={{ fontSize: 12, color: T.accent, background: "none", border: "none", fontWeight: 600, cursor: "pointer" }}>Ver todas →</button>
-                </div>
-                {/* Alertas de alta prioridad primero */}
-                {alerts.filter(a => a.prioridad === 'alta').slice(0, 5).map(a => (
-                    <div key={a.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 12px", marginBottom: 6 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#EF4444", flexShrink: 0, marginTop: 4 }} />
-                        <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, flex: 1 }}>{a.msg}</div>
-                    </div>
-                ))}
-                {/* Alertas medias (máx 4) */}
-                {alerts.filter(a => a.prioridad === 'media').slice(0, 4).map(a => (
-                    <div key={a.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", marginBottom: 6 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#F59E0B", flexShrink: 0, marginTop: 4 }} />
-                        <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, flex: 1 }}>{a.msg}</div>
-                    </div>
-                ))}
-                {alerts.filter(a => a.prioridad === 'media').length > 4 && (
-                    <button onClick={() => setView("seguimiento")} style={{ width: "100%", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "8px", fontSize: 12, color: "#92400E", fontWeight: 600, cursor: "pointer", textAlign: "center" }}>
-                        + {alerts.filter(a => a.prioridad === 'media').length - 4} alertas más → Ver seguimiento
-                    </button>
-                )}
-            </div>)}
-            {alerts.length === 0 && (
-                <div style={{ background: "#ECFDF5", border: "1px solid #86EFAC", borderRadius: 10, padding: "12px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#10B981", flexShrink: 0 }} />
-                    <div style={{ fontSize: 12, color: "#15803D", fontWeight: 600 }}>✓ Todo en orden — sin alertas activas</div>
-                </div>
-            )}
             <div style={{ marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t(cfg, 'dash_obras_curso')}</div>
@@ -2546,7 +2515,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v11 avance-galeria" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v12 sin-alertas" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
