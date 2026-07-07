@@ -2480,7 +2480,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
             const pedsNext = [np, ...peds]; try { localStorage.setItem("vv_pedidos", JSON.stringify(pedsNext)); } catch { } await storage.set("vv_pedidos", JSON.stringify(pedsNext)).catch(() => { });
             textoResp = `No tengo ese dato en la app de V+V. Lo derivé al personal de V+V como URGENTE (quedó en Pedidos). Te respondemos apenas lo tengan.`;
           }
-          arr2.push({ id: uid() + Date.now(), from: "vv", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
+          arr2.push({ id: uid() + Date.now(), from: "vv", to: pend.from, qid: pend.id, texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
           try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
           await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
           } catch { }
@@ -2515,7 +2515,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v16 asistente-de-casa" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v18 borrar-hilo" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -3273,6 +3273,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
   function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
+  function borrarMsgHilo(pedidoId, idx) { if (!confirm("¿Eliminar este mensaje/archivo del hilo?")) return; aplicarPedidos(setPedidos, arr => arr.map(x => x.id === pedidoId ? { ...x, hilo: (x.hilo || []).filter((_, j) => j !== idx) } : x)); }
   async function responderIA(p) {
     setIaLoad(true);
     const hist = p.hilo.map(h => `${h.de === miSide ? "Nosotros (V+V)" : otroNom}: ${h.texto}`).join("\n");
@@ -3335,7 +3336,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
             {h.texto}
             {(h.archivos || []).map((a, j) => a.img ? <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 7 }}><img src={a.url} alt={a.nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} /></a> : <a key={j} href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}>📎 {a.nombre}</a>)}
           </div>
-          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "🤖 IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}</div>
+          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "🤖 IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}{mine && i > 0 && <span onClick={() => borrarMsgHilo(cur.id, i)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
         </div>
       </div>); })}
       <div style={{ marginTop: 12 }}>
