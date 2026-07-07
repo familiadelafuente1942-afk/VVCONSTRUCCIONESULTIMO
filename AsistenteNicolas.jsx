@@ -516,6 +516,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (hist.length && hist[hist.length - 1].role === "user") hist[hist.length - 1] = { role: "user", content: blocks }; else hist.push({ role: "user", content: blocks });
     }
     const resp = await callAI(hist, buildSystem(), apiKey, useSearch);
+    if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(resp || ""))) { setMsgs(prev => [...prev, { role: "assistant", content: "⚠ Me quedé sin crédito de IA por ahora. Para que vuelva a funcionar, hay que recargar crédito de la API en console.anthropic.com (Plans & Billing). Avisá a quien maneja la cuenta." }]); setBusy(false); return; }
     const { limpio, accion } = parseAccion(resp);
     let extra = {};
     if (accion && accion.tipo === "pagar_mp") {

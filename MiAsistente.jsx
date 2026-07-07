@@ -526,6 +526,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (hist.length && hist[hist.length - 1].role === "user") hist[hist.length - 1] = { role: "user", content: blocks }; else hist.push({ role: "user", content: blocks });
     }
     const resp = await callAI(hist, buildSystem(), apiKey, useSearch);
+    if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(resp || ""))) { setMsgs(prev => [...prev, { role: "assistant", content: "⚠ Me quedé sin crédito de IA por ahora. Para que vuelva a funcionar, hay que recargar crédito de la API en console.anthropic.com (Plans & Billing). Avisá a quien maneja la cuenta." }]); setBusy(false); return; }
     const { limpio, accion } = parseAccion(resp);
     let extra = {};
     if (accion && accion.tipo === "pagar_mp") {
@@ -649,7 +650,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v27 · a-vv</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v28 · aviso-credito</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
