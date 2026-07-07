@@ -2273,7 +2273,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)})`).join("\n");
     const li = lics.map(l => `· ${l.nombre} (${l.estado}, ${l.monto || "s/monto"}, ${l.sector})`).join("\n");
     const pe = personal.map(p => `· ${p.nombre} — ${p.rol || ""} en ${((p.obra_ids && p.obra_ids.length) ? p.obra_ids : (p.obra_id ? [p.obra_id] : [])).map(id => obraNom(obras, id)).filter(n => n && n !== "—").join(", ") || "sin obra asignada"}${p.empresa ? ` [${p.empresa}]` : ""}${p.telefono ? ` · WhatsApp ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.adjuntos || []).length ? ` · ${p.adjuntos.length} adjunto(s)` : ""}`).join("\n");
-    const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "vv" ? "enviado a" : "recibido de"} ${p.de === "vv" ? cn : cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
+    const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${esDeCasa(p.de) ? (p.de === "sebastian" ? "consulta interna de Tita" : p.de === "nicolas" ? "consulta interna del asist. de Nicolás" : "enviado a " + cn) : "recibido de " + cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
     const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional.
 
@@ -2490,7 +2490,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         const rp = await storage.get("vv_pedidos");
         if (rp?.value) {
           const peds = JSON.parse(rp.value);
-          const incoming = peds.filter(p => p.para === "vv" && p.de !== "vv");
+          const incoming = peds.filter(p => p.para === "vv" && !esDeCasa(p.de));
           if (pedSeen.current === null) pedSeen.current = new Set(incoming.map(p => p.id));
           else {
             const nuevos = incoming.filter(p => !pedSeen.current.has(p.id));
@@ -2515,7 +2515,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v13 adjuntar-pedidos" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v16 asistente-de-casa" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -3203,6 +3203,7 @@ function AlertasWaView({ db, onBack }) {
 const PEDIDO_ESTADOS = { abierto:{l:"Abierto",c:"#F59E0B",b:"#FFFBEB"}, en_proceso:{l:"En proceso",c:"#3B82F6",b:"#EFF6FF"}, respondido:{l:"Respondido",c:"#8B5CF6",b:"#F5F3FF"}, resuelto:{l:"Resuelto",c:"#16A34A",b:"#ECFDF5"} };
 const PEDIDO_MAX_IA = 4; // tope de intercambios automáticos IA↔IA por pedido
 function parseAccion(texto){ const t=texto||""; let m=t.match(/```accion\s*([\s\S]*?)```/i)||t.match(/```accion\s*([\s\S]*)$/i); if(!m) return {limpio:texto,accion:null}; let raw=m[1].trim(); let a=null; try{a=JSON.parse(raw);}catch{ const i=raw.indexOf("{"),j=raw.lastIndexOf("}"); if(i>=0&&j>i){ try{a=JSON.parse(raw.slice(i,j+1));}catch{} } } return {limpio:(t.replace(m[0],"").trim()||"Listo."),accion:a}; }
+function esDeCasa(de){ return de === "vv" || de === "sebastian" || de === "nicolas"; }
 function nuevoPedido({de,para,asunto,detalle,prioridad,obra_id}){ const f=hoyStr(),ts=Date.now(); return {id:uid()+ts, de, para, asunto:asunto||"(sin asunto)", estado:"abierto", prioridad:prioridad||"media", obra_id:obra_id||"", fecha:f, ts, iaTurns:0, hilo:[{de,texto:detalle||asunto||"",fecha:f,ts,porIA:false}]}; }
 async function aplicarPedidos(setPedidos, fn){ let arr=[]; try{const r=await storage.get("vv_pedidos"); if(r?.value) arr=JSON.parse(r.value);}catch{} const next=fn(arr.slice()); setPedidos(next); return next; }
 async function ejecutarAccion(accion, miSide, ctx){
@@ -3264,9 +3265,9 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   const fileRef = useRef(null);
   async function addAdj(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await toDataUrl(f); const url = await uploadFoto(data, "pedidos", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url, img: f.type.startsWith("image/") }); } setAdj(p => [...p, ...nuevos]); e.target.value = ""; }
 
-  useEffect(() => { const pull = async () => { try { const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch {} }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
+  useEffect(() => { const pull = async () => { try { if (Date.now() - (lastWrite["vv_pedidos"] || 0) < 8000) return; const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch {} }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
 
-  const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : p.de === miSide);
+  const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : esDeCasa(p.de));
   const cur = open ? pedidos.find(p => p.id === open) : null;
   function crear() { if (!nuevo.asunto?.trim()) return; aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: miSide, para: "cliente", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }), ...arr]); setNuevo(null); }
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
@@ -3279,7 +3280,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
     const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey, false);
     setReply(r); setIaLoad(false);
   }
-  const persp = (h) => h.de === miSide;
+  const persp = (h) => esDeCasa(h.de);
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="pedidos" label="Pedidos · Seguimiento" sub={`Gestión de temas con ${otroNom}`} onBack={onBack} />
@@ -3304,7 +3305,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
               {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "2px 7px" }}>🏗 {obraNom(obras, p.obra_id)}</span>}
               {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "#FEF2F2", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
-              <span style={{ fontSize: 10.5, color: T.muted }}>{p.de === miSide ? "Enviado" : "Recibido"} · {p.fecha}</span>
+              <span style={{ fontSize: 10.5, color: T.muted }}>{esDeCasa(p.de) ? (p.de === "sebastian" || p.de === "nicolas" ? "Interno" : "Enviado") : "Recibido"} · {p.fecha}</span>
             </div>
             <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>{ult?.porIA ? "🤖 " : ""}{ult?.texto}</div>
           </div>
@@ -3320,7 +3321,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
           <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{cur.asunto}</div>
           <Badge color={e.c} bg={e.b}>{e.l}</Badge>
         </div>
-        <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{cur.de === miSide ? `Enviado a ${otroNom}` : `Recibido de ${otroNom}`} · {cur.fecha} · prioridad {cur.prioridad}</div>
+        <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{esDeCasa(cur.de) ? (cur.de === "sebastian" ? "Consulta interna · Tita" : cur.de === "nicolas" ? "Consulta interna · Nicolás" : `Enviado a ${otroNom}`) : `Recibido de ${otroNom}`} · {cur.fecha} · prioridad {cur.prioridad}</div>
         {cur.obra_id && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 6, padding: "4px 10px", marginTop: 8 }}>🏗 Obra: {obraNom(obras, cur.obra_id)}</div>}
         <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
           {Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{v.l}</button>)}
@@ -3876,10 +3877,10 @@ function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
           </div>
         </div>
         <nav style={{ maxWidth:1180, margin:"0 auto", padding:"4px 12px 0", display:"flex", gap:2, justifyContent:"center", flexWrap:"wrap" }}>
-          {WEB_NAV.map(n=>{ const active=view===n.id; return (
-            <button key={n.id} onClick={()=>go(n.id)} style={{ position:"relative", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, fontWeight:active?800:600, color:active?T.accent:T.sub, letterSpacing:"0.02em", borderBottom:`2px solid ${active?BRASS:"transparent"}`, whiteSpace:"nowrap", cursor:"pointer" }}>
+          {WEB_NAV.map(n=>{ const active=view===n.id; const hayNuevo=cnt(n.id) > 0; return (
+            <button key={n.id} onClick={()=>go(n.id)} style={{ position:"relative", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, fontWeight:(active||hayNuevo)?800:600, color:hayNuevo?"#EF4444":(active?T.accent:T.sub), letterSpacing:"0.02em", borderBottom:`2px solid ${active?BRASS:"transparent"}`, whiteSpace:"nowrap", cursor:"pointer" }}>
               {n.label}
-              {cnt(n.id) > 0 && <span style={{ position:"absolute", top:3, right:2, background:"#EF4444", color:"#fff", borderRadius:9, minWidth:16, height:16, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px" }}>{cnt(n.id) > 99 ? "99+" : cnt(n.id)}</span>}
+              {hayNuevo && <span style={{ position:"absolute", top:3, right:2, background:"#EF4444", color:"#fff", borderRadius:9, minWidth:16, height:16, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px" }}>{cnt(n.id) > 99 ? "99+" : cnt(n.id)}</span>}
             </button>
           ); })}
         </nav>
