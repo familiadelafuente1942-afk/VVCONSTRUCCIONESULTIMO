@@ -1203,10 +1203,10 @@ function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unread
           </div>
         </div>
         <nav style={{ maxWidth: 1180, margin: "0 auto", padding: "4px 12px 0", display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
-          {NAV.map(n => { const active = screen === n.id; return (
-            <button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", background: "none", border: "none", padding: "9px 12px", fontSize: 12.5, fontWeight: active ? 800 : 600, color: active ? T.accent : T.sub, borderBottom: `2px solid ${active ? BRASS : "transparent"}`, whiteSpace: "nowrap", cursor: "pointer" }}>
+          {NAV.map(n => { const active = screen === n.id; const hayNuevo = badge(n.id) > 0; return (
+            <button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", background: "none", border: "none", padding: "9px 12px", fontSize: 12.5, fontWeight: (active || hayNuevo) ? 800 : 600, color: hayNuevo ? "#EF4444" : (active ? T.accent : T.sub), borderBottom: `2px solid ${active ? BRASS : "transparent"}`, whiteSpace: "nowrap", cursor: "pointer" }}>
               {n.label}
-              {badge(n.id) > 0 && <span style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{badge(n.id)}</span>}
+              {hayNuevo && <span style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{badge(n.id)}</span>}
             </button>); })}
         </nav>
       </div>
