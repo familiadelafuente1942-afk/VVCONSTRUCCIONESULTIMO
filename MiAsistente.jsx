@@ -666,7 +666,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v29 · obras-archivos</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v30 · importar-contactos</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
@@ -1006,11 +1006,46 @@ function GastosBody({ gastos, onAdd, exportar, borrar }) {
 
 function ContactosBody({ contactos, onSave }) {
   const [form, setForm] = React.useState(null);
+  const vcfRef = React.useRef(null);
   const lista = (contactos || []).slice().sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
   function guardar() { if (!form.nombre?.trim()) { alert("Poné al menos el nombre."); return; } const arr = form.id ? lista.map(c => c.id === form.id ? form : c) : [...lista, { ...form, id: uid() + Date.now() }]; onSave(arr); setForm(null); }
   function borrar(id) { if (confirm("¿Borrar este contacto?")) onSave(lista.filter(c => c.id !== id)); }
+  const limpiaTel = (t) => String(t || "").replace(/[^\d+]/g, "");
+  function agregarImportados(nuevos) {
+    if (!nuevos.length) { alert("No se seleccionó ningún contacto."); return; }
+    const existTel = new Set(lista.map(c => String(c.telefono || "").replace(/\D/g, "")).filter(Boolean));
+    const existNom = new Set(lista.map(c => (c.nombre || "").toLowerCase().trim()).filter(Boolean));
+    const add = nuevos.filter(n => { const t = String(n.telefono || "").replace(/\D/g, ""); const nm = (n.nombre || "").toLowerCase().trim(); if (t && existTel.has(t)) return false; if (!t && nm && existNom.has(nm)) return false; return n.nombre || t; }).map(n => ({ id: uid() + Date.now() + Math.floor(Math.random() * 99999), nombre: n.nombre || "", telefono: limpiaTel(n.telefono), email: n.email || "", alias: "", nota: "" }));
+    if (!add.length) { alert("Esos contactos ya estaban cargados."); return; }
+    onSave([...lista, ...add]);
+    alert(`Importé ${add.length} contacto${add.length > 1 ? "s" : ""} de la agenda.`);
+  }
+  async function importarAgenda() {
+    if (navigator.contacts && navigator.contacts.select) {
+      try {
+        const sel = await navigator.contacts.select(["name", "tel", "email"], { multiple: true });
+        agregarImportados((sel || []).map(c => ({ nombre: (c.name && c.name[0]) || "", telefono: (c.tel && c.tel[0]) || "", email: (c.email && c.email[0]) || "" })));
+      } catch (e) { }
+    } else { vcfRef.current?.click(); }
+  }
+  function parseVCard(text) {
+    const cards = String(text).split(/BEGIN:VCARD/i).slice(1);
+    return cards.map(card => {
+      const fn = (card.match(/\nFN[^:\n]*:(.+)/i) || [])[1] || (card.match(/\nN[^:\n]*:(.+)/i) || [])[1] || "";
+      const tel = (card.match(/\nTEL[^:\n]*:(.+)/i) || [])[1] || "";
+      const email = (card.match(/\nEMAIL[^:\n]*:(.+)/i) || [])[1] || "";
+      return { nombre: fn.replace(/;/g, " ").trim(), telefono: tel.trim(), email: email.trim() };
+    }).filter(c => c.nombre || c.telefono);
+  }
+  async function onVcf(e) {
+    const f = e.target.files?.[0]; if (!f) return; e.target.value = "";
+    try { const text = await f.text(); const nuevos = parseVCard(text); if (!nuevos.length) { alert("No encontré contactos en ese archivo. Tiene que ser un archivo .vcf (tarjeta de contacto)."); return; } agregarImportados(nuevos); }
+    catch { alert("No pude leer el archivo."); }
+  }
   const waLink = (c) => { const clean = String(c.telefono || "").replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : "549" + clean; return `https://wa.me/${num}`; };
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <input ref={vcfRef} type="file" accept=".vcf,text/vcard,text/x-vcard" multiple onChange={onVcf} style={{ display: "none" }} />
+    {!form && <button onClick={importarAgenda} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>📇 Importar de la agenda del celular</button>}
     {!form && <button onClick={() => setForm({ nombre: "", telefono: "", email: "", alias: "", nota: "" })} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Nuevo contacto favorito</button>}
     {form && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>{form.id ? "Editar contacto" : "Nuevo contacto"}</div>
@@ -1020,7 +1055,7 @@ function ContactosBody({ contactos, onSave }) {
         <button onClick={guardar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
       </div>
     </div>}
-    {lista.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Sin contactos favoritos.<br />Cargalos y después decime: <span style={{ color: T.sub }}>"mandale un WhatsApp a Enrico"</span>.</div>}
+    {lista.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Sin contactos todavía.<br />Tocá <span style={{ color: T.sub }}>"📇 Importar de la agenda"</span> o cargá uno a mano. Después decime: <span style={{ color: T.sub }}>"pasame el contacto de Enrico"</span> o <span style={{ color: T.sub }}>"mandale un WhatsApp a Enrico"</span>.</div>}
     {lista.map(c => (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div style={{ minWidth: 0 }}>
