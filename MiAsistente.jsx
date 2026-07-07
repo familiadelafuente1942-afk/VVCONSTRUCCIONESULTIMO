@@ -408,6 +408,22 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setDb(d => ({ ...d, obras: next })); setObraEdit(null);
     })();
   }
+  async function subirAObra(obraId, e, tipo) {
+    const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
+    let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+    const fotosNew = [], archNew = [];
+    for (const f of files) {
+      const data = await fileToDataUrl(f);
+      const url = await subirBucket(data, f.name);
+      if (!url) { alert(`No pude subir "${f.name}" a la nube. Revisá el bucket 'bco-media' en Supabase.`); continue; }
+      if (tipo === "foto") fotosNew.push({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), url, fecha: hoyStr(), from: "sebastian", nota: "" });
+      else archNew.push({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), nombre: f.name, url, fecha: hoyStr(), from: "sebastian" });
+    }
+    const next = arr.map(o => o.id === obraId ? { ...o, fotos: [...fotosNew, ...(o.fotos || [])], archivos: [...archNew, ...(o.archivos || [])] } : o);
+    try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
+    await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
+    setDb(d => ({ ...d, obras: next })); setSubiendoArch(false);
+  }
   function crearObra(a) {
     const nueva = { id: uid() + Date.now(), nombre: a.nombre || a.obra || "Obra nueva", estado: a.estado || "En curso", avance: Number(a.avance) || 0, direccion: a.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [] };
     (async () => {
@@ -650,7 +666,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v28 · aviso-credito</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v29 · obras-archivos</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
@@ -665,7 +681,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "archivos" && <ArchivosBody archivos={archivos} cat={catArch} setCat={setCatArch} archRef={archRef} subir={subirArchivos} subiendo={subiendoArch} borrar={(id) => persistArch((archivos || []).filter(a => a.id !== id))} />}
     {vista === "modelos" && <ModelosBody modelos={modelos} sel={modeloSel} setSel={setModeloSel} subir={() => modeloRef.current && modeloRef.current.click()} borrar={(id) => { const next = (modelos || []).filter(m => m.id !== id); setModelos(next); if (modeloSel === id) setModeloSel(next[0]?.id || ""); storage.set("sebastian_modelos", JSON.stringify(next)).catch(() => { }); }} />}
-    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "" })} />}
+    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "" })} subirAObra={subirAObra} subiendo={subiendoArch} />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
     <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -814,7 +830,7 @@ function ArchivosBody({ archivos, cat, setCat, archRef, subir, subiendo, borrar 
   </div>);
 }
 
-function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva }) {
+function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra, subiendo }) {
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     {obraEdit && obraEdit._new && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Nueva obra</div>
@@ -851,6 +867,15 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva }) {
         </div>
         <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "" })} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Editar</button>
       </div>)}
+      {!(obraEdit && obraEdit.id === o.id) && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ display: "flex", gap: 7 }}>
+          <label style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: subiendo ? "default" : "pointer", opacity: subiendo ? .5 : 1 }}>📷 Foto<input type="file" accept="image/*" multiple disabled={subiendo} onChange={e => subirAObra(o.id, e, "foto")} style={{ display: "none" }} /></label>
+          <label style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: subiendo ? "default" : "pointer", opacity: subiendo ? .5 : 1 }}>📎 Archivo<input type="file" multiple disabled={subiendo} onChange={e => subirAObra(o.id, e, "archivo")} style={{ display: "none" }} /></label>
+        </div>
+        {subiendo && <div style={{ fontSize: 11, color: T.sub, textAlign: "center", marginTop: 6 }}>Subiendo…</div>}
+        {(o.fotos || []).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 9 }}>{(o.fotos || []).slice(0, 10).map((ft, i) => <a key={i} href={ft.url} target="_blank" rel="noreferrer"><img src={ft.url} alt="" style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 7, display: "block" }} /></a>)}</div>}
+        {(o.archivos || []).length > 0 && <div style={{ marginTop: 8 }}>{(o.archivos || []).map((ar, i) => <a key={i} href={ar.url} target="_blank" rel="noreferrer" download={ar.nombre} style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.accent, textDecoration: "underline", marginTop: 3 }}>📎 {ar.nombre}</a>)}</div>}
+      </div>}
     </div>))}
     <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>⚠ Los cambios en obras se sincronizan con la app de V+V (los ve tu equipo).</div>
   </div>);
