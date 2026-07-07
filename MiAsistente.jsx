@@ -290,6 +290,7 @@ Acciones:
 {"tipo":"recordar","dato":"lo que hay que recordar de Sebastián (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
 {"tipo":"cargar_gasto","gastos":[{"concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"},{"concepto":"Comida","monto":8000},{"concepto":"Ferretería","monto":5000}]}
+{"tipo":"guardar_contacto","contactos":[{"nombre":"Enrico Rossi","telefono":"1145678900","email":"","alias":"","nota":"proveedor de hierro"}]}
 {"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
 {"tipo":"whatsapp","persona":"Valeria","texto":"el mensaje a enviar por WhatsApp"}
@@ -304,6 +305,7 @@ Reglas:
 - "crear_obra" cuando dice "cargá una obra nueva", "agregá la obra X", "abrí una obra en tal dirección". Poné el nombre y lo que aclare (dirección, estado).
 - "recordar" SIEMPRE que Sebastián te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora.
+- "guardar_contacto" cuando te pide guardar/agendar un contacto o te dicta/pega datos de personas: "guardá el contacto de Enrico 1145678900", "agendá a Juan Pérez 11...", o una lista "cargá estos contactos: Juan 11...; María 11...". Poné todos en el array "contactos" (nombre + telefono, y email/alias/nota si los da). Si te pegan varios juntos, cargalos TODOS de una.
 - "cargar_gasto" cuando dice "cargá un gasto de nafta 15000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto, sin obra). IMPORTANTE: si te da VARIOS gastos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "gastos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una.
 - "cargar_pago" SOLO para REGISTRAR/ANOTAR en la planilla de Pagos un pago (no mueve plata): "anotá/registrá/cargá un pago a Humberto en Castores 475 de 50000", "anotá que le pagué a Juan 30 lucas". Palabras clave: anotá, registrá, cargá. Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método. Si el pedido es "pagale/mandale plata a X" (sin decir anotar/registrar), NO uses esto: usá pagar_mp.
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
@@ -600,6 +602,16 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (ok) setMsgs(prev => [...prev, { role: "assistant", content: `✅ PDF generado y descargado: "${accion.titulo || "documento"}". Buscalo en tus Descargas.` }]);
       setBusy(false); return;
     }
+    if (accion && accion.tipo === "guardar_contacto") {
+      const arr = Array.isArray(accion.contactos) ? accion.contactos : [accion];
+      let cur = contactos || [];
+      try { const r = await storage.get("sebastian_contactos"); if (r?.value) cur = JSON.parse(r.value); } catch { }
+      const existTel = new Set(cur.map(c => String(c.telefono || "").replace(/\D/g, "")).filter(Boolean));
+      const nuevos = arr.filter(x => x && (x.nombre || x.telefono)).map(a => ({ id: uid() + Date.now() + Math.floor(Math.random() * 99999), nombre: a.nombre || "", telefono: String(a.telefono || "").replace(/[^\d+]/g, ""), email: a.email || "", alias: a.alias || "", nota: a.nota || "" })).filter(n => { const t = n.telefono.replace(/\D/g, ""); return !(t && existTel.has(t)); });
+      if (nuevos.length) await persistContactos([...cur, ...nuevos]);
+      setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `📇 Guardé ${nuevos.length} contacto${nuevos.length > 1 ? "s" : ""}:\n${nuevos.map(c => `• ${c.nombre}${c.telefono ? " — " + c.telefono : ""}`).join("\n")}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Contactos.` : "Esos contactos ya estaban cargados." }]);
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "cargar_gasto") {
       const arr = Array.isArray(accion.gastos) ? accion.gastos : [accion];
       const nuevos = arr.filter(x => x && (x.concepto || x.texto || x.monto != null)).map(a => ({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }));
@@ -666,7 +678,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v30 · importar-contactos</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v32 · contactos-3vias</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
@@ -1045,7 +1057,8 @@ function ContactosBody({ contactos, onSave }) {
   const waLink = (c) => { const clean = String(c.telefono || "").replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : "549" + clean; return `https://wa.me/${num}`; };
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <input ref={vcfRef} type="file" accept=".vcf,text/vcard,text/x-vcard" multiple onChange={onVcf} style={{ display: "none" }} />
-    {!form && <button onClick={importarAgenda} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>📇 Importar de la agenda del celular</button>}
+    {!form && <button onClick={importarAgenda} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}>📇 Importar contactos (archivo .vcf)</button>}
+    {!form && <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 14, padding: "0 2px" }}>En iPhone la agenda no se puede abrir desde la app (lo bloquea Apple). Hacé: <b>Contactos → elegí el/los contacto/s → Compartir → Guardar en Archivos</b>, y después tocá el botón de arriba y elegí ese archivo.</div>}
     {!form && <button onClick={() => setForm({ nombre: "", telefono: "", email: "", alias: "", nota: "" })} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Nuevo contacto favorito</button>}
     {form && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>{form.id ? "Editar contacto" : "Nuevo contacto"}</div>
