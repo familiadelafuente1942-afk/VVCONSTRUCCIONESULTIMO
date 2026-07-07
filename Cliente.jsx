@@ -911,7 +911,6 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
   const lista = personal.filter(p => !filtroObra || p.obra_id === filtroObra);
   const sitios = [...new Set(obras.map(o => o.nombre))];
   function toggle(id) { setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]); }
-  function borrarP(id) { if (confirm("¿Eliminar este trabajador? Se borra también en V+V.")) setPersonal(p => (p || []).filter(x => x.id !== id)); }
   async function ejecutarCarga() {
     if (!sitio.trim() || sel.length === 0) return; const f = hoyStr();
     let arr = personal; try { const r = await storage.get("vv_personal"); if (r?.value) arr = JSON.parse(r.value); } catch { }
@@ -950,7 +949,6 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
           </div>
           {vc > 0 ? <Badge c="#EF4444" b="#FEF2F2">{vc} vence</Badge> : docn > 0 ? <Badge c="#16A34A" b="#ECFDF5">{docn} doc</Badge> : <Badge c="#94A3B8" b="#F8FAFC">s/doc</Badge>}
         </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }}><button onClick={() => borrarP(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Eliminar</button></div>
       </Card>); })}
     </div>
 
