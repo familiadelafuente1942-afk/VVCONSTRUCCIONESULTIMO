@@ -47,8 +47,18 @@ const storage = {
 const uid = () => Math.random().toString(36).slice(2, 9);
 const hoyStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
 
-const BRASS = "#B0894F";
-const T = { navy: "#0F1B2D", accent: "#1B3A5B", al: "#EAF0F7", bg: "#F5F7FA", card: "#FFFFFF", border: "#E3E8EF", text: "#0F1B2D", sub: "#5B6B7F", muted: "#94A3B8", rsm: 12, shadow: "0 1px 3px rgba(15,27,45,.06)" };
+let BRASS = "#B0894F";
+let T = { navy: "#0F1B2D", accent: "#1B3A5B", al: "#EAF0F7", bg: "#F5F7FA", card: "#FFFFFF", border: "#E3E8EF", text: "#0F1B2D", sub: "#5B6B7F", muted: "#94A3B8", rsm: 12, shadow: "0 1px 3px rgba(15,27,45,.06)" };
+const PALETAS = {
+  institucional: { nombre: "Institucional", navy: "#0F1B2D", accent: "#1B3A5B", al: "#EAF0F7", bg: "#F5F7FA", brass: "#B0894F" },
+  grafito: { nombre: "Grafito", navy: "#1F2937", accent: "#374151", al: "#EEF1F5", bg: "#F4F5F7", brass: "#9CA3AF" },
+  pino: { nombre: "Verde pino", navy: "#14342B", accent: "#22463A", al: "#E7F0EB", bg: "#F4F7F5", brass: "#C79A3E" },
+  vino: { nombre: "Vino", navy: "#3B1220", accent: "#6B2338", al: "#F6E9EE", bg: "#FAF5F6", brass: "#C79A3E" },
+  arena: { nombre: "Arena", navy: "#3A2E1E", accent: "#6B5637", al: "#F3EDE2", bg: "#FAF7F1", brass: "#C79A3E" },
+  negro: { nombre: "Negro", navy: "#111214", accent: "#2A2C31", al: "#EDEEF0", bg: "#F5F5F6", brass: "#C9A25A" },
+};
+function aplicarTema(id) { const p = PALETAS[id] || PALETAS.institucional; T.navy = p.navy; T.accent = p.accent; T.al = p.al; T.bg = p.bg; BRASS = p.brass; try { localStorage.setItem("contratista_tema", id); } catch { } }
+try { aplicarTema(localStorage.getItem("contratista_tema") || "institucional"); } catch { }
 
 function origenLabel(p) { return p.de === "vv" ? "V+V" : p.de === "cliente" ? "Belfast" : (p.empresa || "Contratista"); }
 
@@ -61,6 +71,8 @@ export default function ContratistaApp() {
   const [waFor, setWaFor] = useState(null);
   const [form, setForm] = useState(null);
   const [editEmpresa, setEditEmpresa] = useState(false);
+  const [estiloOpen, setEstiloOpen] = useState(false);
+  const [temaId, setTemaId] = useState(() => { try { return localStorage.getItem("contratista_tema") || "institucional"; } catch { return "institucional"; } });
   const lastWrite = useRef(0);
 
   useEffect(() => { initPush("contratista"); }, []);
@@ -165,11 +177,27 @@ export default function ContratistaApp() {
   return (<div style={{ minHeight: "100vh", background: T.bg, fontFamily: "Inter, system-ui, sans-serif", maxWidth: 620, margin: "0 auto" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 20px", borderBottom: `2px solid ${BRASS}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div>
-        <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Pedidos de materiales</div>
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Pedidos de materiales · v2</div>
         <div style={{ fontSize: 15, fontWeight: 800 }}>{empresa}</div>
       </div>
-      <button onClick={() => { setTmpEmpresa(empresa); setEditEmpresa(true); }} style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.2)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Cambiar</button>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setEstiloOpen(true)} title="Cambiar estilo" style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.2)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>🎨 Estilo</button>
+        <button onClick={() => { setTmpEmpresa(empresa); setEditEmpresa(true); }} style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.2)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Cambiar</button>
+      </div>
     </div>
+    {estiloOpen && <div onClick={() => setEstiloOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,27,45,.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", padding: "18px 20px 26px", width: "100%", maxWidth: 620, boxShadow: "0 -6px 24px rgba(0,0,0,.15)" }}>
+        <div style={{ width: 40, height: 4, background: T.border, borderRadius: 4, margin: "0 auto 16px" }} />
+        <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 3 }}>Estilo de la app</div>
+        <div style={{ fontSize: 12, color: T.sub, marginBottom: 16 }}>Elegí una paleta. Se guarda en este dispositivo.</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {Object.entries(PALETAS).map(([id, p]) => (<button key={id} onClick={() => { aplicarTema(id); setTemaId(id); setEstiloOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, background: T.bg, border: `2px solid ${temaId === id ? p.brass : T.border}`, borderRadius: 12, padding: "11px 12px", cursor: "pointer", textAlign: "left" }}>
+            <div style={{ display: "flex", flexShrink: 0 }}><span style={{ width: 20, height: 20, borderRadius: "50% 0 0 50%", background: p.navy }} /><span style={{ width: 20, height: 20, borderRadius: "0 50% 50% 0", background: p.brass }} /></div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{p.nombre}{temaId === id ? " ✓" : ""}</span>
+          </button>))}
+        </div>
+      </div>
+    </div>}
 
     <div style={{ padding: "16px 20px 90px" }}>
       <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 18 }}>＋ Nuevo pedido de materiales</button>
