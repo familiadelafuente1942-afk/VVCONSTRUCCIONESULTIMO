@@ -677,10 +677,10 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
         let arr = JSON.parse(r.value);
         if (iaSeen.current < 0) iaSeen.current = arr.length;
         else if (arr.length > iaSeen.current) {
-          const nuevos = arr.slice(iaSeen.current); iaSeen.current = arr.length;
-          setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "cliente" ? cfg.nombre : "V+V"} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
+          const nuevos = arr.slice(iaSeen.current).filter(m => m.from === "cliente" || m.to === "cliente" || (m.from === "vv" && m.tipo === "q" && !m.to)); iaSeen.current = arr.length;
+          if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "cliente" ? cfg.nombre : "V+V"} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
         }
-        const pend = arr.find(m => m.from !== "cliente" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
+        const pend = arr.find(m => m.from === "vv" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
         if (pend && !iaBusy.current && cfg?.iaAuto !== false) {
           iaBusy.current = true;
           try {
@@ -698,7 +698,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
             const pedsNext = [np, ...peds]; try { localStorage.setItem("vv_pedidos", JSON.stringify(pedsNext)); } catch { } await storage.set("vv_pedidos", JSON.stringify(pedsNext)).catch(() => { });
             textoResp = `No tengo ese dato en la app de ${cfg.nombre}. Lo derivé al personal de ${cfg.nombre} como URGENTE (quedó en Pedidos). Respondemos apenas lo tengan.`;
           }
-          arr2.push({ id: uid() + Date.now(), from: "cliente", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
+          arr2.push({ id: uid() + Date.now(), from: "cliente", to: pend.from, qid: pend.id, texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
           try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
           await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
           } catch { }
@@ -911,6 +911,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
   const lista = personal.filter(p => !filtroObra || p.obra_id === filtroObra);
   const sitios = [...new Set(obras.map(o => o.nombre))];
   function toggle(id) { setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]); }
+  function borrarP(id) { if (confirm("¿Eliminar este trabajador? Se borra también en V+V.")) setPersonal(p => (p || []).filter(x => x.id !== id)); }
   async function ejecutarCarga() {
     if (!sitio.trim() || sel.length === 0) return; const f = hoyStr();
     let arr = personal; try { const r = await storage.get("vv_personal"); if (r?.value) arr = JSON.parse(r.value); } catch { }
@@ -949,6 +950,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
           </div>
           {vc > 0 ? <Badge c="#EF4444" b="#FEF2F2">{vc} vence</Badge> : docn > 0 ? <Badge c="#16A34A" b="#ECFDF5">{docn} doc</Badge> : <Badge c="#94A3B8" b="#F8FAFC">s/doc</Badge>}
         </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }}><button onClick={() => borrarP(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Eliminar</button></div>
       </Card>); })}
     </div>
 
@@ -1249,6 +1251,7 @@ function ClienteApp() {
   const T = theme(cfg.accent);
   const [screen, setScreen] = useState("asistente");
   const [obras, setObras] = useStored("vv_obras", []);
+  useEffect(() => { if (localStorage.getItem("purge_canning_bf_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_bf_v1", "1"); } catch { } } catch { } })(); }, []);
   const [tareas, setTareas] = useStored("vv_tareas", []);
   const [mensajes, setMensajes] = useStored("vv_mensajes", []);
   const [archivosCliente, setArchivosCliente] = useStored("cliente_archivos", []);
