@@ -93,10 +93,11 @@ function fileToDataUrl(f, maxW = 1400) {
 }
 
 const FORCE_CLOUD = (() => { try { return new URLSearchParams(window.location.search).has("sync"); } catch { return false; } })();
+const lastWrite = {};
 function useStored(key, def) {
   const [v, setV] = useState(() => { try { const l = localStorage.getItem(key); return l ? JSON.parse(l) : def; } catch { return def; } });
-  useEffect(() => { (async () => { const r = await storage.get(key); if (r?.value) { try { const d = JSON.parse(r.value); if (FORCE_CLOUD) { setV(d); try { localStorage.setItem(key, r.value); } catch { } } else { setV(cur => JSON.stringify(d).length >= JSON.stringify(cur).length ? d : cur); } } catch { } } })(); }, [key]);
-  const set = useCallback(u => { setV(prev => { const n = typeof u === 'function' ? u(prev) : u; const j = JSON.stringify(n); try { localStorage.setItem(key, j); } catch { } storage.set(key, j); return n; }); }, [key]);
+  useEffect(() => { (async () => { const r = await storage.get(key); if (r?.value) { try { const d = JSON.parse(r.value); if (Date.now() - (lastWrite[key] || 0) < 8000) return; if (FORCE_CLOUD) { setV(d); try { localStorage.setItem(key, r.value); } catch { } } else { setV(cur => JSON.stringify(d) !== JSON.stringify(cur) ? d : cur); } } catch { } } })(); }, [key]);
+  const set = useCallback(u => { setV(prev => { const n = typeof u === 'function' ? u(prev) : u; const j = JSON.stringify(n); lastWrite[key] = Date.now(); try { localStorage.setItem(key, j); } catch { } storage.set(key, j); return n; }); }, [key]);
   return [v, set];
 }
 
@@ -814,7 +815,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   const [iaLoad, setIaLoad] = useState(false);
   const fileRef = useRef(null);
   async function addAdj(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url, img: f.type.startsWith("image/") }); } setAdj(p => [...p, ...nuevos]); e.target.value = ""; }
-  useEffect(() => { const pull = async () => { try { const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
+  useEffect(() => { const pull = async () => { try { if (Date.now() - (lastWrite["vv_pedidos"] || 0) < 8000) return; const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : p.de === miSide);
   const cur = open ? pedidos.find(p => p.id === open) : null;
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "";
@@ -1105,6 +1106,7 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
         <div style={{ display: "flex", gap: 8, marginTop: 11 }}>
           {!p.leido && <button onClick={() => levantar(p.id)} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>Levantar</button>}
           <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar por WhatsApp</button>
+          <button onClick={() => { if (confirm("¿Eliminar este pedido de materiales? Se borra para las dos empresas.")) setMatpedidos(prev => (prev || []).filter(x => x.id !== p.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: T.rsm, padding: "10px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
         {p.leido && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#16A34A", marginTop: 8 }}>✓ Levantado{p.leidoFecha ? " · " + p.leidoFecha : ""}</div>}
         {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 5 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
@@ -1291,7 +1293,7 @@ function ClienteApp() {
     async function tick() {
       const [rm, ro, rp, rf, rmp] = await Promise.all([storage.get("vv_mensajes"), storage.get("vv_obras"), storage.get("vv_pedidos"), storage.get("vv_formularios"), storage.get("vv_matpedidos")]);
       if (!alive) return;
-      if (rmp?.value) { try { const mp = JSON.parse(rmp.value); setMatpedidos(prev => JSON.stringify(mp) !== JSON.stringify(prev) ? mp : prev); } catch { } }
+      if (rmp?.value && Date.now() - (lastWrite["vv_matpedidos"] || 0) > 8000) { try { const mp = JSON.parse(rmp.value); setMatpedidos(prev => JSON.stringify(mp) !== JSON.stringify(prev) ? mp : prev); } catch { } }
       if (rm?.value) {
         try {
           const arr = JSON.parse(rm.value);
@@ -1310,10 +1312,10 @@ function ClienteApp() {
           } else { lastCount.current = arr.length; }
         } catch { }
       }
-      if (ro?.value) { try { setObras(JSON.parse(ro.value)); } catch { } }
+      if (ro?.value && Date.now() - (lastWrite["vv_obras"] || 0) > 8000) { try { setObras(JSON.parse(ro.value)); } catch { } }
       if (rp?.value) {
         try {
-          const arr = JSON.parse(rp.value); setPedidos(arr);
+          const arr = JSON.parse(rp.value); if (Date.now() - (lastWrite["vv_pedidos"] || 0) > 8000) setPedidos(arr);
           // huella de pedidos recibidos cuyo último mensaje es de V+V
           const huella = arr.filter(p => p.para === "cliente" && p.estado !== "resuelto" && p.hilo[p.hilo.length - 1]?.de === "vv").map(p => p.id + ":" + p.hilo.length).join("|");
           if (lastPed.current === null) { lastPed.current = huella; }
