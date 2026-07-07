@@ -33,7 +33,7 @@ function fileToDataUrl(f) { return new Promise((res, rej) => { const r = new Fil
 
 async function callAI(msgs, sys, apiKey, useSearch) {
   msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
-  const body = { model: "claude-sonnet-4-6", max_tokens: 1500, messages: msgs };
+  const body = { model: "claude-sonnet-5", max_tokens: 4096, thinking: { type: "disabled" }, messages: msgs };
   if (sys) body.system = sys;
   if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
   async function doFetch(b) {
@@ -53,7 +53,15 @@ async function callAI(msgs, sys, apiKey, useSearch) {
 }
 
 const T = { navy: "#1B1A16", accent: "#22463A", al: "#ECF0EC", bg: "#F4F2EC", card: "#FFFFFF", border: "#E5E1D6", text: "#1A1813", sub: "#6E695E", muted: "#A49D8D", rsm: 10, serif: "'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif", sans: "'Inter',-apple-system,'SF Pro Text',system-ui,sans-serif" };
-const BRASS = "#A17C3E";
+let BRASS = "#A17C3E";
+const FONTS = {
+  inter: { n: "Inter (moderna)", sans: "'Inter',-apple-system,'SF Pro Text',system-ui,sans-serif", serif: "'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif" },
+  sistema: { n: "Sistema", sans: "-apple-system,system-ui,'Segoe UI',Roboto,sans-serif", serif: "Georgia,'Times New Roman',serif" },
+  redondeada: { n: "Redondeada", sans: "'SF Pro Rounded','Varela Round',ui-rounded,system-ui,sans-serif", serif: "'Iowan Old Style',Georgia,serif" },
+  elegante: { n: "Elegante", sans: "'Optima','Avenir Next',Avenir,system-ui,sans-serif", serif: "'Didot','Playfair Display','Times New Roman',serif" },
+  tecnica: { n: "Técnica (mono)", sans: "'SF Mono','JetBrains Mono',Menlo,Consolas,monospace", serif: "'Courier New',monospace" },
+};
+const ESQUINAS = [{ n: "Rectas", v: 4 }, { n: "Suaves", v: 10 }, { n: "Redondeadas", v: 18 }];
 
 function obraNom(obras, id) { return (obras || []).find(o => o.id === id)?.nombre || "—"; }
 
@@ -83,11 +91,13 @@ export default function MiAsistente() {
   const modeloRef = useRef(null);
   const chatFileRef = useRef(null);
   const modelo = (modelos || []).find(m => m.id === modeloSel) || null;
-  const CFG_DEF = { titulo: "Mi Asistente", eyebrow: "Privado · Sebastián", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813", fondoUrl: "", fondoOp: 14, serif: true, escala: 100, iconoUrl: "", iconoColor: "#22463A" };
+  const CFG_DEF = { titulo: "Mi Asistente", eyebrow: "Privado · Sebastián", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813", brass: "#A17C3E", borde: "#E5E1D6", sub: "#6E695E", rsm: 10, fontId: "inter", fondoUrl: "", fondoOp: 14, serif: true, escala: 100, iconoUrl: "", iconoColor: "#22463A" };
   const [cfg, setCfg] = useState(() => { try { return { ...CFG_DEF, ...JSON.parse(localStorage.getItem("sebastian_cfg") || "{}") }; } catch { return CFG_DEF; } });
   const iconRef = useRef(null); const fondoRef = useRef(null);
   // Aplica la personalización al tema (colores) en vivo.
   T.accent = cfg.accent || "#22463A"; T.navy = cfg.navy || "#1B1A16"; T.bg = cfg.bg || "#F4F2EC"; T.card = cfg.card || "#FFFFFF"; T.text = cfg.text || "#1A1813";
+  T.border = cfg.borde || "#E5E1D6"; T.sub = cfg.sub || "#6E695E"; T.rsm = (cfg.rsm != null ? cfg.rsm : 10); BRASS = cfg.brass || "#A17C3E";
+  { const F = FONTS[cfg.fontId] || FONTS.inter; T.sans = F.sans; T.serif = F.serif; }
   function saveCfg(next) { setCfg(next); try { localStorage.setItem("sebastian_cfg", JSON.stringify(next)); } catch { } storage.set("sebastian_cfg", JSON.stringify(next)).catch(() => { }); }
   function setC(k, v) { saveCfg({ ...cfg, [k]: v }); }
   useEffect(() => {
@@ -279,7 +289,7 @@ Acciones:
 {"tipo":"crear_obra","nombre":"Nombre de la obra","direccion":"opcional","estado":"En curso","avance":0}
 {"tipo":"recordar","dato":"lo que hay que recordar de Sebastián (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
-{"tipo":"cargar_gasto","concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"}
+{"tipo":"cargar_gasto","gastos":[{"concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"},{"concepto":"Comida","monto":8000},{"concepto":"Ferretería","monto":5000}]}
 {"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
 {"tipo":"whatsapp","persona":"Valeria","texto":"el mensaje a enviar por WhatsApp"}
@@ -294,7 +304,7 @@ Reglas:
 - "crear_obra" cuando dice "cargá una obra nueva", "agregá la obra X", "abrí una obra en tal dirección". Poné el nombre y lo que aclare (dirección, estado).
 - "recordar" SIEMPRE que Sebastián te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora.
-- "cargar_gasto" cuando dice "cargá un gasto de nafta de 15000", "anotá un gasto de comida 8000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto). No lleva obra.
+- "cargar_gasto" cuando dice "cargá un gasto de nafta 15000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto, sin obra). IMPORTANTE: si te da VARIOS gastos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "gastos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una.
 - "cargar_pago" SOLO para REGISTRAR/ANOTAR en la planilla de Pagos un pago (no mueve plata): "anotá/registrá/cargá un pago a Humberto en Castores 475 de 50000", "anotá que le pagué a Juan 30 lucas". Palabras clave: anotá, registrá, cargá. Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método. Si el pedido es "pagale/mandale plata a X" (sin decir anotar/registrar), NO uses esto: usá pagar_mp.
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
 - "whatsapp" cuando dice "mandale un mensaje a X que…" o "escribile a X". Uso los teléfonos de Personal; le dejo el WhatsApp listo para enviar con un toque.
@@ -303,7 +313,7 @@ Reglas:
 Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
 
-  function parseAccion(txt) { const m = txt.match(/<<ACCION>>([\s\S]*?)<<FIN>>/); if (!m) return { limpio: txt, accion: null }; let a = null; try { a = JSON.parse(m[1].trim()); } catch { } return { limpio: txt.replace(m[0], "").trim(), accion: a }; }
+  function parseAccion(txt) { const t = txt || ""; let m = t.match(/<<ACCION>>([\s\S]*?)<<FIN>>/) || t.match(/<<ACCION>>([\s\S]*)$/); if (!m) return { limpio: txt, accion: null }; let raw = m[1].trim(); let a = null; try { a = JSON.parse(raw); } catch { const i = raw.indexOf("{"), j = raw.lastIndexOf("}"); if (i >= 0 && j > i) { try { a = JSON.parse(raw.slice(i, j + 1)); } catch { } } } return { limpio: t.replace(m[0], "").trim(), accion: a }; }
 
   async function persistPagos(next) {
     pagosWrite.current = Date.now(); setPagos(next);
@@ -574,8 +584,12 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setBusy(false); return;
     }
     if (accion && accion.tipo === "cargar_gasto") {
-      const g = cargarGasto(accion);
-      setMsgs(prev => [...prev, { role: "assistant", content: `💸 Gasto cargado: ${g.concepto} · $${g.monto.toLocaleString("es-AR")} (${g.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Gastos.` }]);
+      const arr = Array.isArray(accion.gastos) ? accion.gastos : [accion];
+      const nuevos = arr.filter(x => x && (x.concepto || x.texto || x.monto != null)).map(a => ({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }));
+      if (nuevos.length) persistGastos([...nuevos, ...(gastos || [])]);
+      const total = nuevos.reduce((s, g) => s + g.monto, 0);
+      const detalle = nuevos.map(g => `• ${g.concepto} — $${g.monto.toLocaleString("es-AR")}`).join("\n");
+      setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `💸 Cargué ${nuevos.length} gasto${nuevos.length > 1 ? "s" : ""} (total $${total.toLocaleString("es-AR")}):\n${detalle}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Gastos.` : "No pude leer los gastos. Decímelos con concepto y monto." }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "cargar_pago") {
@@ -635,7 +649,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v19 · tabs-texto</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v24 · personalizacion</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
@@ -860,11 +874,16 @@ function ModelosBody({ modelos, sel, setSel, subir, borrar }) {
 
 function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcono, subirFondo }) {
   const PRESETS = [
-    { n: "Oficina", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813" },
-    { n: "Grafito", accent: "#B08D57", navy: "#141414", bg: "#1B1B1D", card: "#232326", text: "#ECEAE4" },
-    { n: "Borgoña", accent: "#7A2E3A", navy: "#201314", bg: "#F5F0EE", card: "#FFFFFF", text: "#1E1517" },
-    { n: "Azul noche", accent: "#2E5A86", navy: "#0F1B2D", bg: "#EEF2F6", card: "#FFFFFF", text: "#14202E" },
-    { n: "Arena", accent: "#9A6B3F", navy: "#2A2118", bg: "#F7F2E9", card: "#FFFFFF", text: "#241C12" },
+    { n: "Oficina", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813", brass: "#A17C3E", borde: "#E5E1D6", sub: "#6E695E" },
+    { n: "Grafito", accent: "#B08D57", navy: "#141414", bg: "#1B1B1D", card: "#232326", text: "#ECEAE4", brass: "#B08D57", borde: "#33343A", sub: "#A8A69E" },
+    { n: "Borgoña", accent: "#7A2E3A", navy: "#201314", bg: "#F5F0EE", card: "#FFFFFF", text: "#1E1517", brass: "#B08D57", borde: "#E6DAD8", sub: "#6E5B5D" },
+    { n: "Azul noche", accent: "#2E5A86", navy: "#0F1B2D", bg: "#EEF2F6", card: "#FFFFFF", text: "#14202E", brass: "#B0894F", borde: "#DAE1EA", sub: "#5B6B7F" },
+    { n: "Arena", accent: "#9A6B3F", navy: "#2A2118", bg: "#F7F2E9", card: "#FFFFFF", text: "#241C12", brass: "#B08D57", borde: "#E8DFCF", sub: "#6E655A" },
+    { n: "Bosque", accent: "#2F5D3A", navy: "#10241A", bg: "#EFF4EE", card: "#FFFFFF", text: "#15291C", brass: "#C79A3E", borde: "#DCE7DA", sub: "#5C6E5C" },
+    { n: "Medianoche", accent: "#5B7CC7", navy: "#0B1220", bg: "#12182A", card: "#1B2236", text: "#E6EAF2", brass: "#8FA6D6", borde: "#2A3350", sub: "#9AA6C0" },
+    { n: "Cobre", accent: "#B5623A", navy: "#241812", bg: "#F8F1EC", card: "#FFFFFF", text: "#231610", brass: "#C08A5A", borde: "#EBDDD3", sub: "#736258" },
+    { n: "Pizarra", accent: "#475569", navy: "#1E293B", bg: "#F1F5F9", card: "#FFFFFF", text: "#0F172A", brass: "#94A3B8", borde: "#DDE3EB", sub: "#5B6B7F" },
+    { n: "Violeta", accent: "#6D4AA0", navy: "#1E1330", bg: "#F4F0FA", card: "#FFFFFF", text: "#1E1330", brass: "#B08D57", borde: "#E5DDF0", sub: "#6A5E7C" },
   ];
   const Row = ({ label, hint, children }) => (<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
     <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{label}</div>{hint && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{hint}</div>}</div>
@@ -880,7 +899,7 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
     </div>
     <Sec t="Estilos rápidos" />
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 4px" }}>
-      {PRESETS.map(p => <button key={p.n} onClick={() => saveCfg({ ...cfg, accent: p.accent, navy: p.navy, bg: p.bg, card: p.card, text: p.text })} style={{ display: "flex", alignItems: "center", gap: 7, background: T.card, border: `1px solid ${T.border}`, borderRadius: 20, padding: "6px 12px 6px 8px", cursor: "pointer" }}>
+      {PRESETS.map(p => <button key={p.n} onClick={() => saveCfg({ ...cfg, accent: p.accent, navy: p.navy, bg: p.bg, card: p.card, text: p.text, brass: p.brass || cfg.brass, borde: p.borde || cfg.borde, sub: p.sub || cfg.sub })} style={{ display: "flex", alignItems: "center", gap: 7, background: T.card, border: `1px solid ${T.border}`, borderRadius: 20, padding: "6px 12px 6px 8px", cursor: "pointer" }}>
         <span style={{ display: "flex" }}><span style={{ width: 14, height: 14, borderRadius: "50%", background: p.navy, border: "1px solid rgba(0,0,0,.1)" }} /><span style={{ width: 14, height: 14, borderRadius: "50%", background: p.accent, marginLeft: -5, border: "1px solid rgba(0,0,0,.1)" }} /><span style={{ width: 14, height: 14, borderRadius: "50%", background: p.bg, marginLeft: -5, border: "1px solid rgba(0,0,0,.12)" }} /></span>
         <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.n}</span>
       </button>)}
@@ -893,6 +912,8 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
     <Sec t="Tipografía" />
     <Row label="Títulos con serif" hint="Estilo clásico/gerencial en los títulos"><button onClick={() => setC("serif", !cfg.serif)} style={{ width: 44, height: 26, borderRadius: 13, background: cfg.serif ? T.accent : T.border, border: "none", position: "relative", cursor: "pointer" }}><span style={{ position: "absolute", top: 3, left: cfg.serif ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} /></button></Row>
     <Row label={`Tamaño de letra · ${cfg.escala || 100}%`}><input type="range" min="85" max="130" value={cfg.escala || 100} onChange={e => setC("escala", Number(e.target.value))} style={{ width: 140 }} /></Row>
+    <Row label="Tipo de letra"><select value={cfg.fontId || "inter"} onChange={e => setC("fontId", e.target.value)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 15, color: T.text }}>{Object.entries(FONTS).map(([id, f]) => <option key={id} value={id}>{f.n}</option>)}</select></Row>
+    <Row label="Estilo de esquinas"><div style={{ display: "flex", gap: 6 }}>{ESQUINAS.map(e => <button key={e.n} onClick={() => setC("rsm", e.v)} style={{ background: (cfg.rsm != null ? cfg.rsm : 10) === e.v ? T.accent : T.bg, color: (cfg.rsm != null ? cfg.rsm : 10) === e.v ? "#fff" : T.sub, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{e.n}</button>)}</div></Row>
 
     <Sec t="Colores" />
     <Row label="Acento (botones)"><Color k="accent" /></Row>
@@ -900,6 +921,9 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
     <Row label="Fondo"><Color k="bg" /></Row>
     <Row label="Tarjetas"><Color k="card" /></Row>
     <Row label="Texto"><Color k="text" /></Row>
+    <Row label="Detalle dorado" hint="La línea fina y los rótulos"><Color k="brass" /></Row>
+    <Row label="Bordes"><Color k="borde" /></Row>
+    <Row label="Texto suave" hint="Subtítulos y notas"><Color k="sub" /></Row>
 
     <Sec t="Foto de fondo" />
     <input ref={fondoRef} type="file" accept="image/*" onChange={subirFondo} style={{ display: "none" }} />
