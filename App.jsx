@@ -2515,7 +2515,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v12 sin-alertas" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v13 adjuntar-pedidos" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -3342,8 +3342,8 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
         {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>{a.img ? "🖼" : "📎"} {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button onClick={() => fileRef.current?.click()} style={{ width: 44, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, fontSize: 17, cursor: "pointer" }}>＋</button>
-          <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{iaLoad ? "Redactando…" : "🤖 Redactar con IA"}</button>
+          <button onClick={() => fileRef.current?.click()} style={{ background: T.al, color: T.accent, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>📎 Adjuntar</button>
+          <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{iaLoad ? "Redactando…" : "🤖 IA"}</button>
           <PBtn onClick={() => responder(cur.id, reply, false, adj)} style={{ flex: 1 }}>Enviar</PBtn>
         </div>
       </div>
