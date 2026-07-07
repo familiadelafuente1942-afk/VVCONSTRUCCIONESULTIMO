@@ -343,11 +343,11 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
 }
 
 // ── PANTALLA: ARCHIVOS ───────────────────────────────────────────────
-function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivosVV, registrarSubida }) {
+function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivosVV, registrarSubida, quitarDeObra }) {
   const ref = useRef(null);
   const [subiendo, setSubiendo] = useState(false);
   const [destino, setDestino] = useState(obras[0]?.id || "");
-  const obraArch = obras.flatMap(o => (o.archivos || []).map(a => ({ ...a, obra: o.nombre })));
+  const obraArch = obras.flatMap(o => (o.archivos || []).map(a => ({ ...a, obra: o.nombre, _obraId: o.id })));
   async function subir(e) {
     const files = Array.from(e.target.files); if (!files.length) return; setSubiendo(true);
     const nuevos = [];
@@ -362,11 +362,11 @@ function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivo
     if (destino && registrarSubida) await registrarSubida(nuevos.map(n => ({ nombre: n.nombre, url: n.url })), destino);
     setSubiendo(false); e.target.value = "";
   }
-  const FileRow = ({ a, mine }) => (<div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px", marginBottom: 8, boxShadow: T.shadow, display: "flex", alignItems: "center", gap: 11 }}>
+  const FileRow = ({ a, mine, onDelete }) => (<div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px", marginBottom: 8, boxShadow: T.shadow, display: "flex", alignItems: "center", gap: 11 }}>
     <div style={{ width: 36, height: 36, borderRadius: 8, background: mine ? "#EAEEF3" : T.bg, color: mine ? T.accent : T.muted, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>📄</div>
     <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.nombre || "archivo"}</div><div style={{ fontSize: 11, color: T.muted }}>{a.fecha || a.obra || ""}</div></div>
     {a.url && <a href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ background: T.bg, color: T.accent, borderRadius: 7, padding: "7px 11px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Abrir</a>}
-    {mine && <button onClick={() => { if (confirm("¿Eliminar este archivo?")) setArchivosCliente(p => (p || []).filter(x => x.id !== a.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: 7, padding: "7px 9px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>}
+    {onDelete && <button onClick={() => { if (confirm("¿Eliminar este archivo?")) onDelete(); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: 7, padding: "7px 9px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>}
   </div>);
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <div style={{ padding: "16px 20px" }}>
@@ -380,11 +380,11 @@ function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivo
       <div style={{ fontSize: 11, color: T.muted, textAlign: "center", marginBottom: 18 }}>{destino ? "Queda cargado en la obra y V+V recibe el aviso." : "Se guarda como archivo general."}</div>
       {(archivosVV.length > 0 || obraArch.length > 0) && <><Eyebrow T={T}>Compartidos por la obra</Eyebrow>
         {archivosVV.map(a => <FileRow key={a.id} a={a} />)}
-        {obraArch.map((a, i) => <FileRow key={"o" + i} a={a} />)}
+        {obraArch.map((a, i) => <FileRow key={"o" + i} a={a} onDelete={a.from === "cliente" ? () => quitarDeObra(a._obraId, a.id) : undefined} />)}
       </>}
       <div style={{ marginTop: 16 }}><Eyebrow T={T}>Mis archivos enviados</Eyebrow>
         {archivosCliente.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "24px 18px" }}>Todavía no subiste archivos.</div>}
-        {archivosCliente.map(a => <FileRow key={a.id} a={a} mine />)}
+        {archivosCliente.map(a => <FileRow key={a.id} a={a} mine onDelete={() => setArchivosCliente(p => (p || []).filter(x => x.id !== a.id))} />)}
       </div>
     </div>
   </div>);
@@ -1379,6 +1379,11 @@ function ClienteApp() {
     const nuevos = files.map(f => ({ id: uid(), nombre: f.nombre, url: f.url, fecha: hoyStr(), from: "cliente" }));
     setObras(arr.map(o => o.id === obraId ? { ...o, archivos: [...(o.archivos || []), ...nuevos] } : o));
   }
+  async function quitarDeObra(obraId, archId) {
+    const r = await storage.get("vv_obras"); let arr = obras;
+    if (r?.value) { try { arr = JSON.parse(r.value); } catch { } }
+    setObras(arr.map(o => o.id === obraId ? { ...o, archivos: (o.archivos || []).filter(a => a.id !== archId) } : o));
+  }
   // Acuse de recibo automático del agente
   async function acuseRecibo(obraId, files) {
     const nom = obras.find(o => o.id === obraId)?.nombre || "la obra";
@@ -1414,7 +1419,7 @@ function ClienteApp() {
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} />}
-          {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} />}
+          {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} />}
           {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} />}
         </div>
