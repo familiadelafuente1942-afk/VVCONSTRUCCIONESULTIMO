@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v34 (imprevistos por obra y por tipo: seguros/multas)
+// VERSION: v36 (imprevistos 5% sobre total presupuesto)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -88,7 +88,7 @@ function calcCert(cert, obra, certsDeObra, indices) {
   const neto = ajustado - amort;
   const { monto, pct } = extraSums(obra);
   const extraMontoPeriodo = monto * share;
-  const imprevPeriodo = (costoDirPeriodo + extraMontoPeriodo) * num(obra?.imprevistosPct != null ? obra.imprevistosPct : 5) / 100;
+  const imprevPeriodo = bruto * num(obra?.imprevistosPct != null ? obra.imprevistosPct : 5) / 100;
   const extraPctPeriodo = ajustado * pct / 100;
   const costo = costoDirPeriodo + extraMontoPeriodo + imprevPeriodo + extraPctPeriodo;
   const margen = ajustado - costo;
@@ -139,7 +139,7 @@ export default function App() {
     {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
     {tab === "costo" && <CertTab modo="costo" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
     {tab === "cliente" && <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
-    {tab === "caja" && <CajaTab obras={obras} data={data} save={save} />}
+    {tab === "caja" && <CajaTab obras={obras} data={data} save={save} certs={certs} certsDe={certsDe} indices={indices} />}
     {tab === "resultado" && <ResultadoTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
     {verConfig && <ConfigModal data={data} save={save} onClose={() => setVerConfig(false)} />}
   </div>);
@@ -491,7 +491,7 @@ function FirmasModal({ cert, obra, onClose, onSave, titulo }) {
 }
 
 // ═══════════ 4 · RESULTADO (PIN)
-function CajaTab({ obras, data, save }) {
+function CajaTab({ obras, data, save, certs, certsDe, indices }) {
   const [tipo, setTipo] = useState("cobro");
   const [obraId, setObraId] = useState("");
   const [monto, setMonto] = useState("");
@@ -505,6 +505,9 @@ function CajaTab({ obras, data, save }) {
   const pagos = movs.filter(m => m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
   const gastosTot = gastos.reduce((s, g) => s + num(g.monto), 0);
   const saldo = cobros - pagos - gastosTot;
+  const totImprev = (certs || []).reduce((s, c) => { const o = obras.find(x => x.id === c.obraId); if (!o) return s; return s + calcCert(c, o, certsDe(c.obraId), indices).imprevPeriodo; }, 0);
+  const usadoImprev = gastos.filter(g => esImprev(g.cat)).reduce((s, g) => s + num(g.monto), 0);
+  const saldoImprev = totImprev - usadoImprev;
   function registrar() {
     const mm = numMoney(monto); if (!mm) { alert("Poné un monto."); return; }
     const base = { id: uid() + Date.now(), obraId, monto: mm, fecha, nota: nota.trim(), ts: Date.now() };
@@ -529,6 +532,13 @@ function CajaTab({ obras, data, save }) {
         <div><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase" }}>Gastos</div><div style={{ fontSize: 14, fontWeight: 800, color: "#FCA5A5" }}>{money(gastosTot)}</div></div>
       </div>
     </div>
+    {totImprev > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, boxShadow: SHDsm, marginBottom: 14, borderTop: `3px solid ${BRASS}` }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Fondo de imprevistos</div>
+      <Line t="Acumulado (5% del presupuesto)" v={money(totImprev)} c={T.accent} />
+      <Line t="Usado (seguros, multas…)" v={"− " + money(usadoImprev)} c={T.warn} />
+      <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resto disponible</span><Money v={saldoImprev} c={saldoImprev >= 0 ? T.ok : "#EF4444"} /></div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8 }}>Para usar el fondo, cargá un gasto y elegí un tipo del grupo "Imprevisto (fondo)" abajo. El detalle por obra está en Resultados.</div>
+    </div>}
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, boxShadow: SHDsm, marginBottom: 14 }}>
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {[["cobro", "＋ Cobro"], ["pago", "− Pago"], ["gasto", "Gasto obra"]].map(([k, l]) => <button key={k} onClick={() => setTipo(k)} style={{ flex: 1, background: tipo === k ? T.navy : T.bg, color: tipo === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 4px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
@@ -718,8 +728,8 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
 
       {totImprev > 0 && <div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Fondo de imprevistos (caja separada)</div>
-        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12 }}>El 5% de cada certificado se acumula acá. Cubre seguros del personal, multas de obra y de tránsito. Lo que queda se reparte.</div>
-        <Line t="Acumulado (5% de certificados)" v={money(totImprev)} c={T.accent} />
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12 }}>El 5% del total del presupuesto se reserva acá (se va acumulando con cada certificado). Cubre seguros del personal, multas de obra y de tránsito. Lo que queda se reparte.</div>
+        <Line t="Acumulado (5% del presupuesto)" v={money(totImprev)} c={T.accent} />
         <Line t="Usado en imprevistos" v={"− " + money(usadoImprev)} c={T.warn} />
         <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Saldo disponible</span><Money v={saldoImprev} c={saldoImprev >= 0 ? T.ok : "#EF4444"} /></div>
 
