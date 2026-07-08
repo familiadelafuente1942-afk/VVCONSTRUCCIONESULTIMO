@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v20 (dashboard graficos en resultado)
+// VERSION: v22 (costo fijo por quincena = media cuota)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -131,6 +131,7 @@ export default function App() {
 function PresupuestoTab({ obras, data, save, certsDe, indices }) {
   const [form, setForm] = useState(null);
   const [firmandoP, setFirmandoP] = useState(null);
+  const [pdfHtmlP, setPdfHtmlP] = useState(null);
   function imprimirPresupuesto(o) {
     const pc = presupCliente(o), m2 = num(o.m2), precio = num(o.precioCliente);
     const nro = obras.findIndex(x => x.id === o.id) + 1;
@@ -138,8 +139,7 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
     const fp = o.firmasPresup || {};
     const firmaBox = (f, rol) => `<div style="width:240px;text-align:center">${f?.dataUrl ? `<img src="${f.dataUrl}" style="height:44px;display:block;margin:0 auto"/>` : `<div style="height:44px"></div>`}<div style="border-top:1px solid #0F1B2D;padding-top:5px;font-size:11px;color:#5B6B7F">${rol}${f?.nombre ? `<br><b style="color:#0F1B2D">${f.nombre}</b>` : "<br>&nbsp;"}${f?.codigo ? `<br><span style="font-size:8.5px;color:#94A3B8">Cód. ${f.codigo} · ${f.ts || ""}</span>` : ""}</div></div>`;
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Presupuesto ${o.nombre}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 34px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 40px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:10px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{text-align:right;font-size:11px;color:#cdd5e0}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 40px}.meta{display:flex;justify-content:space-between;margin:22px 0 6px;font-size:12.5px}.meta span{color:#5B6B7F}h2{font-size:12px;color:#5B6B7F;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px;border-bottom:1px solid #E3E8EF;padding-bottom:5px}p{font-size:12.5px;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#EAF0F7;color:#1B3A5B;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase}td{padding:8px 10px;border-bottom:1px solid #EEF1F5}.ctr{text-align:center}.rgt{text-align:right}.tot{margin-top:6px}.tot td{border:none;padding:4px 10px;font-size:13px}.tot .big td{border-top:2px solid #0F1B2D;font-size:17px;font-weight:800;color:#1B3A5B;padding-top:9px}.cond li{font-size:12px;margin:4px 0}.foot{display:flex;justify-content:space-between;font-size:11px;color:#5B6B7F;margin-top:54px}</style></head><body><div class="head"><div class="brand">V+V CONSTRUCCIONES<small>CONSTRUCTORA</small></div><div class="doc"><b>PRESUPUESTO DE OBRA N° ${nro}</b>Fecha: ${fmtISO(hoyISO())}</div></div><div class="wrap"><div class="meta"><div><span>Obra:</span> <b>${o.nombre}</b></div><div><span>Comitente:</span> <b>Belfast Construction Management</b></div></div><p>Por medio del presente, <b>V+V Construcciones</b> presenta el presupuesto correspondiente a la ejecución de la obra <b>"${o.nombre}"</b>, con una superficie total de <b>${m2.toLocaleString("es-AR")} m²</b>, según el detalle de rubros e incidencias que se consigna a continuación. El presente documento tiene carácter de oferta formal y, una vez suscripto por las partes, constituye la aceptación del presupuesto de obra.</p><h2>Detalle por rubros</h2><table><thead><tr><th>Rubro</th><th class="ctr">Incidencia</th><th class="rgt">Monto</th></tr></thead><tbody>${rows}</tbody></table><table class="tot"><tr><td class="rgt">Superficie</td><td class="rgt">${m2.toLocaleString("es-AR")} m²</td></tr><tr><td class="rgt">Precio unitario</td><td class="rgt">${money(precio)} /m²</td></tr><tr class="big"><td class="rgt">TOTAL PRESUPUESTO</td><td class="rgt">${money(pc)}</td></tr></table><h2>Condiciones</h2><ul class="cond"><li><b>Anticipo:</b> ${num(o.anticipoPct)}% del total a la firma del presente, a descontar proporcionalmente de cada certificación.</li><li><b>Forma de pago:</b> saldo contra certificaciones de avance de obra.</li><li><b>Redeterminación:</b> los valores se ajustarán por el índice de la Cámara Argentina de la Construcción (CAC), tomando como mes base ${mesLabel(o.mesBase)}.</li><li><b>Validez de la oferta:</b> 15 días corridos desde la fecha.</li></ul><div class="foot">${firmaBox(fp.contratista, "Contratista · V+V Construcciones")}${firmaBox(fp.cliente, "Comitente / Propietario — Acepta el presupuesto")}</div></div></body></html>`;
-    const w = window.open("", "_blank"); if (!w) { alert("Permití las ventanas emergentes para el PDF."); return; }
-    w.document.write(html); w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch { } }, 500);
+    setPdfHtmlP(html);
   }
   const setRub = (i, k, v) => setForm(f => ({ ...f, rubros: f.rubros.map((r, j) => j === i ? { ...r, [k]: v } : r) }));
   const nuevo = () => ({ nombre: "", inicio: hoyISO(), mesBase: mesDe(hoyISO()), anticipoPct: "", imprevistosPct: "5", m2: "", precioCliente: "", costoM2: "", rubros: RUBROS_DEF.map(n => ({ id: uid(), nombre: n, pct: "" })), costoExtra: [{ id: uid(), nombre: "Impuestos / IIBB", tipo: "pct", valor: "" }] });
@@ -228,6 +228,7 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
       </div>
     </div>))}
     {firmandoP && <FirmasModal titulo="Conformidad del presupuesto" cert={{ fecha: firmandoP.inicio, firmas: firmandoP.firmasPresup }} obra={firmandoP} onClose={() => setFirmandoP(null)} onSave={(firmas) => { save({ ...data, obras: obras.map(o => o.id === firmandoP.id ? { ...o, firmasPresup: firmas } : o) }); setFirmandoP(null); }} />}
+    {pdfHtmlP && <PdfOverlay html={pdfHtmlP} onClose={() => setPdfHtmlP(null)} />}
   </div>);
 }
 
@@ -239,6 +240,7 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
   const [fecha, setFecha] = useState(hoyISO());
   const [fechaPago, setFechaPago] = useState(() => proxViernes());
   const [firmando, setFirmando] = useState(null);
+  const [pdfHtml, setPdfHtml] = useState(null);
   const obra = obras.find(o => o.id === obraId);
   const cs = obraId ? certsDe(obraId) : [];
   const ultimo = cs[cs.length - 1];
@@ -266,8 +268,7 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
     const fotos = (c.adjuntos || []).filter(a => a.tipo === "foto"); const videos = (c.adjuntos || []).filter(a => a.tipo === "video");
     const fotosHtml = fotos.length ? `<h2>Registro fotográfico de avance</h2><div style="display:flex;flex-wrap:wrap;gap:8px">${fotos.map(a => `<img src="${a.url}" style="width:31%;height:120px;object-fit:cover;border-radius:6px;border:1px solid #E3E8EF"/>`).join("")}</div>` + (videos.length ? `<div style="margin-top:8px;font-size:11px;color:#5B6B7F">Videos de avance: ${videos.map((a, i) => `<a href="${a.url}">video ${i + 1}</a>`).join(" · ")}</div>` : "") : (videos.length ? `<h2>Videos de avance</h2><div style="font-size:11px;color:#5B6B7F">${videos.map((a, i) => `<a href="${a.url}">video ${i + 1}</a>`).join(" · ")}</div>` : "");
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Certificado ${obra.nombre}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 34px}.head{background:#0F1B2D;color:#fff;padding:20px 40px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:10px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{text-align:right;font-size:11px;color:#cdd5e0}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 40px}.meta{display:flex;justify-content:space-between;margin:22px 0 6px;font-size:12.5px}.meta span{color:#5B6B7F}h2{font-size:12px;color:#5B6B7F;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px;border-bottom:1px solid #E3E8EF;padding-bottom:5px}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#EAF0F7;color:#1B3A5B;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase}td{padding:8px 10px;border-bottom:1px solid #EEF1F5}.ctr{text-align:center}.rgt{text-align:right}.tot td{border:none;padding:4px 10px;font-size:13px}.tot.neto td{border-top:2px solid #0F1B2D;font-size:16px;font-weight:800;color:#1B3A5B;padding-top:9px}.foot{display:flex;justify-content:space-between;font-size:11px;color:#5B6B7F}</style></head><body><div class="head"><div class="brand">V+V CONSTRUCCIONES<small>CONSTRUCTORA</small></div><div class="doc"><b>CERTIFICADO N° ${certN}</b>Fecha: ${fmtISO(c.fecha)}</div></div><div class="wrap"><div class="meta"><div><span>Obra:</span> <b>${obra.nombre}</b></div><div><span>Comitente:</span> <b>Belfast CM</b></div></div><h2>Rubros certificados (incidencia sobre el total)</h2><table><thead><tr><th>Rubro</th><th class="ctr">Incid.</th><th class="ctr">Avance</th><th class="rgt">Importe</th></tr></thead><tbody>${rows}</tbody></table><h2>Resumen</h2><table class="tot">${tr("Certificado bruto", money(r.bruto))}${r.ajuste ? tr(`Ajuste CAC (${r.ajuste.toFixed(2)}%)${r.provisorio ? " · provisorio" : ""}`, "+ " + money(r.ajustado - r.bruto)) : ""}${tr("Subtotal", money(r.ajustado))}${tr("Descuento anticipo", "− " + money(r.amort))}${tr("NETO A COBRAR", money(r.neto), "neto")}</table><div style="margin-top:14px;font-size:12px;color:#5B6B7F">Pago: <b style="color:#0F1B2D">${fmtISO(c.fechaPago)}</b></div>${fotosHtml}<div class="foot" style="margin-top:44px">${firmaBox(fc.contratista, "Contratista · V+V Construcciones")}${firmaBox(fc.cliente, "Cliente · Belfast CM")}</div></div></body></html>`;
-    const w = window.open("", "_blank"); if (!w) { alert("Permití las ventanas emergentes para el PDF."); return; }
-    w.document.write(html); w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch { } }, 500);
+    setPdfHtml(html);
   }
 
   if (obras.length === 0) return <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 20px" }}>Primero cargá una obra en <b>Presupuesto</b>.</div>;
@@ -328,6 +329,7 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
         </div>); })}
     </div>}
     {firmando && <FirmasModal cert={firmando} obra={obras.find(o => o.id === firmando.obraId)} onClose={() => setFirmando(null)} onSave={(firmas) => { save({ ...data, certs: (data.certs || []).map(c => c.id === firmando.id ? { ...c, firmas } : c) }); setFirmando(null); }} />}
+    {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
   </div>);
 }
 
@@ -378,6 +380,18 @@ function SignaturePad({ value, onChange }) {
     <button onClick={clear} style={{ background: "none", border: "none", color: T.muted, fontSize: 11.5, marginTop: 3, cursor: "pointer", textDecoration: "underline" }}>Limpiar</button></div>);
 }
 function genCodigo(fecha) { return "VV-" + String(fecha || hoyISO()).replace(/-/g, "") + "-" + Math.random().toString(36).slice(2, 6).toUpperCase(); }
+function PdfOverlay({ html, onClose }) {
+  const ref = useRef(null);
+  const imprimir = () => { try { const w = ref.current && ref.current.contentWindow; if (w) { w.focus(); w.print(); } } catch { } };
+  return (<div style={{ position: "fixed", inset: 0, background: "#0F1B2D", zIndex: 500, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: T.navy, borderBottom: `1px solid rgba(255,255,255,.1)`, alignItems: "center" }}>
+      <button onClick={onClose} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕ Cerrar</button>
+      <div style={{ flex: 1, textAlign: "center", color: "rgba(255,255,255,.7)", fontSize: 11.5 }}>Vista previa</div>
+      <button onClick={imprimir} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Imprimir / PDF</button>
+    </div>
+    <iframe ref={ref} srcDoc={html} title="pdf" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+  </div>);
+}
 function AdjuntosCert({ cert, data, save }) {
   const [subiendo, setSubiendo] = useState(false);
   const adj = cert.adjuntos || [];
@@ -462,12 +476,13 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
 
   const est = data.estructura || {};
   const mensual = num(est.mensual), nObras = num(est.nObras);
-  const cuota = nObras > 0 ? mensual / nObras : 0; // costo fijo por obra por mes
+  const cuota = nObras > 0 ? mensual / nObras : 0; // costo fijo por obra por MES
+  const cuotaQ = cuota / 2; // por quincena (cada certificado)
   const setEst = (k, v) => save({ ...data, estructura: { ...(data.estructura || {}), [k]: v } });
 
   let totCobro = 0, totCosto = 0, totUtil = 0, totFijo = 0; const porObra = {};
-  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); totCobro += r.neto; totCosto += r.costo; totUtil += r.margen; if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, cobro: 0, costo: 0, util: 0, meses: new Set(), presupCli: presupCliente(o), presupCos: presupCosto(o) }; porObra[o.id].cobro += r.neto; porObra[o.id].costo += r.costo; porObra[o.id].util += r.margen; porObra[o.id].meses.add(mesDe(c.fecha)); });
-  Object.values(porObra).forEach(p => { p.fijo = cuota * p.meses.size; totFijo += p.fijo; p.res = p.util - p.fijo; p.restoCobrar = Math.max(0, p.presupCli - p.cobro); p.restoPagar = Math.max(0, p.presupCos - p.costo); });
+  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); totCobro += r.neto; totCosto += r.costo; totUtil += r.margen; if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, cobro: 0, costo: 0, util: 0, nCert: 0, presupCli: presupCliente(o), presupCos: presupCosto(o) }; porObra[o.id].cobro += r.neto; porObra[o.id].costo += r.costo; porObra[o.id].util += r.margen; porObra[o.id].nCert += 1; });
+  Object.values(porObra).forEach(p => { p.fijo = cuotaQ * p.nCert; totFijo += p.fijo; p.res = p.util - p.fijo; p.restoCobrar = Math.max(0, p.presupCli - p.cobro); p.restoPagar = Math.max(0, p.presupCos - p.costo); });
   const totRes = totUtil - totFijo;
   const arr = Object.values(porObra);
   const totPresupCli = arr.reduce((s, p) => s + p.presupCli, 0);
@@ -541,7 +556,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
       <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10 }}>Capataz, administrativo, sobrestante, etc. (mensual). Se reparte entre las obras que indiques (incluí las que están fuera de esta app).</div>
       <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}><span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Costo fijo mensual ($)</span><input value={mensual ? fmtMiles(mensual) : ""} onChange={e => setEst("mensual", numMoney(e.target.value))} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 130, textAlign: "right" }} /></div>
       <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}><span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Dividir entre (obras)</span><input value={nObras || ""} onChange={e => setEst("nObras", num(e.target.value))} inputMode="numeric" placeholder="Ej: 8" style={{ ...inp, marginTop: 0, width: 130, textAlign: "right" }} /></div>
-      {cuota > 0 && <div style={{ background: T.bg, borderRadius: 9, padding: 10, marginTop: 4 }}><Line t={`Incide por obra / mes (÷ ${nObras})`} v={money(cuota)} c={T.warn} /></div>}
+      {cuota > 0 && <div style={{ background: T.bg, borderRadius: 9, padding: 10, marginTop: 4 }}><Line t={`Por obra / mes (÷ ${nObras})`} v={money(cuota)} c={T.warn} /><Line t="Por certificado (quincena)" v={money(cuotaQ)} c={T.warn} /></div>}
     </div>
 
     {Object.values(porObra).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px" }}>Todavía no hay certificados.</div>}
@@ -555,7 +570,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
       <Line t="Resto a pagar" v={money(p.restoPagar)} c={T.sub} />
       <div style={{ height: 6 }} />
       <Line t="Utilidad de obra" v={money(p.util)} c={T.ok} />
-      {cuota > 0 && <Line t={`Incidencia estructura (${money(cuota)} × ${p.meses.size} ${p.meses.size === 1 ? "mes" : "meses"})`} v={"− " + money(p.fijo)} c={T.warn} />}
+      {cuotaQ > 0 && <Line t={`Estructura (${money(cuotaQ)} × ${p.nCert} ${p.nCert === 1 ? "cert" : "certs"})`} v={"− " + money(p.fijo)} c={T.warn} />}
       <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado · margen {mg.toFixed(1)}%</span><Money v={p.res} c={p.res >= 0 ? T.ok : "#EF4444"} /></div>
     </div>); })}
     <button onClick={() => { const n = prompt("Nueva clave (números):", ""); if (n && n.trim()) { try { localStorage.setItem("finanzas_pin", n.trim()); } catch { } alert("Clave actualizada."); } }} style={{ display: "block", margin: "8px auto 0", background: "none", border: "none", color: T.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>Cambiar clave</button>
