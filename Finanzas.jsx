@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v17 (montos con puntos + incidencia/margen por obra)
+// VERSION: v20 (dashboard graficos en resultado)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -290,8 +290,8 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
             <div style={{ width: 58, display: "flex", alignItems: "center", gap: 1, justifyContent: "center" }}><input value={nuevo[r.id] ?? ""} onChange={e => setNuevo(a => ({ ...a, [r.id]: e.target.value }))} inputMode="decimal" placeholder="0" style={{ ...inp, marginTop: 0, width: 44, textAlign: "center", padding: "10px 2px" }} /><span style={{ fontSize: 11, color: T.sub }}>%</span></div>
             <span style={{ width: 54, textAlign: "center", fontSize: 13, fontWeight: 800, color: acum > ant ? T.accent : T.muted }}>{acum}%</span>
           </div>); })}
-        {(() => { const pc = presupCliente(obra); const ya = ultimo ? clienteAcumDe(ultimo.cantidades, obra) : 0; const saldo = pc - ya; return pc > 0 ? <div style={{ background: T.bg, borderRadius: 9, padding: "9px 11px", marginTop: 4, fontSize: 11.5 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span style={{ color: T.sub }}>Ya certificado (cliente)</span><b>{money(ya)}</b></div>
+        {(() => { const base = esCosto ? presupCosto(obra) : presupCliente(obra); const ya = ultimo ? (esCosto ? costoAcumDe(ultimo.cantidades, obra) : clienteAcumDe(ultimo.cantidades, obra)) : 0; const saldo = base - ya; return base > 0 ? <div style={{ background: T.bg, borderRadius: 9, padding: "9px 11px", marginTop: 4, fontSize: 11.5 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span style={{ color: T.sub }}>Ya certificado ({esCosto ? "costo" : "cliente"})</span><b>{money(ya)}</b></div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span style={{ color: T.sub }}>Saldo por certificar</span><b>{money(saldo)}</b></div>
         </div> : null; })()}
       </div>}
@@ -426,6 +426,29 @@ function FirmasModal({ cert, obra, onClose, onSave, titulo }) {
 }
 
 // ═══════════ 4 · RESULTADO (PIN)
+// ═══════════ Gráficos (SVG propio, sin librerías)
+function Donut({ segs, size = 150, thickness = 20, centro, centroSub }) {
+  const r = (size - thickness) / 2, C = 2 * Math.PI * r;
+  const total = segs.reduce((s, x) => s + Math.max(0, x.value), 0) || 1; let acc = 0;
+  return (<svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.bg} strokeWidth={thickness} />
+      {segs.map((s, i) => { const len = Math.max(0, s.value) / total * C; const el = <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={s.color} strokeWidth={thickness} strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-acc} />; acc += len; return el; })}
+    </g>
+    {centro && <text x="50%" y="49%" textAnchor="middle" dominantBaseline="middle" fontSize="16" fontWeight="800" fill={T.text}>{centro}</text>}
+    {centroSub && <text x="50%" y="63%" textAnchor="middle" dominantBaseline="middle" fontSize="8.5" fill={T.muted}>{centroSub}</text>}
+  </svg>);
+}
+function BarsH({ items }) {
+  const max = Math.max(1, ...items.map(i => Math.abs(i.value)));
+  return (<div>{items.map((it, i) => (<div key={i} style={{ marginBottom: 9 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginBottom: 3 }}><span style={{ color: T.sub, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.label}</span><span style={{ fontWeight: 800, color: it.color || T.text, marginLeft: 8, flexShrink: 0 }}>{it.valueLabel != null ? it.valueLabel : money(it.value)}</span></div>
+    <div style={{ height: 9, background: T.bg, borderRadius: 5, overflow: "hidden" }}><div style={{ width: Math.abs(it.value) / max * 100 + "%", height: "100%", background: it.color || T.accent, borderRadius: 5 }} /></div>
+  </div>))}</div>);
+}
+function Dot({ c }) { return <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: c, marginRight: 6, verticalAlign: "middle" }} />; }
+function KPI({ t, v, c }) { return <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "11px 12px", flex: 1, minWidth: 0 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.03em" }}>{t}</div><div style={{ fontSize: 16, fontWeight: 800, color: c || T.text, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div></div>; }
+
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false);
   const PIN = (() => { try { return localStorage.getItem("finanzas_pin") || "1234"; } catch { return "1234"; } })();
@@ -443,9 +466,16 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const setEst = (k, v) => save({ ...data, estructura: { ...(data.estructura || {}), [k]: v } });
 
   let totCobro = 0, totCosto = 0, totUtil = 0, totFijo = 0; const porObra = {};
-  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); totCobro += r.neto; totCosto += r.costo; totUtil += r.margen; if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, cobro: 0, costo: 0, util: 0, meses: new Set() }; porObra[o.id].cobro += r.neto; porObra[o.id].costo += r.costo; porObra[o.id].util += r.margen; porObra[o.id].meses.add(mesDe(c.fecha)); });
-  Object.values(porObra).forEach(p => { p.fijo = cuota * p.meses.size; totFijo += p.fijo; p.res = p.util - p.fijo; });
+  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); totCobro += r.neto; totCosto += r.costo; totUtil += r.margen; if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, cobro: 0, costo: 0, util: 0, meses: new Set(), presupCli: presupCliente(o), presupCos: presupCosto(o) }; porObra[o.id].cobro += r.neto; porObra[o.id].costo += r.costo; porObra[o.id].util += r.margen; porObra[o.id].meses.add(mesDe(c.fecha)); });
+  Object.values(porObra).forEach(p => { p.fijo = cuota * p.meses.size; totFijo += p.fijo; p.res = p.util - p.fijo; p.restoCobrar = Math.max(0, p.presupCli - p.cobro); p.restoPagar = Math.max(0, p.presupCos - p.costo); });
   const totRes = totUtil - totFijo;
+  const arr = Object.values(porObra);
+  const totPresupCli = arr.reduce((s, p) => s + p.presupCli, 0);
+  const totRestoCobrar = arr.reduce((s, p) => s + p.restoCobrar, 0);
+  const totRestoPagar = arr.reduce((s, p) => s + p.restoPagar, 0);
+  const avanceGen = totPresupCli > 0 ? totCobro / totPresupCli * 100 : 0;
+  const margenGen = totCobro > 0 ? totRes / totCobro * 100 : 0;
+  const fijoPctUtil = totUtil > 0 ? totFijo / totUtil * 100 : 0;
 
   return (<div style={{ padding: "14px 16px 40px" }}>
     <div style={{ background: T.navy, color: "#fff", borderRadius: 14, padding: 18, marginBottom: 16, border: `1px solid ${BRASS}` }}>
@@ -462,6 +492,50 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
       </div>
     </div>
 
+    {arr.length > 0 && <>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <KPI t="Cobrado" v={money(totCobro)} c={T.accent} />
+        <KPI t="Pagado" v={money(totCosto)} c={T.warn} />
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <KPI t="Resultado" v={money(totRes)} c={totRes >= 0 ? T.ok : "#EF4444"} />
+        <KPI t="Margen" v={margenGen.toFixed(1) + "%"} c={T.ok} />
+      </div>
+
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Composición de lo cobrado</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <Donut segs={[{ value: totCosto, color: T.warn }, { value: totFijo, color: BRASS }, { value: Math.max(0, totRes), color: T.ok }]} centro={margenGen.toFixed(0) + "%"} centroSub="ganancia" />
+          <div style={{ flex: 1, fontSize: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7 }}><span><Dot c={T.warn} />Costo de obra</span><b>{money(totCosto)}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7 }}><span><Dot c={BRASS} />Costo fijo estructura</span><b>{money(totFijo)}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span><Dot c={T.ok} />Ganancia</span><b style={{ color: totRes >= 0 ? T.ok : "#EF4444" }}>{money(totRes)}</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7 }}><span style={{ fontWeight: 700, color: T.sub, textTransform: "uppercase", fontSize: 11 }}>Avance general de cobro</span><b>{avanceGen.toFixed(1)}%</b></div>
+        <div style={{ height: 12, background: T.bg, borderRadius: 6, overflow: "hidden" }}><div style={{ width: Math.min(100, avanceGen) + "%", height: "100%", background: BRASS }} /></div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11.5 }}>
+          <span style={{ color: T.sub }}>Resto a cobrar <b style={{ color: T.accent }}>{money(totRestoCobrar)}</b></span>
+          <span style={{ color: T.sub }}>Resto a pagar <b style={{ color: T.warn }}>{money(totRestoPagar)}</b></span>
+        </div>
+      </div>
+
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 12 }}>Resultado por obra</div>
+        <BarsH items={arr.map(p => ({ label: p.nombre, value: p.res, color: p.res >= 0 ? T.ok : "#EF4444" }))} />
+      </div>
+
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 12 }}>Avance por obra</div>
+        <BarsH items={arr.map(p => { const av = p.presupCli > 0 ? p.cobro / p.presupCli * 100 : 0; return { label: p.nombre, value: av, valueLabel: av.toFixed(0) + "%", color: BRASS }; })} />
+      </div>
+
+      {totFijo > 0 && <div style={{ background: T.al, borderRadius: 12, padding: "12px 14px", marginBottom: 14, fontSize: 12, color: T.sub }}>El costo fijo de estructura se lleva el <b style={{ color: T.warn }}>{fijoPctUtil.toFixed(1)}%</b> de la utilidad de las obras.</div>}
+    </>}
+
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Costo fijo de estructura</div>
       <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10 }}>Capataz, administrativo, sobrestante, etc. (mensual). Se reparte entre las obras que indiques (incluí las que están fuera de esta app).</div>
@@ -471,10 +545,15 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
     </div>
 
     {Object.values(porObra).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px" }}>Todavía no hay certificados.</div>}
-    {Object.values(porObra).map((p, i) => { const mg = p.cobro > 0 ? p.res / p.cobro * 100 : 0; return (<div key={i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
+    {Object.values(porObra).map((p, i) => { const mg = p.cobro > 0 ? p.res / p.cobro * 100 : 0; const alerta = p.costo > p.cobro; return (<div key={i} style={{ background: T.card, border: `1px solid ${alerta ? "#EF4444" : T.border}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
       <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>{p.nombre}</div>
+      {alerta && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 10px", fontSize: 11.5, fontWeight: 700, color: "#EF4444", marginBottom: 9 }}>⚠ Pagaste más de lo que cobraste ({money(p.costo - p.cobro)} de más).</div>}
       <Line t="Cobrado al cliente" v={money(p.cobro)} c={T.accent} />
-      <Line t="Costo de obra" v={money(p.costo)} c={T.warn} />
+      <Line t="Resto a cobrar" v={money(p.restoCobrar)} c={T.sub} />
+      <div style={{ height: 6 }} />
+      <Line t="Pagado (costo obra)" v={money(p.costo)} c={T.warn} />
+      <Line t="Resto a pagar" v={money(p.restoPagar)} c={T.sub} />
+      <div style={{ height: 6 }} />
       <Line t="Utilidad de obra" v={money(p.util)} c={T.ok} />
       {cuota > 0 && <Line t={`Incidencia estructura (${money(cuota)} × ${p.meses.size} ${p.meses.size === 1 ? "mes" : "meses"})`} v={"− " + money(p.fijo)} c={T.warn} />}
       <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado · margen {mg.toFixed(1)}%</span><Money v={p.res} c={p.res >= 0 ? T.ok : "#EF4444"} /></div>
