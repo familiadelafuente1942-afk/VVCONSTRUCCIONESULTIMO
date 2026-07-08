@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+// VERSION: v17 (montos con puntos + incidencia/margen por obra)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -110,9 +111,9 @@ export default function App() {
   const obras = data.obras || [], certs = data.certs || [], indices = data.indices || {};
   const certsDe = (id) => certs.filter(c => c.obraId === id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
   return (<div style={{ minHeight: "100vh", background: T.bg, fontFamily: "Inter, system-ui, sans-serif", maxWidth: 680, margin: "0 auto" }}>
-    <div style={{ background: T.navy, color: "#fff", padding: "16px 20px", borderBottom: `2px solid ${BRASS}` }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.12em", textTransform: "uppercase" }}>V+V Construcciones · v11 fotos</div>
-      <div style={{ fontSize: 17, fontWeight: 800 }}>Finanzas y Certificaciones</div>
+    <div style={{ background: T.navy, color: "#fff", padding: "18px 20px", borderBottom: `2px solid ${BRASS}`, textAlign: "center" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.14em", textTransform: "uppercase" }}>V+V Construcciones</div>
+      <div style={{ fontSize: 18, fontWeight: 800, marginTop: 2 }}>Finanzas y Certificaciones</div>
     </div>
     <div style={{ display: "flex", background: T.navy, borderBottom: `1px solid rgba(255,255,255,.08)` }}>
       {[["presupuesto", "Presupuesto"], ["costo", "Cert. Costo"], ["cliente", "Cert. Cliente"], ["resultado", "Resultado"]].map(([k, l]) => (
@@ -122,13 +123,24 @@ export default function App() {
     {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
     {tab === "costo" && <CertTab modo="costo" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
     {tab === "cliente" && <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
-    {tab === "resultado" && <ResultadoTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} />}
+    {tab === "resultado" && <ResultadoTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
   </div>);
 }
 
 // ═══════════ 1 · PRESUPUESTO
 function PresupuestoTab({ obras, data, save, certsDe, indices }) {
   const [form, setForm] = useState(null);
+  const [firmandoP, setFirmandoP] = useState(null);
+  function imprimirPresupuesto(o) {
+    const pc = presupCliente(o), m2 = num(o.m2), precio = num(o.precioCliente);
+    const nro = obras.findIndex(x => x.id === o.id) + 1;
+    const rows = (o.rubros || []).map(r => { const inc = num(r.pct); return `<tr><td>${r.nombre}</td><td class="ctr">${inc.toFixed(1)}%</td><td class="rgt">${money(inc / 100 * pc)}</td></tr>`; }).join("");
+    const fp = o.firmasPresup || {};
+    const firmaBox = (f, rol) => `<div style="width:240px;text-align:center">${f?.dataUrl ? `<img src="${f.dataUrl}" style="height:44px;display:block;margin:0 auto"/>` : `<div style="height:44px"></div>`}<div style="border-top:1px solid #0F1B2D;padding-top:5px;font-size:11px;color:#5B6B7F">${rol}${f?.nombre ? `<br><b style="color:#0F1B2D">${f.nombre}</b>` : "<br>&nbsp;"}${f?.codigo ? `<br><span style="font-size:8.5px;color:#94A3B8">Cód. ${f.codigo} · ${f.ts || ""}</span>` : ""}</div></div>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Presupuesto ${o.nombre}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 34px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 40px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:10px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{text-align:right;font-size:11px;color:#cdd5e0}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 40px}.meta{display:flex;justify-content:space-between;margin:22px 0 6px;font-size:12.5px}.meta span{color:#5B6B7F}h2{font-size:12px;color:#5B6B7F;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px;border-bottom:1px solid #E3E8EF;padding-bottom:5px}p{font-size:12.5px;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#EAF0F7;color:#1B3A5B;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase}td{padding:8px 10px;border-bottom:1px solid #EEF1F5}.ctr{text-align:center}.rgt{text-align:right}.tot{margin-top:6px}.tot td{border:none;padding:4px 10px;font-size:13px}.tot .big td{border-top:2px solid #0F1B2D;font-size:17px;font-weight:800;color:#1B3A5B;padding-top:9px}.cond li{font-size:12px;margin:4px 0}.foot{display:flex;justify-content:space-between;font-size:11px;color:#5B6B7F;margin-top:54px}</style></head><body><div class="head"><div class="brand">V+V CONSTRUCCIONES<small>CONSTRUCTORA</small></div><div class="doc"><b>PRESUPUESTO DE OBRA N° ${nro}</b>Fecha: ${fmtISO(hoyISO())}</div></div><div class="wrap"><div class="meta"><div><span>Obra:</span> <b>${o.nombre}</b></div><div><span>Comitente:</span> <b>Belfast Construction Management</b></div></div><p>Por medio del presente, <b>V+V Construcciones</b> presenta el presupuesto correspondiente a la ejecución de la obra <b>"${o.nombre}"</b>, con una superficie total de <b>${m2.toLocaleString("es-AR")} m²</b>, según el detalle de rubros e incidencias que se consigna a continuación. El presente documento tiene carácter de oferta formal y, una vez suscripto por las partes, constituye la aceptación del presupuesto de obra.</p><h2>Detalle por rubros</h2><table><thead><tr><th>Rubro</th><th class="ctr">Incidencia</th><th class="rgt">Monto</th></tr></thead><tbody>${rows}</tbody></table><table class="tot"><tr><td class="rgt">Superficie</td><td class="rgt">${m2.toLocaleString("es-AR")} m²</td></tr><tr><td class="rgt">Precio unitario</td><td class="rgt">${money(precio)} /m²</td></tr><tr class="big"><td class="rgt">TOTAL PRESUPUESTO</td><td class="rgt">${money(pc)}</td></tr></table><h2>Condiciones</h2><ul class="cond"><li><b>Anticipo:</b> ${num(o.anticipoPct)}% del total a la firma del presente, a descontar proporcionalmente de cada certificación.</li><li><b>Forma de pago:</b> saldo contra certificaciones de avance de obra.</li><li><b>Redeterminación:</b> los valores se ajustarán por el índice de la Cámara Argentina de la Construcción (CAC), tomando como mes base ${mesLabel(o.mesBase)}.</li><li><b>Validez de la oferta:</b> 15 días corridos desde la fecha.</li></ul><div class="foot">${firmaBox(fp.contratista, "Contratista · V+V Construcciones")}${firmaBox(fp.cliente, "Comitente / Propietario — Acepta el presupuesto")}</div></div></body></html>`;
+    const w = window.open("", "_blank"); if (!w) { alert("Permití las ventanas emergentes para el PDF."); return; }
+    w.document.write(html); w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch { } }, 500);
+  }
   const setRub = (i, k, v) => setForm(f => ({ ...f, rubros: f.rubros.map((r, j) => j === i ? { ...r, [k]: v } : r) }));
   const nuevo = () => ({ nombre: "", inicio: hoyISO(), mesBase: mesDe(hoyISO()), anticipoPct: "", imprevistosPct: "5", m2: "", precioCliente: "", costoM2: "", rubros: RUBROS_DEF.map(n => ({ id: uid(), nombre: n, pct: "" })), costoExtra: [{ id: uid(), nombre: "Impuestos / IIBB", tipo: "pct", valor: "" }] });
   function guardar() {
@@ -210,7 +222,12 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}><Box t="Presupuesto costo" v={money(presupCosto(o))} c={T.warn} /><Box t="Presupuesto cliente" v={money(presupCliente(o))} c={T.accent} /></div>
+      <div style={{ display: "flex", gap: 7, marginTop: 10 }}>
+        <button onClick={() => imprimirPresupuesto(o)} style={{ flex: 2, background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📄 Presupuesto PDF</button>
+        <button onClick={() => setFirmandoP(o)} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>✍️ Firmar{(o.firmasPresup?.cliente || o.firmasPresup?.contratista) ? " ✓" : ""}</button>
+      </div>
     </div>))}
+    {firmandoP && <FirmasModal titulo="Conformidad del presupuesto" cert={{ fecha: firmandoP.inicio, firmas: firmandoP.firmasPresup }} obra={firmandoP} onClose={() => setFirmandoP(null)} onSave={(firmas) => { save({ ...data, obras: obras.map(o => o.id === firmandoP.id ? { ...o, firmasPresup: firmas } : o) }); setFirmandoP(null); }} />}
   </div>);
 }
 
@@ -218,15 +235,16 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
 function CertTab({ modo, obras, data, save, certsDe, indices }) {
   const esCosto = modo === "costo";
   const [obraId, setObraId] = useState(obras[0]?.id || "");
-  const [cant, setCant] = useState({});
+  const [nuevo, setNuevo] = useState({});
   const [fecha, setFecha] = useState(hoyISO());
   const [fechaPago, setFechaPago] = useState(() => proxViernes());
   const [firmando, setFirmando] = useState(null);
   const obra = obras.find(o => o.id === obraId);
   const cs = obraId ? certsDe(obraId) : [];
   const ultimo = cs[cs.length - 1];
-  useEffect(() => { const u = obraId ? certsDe(obraId) : []; const last = u[u.length - 1]; setCant(last ? { ...last.cantidades } : {}); }, [obraId]);
-  const certTmp = { id: "_tmp", cantidades: cant, fecha, ts: Date.now() + 1 };
+  useEffect(() => { setNuevo({}); }, [obraId]);
+  const acumulado = {}; (obra?.rubros || []).forEach(r => { const ant = ultimo ? num(ultimo.cantidades?.[r.id]) : 0; acumulado[r.id] = Math.min(100, ant + num(nuevo[r.id])); });
+  const certTmp = { id: "_tmp", cantidades: acumulado, fecha, ts: Date.now() + 1 };
   const preview = obra ? calcCert(certTmp, obra, cs, indices) : null;
   const det = obra ? detalleRubros(certTmp, obra, cs) : [];
   const costoPeriodo = det.reduce((s, d) => s + d.costoPeriodo, 0);
@@ -234,8 +252,8 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
   function guardar() {
     if (!obra) return; const r = calcCert(certTmp, obra, cs, indices);
     if (r.bruto <= 0 && costoPeriodo <= 0) { alert("El avance tiene que ser mayor al del certificado anterior."); return; }
-    const cert = { id: uid() + Date.now(), obraId, fecha, fechaPago, cantidades: { ...cant }, ts: Date.now() };
-    save({ ...data, certs: [...(data.certs || []), cert] }); alert("Certificado guardado.");
+    const cert = { id: uid() + Date.now(), obraId, fecha, fechaPago, cantidades: { ...acumulado }, ts: Date.now() };
+    save({ ...data, certs: [...(data.certs || []), cert] }); setNuevo({}); alert("Certificado guardado.");
   }
   function borrarCert(id) { if (confirm("¿Eliminar este certificado?")) save({ ...data, certs: (data.certs || []).filter(c => c.id !== id) }); }
   function imprimirCertificado(c) {
@@ -259,12 +277,23 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
       <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>Cargás una vez el % de avance por rubro; sirve para los dos certificados.</div>
       <Field label="Obra"><select value={obraId} onChange={e => setObraId(e.target.value)} style={inp}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select></Field>
       {(obra?.rubros || []).length > 0 && <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>% avance acumulado por rubro</div>
-        {(obra.rubros || []).map(r => { const inc = incidencia(obra, r) * 100; const ant = ultimo ? num(ultimo.cantidades?.[r.id]) : 0; const per = Math.max(0, num(cant[r.id]) - ant); const val = esCosto ? (per / 100) * incidencia(obra, r) * presupCosto(obra) : (per / 100) * incidencia(obra, r) * presupCliente(obra);
-          return (<div key={r.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 7 }}>
-            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nombre}</div><div style={{ fontSize: 10.5, color: T.muted }}>incid. {inc.toFixed(1)}%{per > 0 ? ` · +${per.toFixed(0)}% = ${money(val)}` : ""}</div></div>
-            <div style={{ display: "flex", alignItems: "center", gap: 3 }}><input value={cant[r.id] ?? ""} onChange={e => setCant(a => ({ ...a, [r.id]: e.target.value }))} inputMode="decimal" placeholder="0" style={{ ...inp, marginTop: 0, width: 66, textAlign: "center", padding: "10px 4px" }} /><span style={{ fontSize: 13, color: T.sub }}>%</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Avance por rubro</div>
+          <button onClick={() => { if (confirm("¿Certificar el cierre? Completa el avance nuevo para llegar al 100%.")) { const nc = {}; (obra.rubros || []).forEach(r => { const ant = ultimo ? num(ultimo.cantidades?.[r.id]) : 0; nc[r.id] = Math.max(0, 100 - ant); }); setNuevo(nc); } }} style={{ background: T.al, color: T.accent, border: "none", borderRadius: 7, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>Cierre 100%</button>
+        </div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 9 }}>Escribí solo el <b>% NUEVO</b> de este certificado. El acumulado se suma solo y cobrás únicamente lo nuevo.</div>
+        <div style={{ display: "flex", gap: 6, fontSize: 9, color: T.muted, fontWeight: 700, textTransform: "uppercase", padding: "0 2px 3px" }}><span style={{ flex: 1 }}>Rubro</span><span style={{ width: 52, textAlign: "center" }}>Anterior</span><span style={{ width: 58, textAlign: "center" }}>Nuevo</span><span style={{ width: 54, textAlign: "center" }}>Acum.</span></div>
+        {(obra.rubros || []).map(r => { const inc = incidencia(obra, r) * 100; const ant = ultimo ? num(ultimo.cantidades?.[r.id]) : 0; const nv = num(nuevo[r.id]); const acum = Math.min(100, ant + nv); const val = esCosto ? (nv / 100) * incidencia(obra, r) * presupCosto(obra) : (nv / 100) * incidencia(obra, r) * presupCliente(obra);
+          return (<div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
+            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>incid. {inc.toFixed(1)}%{nv > 0 ? ` = ${money(val)}` : ""}</div></div>
+            <span style={{ width: 52, textAlign: "center", fontSize: 13, fontWeight: 700, color: T.sub }}>{ant}%</span>
+            <div style={{ width: 58, display: "flex", alignItems: "center", gap: 1, justifyContent: "center" }}><input value={nuevo[r.id] ?? ""} onChange={e => setNuevo(a => ({ ...a, [r.id]: e.target.value }))} inputMode="decimal" placeholder="0" style={{ ...inp, marginTop: 0, width: 44, textAlign: "center", padding: "10px 2px" }} /><span style={{ fontSize: 11, color: T.sub }}>%</span></div>
+            <span style={{ width: 54, textAlign: "center", fontSize: 13, fontWeight: 800, color: acum > ant ? T.accent : T.muted }}>{acum}%</span>
           </div>); })}
+        {(() => { const pc = presupCliente(obra); const ya = ultimo ? clienteAcumDe(ultimo.cantidades, obra) : 0; const saldo = pc - ya; return pc > 0 ? <div style={{ background: T.bg, borderRadius: 9, padding: "9px 11px", marginTop: 4, fontSize: 11.5 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span style={{ color: T.sub }}>Ya certificado (cliente)</span><b>{money(ya)}</b></div>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span style={{ color: T.sub }}>Saldo por certificar</span><b>{money(saldo)}</b></div>
+        </div> : null; })()}
       </div>}
       {!esCosto && <IndicesPanel data={data} save={save} obra={obra} fecha={fecha} indices={indices} />}
       <div style={{ display: "flex", gap: 10 }}>
@@ -280,6 +309,7 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
           <div style={{ borderTop: `1px solid ${T.border}`, margin: "5px 0", paddingTop: 6 }}><Line t="Bruto" v={money(preview.bruto)} />{preview.ajuste !== 0 && <Line t={`Ajuste CAC (${preview.ajuste.toFixed(2)}%)${preview.provisorio ? " · prov." : ""}`} v={"+ " + money(preview.ajustado - preview.bruto)} />}<Line t="Descuento anticipo" v={"− " + money(preview.amort)} c="#B45309" /></div>
           <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Neto a cobrar</span><Money v={preview.neto} c={T.accent} /></div></>}
       </div>}
+      {preview && obra && (esCosto ? costoPeriodo <= 0 : preview.bruto <= 0) && <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 9, padding: 11, fontSize: 12, color: "#92400E", margin: "4px 0 14px" }}>Este certificado da $0. Para el 2° certificado y siguientes, subí el % acumulado de algún rubro por encima del certificado anterior (o usá "Cierre 100%").</div>}
       <button onClick={guardar} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Guardar certificado</button>
     </div>
     {cs.length > 0 && <div>
@@ -368,14 +398,14 @@ function AdjuntosCert({ cert, data, save }) {
     <label style={{ display: "inline-flex", alignItems: "center", gap: 4, background: T.al, color: T.accent, border: `1px dashed ${T.border}`, borderRadius: 8, padding: "8px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "📷 Foto/Video"}<input type="file" accept="image/*,video/*" multiple onChange={onFiles} style={{ display: "none" }} /></label>
   </div>);
 }
-function FirmasModal({ cert, obra, onClose, onSave }) {
+function FirmasModal({ cert, obra, onClose, onSave, titulo }) {
   const f0 = cert.firmas || {};
   const [cliNom, setCliNom] = useState(f0.cliente?.nombre || ""); const [cliImg, setCliImg] = useState(f0.cliente?.dataUrl || "");
   const [conNom, setConNom] = useState(f0.contratista?.nombre || ""); const [conImg, setConImg] = useState(f0.contratista?.dataUrl || "");
   function guardar() { const stamp = new Date().toLocaleString("es-AR"); const firmas = { ...(cert.firmas || {}) }; if (cliNom.trim() && cliImg) firmas.cliente = { nombre: cliNom.trim(), dataUrl: cliImg, ts: stamp, codigo: f0.cliente?.codigo || genCodigo(cert.fecha) }; if (conNom.trim() && conImg) firmas.contratista = { nombre: conNom.trim(), dataUrl: conImg, ts: stamp, codigo: f0.contratista?.codigo || genCodigo(cert.fecha) }; onSave(firmas); }
   return (<div style={{ position: "fixed", inset: 0, background: "rgba(15,27,45,.55)", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
     <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "16px 16px 0 0", padding: 18, width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto" }}>
-      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 3 }}>Conformidad del certificado</div>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 3 }}>{titulo || "Conformidad del certificado"}</div>
       <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 16 }}>{obra?.nombre} · {fmtISO(cert.fecha)}. Cada parte firma con el dedo. Queda con fecha/hora y código.</div>
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 6 }}>Cliente (Belfast)</div>
@@ -396,7 +426,7 @@ function FirmasModal({ cert, obra, onClose, onSave }) {
 }
 
 // ═══════════ 4 · RESULTADO (PIN)
-function ResultadoTab({ obras, certs, certsDe, indices }) {
+function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false);
   const PIN = (() => { try { return localStorage.getItem("finanzas_pin") || "1234"; } catch { return "1234"; } })();
   if (!ok) return (<div style={{ padding: "40px 24px", textAlign: "center" }}>
@@ -406,24 +436,49 @@ function ResultadoTab({ obras, certs, certsDe, indices }) {
     <button onClick={() => { if (pin === PIN) setOk(true); else alert("Clave incorrecta."); }} style={{ display: "block", margin: "12px auto 0", background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px 26px", fontWeight: 700, cursor: "pointer" }}>Entrar</button>
     <div style={{ fontSize: 10.5, color: T.muted, marginTop: 14 }}>Clave por defecto: 1234</div>
   </div>);
-  let totCobro = 0, totCosto = 0, totRes = 0; const porObra = {};
-  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); totCobro += r.neto; totCosto += r.costo; totRes += r.margen; if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, cobro: 0, costo: 0, res: 0 }; porObra[o.id].cobro += r.neto; porObra[o.id].costo += r.costo; porObra[o.id].res += r.margen; });
+
+  const est = data.estructura || {};
+  const mensual = num(est.mensual), nObras = num(est.nObras);
+  const cuota = nObras > 0 ? mensual / nObras : 0; // costo fijo por obra por mes
+  const setEst = (k, v) => save({ ...data, estructura: { ...(data.estructura || {}), [k]: v } });
+
+  let totCobro = 0, totCosto = 0, totUtil = 0, totFijo = 0; const porObra = {};
+  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); totCobro += r.neto; totCosto += r.costo; totUtil += r.margen; if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, cobro: 0, costo: 0, util: 0, meses: new Set() }; porObra[o.id].cobro += r.neto; porObra[o.id].costo += r.costo; porObra[o.id].util += r.margen; porObra[o.id].meses.add(mesDe(c.fecha)); });
+  Object.values(porObra).forEach(p => { p.fijo = cuota * p.meses.size; totFijo += p.fijo; p.res = p.util - p.fijo; });
+  const totRes = totUtil - totFijo;
+
   return (<div style={{ padding: "14px 16px 40px" }}>
     <div style={{ background: T.navy, color: "#fff", borderRadius: 14, padding: 18, marginBottom: 16, border: `1px solid ${BRASS}` }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Resultado operativo</div>
       <div style={{ fontSize: 30, fontWeight: 800, margin: "6px 0 4px", color: totRes >= 0 ? "#7DE0A6" : "#FCA5A5" }}>{money(totRes)}</div>
-      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>Es lo que podés guardar sin comprometer la obra. Ya está descontado TODO (costos, impuestos, gastos, imprevistos).</div>
+      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>Lo que podés guardar sin comprometer nada. Descontado TODO: costos de obra, impuestos, imprevistos y el costo fijo de estructura.</div>
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.12)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0" }}><span style={{ color: "rgba(255,255,255,.7)" }}>Utilidad de obras</span><span style={{ fontWeight: 700 }}>{money(totUtil)}</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0" }}><span style={{ color: "rgba(255,255,255,.7)" }}>− Costo fijo de estructura</span><span style={{ fontWeight: 700, color: "#FCA5A5" }}>− {money(totFijo)}</span></div>
+      </div>
       <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.12)" }}>
         <div><div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase" }}>Cobrado</div><div style={{ fontSize: 15, fontWeight: 800 }}>{money(totCobro)}</div></div>
-        <div><div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase" }}>Costo pagado</div><div style={{ fontSize: 15, fontWeight: 800, color: "#FCA5A5" }}>{money(totCosto)}</div></div>
+        <div><div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase" }}>Costo obra</div><div style={{ fontSize: 15, fontWeight: 800, color: "#FCA5A5" }}>{money(totCosto)}</div></div>
       </div>
     </div>
+
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Costo fijo de estructura</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10 }}>Capataz, administrativo, sobrestante, etc. (mensual). Se reparte entre las obras que indiques (incluí las que están fuera de esta app).</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}><span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Costo fijo mensual ($)</span><input value={mensual ? fmtMiles(mensual) : ""} onChange={e => setEst("mensual", numMoney(e.target.value))} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 130, textAlign: "right" }} /></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}><span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Dividir entre (obras)</span><input value={nObras || ""} onChange={e => setEst("nObras", num(e.target.value))} inputMode="numeric" placeholder="Ej: 8" style={{ ...inp, marginTop: 0, width: 130, textAlign: "right" }} /></div>
+      {cuota > 0 && <div style={{ background: T.bg, borderRadius: 9, padding: 10, marginTop: 4 }}><Line t={`Incide por obra / mes (÷ ${nObras})`} v={money(cuota)} c={T.warn} /></div>}
+    </div>
+
     {Object.values(porObra).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px" }}>Todavía no hay certificados.</div>}
-    {Object.values(porObra).map((p, i) => (<div key={i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
+    {Object.values(porObra).map((p, i) => { const mg = p.cobro > 0 ? p.res / p.cobro * 100 : 0; return (<div key={i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 10 }}>
       <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>{p.nombre}</div>
-      <Line t="Cobrado al cliente" v={money(p.cobro)} c={T.accent} /><Line t="Costo real" v={money(p.costo)} c={T.warn} />
-      <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 6, display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado (para guardar)</span><Money v={p.res} c={T.ok} /></div>
-    </div>))}
+      <Line t="Cobrado al cliente" v={money(p.cobro)} c={T.accent} />
+      <Line t="Costo de obra" v={money(p.costo)} c={T.warn} />
+      <Line t="Utilidad de obra" v={money(p.util)} c={T.ok} />
+      {cuota > 0 && <Line t={`Incidencia estructura (${money(cuota)} × ${p.meses.size} ${p.meses.size === 1 ? "mes" : "meses"})`} v={"− " + money(p.fijo)} c={T.warn} />}
+      <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado · margen {mg.toFixed(1)}%</span><Money v={p.res} c={p.res >= 0 ? T.ok : "#EF4444"} /></div>
+    </div>); })}
     <button onClick={() => { const n = prompt("Nueva clave (números):", ""); if (n && n.trim()) { try { localStorage.setItem("finanzas_pin", n.trim()); } catch { } alert("Clave actualizada."); } }} style={{ display: "block", margin: "8px auto 0", background: "none", border: "none", color: T.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>Cambiar clave</button>
   </div>);
 }
