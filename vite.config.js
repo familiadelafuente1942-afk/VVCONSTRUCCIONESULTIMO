@@ -12,6 +12,7 @@ export default defineConfig({
         contratista: resolve(__dirname, 'contratista.html'),
         miasistente: resolve(__dirname, 'mi-asistente.html'),
         nicolas: resolve(__dirname, 'nicolas.html'),
+        finanzas: resolve(__dirname, 'finanzas.html'),
       },
     },
   },
