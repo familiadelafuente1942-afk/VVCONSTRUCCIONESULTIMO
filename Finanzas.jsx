@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v32 (solapa Presupuestos plural)
+// VERSION: v34 (imprevistos por obra y por tipo: seguros/multas)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -36,6 +36,8 @@ const SHD = "0 1px 2px rgba(11,22,34,.04), 0 8px 24px -8px rgba(11,22,34,.10)";
 const SHDsm = "0 1px 2px rgba(11,22,34,.05), 0 2px 8px -4px rgba(11,22,34,.08)";
 const RUBROS_DEF = ["Trabajos preliminares", "Movimiento de suelo", "Estructura", "Albañilería", "Revoques", "Contrapiso", "Carpeta", "Colocación"];
 const CAT_GASTO = ["Viáticos", "Combustible", "Fletes", "Comida en obra", "Herramientas", "Alquiler equipos", "Operación de obra", "Otro"];
+const IMPREV_CATS = ["Seguro personal", "Multa de obra", "Multa de tránsito", "Otro imprevisto"];
+const esImprev = (cat) => IMPREV_CATS.includes(cat);
 function logH(d, accion) { const h = d.historial || []; return { ...d, historial: [...h, { id: Math.random().toString(36).slice(2, 9), accion, t: new Date().toLocaleString("es-AR"), ts: Date.now() }].slice(-250) }; }
 const mesDe = (iso) => String(iso || "").slice(0, 7);
 const mesLabel = (m) => { if (!m) return "—"; const [y, mm] = m.split("-"); const N = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]; return `${N[Number(mm) - 1] || mm}/${y.slice(2)}`; };
@@ -532,7 +534,7 @@ function CajaTab({ obras, data, save }) {
         {[["cobro", "＋ Cobro"], ["pago", "− Pago"], ["gasto", "Gasto obra"]].map(([k, l]) => <button key={k} onClick={() => setTipo(k)} style={{ flex: 1, background: tipo === k ? T.navy : T.bg, color: tipo === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 4px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
       </div>
       <Field label="Obra"><select value={obraId} onChange={e => setObraId(e.target.value)} style={inp}><option value="">General (sin obra)</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select></Field>
-      {tipo === "gasto" && <Field label="Tipo de gasto"><select value={cat} onChange={e => setCat(e.target.value)} style={inp}>{CAT_GASTO.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>}
+      {tipo === "gasto" && <Field label="Tipo de gasto"><select value={cat} onChange={e => setCat(e.target.value)} style={inp}><optgroup label="Gasto de obra">{CAT_GASTO.map(c => <option key={c} value={c}>{c}</option>)}</optgroup><optgroup label="Imprevisto (fondo)">{IMPREV_CATS.map(c => <option key={c} value={c}>{c}</option>)}</optgroup></select></Field>}
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}><Field label="Monto"><input value={monto} onChange={e => setMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="0" style={inp} /></Field></div>
         <div style={{ flex: 1 }}><Field label="Fecha"><input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={inp} /></Field></div>
@@ -594,11 +596,12 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const cuotaQ = cuota / 2; // por quincena (cada certificado)
   const setEst = (k, v) => save({ ...data, estructura: { ...(data.estructura || {}), [k]: v } });
 
-  let totCobro = 0, totCosto = 0, totUtil = 0, totFijo = 0; const porObra = {};
-  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); totCobro += r.neto; totCosto += r.costo; totUtil += r.margen; if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, cobro: 0, costo: 0, util: 0, nCert: 0, gastos: 0, presupCli: presupCliente(o), presupCos: presupCosto(o) }; porObra[o.id].cobro += r.neto; porObra[o.id].costo += r.costo; porObra[o.id].util += r.margen; porObra[o.id].nCert += 1; });
-  const gastosArr = data.gastos || []; let totGastos = 0;
-  gastosArr.forEach(g => { totGastos += num(g.monto); if (g.obraId && porObra[g.obraId]) porObra[g.obraId].gastos += num(g.monto); });
-  const gastosPorCat = {}; gastosArr.forEach(g => { gastosPorCat[g.cat || "Otro"] = (gastosPorCat[g.cat || "Otro"] || 0) + num(g.monto); });
+  let totCobro = 0, totCosto = 0, totUtil = 0, totFijo = 0, totImprev = 0; const porObra = {};
+  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); totCobro += r.neto; totCosto += r.costo; totUtil += r.margen; totImprev += r.imprevPeriodo; if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, cobro: 0, costo: 0, util: 0, nCert: 0, gastos: 0, imprevAcum: 0, imprevUsado: 0, presupCli: presupCliente(o), presupCos: presupCosto(o) }; porObra[o.id].cobro += r.neto; porObra[o.id].costo += r.costo; porObra[o.id].util += r.margen; porObra[o.id].nCert += 1; porObra[o.id].imprevAcum += r.imprevPeriodo; });
+  const gastosArr = data.gastos || []; let totGastos = 0, usadoImprev = 0; const imprevPorCat = {};
+  gastosArr.forEach(g => { if (esImprev(g.cat)) { const mm = num(g.monto); usadoImprev += mm; imprevPorCat[g.cat] = (imprevPorCat[g.cat] || 0) + mm; if (g.obraId && porObra[g.obraId]) porObra[g.obraId].imprevUsado += mm; return; } totGastos += num(g.monto); if (g.obraId && porObra[g.obraId]) porObra[g.obraId].gastos += num(g.monto); });
+  const saldoImprev = totImprev - usadoImprev;
+  const gastosPorCat = {}; gastosArr.forEach(g => { if (esImprev(g.cat)) return; gastosPorCat[g.cat || "Otro"] = (gastosPorCat[g.cat || "Otro"] || 0) + num(g.monto); });
   Object.values(porObra).forEach(p => { p.fijo = cuotaQ * p.nCert; totFijo += p.fijo; p.res = p.util - p.fijo - p.gastos; p.restoCobrar = Math.max(0, p.presupCli - p.cobro); p.restoPagar = Math.max(0, p.presupCos - p.costo); });
   const totRes = totUtil - totFijo - totGastos;
   const movs = data.movimientos || [];
@@ -711,6 +714,30 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
           <div style={{ flex: 1, background: T.bg, borderRadius: 11, padding: "11px 12px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Certificado de cobro</div><div style={{ fontSize: 16, fontWeight: 700, color: T.accent, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{money(promCobro)}</div></div>
           <div style={{ flex: 1, background: T.bg, borderRadius: 11, padding: "11px 12px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Certificado de pago</div><div style={{ fontSize: 16, fontWeight: 700, color: T.warn, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{money(promPago)}</div></div>
         </div>
+      </div>}
+
+      {totImprev > 0 && <div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Fondo de imprevistos (caja separada)</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12 }}>El 5% de cada certificado se acumula acá. Cubre seguros del personal, multas de obra y de tránsito. Lo que queda se reparte.</div>
+        <Line t="Acumulado (5% de certificados)" v={money(totImprev)} c={T.accent} />
+        <Line t="Usado en imprevistos" v={"− " + money(usadoImprev)} c={T.warn} />
+        <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Saldo disponible</span><Money v={saldoImprev} c={saldoImprev >= 0 ? T.ok : "#EF4444"} /></div>
+
+        {Object.keys(imprevPorCat).length > 0 && <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Usado por tipo</div>
+          {Object.entries(imprevPorCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => <Line key={k} t={k} v={money(v)} c={T.warn} />)}
+        </div>}
+
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Saldo por obra</div>
+          {arr.map((p, i) => { const saldoO = p.imprevAcum - p.imprevUsado; return (<div key={i} style={{ background: T.bg, borderRadius: 10, padding: "9px 11px", marginBottom: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>{p.nombre}</span><Money v={saldoO} c={saldoO >= 0 ? T.ok : "#EF4444"} /></div>
+            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>Acumuló {money(p.imprevAcum)} · usó {money(p.imprevUsado)}</div>
+          </div>); })}
+        </div>
+
+        {saldoImprev > 0 && <div style={{ background: T.al, borderRadius: 10, padding: "10px 12px", marginTop: 10, fontSize: 11.5, color: T.sub }}>Quedan <b style={{ color: T.ok }}>{money(saldoImprev)}</b> libres para repartir: herramientas o premios al personal administrativo / sobrestantes.</div>}
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8 }}>Para descontar del fondo, cargá el gasto en Gastos eligiendo un tipo del grupo "Imprevisto (fondo)".</div>
       </div>}
 
       {totFijo > 0 && <div style={{ background: T.al, borderRadius: 12, padding: "12px 14px", marginBottom: 14, fontSize: 12, color: T.sub }}>El costo fijo de estructura se lleva el <b style={{ color: T.warn }}>{fijoPctUtil.toFixed(1)}%</b> de la utilidad de las obras.</div>}
