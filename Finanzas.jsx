@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v52 (obras propias + graficos por mes)
+// VERSION: v53 (obras propias 28 rubros, pesos/dolares con cotizacion)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -178,49 +178,70 @@ function AgendaTab({ obras, certs, certsDe, indices, data, save }) {
     <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8 }}>El teléfono va con código de país, sin +, sin 0 y sin 15 (ej: 5491122334455). El botón abre WhatsApp con el mensaje ya escrito. El PDF del certificado se adjunta desde Cert cliente (📄 → Compartir → WhatsApp).</div>
   </div>);
 }
-const CAT_PROPIA = ["Lote", "Materiales", "Mano de obra", "Proyecto y honorarios", "Impuestos y sellos", "Servicios y conexiones", "Otros"];
-function CostoAdderPropia({ onAdd }) {
-  const [cat, setCat] = useState(CAT_PROPIA[0]); const [monto, setMonto] = useState("");
-  return <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-    <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inpSm, flex: 1 }}>{CAT_PROPIA.map(c => <option key={c} value={c}>{c}</option>)}</select>
-    <input value={monto} onChange={e => setMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: 104, textAlign: "right" }} />
-    <button onClick={() => { if (numMoney(monto) > 0) { onAdd(cat, monto); setMonto(""); } }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "0 13px", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>＋</button>
+const RUBROS_PROPIA = ["Lote", "Movimiento de suelo", "Materiales gruesos", "Materiales de plomería", "Materiales de electricidad", "Mano de obra gruesa", "Pintura", "Plomería", "Electricidad", "Aire acondicionado", "Aberturas", "Pisos", "Artefactos sanitarios", "Revestimientos exterior", "Impermeabilización", "Muebles de interior (cocina y vestidores)", "Muebles de decoración", "Decoración", "Revestimientos especiales", "Iluminación", "Durlock", "Barandas de escalera", "Barandas de balcón", "Piscina", "Parquización", "Planta", "Artefactos eléctricos", "Electrodomésticos"];
+const usdFmt = (n) => "US$" + Math.round(n || 0).toLocaleString("es-AR");
+function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef }) {
+  const [open, setOpen] = useState(false);
+  const [monto, setMonto] = useState(""); const [moneda, setMoneda] = useState("usd"); const [cotiz, setCotiz] = useState(cotizDef || "");
+  const subArs = items.reduce((s, c) => s + num(c.montoArs), 0), subUsd = items.reduce((s, c) => s + num(c.montoUsd), 0);
+  const agregar = () => { const mo = numMoney(monto); if (mo <= 0) return; const ct = numMoney(cotiz); let ars, usdv; if (moneda === "usd") { usdv = mo; ars = ct > 0 ? mo * ct : 0; } else { ars = mo; usdv = ct > 0 ? mo / ct : 0; } onAdd({ cat: rubro, moneda, monto: mo, cotiz: ct, montoArs: ars, montoUsd: usdv }); if (ct > 0) setCotizDef(String(ct)); setMonto(""); };
+  return <div style={{ borderBottom: `1px solid ${T.border}`, padding: "9px 0" }}>
+    <div onClick={() => setOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", gap: 8 }}>
+      <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{rubro}</span>
+      {(subArs > 0 || subUsd > 0) ? <span style={{ fontSize: 11.5, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}><b style={{ color: T.accent }}>{usdFmt(subUsd)}</b> <span style={{ color: T.muted }}>/ {money(subArs)}</span></span> : <span style={{ fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>＋ cargar</span>}
+    </div>
+    {open && <div style={{ marginTop: 8, background: T.bg, borderRadius: 9, padding: 10 }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ display: "flex", background: T.card, borderRadius: 8, padding: 2, border: `1px solid ${T.border}` }}>{[["usd", "US$"], ["ars", "$"]].map(([k, l]) => <button key={k} onClick={() => setMoneda(k)} style={{ background: moneda === k ? T.navy : "transparent", color: moneda === k ? "#fff" : T.sub, border: "none", borderRadius: 6, padding: "7px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>
+        <input value={monto} onChange={e => setMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder={moneda === "usd" ? "Monto US$" : "Monto $"} style={{ ...inpSm, flex: 1 }} />
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 7 }}>
+        <span style={{ fontSize: 11.5, color: T.sub, whiteSpace: "nowrap" }}>Cotiz. $/US$</span>
+        <input value={cotiz} onChange={e => setCotiz(fmtMiles(e.target.value))} inputMode="numeric" placeholder="ej: 1450" style={{ ...inpSm, width: 92, textAlign: "right" }} />
+        <button onClick={agregar} style={{ flex: 1, background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Agregar</button>
+      </div>
+      {items.map(c => <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: T.sub, marginTop: 6 }}><span>{usdFmt(num(c.montoUsd))} · {money(num(c.montoArs))}{c.cotiz ? ` · cotiz ${numMoney(c.cotiz).toLocaleString("es-AR")}` : ""}</span><button onClick={() => onDel(c.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></div>)}
+    </div>}
   </div>;
 }
 function PropiasPanel({ data, save }) {
   const propias = data.propias || [];
-  const [nombre, setNombre] = useState(""); const [venta, setVenta] = useState(""); const [abrir, setAbrir] = useState(false);
-  const addPropia = () => { if (!nombre.trim()) return; save({ ...data, propias: [...propias, { id: uid(), nombre: nombre.trim(), ventaEst: numMoney(venta), costos: [], ts: Date.now() }] }); setNombre(""); setVenta(""); };
+  const [nombre, setNombre] = useState(""); const [abrir, setAbrir] = useState(false); const [expandir, setExpandir] = useState({});
+  const [cotizDef, setCotizDef] = useState(String(data.config?.cotizUSD || ""));
+  const addPropia = () => { if (!nombre.trim()) return; save({ ...data, propias: [...propias, { id: uid(), nombre: nombre.trim(), ventaUsd: 0, ventaArs: 0, costos: [], ts: Date.now() }] }); setNombre(""); setAbrir(false); };
+  const upd = (pid, fn) => save({ ...data, config: { ...(data.config || {}), cotizUSD: numMoney(cotizDef) || data.config?.cotizUSD }, propias: propias.map(p => p.id === pid ? fn(p) : p) });
+  const addCosto = (pid, c) => upd(pid, p => ({ ...p, costos: [...(p.costos || []), { id: uid(), ts: Date.now(), ...c }] }));
+  const delCosto = (pid, cid) => upd(pid, p => ({ ...p, costos: (p.costos || []).filter(x => x.id !== cid) }));
+  const setVenta = (pid, k, v) => upd(pid, p => ({ ...p, [k]: numMoney(v) }));
   const delPropia = (id) => save({ ...data, propias: propias.filter(p => p.id !== id) });
-  const addCosto = (pid, cat, monto) => save({ ...data, propias: propias.map(p => p.id === pid ? { ...p, costos: [...(p.costos || []), { id: uid(), cat, monto: numMoney(monto), ts: Date.now() }] } : p) });
-  const delCosto = (pid, cid) => save({ ...data, propias: propias.map(p => p.id === pid ? { ...p, costos: (p.costos || []).filter(c => c.id !== cid) } : p) });
-  const setVentaDe = (pid, v) => save({ ...data, propias: propias.map(p => p.id === pid ? { ...p, ventaEst: numMoney(v) } : p) });
   return (<div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras particulares (para vender)</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Las que hacés para vos, llave en mano con lote. Costo total vs precio de venta.</div></div>
+      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras particulares (para vender)</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Las que hacés para vos, llave en mano con lote. Cargás en $ o US$ con la cotización del momento.</div></div>
       <button onClick={() => setAbrir(o => !o)} style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{abrir ? "Cerrar" : "+ Nueva"}</button>
     </div>
     {abrir && <div style={{ background: T.bg, borderRadius: 11, padding: 12, marginTop: 10 }}>
       <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre (ej: Casa Canning Lote 815)" style={{ ...inp, marginTop: 0 }} />
-      <input value={venta} onChange={e => setVenta(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Precio de venta estimado $" style={inp} />
-      <button onClick={() => { addPropia(); setAbrir(false); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>Crear obra propia</button>
+      <button onClick={addPropia} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>Crear obra propia</button>
     </div>}
     {propias.map(p => {
-      const costos = p.costos || []; const porCat = {}; CAT_PROPIA.forEach(c => porCat[c] = 0); costos.forEach(c => porCat[c.cat] = (porCat[c.cat] || 0) + num(c.monto));
-      const inv = costos.reduce((s, c) => s + num(c.monto), 0); const venta = num(p.ventaEst); const res = venta - inv; const mg = venta > 0 ? res / venta * 100 : 0;
+      const costos = p.costos || []; const totArs = costos.reduce((s, c) => s + num(c.montoArs), 0), totUsd = costos.reduce((s, c) => s + num(c.montoUsd), 0);
+      const vU = num(p.ventaUsd), vA = num(p.ventaArs); const resU = vU - totUsd, resA = vA - totArs; const mgU = vU > 0 ? resU / vU * 100 : 0; const exp = expandir[p.id];
       return (<div key={p.id} style={{ background: T.bg, borderRadius: 12, padding: 13, marginTop: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><span style={{ fontSize: 14.5, fontWeight: 800 }}>{p.nombre}</span><button onClick={() => delPropia(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>Eliminar</button></div>
-        {CAT_PROPIA.filter(c => porCat[c] > 0).map(c => <Line key={c} t={c} v={money(porCat[c])} c={T.warn} />)}
-        <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 6 }}><Line t="Inversión total (llave en mano)" v={money(inv)} c={T.text} /></div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}><span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Precio de venta estimado</span><input defaultValue={p.ventaEst ? fmtMiles(p.ventaEst) : ""} onBlur={e => setVentaDe(p.id, e.target.value)} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: 120, textAlign: "right" }} /></div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado esperado {venta > 0 ? `· ${mg.toFixed(0)}%` : ""}</span><Money v={res} c={res >= 0 ? T.ok : "#EF4444"} /></div>
-        <CostoAdderPropia onAdd={(cat, monto) => addCosto(p.id, cat, monto)} />
-        {costos.length > 0 && <div style={{ marginTop: 8 }}>{costos.slice().reverse().map(c => <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: T.sub, padding: "3px 0" }}><span>{c.cat}</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}>{money(num(c.monto))}<button onClick={() => delCosto(p.id, c.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></span></div>)}</div>}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><span style={{ fontSize: 14.5, fontWeight: 800 }}>{p.nombre}</span><button onClick={() => delPropia(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>Eliminar</button></div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: T.card, borderRadius: 9, padding: "9px 11px" }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>Inversión total</span><span style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}><b style={{ color: T.accent }}>{usdFmt(totUsd)}</b> <span style={{ color: T.muted }}>/ {money(totArs)}</span></span></div>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Venta est. US$</div><input defaultValue={p.ventaUsd ? fmtMiles(p.ventaUsd) : ""} onBlur={e => setVenta(p.id, "ventaUsd", e.target.value)} inputMode="numeric" placeholder="US$" style={{ ...inpSm, width: "100%", boxSizing: "border-box", textAlign: "right" }} /></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Venta est. $</div><input defaultValue={p.ventaArs ? fmtMiles(p.ventaArs) : ""} onBlur={e => setVenta(p.id, "ventaArs", e.target.value)} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: "100%", boxSizing: "border-box", textAlign: "right" }} /></div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 9, paddingTop: 9, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado esperado{vU > 0 ? ` · ${mgU.toFixed(0)}%` : ""}</span><span style={{ fontSize: 13.5, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{vU > 0 && <span style={{ color: resU >= 0 ? T.ok : "#EF4444" }}>{usdFmt(resU)}</span>}{vA > 0 && <span style={{ color: resA >= 0 ? T.ok : "#EF4444", marginLeft: 8 }}>{money(resA)}</span>}{vU <= 0 && vA <= 0 && <span style={{ color: T.muted, fontSize: 11, fontWeight: 600 }}>cargá la venta</span>}</span></div>
+        <button onClick={() => setExpandir(e => ({ ...e, [p.id]: !e[p.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar rubros ▲" : "Cargar / ver rubros ▼"}</button>
+        {exp && <div style={{ marginTop: 8 }}>{RUBROS_PROPIA.map(r => <RubroRow key={r} rubro={r} items={costos.filter(c => c.cat === r)} onAdd={(c) => addCosto(p.id, c)} onDel={(cid) => delCosto(p.id, cid)} cotizDef={cotizDef} setCotizDef={setCotizDef} />)}</div>}
       </div>);
     })}
-    {propias.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nueva" para cargar una obra propia con su lote y costos.</div>}
+    {propias.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nueva" para cargar una obra propia con sus rubros.</div>}
   </div>);
 }
+
 function BarrasMes({ titulo, series, meses }) {
   if (!meses.length) return null;
   const max = Math.max(1, ...meses.map(m => series.reduce((s, se) => Math.max(s, se.data[m] || 0), 0)));
