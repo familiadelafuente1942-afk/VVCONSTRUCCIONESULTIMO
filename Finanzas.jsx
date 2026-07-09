@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v36 (imprevistos 5% sobre total presupuesto)
+// VERSION: v40 (redeterminacion pendiente provisorio/definitivo)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -119,8 +119,8 @@ export default function App() {
   const cfg = data.config || {};
   const obras = data.obras || [], certs = data.certs || [], indices = data.indices || {};
   const certsDe = (id) => certs.filter(c => c.obraId === id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
-  return (<div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", maxWidth: 680, margin: "0 auto", color: T.text }}>
-    <style>{`*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}::selection{background:rgba(176,137,79,.20)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}`}</style>
+  return (<div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", width: "100%", color: T.text }}>
+    <style>{`*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}::selection{background:rgba(176,137,79,.20)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}@media(min-width:1700px){.vv-body{padding-left:calc((100% - 1560px)/2);padding-right:calc((100% - 1560px)/2)}}`}</style>
     <div style={{ background: `linear-gradient(180deg, #0E1B2B 0%, ${T.navy} 100%)`, color: "#fff", padding: "20px 24px 18px", textAlign: "center", position: "relative" }}>
       <button onClick={() => setVerConfig(true)} title="Personalización" style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, width: 34, height: 34, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>⚙︎</button>
       <div style={{ display: "inline-flex", alignItems: "center", gap: 11 }}>
@@ -136,11 +136,13 @@ export default function App() {
         <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.navy : T.muted, padding: "10px 1px 9px", fontSize: 10.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative", letterSpacing: "-0.01em", lineHeight: 1.2 }}>{l1}{l2 ? <><br />{l2}</> : ""}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
       ))}
     </div>
-    {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
-    {tab === "costo" && <CertTab modo="costo" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
-    {tab === "cliente" && <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
-    {tab === "caja" && <CajaTab obras={obras} data={data} save={save} certs={certs} certsDe={certsDe} indices={indices} />}
-    {tab === "resultado" && <ResultadoTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
+    <div className="vv-body">
+      {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
+      {tab === "costo" && <CertTab modo="costo" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
+      {tab === "cliente" && <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
+      {tab === "caja" && <CajaTab obras={obras} data={data} save={save} certs={certs} certsDe={certsDe} indices={indices} />}
+      {tab === "resultado" && <ResultadoTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
+    </div>
     {verConfig && <ConfigModal data={data} save={save} onClose={() => setVerConfig(false)} />}
   </div>);
 }
@@ -318,10 +320,12 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
             <div style={{ width: 58, display: "flex", alignItems: "center", gap: 1, justifyContent: "center" }}><input value={nuevo[r.id] ?? ""} onChange={e => setNuevo(a => ({ ...a, [r.id]: e.target.value }))} inputMode="decimal" placeholder="0" style={{ ...inp, marginTop: 0, width: 44, textAlign: "center", padding: "10px 2px" }} /><span style={{ fontSize: 11, color: T.sub }}>%</span></div>
             <span style={{ width: 54, textAlign: "center", fontSize: 13, fontWeight: 800, color: acum > ant ? T.accent : T.muted }}>{acum}%</span>
           </div>); })}
-        {(() => { const base = esCosto ? presupCosto(obra) : presupCliente(obra); const ya = ultimo ? (esCosto ? costoAcumDe(ultimo.cantidades, obra) : clienteAcumDe(ultimo.cantidades, obra)) : 0; const saldo = base - ya; const avance = base > 0 ? ya / base * 100 : 0; return base > 0 ? <div style={{ background: T.bg, borderRadius: 9, padding: "10px 11px", marginTop: 4, fontSize: 11.5 }}>
+        {(() => { const base = esCosto ? presupCosto(obra) : presupCliente(obra); const ya = ultimo ? (esCosto ? costoAcumDe(ultimo.cantidades, obra) : clienteAcumDe(ultimo.cantidades, obra)) : 0; const saldo = base - ya; const avance = base > 0 ? ya / base * 100 : 0; const antic = presupCliente(obra) * num(obra.anticipoPct) / 100; const amortYa = cs.reduce((s, cc) => s + calcCert(cc, obra, cs, indices).amort, 0); const dispAnt = antic - amortYa; return base > 0 ? <div style={{ background: T.bg, borderRadius: 9, padding: "10px 11px", marginTop: 4, fontSize: 11.5 }}>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span style={{ color: T.sub }}>Presupuesto {esCosto ? "de costo" : "cliente"}</span><b>{money(base)}</b></div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span style={{ color: T.sub }}>Ya certificado ({avance.toFixed(0)}%)</span><b>{money(ya)}</b></div>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0 0", borderTop: `1px solid ${T.border}`, marginTop: 3 }}><span style={{ color: T.text, fontWeight: 700 }}>{esCosto ? "Resta para terminar la obra" : "Resta por cobrar al cliente"}</span><b style={{ color: esCosto ? T.warn : T.accent }}>{money(saldo)}</b></div>
+          {!esCosto && antic > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0 0", borderTop: `1px solid ${T.border}`, marginTop: 5 }}><span style={{ color: T.text, fontWeight: 700 }}>Anticipo disponible</span><b style={{ color: T.ok }}>{money(dispAnt)}</b></div>}
+          {!esCosto && antic > 0 && <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>Adelanto {num(obra.anticipoPct)}%: {money(antic)} · amortizado {money(amortYa)}</div>}
         </div> : null; })()}
       </div>}
       {!esCosto && <IndicesPanel data={data} save={save} obra={obra} fecha={fecha} indices={indices} />}
@@ -532,7 +536,7 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
         <div><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase" }}>Gastos</div><div style={{ fontSize: 14, fontWeight: 800, color: "#FCA5A5" }}>{money(gastosTot)}</div></div>
       </div>
     </div>
-    {totImprev > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, boxShadow: SHDsm, marginBottom: 14, borderTop: `3px solid ${BRASS}` }}>
+    {obras.length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, boxShadow: SHDsm, marginBottom: 14, borderTop: `3px solid ${BRASS}` }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Fondo de imprevistos</div>
       <Line t="Acumulado (5% del presupuesto)" v={money(totImprev)} c={T.accent} />
       <Line t="Usado (seguros, multas…)" v={"− " + money(usadoImprev)} c={T.warn} />
@@ -591,6 +595,7 @@ function KPI({ t, v, c }) { return <div style={{ background: T.card, borderRadiu
 
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false);
+  const [estimPct, setEstimPct] = useState("");
   const PIN = (() => { try { return localStorage.getItem("finanzas_pin") || "1234"; } catch { return "1234"; } })();
   if (!ok) return (<div style={{ padding: "40px 24px", textAlign: "center" }}>
     <div style={{ fontSize: 40, marginBottom: 10 }}>🔒</div><div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Resultado — privado</div>
@@ -606,8 +611,8 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const cuotaQ = cuota / 2; // por quincena (cada certificado)
   const setEst = (k, v) => save({ ...data, estructura: { ...(data.estructura || {}), [k]: v } });
 
-  let totCobro = 0, totCosto = 0, totUtil = 0, totFijo = 0, totImprev = 0; const porObra = {};
-  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); totCobro += r.neto; totCosto += r.costo; totUtil += r.margen; totImprev += r.imprevPeriodo; if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, cobro: 0, costo: 0, util: 0, nCert: 0, gastos: 0, imprevAcum: 0, imprevUsado: 0, presupCli: presupCliente(o), presupCos: presupCosto(o) }; porObra[o.id].cobro += r.neto; porObra[o.id].costo += r.costo; porObra[o.id].util += r.margen; porObra[o.id].nCert += 1; porObra[o.id].imprevAcum += r.imprevPeriodo; });
+  let totCobro = 0, totCosto = 0, totUtil = 0, totFijo = 0, totImprev = 0, provisCount = 0, provisMonto = 0; const porObra = {}; const provisMeses = new Set();
+  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); totCobro += r.neto; totCosto += r.costo; totUtil += r.margen; totImprev += r.imprevPeriodo; if (r.provisorio) { provisCount++; provisMonto += r.ajustado; provisMeses.add(mesDe(c.fecha)); } if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, cobro: 0, costo: 0, util: 0, nCert: 0, gastos: 0, imprevAcum: 0, imprevUsado: 0, anticipo: presupCliente(o) * num(o.anticipoPct) / 100, amort: 0, presupCli: presupCliente(o), presupCos: presupCosto(o) }; porObra[o.id].cobro += r.neto; porObra[o.id].costo += r.costo; porObra[o.id].util += r.margen; porObra[o.id].nCert += 1; porObra[o.id].imprevAcum += r.imprevPeriodo; porObra[o.id].amort += r.amort; });
   const gastosArr = data.gastos || []; let totGastos = 0, usadoImprev = 0; const imprevPorCat = {};
   gastosArr.forEach(g => { if (esImprev(g.cat)) { const mm = num(g.monto); usadoImprev += mm; imprevPorCat[g.cat] = (imprevPorCat[g.cat] || 0) + mm; if (g.obraId && porObra[g.obraId]) porObra[g.obraId].imprevUsado += mm; return; } totGastos += num(g.monto); if (g.obraId && porObra[g.obraId]) porObra[g.obraId].gastos += num(g.monto); });
   const saldoImprev = totImprev - usadoImprev;
@@ -726,7 +731,32 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
         </div>
       </div>}
 
-      {totImprev > 0 && <div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
+      {provisCount > 0 && <div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid #F59E0B` }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Redeterminación pendiente</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12 }}>Certificados hechos con índice provisorio (falta el definitivo del mes por el atraso del CAC).</div>
+        <Line t="Certificados provisorios" v={String(provisCount)} />
+        <Line t="Meses sin índice definitivo" v={[...provisMeses].sort().map(mesLabel).join(", ")} />
+        <Line t="Certificado a valor provisorio" v={money(provisMonto)} c={T.accent} />
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>Aumento estimado del mes (%)</span><input value={estimPct} onChange={e => setEstimPct(e.target.value)} inputMode="decimal" placeholder="3" style={{ ...inp, marginTop: 0, width: 90, textAlign: "right" }} /></div>
+          {num(estimPct) > 0 && <div style={{ background: T.al, borderRadius: 10, padding: "10px 12px", marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>Diferencia estimada a cobrar</span><Money v={provisMonto * num(estimPct) / 100} c={T.ok} /></div>}
+        </div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 10 }}>Cuando cargues el índice real del mes en Cert cliente, la app recalcula sola y esa diferencia queda cobrada. El % estimado es solo una previsión.</div>
+      </div>}
+
+      {obras.some(o => num(o.anticipoPct) > 0) && <div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${T.accent}` }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Anticipo (adelanto del cliente)</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12 }}>Lo que cobraste de adelanto y cuánto te queda disponible. Se va amortizando (descontando) en cada certificado.</div>
+        {arr.map((p, i) => { const disp = p.anticipo - p.amort; return (<div key={i} style={{ background: T.bg, borderRadius: 11, padding: "11px 12px", marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><span style={{ fontSize: 13, fontWeight: 800 }}>{p.nombre}</span></div>
+          <Line t="Anticipo recibido" v={money(p.anticipo)} c={T.accent} />
+          <Line t="Amortizado en certificados" v={"− " + money(p.amort)} c={T.warn} />
+          <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 12.5, fontWeight: 800 }}>Disponible del anticipo</span><Money v={disp} c={disp >= 0 ? T.ok : "#EF4444"} /></div>
+        </div>); })}
+        {arr.length === 0 && <div style={{ fontSize: 12, color: T.muted }}>Cargá un certificado para ver la amortización del anticipo.</div>}
+      </div>}
+
+      {obras.length > 0 && <div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Fondo de imprevistos (caja separada)</div>
         <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12 }}>El 5% del total del presupuesto se reserva acá (se va acumulando con cada certificado). Cubre seguros del personal, multas de obra y de tránsito. Lo que queda se reparte.</div>
         <Line t="Acumulado (5% del presupuesto)" v={money(totImprev)} c={T.accent} />
