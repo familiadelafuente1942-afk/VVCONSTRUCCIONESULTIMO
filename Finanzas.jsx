@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v53 (obras propias 28 rubros, pesos/dolares con cotizacion)
+// VERSION: v55 (rubros propias: contador de cargas + nota por carga)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -182,12 +182,12 @@ const RUBROS_PROPIA = ["Lote", "Movimiento de suelo", "Materiales gruesos", "Mat
 const usdFmt = (n) => "US$" + Math.round(n || 0).toLocaleString("es-AR");
 function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef }) {
   const [open, setOpen] = useState(false);
-  const [monto, setMonto] = useState(""); const [moneda, setMoneda] = useState("usd"); const [cotiz, setCotiz] = useState(cotizDef || "");
+  const [monto, setMonto] = useState(""); const [moneda, setMoneda] = useState("usd"); const [cotiz, setCotiz] = useState(cotizDef || ""); const [nota, setNota] = useState("");
   const subArs = items.reduce((s, c) => s + num(c.montoArs), 0), subUsd = items.reduce((s, c) => s + num(c.montoUsd), 0);
-  const agregar = () => { const mo = numMoney(monto); if (mo <= 0) return; const ct = numMoney(cotiz); let ars, usdv; if (moneda === "usd") { usdv = mo; ars = ct > 0 ? mo * ct : 0; } else { ars = mo; usdv = ct > 0 ? mo / ct : 0; } onAdd({ cat: rubro, moneda, monto: mo, cotiz: ct, montoArs: ars, montoUsd: usdv }); if (ct > 0) setCotizDef(String(ct)); setMonto(""); };
+  const agregar = () => { const mo = numMoney(monto); if (mo <= 0) return; const ct = numMoney(cotiz); let ars, usdv; if (moneda === "usd") { usdv = mo; ars = ct > 0 ? mo * ct : 0; } else { ars = mo; usdv = ct > 0 ? mo / ct : 0; } onAdd({ cat: rubro, moneda, monto: mo, cotiz: ct, montoArs: ars, montoUsd: usdv, nota: nota.trim() }); if (ct > 0) setCotizDef(String(ct)); setMonto(""); setNota(""); };
   return <div style={{ borderBottom: `1px solid ${T.border}`, padding: "9px 0" }}>
     <div onClick={() => setOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", gap: 8 }}>
-      <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{rubro}</span>
+      <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{rubro}{items.length > 0 ? <span style={{ fontSize: 10, color: T.muted, fontWeight: 700, marginLeft: 6 }}>· {items.length} {items.length === 1 ? "carga" : "cargas"}</span> : ""}</span>
       {(subArs > 0 || subUsd > 0) ? <span style={{ fontSize: 11.5, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}><b style={{ color: T.accent }}>{usdFmt(subUsd)}</b> <span style={{ color: T.muted }}>/ {money(subArs)}</span></span> : <span style={{ fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>＋ cargar</span>}
     </div>
     {open && <div style={{ marginTop: 8, background: T.bg, borderRadius: 9, padding: 10 }}>
@@ -200,7 +200,8 @@ function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef }) {
         <input value={cotiz} onChange={e => setCotiz(fmtMiles(e.target.value))} inputMode="numeric" placeholder="ej: 1450" style={{ ...inpSm, width: 92, textAlign: "right" }} />
         <button onClick={agregar} style={{ flex: 1, background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Agregar</button>
       </div>
-      {items.map(c => <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: T.sub, marginTop: 6 }}><span>{usdFmt(num(c.montoUsd))} · {money(num(c.montoArs))}{c.cotiz ? ` · cotiz ${numMoney(c.cotiz).toLocaleString("es-AR")}` : ""}</span><button onClick={() => onDel(c.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></div>)}
+      <input value={nota} onChange={e => setNota(e.target.value)} placeholder="Nota (ej: Corralón X - factura 0012)" style={{ ...inpSm, width: "100%", boxSizing: "border-box", marginTop: 7 }} />
+      {items.map(c => <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: T.sub, marginTop: 6 }}><span style={{ minWidth: 0 }}>{usdFmt(num(c.montoUsd))} · {money(num(c.montoArs))}{c.cotiz ? ` · cotiz ${numMoney(c.cotiz).toLocaleString("es-AR")}` : ""}{c.nota ? <span style={{ color: T.muted }}> · {c.nota}</span> : ""}</span><button onClick={() => onDel(c.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13, flexShrink: 0 }}>✕</button></div>)}
     </div>}
   </div>;
 }
@@ -834,8 +835,65 @@ function BarsH({ items }) {
 function Dot({ c }) { return <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: c, marginRight: 6, verticalAlign: "middle" }} />; }
 function KPI({ t, v, c }) { return <div style={{ background: T.card, borderRadius: 14, padding: "13px 14px", flex: 1, minWidth: 0, boxShadow: SHDsm }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.06em" }}>{t}</div><div style={{ fontSize: 17, fontWeight: 700, color: c || T.text, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{v}</div></div>; }
 
+function PagoUtilAdder({ onAdd }) {
+  const [monto, setMonto] = useState(""); const [socio, setSocio] = useState(""); const [fecha, setFecha] = useState(hoyISO());
+  return <div style={{ background: T.bg, borderRadius: 9, padding: 10, marginTop: 8 }}>
+    <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 6 }}>Pago a cuenta de utilidades</div>
+    <div style={{ display: "flex", gap: 6 }}>
+      <input value={socio} onChange={e => setSocio(e.target.value)} placeholder="Socio" style={{ ...inpSm, flex: 1 }} />
+      <input value={monto} onChange={e => setMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Monto $" style={{ ...inpSm, width: 110, textAlign: "right" }} />
+    </div>
+    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+      <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inpSm, flex: 1 }} />
+      <button onClick={() => { if (numMoney(monto) > 0) { onAdd({ monto: numMoney(monto), socio: socio.trim(), fecha }); setMonto(""); setSocio(""); } }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "0 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Registrar</button>
+    </div>
+  </div>;
+}
+function SociedadPanel({ data, save }) {
+  const socios = data.sociedad || [];
+  const [abrir, setAbrir] = useState(false);
+  const [f, setF] = useState({ nombre: "", descripcion: "", presupuesto: "", costo: "" });
+  const add = () => { if (!f.nombre.trim()) return; save({ ...data, sociedad: [...socios, { id: uid(), nombre: f.nombre.trim(), descripcion: f.descripcion.trim(), presupuesto: numMoney(f.presupuesto), costo: numMoney(f.costo), pagos: [], ts: Date.now() }] }); setF({ nombre: "", descripcion: "", presupuesto: "", costo: "" }); setAbrir(false); };
+  const upd = (id, fn) => save({ ...data, sociedad: socios.map(s => s.id === id ? fn(s) : s) });
+  const del = (id) => save({ ...data, sociedad: socios.filter(s => s.id !== id) });
+  const addPago = (id, pago) => upd(id, s => ({ ...s, pagos: [...(s.pagos || []), { id: uid(), ts: Date.now(), ...pago }] }));
+  const delPago = (id, pid) => upd(id, s => ({ ...s, pagos: (s.pagos || []).filter(p => p.id !== pid) }));
+  const setCampo = (id, k, v) => upd(id, s => ({ ...s, [k]: (k === "presupuesto" || k === "costo") ? numMoney(v) : v }));
+  return (<div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras en sociedad</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Descripción, presupuesto, costo, margen y pagos a cuenta de utilidades.</div></div>
+      <button onClick={() => setAbrir(o => !o)} style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{abrir ? "Cerrar" : "+ Nueva"}</button>
+    </div>
+    {abrir && <div style={{ background: T.bg, borderRadius: 11, padding: 12, marginTop: 10 }}>
+      <input value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} placeholder="Nombre de la obra" style={{ ...inp, marginTop: 0 }} />
+      <textarea value={f.descripcion} onChange={e => setF({ ...f, descripcion: e.target.value })} placeholder="Descripción de la obra" style={{ ...inp, minHeight: 60, resize: "vertical" }} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <input value={f.presupuesto} onChange={e => setF({ ...f, presupuesto: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="Presupuesto pasado $" style={{ ...inp, flex: 1 }} />
+        <input value={f.costo} onChange={e => setF({ ...f, costo: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="Costo $" style={{ ...inp, flex: 1 }} />
+      </div>
+      <button onClick={add} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>Crear obra en sociedad</button>
+    </div>}
+    {socios.map(s => {
+      const util = num(s.presupuesto) - num(s.costo); const pagos = s.pagos || []; const pagTot = pagos.reduce((a, p) => a + num(p.monto), 0); const rest = util - pagTot; const mg = num(s.presupuesto) > 0 ? util / num(s.presupuesto) * 100 : 0;
+      return (<div key={s.id} style={{ background: T.bg, borderRadius: 12, padding: 13, marginTop: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}><span style={{ fontSize: 14.5, fontWeight: 800 }}>{s.nombre}</span><button onClick={() => del(s.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>Eliminar</button></div>
+        {s.descripcion && <div style={{ fontSize: 11.5, color: T.sub, marginBottom: 8, lineHeight: 1.4 }}>{s.descripcion}</div>}
+        <Line t="Presupuesto pasado" v={money(num(s.presupuesto))} c={T.accent} />
+        <Line t="Costo" v={money(num(s.costo))} c={T.warn} />
+        <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 6 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Margen de utilidad {num(s.presupuesto) > 0 ? `· ${mg.toFixed(0)}%` : ""}</span><Money v={util} c={util >= 0 ? T.ok : "#EF4444"} /></div></div>
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${T.border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span style={{ color: T.sub }}>Pagado a cuenta de utilidades</span><b>{money(pagTot)}</b></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 12.5, fontWeight: 800 }}>Utilidad restante por distribuir</span><Money v={rest} c={rest >= 0 ? T.ok : "#EF4444"} /></div>
+          {pagos.slice().reverse().map(p => <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: T.sub, marginTop: 6 }}><span>{p.socio || "Socio"} · {fmtISO(p.fecha)}</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}>{money(num(p.monto))}<button onClick={() => delPago(s.id, p.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></span></div>)}
+          <PagoUtilAdder onAdd={(pago) => addPago(s.id, pago)} />
+        </div>
+      </div>);
+    })}
+    {socios.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nueva" para cargar una obra en sociedad.</div>}
+  </div>);
+}
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
-  const [pin, setPin] = useState(""); const [ok, setOk] = useState(false);
+  const [pin, setPin] = useState(""); const [ok, setOk] = useState(false); const [subtab, setSubtab] = useState("cliente");
   const [estimPct, setEstimPct] = useState("");
   const PIN = (() => { try { return localStorage.getItem("finanzas_pin") || "1234"; } catch { return "1234"; } })();
   if (!ok) return (<div style={{ padding: "40px 24px", textAlign: "center" }}>
@@ -886,6 +944,10 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const promPago = nCertsTot > 0 ? totCosto / nCertsTot : 0;
 
   return (<div style={{ padding: "14px 16px 40px" }}>
+    <div style={{ display: "flex", gap: 6, background: T.card, borderRadius: 12, padding: 5, marginBottom: 14, boxShadow: SHDsm }}>
+      {[["cliente", "Cliente"], ["particulares", "Particulares"], ["sociedad", "Sociedad"]].map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: 1, background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 9, padding: "10px 4px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+    </div>
+    {subtab === "cliente" && <>
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 16, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Resultado operativo</div>
       <div style={{ fontSize: 30, fontWeight: 800, margin: "6px 0 4px", color: totRes >= 0 ? "#7DE0A6" : "#FCA5A5" }}>{money(totRes)}</div>
@@ -1070,7 +1132,9 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
       {mF.length > 0 && <BarrasMes titulo="Facturación por mes" meses={mF} series={[{ nombre: "Facturado", color: T.accent, data: factMes }]} />}
       {mC.length > 0 && <BarrasMes titulo="Cobros vs pagos por mes" meses={mC} series={[{ nombre: "Cobros", color: T.ok, data: cobroMes }, { nombre: "Pagos", color: T.warn, data: pagoMes }]} />}
     </>; })()}
-    <PropiasPanel data={data} save={save} />
+    </>}
+    {subtab === "particulares" && <PropiasPanel data={data} save={save} />}
+    {subtab === "sociedad" && <SociedadPanel data={data} save={save} />}
     <button onClick={() => { const n = prompt("Nueva clave (números):", ""); if (n && n.trim()) { try { localStorage.setItem("finanzas_pin", n.trim()); } catch { } alert("Clave actualizada."); } }} style={{ display: "block", margin: "8px auto 0", background: "none", border: "none", color: T.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>Cambiar clave</button>
   </div>);
 }
