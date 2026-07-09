@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v48 (fix cambio de fondo + mas colores)
+// VERSION: v49 (modo oscuro + tipografias)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -31,7 +31,15 @@ const fmtMiles = (v) => { const s = String(v == null ? "" : v).replace(/\D/g, ""
 const numMoney = (v) => { const s = String(v == null ? "" : v).replace(/\./g, "").replace(/[^\d]/g, ""); return s ? Number(s) : 0; };
 const diasEntre = (a, b) => Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000);
 const BRASS = "#B0894F";
-const T = { navy: "#0B1622", accent: "#1B3A5B", al: "#EEF2F7", bg: "#F5F5F7", card: "#FFFFFF", border: "#E8EAED", text: "#0B1622", sub: "#5B6673", muted: "#98A2B0", ok: "#16A34A", warn: "#B45309", rsm: 12 };
+const T_LIGHT = { navy: "#0B1622", accent: "#1B3A5B", al: "#EEF2F7", bg: "#F5F5F7", card: "#FFFFFF", border: "#E8EAED", text: "#0B1622", sub: "#5B6673", muted: "#98A2B0", ok: "#16A34A", warn: "#B45309", rsm: 12, inpBg: "#FBFBFD", navBar: "rgba(255,255,255,.86)", dark: false };
+const T_DARK = { navy: "#05070B", accent: "#7FB0EA", al: "#1B222C", bg: "#0C0F14", card: "#161B22", border: "#2A313C", text: "#EEF1F5", sub: "#AEB6C2", muted: "#6C7683", ok: "#3DDC84", warn: "#F5B44C", rsm: 12, inpBg: "#0F141B", navBar: "rgba(18,22,29,.86)", dark: true };
+let T = T_LIGHT;
+const buildInp = (t) => ({ width: "100%", background: t.inpBg, border: `1px solid ${t.border}`, borderRadius: 10, padding: "12px 13px", fontSize: 16, color: t.text, boxSizing: "border-box", marginTop: 6, outline: "none", fontVariantNumeric: "tabular-nums" });
+const buildInpSm = (t) => ({ background: t.inpBg, border: `1px solid ${t.border}`, borderRadius: 9, padding: "10px 8px", fontSize: 15, color: t.text, boxSizing: "border-box", outline: "none" });
+let inp = buildInp(T), inpSm = buildInpSm(T);
+const FUENTES = [["", "Inter", "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif"], ["sistema", "Sistema", "-apple-system,system-ui,'Segoe UI',Roboto,sans-serif"], ["serif", "Serif clásica", "'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif"], ["redonda", "Redondeada", "'SF Pro Rounded','Varela Round',ui-rounded,system-ui,sans-serif"], ["elegante", "Elegante", "'Optima','Avenir Next',Avenir,system-ui,sans-serif"], ["mono", "Mono", "'SF Mono','JetBrains Mono',ui-monospace,Menlo,monospace"]];
+const fuenteDe = (cfg) => (FUENTES.find(x => x[0] === (cfg?.fuente || "")) || FUENTES[0])[2];
+const FONDOS_DARK = [["", "Negro", "#0C0F14"], ["carbon", "Carbón", "linear-gradient(160deg,#141A22,#05070B)"], ["navy", "Navy", "linear-gradient(160deg,#0E1728,#06090F)"], ["vino", "Vino", "linear-gradient(160deg,#1C1016,#0A0608)"], ["bosque", "Bosque", "linear-gradient(160deg,#0E1613,#050807)"], ["violeta", "Violeta", "linear-gradient(160deg,#16121F,#08060C)"]];
 const SHD = "0 1px 2px rgba(11,22,34,.04), 0 8px 24px -8px rgba(11,22,34,.10)";
 const SHDsm = "0 1px 2px rgba(11,22,34,.05), 0 2px 8px -4px rgba(11,22,34,.08)";
 const RUBROS_DEF = ["Trabajos preliminares", "Movimiento de suelo", "Estructura", "Albañilería", "Revoques", "Contrapiso", "Carpeta", "Colocación"];
@@ -53,7 +61,7 @@ const FONDOS = [
   ["navy", "Navy suave", "linear-gradient(160deg,#DDE3EE,#AAB6CC)"],
   ["dorado", "Dorado", "linear-gradient(160deg,#F3EAD3,#DEC58A)"],
 ];
-function fondoDe(cfg) { if (cfg?.fondoUrl) return `linear-gradient(rgba(245,245,247,.82),rgba(245,245,247,.82)), url("${cfg.fondoUrl}") center/cover fixed no-repeat`; const f = FONDOS.find(x => x[0] === (cfg?.fondo || "")); return f ? f[2] : "#F5F5F7"; }
+function fondoDe(cfg) { const dark = cfg?.modo === "oscuro"; if (cfg?.fondoUrl) { const ov = dark ? "rgba(12,15,20,.82)" : "rgba(245,245,247,.82)"; return `linear-gradient(${ov},${ov}), url("${cfg.fondoUrl}") center/cover fixed no-repeat`; } if (dark) { const f = FONDOS_DARK.find(x => x[0] === (cfg?.fondoDark || "")); return f ? f[2] : "#0C0F14"; } const f = FONDOS.find(x => x[0] === (cfg?.fondo || "")); return f ? f[2] : "#F5F5F7"; }
 const esImprev = (cat) => IMPREV_CATS.includes(cat);
 function logH(d, accion) { const h = d.historial || []; return { ...d, historial: [...h, { id: Math.random().toString(36).slice(2, 9), accion, t: new Date().toLocaleString("es-AR"), ts: Date.now() }].slice(-250) }; }
 const mesDe = (iso) => String(iso || "").slice(0, 7);
@@ -162,8 +170,7 @@ function detalleRubros(cert, obra, certsDeObra) {
 
 function Money({ v, c }) { return <span style={{ fontWeight: 700, color: c || T.text, fontVariantNumeric: "tabular-nums" }}>{money(v)}</span>; }
 function Field({ label, children, hint }) { return <div style={{ marginBottom: 13 }}><label style={{ fontSize: 11, fontWeight: 600, color: T.sub, letterSpacing: "0.02em" }}>{label}</label>{children}{hint && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>{hint}</div>}</div>; }
-const inp = { width: "100%", background: "#FBFBFD", border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 13px", fontSize: 16, color: T.text, boxSizing: "border-box", marginTop: 6, outline: "none", fontVariantNumeric: "tabular-nums" };
-const inpSm = { background: "#FBFBFD", border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 8px", fontSize: 15, color: T.text, boxSizing: "border-box", outline: "none" };
+const inpLabelStyle = { fontSize: 12.5, fontWeight: 600, color: T.sub };
 function Box({ t, v, c }) { return <div style={{ background: T.bg, borderRadius: 11, padding: "10px 12px" }}><div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>{t}</div><div style={{ fontSize: 14, fontWeight: 700, color: c || T.text, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{v}</div></div>; }
 function Line({ t, v, c }) { return <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "3px 0" }}><span style={{ color: T.sub }}>{t}</span><span style={{ fontWeight: 600, color: c || T.text, fontVariantNumeric: "tabular-nums" }}>{v}</span></div>; }
 
@@ -176,10 +183,11 @@ export default function App() {
   const [tab, setTab] = useState("presupuesto");
   const [verConfig, setVerConfig] = useState(false);
   const cfg = data.config || {};
+  T = cfg.modo === "oscuro" ? T_DARK : T_LIGHT; inp = buildInp(T); inpSm = buildInpSm(T);
   const obras = data.obras || [], certs = data.certs || [], indices = data.cacMensual || {};
   const certsDe = (id) => certs.filter(c => c.obraId === id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
-  return (<div style={{ minHeight: "100vh", background: fondoDe(cfg), fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", width: "100%", color: T.text }}>
-    <style>{`*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}::selection{background:rgba(176,137,79,.20)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}@media(min-width:1700px){.vv-body{padding-left:calc((100% - 1560px)/2);padding-right:calc((100% - 1560px)/2)}}`}</style>
+  return (<div style={{ minHeight: "100vh", background: fondoDe(cfg), fontFamily: fuenteDe(cfg), width: "100%", color: T.text }}>
+    <style>{`*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}::selection{background:rgba(176,137,79,.20)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}input,select,textarea{color:${T.text};background:${T.inpBg}}input::placeholder,textarea::placeholder{color:${T.muted}}@media(min-width:1700px){.vv-body{padding-left:calc((100% - 1560px)/2);padding-right:calc((100% - 1560px)/2)}}`}</style>
     <div style={{ background: `linear-gradient(180deg, #0E1B2B 0%, ${T.navy} 100%)`, color: "#fff", padding: "20px 24px 18px", textAlign: "center", position: "relative" }}>
       <button onClick={() => setVerConfig(true)} title="Personalización" style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, width: 34, height: 34, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>⚙︎</button>
       <button onClick={actualizar} title="Actualizar" style={{ position: "absolute", top: 16, left: 16, background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, height: 34, padding: "0 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>{refrescando ? "↻" : "↻"} {okMsg || (refrescando ? "..." : "Actualizar")}</button>
@@ -191,9 +199,9 @@ export default function App() {
         </div>
       </div>
     </div>
-    <div style={{ display: "flex", background: "rgba(255,255,255,.85)", backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
+    <div style={{ display: "flex", background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
       {[["presupuesto", "Presupuestos"], ["costo", "Cert.", "costo"], ["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"]].map(([k, l1, l2]) => (
-        <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.navy : T.muted, padding: "10px 1px 9px", fontSize: 10.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative", letterSpacing: "-0.01em", lineHeight: 1.2 }}>{l1}{l2 ? <><br />{l2}</> : ""}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
+        <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "10px 1px 9px", fontSize: 10.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative", letterSpacing: "-0.01em", lineHeight: 1.2 }}>{l1}{l2 ? <><br />{l2}</> : ""}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
       ))}
     </div>
     <div className="vv-body">
@@ -504,12 +512,22 @@ function ConfigModal({ data, save, onClose }) {
       <Field label="Nombre de la empresa"><input defaultValue={cfg.nombre ?? ""} onBlur={e => setCfg("nombre", e.target.value)} placeholder="V+V Construcciones" style={inp} /></Field>
       <Field label="Subtítulo"><input defaultValue={cfg.subtitulo ?? ""} onBlur={e => setCfg("subtitulo", e.target.value)} placeholder="Finanzas y Certificaciones" style={inp} /></Field>
       <Field label="Comitente (aparece en los PDF)"><input defaultValue={cfg.comitente ?? ""} onBlur={e => setCfg("comitente", e.target.value)} placeholder="Belfast CM" style={inp} /></Field>
+      <Field label="Modo de color">
+        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+          {[["claro", "☀︎ Claro"], ["oscuro", "🌙 Oscuro"]].map(([k, l]) => <button key={k} onClick={() => setCfg("modo", k)} style={{ flex: 1, background: (cfg.modo || "claro") === k ? T.accent : T.al, color: (cfg.modo || "claro") === k ? "#fff" : T.sub, border: `1px solid ${T.border}`, borderRadius: 10, padding: "11px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+        </div>
+      </Field>
+      <Field label="Tipografía">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 6 }}>
+          {FUENTES.map(([k, l, fam]) => <button key={k} onClick={() => setCfg("fuente", k)} style={{ background: (cfg.fuente || "") === k ? T.accent : T.al, color: (cfg.fuente || "") === k ? "#fff" : T.text, border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px 13px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: fam }}>{l}</button>)}
+        </div>
+      </Field>
       <Field label="Fondo de pantalla">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-          {FONDOS.map(([k, l, bg]) => <button key={k} onClick={() => save({ ...data, config: { ...(data.config || {}), fondo: k, fondoUrl: "" } })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 11, background: bg, border: `2px solid ${(cfg.fondo || "") === k && !cfg.fondoUrl ? BRASS : T.border}` }} />
+          {(cfg.modo === "oscuro" ? FONDOS_DARK : FONDOS).map(([k, l, bg]) => { const sel = cfg.modo === "oscuro" ? (cfg.fondoDark || "") === k : (cfg.fondo || "") === k; return <button key={k} onClick={() => save({ ...data, config: { ...(data.config || {}), [cfg.modo === "oscuro" ? "fondoDark" : "fondo"]: k, fondoUrl: "" } })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 11, background: bg, border: `2px solid ${sel && !cfg.fondoUrl ? BRASS : T.border}` }} />
             <span style={{ fontSize: 10.5, color: T.sub, fontWeight: 600 }}>{l}</span>
-          </button>)}
+          </button>; })}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
           {cfg.fondoUrl && <div style={{ width: 52, height: 52, borderRadius: 11, background: `url("${cfg.fondoUrl}") center/cover`, border: `2px solid ${BRASS}`, flexShrink: 0 }} />}
