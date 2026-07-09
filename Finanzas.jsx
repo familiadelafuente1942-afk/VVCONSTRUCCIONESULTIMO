@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v46 (resumen financiero para Mi Asistente)
+// VERSION: v48 (fix cambio de fondo + mas colores)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -37,7 +37,22 @@ const SHDsm = "0 1px 2px rgba(11,22,34,.05), 0 2px 8px -4px rgba(11,22,34,.08)";
 const RUBROS_DEF = ["Trabajos preliminares", "Movimiento de suelo", "Estructura", "Albañilería", "Revoques", "Contrapiso", "Carpeta", "Colocación"];
 const CAT_GASTO = ["Viáticos", "Combustible", "Fletes", "Comida en obra", "Herramientas", "Alquiler equipos", "Operación de obra", "Otro"];
 const IMPREV_CATS = ["Seguro personal", "Multa de obra", "Multa de tránsito", "Otro imprevisto"];
-const FONDOS = [["", "Claro", "#F5F5F7"], ["calido", "Cálido", "linear-gradient(160deg,#F7F1E8,#EEE4D5)"], ["arena", "Arena", "linear-gradient(160deg,#F0ECE4,#E3DBCC)"], ["azul", "Azul", "linear-gradient(160deg,#EAF0F8,#D7E3F0)"], ["salvia", "Salvia", "linear-gradient(160deg,#EBF1EC,#D8E5DA)"], ["grafito", "Grafito", "linear-gradient(160deg,#EEF0F3,#DDE1E7)"]];
+const FONDOS = [
+  ["", "Claro", "#F5F5F7"],
+  ["perla", "Perla", "linear-gradient(160deg,#FFFFFF,#E7E9EE)"],
+  ["calido", "Cálido", "linear-gradient(160deg,#F6E8D2,#E7CFA6)"],
+  ["arena", "Arena", "linear-gradient(160deg,#EDE1CB,#D6C29E)"],
+  ["durazno", "Durazno", "linear-gradient(160deg,#F9E2D0,#F0C3A5)"],
+  ["rosa", "Rosa", "linear-gradient(160deg,#F6E0E8,#E9BFCE)"],
+  ["lavanda", "Lavanda", "linear-gradient(160deg,#E8E2F4,#CDC0E6)"],
+  ["azul", "Azul", "linear-gradient(160deg,#DCE8F6,#B4CEEC)"],
+  ["cielo", "Cielo", "linear-gradient(160deg,#D6EAF3,#AED4E6)"],
+  ["menta", "Menta", "linear-gradient(160deg,#D8EFE4,#AEDCC7)"],
+  ["salvia", "Salvia", "linear-gradient(160deg,#DFEAE0,#C0D6C6)"],
+  ["grafito", "Grafito", "linear-gradient(160deg,#E1E4EA,#C2C8D2)"],
+  ["navy", "Navy suave", "linear-gradient(160deg,#DDE3EE,#AAB6CC)"],
+  ["dorado", "Dorado", "linear-gradient(160deg,#F3EAD3,#DEC58A)"],
+];
 function fondoDe(cfg) { if (cfg?.fondoUrl) return `linear-gradient(rgba(245,245,247,.82),rgba(245,245,247,.82)), url("${cfg.fondoUrl}") center/cover fixed no-repeat`; const f = FONDOS.find(x => x[0] === (cfg?.fondo || "")); return f ? f[2] : "#F5F5F7"; }
 const esImprev = (cat) => IMPREV_CATS.includes(cat);
 function logH(d, accion) { const h = d.historial || []; return { ...d, historial: [...h, { id: Math.random().toString(36).slice(2, 9), accion, t: new Date().toLocaleString("es-AR"), ts: Date.now() }].slice(-250) }; }
@@ -71,7 +86,8 @@ function useFinanzas() {
     return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); };
   }, []);
   const save = (next) => { lastWrite.t = Date.now(); setData(next); try { localStorage.setItem("vv_finanzas", JSON.stringify(next)); } catch { } storage.set("vv_finanzas", JSON.stringify(next)); try { storage.set("vv_finanzas_resumen", resumenFinanciero(next)); } catch { } };
-  return [data, save];
+  const refrescar = async () => { try { const r = await storage.get("vv_finanzas"); if (r?.value) { const d = JSON.parse(r.value); try { localStorage.setItem("vv_finanzas", r.value); } catch { } lastWrite.t = 0; setData(d); return true; } } catch { } return false; };
+  return [data, save, refrescar];
 }
 
 // ── Modelo: obra = { m2, precioCliente, costoM2, rubros:[{id,nombre,pct}] }
@@ -152,7 +168,10 @@ function Box({ t, v, c }) { return <div style={{ background: T.bg, borderRadius:
 function Line({ t, v, c }) { return <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "3px 0" }}><span style={{ color: T.sub }}>{t}</span><span style={{ fontWeight: 600, color: c || T.text, fontVariantNumeric: "tabular-nums" }}>{v}</span></div>; }
 
 export default function App() {
-  const [data, save] = useFinanzas();
+  const [data, save, refrescar] = useFinanzas();
+  const [refrescando, setRefrescando] = useState(false);
+  const [okMsg, setOkMsg] = useState("");
+  async function actualizar() { setRefrescando(true); const ok = await refrescar(); setRefrescando(false); setOkMsg(ok ? "Actualizado ✓" : "Sin cambios"); setTimeout(() => setOkMsg(""), 2000); }
   useEffect(() => { const t = setTimeout(() => { try { storage.set("vv_finanzas_resumen", resumenFinanciero(data)); } catch { } }, 1500); return () => clearTimeout(t); }, [data]);
   const [tab, setTab] = useState("presupuesto");
   const [verConfig, setVerConfig] = useState(false);
@@ -163,6 +182,7 @@ export default function App() {
     <style>{`*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}::selection{background:rgba(176,137,79,.20)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}@media(min-width:1700px){.vv-body{padding-left:calc((100% - 1560px)/2);padding-right:calc((100% - 1560px)/2)}}`}</style>
     <div style={{ background: `linear-gradient(180deg, #0E1B2B 0%, ${T.navy} 100%)`, color: "#fff", padding: "20px 24px 18px", textAlign: "center", position: "relative" }}>
       <button onClick={() => setVerConfig(true)} title="Personalización" style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, width: 34, height: 34, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>⚙︎</button>
+      <button onClick={actualizar} title="Actualizar" style={{ position: "absolute", top: 16, left: 16, background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, height: 34, padding: "0 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>{refrescando ? "↻" : "↻"} {okMsg || (refrescando ? "..." : "Actualizar")}</button>
       <div style={{ display: "inline-flex", alignItems: "center", gap: 11 }}>
         <div style={{ width: 36, height: 36, borderRadius: 10, background: cfg.logo ? "#fff" : `linear-gradient(145deg, ${BRASS}, #c9a869)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: T.navy, letterSpacing: "-0.02em", boxShadow: "0 2px 8px rgba(176,137,79,.35)", overflow: "hidden" }}>{cfg.logo ? <img src={cfg.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : "V+V"}</div>
         <div style={{ textAlign: "left" }}>
@@ -486,7 +506,7 @@ function ConfigModal({ data, save, onClose }) {
       <Field label="Comitente (aparece en los PDF)"><input defaultValue={cfg.comitente ?? ""} onBlur={e => setCfg("comitente", e.target.value)} placeholder="Belfast CM" style={inp} /></Field>
       <Field label="Fondo de pantalla">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-          {FONDOS.map(([k, l, bg]) => <button key={k} onClick={() => { setCfg("fondo", k); setCfg("fondoUrl", ""); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+          {FONDOS.map(([k, l, bg]) => <button key={k} onClick={() => save({ ...data, config: { ...(data.config || {}), fondo: k, fondoUrl: "" } })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
             <div style={{ width: 52, height: 52, borderRadius: 11, background: bg, border: `2px solid ${(cfg.fondo || "") === k && !cfg.fondoUrl ? BRASS : T.border}` }} />
             <span style={{ fontSize: 10.5, color: T.sub, fontWeight: 600 }}>{l}</span>
           </button>)}
