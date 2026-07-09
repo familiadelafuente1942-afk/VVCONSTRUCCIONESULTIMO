@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v50 (acceso rapido a otras apps)
+// VERSION: v52 (obras propias + graficos por mes)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -126,6 +126,113 @@ function resumenFinanciero(data) {
   if (!obras.length) L.push("(Todavía no hay obras cargadas.)");
   return L.join("\n");
 }
+function limpiarTel(t) { return String(t || "").replace(/[^\d]/g, ""); }
+function waLink(tel, texto) { return `https://wa.me/${limpiarTel(tel)}?text=${encodeURIComponent(texto)}`; }
+function resumenSocioTexto(data) { return `*Resumen financiero — V+V Construcciones*\n\n${resumenFinanciero(data)}`; }
+function mensajeCertificadoTexto(obra, data, certsDe, indices) {
+  const cs = certsDe(obra.id); const ult = cs[cs.length - 1];
+  if (!ult) return `Hola! Todavía no hay certificados cargados para ${obra.nombre}.`;
+  const r = calcCert(ult, obra, cs, indices); const tot = quincenasObra(obra) || cs.length;
+  const pc = presupCliente(obra); const ya = clienteAcumDe(ult.cantidades, obra); const resto = Math.max(0, pc - ya);
+  return `Hola! Te paso el detalle del certificado de *${obra.nombre}*:\n\n` +
+    `Certificado N° ${cs.length}${tot ? ` de ${tot}` : ""} — ${fmtISO(ult.fecha)}\n` +
+    `Avance acumulado: ${pc > 0 ? (ya / pc * 100).toFixed(0) : 0}%\n` +
+    `Monto del período: ${money(r.bruto)}\n` +
+    (r.ajuste > 0 ? `Ajuste CAC (redet.): ${money(r.ajuste)}\n` : "") +
+    (r.amort > 0 ? `Amortización anticipo: -${money(r.amort)}\n` : "") +
+    `*Neto a cobrar: ${money(r.neto)}*\n` +
+    `Saldo por cobrar: ${money(resto)}\n\n` +
+    `El PDF del certificado te lo adjunto aparte. Cualquier cosa avisame. Saludos.`;
+}
+function AgendaTab({ obras, certs, certsDe, indices, data, save }) {
+  const contactos = data.contactos || [];
+  const [nombre, setNombre] = useState(""); const [telefono, setTelefono] = useState(""); const [tipo, setTipo] = useState("cliente"); const [obraId, setObraId] = useState("");
+  const agregar = () => { if (!nombre.trim()) return; save({ ...data, contactos: [...contactos, { id: uid(), nombre: nombre.trim(), telefono: telefono.trim(), tipo, obraId: obraId || "", ts: Date.now() }] }); setNombre(""); setTelefono(""); setObraId(""); };
+  const borrar = (id) => save({ ...data, contactos: contactos.filter(c => c.id !== id) });
+  const setObraDe = (id, oid) => save({ ...data, contactos: contactos.map(c => c.id === id ? { ...c, obraId: oid } : c) });
+  return (<div style={{ padding: "14px 16px 40px" }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, boxShadow: SHDsm, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Nuevo contacto</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        {[["cliente", "Cliente"], ["socio", "Socio"]].map(([k, l]) => <button key={k} onClick={() => setTipo(k)} style={{ flex: 1, background: tipo === k ? T.navy : T.bg, color: tipo === k ? "#fff" : T.sub, border: "none", borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+      </div>
+      <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre" style={inp} />
+      <input value={telefono} onChange={e => setTelefono(e.target.value)} inputMode="tel" placeholder="WhatsApp con código país (ej: 5491122334455)" style={inp} />
+      {tipo === "cliente" && obras.length > 0 && <select value={obraId} onChange={e => setObraId(e.target.value)} style={inp}><option value="">Obra vinculada (opcional)</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>}
+      <button onClick={agregar} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>Agregar contacto</button>
+    </div>
+    {contactos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>Todavía no hay contactos cargados.</div>}
+    {contactos.slice().sort((a, b) => a.tipo === b.tipo ? 0 : a.tipo === "socio" ? -1 : 1).map(c => { const esCli = c.tipo === "cliente"; const obra = obras.find(o => o.id === c.obraId); return (
+      <div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 14, marginBottom: 10, boxShadow: SHDsm }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800 }}>{c.nombre}</div><div style={{ fontSize: 12, color: T.sub, marginTop: 1 }}>{c.telefono || "sin teléfono"}</div></div>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: esCli ? T.accent : BRASS, background: esCli ? T.al : "rgba(176,137,79,.14)", borderRadius: 6, padding: "3px 8px", flexShrink: 0 }}>{esCli ? "CLIENTE" : "SOCIO"}</span>
+        </div>
+        {esCli ? <div style={{ marginTop: 10 }}>
+          {obras.length > 0 && <select value={c.obraId || ""} onChange={e => setObraDe(c.id, e.target.value)} style={{ ...inp, marginTop: 0 }}><option value="">Elegí la obra del certificado…</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>}
+          {obra ? <a href={waLink(c.telefono, mensajeCertificadoTexto(obra, data, certsDe, indices))} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginTop: 8 }}>Enviar certificado por WhatsApp</a> : <div style={{ fontSize: 11, color: T.muted, marginTop: 6 }}>Elegí una obra para mandar su último certificado.</div>}
+        </div> : <a href={waLink(c.telefono, resumenSocioTexto(data))} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginTop: 10 }}>Enviar resumen por WhatsApp</a>}
+        <button onClick={() => borrar(c.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11.5, cursor: "pointer", marginTop: 8, padding: 0 }}>Eliminar</button>
+      </div>
+    ); })}
+    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8 }}>El teléfono va con código de país, sin +, sin 0 y sin 15 (ej: 5491122334455). El botón abre WhatsApp con el mensaje ya escrito. El PDF del certificado se adjunta desde Cert cliente (📄 → Compartir → WhatsApp).</div>
+  </div>);
+}
+const CAT_PROPIA = ["Lote", "Materiales", "Mano de obra", "Proyecto y honorarios", "Impuestos y sellos", "Servicios y conexiones", "Otros"];
+function CostoAdderPropia({ onAdd }) {
+  const [cat, setCat] = useState(CAT_PROPIA[0]); const [monto, setMonto] = useState("");
+  return <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+    <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inpSm, flex: 1 }}>{CAT_PROPIA.map(c => <option key={c} value={c}>{c}</option>)}</select>
+    <input value={monto} onChange={e => setMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: 104, textAlign: "right" }} />
+    <button onClick={() => { if (numMoney(monto) > 0) { onAdd(cat, monto); setMonto(""); } }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "0 13px", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>＋</button>
+  </div>;
+}
+function PropiasPanel({ data, save }) {
+  const propias = data.propias || [];
+  const [nombre, setNombre] = useState(""); const [venta, setVenta] = useState(""); const [abrir, setAbrir] = useState(false);
+  const addPropia = () => { if (!nombre.trim()) return; save({ ...data, propias: [...propias, { id: uid(), nombre: nombre.trim(), ventaEst: numMoney(venta), costos: [], ts: Date.now() }] }); setNombre(""); setVenta(""); };
+  const delPropia = (id) => save({ ...data, propias: propias.filter(p => p.id !== id) });
+  const addCosto = (pid, cat, monto) => save({ ...data, propias: propias.map(p => p.id === pid ? { ...p, costos: [...(p.costos || []), { id: uid(), cat, monto: numMoney(monto), ts: Date.now() }] } : p) });
+  const delCosto = (pid, cid) => save({ ...data, propias: propias.map(p => p.id === pid ? { ...p, costos: (p.costos || []).filter(c => c.id !== cid) } : p) });
+  const setVentaDe = (pid, v) => save({ ...data, propias: propias.map(p => p.id === pid ? { ...p, ventaEst: numMoney(v) } : p) });
+  return (<div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras particulares (para vender)</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Las que hacés para vos, llave en mano con lote. Costo total vs precio de venta.</div></div>
+      <button onClick={() => setAbrir(o => !o)} style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{abrir ? "Cerrar" : "+ Nueva"}</button>
+    </div>
+    {abrir && <div style={{ background: T.bg, borderRadius: 11, padding: 12, marginTop: 10 }}>
+      <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre (ej: Casa Canning Lote 815)" style={{ ...inp, marginTop: 0 }} />
+      <input value={venta} onChange={e => setVenta(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Precio de venta estimado $" style={inp} />
+      <button onClick={() => { addPropia(); setAbrir(false); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>Crear obra propia</button>
+    </div>}
+    {propias.map(p => {
+      const costos = p.costos || []; const porCat = {}; CAT_PROPIA.forEach(c => porCat[c] = 0); costos.forEach(c => porCat[c.cat] = (porCat[c.cat] || 0) + num(c.monto));
+      const inv = costos.reduce((s, c) => s + num(c.monto), 0); const venta = num(p.ventaEst); const res = venta - inv; const mg = venta > 0 ? res / venta * 100 : 0;
+      return (<div key={p.id} style={{ background: T.bg, borderRadius: 12, padding: 13, marginTop: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><span style={{ fontSize: 14.5, fontWeight: 800 }}>{p.nombre}</span><button onClick={() => delPropia(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>Eliminar</button></div>
+        {CAT_PROPIA.filter(c => porCat[c] > 0).map(c => <Line key={c} t={c} v={money(porCat[c])} c={T.warn} />)}
+        <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 6 }}><Line t="Inversión total (llave en mano)" v={money(inv)} c={T.text} /></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}><span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Precio de venta estimado</span><input defaultValue={p.ventaEst ? fmtMiles(p.ventaEst) : ""} onBlur={e => setVentaDe(p.id, e.target.value)} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: 120, textAlign: "right" }} /></div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado esperado {venta > 0 ? `· ${mg.toFixed(0)}%` : ""}</span><Money v={res} c={res >= 0 ? T.ok : "#EF4444"} /></div>
+        <CostoAdderPropia onAdd={(cat, monto) => addCosto(p.id, cat, monto)} />
+        {costos.length > 0 && <div style={{ marginTop: 8 }}>{costos.slice().reverse().map(c => <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: T.sub, padding: "3px 0" }}><span>{c.cat}</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}>{money(num(c.monto))}<button onClick={() => delCosto(p.id, c.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></span></div>)}</div>}
+      </div>);
+    })}
+    {propias.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nueva" para cargar una obra propia con su lote y costos.</div>}
+  </div>);
+}
+function BarrasMes({ titulo, series, meses }) {
+  if (!meses.length) return null;
+  const max = Math.max(1, ...meses.map(m => series.reduce((s, se) => Math.max(s, se.data[m] || 0), 0)));
+  return (<div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm }}>
+    <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 12 }}>{titulo}</div>
+    {meses.map(m => <div key={m} style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginBottom: 3 }}><span style={{ color: T.sub, fontWeight: 600 }}>{mesLabel(m)}</span><span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{series.map((se, i) => <span key={i} style={{ color: se.color, marginLeft: i ? 8 : 0 }}>{money(se.data[m] || 0)}</span>)}</span></div>
+      <div style={{ display: "flex", gap: 3, height: series.length > 1 ? 8 : 10 }}>{series.map((se, i) => <div key={i} style={{ flex: 1, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ width: `${(se.data[m] || 0) / max * 100}%`, height: "100%", background: se.color, borderRadius: 4 }} /></div>)}</div>
+    </div>)}
+    {series.length > 1 && <div style={{ display: "flex", gap: 14, marginTop: 4, fontSize: 11 }}>{series.map((se, i) => <span key={i} style={{ color: T.sub }}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: se.color, marginRight: 5 }} />{se.nombre}</span>)}</div>}
+  </div>);
+}
 function presupCosto(o) { return num(o?.m2) * num(o?.costoM2); }
 function incidencia(o, r) { return num(r?.pct) / 100; }
 function sumaIncid(o) { return (o?.rubros || []).reduce((s, r) => s + num(r.pct), 0); }
@@ -200,7 +307,7 @@ export default function App() {
       </div>
     </div>
     <div style={{ display: "flex", background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
-      {[["presupuesto", "Presupuestos"], ["costo", "Cert.", "costo"], ["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"]].map(([k, l1, l2]) => (
+      {[["presupuesto", "Presupuestos"], ["costo", "Cert.", "costo"], ["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]].map(([k, l1, l2]) => (
         <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "10px 1px 9px", fontSize: 10.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative", letterSpacing: "-0.01em", lineHeight: 1.2 }}>{l1}{l2 ? <><br />{l2}</> : ""}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
       ))}
     </div>
@@ -210,6 +317,7 @@ export default function App() {
       {tab === "cliente" && <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
       {tab === "caja" && <CajaTab obras={obras} data={data} save={save} certs={certs} certsDe={certsDe} indices={indices} />}
       {tab === "resultado" && <ResultadoTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
+      {tab === "agenda" && <AgendaTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
     </div>
     {verConfig && <ConfigModal data={data} save={save} onClose={() => setVerConfig(false)} />}
   </div>);
@@ -937,6 +1045,11 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
       <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado · margen {mg.toFixed(1)}%</span><Money v={p.res} c={p.res >= 0 ? T.ok : "#EF4444"} /></div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.bg}`, fontSize: 11 }}><span style={{ color: T.muted }}>Resto a cobrar {money(p.restoCobrar)}</span><span style={{ color: T.muted }}>Resto a pagar {money(p.restoPagar)}</span></div>
     </div>); })}
+    {(() => { const factMes = {}, cobroMes = {}, pagoMes = {}; certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); const m = mesDe(c.fecha); factMes[m] = (factMes[m] || 0) + r.ajustado; }); (data.movimientos || []).forEach(mv => { const m = mesDe(mv.fecha); if (mv.tipo === "cobro") cobroMes[m] = (cobroMes[m] || 0) + num(mv.monto); else if (mv.tipo === "pago") pagoMes[m] = (pagoMes[m] || 0) + num(mv.monto); }); const mF = Object.keys(factMes).sort(); const mC = Array.from(new Set([...Object.keys(cobroMes), ...Object.keys(pagoMes)])).sort(); return <>
+      {mF.length > 0 && <BarrasMes titulo="Facturación por mes" meses={mF} series={[{ nombre: "Facturado", color: T.accent, data: factMes }]} />}
+      {mC.length > 0 && <BarrasMes titulo="Cobros vs pagos por mes" meses={mC} series={[{ nombre: "Cobros", color: T.ok, data: cobroMes }, { nombre: "Pagos", color: T.warn, data: pagoMes }]} />}
+    </>; })()}
+    <PropiasPanel data={data} save={save} />
     <button onClick={() => { const n = prompt("Nueva clave (números):", ""); if (n && n.trim()) { try { localStorage.setItem("finanzas_pin", n.trim()); } catch { } alert("Clave actualizada."); } }} style={{ display: "block", margin: "8px auto 0", background: "none", border: "none", color: T.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>Cambiar clave</button>
   </div>);
 }
