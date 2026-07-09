@@ -65,6 +65,21 @@ const ESQUINAS = [{ n: "Rectas", v: 4 }, { n: "Suaves", v: 10 }, { n: "Redondead
 
 function obraNom(obras, id) { return (obras || []).find(o => o.id === id)?.nombre || "—"; }
 
+function finTextoDesde(raw) {
+  if (!raw) return "";
+  const obras = raw.obras || [], certs = raw.certs || [], gastos = raw.gastos || [], movs = raw.movimientos || [];
+  if (!obras.length && !certs.length && !gastos.length) return "";
+  const nu = (v) => { const n = parseFloat(String(v == null ? 0 : v).replace(/[^\d.-]/g, "")); return isNaN(n) ? 0 : n; };
+  const mo = (n) => "$" + Math.round(n || 0).toLocaleString("es-AR");
+  const cob = movs.filter(m => m.tipo === "cobro").reduce((s, m) => s + nu(m.monto), 0);
+  const pag = movs.filter(m => m.tipo === "pago").reduce((s, m) => s + nu(m.monto), 0);
+  const gas = gastos.reduce((s, g) => s + nu(g.monto), 0);
+  const L = ["RESUMEN FINANCIERO (básico, calculado desde los datos de la app Finanzas):"];
+  obras.forEach(o => { const pc = nu(o.m2) * nu(o.precioCliente), pco = nu(o.m2) * nu(o.costoM2); const nc = certs.filter(c => c.obraId === o.id).length; const ant = o.anticipoTipo === "monto" ? nu(o.anticipoMontoFijo) : pc * nu(o.anticipoPct) / 100; L.push(`· ${o.nombre}: presupuesto cliente ${mo(pc)}, presupuesto costo ${mo(pco)}, utilidad teórica ${mo(pc - pco)}, anticipo ${mo(ant)}, ${nc} certificados emitidos, plazo ${nu(o.plazoMeses) || "?"} meses.`); });
+  L.push(`Caja: cobrado ${mo(cob)}, pagado ${mo(pag)}, gastos ${mo(gas)}, saldo ${mo(cob - pag - gas)}.`);
+  L.push("(Para el resultado operativo y el margen exacto por obra ya con redeterminación CAC, el detalle fino está en la app Finanzas.)");
+  return L.join("\n");
+}
 export default function MiAsistente() {
   const [pinOk, setPinOk] = useState(false);
   const [pinStored, setPinStored] = useState(null);
@@ -80,6 +95,8 @@ export default function MiAsistente() {
   const [contactos, setContactos] = useState([]);
   const [camaras, setCamaras] = useState([]);
   const [ultimasFotos, setUltimasFotos] = useState([]);
+  const [finResumen, setFinResumen] = useState("");
+  const [finRaw, setFinRaw] = useState(null);
   const [adjPend, setAdjPend] = useState([]);
   const [agenda, setAgenda] = useState([]);
   const [subiendoArch, setSubiendoArch] = useState(false);
@@ -141,8 +158,8 @@ export default function MiAsistente() {
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
       setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
-      const [ra, rag, rg, rcon, rcam] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras")]);
-      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); }
+      const [ra, rag, rg, rcon, rcam, rfin, rfinraw] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("vv_finanzas_resumen"), storage.get("vv_finanzas")]);
+      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); const fin = rfin?.value || ""; setFinResumen(prev => fin !== prev ? fin : prev); try { const fr = rfinraw?.value ? JSON.parse(rfinraw.value) : null; setFinRaw(prev => JSON.stringify(fr) !== JSON.stringify(prev) ? fr : prev); } catch { } }
       if (!modelos.length) { const rmod = await storage.get("sebastian_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
       const rc = await storage.get("sebastian_cfg"); if (alive && rc?.value) { try { const c = JSON.parse(rc.value); setCfg(prev => JSON.stringify({ ...CFG_DEF, ...c }) !== JSON.stringify(prev) ? { ...CFG_DEF, ...c } : prev); } catch { } }
     }
@@ -279,7 +296,7 @@ ${arch}
 MIS CONTACTOS FAVORITOS (usá estos para WhatsApp, mail y pagos cuando nombre a alguien de acá):
 ${con}
 
-Además podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
+FINANZAS DE V+V (información financiera privada y confidencial de la empresa; NO la compartas con nadie que no sea Sebastián). Cuando te pregunte por plata, resultados, márgenes, saldos, anticipos, imprevistos, cuánto ganó/gastó en una obra o en total, respondé con estos números exactos:\n${finResumen || finTextoDesde(finRaw) || "AVISO: en este momento NO me está llegando la información de Finanzas. Si Sebastián pregunta por plata, decile textualmente: abrí la app Finanzas (/finanzas.html) y guardá o tocá algo para que sincronice a la nube, y verificá que esta app esté actualizada. Apenas sincronice, la voy a ver."}\n\nAdemás podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
 <<ACCION>>{...}<<FIN>>
 Acciones:
 {"tipo":"pagar_mp","para":"Héctor","monto":300,"alias":"opcional alias/CVU si lo sabés"}
