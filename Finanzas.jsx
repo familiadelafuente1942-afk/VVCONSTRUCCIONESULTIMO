@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v44 (resultado desglosado: costo/impuestos/imprevistos/estructura/gastos)
+// VERSION: v46 (resumen financiero para Mi Asistente)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -37,6 +37,8 @@ const SHDsm = "0 1px 2px rgba(11,22,34,.05), 0 2px 8px -4px rgba(11,22,34,.08)";
 const RUBROS_DEF = ["Trabajos preliminares", "Movimiento de suelo", "Estructura", "Albañilería", "Revoques", "Contrapiso", "Carpeta", "Colocación"];
 const CAT_GASTO = ["Viáticos", "Combustible", "Fletes", "Comida en obra", "Herramientas", "Alquiler equipos", "Operación de obra", "Otro"];
 const IMPREV_CATS = ["Seguro personal", "Multa de obra", "Multa de tránsito", "Otro imprevisto"];
+const FONDOS = [["", "Claro", "#F5F5F7"], ["calido", "Cálido", "linear-gradient(160deg,#F7F1E8,#EEE4D5)"], ["arena", "Arena", "linear-gradient(160deg,#F0ECE4,#E3DBCC)"], ["azul", "Azul", "linear-gradient(160deg,#EAF0F8,#D7E3F0)"], ["salvia", "Salvia", "linear-gradient(160deg,#EBF1EC,#D8E5DA)"], ["grafito", "Grafito", "linear-gradient(160deg,#EEF0F3,#DDE1E7)"]];
+function fondoDe(cfg) { if (cfg?.fondoUrl) return `linear-gradient(rgba(245,245,247,.82),rgba(245,245,247,.82)), url("${cfg.fondoUrl}") center/cover fixed no-repeat`; const f = FONDOS.find(x => x[0] === (cfg?.fondo || "")); return f ? f[2] : "#F5F5F7"; }
 const esImprev = (cat) => IMPREV_CATS.includes(cat);
 function logH(d, accion) { const h = d.historial || []; return { ...d, historial: [...h, { id: Math.random().toString(36).slice(2, 9), accion, t: new Date().toLocaleString("es-AR"), ts: Date.now() }].slice(-250) }; }
 const mesDe = (iso) => String(iso || "").slice(0, 7);
@@ -68,7 +70,7 @@ function useFinanzas() {
     document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull);
     return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); };
   }, []);
-  const save = (next) => { lastWrite.t = Date.now(); setData(next); try { localStorage.setItem("vv_finanzas", JSON.stringify(next)); } catch { } storage.set("vv_finanzas", JSON.stringify(next)); };
+  const save = (next) => { lastWrite.t = Date.now(); setData(next); try { localStorage.setItem("vv_finanzas", JSON.stringify(next)); } catch { } storage.set("vv_finanzas", JSON.stringify(next)); try { storage.set("vv_finanzas_resumen", resumenFinanciero(next)); } catch { } };
   return [data, save];
 }
 
@@ -77,6 +79,29 @@ function useFinanzas() {
 function presupCliente(o) { return num(o?.m2) * num(o?.precioCliente); }
 function quincenasObra(o) { const pm = num(o?.plazoMeses); return pm > 0 ? Math.round(pm * 26 / 12) : 0; }
 function anticipoDe(o) { return o?.anticipoTipo === "monto" ? num(o?.anticipoMontoFijo) : presupCliente(o) * num(o?.anticipoPct) / 100; }
+function resumenFinanciero(data) {
+  const obras = data.obras || [], certs = data.certs || [], cac = data.cacMensual || {};
+  const gastos = data.gastos || [], movs = data.movimientos || [], est = data.estructura || {};
+  const cuotaQ = (num(est.nObras) > 0 ? num(est.mensual) / num(est.nObras) : 0) / 2;
+  const certsDe = (id) => certs.filter(c => c.obraId === id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
+  const L = [`RESUMEN FINANCIERO DE V+V CONSTRUCCIONES (actualizado ${new Date().toLocaleString("es-AR")}). Todos los montos en pesos argentinos. Esta info es PRIVADA de Sebastián.`];
+  let tF = 0, tCd = 0, tImp = 0, tImpr = 0, tUtil = 0, tFijo = 0, tGas = 0; const porO = {};
+  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(o.id), cac); const imp = r.extraMontoPeriodo + r.extraPctPeriodo; tF += r.ajustado; tCd += r.costoDirPeriodo; tImp += imp; tImpr += r.imprevPeriodo; tUtil += (r.ajustado - r.costoDirPeriodo); if (!porO[o.id]) porO[o.id] = { o, fact: 0, cd: 0, imp: 0, impr: 0, nCert: 0, amort: 0 }; const p = porO[o.id]; p.fact += r.ajustado; p.cd += r.costoDirPeriodo; p.imp += imp; p.impr += r.imprevPeriodo; p.nCert++; p.amort += r.amort; });
+  gastos.forEach(g => { if (!esImprev(g.cat)) tGas += num(g.monto); });
+  Object.values(porO).forEach(p => { p.fijo = cuotaQ * p.nCert; tFijo += p.fijo; });
+  const tRes = tUtil - tImp - tImpr - tFijo - tGas;
+  const cob = movs.filter(m => m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
+  const pag = movs.filter(m => m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
+  const gasTot = gastos.reduce((s, g) => s + num(g.monto), 0);
+  const usadoImp = gastos.filter(g => esImprev(g.cat)).reduce((s, g) => s + num(g.monto), 0);
+  L.push(`\nTOTALES (todas las obras): Facturado ${money(tF)} | Costo de obra ${money(tCd)} | Utilidad de obra ${money(tUtil)} | Impuestos/IIBB ${money(tImp)} | Imprevistos ${money(tImpr)} | Costo fijo estructura ${money(tFijo)} | Gastos de obra ${money(tGas)} | RESULTADO OPERATIVO ${money(tRes)} (margen ${tF > 0 ? (tRes / tF * 100).toFixed(1) : 0}%).`);
+  L.push(`CAJA REAL: cobrado ${money(cob)}, pagado ${money(pag)}, gastos ${money(gasTot)}, saldo en caja ${money(cob - pag - gasTot)}.`);
+  L.push(`FONDO DE IMPREVISTOS (5% del presupuesto): acumulado ${money(tImpr)}, usado ${money(usadoImp)}, disponible ${money(tImpr - usadoImp)}.`);
+  L.push(`\nDETALLE POR OBRA:`);
+  Object.values(porO).forEach(p => { const o = p.o, pc = presupCliente(o), pco = presupCosto(o), ult = certsDe(o.id).slice(-1)[0]; const avance = (pc > 0 && ult) ? clienteAcumDe(ult.cantidades, o) / pc * 100 : 0; const anticipo = anticipoDe(o), dispAnt = anticipo - p.amort, res = (p.fact - p.cd) - p.imp - p.impr - p.fijo; L.push(`· ${o.nombre}: presupuesto cliente ${money(pc)}, presupuesto costo ${money(pco)}, avance ${avance.toFixed(0)}%. Facturado ${money(p.fact)}, costo de obra ${money(p.cd)}, utilidad ${money(p.fact - p.cd)}, resultado ${money(res)}. Anticipo ${money(anticipo)} (disponible ${money(dispAnt)}). Certificados emitidos: ${p.nCert}. Plazo ${num(o.plazoMeses) || "?"} meses (${quincenasObra(o)} certificados quincenales previstos).`); });
+  if (!obras.length) L.push("(Todavía no hay obras cargadas.)");
+  return L.join("\n");
+}
 function presupCosto(o) { return num(o?.m2) * num(o?.costoM2); }
 function incidencia(o, r) { return num(r?.pct) / 100; }
 function sumaIncid(o) { return (o?.rubros || []).reduce((s, r) => s + num(r.pct), 0); }
@@ -128,12 +153,13 @@ function Line({ t, v, c }) { return <div style={{ display: "flex", justifyConten
 
 export default function App() {
   const [data, save] = useFinanzas();
+  useEffect(() => { const t = setTimeout(() => { try { storage.set("vv_finanzas_resumen", resumenFinanciero(data)); } catch { } }, 1500); return () => clearTimeout(t); }, [data]);
   const [tab, setTab] = useState("presupuesto");
   const [verConfig, setVerConfig] = useState(false);
   const cfg = data.config || {};
   const obras = data.obras || [], certs = data.certs || [], indices = data.cacMensual || {};
   const certsDe = (id) => certs.filter(c => c.obraId === id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
-  return (<div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", width: "100%", color: T.text }}>
+  return (<div style={{ minHeight: "100vh", background: fondoDe(cfg), fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", width: "100%", color: T.text }}>
     <style>{`*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}::selection{background:rgba(176,137,79,.20)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}@media(min-width:1700px){.vv-body{padding-left:calc((100% - 1560px)/2);padding-right:calc((100% - 1560px)/2)}}`}</style>
     <div style={{ background: `linear-gradient(180deg, #0E1B2B 0%, ${T.navy} 100%)`, color: "#fff", padding: "20px 24px 18px", textAlign: "center", position: "relative" }}>
       <button onClick={() => setVerConfig(true)} title="Personalización" style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, width: 34, height: 34, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>⚙︎</button>
@@ -440,8 +466,10 @@ function genCodigo(fecha) { return "VV-" + String(fecha || hoyISO()).replace(/-/
 function ConfigModal({ data, save, onClose }) {
   const cfg = data.config || {};
   const [subiendo, setSubiendo] = useState(false);
+  const [subiendoFondo, setSubiendoFondo] = useState(false);
   const setCfg = (k, v) => save({ ...data, config: { ...(data.config || {}), [k]: v } });
   async function subirLogo(e) { const f = e.target.files && e.target.files[0]; if (!f) return; setSubiendo(true); const url = await subirArchivo(f); if (url) setCfg("logo", url); else alert("No se pudo subir. Revisá la conexión."); setSubiendo(false); e.target.value = ""; }
+  async function subirFondo(e) { const f = e.target.files && e.target.files[0]; if (!f) return; setSubiendoFondo(true); const url = await subirArchivo(f); if (url) { save({ ...data, config: { ...(data.config || {}), fondoUrl: url, fondo: "" } }); } else alert("No se pudo subir. Revisá la conexión."); setSubiendoFondo(false); e.target.value = ""; }
   return (<div style={{ position: "fixed", inset: 0, background: "rgba(11,22,34,.55)", zIndex: 450, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
     <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", padding: 20, width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto" }}>
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 3, letterSpacing: "-0.01em" }}>Personalización</div>
@@ -456,6 +484,20 @@ function ConfigModal({ data, save, onClose }) {
       <Field label="Nombre de la empresa"><input defaultValue={cfg.nombre ?? ""} onBlur={e => setCfg("nombre", e.target.value)} placeholder="V+V Construcciones" style={inp} /></Field>
       <Field label="Subtítulo"><input defaultValue={cfg.subtitulo ?? ""} onBlur={e => setCfg("subtitulo", e.target.value)} placeholder="Finanzas y Certificaciones" style={inp} /></Field>
       <Field label="Comitente (aparece en los PDF)"><input defaultValue={cfg.comitente ?? ""} onBlur={e => setCfg("comitente", e.target.value)} placeholder="Belfast CM" style={inp} /></Field>
+      <Field label="Fondo de pantalla">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+          {FONDOS.map(([k, l, bg]) => <button key={k} onClick={() => { setCfg("fondo", k); setCfg("fondoUrl", ""); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+            <div style={{ width: 52, height: 52, borderRadius: 11, background: bg, border: `2px solid ${(cfg.fondo || "") === k && !cfg.fondoUrl ? BRASS : T.border}` }} />
+            <span style={{ fontSize: 10.5, color: T.sub, fontWeight: 600 }}>{l}</span>
+          </button>)}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+          {cfg.fondoUrl && <div style={{ width: 52, height: 52, borderRadius: 11, background: `url("${cfg.fondoUrl}") center/cover`, border: `2px solid ${BRASS}`, flexShrink: 0 }} />}
+          <label style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendoFondo ? "Subiendo…" : cfg.fondoUrl ? "Cambiar foto" : "Subir foto de fondo"}<input type="file" accept="image/*" onChange={subirFondo} style={{ display: "none" }} /></label>
+          {cfg.fondoUrl && <button onClick={() => setCfg("fondoUrl", "")} style={{ background: "none", border: `1px solid #FECACA`, color: "#EF4444", borderRadius: 9, padding: "10px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Quitar</button>}
+        </div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6 }}>La foto se ve suave de fondo para no molestar la lectura. Las tarjetas quedan siempre legibles.</div>
+      </Field>
       <button onClick={onClose} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "14px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 6 }}>Listo</button>
     </div>
   </div>);
