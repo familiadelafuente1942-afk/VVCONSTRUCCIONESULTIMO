@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v63 (respaldo: export Excel/CSV + backup JSON + restaurar)
+// VERSION: v64 (graficos torta y barras en sociedad, particulares, edificios y general)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -334,6 +334,7 @@ function PropiasPanel({ data, save }) {
           <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Venta est. $</div><input defaultValue={p.ventaArs ? fmtMiles(p.ventaArs) : ""} onBlur={e => setVenta(p.id, "ventaArs", e.target.value)} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: "100%", boxSizing: "border-box", textAlign: "right" }} /></div>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 9, paddingTop: 9, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado esperado{vU > 0 ? ` · ${mgU.toFixed(0)}%` : ""}</span><span style={{ fontSize: 13.5, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{vU > 0 && <span style={{ color: resU >= 0 ? T.ok : "#EF4444" }}>{usdFmt(resU)}</span>}{vA > 0 && <span style={{ color: resA >= 0 ? T.ok : "#EF4444", marginLeft: 8 }}>{money(resA)}</span>}{vU <= 0 && vA <= 0 && <span style={{ color: T.muted, fontSize: 11, fontWeight: 600 }}>cargá la venta</span>}</span></div>
+        {(() => { const rt = {}; costos.forEach(c => { rt[c.cat] = (rt[c.cat] || 0) + num(c.montoArs); }); const arr = Object.entries(rt).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]); const top = arr.slice(0, 7).map(([k, v]) => ({ label: k, value: v })); const ot = arr.slice(7).reduce((a, [, v]) => a + v, 0); if (ot > 0) top.push({ label: "Otros", value: ot }); return <div style={{ marginTop: 10 }}><GraficoTorta titulo="Costos por rubro" items={top} centro={money(totArs)} centroSub="inversión" /></div>; })()}
         <button onClick={() => setExpandir(e => ({ ...e, [p.id]: !e[p.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar rubros ▲" : "Cargar / ver rubros ▼"}</button>
         {exp && <div style={{ marginTop: 8 }}>{RUBROS_PROPIA.map(r => <RubroRow key={r} rubro={r} items={costos.filter(c => c.cat === r)} onAdd={(c) => addCosto(p.id, c)} onDel={(cid) => delCosto(p.id, cid)} cotizDef={cotizDef} setCotizDef={setCotizDef} />)}</div>}
         {(p.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>{(p.adjuntos || []).map(m => <div key={m.url} style={{ position: "relative" }}>{m.tipo === "video" ? <video src={m.url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", background: "#000" }} /> : <img src={m.url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover" }} />}<button onClick={() => delAdj(p.id, m.url)} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button></div>)}</div>}
@@ -949,6 +950,27 @@ function BarsH({ items }) {
   </div>))}</div>);
 }
 function Dot({ c }) { return <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: c, marginRight: 6, verticalAlign: "middle" }} />; }
+const PALETA = ["#1B3A5B", "#B0894F", "#16A34A", "#C2410C", "#7C3AED", "#0891B2", "#DB2777", "#65A30D", "#EA580C", "#4F46E5", "#0D9488", "#9333EA", "#CA8A04", "#DC2626"];
+function GraficoTorta({ titulo, items, centro, centroSub }) {
+  const its = (items || []).filter(x => Math.max(0, x.value) > 0);
+  if (!its.length) return null;
+  const segs = its.map((it, i) => ({ value: Math.max(0, it.value), color: it.color || PALETA[i % PALETA.length] }));
+  return <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 10, boxShadow: SHDsm }}>
+    <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>{titulo}</div>
+    <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+      <Donut segs={segs} size={128} thickness={18} centro={centro} centroSub={centroSub} />
+      <div style={{ flex: 1, minWidth: 140, fontSize: 12 }}>{its.map((it, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}><span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><Dot c={it.color || PALETA[i % PALETA.length]} />{it.label}</span><b style={{ marginLeft: 8, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{it.valueLabel != null ? it.valueLabel : money(it.value)}</b></div>)}</div>
+    </div>
+  </div>;
+}
+function GraficoBarras({ titulo, items }) {
+  const its = (items || []).filter(x => Math.abs(x.value) > 0);
+  if (!its.length) return null;
+  return <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 10, boxShadow: SHDsm }}>
+    <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 12 }}>{titulo}</div>
+    <BarsH items={its.map((it, i) => ({ ...it, color: it.color || PALETA[i % PALETA.length] }))} />
+  </div>;
+}
 function KPI({ t, v, c }) { return <div style={{ background: T.card, borderRadius: 14, padding: "13px 14px", flex: 1, minWidth: 0, boxShadow: SHDsm }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.06em" }}>{t}</div><div style={{ fontSize: 17, fontWeight: 700, color: c || T.text, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{v}</div></div>; }
 
 function MiniAdder({ titulo, campo1, campo2, tipos, onAdd, btn }) {
@@ -1049,6 +1071,9 @@ function GeneralPanel({ data, obras, certs, certsDe, indices }) {
       <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 8, fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>Egresos por modelo</div>
       {R("Clientes", cliEgr, T.warn)}{R("Sociedad", socEgr, T.warn)}{R("Particulares", propEgr, T.warn)}{R("Edificios", edifEgr, T.warn)}
     </div>
+    <GraficoBarras titulo="Cobrado por modelo (período)" items={[{ label: "Clientes", value: cliCob, color: T.ok }, { label: "Sociedad", value: socCob, color: "#16A34A" }]} />
+    <GraficoBarras titulo="Egresos / inversión por modelo (período)" items={[{ label: "Clientes", value: cliEgr }, { label: "Sociedad", value: socEgr }, { label: "Particulares", value: propEgr }, { label: "Edificios", value: edifEgr }]} />
+    <GraficoTorta titulo="Resultado por modelo (acumulado)" items={[{ label: "Cliente", value: cResCliente }, { label: "Sociedad", value: rSoc }, { label: "Particulares", value: rProp }, { label: "Edificios", value: rEdif }]} centro={money(resTotal)} centroSub="resultado" />
     {(Object.keys(cliObra).length > 0 || socObra.length > 0 || propObra.length > 0 || edifObra.length > 0) && <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Detalle por obra (período)</div>
       {Object.entries(cliObra).map(([k, v]) => <div key={"c" + k} style={{ padding: "6px 0", borderBottom: `1px solid ${T.border}` }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{k} <span style={{ fontSize: 9.5, color: T.accent, fontWeight: 700 }}>CLIENTE</span></div><div style={{ fontSize: 11.5, color: T.sub }}>Cobrado {money(v.cob)} · Egresos {money(v.egr)}</div></div>)}
@@ -1111,6 +1136,9 @@ function SociedadPanel({ data, save }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}><span style={{ fontSize: 12.5, fontWeight: 800 }}>Utilidad por distribuir</span><Money v={rest} c={rest >= 0 ? T.ok : "#EF4444"} /></div>
         <button onClick={() => setExpand(x => ({ ...x, [s.id]: !x[s.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar detalle ▲" : "Socios · cobros · adicionales · gastos · retiros ▼"}</button>
         {exp && <div style={{ marginTop: 8 }}>
+          <GraficoTorta titulo="Composición del presupuesto" items={[{ label: "Costo", value: costoReal - imprevTot }, { label: "Imprevistos", value: imprevTot }, { label: "Utilidad", value: Math.max(0, util) }]} centro={money(presTotal)} centroSub="presup." />
+          {lsoc.length > 0 && <GraficoBarras titulo="Reparto de utilidad por socio" items={lsoc.map(so => ({ label: `${so.nombre} (${num(so.pct)}%)`, value: util * num(so.pct) / 100 }))} />}
+          <GraficoTorta titulo="Cobranza" items={[{ label: "Cobrado", value: cobrado, color: T.ok }, { label: "Resta a cobrar", value: Math.max(0, presTotal - cobrado), color: T.warn }]} centro={presTotal > 0 ? Math.round(cobrado / presTotal * 100) + "%" : "0%"} centroSub="cobrado" />
           <div style={{ background: T.card, borderRadius: 10, padding: 11, marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 11, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em" }}>Socios y reparto</span>{lsoc.length > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: sumaPct === 100 ? T.ok : T.warn }}>{sumaPct}%{sumaPct !== 100 ? " ⚠" : " ✓"}</span>}</div>
             {lsoc.map(so => { const corr = util * num(so.pct) / 100; const retS = retiros.filter(r => r.socioId === so.id).reduce((a, r) => a + num(r.monto), 0); const queda = corr - retS; return <div key={so.id} style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
@@ -1206,6 +1234,10 @@ function EdificiosPanel({ data, save }) {
         <div style={{ display: "flex", justifyContent: "space-between", background: T.card, borderRadius: 9, padding: "9px 11px" }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>Inversión total</span><span style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}><b style={{ color: T.accent }}>{usdFmt(totUsd)}</b> <span style={{ color: T.muted }}>/ {money(totArs)}</span></span></div>
         <div style={{ display: "flex", justifyContent: "space-between", background: T.card, borderRadius: 9, padding: "9px 11px", marginTop: 6 }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>Venta proyectada <span style={{ fontSize: 10.5, color: T.muted }}>· {unidades.length} un. ({nV} vend.)</span></span><span style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}><b style={{ color: T.accent }}>{usdFmt(vtaUsd)}</b> <span style={{ color: T.muted }}>/ {money(vtaArs)}</span></span></div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 9, paddingTop: 9, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado esperado</span><span style={{ fontSize: 13.5, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}><span style={{ color: resU >= 0 ? T.ok : "#EF4444" }}>{usdFmt(resU)}</span><span style={{ color: resA >= 0 ? T.ok : "#EF4444", marginLeft: 8 }}>{money(resA)}</span></span></div>
+        {(() => { const porEstado = { disponible: 0, reservado: 0, vendido: 0 }; unidades.forEach(u => { porEstado[u.estado || "disponible"] += num(u.precioUsd); }); const rt = {}; costos.forEach(c => { rt[c.cat] = (rt[c.cat] || 0) + num(c.montoArs); }); const arr = Object.entries(rt).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]); const top = arr.slice(0, 7).map(([k, v]) => ({ label: k, value: v })); const ot = arr.slice(7).reduce((a, [, v]) => a + v, 0); if (ot > 0) top.push({ label: "Otros", value: ot }); return <div style={{ marginTop: 10 }}>
+          <GraficoTorta titulo="Unidades por estado (US$)" items={[{ label: "Vendido", value: porEstado.vendido, color: T.ok }, { label: "Reservado", value: porEstado.reservado, color: T.warn }, { label: "Disponible", value: porEstado.disponible, color: T.muted }].map(x => ({ ...x, valueLabel: usdFmt(x.value) }))} centro={unidades.length + ""} centroSub="unidades" />
+          <GraficoTorta titulo="Costos por rubro" items={top} centro={money(totArs)} centroSub="inversión" />
+        </div>; })()}
         <button onClick={() => setExpandir(x => ({ ...x, [e.id]: !x[e.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar unidades y costos ▲" : "Cargar unidades y costos ▼"}</button>
         {exp && <div style={{ marginTop: 10 }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Unidades (departamentos)</div>
