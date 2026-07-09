@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v67 (barras en todos los modelos ademas de tortas)
+// VERSION: v68 (export Excel real xlsx con hojas por modelo)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -186,6 +186,29 @@ function svgBarrasHTML(titulo, items, PAL) {
   const max = Math.max(1, ...its.map(i => Math.abs(i.value)));
   const rows = its.map((it, i) => { const col = it.color || PAL[i % PAL.length]; const w = Math.abs(it.value) / max * 100; const vl = it.valueLabel != null ? it.valueLabel : "$" + Math.round(it.value).toLocaleString("es-AR"); return `<div class="brow"><div class="blab"><span>${it.label}</span><b>${vl}</b></div><div class="btrack"><div class="bfill" style="width:${w}%;background:${col}"></div></div></div>`; }).join("");
   return `<h2>${titulo}</h2>${rows}`;
+}
+function cargarXLSX() { return new Promise((res, rej) => { if (typeof window !== "undefined" && window.XLSX) return res(window.XLSX); const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; s.onload = () => res(window.XLSX); s.onerror = () => rej(new Error("no se pudo cargar la librería")); document.head.appendChild(s); }); }
+async function exportarExcel(data) {
+  const M = (n) => Math.round(num(n) || 0);
+  try {
+    const XLSX = await cargarXLSX(); const wb = XLSX.utils.book_new();
+    const add = (nombre, aoa, cols) => { const ws = XLSX.utils.aoa_to_sheet(aoa); if (cols) ws["!cols"] = cols.map(w => ({ wch: w })); ws["!freeze"] = { xSplit: 0, ySplit: 1 }; XLSX.utils.book_append_sheet(wb, ws, nombre.slice(0, 31)); };
+    const obras = data.obras || []; const nom = (id) => { const o = obras.find(x => x.id === id); return o ? o.nombre : "General"; };
+    const rSoc = (data.sociedad || []).reduce((a, s) => { const pi = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto); const ad = (s.adicionales || []).reduce((x, y) => x + num(y.monto), 0); const cr = (s.gastos || []).reduce((x, y) => x + num(y.monto), 0); return a + (pi + ad - cr); }, 0);
+    const rProp = (data.propias || []).reduce((a, p) => a + (num(p.ventaArs) - (p.costos || []).reduce((x, y) => x + num(y.montoArs), 0)), 0);
+    const rEdif = (data.edificios || []).reduce((a, e) => { const inv = (e.costos || []).reduce((x, y) => x + num(y.montoArs), 0); const vta = (e.unidades || []).reduce((x, y) => x + num(y.precioArs), 0); return a + (vta - inv); }, 0);
+    add("Resumen", [["V+V CONSTRUCCIONES"], ["Respaldo generado", new Date().toLocaleString("es-AR")], [], ["Modelo", "Resultado $"], ["Obras en sociedad", rSoc], ["Obras particulares", rProp], ["Edificios", rEdif]], [26, 18]);
+    add("Obras cliente", [["Nombre", "m2", "Precio cli/m2", "Costo/m2", "Presup cliente", "Presup costo", "Plazo(m)", "Mes base"], ...obras.map(o => [o.nombre, num(o.m2), num(o.precioCliente), num(o.costoM2), M(num(o.m2) * num(o.precioCliente)), M(num(o.m2) * num(o.costoM2)), num(o.plazoMeses), o.mesBase || ""])], [24, 8, 14, 14, 16, 16, 9, 10]);
+    const cert = [["Obra", "Fecha", "Rubro", "% acumulado"]]; (data.certs || []).forEach(c => { const o = obras.find(x => x.id === c.obraId); Object.entries(c.cantidades || {}).forEach(([rid, p]) => { const rb = (o && o.rubros || []).find(r => r.id === rid); cert.push([o ? o.nombre : "", c.fecha, rb ? rb.nombre : rid, num(p)]); }); }); add("Certificados", cert, [24, 12, 22, 12]);
+    add("Movimientos", [["Tipo", "Obra", "Monto", "Fecha", "Nota"], ...(data.movimientos || []).map(m => [m.tipo, nom(m.obraId), M(m.monto), m.fecha, m.nota || ""])], [10, 22, 14, 12, 26]);
+    add("Gastos", [["Categoria", "Obra", "Monto", "Fecha", "Nota"], ...(data.gastos || []).map(g => [g.cat, nom(g.obraId), M(g.monto), g.fecha, g.nota || ""])], [18, 22, 14, 12, 26]);
+    add("Sociedad", [["Obra", "Presup inicial", "Costo estimado", "Adicionales", "Costo real", "Cobrado", "Utilidad", "Retiros"], ...(data.sociedad || []).map(s => { const pi = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto); const ad = (s.adicionales || []).reduce((a, x) => a + num(x.monto), 0); const cr = (s.gastos || []).reduce((a, x) => a + num(x.monto), 0); const cob = (s.cobros || []).reduce((a, x) => a + num(x.monto), 0); const ret = (s.retiros || s.pagos || []).reduce((a, x) => a + num(x.monto), 0); return [s.nombre, M(pi), M(s.costoEstimado), M(ad), M(cr), M(cob), M(pi + ad - cr), M(ret)]; })], [22, 16, 16, 14, 14, 14, 14, 14]);
+    const det = [["Obra", "Tipo", "Detalle", "Monto", "Fecha"]]; (data.sociedad || []).forEach(s => { (s.adicionales || []).forEach(a => det.push([s.nombre, "Adicional", a.texto || "", M(a.monto), a.fecha || ""])); (s.gastos || []).forEach(g => det.push([s.nombre, "Gasto " + (g.tipo || ""), g.texto || "", M(g.monto), g.fecha || ""])); (s.cobros || []).forEach(c => det.push([s.nombre, "Cobro", c.texto || "", M(c.monto), c.fecha || ""])); (s.socios || []).forEach(so => det.push([s.nombre, "Socio", so.nombre + " (" + num(so.pct) + "%)", so.tel || "", ""])); (s.retiros || []).forEach(r => { const so = (s.socios || []).find(x => x.id === r.socioId); det.push([s.nombre, "Retiro", so ? so.nombre : (r.texto || ""), M(r.monto), r.fecha || ""]); }); }); add("Sociedad detalle", det, [22, 16, 26, 14, 12]);
+    const prop = [["Obra", "Rubro", "US$", "$", "Cotiz", "Nota"]]; (data.propias || []).forEach(p => { (p.costos || []).forEach(c => prop.push([p.nombre, c.cat, M(c.montoUsd), M(c.montoArs), num(c.cotiz), c.nota || ""])); prop.push([p.nombre, "VENTA ESTIMADA", M(p.ventaUsd), M(p.ventaArs), "", ""]); }); add("Particulares", prop, [22, 28, 14, 14, 10, 24]);
+    const ed = [["Edificio", "Tipo", "Detalle", "US$", "$", "Estado"]]; (data.edificios || []).forEach(e => { (e.unidades || []).forEach(u => ed.push([e.nombre, "Unidad", u.nombre, M(u.precioUsd), M(u.precioArs), u.estado || ""])); (e.costos || []).forEach(c => ed.push([e.nombre, "Costo", c.cat, M(c.montoUsd), M(c.montoArs), ""])); }); add("Edificios", ed, [22, 10, 28, 14, 14, 12]);
+    add("Presupuestos", [["Nombre", "Cliente", "Monto", "Estado", "Fecha", "Motivo"], ...(data.presupuestosSoc || []).map(p => [p.nombre, p.cliente || "", M(p.monto), (EST_PRES.find(e => e[0] === p.estado) || ["", p.estado])[1], p.fechaLimite || "", p.motivo || ""])], [24, 18, 14, 14, 12, 26]);
+    XLSX.writeFile(wb, `VV-Finanzas-${hoyISO()}.xlsx`);
+  } catch (e) { alert("No pude generar el Excel (" + (e && e.message) + "). Te bajo el CSV como alternativa."); descargarArchivo(`VV-Finanzas-${hoyISO()}.csv`, csvDe(data), "text/csv;charset=utf-8"); }
 }
 function reporteHTML(titulo, subtitulo, secciones, media, cfg, graficos) {
   const marca = (cfg && cfg.nombre) || "V+V Construcciones";
@@ -792,11 +815,11 @@ function ConfigModal({ data, save, onClose }) {
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>Respaldo de datos</div>
         <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Tus datos ya se guardan solos en la nube. Igual podés descargar copias por las dudas.</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => descargarArchivo(`VV-Finanzas-${hoyISO()}.csv`, csvDe(data), "text/csv;charset=utf-8")} style={{ flex: "1 1 45%", background: "#1D6F42", color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Descargar Excel</button>
+          <button onClick={() => exportarExcel(data)} style={{ flex: "1 1 45%", background: "#1D6F42", color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Descargar Excel</button>
           <button onClick={() => descargarArchivo(`VV-Finanzas-RESPALDO-${hoyISO()}.json`, JSON.stringify(data, null, 2), "application/json")} style={{ flex: "1 1 45%", background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Respaldo completo</button>
         </div>
         <label style={{ display: "block", textAlign: "center", background: T.al, color: T.accent, border: `1px dashed ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>Restaurar desde respaldo (.json)<input type="file" accept=".json,application/json" onChange={async e => { const f = e.target.files && e.target.files[0]; if (!f) return; try { const txt = await f.text(); const obj = JSON.parse(txt); if (!obj || typeof obj !== "object") throw new Error("Archivo inválido"); if (confirm("Esto REEMPLAZA todos los datos actuales por los del respaldo. ¿Continuar?")) { save(obj); alert("Respaldo restaurado ✓"); } } catch (err) { alert("No se pudo restaurar: " + (err && err.message)); } e.target.value = ""; }} style={{ display: "none" }} /></label>
-        <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>El "Excel" (.csv) es para leer/analizar. El "Respaldo completo" (.json) es el que sirve para restaurar todo exacto si perdés el acceso — guardalo en tu mail o en Archivos.</div>
+        <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>El "Excel" (.xlsx) sale con una hoja por modelo (Obras cliente, Certificados, Movimientos, Gastos, Sociedad, Particulares, Edificios, Presupuestos), igual que la app. El "Respaldo completo" (.json) es el que sirve para restaurar todo exacto si perdés el acceso — guardalo en tu mail o en Archivos.</div>
       </div>
       <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Otras apps de V+V</div>
