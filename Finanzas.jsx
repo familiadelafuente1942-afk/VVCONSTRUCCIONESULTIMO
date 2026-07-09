@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v49 (modo oscuro + tipografias)
+// VERSION: v50 (acceso rapido a otras apps)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -536,6 +536,13 @@ function ConfigModal({ data, save, onClose }) {
         </div>
         <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6 }}>La foto se ve suave de fondo para no molestar la lectura. Las tarjetas quedan siempre legibles.</div>
       </Field>
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Otras apps de V+V</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {[["mi-asistente.html", "🤖 Mi Asistente"], ["index.html", "🏗 V+V"], ["cliente.html", "👤 Cliente"], ["contratista.html", "🧰 Contratista"], ["nicolas.html", "📋 Nicolás"]].map(([href, l]) => <a key={href} href={href} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>{l}</a>)}
+        </div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 7 }}>Se abren en la misma ventana. Mi Asistente ya ve estas finanzas para responderte por plata.</div>
+      </div>
       <button onClick={onClose} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "14px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 6 }}>Listo</button>
     </div>
   </div>);
