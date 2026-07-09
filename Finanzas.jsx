@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v57 (sociedad: adicionales, costo real, imprevistos, retiros)
+// VERSION: v58 (sociedad: cobranza, socios y reparto, retiros por socio)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -848,19 +848,50 @@ function MiniAdder({ titulo, campo1, campo2, tipos, onAdd, btn }) {
     </div>
   </div>;
 }
+function MoneyInput({ value, onSave, placeholder, style }) {
+  const [v, setV] = useState(value ? fmtMiles(value) : "");
+  useEffect(() => { setV(value ? fmtMiles(value) : ""); }, [value]);
+  return <input value={v} onChange={e => setV(fmtMiles(e.target.value))} onBlur={() => onSave(numMoney(v))} inputMode="numeric" placeholder={placeholder} style={style} />;
+}
+function SocioAdder({ onAdd }) {
+  const [nombre, setNombre] = useState(""); const [pct, setPct] = useState(""); const [tel, setTel] = useState("");
+  return <div style={{ background: T.bg, borderRadius: 9, padding: 10, marginTop: 8 }}>
+    <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 6 }}>Agregar socio</div>
+    <div style={{ display: "flex", gap: 6 }}>
+      <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre del socio" style={{ ...inpSm, flex: 1 }} />
+      <input value={pct} onChange={e => setPct(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" placeholder="%" style={{ ...inpSm, width: 64, textAlign: "right" }} />
+    </div>
+    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+      <input value={tel} onChange={e => setTel(e.target.value)} inputMode="tel" placeholder="Teléfono / info (opcional)" style={{ ...inpSm, flex: 1 }} />
+      <button onClick={() => { if (nombre.trim()) { onAdd({ nombre: nombre.trim(), pct: num(pct), tel: tel.trim() }); setNombre(""); setPct(""); setTel(""); } }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "0 15px", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>＋</button>
+    </div>
+  </div>;
+}
+function RetiroAdder({ socios, onAdd }) {
+  const [socioId, setSocioId] = useState(""); const [monto, setMonto] = useState(""); const [fecha, setFecha] = useState(hoyISO());
+  return <div style={{ background: T.bg, borderRadius: 9, padding: 10, marginTop: 8 }}>
+    <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 6 }}>Nuevo retiro de utilidad</div>
+    {socios.length > 0 ? <select value={socioId} onChange={e => setSocioId(e.target.value)} style={{ ...inpSm, width: "100%", boxSizing: "border-box" }}><option value="">Elegí socio…</option>{socios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}</select> : <div style={{ fontSize: 11, color: T.muted }}>Cargá los socios primero para asignar el retiro.</div>}
+    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+      <input value={monto} onChange={e => setMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Monto $" style={{ ...inpSm, flex: 1, textAlign: "right" }} />
+      <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inpSm, width: 138 }} />
+      <button onClick={() => { if (numMoney(monto) > 0 && (socioId || !socios.length)) { const so = socios.find(x => x.id === socioId); onAdd({ socioId, texto: so ? so.nombre : "Socio", monto: numMoney(monto), fecha }); setMonto(""); } }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "0 15px", fontWeight: 700, fontSize: 16, cursor: "pointer" }}>＋</button>
+    </div>
+  </div>;
+}
 function SociedadPanel({ data, save }) {
   const socios = data.sociedad || [];
   const [abrir, setAbrir] = useState(false); const [expand, setExpand] = useState({});
   const [f, setF] = useState({ nombre: "", descripcion: "", presupuesto: "", costoEst: "" });
-  const add = () => { if (!f.nombre.trim()) return; save({ ...data, sociedad: [...socios, { id: uid(), nombre: f.nombre.trim(), descripcion: f.descripcion.trim(), presupuestoInicial: numMoney(f.presupuesto), costoEstimado: numMoney(f.costoEst), adicionales: [], gastos: [], retiros: [], ts: Date.now() }] }); setF({ nombre: "", descripcion: "", presupuesto: "", costoEst: "" }); setAbrir(false); };
+  const add = () => { if (!f.nombre.trim()) return; save({ ...data, sociedad: [...socios, { id: uid(), nombre: f.nombre.trim(), descripcion: f.descripcion.trim(), presupuestoInicial: numMoney(f.presupuesto), costoEstimado: numMoney(f.costoEst), adicionales: [], gastos: [], cobros: [], retiros: [], socios: [], ts: Date.now() }] }); setF({ nombre: "", descripcion: "", presupuesto: "", costoEst: "" }); setAbrir(false); };
   const upd = (id, fn) => save({ ...data, sociedad: socios.map(x => x.id === id ? fn(x) : x) });
   const del = (id) => save({ ...data, sociedad: socios.filter(x => x.id !== id) });
   const push = (id, campo, item) => upd(id, s => ({ ...s, [campo]: [...(s[campo] || []), { id: uid(), ts: Date.now(), ...item }] }));
   const pull = (id, campo, iid) => upd(id, s => ({ ...s, [campo]: (s[campo] || []).filter(x => x.id !== iid) }));
-  const setCampo = (id, k, v) => upd(id, s => ({ ...s, [k]: numMoney(v) }));
+  const setCampo = (id, k, v) => upd(id, s => ({ ...s, [k]: v }));
   return (<div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras en sociedad</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Presupuesto y costo reales (con adicionales e imprevistos) y retiros de utilidades.</div></div>
+      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras en sociedad</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Presupuesto y costo reales, cobranza, socios y reparto de utilidades.</div></div>
       <button onClick={() => setAbrir(o => !o)} style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{abrir ? "Cerrar" : "+ Nueva"}</button>
     </div>
     {abrir && <div style={{ background: T.bg, borderRadius: 11, padding: 12, marginTop: 10 }}>
@@ -874,31 +905,45 @@ function SociedadPanel({ data, save }) {
     </div>}
     {socios.map(s => {
       const presIni = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto); const costoEst = num(s.costoEstimado != null ? s.costoEstimado : s.costo);
-      const adic = s.adicionales || []; const gastos = s.gastos || []; const retiros = s.retiros || s.pagos || [];
+      const adic = s.adicionales || [], gastos = s.gastos || [], cobros = s.cobros || [], retiros = s.retiros || s.pagos || [], lsoc = s.socios || [];
       const adicTot = adic.reduce((a, x) => a + num(x.monto), 0); const presTotal = presIni + adicTot;
       const costoReal = gastos.reduce((a, x) => a + num(x.monto), 0); const imprevTot = gastos.filter(g => g.tipo === "imprevisto").reduce((a, x) => a + num(x.monto), 0);
+      const cobrado = cobros.reduce((a, x) => a + num(x.monto), 0); const restaCobrar = presTotal - cobrado;
       const util = presTotal - costoReal; const retTot = retiros.reduce((a, x) => a + num(x.monto), 0); const rest = util - retTot; const mg = presTotal > 0 ? util / presTotal * 100 : 0;
-      const exp = expand[s.id];
+      const sumaPct = lsoc.reduce((a, x) => a + num(x.pct), 0); const exp = expand[s.id];
       return (<div key={s.id} style={{ background: T.bg, borderRadius: 12, padding: 13, marginTop: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}><span style={{ fontSize: 14.5, fontWeight: 800 }}>{s.nombre}</span><button onClick={() => del(s.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>Eliminar</button></div>
         {s.descripcion && <div style={{ fontSize: 11.5, color: T.sub, marginBottom: 8, lineHeight: 1.4 }}>{s.descripcion}</div>}
         <Line t={`Presupuesto (inicial ${money(presIni)}${adicTot > 0 ? ` + adic. ${money(adicTot)}` : ""})`} v={money(presTotal)} c={T.accent} />
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "2px 0" }}><span style={{ color: T.sub }}>Cobrado / resta a cobrar</span><span><b style={{ color: T.ok }}>{money(cobrado)}</b> <span style={{ color: T.muted }}>/ {money(restaCobrar)}</span></span></div>
         <Line t={`Costo real${imprevTot > 0 ? ` (imprev. ${money(imprevTot)})` : ""}`} v={money(costoReal)} c={T.warn} />
         {costoEst > 0 && <div style={{ fontSize: 10.5, color: T.muted, marginTop: -2, marginBottom: 4 }}>Costo estimado {money(costoEst)} · desvío {costoReal - costoEst >= 0 ? "+" : ""}{money(costoReal - costoEst)}</div>}
         <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Utilidad {presTotal > 0 ? `· ${mg.toFixed(0)}%` : ""}</span><Money v={util} c={util >= 0 ? T.ok : "#EF4444"} /></div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}><span style={{ fontSize: 12, color: T.sub }}>Retiros de utilidades</span><b style={{ fontSize: 12.5 }}>{money(retTot)}</b></div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}><span style={{ fontSize: 12.5, fontWeight: 800 }}>Utilidad por distribuir</span><Money v={rest} c={rest >= 0 ? T.ok : "#EF4444"} /></div>
-        <button onClick={() => setExpand(x => ({ ...x, [s.id]: !x[s.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar detalle ▲" : "Adicionales · gastos · retiros ▼"}</button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}><span style={{ fontSize: 12.5, fontWeight: 800 }}>Utilidad por distribuir</span><Money v={rest} c={rest >= 0 ? T.ok : "#EF4444"} /></div>
+        <button onClick={() => setExpand(x => ({ ...x, [s.id]: !x[s.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar detalle ▲" : "Socios · cobros · adicionales · gastos · retiros ▼"}</button>
         {exp && <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em" }}>Adicionales (suman al presupuesto)</div>
+          <div style={{ background: T.card, borderRadius: 10, padding: 11, marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 11, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em" }}>Socios y reparto</span>{lsoc.length > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: sumaPct === 100 ? T.ok : T.warn }}>{sumaPct}%{sumaPct !== 100 ? " ⚠" : " ✓"}</span>}</div>
+            {lsoc.map(so => { const corr = util * num(so.pct) / 100; const retS = retiros.filter(r => r.socioId === so.id).reduce((a, r) => a + num(r.monto), 0); const queda = corr - retS; return <div key={so.id} style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>{so.nombre} <span style={{ color: T.muted, fontWeight: 600 }}>· {num(so.pct)}%</span></span><button onClick={() => pull(s.id, "socios", so.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 12 }}>✕</button></div>
+              {so.tel && <div style={{ fontSize: 10.5, color: T.muted }}>{so.tel}</div>}
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginTop: 3 }}><span style={{ color: T.sub }}>Le corresponde {money(corr)}</span><span style={{ color: T.sub }}>Retiró {money(retS)}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, fontWeight: 700, marginTop: 1 }}><span>Le queda</span><span style={{ color: queda >= 0 ? T.ok : "#EF4444" }}>{money(queda)}</span></div>
+            </div>; })}
+            <SocioAdder onAdd={(it) => push(s.id, "socios", it)} />
+          </div>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em" }}>Cobros (lo que se cobra)</div>
+          {cobros.map(c => <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: T.sub, marginTop: 5 }}><span>{c.texto || "Cobro"} · {fmtISO(c.fecha)}</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}>{money(num(c.monto))}<button onClick={() => pull(s.id, "cobros", c.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></span></div>)}
+          <MiniAdder titulo="Nuevo cobro" campo1="Concepto / quién paga" onAdd={(it) => push(s.id, "cobros", it)} />
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 14 }}>Adicionales (suman al presupuesto)</div>
           {adic.map(a => <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: T.sub, marginTop: 5 }}><span>{a.texto || "Adicional"} · {fmtISO(a.fecha)}</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}>{money(num(a.monto))}<button onClick={() => pull(s.id, "adicionales", a.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></span></div>)}
           <MiniAdder titulo="Nuevo adicional" campo1="Descripción del adicional" onAdd={(it) => push(s.id, "adicionales", it)} />
           <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 14 }}>Gastos / pagos (costo real)</div>
           {gastos.map(g => <div key={g.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: T.sub, marginTop: 5 }}><span>{g.texto || "Gasto"}{g.tipo && g.tipo !== "normal" ? <span style={{ color: g.tipo === "imprevisto" ? T.warn : T.accent, fontWeight: 700 }}> · {g.tipo}</span> : ""} · {fmtISO(g.fecha)}</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}>{money(num(g.monto))}<button onClick={() => pull(s.id, "gastos", g.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></span></div>)}
           <MiniAdder titulo="Nuevo gasto / pago parcial" campo1="Concepto (proveedor, mano de obra…)" tipos={[["normal", "Normal"], ["imprevisto", "Imprevisto"], ["adicional", "Adicional"]]} onAdd={(it) => push(s.id, "gastos", it)} />
           <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 14 }}>Retiros de utilidades</div>
-          {retiros.map(p => <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: T.sub, marginTop: 5 }}><span>{p.texto || p.socio || "Socio"} · {fmtISO(p.fecha)}</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}>{money(num(p.monto))}<button onClick={() => pull(s.id, "retiros", p.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></span></div>)}
-          <MiniAdder titulo="Nuevo retiro de utilidad" campo1="Socio que retira" onAdd={(it) => push(s.id, "retiros", it)} />
+          {retiros.map(p => { const so = lsoc.find(x => x.id === p.socioId); return <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: T.sub, marginTop: 5 }}><span>{so ? so.nombre : (p.texto || p.socio || "Socio")} · {fmtISO(p.fecha)}</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}>{money(num(p.monto))}<button onClick={() => pull(s.id, "retiros", p.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></span></div>; })}
+          <RetiroAdder socios={lsoc} onAdd={(it) => push(s.id, "retiros", it)} />
         </div>}
       </div>);
     })}
