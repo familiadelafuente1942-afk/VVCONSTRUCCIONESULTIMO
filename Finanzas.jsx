@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v60 (solapa General: consolidado V+V por periodo)
+// VERSION: v63 (respaldo: export Excel/CSV + backup JSON + restaurar)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -151,6 +151,81 @@ function reporteSociedadParcial(s, socio) {
   if (media.length) { L.push("", "*Fotos y videos de la obra:*"); media.forEach(m => L.push(`${m.tipo === "video" ? "🎥" : "📷"} ${m.url}`)); }
   return L.join("\n");
 }
+function descargarArchivo(nombre, contenido, tipo) {
+  try { const blob = new Blob([contenido], { type: tipo }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(() => { try { document.body.removeChild(a); } catch { } URL.revokeObjectURL(url); }, 1200); } catch (e) { alert("No se pudo descargar: " + (e && e.message)); }
+}
+function csvDe(data) {
+  const rows = []; const R = (...a) => rows.push(a.map(v => { const s = String(v == null ? "" : v); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(";")); const M = (n) => Math.round(num(n) || 0);
+  R("V+V CONSTRUCCIONES - RESPALDO", new Date().toLocaleString("es-AR")); R("");
+  R("OBRAS DE CLIENTE"); R("Nombre", "m2", "Precio cli/m2", "Costo/m2", "Presup cliente", "Presup costo", "Plazo(m)", "Mes base");
+  (data.obras || []).forEach(o => R(o.nombre, o.m2, o.precioCliente, o.costoM2, M(num(o.m2) * num(o.precioCliente)), M(num(o.m2) * num(o.costoM2)), o.plazoMeses, o.mesBase)); R("");
+  R("CERTIFICADOS (cliente)"); R("Obra", "Fecha", "Rubro", "% acumulado");
+  (data.certs || []).forEach(c => { const o = (data.obras || []).find(x => x.id === c.obraId); Object.entries(c.cantidades || {}).forEach(([rid, p]) => { const rb = (o && o.rubros || []).find(r => r.id === rid); R(o ? o.nombre : "", c.fecha, rb ? rb.nombre : rid, p); }); }); R("");
+  R("MOVIMIENTOS DE CAJA"); R("Tipo", "Obra", "Monto", "Fecha", "Nota");
+  (data.movimientos || []).forEach(m => { const o = (data.obras || []).find(x => x.id === m.obraId); R(m.tipo, o ? o.nombre : "General", M(m.monto), m.fecha, m.nota || ""); }); R("");
+  R("GASTOS"); R("Categoria", "Obra", "Monto", "Fecha", "Nota");
+  (data.gastos || []).forEach(g => { const o = (data.obras || []).find(x => x.id === g.obraId); R(g.cat, o ? o.nombre : "General", M(g.monto), g.fecha, g.nota || ""); }); R("");
+  R("OBRAS EN SOCIEDAD"); R("Obra", "Presup inicial", "Costo estimado", "Adicionales", "Costo real", "Cobrado", "Utilidad");
+  (data.sociedad || []).forEach(s => { const pi = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto); const ad = (s.adicionales || []).reduce((a, x) => a + num(x.monto), 0); const cr = (s.gastos || []).reduce((a, x) => a + num(x.monto), 0); const cob = (s.cobros || []).reduce((a, x) => a + num(x.monto), 0); R(s.nombre, M(pi), M(s.costoEstimado), M(ad), M(cr), M(cob), M(pi + ad - cr)); });
+  (data.sociedad || []).forEach(s => { R(""); R("Detalle " + s.nombre); (s.adicionales || []).forEach(a => R("Adicional", a.texto, M(a.monto), a.fecha)); (s.gastos || []).forEach(g => R("Gasto", g.texto, g.tipo, M(g.monto), g.fecha)); (s.cobros || []).forEach(c => R("Cobro", c.texto, M(c.monto), c.fecha)); (s.socios || []).forEach(so => R("Socio", so.nombre, num(so.pct) + "%", so.tel)); (s.retiros || []).forEach(r => { const so = (s.socios || []).find(x => x.id === r.socioId); R("Retiro", so ? so.nombre : r.texto, M(r.monto), r.fecha); }); }); R("");
+  R("OBRAS PARTICULARES"); R("Obra", "Rubro", "US$", "$", "Cotiz", "Nota");
+  (data.propias || []).forEach(p => { (p.costos || []).forEach(c => R(p.nombre, c.cat, M(c.montoUsd), M(c.montoArs), c.cotiz, c.nota || "")); R(p.nombre, "VENTA ESTIMADA", M(p.ventaUsd), M(p.ventaArs)); }); R("");
+  R("EDIFICIOS"); R("Edificio", "Tipo", "Detalle", "US$", "$", "Estado");
+  (data.edificios || []).forEach(e => { (e.unidades || []).forEach(u => R(e.nombre, "Unidad", u.nombre, M(u.precioUsd), M(u.precioArs), u.estado)); (e.costos || []).forEach(c => R(e.nombre, "Costo", c.cat, M(c.montoUsd), M(c.montoArs))); });
+  return "\uFEFF" + rows.join("\n");
+}
+function reporteHTML(titulo, subtitulo, secciones, media, cfg) {
+  const marca = (cfg && cfg.nombre) || "V+V Construcciones";
+  const filasHTML = secciones.map(sec => `<h2>${sec.titulo}</h2><table>${sec.filas.map(f => `<tr><td>${f.label}</td><td class="v${f.strong ? ' s' : ''}">${f.value}</td></tr>`).join("")}</table>`).join("");
+  const fotos = (media || []).filter(m => m.tipo !== "video");
+  const vids = (media || []).filter(m => m.tipo === "video");
+  const fotosHTML = fotos.length ? `<h2>Fotos</h2><div class="fotos">${fotos.map(m => `<img src="${m.url}"/>`).join("")}</div>` : "";
+  const vidsHTML = vids.length ? `<h2>Videos</h2>${vids.map(m => `<div class="lnk">🎥 <a href="${m.url}">${m.url}</a></div>`).join("")}` : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;color:#0B1622;margin:0;padding:26px 24px;font-size:13px}.head{border-bottom:2px solid #B0894F;padding-bottom:12px;margin-bottom:14px}.marca{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#B0894F;font-weight:700}h1{font-size:20px;margin:4px 0 2px}.sub{color:#5B6673;font-size:12px}h2{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#5B6673;margin:16px 0 5px;border-bottom:1px solid #E8EAED;padding-bottom:4px}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px solid #F0F1F3}td.v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}td.v.s{font-weight:800;font-size:15px;color:#16A34A}.fotos{display:flex;flex-wrap:wrap;gap:8px}.fotos img{width:31%;height:118px;object-fit:cover;border-radius:8px}.lnk{font-size:11px;margin:3px 0;word-break:break-all}.foot{margin-top:20px;color:#98A2B0;font-size:10px;text-align:center}@media print{.fotos img{width:31%}}</style></head><body><div class="head"><div class="marca">${marca}</div><h1>${titulo}</h1>${subtitulo ? `<div class="sub">${subtitulo}</div>` : ""}<div class="sub">${new Date().toLocaleDateString("es-AR")}</div></div>${filasHTML}${fotosHTML}${vidsHTML}<div class="foot">Generado con V+V Finanzas · documento informativo</div></body></html>`;
+}
+function seccionesSociedad(s) {
+  const presIni = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto);
+  const adic = s.adicionales || [], gastos = s.gastos || [], cobros = s.cobros || [], retiros = s.retiros || s.pagos || [], lsoc = s.socios || [];
+  const adicTot = adic.reduce((a, x) => a + num(x.monto), 0), presTotal = presIni + adicTot;
+  const costoReal = gastos.reduce((a, x) => a + num(x.monto), 0), imprevTot = gastos.filter(g => g.tipo === "imprevisto").reduce((a, x) => a + num(x.monto), 0);
+  const cobrado = cobros.reduce((a, x) => a + num(x.monto), 0), util = presTotal - costoReal, retTot = retiros.reduce((a, x) => a + num(x.monto), 0);
+  const sec = [{ titulo: "Resumen", filas: [{ label: "Presupuesto (inicial + adicionales)", value: money(presTotal) }, { label: "Cobrado", value: money(cobrado) }, { label: "Resta a cobrar", value: money(presTotal - cobrado) }, { label: "Costo real" + (imprevTot ? ` (imprev. ${money(imprevTot)})` : ""), value: money(costoReal) }, { label: "Utilidad", value: money(util), strong: true }, { label: "Utilidad por distribuir", value: money(util - retTot) }] }];
+  if (lsoc.length) sec.push({ titulo: "Reparto por socio", filas: lsoc.map(so => { const corr = util * num(so.pct) / 100; const rs = retiros.filter(r => r.socioId === so.id).reduce((a, r) => a + num(r.monto), 0); return { label: `${so.nombre} (${num(so.pct)}%) — retiró ${money(rs)}`, value: money(corr - rs) }; }) });
+  if (adic.length) sec.push({ titulo: "Adicionales", filas: adic.map(a => ({ label: a.texto || "Adicional", value: money(num(a.monto)) })) });
+  if (gastos.length) sec.push({ titulo: "Gastos / costo real", filas: gastos.map(g => ({ label: (g.texto || "Gasto") + (g.tipo && g.tipo !== "normal" ? ` (${g.tipo})` : ""), value: money(num(g.monto)) })) });
+  return sec;
+}
+function reportePropiaTexto(p) {
+  const costos = p.costos || []; const rub = {}; costos.forEach(c => { rub[c.cat] = (rub[c.cat] || 0) + num(c.montoArs); });
+  const inv = costos.reduce((s, c) => s + num(c.montoArs), 0), invU = costos.reduce((s, c) => s + num(c.montoUsd), 0);
+  const vA = num(p.ventaArs), vU = num(p.ventaUsd);
+  const L = [`*${p.nombre} — Obra particular*`, "", `*Inversión total:* ${money(inv)} / US$${Math.round(invU).toLocaleString("es-AR")}`];
+  if (vU) L.push(`*Venta est.:* US$${Math.round(vU).toLocaleString("es-AR")} · *Resultado:* US$${Math.round(vU - invU).toLocaleString("es-AR")}`);
+  if (vA) L.push(`*Venta est.:* ${money(vA)} · *Resultado:* ${money(vA - inv)}`);
+  L.push("", "*Costos por rubro:*"); Object.entries(rub).filter(([, v]) => v > 0).forEach(([k, v]) => L.push(`• ${k}: ${money(v)}`));
+  const media = p.adjuntos || []; if (media.length) { L.push("", "*Fotos y videos:*"); media.forEach(m => L.push(`${m.tipo === "video" ? "🎥" : "📷"} ${m.url}`)); }
+  return L.join("\n");
+}
+function seccionesPropia(p) {
+  const costos = p.costos || []; const rub = {}; costos.forEach(c => { rub[c.cat] = (rub[c.cat] || 0) + num(c.montoArs); });
+  const inv = costos.reduce((s, c) => s + num(c.montoArs), 0), invU = costos.reduce((s, c) => s + num(c.montoUsd), 0), vA = num(p.ventaArs), vU = num(p.ventaUsd);
+  return [{ titulo: "Resumen", filas: [{ label: "Inversión total US$", value: "US$" + Math.round(invU).toLocaleString("es-AR") }, { label: "Inversión total $", value: money(inv) }, ...(vU ? [{ label: "Venta estimada US$", value: "US$" + Math.round(vU).toLocaleString("es-AR") }, { label: "Resultado US$", value: "US$" + Math.round(vU - invU).toLocaleString("es-AR"), strong: true }] : []), ...(vA ? [{ label: "Venta estimada $", value: money(vA) }, { label: "Resultado $", value: money(vA - inv), strong: true }] : [])] }, { titulo: "Costos por rubro", filas: Object.entries(rub).filter(([, v]) => v > 0).map(([k, v]) => ({ label: k, value: money(v) })) }];
+}
+function reporteEdificioTexto(e) {
+  const costos = e.costos || [], unidades = e.unidades || [];
+  const inv = costos.reduce((s, c) => s + num(c.montoArs), 0), invU = costos.reduce((s, c) => s + num(c.montoUsd), 0);
+  const vtaU = unidades.reduce((s, u) => s + num(u.precioUsd), 0), vtaA = unidades.reduce((s, u) => s + num(u.precioArs), 0), nV = unidades.filter(u => u.estado === "vendido").length;
+  const L = [`*${e.nombre} — Edificio*`, "", `*Inversión total:* ${money(inv)} / US$${Math.round(invU).toLocaleString("es-AR")}`, `*Venta proyectada:* US$${Math.round(vtaU).toLocaleString("es-AR")} (${unidades.length} un., ${nV} vend.)`, `*Resultado:* US$${Math.round(vtaU - invU).toLocaleString("es-AR")} / ${money(vtaA - inv)}`, "", "*Unidades:*"];
+  unidades.forEach(u => L.push(`• ${u.nombre} (${(u.estado || "disponible")}): US$${Math.round(num(u.precioUsd)).toLocaleString("es-AR")}`));
+  const media = e.adjuntos || []; if (media.length) { L.push("", "*Fotos y videos:*"); media.forEach(m => L.push(`${m.tipo === "video" ? "🎥" : "📷"} ${m.url}`)); }
+  return L.join("\n");
+}
+function seccionesEdificio(e) {
+  const costos = e.costos || [], unidades = e.unidades || [];
+  const inv = costos.reduce((s, c) => s + num(c.montoArs), 0), invU = costos.reduce((s, c) => s + num(c.montoUsd), 0), vtaU = unidades.reduce((s, u) => s + num(u.precioUsd), 0), vtaA = unidades.reduce((s, u) => s + num(u.precioArs), 0);
+  const rub = {}; costos.forEach(c => { rub[c.cat] = (rub[c.cat] || 0) + num(c.montoArs); });
+  return [{ titulo: "Resumen", filas: [{ label: "Inversión total US$", value: "US$" + Math.round(invU).toLocaleString("es-AR") }, { label: "Inversión total $", value: money(inv) }, { label: "Venta proyectada US$", value: "US$" + Math.round(vtaU).toLocaleString("es-AR") }, { label: "Resultado US$", value: "US$" + Math.round(vtaU - invU).toLocaleString("es-AR"), strong: true }, { label: "Resultado $", value: money(vtaA - inv), strong: true }] }, { titulo: "Unidades", filas: unidades.map(u => ({ label: `${u.nombre} · ${(u.estado || "disponible")}`, value: "US$" + Math.round(num(u.precioUsd)).toLocaleString("es-AR") })) }, { titulo: "Costos por rubro", filas: Object.entries(rub).filter(([, v]) => v > 0).map(([k, v]) => ({ label: k, value: money(v) })) }];
+}
 function mensajeCertificadoTexto(obra, data, certsDe, indices) {
   const cs = certsDe(obra.id); const ult = cs[cs.length - 1];
   if (!ult) return `Hola! Todavía no hay certificados cargados para ${obra.nombre}.`;
@@ -229,14 +304,16 @@ function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef }) {
 }
 function PropiasPanel({ data, save }) {
   const propias = data.propias || [];
-  const [nombre, setNombre] = useState(""); const [abrir, setAbrir] = useState(false); const [expandir, setExpandir] = useState({});
+  const [nombre, setNombre] = useState(""); const [abrir, setAbrir] = useState(false); const [expandir, setExpandir] = useState({}); const [subiendo, setSubiendo] = useState(""); const [pdfHtml, setPdfHtml] = useState(null);
   const [cotizDef, setCotizDef] = useState(String(data.config?.cotizUSD || ""));
-  const addPropia = () => { if (!nombre.trim()) return; save({ ...data, propias: [...propias, { id: uid(), nombre: nombre.trim(), ventaUsd: 0, ventaArs: 0, costos: [], ts: Date.now() }] }); setNombre(""); setAbrir(false); };
+  const addPropia = () => { if (!nombre.trim()) return; save({ ...data, propias: [...propias, { id: uid(), nombre: nombre.trim(), ventaUsd: 0, ventaArs: 0, costos: [], adjuntos: [], ts: Date.now() }] }); setNombre(""); setAbrir(false); };
   const upd = (pid, fn) => save({ ...data, config: { ...(data.config || {}), cotizUSD: numMoney(cotizDef) || data.config?.cotizUSD }, propias: propias.map(p => p.id === pid ? fn(p) : p) });
   const addCosto = (pid, c) => upd(pid, p => ({ ...p, costos: [...(p.costos || []), { id: uid(), ts: Date.now(), ...c }] }));
   const delCosto = (pid, cid) => upd(pid, p => ({ ...p, costos: (p.costos || []).filter(x => x.id !== cid) }));
   const setVenta = (pid, k, v) => upd(pid, p => ({ ...p, [k]: numMoney(v) }));
   const delPropia = (id) => save({ ...data, propias: propias.filter(p => p.id !== id) });
+  const delAdj = (pid, url) => save({ ...data, propias: propias.map(p => p.id === pid ? { ...p, adjuntos: (p.adjuntos || []).filter(a => a.url !== url) } : p) });
+  async function subirAdj(pid, file) { if (!file) return; setSubiendo(pid); const url = await subirArchivo(file); if (url) save({ ...data, propias: propias.map(p => p.id === pid ? { ...p, adjuntos: [...(p.adjuntos || []), { url, tipo: (file.type || "").startsWith("video") ? "video" : "foto" }] } : p) }); else alert("No se pudo subir."); setSubiendo(""); }
   return (<div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras particulares (para vender)</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Las que hacés para vos, llave en mano con lote. Cargás en $ o US$ con la cotización del momento.</div></div>
@@ -259,9 +336,16 @@ function PropiasPanel({ data, save }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 9, paddingTop: 9, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado esperado{vU > 0 ? ` · ${mgU.toFixed(0)}%` : ""}</span><span style={{ fontSize: 13.5, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{vU > 0 && <span style={{ color: resU >= 0 ? T.ok : "#EF4444" }}>{usdFmt(resU)}</span>}{vA > 0 && <span style={{ color: resA >= 0 ? T.ok : "#EF4444", marginLeft: 8 }}>{money(resA)}</span>}{vU <= 0 && vA <= 0 && <span style={{ color: T.muted, fontSize: 11, fontWeight: 600 }}>cargá la venta</span>}</span></div>
         <button onClick={() => setExpandir(e => ({ ...e, [p.id]: !e[p.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar rubros ▲" : "Cargar / ver rubros ▼"}</button>
         {exp && <div style={{ marginTop: 8 }}>{RUBROS_PROPIA.map(r => <RubroRow key={r} rubro={r} items={costos.filter(c => c.cat === r)} onAdd={(c) => addCosto(p.id, c)} onDel={(cid) => delCosto(p.id, cid)} cotizDef={cotizDef} setCotizDef={setCotizDef} />)}</div>}
+        {(p.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>{(p.adjuntos || []).map(m => <div key={m.url} style={{ position: "relative" }}>{m.tipo === "video" ? <video src={m.url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", background: "#000" }} /> : <img src={m.url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover" }} />}<button onClick={() => delAdj(p.id, m.url)} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button></div>)}</div>}
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <label style={{ flex: 1, textAlign: "center", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{subiendo === p.id ? "Subiendo…" : "📷 Foto/video"}<input type="file" accept="image/*,video/*" onChange={e => { subirAdj(p.id, e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
+          <a href={waLink("", reportePropiaTexto(p))} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>WhatsApp</a>
+          <button onClick={() => setPdfHtml(reporteHTML(p.nombre + " — Obra particular", "", seccionesPropia(p), p.adjuntos, data.config))} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>PDF</button>
+        </div>
       </div>);
     })}
     {propias.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nueva" para cargar una obra propia con sus rubros.</div>}
+    {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
   </div>);
 }
 
@@ -689,6 +773,16 @@ function ConfigModal({ data, save, onClose }) {
         <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6 }}>La foto se ve suave de fondo para no molestar la lectura. Las tarjetas quedan siempre legibles.</div>
       </Field>
       <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>Respaldo de datos</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Tus datos ya se guardan solos en la nube. Igual podés descargar copias por las dudas.</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={() => descargarArchivo(`VV-Finanzas-${hoyISO()}.csv`, csvDe(data), "text/csv;charset=utf-8")} style={{ flex: "1 1 45%", background: "#1D6F42", color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Descargar Excel</button>
+          <button onClick={() => descargarArchivo(`VV-Finanzas-RESPALDO-${hoyISO()}.json`, JSON.stringify(data, null, 2), "application/json")} style={{ flex: "1 1 45%", background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Respaldo completo</button>
+        </div>
+        <label style={{ display: "block", textAlign: "center", background: T.al, color: T.accent, border: `1px dashed ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>Restaurar desde respaldo (.json)<input type="file" accept=".json,application/json" onChange={async e => { const f = e.target.files && e.target.files[0]; if (!f) return; try { const txt = await f.text(); const obj = JSON.parse(txt); if (!obj || typeof obj !== "object") throw new Error("Archivo inválido"); if (confirm("Esto REEMPLAZA todos los datos actuales por los del respaldo. ¿Continuar?")) { save(obj); alert("Respaldo restaurado ✓"); } } catch (err) { alert("No se pudo restaurar: " + (err && err.message)); } e.target.value = ""; }} style={{ display: "none" }} /></label>
+        <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>El "Excel" (.csv) es para leer/analizar. El "Respaldo completo" (.json) es el que sirve para restaurar todo exacto si perdés el acceso — guardalo en tu mail o en Archivos.</div>
+      </div>
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Otras apps de V+V</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {[["mi-asistente.html", "🤖 Mi Asistente"], ["index.html", "🏗 V+V"], ["cliente.html", "👤 Cliente"], ["contratista.html", "🧰 Contratista"], ["nicolas.html", "📋 Nicolás"]].map(([href, l]) => <a key={href} href={href} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>{l}</a>)}
@@ -975,7 +1069,7 @@ function GeneralPanel({ data, obras, certs, certsDe, indices }) {
 }
 function SociedadPanel({ data, save }) {
   const socios = data.sociedad || [];
-  const [abrir, setAbrir] = useState(false); const [expand, setExpand] = useState({}); const [subiendo, setSubiendo] = useState("");
+  const [abrir, setAbrir] = useState(false); const [expand, setExpand] = useState({}); const [subiendo, setSubiendo] = useState(""); const [pdfHtml, setPdfHtml] = useState(null);
   const [f, setF] = useState({ nombre: "", descripcion: "", presupuesto: "", costoEst: "" });
   const add = () => { if (!f.nombre.trim()) return; save({ ...data, sociedad: [...socios, { id: uid(), nombre: f.nombre.trim(), descripcion: f.descripcion.trim(), presupuestoInicial: numMoney(f.presupuesto), costoEstimado: numMoney(f.costoEst), adicionales: [], gastos: [], cobros: [], retiros: [], socios: [], ts: Date.now() }] }); setF({ nombre: "", descripcion: "", presupuesto: "", costoEst: "" }); setAbrir(false); };
   const upd = (id, fn) => save({ ...data, sociedad: socios.map(x => x.id === id ? fn(x) : x) });
@@ -1032,7 +1126,10 @@ function SociedadPanel({ data, save }) {
             <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Fotos y videos de la obra</div>
             {(s.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>{(s.adjuntos || []).map(m => <div key={m.id} style={{ position: "relative" }}>{m.tipo === "video" ? <video src={m.url} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", background: "#000" }} /> : <img src={m.url} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover" }} />}<button onClick={() => pull(s.id, "adjuntos", m.id)} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button></div>)}</div>}
             <label style={{ display: "block", textAlign: "center", background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo === s.id ? "Subiendo…" : "＋ Subir foto o video"}<input type="file" accept="image/*,video/*" onChange={e => { const file = e.target.files && e.target.files[0]; subirAdj(s.id, file); e.target.value = ""; }} style={{ display: "none" }} /></label>
-            <a href={waLink("", reporteSociedadParcial(s))} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, textDecoration: "none", marginTop: 8 }}>Enviar reporte por WhatsApp (elegir contacto)</a>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <a href={waLink("", reporteSociedadParcial(s))} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>WhatsApp</a>
+              <button onClick={() => setPdfHtml(reporteHTML(s.nombre + " — Resultado parcial", s.descripcion, seccionesSociedad(s), s.adjuntos, data.config))} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Exportar PDF</button>
+            </div>
             <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>El reporte va con todos los números detallados y los links a las fotos/videos. Cada socio con teléfono cargado tiene su botón propio arriba.</div>
           </div>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em" }}>Cobros (lo que se cobra)</div>
@@ -1051,6 +1148,7 @@ function SociedadPanel({ data, save }) {
       </div>);
     })}
     {socios.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nueva" para cargar una obra en sociedad.</div>}
+    {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
   </div>);
 }
 function UnidadAdder({ onAdd, cotizDef }) {
@@ -1075,11 +1173,13 @@ function UnidadAdder({ onAdd, cotizDef }) {
 }
 function EdificiosPanel({ data, save }) {
   const edificios = data.edificios || [];
-  const [abrir, setAbrir] = useState(false); const [nombre, setNombre] = useState(""); const [expandir, setExpandir] = useState({});
+  const [abrir, setAbrir] = useState(false); const [nombre, setNombre] = useState(""); const [expandir, setExpandir] = useState({}); const [subiendo, setSubiendo] = useState(""); const [pdfHtml, setPdfHtml] = useState(null);
   const [cotizDef, setCotizDef] = useState(String(data.config?.cotizUSD || ""));
   const upd = (id, fn) => save({ ...data, config: { ...(data.config || {}), cotizUSD: numMoney(cotizDef) || data.config?.cotizUSD }, edificios: edificios.map(e => e.id === id ? fn(e) : e) });
-  const addEd = () => { if (!nombre.trim()) return; save({ ...data, edificios: [...edificios, { id: uid(), nombre: nombre.trim(), costos: [], unidades: [], ts: Date.now() }] }); setNombre(""); setAbrir(false); };
+  const addEd = () => { if (!nombre.trim()) return; save({ ...data, edificios: [...edificios, { id: uid(), nombre: nombre.trim(), costos: [], unidades: [], adjuntos: [], ts: Date.now() }] }); setNombre(""); setAbrir(false); };
   const delEd = (id) => save({ ...data, edificios: edificios.filter(e => e.id !== id) });
+  const delAdj = (id, url) => save({ ...data, edificios: edificios.map(e => e.id === id ? { ...e, adjuntos: (e.adjuntos || []).filter(a => a.url !== url) } : e) });
+  async function subirAdj(id, file) { if (!file) return; setSubiendo(id); const url = await subirArchivo(file); if (url) save({ ...data, edificios: edificios.map(e => e.id === id ? { ...e, adjuntos: [...(e.adjuntos || []), { url, tipo: (file.type || "").startsWith("video") ? "video" : "foto" }] } : e) }); else alert("No se pudo subir."); setSubiendo(""); }
   const addCosto = (id, c) => upd(id, e => ({ ...e, costos: [...(e.costos || []), { id: uid(), ts: Date.now(), ...c }] }));
   const delCosto = (id, cid) => upd(id, e => ({ ...e, costos: (e.costos || []).filter(x => x.id !== cid) }));
   const addUnidad = (id, u) => upd(id, e => ({ ...e, unidades: [...(e.unidades || []), { id: uid(), ts: Date.now(), ...u }] }));
@@ -1117,9 +1217,16 @@ function EdificiosPanel({ data, save }) {
           <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em", margin: "14px 0 4px" }}>Costos por rubro</div>
           {RUBROS_PROPIA.map(r => <RubroRow key={r} rubro={r} items={costos.filter(c => c.cat === r)} onAdd={(c) => addCosto(e.id, c)} onDel={(cid) => delCosto(e.id, cid)} cotizDef={cotizDef} setCotizDef={setCotizDef} />)}
         </div>}
+        {(e.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>{(e.adjuntos || []).map(m => <div key={m.url} style={{ position: "relative" }}>{m.tipo === "video" ? <video src={m.url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", background: "#000" }} /> : <img src={m.url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover" }} />}<button onClick={() => delAdj(e.id, m.url)} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button></div>)}</div>}
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <label style={{ flex: 1, textAlign: "center", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{subiendo === e.id ? "Subiendo…" : "📷 Foto/video"}<input type="file" accept="image/*,video/*" onChange={ev => { subirAdj(e.id, ev.target.files && ev.target.files[0]); ev.target.value = ""; }} style={{ display: "none" }} /></label>
+          <a href={waLink("", reporteEdificioTexto(e))} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>WhatsApp</a>
+          <button onClick={() => setPdfHtml(reporteHTML(e.nombre + " — Edificio", "", seccionesEdificio(e), e.adjuntos, data.config))} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>PDF</button>
+        </div>
       </div>);
     })}
     {edificios.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nuevo" para cargar un edificio con sus unidades y costos.</div>}
+    {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
   </div>);
 }
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
@@ -1205,7 +1312,10 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
         <div style={{ flex: 1, background: T.bg, borderRadius: 11, padding: "11px 12px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Promedio por mes</div><div style={{ fontSize: 16, fontWeight: 700, color: T.accent, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{money(utilMensualProm)}</div></div>
       </div>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Flujo de utilidad por mes</div>
-      <BarsH items={proyMeses.map(k => ({ label: mesLabel(k), value: proy[k], valueLabel: money(proy[k]), color: proy[k] >= 0 ? T.ok : "#EF4444" }))} />
+      {(() => { const mx = Math.max(1, ...proyMeses.map(k => Math.abs(proy[k]))); return proyMeses.map(k => { const v = proy[k]; const pos = v >= 0; return <div key={k} style={{ marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 11.5, marginBottom: 4 }}><span style={{ color: T.sub, fontWeight: 600 }}>{mesLabel(k)}</span><span style={{ fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>{money(v)}</span></div>
+        <div style={{ height: 4, background: T.bg, borderRadius: 3, overflow: "hidden" }}><div style={{ width: `${Math.abs(v) / mx * 100}%`, height: "100%", background: pos ? T.ok : "#EF4444", opacity: 0.5, borderRadius: 3 }} /></div>
+      </div>; }); })()}
       <div style={{ display: "flex", gap: 8, margin: "14px 0 12px" }}>
         <div style={{ flex: 1, background: T.bg, borderRadius: 11, padding: "11px 12px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Certificados quincenales</div><div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{totalQuincenas}</div></div>
         <div style={{ flex: 1, background: T.bg, borderRadius: 11, padding: "11px 12px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Utilidad por quincena</div><div style={{ fontSize: 16, fontWeight: 700, color: T.ok, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{money(utilPorQuincena)}</div></div>
