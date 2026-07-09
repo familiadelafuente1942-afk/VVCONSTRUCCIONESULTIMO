@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v40 (redeterminacion pendiente provisorio/definitivo)
+// VERSION: v41 (redeterminacion CAC % mensual, quincenal compuesto sobre saldo)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -41,8 +41,20 @@ const esImprev = (cat) => IMPREV_CATS.includes(cat);
 function logH(d, accion) { const h = d.historial || []; return { ...d, historial: [...h, { id: Math.random().toString(36).slice(2, 9), accion, t: new Date().toLocaleString("es-AR"), ts: Date.now() }].slice(-250) }; }
 const mesDe = (iso) => String(iso || "").slice(0, 7);
 const mesLabel = (m) => { if (!m) return "—"; const [y, mm] = m.split("-"); const N = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]; return `${N[Number(mm) - 1] || mm}/${y.slice(2)}`; };
-function latestIndiceVal(indices) { const ks = Object.keys(indices || {}).filter(k => num(indices[k]) > 0).sort(); return ks.length ? num(indices[ks[ks.length - 1]]) : 0; }
-function factorRedet(obra, cert, indices) { const base = num((indices || {})[obra?.mesBase]); const m = mesDe(cert?.fecha); const has = (indices || {})[m] != null && num(indices[m]) > 0; const val = has ? num(indices[m]) : latestIndiceVal(indices); const factor = (base > 0 && val > 0) ? val / base : 1; return { factor, provisorio: base > 0 && !has && val > 0, base, val, mes: m }; }
+function cacRate(mes, cac) { const p = (cac || {})[mes]; if (p == null || String(p).trim() === "") return { rate: 0, provisorio: true }; return { rate: Math.sqrt(1 + num(p) / 100) - 1, provisorio: false }; }
+function redetReplay(cert, obra, certsDeObra, cac) {
+  const pc = presupCliente(obra);
+  const list = (certsDeObra || []).some(c => c.id === cert.id) ? [...(certsDeObra || [])] : [...(certsDeObra || []), cert];
+  list.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
+  let saldo = pc, prevAcum = 0, ajuste = 0, provisorio = false, rate = 0, saldoAntes = pc;
+  for (const cc of list) {
+    const acum = clienteAcumDe(cc.cantidades, obra); const b = Math.max(0, acum - prevAcum); prevAcum = acum;
+    const sAntes = saldo; saldo -= b;
+    const rr = cacRate(mesDe(cc.fecha), cac); const aj = Math.max(0, saldo) * rr.rate; saldo += aj;
+    if (cc.id === cert.id) { ajuste = aj; provisorio = rr.provisorio; rate = rr.rate; saldoAntes = Math.max(0, sAntes - b); }
+  }
+  return { ajuste, provisorio, rate, saldoBase: saldoAntes };
+}
 
 const lastWrite = { t: 0 };
 function useFinanzas() {
@@ -80,9 +92,9 @@ function calcCert(cert, obra, certsDeObra, indices) {
   const coAcum = costoAcumDe(cert.cantidades, obra);
   const prevCo = prevCert ? costoAcumDe(prevCert.cantidades, obra) : 0;
   const costoDirPeriodo = Math.max(0, coAcum - prevCo);
-  const fr = factorRedet(obra, cert, indices);
-  const ajuste = (fr.factor - 1) * 100;
-  const ajustado = bruto * fr.factor;
+  const rd = redetReplay(cert, obra, certsDeObra, indices);
+  const ajuste = rd.ajuste;
+  const ajustado = bruto + rd.ajuste;
   const share = pc > 0 ? bruto / pc : 0;
   const amort = anticipoMonto * share;
   const neto = ajustado - amort;
@@ -94,7 +106,7 @@ function calcCert(cert, obra, certsDeObra, indices) {
   const margen = ajustado - costo;
   const margenPct = ajustado > 0 ? margen / ajustado * 100 : 0;
   const avanceAcum = pc > 0 ? cliAcum / pc * 100 : 0;
-  return { pc, anticipoMonto, avanceAcum, bruto, ajuste, ajustado, amort, neto, costoDirPeriodo, extraMontoPeriodo, imprevPeriodo, extraPctPeriodo, costo, margen, margenPct, provisorio: fr.provisorio, factor: fr.factor };
+  return { pc, anticipoMonto, avanceAcum, bruto, ajuste, ajustado, amort, neto, costoDirPeriodo, extraMontoPeriodo, imprevPeriodo, extraPctPeriodo, costo, margen, margenPct, provisorio: rd.provisorio, rate: rd.rate, saldoBase: rd.saldoBase };
 }
 function detalleRubros(cert, obra, certsDeObra) {
   const pc = presupCliente(obra), pco = presupCosto(obra);
@@ -117,7 +129,7 @@ export default function App() {
   const [tab, setTab] = useState("presupuesto");
   const [verConfig, setVerConfig] = useState(false);
   const cfg = data.config || {};
-  const obras = data.obras || [], certs = data.certs || [], indices = data.indices || {};
+  const obras = data.obras || [], certs = data.certs || [], indices = data.cacMensual || {};
   const certsDe = (id) => certs.filter(c => c.obraId === id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
   return (<div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", width: "100%", color: T.text }}>
     <style>{`*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}::selection{background:rgba(176,137,79,.20)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}@media(min-width:1700px){.vv-body{padding-left:calc((100% - 1560px)/2);padding-right:calc((100% - 1560px)/2)}}`}</style>
@@ -287,7 +299,7 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
     const cP = dd.reduce((s, d) => s + d.costoPeriodo, 0);
     const rows = dd.map(d => `<tr><td>${d.nombre}</td><td class="ctr">${(d.inc * 100).toFixed(1)}%</td><td class="ctr"><b>${d.pctAcum.toFixed(1)}%</b></td><td class="rgt">${money(esCosto ? d.costoPeriodo : d.clientePeriodo)}</td></tr>`).join("");
     const tr = (t, v, cls) => `<tr class="${cls || ""}"><td colspan="3" class="rgt">${t}</td><td class="rgt">${v}</td></tr>`;
-    const resumen = esCosto ? tr("TOTAL COSTO DEL PERÍODO", money(cP), "neto") : `${tr("Certificado bruto", money(r.bruto))}${r.ajuste ? tr(`Ajuste CAC (${r.ajuste.toFixed(2)}%)${r.provisorio ? " · provisorio" : ""}`, "+ " + money(r.ajustado - r.bruto)) : ""}${tr("Subtotal", money(r.ajustado))}${tr("Descuento anticipo", "− " + money(r.amort))}${tr("NETO A COBRAR", money(r.neto), "neto")}`;
+    const resumen = esCosto ? tr("TOTAL COSTO DEL PERÍODO", money(cP), "neto") : `${tr("Certificado bruto", money(r.bruto))}${r.ajuste > 0 || r.provisorio ? tr(`Ajuste CAC (redet.)${r.provisorio ? " · provisorio" : ""}`, "+ " + money(r.ajuste)) : ""}${tr("Subtotal", money(r.ajustado))}${tr("Descuento anticipo", "− " + money(r.amort))}${tr("NETO A COBRAR", money(r.neto), "neto")}`;
     const fc = c.firmas || {};
     const firmaBox = (f, rol) => `<div style="width:230px;text-align:center">${f?.dataUrl ? `<img src="${f.dataUrl}" style="height:44px;display:block;margin:0 auto"/>` : `<div style="height:44px"></div>`}<div style="border-top:1px solid #0F1B2D;padding-top:5px;font-size:11px;color:#5B6B7F">${rol}${f?.nombre ? `<br><b style="color:#0F1B2D">${f.nombre}</b>` : ""}${f?.codigo ? `<br><span style="font-size:8.5px;color:#94A3B8">Cód. ${f.codigo} · ${f.ts || ""}</span>` : ""}</div></div>`;
     const fotos = (c.adjuntos || []).filter(a => a.tipo === "foto"); const videos = (c.adjuntos || []).filter(a => a.tipo === "video");
@@ -339,7 +351,7 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
           <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 6, display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Total costo directo</span><Money v={costoPeriodo} c={T.warn} /></div></>
           : <><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, letterSpacing: "0.06em", marginBottom: 4 }}>CERTIFICADO AL CLIENTE</div>
           {det.filter(d => d.per > 0).map((d, i) => <Line key={i} t={`${d.nombre} · incid ${(d.inc * 100).toFixed(0)}% (${d.pctAcum.toFixed(0)}%)`} v={money(d.clientePeriodo)} />)}
-          <div style={{ borderTop: `1px solid ${T.border}`, margin: "5px 0", paddingTop: 6 }}><Line t="Bruto" v={money(preview.bruto)} />{preview.ajuste !== 0 && <Line t={`Ajuste CAC (${preview.ajuste.toFixed(2)}%)${preview.provisorio ? " · prov." : ""}`} v={"+ " + money(preview.ajustado - preview.bruto)} />}<Line t="Descuento anticipo" v={"− " + money(preview.amort)} c="#B45309" /></div>
+          <div style={{ borderTop: `1px solid ${T.border}`, margin: "5px 0", paddingTop: 6 }}><Line t="Bruto" v={money(preview.bruto)} />{(preview.ajuste > 0 || preview.provisorio) && <Line t={`Ajuste CAC${preview.provisorio ? " · prov." : ""}`} v={"+ " + money(preview.ajuste)} c={T.ok} />}<Line t="Descuento anticipo" v={"− " + money(preview.amort)} c="#B45309" /></div>
           <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Neto a cobrar</span><Money v={preview.neto} c={T.accent} /></div></>}
       </div>}
       {preview && obra && (esCosto ? costoPeriodo <= 0 : preview.bruto <= 0) && <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 9, padding: 11, fontSize: 12, color: "#92400E", margin: "4px 0 14px" }}>Este certificado da $0. Para el 2° certificado y siguientes, subí el % acumulado de algún rubro por encima del certificado anterior (o usá "Cierre 100%").</div>}
@@ -365,35 +377,37 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
   </div>);
 }
 
-// ═══════════ Índices CAC
+// ═══════════ CAC mensual (%)
 function AddMesIndice({ onAdd }) {
   const [m, setM] = useState(""); const [v, setV] = useState("");
   return <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
     <input type="month" value={m} onChange={e => setM(e.target.value)} style={{ ...inp, marginTop: 0, flex: 1 }} />
-    <input value={v} onChange={e => setV(e.target.value)} inputMode="decimal" placeholder="índice" style={{ ...inp, marginTop: 0, width: 100, textAlign: "right" }} />
+    <input value={v} onChange={e => setV(e.target.value)} inputMode="decimal" placeholder="% CAC" style={{ ...inp, marginTop: 0, width: 100, textAlign: "right" }} />
     <button onClick={() => { if (m && v) { onAdd(m, v); setM(""); setV(""); } }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "11px 12px", fontWeight: 700, cursor: "pointer" }}>＋</button>
   </div>;
 }
 function IndicesPanel({ data, save, obra, fecha, indices }) {
   const [open, setOpen] = useState(false);
-  const fr = obra ? factorRedet(obra, { fecha }, indices) : { factor: 1, provisorio: false, base: 0, val: 0 };
-  const ajuste = (fr.factor - 1) * 100;
-  const setIndice = (mes, valor) => { const next = { ...(data.indices || {}) }; if (String(valor).trim() === "") delete next[mes]; else next[mes] = num(valor); save({ ...data, indices: next }); };
-  const meses = Array.from(new Set([...Object.keys(indices || {}), obra?.mesBase, mesDe(fecha)].filter(Boolean))).sort();
+  const mesCert = mesDe(fecha);
+  const rr = cacRate(mesCert, indices);
+  const pctMes = (indices || {})[mesCert];
+  const setIndice = (mes, valor) => { const next = { ...(data.cacMensual || {}) }; if (String(valor).trim() === "") delete next[mes]; else next[mes] = num(valor); save({ ...data, cacMensual: next }); };
+  const meses = Array.from(new Set([...Object.keys(indices || {}), obra?.mesBase, mesCert].filter(Boolean))).sort();
   return (<div style={{ background: T.al, borderRadius: 11, padding: 12, marginBottom: 12 }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
       <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em" }}>Redeterminación CAC</div>
-        {obra && (fr.base > 0 && fr.val > 0 ? <div style={{ fontSize: 12.5, marginTop: 3 }}>Factor <b>{fr.factor.toFixed(4)}</b> · ajuste <b style={{ color: ajuste >= 0 ? T.ok : T.warn }}>{ajuste >= 0 ? "+" : ""}{ajuste.toFixed(2)}%</b>{fr.provisorio && <span style={{ color: T.warn, fontWeight: 700 }}> · provisorio</span>}</div>
-          : <div style={{ fontSize: 11.5, color: T.warn, marginTop: 3 }}>Cargá el índice del mes base ({mesLabel(obra?.mesBase)}) y del mes actual.</div>)}
+        {rr.provisorio
+          ? <div style={{ fontSize: 11.5, color: T.warn, marginTop: 3, fontWeight: 600 }}>Falta el CAC de {mesLabel(mesCert)} · provisorio (0%). Cargalo cuando salga.</div>
+          : <div style={{ fontSize: 12.5, marginTop: 3 }}>CAC {mesLabel(mesCert)}: <b>{num(pctMes).toFixed(2)}%</b> · por quincena <b style={{ color: T.ok }}>{(rr.rate * 100).toFixed(4)}%</b></div>}
       </div>
-      <button onClick={() => setOpen(o => !o)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{open ? "Cerrar" : "Índices"}</button>
+      <button onClick={() => setOpen(o => !o)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{open ? "Cerrar" : "CAC %"}</button>
     </div>
     {open && <div style={{ marginTop: 10 }}>
-      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Cargá el CAC de cada mes cuando sale. Si falta el actual, uso el último como provisorio y recalculo al cargar el definitivo.</div>
-      {meses.map(m => <div key={m} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{mesLabel(m)}{m === obra?.mesBase ? " · base" : ""}{m === mesDe(fecha) ? " · este cert" : ""}</span>
-        <input defaultValue={indices[m] ?? ""} onBlur={e => setIndice(m, e.target.value)} inputMode="decimal" placeholder="índice" style={{ ...inp, marginTop: 0, width: 120, textAlign: "right" }} />
-      </div>)}
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Cargá el % del CAC de cada mes cuando sale (ej: 3). Se aplica dividido en las dos quincenas (√ compuesto) sobre el saldo pendiente. Si falta el mes actual, va provisorio en 0% y recalcula al cargarlo.</div>
+      {meses.map(m => { const r2 = cacRate(m, indices); return <div key={m} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{mesLabel(m)}{m === mesCert ? " · este cert" : ""}{!r2.provisorio ? <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 400 }}> · quinc. {(r2.rate * 100).toFixed(3)}%</span> : ""}</span>
+        <input defaultValue={indices[m] ?? ""} onBlur={e => setIndice(m, e.target.value)} inputMode="decimal" placeholder="% CAC" style={{ ...inp, marginTop: 0, width: 110, textAlign: "right" }} /><span style={{ fontSize: 12, color: T.sub }}>%</span>
+      </div>; })}
       <AddMesIndice onAdd={setIndice} />
     </div>}
   </div>);
