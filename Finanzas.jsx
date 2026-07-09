@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v65 (graficos torta y barras incrustados en los PDF + PDF general)
+// VERSION: v67 (barras en todos los modelos ademas de tortas)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -349,7 +349,7 @@ function PropiasPanel({ data, save }) {
           <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Venta est. $</div><input defaultValue={p.ventaArs ? fmtMiles(p.ventaArs) : ""} onBlur={e => setVenta(p.id, "ventaArs", e.target.value)} inputMode="numeric" placeholder="$" style={{ ...inpSm, width: "100%", boxSizing: "border-box", textAlign: "right" }} /></div>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 9, paddingTop: 9, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>Resultado esperado{vU > 0 ? ` · ${mgU.toFixed(0)}%` : ""}</span><span style={{ fontSize: 13.5, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{vU > 0 && <span style={{ color: resU >= 0 ? T.ok : "#EF4444" }}>{usdFmt(resU)}</span>}{vA > 0 && <span style={{ color: resA >= 0 ? T.ok : "#EF4444", marginLeft: 8 }}>{money(resA)}</span>}{vU <= 0 && vA <= 0 && <span style={{ color: T.muted, fontSize: 11, fontWeight: 600 }}>cargá la venta</span>}</span></div>
-        {(() => { const rt = {}; costos.forEach(c => { rt[c.cat] = (rt[c.cat] || 0) + num(c.montoArs); }); const arr = Object.entries(rt).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]); const top = arr.slice(0, 7).map(([k, v]) => ({ label: k, value: v })); const ot = arr.slice(7).reduce((a, [, v]) => a + v, 0); if (ot > 0) top.push({ label: "Otros", value: ot }); return <div style={{ marginTop: 10 }}><GraficoTorta titulo="Costos por rubro" items={top} centro={money(totArs)} centroSub="inversión" /></div>; })()}
+        {(() => { const rt = {}; costos.forEach(c => { rt[c.cat] = (rt[c.cat] || 0) + num(c.montoArs); }); const arr = Object.entries(rt).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]); const top = arr.slice(0, 7).map(([k, v]) => ({ label: k, value: v })); const ot = arr.slice(7).reduce((a, [, v]) => a + v, 0); if (ot > 0) top.push({ label: "Otros", value: ot }); return <div style={{ marginTop: 10 }}><GraficoTorta titulo="Costos por rubro" items={top} centro={money(totArs)} centroSub="inversión" /><GraficoBarras titulo="Costos por rubro (ranking)" items={top} />{(vU > 0 || vA > 0) && <GraficoBarras titulo="Inversión vs resultado" items={[{ label: "Inversión", value: totArs, color: "#C2410C" }, { label: "Resultado", value: Math.max(0, resA), color: T.ok }]} />}</div>; })()}
         <button onClick={() => setExpandir(e => ({ ...e, [p.id]: !e[p.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar rubros ▲" : "Cargar / ver rubros ▼"}</button>
         {exp && <div style={{ marginTop: 8 }}>{RUBROS_PROPIA.map(r => <RubroRow key={r} rubro={r} items={costos.filter(c => c.cat === r)} onAdd={(c) => addCosto(p.id, c)} onDel={(cid) => delCosto(p.id, cid)} cotizDef={cotizDef} setCotizDef={setCotizDef} />)}</div>}
         {(p.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>{(p.adjuntos || []).map(m => <div key={m.url} style={{ position: "relative" }}>{m.tipo === "video" ? <video src={m.url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", background: "#000" }} /> : <img src={m.url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover" }} />}<button onClick={() => delAdj(p.id, m.url)} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button></div>)}</div>}
@@ -1089,6 +1089,7 @@ function GeneralPanel({ data, obras, certs, certsDe, indices }) {
     <GraficoBarras titulo="Cobrado por modelo (período)" items={[{ label: "Clientes", value: cliCob, color: T.ok }, { label: "Sociedad", value: socCob, color: "#16A34A" }]} />
     <GraficoBarras titulo="Egresos / inversión por modelo (período)" items={[{ label: "Clientes", value: cliEgr }, { label: "Sociedad", value: socEgr }, { label: "Particulares", value: propEgr }, { label: "Edificios", value: edifEgr }]} />
     <GraficoTorta titulo="Resultado por modelo (acumulado)" items={[{ label: "Cliente", value: cResCliente }, { label: "Sociedad", value: rSoc }, { label: "Particulares", value: rProp }, { label: "Edificios", value: rEdif }]} centro={money(resTotal)} centroSub="resultado" />
+    <GraficoBarras titulo="Resultado por modelo (acumulado)" items={[{ label: "Cliente", value: cResCliente }, { label: "Sociedad", value: rSoc }, { label: "Particulares", value: rProp }, { label: "Edificios", value: rEdif }]} />
     {(Object.keys(cliObra).length > 0 || socObra.length > 0 || propObra.length > 0 || edifObra.length > 0) && <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Detalle por obra (período)</div>
       {Object.entries(cliObra).map(([k, v]) => <div key={"c" + k} style={{ padding: "6px 0", borderBottom: `1px solid ${T.border}` }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{k} <span style={{ fontSize: 9.5, color: T.accent, fontWeight: 700 }}>CLIENTE</span></div><div style={{ fontSize: 11.5, color: T.sub }}>Cobrado {money(v.cob)} · Egresos {money(v.egr)}</div></div>)}
@@ -1154,6 +1155,7 @@ function SociedadPanel({ data, save }) {
         <button onClick={() => setExpand(x => ({ ...x, [s.id]: !x[s.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar detalle ▲" : "Socios · cobros · adicionales · gastos · retiros ▼"}</button>
         {exp && <div style={{ marginTop: 8 }}>
           <GraficoTorta titulo="Composición del presupuesto" items={[{ label: "Costo", value: costoReal - imprevTot }, { label: "Imprevistos", value: imprevTot }, { label: "Utilidad", value: Math.max(0, util) }]} centro={money(presTotal)} centroSub="presup." />
+          <GraficoBarras titulo="Presupuesto · Costo · Utilidad" items={[{ label: "Presupuesto", value: presTotal, color: T.accent }, { label: "Costo real", value: costoReal, color: "#C2410C" }, { label: "Utilidad", value: Math.max(0, util), color: T.ok }]} />
           {lsoc.length > 0 && <GraficoBarras titulo="Reparto de utilidad por socio" items={lsoc.map(so => ({ label: `${so.nombre} (${num(so.pct)}%)`, value: util * num(so.pct) / 100 }))} />}
           <GraficoTorta titulo="Cobranza" items={[{ label: "Cobrado", value: cobrado, color: T.ok }, { label: "Resta a cobrar", value: Math.max(0, presTotal - cobrado), color: T.warn }]} centro={presTotal > 0 ? Math.round(cobrado / presTotal * 100) + "%" : "0%"} centroSub="cobrado" />
           <div style={{ background: T.card, borderRadius: 10, padding: 11, marginBottom: 10 }}>
@@ -1254,6 +1256,8 @@ function EdificiosPanel({ data, save }) {
         {(() => { const porEstado = { disponible: 0, reservado: 0, vendido: 0 }; unidades.forEach(u => { porEstado[u.estado || "disponible"] += num(u.precioUsd); }); const rt = {}; costos.forEach(c => { rt[c.cat] = (rt[c.cat] || 0) + num(c.montoArs); }); const arr = Object.entries(rt).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]); const top = arr.slice(0, 7).map(([k, v]) => ({ label: k, value: v })); const ot = arr.slice(7).reduce((a, [, v]) => a + v, 0); if (ot > 0) top.push({ label: "Otros", value: ot }); return <div style={{ marginTop: 10 }}>
           <GraficoTorta titulo="Unidades por estado (US$)" items={[{ label: "Vendido", value: porEstado.vendido, color: T.ok }, { label: "Reservado", value: porEstado.reservado, color: T.warn }, { label: "Disponible", value: porEstado.disponible, color: T.muted }].map(x => ({ ...x, valueLabel: usdFmt(x.value) }))} centro={unidades.length + ""} centroSub="unidades" />
           <GraficoTorta titulo="Costos por rubro" items={top} centro={money(totArs)} centroSub="inversión" />
+          <GraficoBarras titulo="Costos por rubro (ranking)" items={top} />
+          <GraficoBarras titulo="Inversión vs venta proyectada" items={[{ label: "Inversión", value: totArs, color: "#C2410C" }, { label: "Venta proyectada", value: vtaArs, color: T.ok }]} />
         </div>; })()}
         <button onClick={() => setExpandir(x => ({ ...x, [e.id]: !x[e.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar unidades y costos ▲" : "Cargar unidades y costos ▼"}</button>
         {exp && <div style={{ marginTop: 10 }}>
@@ -1276,6 +1280,69 @@ function EdificiosPanel({ data, save }) {
     })}
     {edificios.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nuevo" para cargar un edificio con sus unidades y costos.</div>}
     {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
+  </div>);
+}
+const EST_PRES = [["por_presentar", "A presentar"], ["presentado", "Sin definición"], ["ganado", "Ganado"], ["perdido", "No cerrado"]];
+function PresupuestosPanel({ data, save }) {
+  const lista = data.presupuestosSoc || [];
+  const [abrir, setAbrir] = useState(false);
+  const [f, setF] = useState({ nombre: "", cliente: "", monto: "", estado: "presentado", fechaLimite: "" });
+  const hoy = hoyISO();
+  const COL = { por_presentar: T.muted, presentado: T.accent, ganado: T.ok, perdido: "#EF4444" };
+  const add = () => { if (!f.nombre.trim()) return; save({ ...data, presupuestosSoc: [...lista, { id: uid(), nombre: f.nombre.trim(), cliente: f.cliente.trim(), monto: numMoney(f.monto), estado: f.estado, fechaLimite: f.fechaLimite, motivo: "", ts: Date.now() }] }); setF({ nombre: "", cliente: "", monto: "", estado: "presentado", fechaLimite: "" }); setAbrir(false); };
+  const upd = (id, patch) => save({ ...data, presupuestosSoc: lista.map(p => p.id === id ? { ...p, ...patch } : p) });
+  const del = (id) => save({ ...data, presupuestosSoc: lista.filter(p => p.id !== id) });
+  const ganados = lista.filter(p => p.estado === "ganado"), perdidos = lista.filter(p => p.estado === "perdido"), presentados = lista.filter(p => p.estado === "presentado"), porPresentar = lista.filter(p => p.estado === "por_presentar");
+  const definidos = ganados.length + perdidos.length; const efectividad = definidos > 0 ? ganados.length / definidos * 100 : 0;
+  const atrasados = porPresentar.filter(p => p.fechaLimite && p.fechaLimite < hoy);
+  const montoGanado = ganados.reduce((a, p) => a + num(p.monto), 0), montoPerdido = perdidos.reduce((a, p) => a + num(p.monto), 0);
+  return (<div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Presupuestos</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Seguimiento de presupuestos y efectividad.</div></div>
+      <button onClick={() => setAbrir(o => !o)} style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{abrir ? "Cerrar" : "+ Nuevo"}</button>
+    </div>
+    {atrasados.length > 0 && <div style={{ background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.4)", borderRadius: 10, padding: "10px 12px", marginTop: 10, fontSize: 12.5, color: "#EF4444", fontWeight: 700 }}>⚠ {atrasados.length} presupuesto{atrasados.length > 1 ? "s" : ""} atrasado{atrasados.length > 1 ? "s" : ""} — vencidos y sin presentar</div>}
+    {presentados.length > 0 && <div style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px", marginTop: 8, fontSize: 12, color: T.sub }}>⏳ {presentados.length} sin definición, esperando respuesta del cliente</div>}
+    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+      <div style={{ flex: 1, background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 12, padding: "13px 14px" }}>
+        <div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.06em" }}>Efectividad</div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: "#7DE0A6", margin: "3px 0" }}>{efectividad.toFixed(0)}%</div>
+        <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.7)" }}>{ganados.length} ganados de {definidos} definidos</div>
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ flex: 1, background: T.bg, borderRadius: 10, padding: "8px 10px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600 }}>Ganado</div><div style={{ fontSize: 13, fontWeight: 700, color: T.ok }}>{money(montoGanado)}</div></div>
+        <div style={{ flex: 1, background: T.bg, borderRadius: 10, padding: "8px 10px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600 }}>No cerrado</div><div style={{ fontSize: 13, fontWeight: 700, color: "#EF4444" }}>{money(montoPerdido)}</div></div>
+      </div>
+    </div>
+    <GraficoTorta titulo="Presupuestos por estado" items={[{ label: "Ganados", value: ganados.length, color: T.ok, valueLabel: ganados.length + "" }, { label: "No cerrados", value: perdidos.length, color: "#EF4444", valueLabel: perdidos.length + "" }, { label: "Sin definición", value: presentados.length, color: T.accent, valueLabel: presentados.length + "" }, { label: "A presentar", value: porPresentar.length, color: T.muted, valueLabel: porPresentar.length + "" }]} centro={lista.length + ""} centroSub="total" />
+    <GraficoBarras titulo="Monto por estado" items={[{ label: "Ganado", value: montoGanado, color: T.ok }, { label: "No cerrado", value: montoPerdido, color: "#EF4444" }, { label: "Sin definición", value: presentados.reduce((a, p) => a + num(p.monto), 0), color: T.accent }]} />
+    {abrir && <div style={{ background: T.bg, borderRadius: 11, padding: 12, marginTop: 4 }}>
+      <input value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} placeholder="Nombre del proyecto / obra" style={{ ...inp, marginTop: 0 }} />
+      <input value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} placeholder="Cliente (opcional)" style={inp} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <input value={f.monto} onChange={e => setF({ ...f, monto: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="Monto $" style={{ ...inp, flex: 1 }} />
+        <select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} style={{ ...inp, flex: 1 }}>{EST_PRES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+      </div>
+      <div style={{ fontSize: 10.5, color: T.muted, margin: "6px 0 2px" }}>Fecha límite (para presentar) o de presentación</div>
+      <input type="date" value={f.fechaLimite} onChange={e => setF({ ...f, fechaLimite: e.target.value })} style={{ ...inp, marginTop: 0 }} />
+      <button onClick={add} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>Agregar presupuesto</button>
+    </div>}
+    {lista.slice().reverse().map(p => { const atrasado = p.estado === "por_presentar" && p.fechaLimite && p.fechaLimite < hoy; return (<div key={p.id} style={{ background: T.bg, borderRadius: 12, padding: 12, marginTop: 10, border: atrasado ? "1px solid rgba(239,68,68,.5)" : "none" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}><div><div style={{ fontSize: 13.5, fontWeight: 800 }}>{p.nombre}</div>{p.cliente && <div style={{ fontSize: 11, color: T.sub }}>{p.cliente}</div>}</div><button onClick={() => del(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>Eliminar</button></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4, fontSize: 12 }}><b>{money(num(p.monto))}</b><span style={{ color: atrasado ? "#EF4444" : T.muted, fontWeight: atrasado ? 700 : 400 }}>{p.fechaLimite ? (atrasado ? "⚠ vencido " : "") + fmtISO(p.fechaLimite) : "sin fecha"}</span></div>
+      <div style={{ display: "flex", gap: 4, marginTop: 8 }}>{EST_PRES.map(([k, l]) => <button key={k} onClick={() => upd(p.id, { estado: k })} style={{ flex: 1, background: p.estado === k ? COL[k] : "transparent", color: p.estado === k ? "#fff" : T.sub, border: `1px solid ${p.estado === k ? COL[k] : T.border}`, borderRadius: 7, padding: "7px 2px", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>
+      {p.estado === "perdido" && <input value={p.motivo || ""} onChange={e => upd(p.id, { motivo: e.target.value })} placeholder="Motivo por el que no se cerró…" style={{ ...inpSm, width: "100%", boxSizing: "border-box", marginTop: 8 }} />}
+    </div>); })}
+    {lista.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nuevo" para cargar un presupuesto y seguir su efectividad.</div>}
+  </div>);
+}
+function SociedadWrap({ data, save }) {
+  const [vista, setVista] = useState("obras");
+  return (<div>
+    <div style={{ display: "flex", gap: 6, background: T.card, borderRadius: 11, padding: 4, marginBottom: 12, boxShadow: SHDsm }}>
+      {[["obras", "Obras"], ["presupuestos", "Presupuestos"]].map(([k, l]) => <button key={k} onClick={() => setVista(k)} style={{ flex: 1, background: vista === k ? T.accent : "transparent", color: vista === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+    </div>
+    {vista === "obras" ? <SociedadPanel data={data} save={save} /> : <PresupuestosPanel data={data} save={save} />}
   </div>);
 }
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
@@ -1523,7 +1590,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
     </>; })()}
     </>}
     {subtab === "particulares" && <PropiasPanel data={data} save={save} />}
-    {subtab === "sociedad" && <SociedadPanel data={data} save={save} />}
+    {subtab === "sociedad" && <SociedadWrap data={data} save={save} />}
     {subtab === "edificios" && <EdificiosPanel data={data} save={save} />}
     {subtab === "general" && <GeneralPanel data={data} obras={obras} certs={certs} certsDe={certsDe} indices={indices} />}
     <button onClick={() => { const n = prompt("Nueva clave (números):", ""); if (n && n.trim()) { try { localStorage.setItem("finanzas_pin", n.trim()); } catch { } alert("Clave actualizada."); } }} style={{ display: "block", margin: "8px auto 0", background: "none", border: "none", color: T.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>Cambiar clave</button>
