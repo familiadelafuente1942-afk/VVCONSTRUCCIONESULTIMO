@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v58 (sociedad: cobranza, socios y reparto, retiros por socio)
+// VERSION: v60 (solapa General: consolidado V+V por periodo)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -129,6 +129,28 @@ function resumenFinanciero(data) {
 function limpiarTel(t) { return String(t || "").replace(/[^\d]/g, ""); }
 function waLink(tel, texto) { return `https://wa.me/${limpiarTel(tel)}?text=${encodeURIComponent(texto)}`; }
 function resumenSocioTexto(data) { return `*Resumen financiero — V+V Construcciones*\n\n${resumenFinanciero(data)}`; }
+function reporteSociedadParcial(s, socio) {
+  const presIni = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto);
+  const adic = s.adicionales || [], gastos = s.gastos || [], cobros = s.cobros || [], retiros = s.retiros || s.pagos || [], lsoc = s.socios || [], media = s.adjuntos || [];
+  const adicTot = adic.reduce((a, x) => a + num(x.monto), 0); const presTotal = presIni + adicTot;
+  const costoReal = gastos.reduce((a, x) => a + num(x.monto), 0); const imprevTot = gastos.filter(g => g.tipo === "imprevisto").reduce((a, x) => a + num(x.monto), 0);
+  const cobrado = cobros.reduce((a, x) => a + num(x.monto), 0); const restaCobrar = presTotal - cobrado;
+  const util = presTotal - costoReal; const retTot = retiros.reduce((a, x) => a + num(x.monto), 0); const rest = util - retTot;
+  const L = [`*${s.nombre} — Resultado parcial*`];
+  if (s.descripcion) L.push(`_${s.descripcion}_`);
+  L.push("");
+  L.push(`*Presupuesto:* ${money(presTotal)}` + (adicTot ? ` (inicial ${money(presIni)} + adicionales ${money(adicTot)})` : ""));
+  L.push(`*Cobrado:* ${money(cobrado)}  ·  *Resta a cobrar:* ${money(restaCobrar)}`);
+  L.push(`*Costo real:* ${money(costoReal)}` + (imprevTot ? ` (imprevistos ${money(imprevTot)})` : ""));
+  L.push(`*Utilidad:* ${money(util)}` + (presTotal > 0 ? ` (${(util / presTotal * 100).toFixed(0)}%)` : ""));
+  L.push(`*Utilidad por distribuir:* ${money(rest)}`);
+  if (adic.length) { L.push("", "*Adicionales:*"); adic.forEach(a => L.push(`• ${a.texto || "Adicional"}: ${money(num(a.monto))}`)); }
+  if (imprevTot > 0) { L.push("", "*Imprevistos:*"); gastos.filter(g => g.tipo === "imprevisto").forEach(g => L.push(`• ${g.texto || "Imprevisto"}: ${money(num(g.monto))}`)); }
+  if (lsoc.length) { L.push("", "*Reparto por socio:*"); lsoc.forEach(so => { const corr = util * num(so.pct) / 100; const rs = retiros.filter(r => r.socioId === so.id).reduce((a, r) => a + num(r.monto), 0); L.push(`• ${so.nombre} (${num(so.pct)}%): le corresponde ${money(corr)}, retiró ${money(rs)}, le queda ${money(corr - rs)}`); }); }
+  if (socio) { const corr = util * num(socio.pct) / 100; const rs = retiros.filter(r => r.socioId === socio.id).reduce((a, r) => a + num(r.monto), 0); L.push("", `*${socio.nombre}, tu parte:* te corresponde ${money(corr)}, retiraste ${money(rs)}, te queda ${money(corr - rs)}.`); }
+  if (media.length) { L.push("", "*Fotos y videos de la obra:*"); media.forEach(m => L.push(`${m.tipo === "video" ? "🎥" : "📷"} ${m.url}`)); }
+  return L.join("\n");
+}
 function mensajeCertificadoTexto(obra, data, certsDe, indices) {
   const cs = certsDe(obra.id); const ult = cs[cs.length - 1];
   if (!ult) return `Hola! Todavía no hay certificados cargados para ${obra.nombre}.`;
@@ -879,9 +901,81 @@ function RetiroAdder({ socios, onAdd }) {
     </div>
   </div>;
 }
+function GeneralPanel({ data, obras, certs, certsDe, indices }) {
+  const [desde, setDesde] = useState(""); const [hasta, setHasta] = useState("");
+  const enR = (f) => { if (!f) return false; if (desde && f < desde) return false; if (hasta && f > hasta) return false; return true; };
+  const fechaDe = (ts) => ts ? new Date(ts).toISOString().slice(0, 10) : "";
+  const anio = new Date().getFullYear();
+  const presets = [["Este mes", new Date().toISOString().slice(0, 8) + "01", new Date().toISOString().slice(0, 10)], ["Este año", `${anio}-01-01`, `${anio}-12-31`], ["Todo", "", ""]];
+  // CLIENTE — caja del período
+  const movs = data.movimientos || [], gastosG = data.gastos || [];
+  let cliCob = 0, cliEgr = 0; const cliObra = {};
+  const addCli = (key, k, v) => { if (!cliObra[key]) cliObra[key] = { cob: 0, egr: 0 }; cliObra[key][k] += v; };
+  movs.forEach(m => { if (!enR(m.fecha)) return; const o = obras.find(x => x.id === m.obraId); const key = o ? o.nombre : "General"; if (m.tipo === "cobro") { cliCob += num(m.monto); addCli(key, "cob", num(m.monto)); } else { cliEgr += num(m.monto); addCli(key, "egr", num(m.monto)); } });
+  gastosG.forEach(g => { if (!enR(g.fecha)) return; cliEgr += num(g.monto); const o = obras.find(x => x.id === g.obraId); addCli(o ? o.nombre : "General", "egr", num(g.monto)); });
+  // SOCIEDAD
+  const soc = data.sociedad || []; let socCob = 0, socEgr = 0; const socObra = [];
+  soc.forEach(s => { const cob = (s.cobros || []).filter(c => enR(c.fecha)).reduce((a, c) => a + num(c.monto), 0); const egr = (s.gastos || []).filter(g => enR(g.fecha)).reduce((a, g) => a + num(g.monto), 0); socCob += cob; socEgr += egr; if (cob || egr) socObra.push({ nombre: s.nombre, cob, egr }); });
+  // PARTICULARES / EDIFICIOS — inversión del período (por ts de cada costo)
+  const prop = data.propias || []; let propEgr = 0; const propObra = [];
+  prop.forEach(p => { const egr = (p.costos || []).filter(c => enR(fechaDe(c.ts))).reduce((a, c) => a + num(c.montoArs), 0); propEgr += egr; if (egr) propObra.push({ nombre: p.nombre, egr }); });
+  const edif = data.edificios || []; let edifEgr = 0; const edifObra = [];
+  edif.forEach(e => { const egr = (e.costos || []).filter(c => enR(fechaDe(c.ts))).reduce((a, c) => a + num(c.montoArs), 0); edifEgr += egr; if (egr) edifObra.push({ nombre: e.nombre, egr }); });
+  const totCob = cliCob + socCob; const totEgr = cliEgr + socEgr + propEgr + edifEgr; const flujo = totCob - totEgr;
+  // RESULTADOS ACUMULADOS (todo, sin filtro de período)
+  const est = data.estructura || {}; const cuotaQ = (num(est.nObras) > 0 ? num(est.mensual) / num(est.nObras) : 0) / 2;
+  let cFact = 0, cCostoDir = 0, cImp = 0, cImprev = 0, cNcert = 0;
+  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); cFact += r.ajustado; cCostoDir += r.costoDirPeriodo; cImp += r.extraMontoPeriodo + r.extraPctPeriodo; cImprev += r.imprevPeriodo; cNcert++; });
+  const cGastos = gastosG.filter(g => !esImprev(g.cat)).reduce((a, g) => a + num(g.monto), 0);
+  const cResCliente = (cFact - cCostoDir) - cImp - cImprev - (cuotaQ * cNcert) - cGastos;
+  const rSoc = soc.reduce((a, s) => { const presIni = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto); const adicT = (s.adicionales || []).reduce((x, y) => x + num(y.monto), 0); const cReal = (s.gastos || []).reduce((x, y) => x + num(y.monto), 0); return a + (presIni + adicT - cReal); }, 0);
+  const rProp = prop.reduce((a, p) => { const inv = (p.costos || []).reduce((x, y) => x + num(y.montoArs), 0); return a + (num(p.ventaArs) - inv); }, 0);
+  const rEdif = edif.reduce((a, e) => { const inv = (e.costos || []).reduce((x, y) => x + num(y.montoArs), 0); const vta = (e.unidades || []).reduce((x, y) => x + num(y.precioArs), 0); return a + (vta - inv); }, 0);
+  const resTotal = cResCliente + rSoc + rProp + rEdif;
+  const R = (t, v, c) => <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "3px 0" }}><span style={{ color: T.sub }}>{t}</span><b style={{ color: c || T.text }}>{money(v)}</b></div>;
+  return (<div>
+    <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Período</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 10, color: T.muted, marginBottom: 2 }}>Desde</div><input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ ...inpSm, width: "100%", boxSizing: "border-box" }} /></div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 10, color: T.muted, marginBottom: 2 }}>Hasta</div><input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ ...inpSm, width: "100%", boxSizing: "border-box" }} /></div>
+      </div>
+      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>{presets.map(([l, d, h]) => <button key={l} onClick={() => { setDesde(d); setHasta(h); }} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "8px 4px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>
+    </div>
+    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Flujo del período {desde || hasta ? `(${fmtISO(desde) || "inicio"} → ${fmtISO(hasta) || "hoy"})` : "(todo)"}</div>
+      <div style={{ fontSize: 28, fontWeight: 800, margin: "6px 0 10px", color: flujo >= 0 ? "#7DE0A6" : "#FCA5A5" }}>{money(flujo)}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0", borderTop: "1px solid rgba(255,255,255,.12)", paddingTop: 8 }}><span style={{ color: "rgba(255,255,255,.75)" }}>Cobrado en el período</span><b>{money(totCob)}</b></div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0" }}><span style={{ color: "rgba(255,255,255,.75)" }}>Egresos / inversión</span><b style={{ color: "#FCA5A5" }}>− {money(totEgr)}</b></div>
+    </div>
+    <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Cobrado por modelo (en el período)</div>
+      {R("Clientes", cliCob, T.ok)}{R("Sociedad", socCob, T.ok)}
+      <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, marginBottom: 8 }}>Particulares y Edificios se cobran al vender; acá se muestran por la inversión del período.</div>
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 8, fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>Egresos por modelo</div>
+      {R("Clientes", cliEgr, T.warn)}{R("Sociedad", socEgr, T.warn)}{R("Particulares", propEgr, T.warn)}{R("Edificios", edifEgr, T.warn)}
+    </div>
+    {(Object.keys(cliObra).length > 0 || socObra.length > 0 || propObra.length > 0 || edifObra.length > 0) && <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Detalle por obra (período)</div>
+      {Object.entries(cliObra).map(([k, v]) => <div key={"c" + k} style={{ padding: "6px 0", borderBottom: `1px solid ${T.border}` }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{k} <span style={{ fontSize: 9.5, color: T.accent, fontWeight: 700 }}>CLIENTE</span></div><div style={{ fontSize: 11.5, color: T.sub }}>Cobrado {money(v.cob)} · Egresos {money(v.egr)}</div></div>)}
+      {socObra.map((v, i) => <div key={"s" + i} style={{ padding: "6px 0", borderBottom: `1px solid ${T.border}` }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{v.nombre} <span style={{ fontSize: 9.5, color: BRASS, fontWeight: 700 }}>SOCIEDAD</span></div><div style={{ fontSize: 11.5, color: T.sub }}>Cobrado {money(v.cob)} · Egresos {money(v.egr)}</div></div>)}
+      {propObra.map((v, i) => <div key={"p" + i} style={{ padding: "6px 0", borderBottom: `1px solid ${T.border}` }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{v.nombre} <span style={{ fontSize: 9.5, color: T.sub, fontWeight: 700 }}>PARTICULAR</span></div><div style={{ fontSize: 11.5, color: T.sub }}>Invertido {money(v.egr)}</div></div>)}
+      {edifObra.map((v, i) => <div key={"e" + i} style={{ padding: "6px 0", borderBottom: `1px solid ${T.border}` }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{v.nombre} <span style={{ fontSize: 9.5, color: T.sub, fontWeight: 700 }}>EDIFICIO</span></div><div style={{ fontSize: 11.5, color: T.sub }}>Invertido {money(v.egr)}</div></div>)}
+    </div>}
+    <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Resultados parciales (acumulado total)</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Resultado esperado de cada modelo con todo lo cargado hasta hoy.</div>
+      {R("Obras de cliente", cResCliente, cResCliente >= 0 ? T.ok : "#EF4444")}
+      {R("Obras en sociedad", rSoc, rSoc >= 0 ? T.ok : "#EF4444")}
+      {R("Obras particulares", rProp, rProp >= 0 ? T.ok : "#EF4444")}
+      {R("Edificios", rEdif, rEdif >= 0 ? T.ok : "#EF4444")}
+      <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13.5, fontWeight: 800 }}>Resultado general V+V</span><Money v={resTotal} c={resTotal >= 0 ? T.ok : "#EF4444"} /></div>
+    </div>
+  </div>);
+}
 function SociedadPanel({ data, save }) {
   const socios = data.sociedad || [];
-  const [abrir, setAbrir] = useState(false); const [expand, setExpand] = useState({});
+  const [abrir, setAbrir] = useState(false); const [expand, setExpand] = useState({}); const [subiendo, setSubiendo] = useState("");
   const [f, setF] = useState({ nombre: "", descripcion: "", presupuesto: "", costoEst: "" });
   const add = () => { if (!f.nombre.trim()) return; save({ ...data, sociedad: [...socios, { id: uid(), nombre: f.nombre.trim(), descripcion: f.descripcion.trim(), presupuestoInicial: numMoney(f.presupuesto), costoEstimado: numMoney(f.costoEst), adicionales: [], gastos: [], cobros: [], retiros: [], socios: [], ts: Date.now() }] }); setF({ nombre: "", descripcion: "", presupuesto: "", costoEst: "" }); setAbrir(false); };
   const upd = (id, fn) => save({ ...data, sociedad: socios.map(x => x.id === id ? fn(x) : x) });
@@ -889,6 +983,7 @@ function SociedadPanel({ data, save }) {
   const push = (id, campo, item) => upd(id, s => ({ ...s, [campo]: [...(s[campo] || []), { id: uid(), ts: Date.now(), ...item }] }));
   const pull = (id, campo, iid) => upd(id, s => ({ ...s, [campo]: (s[campo] || []).filter(x => x.id !== iid) }));
   const setCampo = (id, k, v) => upd(id, s => ({ ...s, [k]: v }));
+  async function subirAdj(id, file) { if (!file) return; setSubiendo(id); const url = await subirArchivo(file); if (url) { const tipo = (file.type || "").startsWith("video") ? "video" : "foto"; push(id, "adjuntos", { url, tipo }); } else alert("No se pudo subir. Revisá la conexión."); setSubiendo(""); }
   return (<div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras en sociedad</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Presupuesto y costo reales, cobranza, socios y reparto de utilidades.</div></div>
@@ -929,8 +1024,16 @@ function SociedadPanel({ data, save }) {
               {so.tel && <div style={{ fontSize: 10.5, color: T.muted }}>{so.tel}</div>}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginTop: 3 }}><span style={{ color: T.sub }}>Le corresponde {money(corr)}</span><span style={{ color: T.sub }}>Retiró {money(retS)}</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, fontWeight: 700, marginTop: 1 }}><span>Le queda</span><span style={{ color: queda >= 0 ? T.ok : "#EF4444" }}>{money(queda)}</span></div>
+              {so.tel && <a href={waLink(so.tel, reporteSociedadParcial(s, so))} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 8, padding: "8px", fontSize: 12, fontWeight: 700, textDecoration: "none", marginTop: 7 }}>Enviar su resultado por WhatsApp</a>}
             </div>; })}
             <SocioAdder onAdd={(it) => push(s.id, "socios", it)} />
+          </div>
+          <div style={{ background: T.card, borderRadius: 10, padding: 11, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Fotos y videos de la obra</div>
+            {(s.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>{(s.adjuntos || []).map(m => <div key={m.id} style={{ position: "relative" }}>{m.tipo === "video" ? <video src={m.url} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", background: "#000" }} /> : <img src={m.url} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover" }} />}<button onClick={() => pull(s.id, "adjuntos", m.id)} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button></div>)}</div>}
+            <label style={{ display: "block", textAlign: "center", background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo === s.id ? "Subiendo…" : "＋ Subir foto o video"}<input type="file" accept="image/*,video/*" onChange={e => { const file = e.target.files && e.target.files[0]; subirAdj(s.id, file); e.target.value = ""; }} style={{ display: "none" }} /></label>
+            <a href={waLink("", reporteSociedadParcial(s))} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, textDecoration: "none", marginTop: 8 }}>Enviar reporte por WhatsApp (elegir contacto)</a>
+            <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>El reporte va con todos los números detallados y los links a las fotos/videos. Cada socio con teléfono cargado tiene su botón propio arriba.</div>
           </div>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em" }}>Cobros (lo que se cobra)</div>
           {cobros.map(c => <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: T.sub, marginTop: 5 }}><span>{c.texto || "Cobro"} · {fmtISO(c.fecha)}</span><span style={{ display: "flex", gap: 8, alignItems: "center" }}>{money(num(c.monto))}<button onClick={() => pull(s.id, "cobros", c.id)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button></span></div>)}
@@ -1071,8 +1174,8 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const promPago = nCertsTot > 0 ? totCosto / nCertsTot : 0;
 
   return (<div style={{ padding: "14px 16px 40px" }}>
-    <div style={{ display: "flex", gap: 4, background: T.card, borderRadius: 12, padding: 5, marginBottom: 14, boxShadow: SHDsm }}>
-      {[["cliente", "Cliente"], ["particulares", "Particul."], ["sociedad", "Sociedad"], ["edificios", "Edificios"]].map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: 1, background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 9, padding: "10px 2px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em" }}>{l}</button>)}
+    <div style={{ display: "flex", gap: 3, background: T.card, borderRadius: 12, padding: 4, marginBottom: 14, boxShadow: SHDsm, flexWrap: "wrap" }}>
+      {[["general", "General"], ["cliente", "Cliente"], ["particulares", "Particul."], ["sociedad", "Sociedad"], ["edificios", "Edificios"]].map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: "1 1 30%", background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 2px", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em" }}>{l}</button>)}
     </div>
     {subtab === "cliente" && <>
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 16, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
@@ -1263,6 +1366,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
     {subtab === "particulares" && <PropiasPanel data={data} save={save} />}
     {subtab === "sociedad" && <SociedadPanel data={data} save={save} />}
     {subtab === "edificios" && <EdificiosPanel data={data} save={save} />}
+    {subtab === "general" && <GeneralPanel data={data} obras={obras} certs={certs} certsDe={certsDe} indices={indices} />}
     <button onClick={() => { const n = prompt("Nueva clave (números):", ""); if (n && n.trim()) { try { localStorage.setItem("finanzas_pin", n.trim()); } catch { } alert("Clave actualizada."); } }} style={{ display: "block", margin: "8px auto 0", background: "none", border: "none", color: T.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>Cambiar clave</button>
   </div>);
 }
