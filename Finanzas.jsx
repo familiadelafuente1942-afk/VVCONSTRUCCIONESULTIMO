@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v89 (IA con acceso de lectura a todos los datos para responder consultas)
+// VERSION: v90 (IA tipo chat: barra fija abajo + auto-scroll a la respuesta)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -1526,6 +1526,8 @@ function contextoDatos(data) {
 function AsistenteCargaTab({ data, save }) {
   const [texto, setTexto] = useState(""); const [files, setFiles] = useState([]); const [cargando, setCargando] = useState(false); const [msgs, setMsgs] = useState(() => { try { const l = localStorage.getItem("vv_ia_chat"); return l ? JSON.parse(l) : []; } catch { return []; } }); const [acciones, setAcciones] = useState([]); const [error, setError] = useState(""); const [subLogo, setSubLogo] = useState(false); const [mostrarTexto, setMostrarTexto] = useState(false);
   const taRef = useRef(null);
+  const endRef = useRef(null);
+  useEffect(() => { try { endRef.current && endRef.current.scrollIntoView({ behavior: "smooth", block: "end" }); } catch { } }, [msgs, cargando, acciones]);
   useEffect(() => { try { const s = JSON.stringify(msgs.slice(-40)); localStorage.setItem("vv_ia_chat", s); storage.set("vv_ia_chat", s); } catch { } }, [msgs]);
   useEffect(() => { if (msgs.length === 0) { (async () => { try { const r = await storage.get("vv_ia_chat"); if (r && r.value) { const arr = JSON.parse(r.value); if (Array.isArray(arr) && arr.length) setMsgs(arr); } } catch { } })(); } }, []);
   const enfocar = () => { setMostrarTexto(true); setTimeout(() => { try { taRef.current && taRef.current.focus(); } catch { } }, 60); };
@@ -1594,53 +1596,63 @@ ${contextoDatos(data)}`;
   const confirmarTodo = () => { let nd = data; const ok = []; acciones.forEach(a => { const r = aplicarAccion(nd, a); if (r) { nd = r; ok.push(a._id); } }); if (ok.length) save(nd); setAcciones(prev => prev.filter(x => !ok.includes(x._id))); if (ok.length) setMsgs(m => [...m, { role: "assistant", text: `✓ Cargué ${ok.length} cosa(s).` }]); if (ok.length < acciones.length) alert("Algunas no las pude cargar (revisá la obra/persona)."); };
   const descartar = (id) => setAcciones(prev => prev.filter(x => x._id !== id));
   const vacio = msgs.length === 0 && acciones.length === 0 && !cargando;
-  return (<div style={{ padding: "14px 16px 40px" }}>
-    <div style={{ textAlign: "center", marginBottom: 16, marginTop: 4 }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.14em", textTransform: "uppercase" }}>Asistente V+V</div>
-      <div style={{ fontSize: 13, color: T.sub, marginTop: 5, lineHeight: 1.4 }}>Hablale para cargar, o subí fotos/PDF.<br />Siempre te muestro qué entendí y vos confirmás.</div>
+  const charla = msgs.length > 0 || acciones.length > 0 || cargando;
+  return (<div style={{ display: "flex", flexDirection: "column", minHeight: "78vh" }}>
+    <div style={{ flex: 1, padding: "14px 16px 8px" }}>
+      {!charla && <>
+        <div style={{ textAlign: "center", marginBottom: 16, marginTop: 4 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.14em", textTransform: "uppercase" }}>Asistente V+V</div>
+          <div style={{ fontSize: 13, color: T.sub, marginTop: 5, lineHeight: 1.4 }}>Tocá el micrófono para hablarle, subí fotos/PDF, o escribí abajo.<br />Siempre te muestro qué entendí y vos confirmás.</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 8 }}>
+          <div onClick={escuchar} style={{ width: "min(72vw, 240px)", aspectRatio: "1", background: T.card, border: `2px solid ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, position: "relative" }}>
+            {data.config && data.config.logo ? <img src={data.config.logo} alt="logo" style={{ width: 92, height: 92, borderRadius: 18, objectFit: "cover", background: "#fff" }} /> : <div style={{ fontSize: 52 }}>🎤</div>}
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>🎤 Hablarle a la IA</div>
+            <label onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 10, right: 10, background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 9px", fontSize: 10.5, fontWeight: 700, color: T.sub, cursor: "pointer" }}>{subLogo ? "…" : "✎ logo"}<input type="file" accept="image/*" onChange={e => { subirLogo(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
+          </div>
+          <label style={{ width: "min(72vw, 240px)", aspectRatio: "1", background: T.card, border: `2px dashed ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            <div style={{ fontSize: 52 }}>📎</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>Subir fotos / archivos</div>
+            <div style={{ fontSize: 11, color: T.muted }}>fotos, video, PDF, documentos</div>
+            <input type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" multiple onChange={e => { setFiles(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
+          </label>
+        </div>
+      </>}
+      {msgs.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><span style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Conversación</span><button onClick={() => { setMsgs([]); setAcciones([]); try { localStorage.setItem("vv_ia_chat", "[]"); storage.set("vv_ia_chat", "[]"); } catch { } }} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>＋ Nueva</button></div>}
+      {msgs.map((mm, i) => <div key={i} style={{ display: "flex", justifyContent: mm.role === "user" ? "flex-end" : "flex-start", marginBottom: 8 }}>
+        <div style={{ maxWidth: "85%", background: mm.role === "user" ? T.accent : T.card, color: mm.role === "user" ? "#fff" : T.text, border: mm.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: 13, padding: "10px 13px", fontSize: 13, lineHeight: 1.45, boxShadow: SHDsm }}>
+          {mm.text}
+          {mm.role === "assistant" && <button onClick={() => hablar(mm.text)} title="Escuchar" style={{ background: "none", border: "none", color: T.accent, cursor: "pointer", fontSize: 14, marginLeft: 6 }}>🔊</button>}
+        </div>
+      </div>)}
+      {cargando && <div style={{ fontSize: 12, color: T.muted, textAlign: "center", padding: "8px 0" }}>Pensando…</div>}
+      {error && <div style={{ background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.4)", borderRadius: 10, padding: "11px 13px", fontSize: 12.5, color: "#EF4444", margin: "6px 0" }}>{error}</div>}
+      {acciones.length > 1 && <button onClick={confirmarTodo} style={{ width: "100%", background: T.ok, color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", margin: "8px 0" }}>Confirmar y aplicar todo ({acciones.length})</button>}
+      {acciones.map(a => { const ap = accionAplicable(data, a); const esBorrar = a.tipo === "borrar"; return (<div key={a._id} style={{ background: T.card, border: `1px solid ${!ap ? "rgba(239,68,68,.45)" : esBorrar ? "rgba(239,68,68,.35)" : T.border}`, borderRadius: 14, padding: 14, marginBottom: 10, boxShadow: SHDsm }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: esBorrar ? "#EF4444" : T.accent, background: esBorrar ? "rgba(239,68,68,.12)" : T.al, borderRadius: 6, padding: "3px 8px", textTransform: "uppercase" }}>{esBorrar ? "Borrar" : "Cargar"}</span>
+          {a.confianza && <span style={{ fontSize: 10, fontWeight: 700, color: a.confianza === "alta" ? T.ok : a.confianza === "media" ? T.warn : "#EF4444" }}>{a.confianza}</span>}
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{descAccion(a)}</div>
+        <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{fmtISO(a.fecha || hoyISO())}{a.cotizacion ? ` · cotiz ${num(a.cotizacion)}` : ""}{a.nota && a.operacion !== "presupuesto" ? ` · ${a.nota}` : ""}</div>
+        {!ap && <div style={{ fontSize: 11, color: "#EF4444", marginTop: 5, fontWeight: 700 }}>⚠ No encontré "{a.objetivo || a.nombre}". Revisá el nombre o cargalo primero.</div>}
+        {a.falta && ap && <div style={{ fontSize: 11, color: T.warn, marginTop: 5 }}>Revisá: {a.falta}</div>}
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button onClick={() => confirmar(a)} disabled={!ap} style={{ flex: 1, background: !ap ? T.muted : esBorrar ? "#EF4444" : T.ok, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: ap ? "pointer" : "default" }}>{esBorrar ? "Confirmar borrado" : "Confirmar y cargar"}</button>
+          <button onClick={() => descartar(a._id)} style={{ background: T.bg, color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Descartar</button>
+        </div>
+      </div>); })}
+      <div ref={endRef} />
     </div>
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 16 }}>
-      <div onClick={escuchar} style={{ width: "min(74vw, 250px)", aspectRatio: "1", background: T.card, border: `2px solid ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, position: "relative" }}>
-        {data.config && data.config.logo ? <img src={data.config.logo} alt="logo" style={{ width: 96, height: 96, borderRadius: 18, objectFit: "cover", background: "#fff" }} /> : <div style={{ fontSize: 54 }}>🎤</div>}
-        <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>🎤 Hablarle a la IA</div>
-        <label onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 10, right: 10, background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 9px", fontSize: 10.5, fontWeight: 700, color: T.sub, cursor: "pointer" }}>{subLogo ? "…" : "✎ logo"}<input type="file" accept="image/*" onChange={e => { subirLogo(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
+    <div style={{ position: "sticky", bottom: 0, background: T.bg, borderTop: `1px solid ${T.border}`, padding: "9px 12px calc(9px + env(safe-area-inset-bottom))", boxShadow: "0 -4px 14px rgba(15,27,45,.06)" }}>
+      {files.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>{files.map((f, i) => <span key={i} style={{ fontSize: 11, background: T.al, color: T.sub, borderRadius: 7, padding: "5px 9px" }}>{f.type === "application/pdf" ? "📄" : "🖼"} {f.name.slice(0, 20)}</span>)}</div>}
+      <div style={{ display: "flex", gap: 7, alignItems: "flex-end" }}>
+        <button onClick={escuchar} title="Hablar" style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 11, padding: "11px 12px", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>🎤</button>
+        <label title="Subir" style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 11, padding: "11px 12px", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>📎<input type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" multiple onChange={e => { setFiles(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} /></label>
+        <textarea ref={taRef} value={texto} onChange={e => setTexto(e.target.value)} placeholder='Escribile a la IA…' style={{ ...inp, minHeight: 44, maxHeight: 120, resize: "none", marginTop: 0, flex: 1 }} />
+        <button onClick={() => enviar()} disabled={cargando || (!texto.trim() && !files.length)} style={{ background: cargando || (!texto.trim() && !files.length) ? T.muted : T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px 16px", fontSize: 14, fontWeight: 800, cursor: cargando ? "default" : "pointer", flexShrink: 0 }}>{cargando ? "…" : "Enviar"}</button>
       </div>
-      <label style={{ width: "min(74vw, 250px)", aspectRatio: "1", background: T.card, border: `2px dashed ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-        <div style={{ fontSize: 54 }}>📎</div>
-        <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>Subir fotos / archivos</div>
-        <div style={{ fontSize: 11, color: T.muted }}>fotos, video, PDF, documentos</div>
-        <input type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" multiple onChange={e => { setFiles(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
-      </label>
     </div>
-    {files.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>{files.map((f, i) => <span key={i} style={{ fontSize: 11, background: T.al, color: T.sub, borderRadius: 7, padding: "5px 9px" }}>{f.type === "application/pdf" ? "📄" : "🖼"} {f.name.slice(0, 22)}</span>)}</div>}
-    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14 }}>
-      <textarea ref={taRef} value={texto} onChange={e => setTexto(e.target.value)} placeholder='Escribile a la IA qué cargar…' style={{ ...inp, minHeight: 48, resize: "vertical", marginTop: 0, flex: 1 }} />
-      <button onClick={enviar} disabled={cargando || (!texto.trim() && !files.length)} style={{ background: cargando || (!texto.trim() && !files.length) ? T.muted : T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px 18px", fontSize: 14, fontWeight: 800, cursor: cargando ? "default" : "pointer" }}>{cargando ? "…" : "Enviar"}</button>
-    </div>
-    {msgs.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><span style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Conversación</span><button onClick={() => { setMsgs([]); setAcciones([]); try { localStorage.setItem("vv_ia_chat", "[]"); storage.set("vv_ia_chat", "[]"); } catch { } }} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>＋ Nueva</button></div>}
-    {msgs.map((mm, i) => <div key={i} style={{ display: "flex", justifyContent: mm.role === "user" ? "flex-end" : "flex-start", marginBottom: 8 }}>
-      <div style={{ maxWidth: "85%", background: mm.role === "user" ? T.accent : T.card, color: mm.role === "user" ? "#fff" : T.text, border: mm.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: 13, padding: "10px 13px", fontSize: 13, lineHeight: 1.45, boxShadow: SHDsm }}>
-        {mm.text}
-        {mm.role === "assistant" && <button onClick={() => hablar(mm.text)} title="Escuchar" style={{ background: "none", border: "none", color: T.accent, cursor: "pointer", fontSize: 14, marginLeft: 6 }}>🔊</button>}
-      </div>
-    </div>)}
-    {cargando && <div style={{ fontSize: 12, color: T.muted, textAlign: "center", padding: "8px 0" }}>Pensando…</div>}
-    {error && <div style={{ background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.4)", borderRadius: 10, padding: "11px 13px", fontSize: 12.5, color: "#EF4444", margin: "6px 0" }}>{error}</div>}
-    {acciones.length > 1 && <button onClick={confirmarTodo} style={{ width: "100%", background: T.ok, color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", margin: "8px 0" }}>Confirmar y aplicar todo ({acciones.length})</button>}
-    {acciones.map(a => { const ap = accionAplicable(data, a); const esBorrar = a.tipo === "borrar"; return (<div key={a._id} style={{ background: T.card, border: `1px solid ${!ap ? "rgba(239,68,68,.45)" : esBorrar ? "rgba(239,68,68,.35)" : T.border}`, borderRadius: 14, padding: 14, marginBottom: 10, boxShadow: SHDsm }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-        <span style={{ fontSize: 10, fontWeight: 800, color: esBorrar ? "#EF4444" : T.accent, background: esBorrar ? "rgba(239,68,68,.12)" : T.al, borderRadius: 6, padding: "3px 8px", textTransform: "uppercase" }}>{esBorrar ? "Borrar" : "Cargar"}</span>
-        {a.confianza && <span style={{ fontSize: 10, fontWeight: 700, color: a.confianza === "alta" ? T.ok : a.confianza === "media" ? T.warn : "#EF4444" }}>{a.confianza}</span>}
-      </div>
-      <div style={{ fontSize: 14, fontWeight: 700 }}>{descAccion(a)}</div>
-      <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{fmtISO(a.fecha || hoyISO())}{a.cotizacion ? ` · cotiz ${num(a.cotizacion)}` : ""}{a.nota && a.operacion !== "presupuesto" ? ` · ${a.nota}` : ""}</div>
-      {!ap && <div style={{ fontSize: 11, color: "#EF4444", marginTop: 5, fontWeight: 700 }}>⚠ No encontré "{a.objetivo || a.nombre}". Revisá el nombre o cargalo primero.</div>}
-      {a.falta && ap && <div style={{ fontSize: 11, color: T.warn, marginTop: 5 }}>Revisá: {a.falta}</div>}
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button onClick={() => confirmar(a)} disabled={!ap} style={{ flex: 1, background: !ap ? T.muted : esBorrar ? "#EF4444" : T.ok, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: ap ? "pointer" : "default" }}>{esBorrar ? "Confirmar borrado" : "Confirmar y cargar"}</button>
-        <button onClick={() => descartar(a._id)} style={{ background: T.bg, color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Descartar</button>
-      </div>
-    </div>); })}
   </div>);
 }
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
