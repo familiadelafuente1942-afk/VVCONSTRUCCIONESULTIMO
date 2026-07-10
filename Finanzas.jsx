@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v75 (agenda: evita y limpia contactos duplicados)
+// VERSION: v84 (gastos: asignar obra desde la planilla + IA anota gasto sin obra)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -472,7 +472,7 @@ export default function App() {
   const [okMsg, setOkMsg] = useState("");
   async function actualizar() { setRefrescando(true); const ok = await refrescar(); setRefrescando(false); setOkMsg(ok ? "Actualizado ✓" : "Sin cambios"); setTimeout(() => setOkMsg(""), 2000); }
   useEffect(() => { const t = setTimeout(() => { try { storage.set("vv_finanzas_resumen", resumenFinanciero(data)); } catch { } }, 1500); return () => clearTimeout(t); }, [data]);
-  const [tab, setTab] = useState("presupuesto");
+  const [tab, setTab] = useState("ia");
   const [verConfig, setVerConfig] = useState(false);
   const cfg = data.config || {};
   T = cfg.modo === "oscuro" ? T_DARK : T_LIGHT; inp = buildInp(T); inpSm = buildInpSm(T);
@@ -492,7 +492,7 @@ export default function App() {
       </div>
     </div>
     <div style={{ display: "flex", background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
-      {[["presupuesto", "Presupuestos"], ["costo", "Cert.", "costo"], ["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]].map(([k, l1, l2]) => (
+      {[["ia", "✨ IA"], ["presupuesto", "Presupuestos"], ["costo", "Cert.", "costo"], ["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]].map(([k, l1, l2]) => (
         <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "10px 1px 9px", fontSize: 10.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative", letterSpacing: "-0.01em", lineHeight: 1.2 }}>{l1}{l2 ? <><br />{l2}</> : ""}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
       ))}
     </div>
@@ -503,6 +503,7 @@ export default function App() {
       {tab === "caja" && <CajaTab obras={obras} data={data} save={save} certs={certs} certsDe={certsDe} indices={indices} />}
       {tab === "resultado" && <ResultadoTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
       {tab === "agenda" && <AgendaTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
+      {tab === "ia" && <AsistenteCargaTab data={data} save={save} />}
     </div>
     {verConfig && <ConfigModal data={data} save={save} onClose={() => setVerConfig(false)} />}
   </div>);
@@ -951,6 +952,7 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
   }
   function borrarMov(id) { if (confirm("¿Eliminar?")) save(logH({ ...data, movimientos: movs.filter(m => m.id !== id) }, "Borró movimiento")); }
   function borrarGasto(id) { if (confirm("¿Eliminar?")) save(logH({ ...data, gastos: gastos.filter(g => g.id !== id) }, "Borró gasto")); }
+  function setObraGasto(id, oid) { save(logH({ ...data, gastos: gastos.map(g => g.id === id ? { ...g, obraId: oid } : g) }, `Asignó gasto a ${nombreObra(oid)}`)); }
   const items = [...movs.map(m => ({ ...m, kind: m.tipo })), ...gastos.map(g => ({ ...g, kind: "gasto" }))].sort((a, b) => b.ts - a.ts).slice(0, 40);
   const hist = (data.historial || []).slice().reverse();
   const colorDe = (k) => k === "cobro" ? T.ok : "#EF4444";
@@ -988,8 +990,12 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
     </div>
     <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Últimos movimientos</div>
     {items.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "16px" }}>Todavía no cargaste movimientos.</div>}
-    {items.map(it => (<div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: "11px 13px", marginBottom: 8, boxShadow: SHDsm, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-      <div style={{ minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.kind === "cobro" ? "Cobro" : it.kind === "pago" ? "Pago" : it.cat}<span style={{ fontSize: 11, fontWeight: 500, color: T.sub }}> · {nombreObra(it.obraId)}</span></div><div style={{ fontSize: 11, color: T.muted }}>{fmtISO(it.fecha)}{it.nota ? ` · ${it.nota}` : ""}</div></div>
+    {items.map(it => (<div key={it.id} style={{ background: T.card, border: `1px solid ${it.kind === "gasto" && !it.obraId ? "rgba(180,83,9,.45)" : T.border}`, borderRadius: 13, padding: "11px 13px", marginBottom: 8, boxShadow: SHDsm, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.kind === "cobro" ? "Cobro" : it.kind === "pago" ? "Pago" : it.cat}{it.kind !== "gasto" && <span style={{ fontSize: 11, fontWeight: 500, color: T.sub }}> · {nombreObra(it.obraId)}</span>}</div>
+        <div style={{ fontSize: 11, color: T.muted }}>{fmtISO(it.fecha)}{it.nota ? ` · ${it.nota}` : ""}</div>
+        {it.kind === "gasto" && obras.length > 0 && <select value={it.obraId || ""} onChange={e => setObraGasto(it.id, e.target.value)} style={{ ...inpSm, marginTop: 6, width: "100%", boxSizing: "border-box", fontWeight: 700, color: it.obraId ? T.accent : T.warn, borderColor: it.obraId ? T.border : "rgba(180,83,9,.5)" }}><option value="">⚠ Asignar obra…</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>}
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}><span style={{ fontSize: 13, fontWeight: 800, color: colorDe(it.kind) }}>{signo(it.kind)}{money(num(it.monto))}</span><button onClick={() => it.kind === "gasto" ? borrarGasto(it.id) : borrarMov(it.id)} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, padding: "4px 7px", fontSize: 10, cursor: "pointer" }}>✕</button></div>
     </div>))}
     <button onClick={() => setVerHist(v => !v)} style={{ display: "block", margin: "14px auto 0", background: "none", border: "none", color: T.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>{verHist ? "Ocultar" : "Ver"} historial de actividad</button>
@@ -1108,7 +1114,7 @@ function GeneralPanel({ data, obras, certs, certsDe, indices }) {
   prop.forEach(p => { const egr = (p.costos || []).filter(c => enR(fechaDe(c.ts))).reduce((a, c) => a + num(c.montoArs), 0); propEgr += egr; if (egr) propObra.push({ nombre: p.nombre, egr }); });
   const edif = data.edificios || []; let edifEgr = 0; const edifObra = [];
   edif.forEach(e => { const egr = (e.costos || []).filter(c => enR(fechaDe(c.ts))).reduce((a, c) => a + num(c.montoArs), 0); edifEgr += egr; if (egr) edifObra.push({ nombre: e.nombre, egr }); });
-  const totCob = cliCob + socCob; const totEgr = cliEgr + socEgr + propEgr + edifEgr; const flujo = totCob - totEgr;
+  const totCob = cliCob + socCob; const totEgr = cliEgr + socEgr + edifEgr; const flujo = totCob - totEgr;
   // RESULTADOS ACUMULADOS (todo, sin filtro de período)
   const est = data.estructura || {}; const cuotaQ = (num(est.nObras) > 0 ? num(est.mensual) / num(est.nObras) : 0) / 2;
   let cFact = 0, cCostoDir = 0, cImp = 0, cImprev = 0, cNcert = 0;
@@ -1118,7 +1124,7 @@ function GeneralPanel({ data, obras, certs, certsDe, indices }) {
   const rSoc = soc.reduce((a, s) => { const presIni = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto); const adicT = (s.adicionales || []).reduce((x, y) => x + num(y.monto), 0); const cReal = (s.gastos || []).reduce((x, y) => x + num(y.monto), 0); return a + (presIni + adicT - cReal); }, 0);
   const rProp = prop.reduce((a, p) => { const inv = (p.costos || []).reduce((x, y) => x + num(y.montoArs), 0); return a + (num(p.ventaArs) - inv); }, 0);
   const rEdif = edif.reduce((a, e) => { const inv = (e.costos || []).reduce((x, y) => x + num(y.montoArs), 0); const vta = (e.unidades || []).reduce((x, y) => x + num(y.precioArs), 0); return a + (vta - inv); }, 0);
-  const resTotal = cResCliente + rSoc + rProp + rEdif;
+  const resTotal = cResCliente + rSoc + rEdif;
   const R = (t, v, c) => <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "3px 0" }}><span style={{ color: T.sub }}>{t}</span><b style={{ color: c || T.text }}>{money(v)}</b></div>;
   return (<div>
     <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm }}>
@@ -1138,14 +1144,14 @@ function GeneralPanel({ data, obras, certs, certsDe, indices }) {
     <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Cobrado por modelo (en el período)</div>
       {R("Clientes", cliCob, T.ok)}{R("Sociedad", socCob, T.ok)}
-      <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, marginBottom: 8 }}>Particulares y Edificios se cobran al vender; acá se muestran por la inversión del período.</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, marginBottom: 8 }}>Edificios se cobra al vender; acá se muestra por la inversión del período. Obras particulares va en un canal aparte (abajo).</div>
       <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 8, fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>Egresos por modelo</div>
-      {R("Clientes", cliEgr, T.warn)}{R("Sociedad", socEgr, T.warn)}{R("Particulares", propEgr, T.warn)}{R("Edificios", edifEgr, T.warn)}
+      {R("Clientes", cliEgr, T.warn)}{R("Sociedad", socEgr, T.warn)}{R("Edificios", edifEgr, T.warn)}
     </div>
     <GraficoBarras titulo="Cobrado por modelo (período)" items={[{ label: "Clientes", value: cliCob, color: T.ok }, { label: "Sociedad", value: socCob, color: "#16A34A" }]} />
-    <GraficoBarras titulo="Egresos / inversión por modelo (período)" items={[{ label: "Clientes", value: cliEgr }, { label: "Sociedad", value: socEgr }, { label: "Particulares", value: propEgr }, { label: "Edificios", value: edifEgr }]} />
-    <GraficoTorta titulo="Resultado por modelo (acumulado)" items={[{ label: "Cliente", value: cResCliente }, { label: "Sociedad", value: rSoc }, { label: "Particulares", value: rProp }, { label: "Edificios", value: rEdif }]} centro={money(resTotal)} centroSub="resultado" />
-    <GraficoBarras titulo="Resultado por modelo (acumulado)" items={[{ label: "Cliente", value: cResCliente }, { label: "Sociedad", value: rSoc }, { label: "Particulares", value: rProp }, { label: "Edificios", value: rEdif }]} />
+    <GraficoBarras titulo="Egresos / inversión por modelo (período)" items={[{ label: "Clientes", value: cliEgr }, { label: "Sociedad", value: socEgr }, { label: "Edificios", value: edifEgr }]} />
+    <GraficoTorta titulo="Resultado por modelo (acumulado)" items={[{ label: "Cliente", value: cResCliente }, { label: "Sociedad", value: rSoc }, { label: "Edificios", value: rEdif }]} centro={money(resTotal)} centroSub="resultado" />
+    <GraficoBarras titulo="Resultado por modelo (acumulado)" items={[{ label: "Cliente", value: cResCliente }, { label: "Sociedad", value: rSoc }, { label: "Edificios", value: rEdif }]} />
     {(Object.keys(cliObra).length > 0 || socObra.length > 0 || propObra.length > 0 || edifObra.length > 0) && <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Detalle por obra (período)</div>
       {Object.entries(cliObra).map(([k, v]) => <div key={"c" + k} style={{ padding: "6px 0", borderBottom: `1px solid ${T.border}` }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{k} <span style={{ fontSize: 9.5, color: T.accent, fontWeight: 700 }}>CLIENTE</span></div><div style={{ fontSize: 11.5, color: T.sub }}>Cobrado {money(v.cob)} · Egresos {money(v.egr)}</div></div>)}
@@ -1158,11 +1164,17 @@ function GeneralPanel({ data, obras, certs, certsDe, indices }) {
       <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Resultado esperado de cada modelo con todo lo cargado hasta hoy.</div>
       {R("Obras de cliente", cResCliente, cResCliente >= 0 ? T.ok : "#EF4444")}
       {R("Obras en sociedad", rSoc, rSoc >= 0 ? T.ok : "#EF4444")}
-      {R("Obras particulares", rProp, rProp >= 0 ? T.ok : "#EF4444")}
       {R("Edificios", rEdif, rEdif >= 0 ? T.ok : "#EF4444")}
       <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 13.5, fontWeight: 800 }}>Resultado general V+V</span><Money v={resTotal} c={resTotal >= 0 ? T.ok : "#EF4444"} /></div>
+      <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>No incluye obras particulares (van por canal aparte hasta venderse).</div>
     </div>
-    <button onClick={() => setPdfHtml(reporteHTML("V+V Construcciones — Resultado general", `Período: ${desde || hasta ? `${fmtISO(desde) || "inicio"} → ${fmtISO(hasta) || "hoy"}` : "todo"}`, [{ titulo: "Flujo del período", filas: [{ label: "Cobrado en el período", value: money(totCob) }, { label: "Egresos / inversión", value: money(totEgr) }, { label: "Flujo del período", value: money(flujo), strong: true }] }, { titulo: "Cobrado por modelo", filas: [{ label: "Clientes", value: money(cliCob) }, { label: "Sociedad", value: money(socCob) }] }, { titulo: "Egresos por modelo", filas: [{ label: "Clientes", value: money(cliEgr) }, { label: "Sociedad", value: money(socEgr) }, { label: "Particulares", value: money(propEgr) }, { label: "Edificios", value: money(edifEgr) }] }, { titulo: "Resultados por modelo (acumulado)", filas: [{ label: "Obras de cliente", value: money(cResCliente) }, { label: "Obras en sociedad", value: money(rSoc) }, { label: "Obras particulares", value: money(rProp) }, { label: "Edificios", value: money(rEdif) }, { label: "Resultado general V+V", value: money(resTotal), strong: true }] }], null, data.config, [{ tipo: "barras", titulo: "Cobrado por modelo", items: [{ label: "Clientes", value: cliCob }, { label: "Sociedad", value: socCob }] }, { tipo: "barras", titulo: "Egresos por modelo", items: [{ label: "Clientes", value: cliEgr }, { label: "Sociedad", value: socEgr }, { label: "Particulares", value: propEgr }, { label: "Edificios", value: edifEgr }] }, { tipo: "torta", titulo: "Resultado por modelo", items: [{ label: "Cliente", value: cResCliente }, { label: "Sociedad", value: rSoc }, { label: "Particulares", value: rProp }, { label: "Edificios", value: rEdif }] }]))} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>Exportar resultado general a PDF</button>
+    <div style={{ background: T.card, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm, border: `1px dashed ${BRASS}` }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, textTransform: "uppercase", marginBottom: 4 }}>Obras particulares · canal aparte</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Se maneja por separado: hasta que vendas, solo hay inversión. No afecta el resultado general.</div>
+      {R("Invertido en el período", propEgr, T.warn)}
+      {R("Resultado esperado (con venta estimada)", rProp, rProp >= 0 ? T.ok : "#EF4444")}
+    </div>
+    <button onClick={() => setPdfHtml(reporteHTML("V+V Construcciones — Resultado general", `Período: ${desde || hasta ? `${fmtISO(desde) || "inicio"} → ${fmtISO(hasta) || "hoy"}` : "todo"}`, [{ titulo: "Flujo del período", filas: [{ label: "Cobrado en el período", value: money(totCob) }, { label: "Egresos / inversión", value: money(totEgr) }, { label: "Flujo del período", value: money(flujo), strong: true }] }, { titulo: "Cobrado por modelo", filas: [{ label: "Clientes", value: money(cliCob) }, { label: "Sociedad", value: money(socCob) }] }, { titulo: "Egresos por modelo", filas: [{ label: "Clientes", value: money(cliEgr) }, { label: "Sociedad", value: money(socEgr) }, { label: "Edificios", value: money(edifEgr) }] }, { titulo: "Resultados por modelo (acumulado)", filas: [{ label: "Obras de cliente", value: money(cResCliente) }, { label: "Obras en sociedad", value: money(rSoc) }, { label: "Edificios", value: money(rEdif) }, { label: "Resultado general V+V", value: money(resTotal), strong: true }] }, { titulo: "Obras particulares (canal aparte)", filas: [{ label: "Invertido en el período", value: money(propEgr) }, { label: "Resultado esperado (con venta)", value: money(rProp) }] }], null, data.config, [{ tipo: "barras", titulo: "Cobrado por modelo", items: [{ label: "Clientes", value: cliCob }, { label: "Sociedad", value: socCob }] }, { tipo: "barras", titulo: "Egresos por modelo", items: [{ label: "Clientes", value: cliEgr }, { label: "Sociedad", value: socEgr }, { label: "Edificios", value: edifEgr }] }, { tipo: "torta", titulo: "Resultado por modelo", items: [{ label: "Cliente", value: cResCliente }, { label: "Sociedad", value: rSoc }, { label: "Edificios", value: rEdif }] }]))} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>Exportar resultado general a PDF</button>
     {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
   </div>);
 }
@@ -1399,6 +1411,150 @@ function SociedadWrap({ data, save }) {
       {[["obras", "Obras"], ["presupuestos", "Presupuestos"]].map(([k, l]) => <button key={k} onClick={() => setVista(k)} style={{ flex: 1, background: vista === k ? T.accent : "transparent", color: vista === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
     </div>
     {vista === "obras" ? <SociedadPanel data={data} save={save} /> : <PresupuestosPanel data={data} save={save} />}
+  </div>);
+}
+function matchEnt(lista, nombre) { const n = String(nombre || "").trim().toLowerCase(); if (!n) return null; return (lista || []).find(x => String(x.nombre || "").trim().toLowerCase() === n) || (lista || []).find(x => { const e = String(x.nombre || "").trim().toLowerCase(); return e && (e.includes(n) || n.includes(e)); }) || null; }
+function rubroMatch(r) { const n = String(r || "").trim().toLowerCase(); if (!n) return "Otros"; return RUBROS_PROPIA.find(x => x.toLowerCase() === n) || RUBROS_PROPIA.find(x => x.toLowerCase().includes(n) || n.includes(x.toLowerCase())) || r; }
+function accionAplicable(data, a) {
+  if (!a) return false;
+  if (a.operacion === "contacto") { if (a.tipo === "borrar") return (data.contactos || []).some(c => String(c.nombre || "").trim().toLowerCase() === String(a.nombre || a.objetivo || "").trim().toLowerCase()); return !!String(a.nombre || a.objetivo || "").trim(); }
+  if (a.operacion === "presupuesto") return true;
+  if (a.operacion === "obra") return !!String(a.nombre || a.objetivo || a.rubro || "").trim();
+  if (a.operacion === "socio") return !!matchEnt(data.sociedad || [], a.objetivo);
+  if (a.operacion === "unidad") return !!matchEnt(data.edificios || [], a.objetivo);
+  if (a.modelo === "cliente") return true;
+  if (a.modelo === "particular") return !!matchEnt(data.propias || [], a.objetivo);
+  if (a.modelo === "edificio") return !!matchEnt(data.edificios || [], a.objetivo);
+  if (a.modelo === "sociedad") return !!matchEnt(data.sociedad || [], a.objetivo);
+  return false;
+}
+function aplicarAccion(data, a) {
+  if (!accionAplicable(data, a)) return null;
+  const monto = num(a.monto); const fecha = a.fecha || hoyISO(); const moneda = a.moneda === "usd" ? "usd" : "ars"; const cotiz = num(a.cotizacion); const borrar = a.tipo === "borrar";
+  const dual = () => { let ars, usdv; if (moneda === "usd") { usdv = monto; ars = cotiz > 0 ? monto * cotiz : 0; } else { ars = monto; usdv = cotiz > 0 ? monto / cotiz : 0; } return { montoArs: ars, montoUsd: usdv }; };
+  if (a.operacion === "contacto") {
+    const nombre = String(a.nombre || a.objetivo || "").trim();
+    if (borrar) { const seen = false; const nc = (data.contactos || []).filter(c => String(c.nombre || "").trim().toLowerCase() !== nombre.toLowerCase()); return { ...data, contactos: nc }; }
+    const tipoC = /socio/i.test(String(a.rubro || a.nota || a.operacion || "")) ? "socio" : "cliente";
+    return { ...data, contactos: [...(data.contactos || []), { id: uid(), nombre, telefono: String(a.telefono || "").trim(), tipo: tipoC, obraId: "", ts: Date.now() }] };
+  }
+  if (a.operacion === "socio") { const s = matchEnt(data.sociedad || [], a.objetivo); if (!s) return null; if (borrar) return { ...data, sociedad: data.sociedad.map(x => x.id === s.id ? { ...x, socios: (x.socios || []).filter(so => String(so.nombre || "").trim().toLowerCase() !== String(a.nombre || "").trim().toLowerCase()) } : x) }; return { ...data, sociedad: data.sociedad.map(x => x.id === s.id ? { ...x, socios: [...(x.socios || []), { id: uid(), nombre: String(a.nombre || "").trim(), pct: num(a.pct), tel: String(a.telefono || "").trim() }] } : x) }; }
+  if (a.operacion === "unidad") { const e = matchEnt(data.edificios || [], a.objetivo); if (!e) return null; const d = dual(); return { ...data, edificios: data.edificios.map(x => x.id === e.id ? { ...x, unidades: [...(x.unidades || []), { id: uid(), nombre: a.rubro || a.nombre || "Unidad", m2: num(a.m2), precioUsd: d.montoUsd, precioArs: d.montoArs, cotiz, estado: "disponible", ts: Date.now() }] } : x) }; }
+  if (a.operacion === "presupuesto") { return { ...data, presupuestosSoc: [...(data.presupuestosSoc || []), { id: uid(), nombre: a.objetivo || a.rubro || "Presupuesto", cliente: a.nota || "", monto, estado: "presentado", fechaLimite: a.fecha || "", motivo: "", ts: Date.now() }] }; }
+  if (a.operacion === "obra") {
+    const nombre = String(a.nombre || a.objetivo || a.rubro || "").trim(); if (!nombre) return null;
+    const rubros = Array.isArray(a.rubros) && a.rubros.length ? a.rubros.map(r => ({ id: uid(), nombre: r.nombre || r.rubro || "Rubro", pct: num(r.pct) })) : [{ id: uid(), nombre: "General", pct: 100 }];
+    const inicio = a.fecha || hoyISO();
+    const obra = { id: uid(), nombre, inicio, mesBase: inicio.slice(0, 7), plazoMeses: num(a.plazoMeses) || 12, anticipoTipo: "pct", anticipoPct: num(a.anticipoPct), anticipoMontoFijo: 0, imprevistosPct: 5, m2: num(a.m2), precioCliente: num(a.precioM2 != null ? a.precioM2 : a.precioCliente), costoM2: num(a.costoM2), rubros, costoExtra: [], firmasPresup: {} };
+    return { ...data, obras: [...(data.obras || []), obra] };
+  }
+  if (a.modelo === "particular") { const p = matchEnt(data.propias || [], a.objetivo); if (!p) return null; const d = dual(); return { ...data, propias: data.propias.map(x => x.id === p.id ? { ...x, costos: [...(x.costos || []), { id: uid(), cat: rubroMatch(a.rubro), moneda, monto, cotiz, montoArs: d.montoArs, montoUsd: d.montoUsd, nota: a.nota || "", ts: Date.now() }] } : x) }; }
+  if (a.modelo === "edificio") { const e = matchEnt(data.edificios || [], a.objetivo); if (!e) return null; const d = dual(); return { ...data, edificios: data.edificios.map(x => x.id === e.id ? { ...x, costos: [...(x.costos || []), { id: uid(), cat: rubroMatch(a.rubro), moneda, monto, cotiz, montoArs: d.montoArs, montoUsd: d.montoUsd, ts: Date.now() }] } : x) }; }
+  if (a.modelo === "sociedad") { const s = matchEnt(data.sociedad || [], a.objetivo); if (!s) return null; const campo = a.operacion === "cobro" ? "cobros" : a.operacion === "adicional" ? "adicionales" : a.operacion === "retiro" ? "retiros" : "gastos"; const item = campo === "gastos" ? { id: uid(), texto: a.rubro || a.nota || "Gasto", tipo: /imprev/i.test(String(a.rubro || a.nota || "")) ? "imprevisto" : "normal", monto, fecha, ts: Date.now() } : { id: uid(), texto: a.rubro || a.nota || campo, monto, fecha, ts: Date.now() }; return { ...data, sociedad: data.sociedad.map(x => x.id === s.id ? { ...x, [campo]: [...(x[campo] || []), item] } : x) }; }
+  if (a.modelo === "cliente") { const o = matchEnt(data.obras || [], a.objetivo); if (a.operacion === "cobro" || a.operacion === "pago") return { ...data, movimientos: [...(data.movimientos || []), { id: uid(), tipo: a.operacion, obraId: o ? o.id : "", monto, fecha, nota: a.nota || a.rubro || "", ts: Date.now() }] }; return { ...data, gastos: [...(data.gastos || []), { id: uid(), cat: a.rubro || "Otros", obraId: o ? o.id : "", monto, fecha, nota: a.nota || "", ts: Date.now() }] }; }
+  return null;
+}
+function descAccion(a) {
+  const m = num(a.monto); const mtxt = m ? (money(m) + (a.moneda === "usd" ? " US$" : "")) : "";
+  if (a.operacion === "contacto") return (a.tipo === "borrar" ? "Borrar contacto: " : "Agregar contacto: ") + (a.nombre || a.objetivo || "");
+  if (a.operacion === "socio") return (a.tipo === "borrar" ? "Borrar socio " : "Agregar socio ") + (a.nombre || "") + (a.pct ? ` (${num(a.pct)}%)` : "") + " · " + (a.objetivo || "");
+  if (a.operacion === "unidad") return "Agregar unidad " + (a.rubro || a.nombre || "") + (mtxt ? " " + mtxt : "") + " · " + (a.objetivo || "");
+  if (a.operacion === "presupuesto") return "Agregar presupuesto " + (a.objetivo || "") + (mtxt ? " " + mtxt : "");
+  if (a.operacion === "obra") { const nom = String(a.nombre || a.objetivo || a.rubro || "").trim(); return "Crear obra/presupuesto: " + nom + (a.m2 ? ` · ${num(a.m2)} m²` : "") + (a.precioM2 ? ` · $${num(a.precioM2)}/m² cliente` : "") + (a.costoM2 ? ` · costo $${num(a.costoM2)}/m²` : ""); }
+  const op = a.operacion === "cobro" ? "Cobro" : a.operacion === "pago" ? "Pago" : a.operacion === "adicional" ? "Adicional" : a.operacion === "retiro" ? "Retiro" : a.operacion === "costo" ? "Costo" : "Gasto";
+  return op + (mtxt ? " " + mtxt : "") + (a.rubro ? ` · ${a.rubro}` : "") + " · " + (a.objetivo || "sin asignar");
+}
+function AsistenteCargaTab({ data, save }) {
+  const [texto, setTexto] = useState(""); const [files, setFiles] = useState([]); const [cargando, setCargando] = useState(false); const [msgs, setMsgs] = useState([]); const [acciones, setAcciones] = useState([]); const [error, setError] = useState(""); const [subLogo, setSubLogo] = useState(false); const [mostrarTexto, setMostrarTexto] = useState(false);
+  async function subirLogo(file) { if (!file) return; setSubLogo(true); try { const url = await subirArchivo(file); if (url) save({ ...data, config: { ...(data.config || {}), logo: url } }); else alert("No se pudo subir el logo."); } catch { alert("No se pudo subir el logo."); } setSubLogo(false); }
+  const ents = { cliente: (data.obras || []).map(o => o.nombre), particular: (data.propias || []).map(p => p.nombre), sociedad: (data.sociedad || []).map(s => s.nombre), edificio: (data.edificios || []).map(e => e.nombre) };
+  const socNames = (data.sociedad || []).flatMap(s => (s.socios || []).map(so => so.nombre));
+  const contNames = (data.contactos || []).map(c => c.nombre);
+  const system = `Sos el asistente de una app financiera de una constructora argentina (V+V). El usuario te habla en español rioplatense (vos) o te manda fotos/PDF de facturas, remitos o documentación. Tu tarea es entender qué quiere cargar, modificar o borrar y devolver SOLO un JSON valido (sin markdown, sin texto fuera del JSON):
+{"respuesta":"<mensaje corto y claro al usuario, en español rioplatense>","acciones":[{"tipo":"agregar|borrar","modelo":"cliente|particular|sociedad|edificio","operacion":"gasto|cobro|pago|adicional|retiro|costo|contacto|socio|unidad|presupuesto|obra","objetivo":"<obra/entidad donde va, exacta de las listas>","rubro":"<rubro/concepto>","monto":<entero sin puntos>,"moneda":"ars|usd","cotizacion":<numero o null>,"fecha":"YYYY-MM-DD o null","nombre":"<para contacto/socio/obra>","telefono":"<opcional>","pct":<para socio, numero o null>,"m2":<para obra/unidad o null>,"precioM2":<precio venta al cliente por m2, para obra>,"costoM2":<costo por m2, para obra>,"plazoMeses":<para obra>,"anticipoPct":<para obra>,"rubros":[{"nombre":"<rubro>","pct":<incidencia %>}],"nota":"<texto>","confianza":"alta|media|baja","falta":"<que falta o vacio>"}]}
+Listas actuales:
+- Obras cliente: ${ents.cliente.join(", ") || "(ninguna)"}
+- Particular: ${ents.particular.join(", ") || "(ninguna)"}
+- Sociedad: ${ents.sociedad.join(", ") || "(ninguna)"}
+- Edificios: ${ents.edificio.join(", ") || "(ninguna)"}
+- Socios cargados: ${socNames.join(", ") || "(ninguno)"}
+- Contactos en agenda: ${contNames.join(", ") || "(ninguno)"}
+Reglas: El usuario SIEMPRE indica dónde cargar (ej: "cargar en sociedad un pago para el plomero de 50000" => modelo sociedad, operacion gasto, rubro "plomero", monto 50000). Si dice "anotá/anótame un gasto" SIN decir la obra (ej: "anotá 50000 de nafta"), usá modelo "cliente", operacion "gasto", rubro el concepto (nafta), objetivo "" (queda sin asignar; el usuario le pone la obra después en la planilla de Gastos). Para CREAR un presupuesto de obra de cliente usá operacion "obra" con nombre, m2, precioM2 (precio de venta al cliente por m2), costoM2 (costo por m2), plazoMeses, anticipoPct y rubros [{nombre,pct}] si los da; lo que no diga, dejalo en null/0. Convertí montos a entero (2.000.500 => 2000500). "dólares/USD/u$s" => usd, si no aclara => ars. Para particular y edificio la operacion de costos es "costo". Para agenda usá operacion "contacto" (nombre + telefono; poné "socio" en rubro si es socio, si no cliente). Para borrar personas: tipo "borrar", operacion "contacto", nombre. Si un PDF/foto tiene varias líneas, una acción por línea. NUNCA borres algo si no estás seguro; ante la duda no lo pongas y pedí aclaración en "respuesta". Si falta info, confianza "baja" y detallá en "falta". Si el usuario solo pregunta o saluda, devolvé acciones vacías y respondé en "respuesta". Hoy es ${hoyISO()}.`;
+  const toB64 = (f) => new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(",")[1]); rd.onerror = () => rej(new Error("no se pudo leer")); rd.readAsDataURL(f); });
+  const hablar = (txt) => { try { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(txt); u.lang = "es-AR"; window.speechSynthesis.speak(u); } catch { } };
+  const escuchar = () => { try { const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) { alert("En el iPhone usá el micrófono del teclado para dictar dentro del cuadro de texto."); return; } const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = false; rec.onresult = (e) => setTexto(t => (t ? t + " " : "") + e.results[0][0].transcript); rec.start(); } catch { alert("Usá el micrófono del teclado para dictar."); } };
+  async function enviar() {
+    if (!texto.trim() && !files.length) return;
+    const userText = texto.trim() || "(archivos adjuntos)";
+    setMsgs(m => [...m, { role: "user", text: userText }]); setTexto(""); setCargando(true); setError(""); setAcciones([]);
+    try {
+      const content = []; const extras = [];
+      for (const f of files) { if (f.type === "application/pdf") { const b64 = await toB64(f); content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }); } else if ((f.type || "").startsWith("image/")) { const b64 = await toB64(f); content.push({ type: "image", source: { type: "base64", media_type: f.type, data: b64 } }); } else { extras.push(f.name); } }
+      content.push({ type: "text", text: userText + (extras.length ? `\n(También adjunté archivos que no se leen solos: ${extras.join(", ")})` : "") });
+      setFiles([]);
+      const history = msgs.slice(-4).map(mm => ({ role: mm.role, content: mm.text }));
+      const body = { model: "claude-sonnet-5", max_tokens: 3000, system, messages: [...history, { role: "user", content }] };
+      const r = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const d = await r.json(); if (!r.ok) throw new Error((d && d.error && d.error.message) || ("Error " + r.status));
+      const txt = (d.content || []).filter(x => x.type === "text").map(x => x.text).join("\n");
+      let parsed = { respuesta: "", acciones: [] };
+      try { const j = txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1); parsed = JSON.parse(j); } catch { parsed.respuesta = txt || "No pude interpretarlo."; }
+      setMsgs(m => [...m, { role: "assistant", text: parsed.respuesta || "Listo." }]);
+      setAcciones((parsed.acciones || []).map(a => ({ ...a, _id: uid() })));
+    } catch (e) { setError("No pude procesarlo: " + (e && e.message)); setMsgs(m => [...m, { role: "assistant", text: "Tuve un problema para procesarlo. Probá de nuevo." }]); }
+    setCargando(false);
+  }
+  const confirmar = (a) => { const nd = aplicarAccion(data, a); if (!nd) { alert("No pude aplicarlo. Revisá que la obra/persona exista y el nombre coincida."); return; } save(nd); setAcciones(prev => prev.filter(x => x._id !== a._id)); setMsgs(m => [...m, { role: "assistant", text: "✓ Cargado: " + descAccion(a) }]); };
+  const confirmarTodo = () => { let nd = data; const ok = []; acciones.forEach(a => { const r = aplicarAccion(nd, a); if (r) { nd = r; ok.push(a._id); } }); if (ok.length) save(nd); setAcciones(prev => prev.filter(x => !ok.includes(x._id))); if (ok.length) setMsgs(m => [...m, { role: "assistant", text: `✓ Cargué ${ok.length} cosa(s).` }]); if (ok.length < acciones.length) alert("Algunas no las pude cargar (revisá la obra/persona)."); };
+  const descartar = (id) => setAcciones(prev => prev.filter(x => x._id !== id));
+  const vacio = msgs.length === 0 && acciones.length === 0 && !cargando;
+  return (<div style={{ padding: "14px 16px 40px" }}>
+    <div style={{ textAlign: "center", marginBottom: 16, marginTop: 4 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.14em", textTransform: "uppercase" }}>Asistente V+V</div>
+      <div style={{ fontSize: 13, color: T.sub, marginTop: 5, lineHeight: 1.4 }}>Hablale para cargar, o subí fotos/PDF.<br />Siempre te muestro qué entendí y vos confirmás.</div>
+    </div>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 16 }}>
+      <div onClick={() => setMostrarTexto(true)} style={{ width: "min(74vw, 250px)", aspectRatio: "1", background: T.card, border: `2px solid ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, position: "relative" }}>
+        {data.config && data.config.logo ? <img src={data.config.logo} alt="logo" style={{ width: 96, height: 96, borderRadius: 18, objectFit: "cover", background: "#fff" }} /> : <div style={{ fontSize: 54 }}>🎙️</div>}
+        <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>Hablarle a la IA</div>
+        <label onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 10, right: 10, background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 9px", fontSize: 10.5, fontWeight: 700, color: T.sub, cursor: "pointer" }}>{subLogo ? "…" : "✎ logo"}<input type="file" accept="image/*" onChange={e => { subirLogo(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
+      </div>
+      <label style={{ width: "min(74vw, 250px)", aspectRatio: "1", background: T.card, border: `2px dashed ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+        <div style={{ fontSize: 54 }}>📎</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>Subir fotos / archivos</div>
+        <div style={{ fontSize: 11, color: T.muted }}>fotos, video, PDF, documentos</div>
+        <input type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" multiple onChange={e => { setFiles(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
+      </label>
+    </div>
+    {files.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>{files.map((f, i) => <span key={i} style={{ fontSize: 11, background: T.al, color: T.sub, borderRadius: 7, padding: "5px 9px" }}>{f.type === "application/pdf" ? "📄" : "🖼"} {f.name.slice(0, 22)}</span>)}</div>}
+    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14 }}>
+      <textarea value={texto} onChange={e => setTexto(e.target.value)} placeholder='Escribile a la IA qué cargar…' style={{ ...inp, minHeight: 48, resize: "vertical", marginTop: 0, flex: 1 }} />
+      <button onClick={escuchar} title="Dictar" style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 11, padding: "12px 13px", fontSize: 17, cursor: "pointer" }}>🎤</button>
+      <button onClick={enviar} disabled={cargando || (!texto.trim() && !files.length)} style={{ background: cargando || (!texto.trim() && !files.length) ? T.muted : T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px 18px", fontSize: 14, fontWeight: 800, cursor: cargando ? "default" : "pointer" }}>{cargando ? "…" : "Enviar"}</button>
+    </div>
+    {msgs.map((mm, i) => <div key={i} style={{ display: "flex", justifyContent: mm.role === "user" ? "flex-end" : "flex-start", marginBottom: 8 }}>
+      <div style={{ maxWidth: "85%", background: mm.role === "user" ? T.accent : T.card, color: mm.role === "user" ? "#fff" : T.text, border: mm.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: 13, padding: "10px 13px", fontSize: 13, lineHeight: 1.45, boxShadow: SHDsm }}>
+        {mm.text}
+        {mm.role === "assistant" && <button onClick={() => hablar(mm.text)} title="Escuchar" style={{ background: "none", border: "none", color: T.accent, cursor: "pointer", fontSize: 14, marginLeft: 6 }}>🔊</button>}
+      </div>
+    </div>)}
+    {cargando && <div style={{ fontSize: 12, color: T.muted, textAlign: "center", padding: "8px 0" }}>Pensando…</div>}
+    {error && <div style={{ background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.4)", borderRadius: 10, padding: "11px 13px", fontSize: 12.5, color: "#EF4444", margin: "6px 0" }}>{error}</div>}
+    {acciones.length > 1 && <button onClick={confirmarTodo} style={{ width: "100%", background: T.ok, color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", margin: "8px 0" }}>Confirmar y aplicar todo ({acciones.length})</button>}
+    {acciones.map(a => { const ap = accionAplicable(data, a); const esBorrar = a.tipo === "borrar"; return (<div key={a._id} style={{ background: T.card, border: `1px solid ${!ap ? "rgba(239,68,68,.45)" : esBorrar ? "rgba(239,68,68,.35)" : T.border}`, borderRadius: 14, padding: 14, marginBottom: 10, boxShadow: SHDsm }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: esBorrar ? "#EF4444" : T.accent, background: esBorrar ? "rgba(239,68,68,.12)" : T.al, borderRadius: 6, padding: "3px 8px", textTransform: "uppercase" }}>{esBorrar ? "Borrar" : "Cargar"}</span>
+        {a.confianza && <span style={{ fontSize: 10, fontWeight: 700, color: a.confianza === "alta" ? T.ok : a.confianza === "media" ? T.warn : "#EF4444" }}>{a.confianza}</span>}
+      </div>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>{descAccion(a)}</div>
+      <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{fmtISO(a.fecha || hoyISO())}{a.cotizacion ? ` · cotiz ${num(a.cotizacion)}` : ""}{a.nota && a.operacion !== "presupuesto" ? ` · ${a.nota}` : ""}</div>
+      {!ap && <div style={{ fontSize: 11, color: "#EF4444", marginTop: 5, fontWeight: 700 }}>⚠ No encontré "{a.objetivo || a.nombre}". Revisá el nombre o cargalo primero.</div>}
+      {a.falta && ap && <div style={{ fontSize: 11, color: T.warn, marginTop: 5 }}>Revisá: {a.falta}</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button onClick={() => confirmar(a)} disabled={!ap} style={{ flex: 1, background: !ap ? T.muted : esBorrar ? "#EF4444" : T.ok, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: ap ? "pointer" : "default" }}>{esBorrar ? "Confirmar borrado" : "Confirmar y cargar"}</button>
+        <button onClick={() => descartar(a._id)} style={{ background: T.bg, color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Descartar</button>
+      </div>
+    </div>); })}
   </div>);
 }
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
