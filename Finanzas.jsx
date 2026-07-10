@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v85 (IA: guarda conversacion, comprime fotos HEIC, botones hablar enfocan)
+// VERSION: v86 (IA: boton logo = microfono para hablar, saco mic de la barra)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -1519,9 +1519,9 @@ Reglas: El usuario SIEMPRE indica dónde cargar (ej: "cargar en sociedad un pago
       <div style={{ fontSize: 13, color: T.sub, marginTop: 5, lineHeight: 1.4 }}>Hablale para cargar, o subí fotos/PDF.<br />Siempre te muestro qué entendí y vos confirmás.</div>
     </div>
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 16 }}>
-      <div onClick={enfocar} style={{ width: "min(74vw, 250px)", aspectRatio: "1", background: T.card, border: `2px solid ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, position: "relative" }}>
-        {data.config && data.config.logo ? <img src={data.config.logo} alt="logo" style={{ width: 96, height: 96, borderRadius: 18, objectFit: "cover", background: "#fff" }} /> : <div style={{ fontSize: 54 }}>🎙️</div>}
-        <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>Hablarle a la IA</div>
+      <div onClick={escuchar} style={{ width: "min(74vw, 250px)", aspectRatio: "1", background: T.card, border: `2px solid ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, position: "relative" }}>
+        {data.config && data.config.logo ? <img src={data.config.logo} alt="logo" style={{ width: 96, height: 96, borderRadius: 18, objectFit: "cover", background: "#fff" }} /> : <div style={{ fontSize: 54 }}>🎤</div>}
+        <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>🎤 Hablarle a la IA</div>
         <label onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 10, right: 10, background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 9px", fontSize: 10.5, fontWeight: 700, color: T.sub, cursor: "pointer" }}>{subLogo ? "…" : "✎ logo"}<input type="file" accept="image/*" onChange={e => { subirLogo(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
       </div>
       <label style={{ width: "min(74vw, 250px)", aspectRatio: "1", background: T.card, border: `2px dashed ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
@@ -1534,7 +1534,6 @@ Reglas: El usuario SIEMPRE indica dónde cargar (ej: "cargar en sociedad un pago
     {files.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>{files.map((f, i) => <span key={i} style={{ fontSize: 11, background: T.al, color: T.sub, borderRadius: 7, padding: "5px 9px" }}>{f.type === "application/pdf" ? "📄" : "🖼"} {f.name.slice(0, 22)}</span>)}</div>}
     <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14 }}>
       <textarea ref={taRef} value={texto} onChange={e => setTexto(e.target.value)} placeholder='Escribile a la IA qué cargar…' style={{ ...inp, minHeight: 48, resize: "vertical", marginTop: 0, flex: 1 }} />
-      <button onClick={escuchar} title="Dictar" style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 11, padding: "12px 13px", fontSize: 17, cursor: "pointer" }}>🎤</button>
       <button onClick={enviar} disabled={cargando || (!texto.trim() && !files.length)} style={{ background: cargando || (!texto.trim() && !files.length) ? T.muted : T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px 18px", fontSize: 14, fontWeight: 800, cursor: cargando ? "default" : "pointer" }}>{cargando ? "…" : "Enviar"}</button>
     </div>
     {msgs.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><span style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Conversación</span><button onClick={() => { setMsgs([]); setAcciones([]); try { localStorage.setItem("vv_ia_chat", "[]"); storage.set("vv_ia_chat", "[]"); } catch { } }} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>＋ Nueva</button></div>}
