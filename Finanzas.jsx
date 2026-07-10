@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v87 (IA: dictado con auto-envio tras 3s de silencio)
+// VERSION: v88 (presupuesto formato Belfast: PDF en Sociedad + IA lo arma desde descripcion)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -210,6 +210,47 @@ async function exportarExcel(data) {
     add("Presupuestos", [["Nombre", "Cliente", "Monto", "Estado", "Fecha", "Motivo"], ...(data.presupuestosSoc || []).map(p => [p.nombre, p.cliente || "", M(p.monto), (EST_PRES.find(e => e[0] === p.estado) || ["", p.estado])[1], p.fechaLimite || "", p.motivo || ""])], [24, 18, 14, 14, 12, 26]);
     XLSX.writeFile(wb, `VV-Finanzas-${hoyISO()}.xlsx`);
   } catch (e) { alert("No pude generar el Excel (" + (e && e.message) + "). Te bajo el CSV como alternativa."); descargarArchivo(`VV-Finanzas-${hoyISO()}.csv`, csvDe(data), "text/csv;charset=utf-8"); }
+}
+function presupuestoBelfastHTML(p) {
+  const money2 = (n) => "$ " + Math.round(num(n) || 0).toLocaleString("es-AR");
+  const fecha = p.fecha ? fmtISO(p.fecha) : new Date().toLocaleDateString("es-AR");
+  const inclusiones = (p.inclusiones || "").trim();
+  const noIncluye = (p.noIncluye || "Ningún tipo de materiales ni IVA, Tasas, Expensas, Impuestos, Servicios y Derechos de Construcción.").trim();
+  const items = Array.isArray(p.items) ? p.items : [];
+  const filaJef = (l, v) => v ? `<p><b>${l}</b> ${v}</p>` : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Presupuesto ${p.numero || ""}</title><style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,'Times New Roman',Georgia,serif;color:#111;padding:34px 46px 60px;font-size:13.5px;line-height:1.55}
+.logo{width:78px;height:78px;background:#111;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto;border-radius:2px;text-align:center}
+.logo b{font-size:12px;letter-spacing:1px}.logo small{font-size:6px;letter-spacing:.5px;margin-top:2px;opacity:.85}
+.fecha{text-align:right;font-style:italic;margin-top:8px}
+h1{text-align:center;font-size:15px;letter-spacing:1px;margin:20px 0 22px}
+.box{border:1px solid #444;padding:10px 12px;margin-bottom:22px;font-size:13px}
+h2{font-size:14px;margin:20px 0 8px;font-weight:bold}
+p{margin:8px 0}.desc{text-align:justify}
+.precio b{font-size:14px}.tot{font-size:15px;font-weight:bold}
+.ni{font-weight:bold;text-decoration:underline;font-style:italic;font-size:12px}
+.foot{position:fixed;bottom:22px;left:0;right:0;text-align:center;font-size:10.5px;color:#333;border-top:1px solid #999;padding-top:6px}
+.foot a{color:#2244aa;text-decoration:none}
+.firma{margin-top:70px;font-size:11px;line-height:1.4}.firma b{font-size:12px}
+table{width:100%;border-collapse:collapse;margin:6px 0;font-size:12.5px}td{padding:5px 4px;border-bottom:1px solid #ddd}td.r{text-align:right}
+</style></head><body>
+<div class="logo"><b>BELFAST</b><small>CONSTRUCTION MANAGEMENT</small><small>WE PORTRAY WHAT WE ASPIRE TO BE</small></div>
+<div class="fecha">${fecha}</div>
+<h1>PRESUPUESTO</h1>
+<div class="box"><b>Presup. Número:</b> ${p.numero || "—"}<br/><b>Lugar:</b> ${p.lugar || p.nombre || "—"}<br/>El presente presupuesto se rige por las siguientes inclusiones y exclusiones:.</div>
+<h2>${p.titulo || p.nombre || "Trabajos"}</h2>
+<p><b>Descripción técnica:</b></p>
+<p class="desc">${(p.descripcion || "").replace(/\n/g, "<br/>")}</p>
+${inclusiones ? `<p class="desc">${inclusiones.replace(/\n/g, "<br/>")}</p>` : ""}
+${items.length ? `<h2>Detalle</h2><table>${items.map(it => `<tr><td>${it.concepto || ""}</td><td class="r">${money2(it.monto)}</td></tr>`).join("")}</table>` : ""}
+<h2>PRECIO:</h2>
+<p class="precio"><b>Total, de Pesos ${money2(p.total)} ${p.iva === false ? "" : "+ IVA"}</b></p>
+${p.formaPago ? `<p>Forma de Pago: ${p.formaPago}</p>` : ""}
+${(p.jefaturaTexto || p.viaticos || p.honorariosPct) ? `<h2>JEFATURA DE OBRA:</h2>${p.jefaturaTexto ? `<p>${p.jefaturaTexto}</p>` : ""}${filaJef("Viáticos Totales:", p.viaticos ? "PESOS " + Math.round(num(p.viaticos)).toLocaleString("es-AR") : "")}${p.honorariosPct ? `<p><i>Honorarios Proyecto y Dirección <b>${num(p.honorariosPct)}%</b></i></p>` : ""}` : ""}
+<p class="ni">NO INCLUYE:</p>
+<p style="font-size:12px">${noIncluye}</p>
+<div class="foot">Calle del Portal 16 - NORDELTA<br/><a>info@belfastcm.com</a> – <a>www.belfastcm.com</a> - @belfast_cm</div>
+</body></html>`;
 }
 function reporteHTML(titulo, subtitulo, secciones, media, cfg, graficos) {
   const marca = (cfg && cfg.nombre) || "V+V Construcciones";
@@ -1354,6 +1395,7 @@ const EST_PRES = [["por_presentar", "A presentar"], ["presentado", "Sin definici
 function PresupuestosPanel({ data, save }) {
   const lista = data.presupuestosSoc || [];
   const [abrir, setAbrir] = useState(false);
+  const [pdfHtml, setPdfHtml] = useState(null);
   const [f, setF] = useState({ nombre: "", cliente: "", monto: "", estado: "presentado", fechaLimite: "" });
   const hoy = hoyISO();
   const COL = { por_presentar: T.muted, presentado: T.accent, ganado: T.ok, perdido: "#EF4444" };
@@ -1400,8 +1442,10 @@ function PresupuestosPanel({ data, save }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4, fontSize: 12 }}><b>{money(num(p.monto))}</b><span style={{ color: atrasado ? "#EF4444" : T.muted, fontWeight: atrasado ? 700 : 400 }}>{p.fechaLimite ? (atrasado ? "⚠ vencido " : "") + fmtISO(p.fechaLimite) : "sin fecha"}</span></div>
       <div style={{ display: "flex", gap: 4, marginTop: 8 }}>{EST_PRES.map(([k, l]) => <button key={k} onClick={() => upd(p.id, { estado: k })} style={{ flex: 1, background: p.estado === k ? COL[k] : "transparent", color: p.estado === k ? "#fff" : T.sub, border: `1px solid ${p.estado === k ? COL[k] : T.border}`, borderRadius: 7, padding: "7px 2px", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>
       {p.estado === "perdido" && <input value={p.motivo || ""} onChange={e => upd(p.id, { motivo: e.target.value })} placeholder="Motivo por el que no se cerró…" style={{ ...inpSm, width: "100%", boxSizing: "border-box", marginTop: 8 }} />}
+      <button onClick={() => setPdfHtml(presupuestoBelfastHTML(p))} style={{ width: "100%", marginTop: 8, background: T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Ver / Enviar PDF (formato Belfast)</button>
     </div>); })}
     {lista.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nuevo" para cargar un presupuesto y seguir su efectividad.</div>}
+    {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
   </div>);
 }
 function SociedadWrap({ data, save }) {
@@ -1440,7 +1484,7 @@ function aplicarAccion(data, a) {
   }
   if (a.operacion === "socio") { const s = matchEnt(data.sociedad || [], a.objetivo); if (!s) return null; if (borrar) return { ...data, sociedad: data.sociedad.map(x => x.id === s.id ? { ...x, socios: (x.socios || []).filter(so => String(so.nombre || "").trim().toLowerCase() !== String(a.nombre || "").trim().toLowerCase()) } : x) }; return { ...data, sociedad: data.sociedad.map(x => x.id === s.id ? { ...x, socios: [...(x.socios || []), { id: uid(), nombre: String(a.nombre || "").trim(), pct: num(a.pct), tel: String(a.telefono || "").trim() }] } : x) }; }
   if (a.operacion === "unidad") { const e = matchEnt(data.edificios || [], a.objetivo); if (!e) return null; const d = dual(); return { ...data, edificios: data.edificios.map(x => x.id === e.id ? { ...x, unidades: [...(x.unidades || []), { id: uid(), nombre: a.rubro || a.nombre || "Unidad", m2: num(a.m2), precioUsd: d.montoUsd, precioArs: d.montoArs, cotiz, estado: "disponible", ts: Date.now() }] } : x) }; }
-  if (a.operacion === "presupuesto") { return { ...data, presupuestosSoc: [...(data.presupuestosSoc || []), { id: uid(), nombre: a.objetivo || a.rubro || "Presupuesto", cliente: a.nota || "", monto, estado: "presentado", fechaLimite: a.fecha || "", motivo: "", ts: Date.now() }] }; }
+  if (a.operacion === "presupuesto") { return { ...data, presupuestosSoc: [...(data.presupuestosSoc || []), { id: uid(), nombre: a.objetivo || a.nombre || a.titulo || "Presupuesto", lugar: a.lugar || a.objetivo || "", titulo: a.titulo || a.rubro || "", cliente: a.cliente || "", numero: a.numero || "", descripcion: a.descripcion || a.nota || "", total: num(a.total != null ? a.total : a.monto), monto: num(a.total != null ? a.total : a.monto), formaPago: a.formaPago || "", viaticos: num(a.viaticos), honorariosPct: num(a.honorariosPct), jefaturaTexto: a.jefaturaTexto || "", noIncluye: a.noIncluye || "", estado: "presentado", fechaLimite: a.fecha || "", fecha: a.fecha || hoyISO(), motivo: "", ts: Date.now() }] }; }
   if (a.operacion === "obra") {
     const nombre = String(a.nombre || a.objetivo || a.rubro || "").trim(); if (!nombre) return null;
     const rubros = Array.isArray(a.rubros) && a.rubros.length ? a.rubros.map(r => ({ id: uid(), nombre: r.nombre || r.rubro || "Rubro", pct: num(r.pct) })) : [{ id: uid(), nombre: "General", pct: 100 }];
@@ -1459,7 +1503,7 @@ function descAccion(a) {
   if (a.operacion === "contacto") return (a.tipo === "borrar" ? "Borrar contacto: " : "Agregar contacto: ") + (a.nombre || a.objetivo || "");
   if (a.operacion === "socio") return (a.tipo === "borrar" ? "Borrar socio " : "Agregar socio ") + (a.nombre || "") + (a.pct ? ` (${num(a.pct)}%)` : "") + " · " + (a.objetivo || "");
   if (a.operacion === "unidad") return "Agregar unidad " + (a.rubro || a.nombre || "") + (mtxt ? " " + mtxt : "") + " · " + (a.objetivo || "");
-  if (a.operacion === "presupuesto") return "Agregar presupuesto " + (a.objetivo || "") + (mtxt ? " " + mtxt : "");
+  if (a.operacion === "presupuesto") { const t = num(a.total != null ? a.total : a.monto); return "Presupuesto Belfast: " + (a.objetivo || a.nombre || a.titulo || "") + (t ? " · $" + Math.round(t).toLocaleString("es-AR") : ""); }
   if (a.operacion === "obra") { const nom = String(a.nombre || a.objetivo || a.rubro || "").trim(); return "Crear obra/presupuesto: " + nom + (a.m2 ? ` · ${num(a.m2)} m²` : "") + (a.precioM2 ? ` · $${num(a.precioM2)}/m² cliente` : "") + (a.costoM2 ? ` · costo $${num(a.costoM2)}/m²` : ""); }
   const op = a.operacion === "cobro" ? "Cobro" : a.operacion === "pago" ? "Pago" : a.operacion === "adicional" ? "Adicional" : a.operacion === "retiro" ? "Retiro" : a.operacion === "costo" ? "Costo" : "Gasto";
   return op + (mtxt ? " " + mtxt : "") + (a.rubro ? ` · ${a.rubro}` : "") + " · " + (a.objetivo || "sin asignar");
@@ -1476,7 +1520,7 @@ function AsistenteCargaTab({ data, save }) {
   const socNames = (data.sociedad || []).flatMap(s => (s.socios || []).map(so => so.nombre));
   const contNames = (data.contactos || []).map(c => c.nombre);
   const system = `Sos el asistente de una app financiera de una constructora argentina (V+V). El usuario te habla en español rioplatense (vos) o te manda fotos/PDF de facturas, remitos o documentación. Tu tarea es entender qué quiere cargar, modificar o borrar y devolver SOLO un JSON valido (sin markdown, sin texto fuera del JSON):
-{"respuesta":"<mensaje corto y claro al usuario, en español rioplatense>","acciones":[{"tipo":"agregar|borrar","modelo":"cliente|particular|sociedad|edificio","operacion":"gasto|cobro|pago|adicional|retiro|costo|contacto|socio|unidad|presupuesto|obra","objetivo":"<obra/entidad donde va, exacta de las listas>","rubro":"<rubro/concepto>","monto":<entero sin puntos>,"moneda":"ars|usd","cotizacion":<numero o null>,"fecha":"YYYY-MM-DD o null","nombre":"<para contacto/socio/obra>","telefono":"<opcional>","pct":<para socio, numero o null>,"m2":<para obra/unidad o null>,"precioM2":<precio venta al cliente por m2, para obra>,"costoM2":<costo por m2, para obra>,"plazoMeses":<para obra>,"anticipoPct":<para obra>,"rubros":[{"nombre":"<rubro>","pct":<incidencia %>}],"nota":"<texto>","confianza":"alta|media|baja","falta":"<que falta o vacio>"}]}
+{"respuesta":"<mensaje corto y claro al usuario, en español rioplatense>","acciones":[{"tipo":"agregar|borrar","modelo":"cliente|particular|sociedad|edificio","operacion":"gasto|cobro|pago|adicional|retiro|costo|contacto|socio|unidad|presupuesto|obra","objetivo":"<obra/entidad donde va, exacta de las listas>","rubro":"<rubro/concepto>","monto":<entero sin puntos>,"moneda":"ars|usd","cotizacion":<numero o null>,"fecha":"YYYY-MM-DD o null","nombre":"<para contacto/socio/obra>","telefono":"<opcional>","pct":<para socio, numero o null>,"m2":<para obra/unidad o null>,"precioM2":<precio venta al cliente por m2, para obra>,"costoM2":<costo por m2, para obra>,"plazoMeses":<para obra>,"anticipoPct":<para obra>,"rubros":[{"nombre":"<rubro>","pct":<incidencia %>}],"lugar":"<para presupuesto: predio/lugar>","titulo":"<para presupuesto: titulo del trabajo>","descripcion":"<para presupuesto: descripcion tecnica>","total":<para presupuesto: total en pesos, entero>,"formaPago":"<para presupuesto>","viaticos":<para presupuesto, entero o null>,"honorariosPct":<para presupuesto, numero o null>,"numero":"<para presupuesto: nro>","nota":"<texto>","confianza":"alta|media|baja","falta":"<que falta o vacio>"}]}
 Listas actuales:
 - Obras cliente: ${ents.cliente.join(", ") || "(ninguna)"}
 - Particular: ${ents.particular.join(", ") || "(ninguna)"}
@@ -1484,7 +1528,7 @@ Listas actuales:
 - Edificios: ${ents.edificio.join(", ") || "(ninguna)"}
 - Socios cargados: ${socNames.join(", ") || "(ninguno)"}
 - Contactos en agenda: ${contNames.join(", ") || "(ninguno)"}
-Reglas: El usuario SIEMPRE indica dónde cargar (ej: "cargar en sociedad un pago para el plomero de 50000" => modelo sociedad, operacion gasto, rubro "plomero", monto 50000). Si dice "anotá/anótame un gasto" SIN decir la obra (ej: "anotá 50000 de nafta"), usá modelo "cliente", operacion "gasto", rubro el concepto (nafta), objetivo "" (queda sin asignar; el usuario le pone la obra después en la planilla de Gastos). Para CREAR un presupuesto de obra de cliente usá operacion "obra" con nombre, m2, precioM2 (precio de venta al cliente por m2), costoM2 (costo por m2), plazoMeses, anticipoPct y rubros [{nombre,pct}] si los da; lo que no diga, dejalo en null/0. Convertí montos a entero (2.000.500 => 2000500). "dólares/USD/u$s" => usd, si no aclara => ars. Para particular y edificio la operacion de costos es "costo". Para agenda usá operacion "contacto" (nombre + telefono; poné "socio" en rubro si es socio, si no cliente). Para borrar personas: tipo "borrar", operacion "contacto", nombre. Si un PDF/foto tiene varias líneas, una acción por línea. NUNCA borres algo si no estás seguro; ante la duda no lo pongas y pedí aclaración en "respuesta". Si falta info, confianza "baja" y detallá en "falta". Si el usuario solo pregunta o saluda, devolvé acciones vacías y respondé en "respuesta". Hoy es ${hoyISO()}.`;
+Reglas: El usuario SIEMPRE indica dónde cargar (ej: "cargar en sociedad un pago para el plomero de 50000" => modelo sociedad, operacion gasto, rubro "plomero", monto 50000). Si dice "anotá/anótame un gasto" SIN decir la obra (ej: "anotá 50000 de nafta"), usá modelo "cliente", operacion "gasto", rubro el concepto (nafta), objetivo "" (queda sin asignar; el usuario le pone la obra después en la planilla de Gastos). Para CREAR un presupuesto de obra de cliente usá operacion "obra" con nombre, m2, precioM2 (precio de venta al cliente por m2), costoM2 (costo por m2), plazoMeses, anticipoPct y rubros [{nombre,pct}] si los da; lo que no diga, dejalo en null/0. Los PRESUPUESTOS DE OBRAS EN SOCIEDAD usan el formato Belfast: cuando te pida "cargá/armá un presupuesto para <lugar>" y te pase una descripción, usá operacion "presupuesto" con objetivo/nombre = lugar/predio, lugar, titulo (título corto del trabajo, ej "Corte y retiro de árboles"), descripcion (descripción técnica prolija, podés redactarla mejor a partir de lo que diga), total (monto en pesos), formaPago, viaticos, honorariosPct, numero si lo da. Redactá la descripción técnica de forma profesional. Si no da algún dato, dejalo vacío/null (después lo completa a mano) y no bajes la confianza por eso. Convertí montos a entero (2.000.500 => 2000500). "dólares/USD/u$s" => usd, si no aclara => ars. Para particular y edificio la operacion de costos es "costo". Para agenda usá operacion "contacto" (nombre + telefono; poné "socio" en rubro si es socio, si no cliente). Para borrar personas: tipo "borrar", operacion "contacto", nombre. Si un PDF/foto tiene varias líneas, una acción por línea. NUNCA borres algo si no estás seguro; ante la duda no lo pongas y pedí aclaración en "respuesta". Si falta info, confianza "baja" y detallá en "falta". Si el usuario solo pregunta o saluda, devolvé acciones vacías y respondé en "respuesta". Hoy es ${hoyISO()}.`;
   const toB64 = (f) => new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(",")[1]); rd.onerror = () => rej(new Error("no se pudo leer")); rd.readAsDataURL(f); });
   const hablar = (txt) => { try { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(txt); u.lang = "es-AR"; window.speechSynthesis.speak(u); } catch { } };
   const escuchar = () => {
