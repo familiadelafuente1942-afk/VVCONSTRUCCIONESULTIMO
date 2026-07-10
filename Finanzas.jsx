@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v72 (cada gasto con su cotizacion propia, unificacion opcional, default pesos)
+// VERSION: v73 (borrar en todos lados: X explicita en CAC)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -761,7 +761,7 @@ function IndicesPanel({ data, save, obra, fecha, indices }) {
       <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Cargá el % del CAC de cada mes cuando sale (ej: 3). Se aplica dividido en las dos quincenas (√ compuesto) sobre el saldo pendiente. Si falta el mes actual, va provisorio en 0% y recalcula al cargarlo.</div>
       {meses.map(m => { const r2 = cacRate(m, indices); return <div key={m} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{mesLabel(m)}{m === mesCert ? " · este cert" : ""}{!r2.provisorio ? <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 400 }}> · quinc. {(r2.rate * 100).toFixed(3)}%</span> : ""}</span>
-        <input defaultValue={indices[m] ?? ""} onBlur={e => setIndice(m, e.target.value)} inputMode="decimal" placeholder="% CAC" style={{ ...inp, marginTop: 0, width: 110, textAlign: "right" }} /><span style={{ fontSize: 12, color: T.sub }}>%</span>
+        <input defaultValue={indices[m] ?? ""} onBlur={e => setIndice(m, e.target.value)} inputMode="decimal" placeholder="% CAC" style={{ ...inp, marginTop: 0, width: 92, textAlign: "right" }} /><span style={{ fontSize: 12, color: T.sub }}>%</span>{indices[m] != null && <button onClick={() => setIndice(m, "")} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>✕</button>}
       </div>; })}
       <AddMesIndice onAdd={setIndice} />
     </div>}
