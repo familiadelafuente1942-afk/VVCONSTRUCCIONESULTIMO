@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v74 (PDF: Guardar/Imprimir nativo como principal para Archivos, WhatsApp aparte)
+// VERSION: v75 (agenda: evita y limpia contactos duplicados)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -127,6 +127,7 @@ function resumenFinanciero(data) {
   return L.join("\n");
 }
 function limpiarTel(t) { return String(t || "").replace(/[^\d]/g, ""); }
+function dedupeContactos(arr) { const seen = new Set(); return (arr || []).filter(c => { const k = (c.tipo || "") + "|" + String(c.nombre || "").trim().toLowerCase() + "|" + limpiarTel(c.telefono || ""); if (seen.has(k)) return false; seen.add(k); return true; }); }
 function waLink(tel, texto) { return `https://wa.me/${limpiarTel(tel)}?text=${encodeURIComponent(texto)}`; }
 function resumenSocioTexto(data) { return `*Resumen financiero — V+V Construcciones*\n\n${resumenFinanciero(data)}`; }
 function reporteSociedadParcial(s, socio) {
@@ -282,7 +283,8 @@ function mensajeCertificadoTexto(obra, data, certsDe, indices) {
 function AgendaTab({ obras, certs, certsDe, indices, data, save }) {
   const contactos = data.contactos || [];
   const [nombre, setNombre] = useState(""); const [telefono, setTelefono] = useState(""); const [tipo, setTipo] = useState("cliente"); const [obraId, setObraId] = useState("");
-  const agregar = () => { if (!nombre.trim()) return; save({ ...data, contactos: [...contactos, { id: uid(), nombre: nombre.trim(), telefono: telefono.trim(), tipo, obraId: obraId || "", ts: Date.now() }] }); setNombre(""); setTelefono(""); setObraId(""); };
+  const agregar = () => { if (!nombre.trim()) return; const key = tipo + "|" + nombre.trim().toLowerCase() + "|" + limpiarTel(telefono); if (contactos.some(c => ((c.tipo || "") + "|" + String(c.nombre || "").trim().toLowerCase() + "|" + limpiarTel(c.telefono || "")) === key)) { alert("Ese contacto ya está en la agenda."); return; } save({ ...data, contactos: [...contactos, { id: uid(), nombre: nombre.trim(), telefono: telefono.trim(), tipo, obraId: obraId || "", ts: Date.now() }] }); setNombre(""); setTelefono(""); setObraId(""); };
+  const limpiarDup = () => save({ ...data, contactos: dedupeContactos(contactos) });
   const borrar = (id) => save({ ...data, contactos: contactos.filter(c => c.id !== id) });
   const setObraDe = (id, oid) => save({ ...data, contactos: contactos.map(c => c.id === id ? { ...c, obraId: oid } : c) });
   return (<div style={{ padding: "14px 16px 40px" }}>
@@ -297,7 +299,8 @@ function AgendaTab({ obras, certs, certsDe, indices, data, save }) {
       <button onClick={agregar} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>Agregar contacto</button>
     </div>
     {contactos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>Todavía no hay contactos cargados.</div>}
-    {contactos.slice().sort((a, b) => a.tipo === b.tipo ? 0 : a.tipo === "socio" ? -1 : 1).map(c => { const esCli = c.tipo === "cliente"; const obra = obras.find(o => o.id === c.obraId); return (
+    {contactos.length - dedupeContactos(contactos).length > 0 && <button onClick={limpiarDup} style={{ width: "100%", background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.4)", color: "#EF4444", borderRadius: 10, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>Limpiar {contactos.length - dedupeContactos(contactos).length} contacto(s) duplicado(s)</button>}
+    {dedupeContactos(contactos).slice().sort((a, b) => a.tipo === b.tipo ? 0 : a.tipo === "socio" ? -1 : 1).map(c => { const esCli = c.tipo === "cliente"; const obra = obras.find(o => o.id === c.obraId); return (
       <div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 14, marginBottom: 10, boxShadow: SHDsm }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800 }}>{c.nombre}</div><div style={{ fontSize: 12, color: T.sub, marginTop: 1 }}>{c.telefono || "sin teléfono"}</div></div>
