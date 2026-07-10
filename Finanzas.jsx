@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v86 (IA: boton logo = microfono para hablar, saco mic de la barra)
+// VERSION: v87 (IA: dictado con auto-envio tras 3s de silencio)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -1487,10 +1487,29 @@ Listas actuales:
 Reglas: El usuario SIEMPRE indica dónde cargar (ej: "cargar en sociedad un pago para el plomero de 50000" => modelo sociedad, operacion gasto, rubro "plomero", monto 50000). Si dice "anotá/anótame un gasto" SIN decir la obra (ej: "anotá 50000 de nafta"), usá modelo "cliente", operacion "gasto", rubro el concepto (nafta), objetivo "" (queda sin asignar; el usuario le pone la obra después en la planilla de Gastos). Para CREAR un presupuesto de obra de cliente usá operacion "obra" con nombre, m2, precioM2 (precio de venta al cliente por m2), costoM2 (costo por m2), plazoMeses, anticipoPct y rubros [{nombre,pct}] si los da; lo que no diga, dejalo en null/0. Convertí montos a entero (2.000.500 => 2000500). "dólares/USD/u$s" => usd, si no aclara => ars. Para particular y edificio la operacion de costos es "costo". Para agenda usá operacion "contacto" (nombre + telefono; poné "socio" en rubro si es socio, si no cliente). Para borrar personas: tipo "borrar", operacion "contacto", nombre. Si un PDF/foto tiene varias líneas, una acción por línea. NUNCA borres algo si no estás seguro; ante la duda no lo pongas y pedí aclaración en "respuesta". Si falta info, confianza "baja" y detallá en "falta". Si el usuario solo pregunta o saluda, devolvé acciones vacías y respondé en "respuesta". Hoy es ${hoyISO()}.`;
   const toB64 = (f) => new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(",")[1]); rd.onerror = () => rej(new Error("no se pudo leer")); rd.readAsDataURL(f); });
   const hablar = (txt) => { try { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(txt); u.lang = "es-AR"; window.speechSynthesis.speak(u); } catch { } };
-  const escuchar = () => { try { const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) { enfocar(); alert("Para dictar en el iPhone: tocá el micrófono del teclado (al lado de la barra espaciadora)."); return; } const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = false; rec.onresult = (e) => setTexto(t => (t ? t + " " : "") + e.results[0][0].transcript); rec.onerror = () => enfocar(); rec.start(); } catch { enfocar(); alert("Usá el micrófono del teclado para dictar."); } };
-  async function enviar() {
-    if (!texto.trim() && !files.length) return;
-    const userText = texto.trim() || "(archivos adjuntos)";
+  const escuchar = () => {
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { enfocar(); alert("Para dictar en el iPhone: tocá el micrófono del teclado (al lado de la barra espaciadora) y cuando termines, tocá Enviar."); return; }
+      const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = true;
+      let finalTxt = ""; let timer = null;
+      const cerrarYEnviar = () => { try { rec.stop(); } catch { } };
+      rec.onresult = (e) => {
+        let interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) finalTxt += t + " "; else interim += t; }
+        setTexto((finalTxt + interim).trim());
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(cerrarYEnviar, 3000);
+      };
+      rec.onend = () => { if (timer) clearTimeout(timer); const t = finalTxt.trim(); if (t) { setTexto(t); setTimeout(() => enviar(t), 100); } };
+      rec.onerror = () => { if (timer) clearTimeout(timer); enfocar(); };
+      rec.start();
+    } catch { enfocar(); alert("Usá el micrófono del teclado para dictar."); }
+  };
+  async function enviar(override) {
+    const base = (typeof override === "string" ? override : texto).trim();
+    if (!base && !files.length) return;
+    const userText = base || "(archivos adjuntos)";
     setMsgs(m => [...m, { role: "user", text: userText }]); setTexto(""); setCargando(true); setError(""); setAcciones([]);
     try {
       const content = []; const extras = [];
