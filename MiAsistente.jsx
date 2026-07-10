@@ -116,6 +116,7 @@ export default function MiAsistente() {
   T.border = cfg.borde || "#E5E1D6"; T.sub = cfg.sub || "#6E695E"; T.rsm = (cfg.rsm != null ? cfg.rsm : 10); BRASS = cfg.brass || "#A17C3E";
   { const F = FONTS[cfg.fontId] || FONTS.inter; T.sans = F.sans; T.serif = F.serif; }
   function saveCfg(next) { setCfg(next); try { localStorage.setItem("sebastian_cfg", JSON.stringify(next)); } catch { } storage.set("sebastian_cfg", JSON.stringify(next)).catch(() => { }); }
+  function subirFotoBoton(file) { if (!file) return; try { const img = new window.Image(); const url = URL.createObjectURL(file); img.onload = () => { let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height; const max = 340; if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); } const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h); const durl = c.toDataURL("image/jpeg", 0.82); URL.revokeObjectURL(url); saveCfg({ ...cfg, iaFoto: durl }); }; img.onerror = () => { URL.revokeObjectURL(url); alert("No pude leer la imagen."); }; img.src = url; } catch { alert("No pude subir la imagen."); } }
   function setC(k, v) { saveCfg({ ...cfg, [k]: v }); }
   useEffect(() => {
     // Ícono en la pantalla de inicio (apple-touch-icon) + favicon, best-effort.
@@ -298,6 +299,7 @@ ${con}
 
 FINANZAS DE V+V (información financiera privada y confidencial; NO la compartas con nadie que no sea Sebastián). IMPORTANTE: NO necesitás entrar a ninguna página web ni "abrir la app de Finanzas" para esto. Los datos financieros de la empresa YA te los paso acá abajo, en tu contexto. Cuando Sebastián te pregunte por la app de Finanzas, por plata, resultados, márgenes, saldos, anticipos, imprevistos, o cuánto ganó/gastó en una obra o en total, NUNCA respondas que no tenés acceso a páginas externas: simplemente contestá usando estos números que ya tenés acá:\n${finResumen || finTextoDesde(finRaw) || "AVISO: en este momento NO me está llegando la información de Finanzas. Si Sebastián pregunta por plata, decile textualmente: abrí la app Finanzas (/finanzas.html) y guardá o tocá algo para que sincronice a la nube, y verificá que esta app esté actualizada. Apenas sincronice, la voy a ver."}\n\nAdemás podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
 <<ACCION>>{...}<<FIN>>
+REGLA CLAVE: cada vez que Sebastián te pida CARGAR/ANOTAR/REGISTRAR algo (un pago, un gasto, un contacto, etc.), SIEMPRE tenés que terminar con el bloque <<ACCION>>...<<FIN>>. NUNCA digas "listo/lo cargué/lo anoté" sin poner el bloque: la app carga los datos SOLA a partir del bloque y te confirma sola cuántos cargó. Si no ponés el bloque, NO se carga nada. Cuando sean VARIOS ítems (varios pagos, varios gastos, varios contactos), poné TODOS juntos dentro del array correspondiente ("pagos", "gastos" o "contactos") en UN SOLO bloque; no mandes un bloque por cada uno ni cargues de a uno.
 Acciones:
 {"tipo":"pagar_mp","para":"Héctor","monto":300,"alias":"opcional alias/CVU si lo sabés"}
 {"tipo":"mandar_mail","para":"Héctor","email":"opcional si lo sabés","asunto":"...","cuerpo":"texto del mail redactado"}
@@ -332,7 +334,20 @@ Reglas:
 Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
 
-  function parseAccion(txt) { const t = txt || ""; let m = t.match(/<<ACCION>>([\s\S]*?)<<FIN>>/) || t.match(/<<ACCION>>([\s\S]*)$/); if (!m) return { limpio: txt, accion: null }; let raw = m[1].trim(); let a = null; try { a = JSON.parse(raw); } catch { const i = raw.indexOf("{"), j = raw.lastIndexOf("}"); if (i >= 0 && j > i) { try { a = JSON.parse(raw.slice(i, j + 1)); } catch { } } } return { limpio: t.replace(m[0], "").trim(), accion: a }; }
+  function parseAccion(txt) {
+    const t = txt || "";
+    const blocks = []; const usados = [];
+    const re = /<<ACCION>>([\s\S]*?)(?:<<FIN>>|$)/g; let mm;
+    while ((mm = re.exec(t)) !== null) { usados.push(mm[0]); const raw = (mm[1] || "").trim(); let a = null; try { a = JSON.parse(raw); } catch { const i = raw.indexOf("{"), j = raw.lastIndexOf("}"); if (i >= 0 && j > i) { try { a = JSON.parse(raw.slice(i, j + 1)); } catch { } } } if (a && a.tipo) blocks.push(a); }
+    let limpio = t; usados.forEach(u => { limpio = limpio.replace(u, ""); }); limpio = limpio.trim();
+    if (blocks.length === 0) return { limpio: txt, accion: null };
+    if (blocks.length === 1) return { limpio, accion: blocks[0] };
+    const mergeField = { cargar_pago: "pagos", cargar_gasto: "gastos", guardar_contacto: "contactos" };
+    const tipos = [...new Set(blocks.map(b => b.tipo))];
+    if (tipos.length === 1 && mergeField[tipos[0]]) { const f = mergeField[tipos[0]]; const items = []; blocks.forEach(b => { if (Array.isArray(b[f])) items.push(...b[f]); else items.push(b); }); return { limpio, accion: { tipo: tipos[0], [f]: items } }; }
+    for (const tp of ["cargar_pago", "cargar_gasto", "guardar_contacto"]) { const grp = blocks.filter(b => b.tipo === tp); if (grp.length) { const f = mergeField[tp]; const items = []; grp.forEach(b => { if (Array.isArray(b[f])) items.push(...b[f]); else items.push(b); }); return { limpio, accion: { tipo: tp, [f]: items } }; } }
+    return { limpio, accion: blocks[0] };
+  }
 
   async function persistPagos(next) {
     pagosWrite.current = Date.now(); setPagos(next);
@@ -562,7 +577,15 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     }
     const resp = await callAI(hist, buildSystem(), apiKey, useSearch);
     if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(resp || ""))) { setMsgs(prev => [...prev, { role: "assistant", content: "⚠ Me quedé sin crédito de IA por ahora. Para que vuelva a funcionar, hay que recargar crédito de la API en console.anthropic.com (Plans & Billing). Avisá a quien maneja la cuenta." }]); setBusy(false); return; }
-    const { limpio, accion } = parseAccion(resp);
+    let { limpio, accion } = parseAccion(resp);
+    if (!accion && /(cargá|carga|cargame|cárgame|anot|registr|gast[éeo\s]|gasto|gastos|pagué|pagu[eé]|pago|pagos|remito|factura)/i.test(t) && /\d/.test(t)) {
+      try {
+        const fSys = `Sos un extractor de acciones. Del pedido del usuario devolvé SOLO un bloque <<ACCION>>{...}<<FIN>> (sin nada de texto afuera). Usá tipo "cargar_gasto" con "gastos":[{"concepto","monto","fecha"}] para gastos generales, o "cargar_pago" con "pagos":[{"persona","monto","obra","estado","metodo","fecha"}] para pagos a personas. Poné TODOS los ítems juntos en el array. Montos enteros (15.000 => 15000, "50 lucas" => 50000). Sin fecha usá hoy ${hoyStr()}. Si de verdad no hay nada concreto para cargar, devolvé <<ACCION>>{"tipo":"nada"}<<FIN>>.`;
+        const resp2 = await callAI([{ role: "user", content: t }], fSys, apiKey, false);
+        const p2 = parseAccion(resp2);
+        if (p2.accion && p2.accion.tipo && p2.accion.tipo !== "nada") accion = p2.accion;
+      } catch { }
+    }
     let extra = {};
     if (accion && accion.tipo === "pagar_mp") {
       const q = String(accion.para || "").toLowerCase();
@@ -745,9 +768,15 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         {modelo && <span style={{ fontSize: 10.5, color: T.muted }}>Modelo activo: {modelo.nombre}</span>}
       </div>
       {adjPend.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adjPend.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "🖼" : a.kind === "texto" ? "📊" : "📄"} {a.nombre.slice(0, 22)} <span onClick={() => setAdjPend(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+        <div onClick={dictar} style={{ width: 132, height: 132, background: T.card, border: `2px solid ${escuchando ? "#DC2626" : T.accent}`, borderRadius: 20, boxShadow: "0 4px 14px rgba(0,0,0,.08)", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, position: "relative" }}>
+          {cfg.iaFoto ? <img src={cfg.iaFoto} alt="foto" style={{ width: 74, height: 74, borderRadius: 14, objectFit: "cover" }} /> : <span style={{ fontSize: 42 }}>🎤</span>}
+          <span style={{ fontSize: 12, fontWeight: 800, color: escuchando ? "#DC2626" : T.accent }}>{escuchando ? "Escuchando…" : "Hablarle a la IA"}</span>
+          <label onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 5, right: 6, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "2px 6px", fontSize: 9, fontWeight: 700, color: T.sub, cursor: "pointer" }}>✎ foto<input type="file" accept="image/*" onChange={e => { subirFotoBoton(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
+        </div>
+      </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={dictar} title="Hablar" style={{ background: escuchando ? "#DC2626" : T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, color: escuchando ? "#fff" : T.accent, borderRadius: 12, padding: "0 15px", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>🎤</button>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : adjPend.length ? "Preguntá algo sobre lo que adjuntaste…" : "Escribí o tocá el micrófono…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : adjPend.length ? "Preguntá algo sobre lo que adjuntaste…" : "Escribí o tocá el botón de arriba…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
         <button onClick={enviar} disabled={busy || (!input.trim() && adjPend.length === 0)} style={{ background: (busy || (!input.trim() && adjPend.length === 0)) ? T.border : T.accent, color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", fontSize: 14, fontWeight: 600, letterSpacing: "0.03em", cursor: (busy || (!input.trim() && adjPend.length === 0)) ? "default" : "pointer" }}>Enviar</button>
       </div>
     </div>
