@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v73 (borrar en todos lados: X explicita en CAC)
+// VERSION: v74 (PDF: Guardar/Imprimir nativo como principal para Archivos, WhatsApp aparte)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -849,27 +849,27 @@ function ConfigModal({ data, save, onClose }) {
 }
 function PdfOverlay({ html, onClose }) {
   const ref = useRef(null); const [gen, setGen] = useState(false);
-  const imprimir = () => { try { const w = ref.current && ref.current.contentWindow; if (w) { w.focus(); w.print(); } } catch { } };
-  async function guardarCompartir() {
+  const imprimir = () => { try { const w = ref.current && ref.current.contentWindow; if (w) { w.focus(); w.print(); } } catch { alert("No se pudo abrir la impresión."); } };
+  async function compartirWA() {
     setGen(true);
     try {
       const win = ref.current && ref.current.contentWindow, doc = ref.current && ref.current.contentDocument;
       if (!win || !doc) throw new Error("preview no lista");
       if (!win.html2pdf) { await new Promise((res, rej) => { const s = doc.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"; s.onload = res; s.onerror = () => rej(new Error("no se pudo cargar el generador")); doc.head.appendChild(s); }); }
-      const opt = { margin: 6, filename: "VV-reporte.pdf", image: { type: "jpeg", quality: 0.95 }, html2canvas: { scale: 2, useCORS: true, allowTaint: false }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } };
+      const opt = { margin: 6, image: { type: "jpeg", quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } };
       const blob = await win.html2pdf().set(opt).from(doc.body).outputPdf("blob");
       const file = new File([blob], "VV-reporte.pdf", { type: "application/pdf" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Reporte V+V" }); }
-      else { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "VV-reporte.pdf"; document.body.appendChild(a); a.click(); setTimeout(() => { try { document.body.removeChild(a); } catch { } URL.revokeObjectURL(url); }, 1200); }
-    } catch (e) { if (!(e && e.name === "AbortError")) alert("No se pudo generar el PDF (" + (e && e.message) + "). Probá con Imprimir → Guardar en Archivos."); }
+      else { const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "VV-reporte.pdf"; document.body.appendChild(a); a.click(); setTimeout(() => { try { a.remove(); } catch { } URL.revokeObjectURL(url); }, 1500); }
+    } catch (e) { if (!(e && e.name === "AbortError")) alert('No pude generar el PDF para compartir directo (a veces pasa por las fotos). Usá "Guardar / Imprimir" y desde ahí tocá Compartir → WhatsApp o Guardar en Archivos.'); }
     setGen(false);
   }
   return (<div style={{ position: "fixed", inset: 0, background: "#0F1B2D", zIndex: 500, display: "flex", flexDirection: "column" }}>
     <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: T.navy, borderBottom: `1px solid rgba(255,255,255,.1)`, alignItems: "center" }}>
       <button onClick={onClose} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "10px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
-      <button onClick={imprimir} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "10px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Imprimir</button>
+      <button onClick={imprimir} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Guardar / Imprimir</button>
       <div style={{ flex: 1 }} />
-      <button onClick={guardarCompartir} disabled={gen} style={{ background: gen ? "rgba(176,137,79,.5)" : "#25D366", color: "#fff", border: "none", borderRadius: 9, padding: "10px 18px", fontWeight: 700, fontSize: 13, cursor: gen ? "default" : "pointer" }}>{gen ? "Generando…" : "Guardar / Enviar"}</button>
+      <button onClick={compartirWA} disabled={gen} style={{ background: gen ? "rgba(37,211,102,.5)" : "#25D366", color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: gen ? "default" : "pointer" }}>{gen ? "Generando…" : "WhatsApp"}</button>
     </div>
     <iframe ref={ref} srcDoc={html} title="pdf" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
   </div>);
