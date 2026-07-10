@@ -308,7 +308,7 @@ Acciones:
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
 {"tipo":"cargar_gasto","gastos":[{"concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"},{"concepto":"Comida","monto":8000},{"concepto":"Ferretería","monto":5000}]}
 {"tipo":"guardar_contacto","contactos":[{"nombre":"Enrico Rossi","telefono":"1145678900","email":"","alias":"","nota":"proveedor de hierro"}]}
-{"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
+{"tipo":"cargar_pago","pagos":[{"persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo"},{"persona":"Juan","monto":30000,"estado":"pendiente"}]}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
 {"tipo":"whatsapp","persona":"Valeria","texto":"el mensaje a enviar por WhatsApp"}
 {"tipo":"preguntar_ia","texto":"el mensaje o consulta para V+V (equipo/IA de V+V)"}
@@ -324,7 +324,7 @@ Reglas:
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora.
 - "guardar_contacto" cuando te pide guardar/agendar un contacto o te dicta/pega datos de personas: "guardá el contacto de Enrico 1145678900", "agendá a Juan Pérez 11...", o una lista "cargá estos contactos: Juan 11...; María 11...". Poné todos en el array "contactos" (nombre + telefono, y email/alias/nota si los da). Si te pegan varios juntos, cargalos TODOS de una.
 - "cargar_gasto" cuando dice "cargá un gasto de nafta 15000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto, sin obra). IMPORTANTE: si te da VARIOS gastos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "gastos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una.
-- "cargar_pago" SOLO para REGISTRAR/ANOTAR en la planilla de Pagos un pago (no mueve plata): "anotá/registrá/cargá un pago a Humberto en Castores 475 de 50000", "anotá que le pagué a Juan 30 lucas". Palabras clave: anotá, registrá, cargá. Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método. Si el pedido es "pagale/mandale plata a X" (sin decir anotar/registrar), NO uses esto: usá pagar_mp.
+- "cargar_pago" SOLO para REGISTRAR/ANOTAR en la planilla de Pagos uno o varios pagos (no mueve plata): "anotá/registrá/cargá un pago a Humberto en Castores 475 de 50000", "anotá que le pagué a Juan 30 lucas". Palabras clave: anotá, registrá, cargá. IMPORTANTE: si te da VARIOS pagos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "pagos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una. Cada pago va con la fecha de hoy salvo que diga otra. Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método. Si el pedido es "pagale/mandale plata a X" (sin decir anotar/registrar), NO uses esto: usá pagar_mp.
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
 - "whatsapp" cuando dice "mandale un mensaje a X que…" o "escribile a X". Uso los teléfonos de Personal; le dejo el WhatsApp listo para enviar con un toque.
 - "preguntar_ia" es TU ÚNICO canal hacia V+V. Usalo SIEMPRE que te digan "mandale/decile/avisale/pasale/preguntale/consultale a V+V", "que V+V…", "avisá a la oficina/al equipo", o cualquier cosa dirigida a V+V. IMPORTANTE: vos sos DE V+V (de la casa); esto llega al equipo/IA de V+V, NUNCA a Belfast ni al cliente. Belfast es una empresa EXTERNA (el cliente) y NO tenés que mandarle nada salvo que te lo pidan explícitamente por su nombre. Si dudás entre V+V y Belfast, es V+V.
@@ -639,8 +639,12 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setBusy(false); return;
     }
     if (accion && accion.tipo === "cargar_pago") {
-      const p = cargarPago(accion);
-      setMsgs(prev => [...prev, { role: "assistant", content: `✅ Pago cargado: ${p.persona || "—"}${p.monto ? ` · $${p.monto.toLocaleString("es-AR")}` : ""}${p.obra ? ` · ${p.obra}` : ""} · ${p.estado}${p.metodo ? ` · ${p.metodo}` : ""} (${p.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Pagos y lo podés exportar a Excel.` }]);
+      const arr = Array.isArray(accion.pagos) ? accion.pagos : [accion];
+      const nuevos = arr.filter(x => x && (x.persona || x.monto != null)).map(a => { const obra = a.obra ? (db.obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(a.obra).toLowerCase())) : null; return { id: uid() + Date.now() + Math.floor(Math.random() * 9999), persona: a.persona || "", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, obra: (obra && obra.nombre) || a.obra || "", obra_id: (obra && obra.id) || "", estado: (a.estado || "pendiente").toLowerCase().includes("pag") ? "pagado" : "pendiente", metodo: a.metodo || "", nota: a.nota || "", fecha: a.fecha || hoyStr(), ts: Date.now() }; });
+      if (nuevos.length) persistPagos([...nuevos, ...(pagos || [])]);
+      const total = nuevos.reduce((s, p) => s + p.monto, 0);
+      const detalle = nuevos.map(p => `• ${p.persona || "—"} — $${p.monto.toLocaleString("es-AR")}${p.obra ? ` (${p.obra})` : ""} · ${p.estado}`).join("\n");
+      setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `✅ Cargué ${nuevos.length} pago${nuevos.length > 1 ? "s" : ""} (total $${total.toLocaleString("es-AR")}) con fecha ${hoyStr()}:\n${detalle}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Pagos, agrupados por día.` : "No pude leer los pagos. Decime persona y monto de cada uno." }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "whatsapp") {
@@ -786,19 +790,25 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pendiente</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: "#9A6B1E", marginTop: 3 }}>${totalPend.toLocaleString("es-AR")}</div></div>
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pagado</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totalPag.toLocaleString("es-AR")}</div></div>
     </div>
-    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px", lineHeight: 1.6 }}>Todavía no cargaste pagos.<br />Desde el Chat, decime por ejemplo:<br /><span style={{ color: T.sub }}>"cargá un pago a Humberto en Castores 475 de 50000 en efectivo"</span></div>}
-    {lista.map(p => (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `2px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{p.persona || "—"} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(p.monto || 0).toLocaleString("es-AR")}</span></div>
-          <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{p.obra || "sin obra"} · {p.fecha}{p.metodo ? ` · ${p.metodo}` : ""}{p.nota ? ` · ${p.nota}` : ""}</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: p.estado === "pagado" ? T.accent : "#B98A2E", border: `1px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: 5, padding: "2px 7px" }}>{p.estado}</span>
-          <button onClick={() => borrar(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer" }}>✕</button>
-        </div>
+    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px", lineHeight: 1.6 }}>Todavía no cargaste pagos.<br />Desde el Chat, decime por ejemplo:<br /><span style={{ color: T.sub }}>"cargá pagos: Humberto 50000 Castores efectivo, Juan 30000 pendiente, Luis 20000 pagado"</span></div>}
+    {(() => { const grupos = []; lista.forEach(p => { const k = p.fecha || "sin fecha"; let g = grupos.find(x => x.fecha === k); if (!g) { g = { fecha: k, items: [] }; grupos.push(g); } g.items.push(p); }); return grupos.map(g => { const esHoy = g.fecha === hoyStr(); const sub = g.items.reduce((a, p) => a + (p.monto || 0), 0); const subPend = g.items.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0); return (<div key={g.fecha} style={{ marginBottom: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "14px 0 8px", paddingBottom: 5, borderBottom: `1px solid ${esHoy ? BRASS : T.border}` }}>
+        <span style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: esHoy ? BRASS : T.sub }}>{esHoy ? "Hoy · " : ""}{g.fecha}</span>
+        <span style={{ fontSize: 11, color: T.muted, fontWeight: 700 }}>{g.items.length} pago{g.items.length > 1 ? "s" : ""} · ${sub.toLocaleString("es-AR")}{subPend > 0 ? ` (pend. $${subPend.toLocaleString("es-AR")})` : ""}</span>
       </div>
-    </div>))}
+      {g.items.map(p => (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `2px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{p.persona || "—"} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(p.monto || 0).toLocaleString("es-AR")}</span></div>
+            <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{p.obra || "sin obra"}{p.metodo ? ` · ${p.metodo}` : ""}{p.nota ? ` · ${p.nota}` : ""}</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: p.estado === "pagado" ? T.accent : "#B98A2E", border: `1px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: 5, padding: "2px 7px" }}>{p.estado}</span>
+            <button onClick={() => borrar(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer" }}>✕</button>
+          </div>
+        </div>
+      </div>))}
+    </div>); }); })()}
   </div>);
 }
 
