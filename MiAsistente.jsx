@@ -806,6 +806,9 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }
   const obrasUnicas = [...new Set((pagos || []).map(p => p.obra).filter(Boolean))];
   const totalPend = lista.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
   const totalPag = lista.filter(p => p.estado === "pagado").reduce((a, p) => a + (p.monto || 0), 0);
+  const mesAA = hoyStr().slice(3);
+  const diasPagados = []; const totPorDia = {};
+  lista.forEach(p => { if (p.estado === "pagado" && String(p.fecha || "").slice(3) === mesAA) { if (totPorDia[p.fecha] == null) { totPorDia[p.fecha] = 0; diasPagados.push(p.fecha); } totPorDia[p.fecha] += (p.monto || 0); } });
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <a href="https://www.mercadopago.com.ar/" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#009EE3", color: "#fff", borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 700, textDecoration: "none", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,158,227,.3)" }}>💳 Pagar por Mercado Pago</a>
     <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -819,6 +822,13 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pendiente</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: "#9A6B1E", marginTop: 3 }}>${totalPend.toLocaleString("es-AR")}</div></div>
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pagado</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totalPag.toLocaleString("es-AR")}</div></div>
     </div>
+    {diasPagados.length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 16 }}>
+      <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 8 }}>Pagado por día · este mes</div>
+      {diasPagados.map((d, i) => <div key={d} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: d === hoyStr() ? T.accent : T.text }}>{d === hoyStr() ? "Hoy · " : ""}{d}</span>
+        <span style={{ fontFamily: T.serif, fontSize: 14.5, fontWeight: 600, color: T.accent }}>${totPorDia[d].toLocaleString("es-AR")}</span>
+      </div>)}
+    </div>}
     {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px", lineHeight: 1.6 }}>Todavía no cargaste pagos.<br />Desde el Chat, decime por ejemplo:<br /><span style={{ color: T.sub }}>"cargá pagos: Humberto 50000 Castores efectivo, Juan 30000 pendiente, Luis 20000 pagado"</span></div>}
     {(() => { const grupos = []; lista.forEach(p => { const k = p.fecha || "sin fecha"; let g = grupos.find(x => x.fecha === k); if (!g) { g = { fecha: k, items: [] }; grupos.push(g); } g.items.push(p); }); return grupos.map(g => { const esHoy = g.fecha === hoyStr(); const sub = g.items.reduce((a, p) => a + (p.monto || 0), 0); const subPend = g.items.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0); return (<div key={g.fecha} style={{ marginBottom: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "14px 0 8px", paddingBottom: 5, borderBottom: `1px solid ${esHoy ? BRASS : T.border}` }}>
