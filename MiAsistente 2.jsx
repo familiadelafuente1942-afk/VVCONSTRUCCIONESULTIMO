@@ -33,7 +33,7 @@ function fileToDataUrl(f) { return new Promise((res, rej) => { const r = new Fil
 
 async function callAI(msgs, sys, apiKey, useSearch) {
   msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
-  const body = { model: "claude-sonnet-4-6", max_tokens: 1500, messages: msgs };
+  const body = { model: "claude-sonnet-5", max_tokens: 4096, thinking: { type: "disabled" }, messages: msgs };
   if (sys) body.system = sys;
   if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
   async function doFetch(b) {
@@ -53,10 +53,33 @@ async function callAI(msgs, sys, apiKey, useSearch) {
 }
 
 const T = { navy: "#1B1A16", accent: "#22463A", al: "#ECF0EC", bg: "#F4F2EC", card: "#FFFFFF", border: "#E5E1D6", text: "#1A1813", sub: "#6E695E", muted: "#A49D8D", rsm: 10, serif: "'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif", sans: "'Inter',-apple-system,'SF Pro Text',system-ui,sans-serif" };
-const BRASS = "#A17C3E";
+let BRASS = "#A17C3E";
+const FONTS = {
+  inter: { n: "Inter (moderna)", sans: "'Inter',-apple-system,'SF Pro Text',system-ui,sans-serif", serif: "'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif" },
+  sistema: { n: "Sistema", sans: "-apple-system,system-ui,'Segoe UI',Roboto,sans-serif", serif: "Georgia,'Times New Roman',serif" },
+  redondeada: { n: "Redondeada", sans: "'SF Pro Rounded','Varela Round',ui-rounded,system-ui,sans-serif", serif: "'Iowan Old Style',Georgia,serif" },
+  elegante: { n: "Elegante", sans: "'Optima','Avenir Next',Avenir,system-ui,sans-serif", serif: "'Didot','Playfair Display','Times New Roman',serif" },
+  tecnica: { n: "Técnica (mono)", sans: "'SF Mono','JetBrains Mono',Menlo,Consolas,monospace", serif: "'Courier New',monospace" },
+};
+const ESQUINAS = [{ n: "Rectas", v: 4 }, { n: "Suaves", v: 10 }, { n: "Redondeadas", v: 18 }];
 
 function obraNom(obras, id) { return (obras || []).find(o => o.id === id)?.nombre || "—"; }
 
+function finTextoDesde(raw) {
+  if (!raw) return "";
+  const obras = raw.obras || [], certs = raw.certs || [], gastos = raw.gastos || [], movs = raw.movimientos || [];
+  if (!obras.length && !certs.length && !gastos.length) return "";
+  const nu = (v) => { const n = parseFloat(String(v == null ? 0 : v).replace(/[^\d.-]/g, "")); return isNaN(n) ? 0 : n; };
+  const mo = (n) => "$" + Math.round(n || 0).toLocaleString("es-AR");
+  const cob = movs.filter(m => m.tipo === "cobro").reduce((s, m) => s + nu(m.monto), 0);
+  const pag = movs.filter(m => m.tipo === "pago").reduce((s, m) => s + nu(m.monto), 0);
+  const gas = gastos.reduce((s, g) => s + nu(g.monto), 0);
+  const L = ["RESUMEN FINANCIERO (básico, calculado desde los datos de la app Finanzas):"];
+  obras.forEach(o => { const pc = nu(o.m2) * nu(o.precioCliente), pco = nu(o.m2) * nu(o.costoM2); const nc = certs.filter(c => c.obraId === o.id).length; const ant = o.anticipoTipo === "monto" ? nu(o.anticipoMontoFijo) : pc * nu(o.anticipoPct) / 100; L.push(`· ${o.nombre}: presupuesto cliente ${mo(pc)}, presupuesto costo ${mo(pco)}, utilidad teórica ${mo(pc - pco)}, anticipo ${mo(ant)}, ${nc} certificados emitidos, plazo ${nu(o.plazoMeses) || "?"} meses.`); });
+  L.push(`Caja: cobrado ${mo(cob)}, pagado ${mo(pag)}, gastos ${mo(gas)}, saldo ${mo(cob - pag - gas)}.`);
+  L.push("(Para el resultado operativo y el margen exacto por obra ya con redeterminación CAC, el detalle fino está en la app Finanzas.)");
+  return L.join("\n");
+}
 export default function MiAsistente() {
   const [pinOk, setPinOk] = useState(false);
   const [pinStored, setPinStored] = useState(null);
@@ -72,6 +95,8 @@ export default function MiAsistente() {
   const [contactos, setContactos] = useState([]);
   const [camaras, setCamaras] = useState([]);
   const [ultimasFotos, setUltimasFotos] = useState([]);
+  const [finResumen, setFinResumen] = useState("");
+  const [finRaw, setFinRaw] = useState(null);
   const [adjPend, setAdjPend] = useState([]);
   const [agenda, setAgenda] = useState([]);
   const [subiendoArch, setSubiendoArch] = useState(false);
@@ -83,11 +108,13 @@ export default function MiAsistente() {
   const modeloRef = useRef(null);
   const chatFileRef = useRef(null);
   const modelo = (modelos || []).find(m => m.id === modeloSel) || null;
-  const CFG_DEF = { titulo: "Mi Asistente", eyebrow: "Privado · Sebastián", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813", fondoUrl: "", fondoOp: 14, serif: true, escala: 100, iconoUrl: "", iconoColor: "#22463A" };
+  const CFG_DEF = { titulo: "Mi Asistente", eyebrow: "Privado · Sebastián", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813", brass: "#A17C3E", borde: "#E5E1D6", sub: "#6E695E", rsm: 10, fontId: "inter", fondoUrl: "", fondoOp: 14, serif: true, escala: 100, iconoUrl: "", iconoColor: "#22463A" };
   const [cfg, setCfg] = useState(() => { try { return { ...CFG_DEF, ...JSON.parse(localStorage.getItem("sebastian_cfg") || "{}") }; } catch { return CFG_DEF; } });
   const iconRef = useRef(null); const fondoRef = useRef(null);
   // Aplica la personalización al tema (colores) en vivo.
   T.accent = cfg.accent || "#22463A"; T.navy = cfg.navy || "#1B1A16"; T.bg = cfg.bg || "#F4F2EC"; T.card = cfg.card || "#FFFFFF"; T.text = cfg.text || "#1A1813";
+  T.border = cfg.borde || "#E5E1D6"; T.sub = cfg.sub || "#6E695E"; T.rsm = (cfg.rsm != null ? cfg.rsm : 10); BRASS = cfg.brass || "#A17C3E";
+  { const F = FONTS[cfg.fontId] || FONTS.inter; T.sans = F.sans; T.serif = F.serif; }
   function saveCfg(next) { setCfg(next); try { localStorage.setItem("sebastian_cfg", JSON.stringify(next)); } catch { } storage.set("sebastian_cfg", JSON.stringify(next)).catch(() => { }); }
   function setC(k, v) { saveCfg({ ...cfg, [k]: v }); }
   useEffect(() => {
@@ -131,8 +158,8 @@ export default function MiAsistente() {
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
       setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
-      const [ra, rag, rg, rcon, rcam] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras")]);
-      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); }
+      const [ra, rag, rg, rcon, rcam, rfin, rfinraw] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("vv_finanzas_resumen"), storage.get("vv_finanzas")]);
+      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); const fin = rfin?.value || ""; setFinResumen(prev => fin !== prev ? fin : prev); try { const fr = rfinraw?.value ? JSON.parse(rfinraw.value) : null; setFinRaw(prev => JSON.stringify(fr) !== JSON.stringify(prev) ? fr : prev); } catch { } }
       if (!modelos.length) { const rmod = await storage.get("sebastian_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
       const rc = await storage.get("sebastian_cfg"); if (alive && rc?.value) { try { const c = JSON.parse(rc.value); setCfg(prev => JSON.stringify({ ...CFG_DEF, ...c }) !== JSON.stringify(prev) ? { ...CFG_DEF, ...c } : prev); } catch { } }
     }
@@ -269,8 +296,9 @@ ${arch}
 MIS CONTACTOS FAVORITOS (usá estos para WhatsApp, mail y pagos cuando nombre a alguien de acá):
 ${con}
 
-Además podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
+FINANZAS DE V+V (información financiera privada y confidencial; NO la compartas con nadie que no sea Sebastián). IMPORTANTE: NO necesitás entrar a ninguna página web ni "abrir la app de Finanzas" para esto. Los datos financieros de la empresa YA te los paso acá abajo, en tu contexto. Cuando Sebastián te pregunte por la app de Finanzas, por plata, resultados, márgenes, saldos, anticipos, imprevistos, o cuánto ganó/gastó en una obra o en total, NUNCA respondas que no tenés acceso a páginas externas: simplemente contestá usando estos números que ya tenés acá:\n${finResumen || finTextoDesde(finRaw) || "AVISO: en este momento NO me está llegando la información de Finanzas. Si Sebastián pregunta por plata, decile textualmente: abrí la app Finanzas (/finanzas.html) y guardá o tocá algo para que sincronice a la nube, y verificá que esta app esté actualizada. Apenas sincronice, la voy a ver."}\n\nAdemás podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
 <<ACCION>>{...}<<FIN>>
+REGLA CLAVE: cada vez que Sebastián te pida CARGAR/ANOTAR/REGISTRAR algo (un pago, un gasto, un contacto, etc.), SIEMPRE tenés que terminar con el bloque <<ACCION>>...<<FIN>>. NUNCA digas "listo/lo cargué/lo anoté" sin poner el bloque: la app carga los datos SOLA a partir del bloque y te confirma sola cuántos cargó. Si no ponés el bloque, NO se carga nada. Cuando sean VARIOS ítems (varios pagos, varios gastos, varios contactos), poné TODOS juntos dentro del array correspondiente ("pagos", "gastos" o "contactos") en UN SOLO bloque; no mandes un bloque por cada uno ni cargues de a uno.
 Acciones:
 {"tipo":"pagar_mp","para":"Héctor","monto":300,"alias":"opcional alias/CVU si lo sabés"}
 {"tipo":"mandar_mail","para":"Héctor","email":"opcional si lo sabés","asunto":"...","cuerpo":"texto del mail redactado"}
@@ -279,11 +307,12 @@ Acciones:
 {"tipo":"crear_obra","nombre":"Nombre de la obra","direccion":"opcional","estado":"En curso","avance":0}
 {"tipo":"recordar","dato":"lo que hay que recordar de Sebastián (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
-{"tipo":"cargar_gasto","concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"}
-{"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
+{"tipo":"cargar_gasto","gastos":[{"concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"},{"concepto":"Comida","monto":8000},{"concepto":"Ferretería","monto":5000}]}
+{"tipo":"guardar_contacto","contactos":[{"nombre":"Enrico Rossi","telefono":"1145678900","email":"","alias":"","nota":"proveedor de hierro"}]}
+{"tipo":"cargar_pago","pagos":[{"persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo"},{"persona":"Juan","monto":30000,"estado":"pendiente"}]}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
 {"tipo":"whatsapp","persona":"Valeria","texto":"el mensaje a enviar por WhatsApp"}
-{"tipo":"preguntar_ia","texto":"lo que querés consultarle a la IA de V+V"}
+{"tipo":"preguntar_ia","texto":"el mensaje o consulta para V+V (equipo/IA de V+V)"}
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano"}
 Reglas:
@@ -294,16 +323,30 @@ Reglas:
 - "crear_obra" cuando dice "cargá una obra nueva", "agregá la obra X", "abrí una obra en tal dirección". Poné el nombre y lo que aclare (dirección, estado).
 - "recordar" SIEMPRE que Sebastián te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora.
-- "cargar_gasto" cuando dice "cargá un gasto de nafta de 15000", "anotá un gasto de comida 8000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto). No lleva obra.
-- "cargar_pago" SOLO para REGISTRAR/ANOTAR en la planilla de Pagos un pago (no mueve plata): "anotá/registrá/cargá un pago a Humberto en Castores 475 de 50000", "anotá que le pagué a Juan 30 lucas". Palabras clave: anotá, registrá, cargá. Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método. Si el pedido es "pagale/mandale plata a X" (sin decir anotar/registrar), NO uses esto: usá pagar_mp.
+- "guardar_contacto" cuando te pide guardar/agendar un contacto o te dicta/pega datos de personas: "guardá el contacto de Enrico 1145678900", "agendá a Juan Pérez 11...", o una lista "cargá estos contactos: Juan 11...; María 11...". Poné todos en el array "contactos" (nombre + telefono, y email/alias/nota si los da). Si te pegan varios juntos, cargalos TODOS de una.
+- "cargar_gasto" cuando dice "cargá un gasto de nafta 15000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto, sin obra). IMPORTANTE: si te da VARIOS gastos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "gastos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una.
+- "cargar_pago" SOLO para REGISTRAR/ANOTAR en la planilla de Pagos uno o varios pagos (no mueve plata): "anotá/registrá/cargá un pago a Humberto en Castores 475 de 50000", "anotá que le pagué a Juan 30 lucas". Palabras clave: anotá, registrá, cargá. IMPORTANTE: si te da VARIOS pagos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "pagos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una. Cada pago va con la fecha de hoy salvo que diga otra. Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método. Si el pedido es "pagale/mandale plata a X" (sin decir anotar/registrar), NO uses esto: usá pagar_mp.
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
 - "whatsapp" cuando dice "mandale un mensaje a X que…" o "escribile a X". Uso los teléfonos de Personal; le dejo el WhatsApp listo para enviar con un toque.
-- "preguntar_ia" solo si pide expresamente consultar a la IA de V+V.
+- "preguntar_ia" es TU ÚNICO canal hacia V+V. Usalo SIEMPRE que te digan "mandale/decile/avisale/pasale/preguntale/consultale a V+V", "que V+V…", "avisá a la oficina/al equipo", o cualquier cosa dirigida a V+V. IMPORTANTE: vos sos DE V+V (de la casa); esto llega al equipo/IA de V+V, NUNCA a Belfast ni al cliente. Belfast es una empresa EXTERNA (el cliente) y NO tenés que mandarle nada salvo que te lo pidan explícitamente por su nombre. Si dudás entre V+V y Belfast, es V+V.
 - "traer_fotos"/"traer_plano" para mostrar fotos, videos o planos en el chat.
 Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
 
-  function parseAccion(txt) { const m = txt.match(/<<ACCION>>([\s\S]*?)<<FIN>>/); if (!m) return { limpio: txt, accion: null }; let a = null; try { a = JSON.parse(m[1].trim()); } catch { } return { limpio: txt.replace(m[0], "").trim(), accion: a }; }
+  function parseAccion(txt) {
+    const t = txt || "";
+    const blocks = []; const usados = [];
+    const re = /<<ACCION>>([\s\S]*?)(?:<<FIN>>|$)/g; let mm;
+    while ((mm = re.exec(t)) !== null) { usados.push(mm[0]); const raw = (mm[1] || "").trim(); let a = null; try { a = JSON.parse(raw); } catch { const i = raw.indexOf("{"), j = raw.lastIndexOf("}"); if (i >= 0 && j > i) { try { a = JSON.parse(raw.slice(i, j + 1)); } catch { } } } if (a && a.tipo) blocks.push(a); }
+    let limpio = t; usados.forEach(u => { limpio = limpio.replace(u, ""); }); limpio = limpio.trim();
+    if (blocks.length === 0) return { limpio: txt, accion: null };
+    if (blocks.length === 1) return { limpio, accion: blocks[0] };
+    const mergeField = { cargar_pago: "pagos", cargar_gasto: "gastos", guardar_contacto: "contactos" };
+    const tipos = [...new Set(blocks.map(b => b.tipo))];
+    if (tipos.length === 1 && mergeField[tipos[0]]) { const f = mergeField[tipos[0]]; const items = []; blocks.forEach(b => { if (Array.isArray(b[f])) items.push(...b[f]); else items.push(b); }); return { limpio, accion: { tipo: tipos[0], [f]: items } }; }
+    for (const tp of ["cargar_pago", "cargar_gasto", "guardar_contacto"]) { const grp = blocks.filter(b => b.tipo === tp); if (grp.length) { const f = mergeField[tp]; const items = []; grp.forEach(b => { if (Array.isArray(b[f])) items.push(...b[f]); else items.push(b); }); return { limpio, accion: { tipo: tp, [f]: items } }; } }
+    return { limpio, accion: blocks[0] };
+  }
 
   async function persistPagos(next) {
     pagosWrite.current = Date.now(); setPagos(next);
@@ -397,6 +440,22 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
       setDb(d => ({ ...d, obras: next })); setObraEdit(null);
     })();
+  }
+  async function subirAObra(obraId, e, tipo) {
+    const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
+    let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+    const fotosNew = [], archNew = [];
+    for (const f of files) {
+      const data = await fileToDataUrl(f);
+      const url = await subirBucket(data, f.name);
+      if (!url) { alert(`No pude subir "${f.name}" a la nube. Revisá el bucket 'bco-media' en Supabase.`); continue; }
+      if (tipo === "foto") fotosNew.push({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), url, fecha: hoyStr(), from: "sebastian", nota: "" });
+      else archNew.push({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), nombre: f.name, url, fecha: hoyStr(), from: "sebastian" });
+    }
+    const next = arr.map(o => o.id === obraId ? { ...o, fotos: [...fotosNew, ...(o.fotos || [])], archivos: [...archNew, ...(o.archivos || [])] } : o);
+    try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
+    await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
+    setDb(d => ({ ...d, obras: next })); setSubiendoArch(false);
   }
   function crearObra(a) {
     const nueva = { id: uid() + Date.now(), nombre: a.nombre || a.obra || "Obra nueva", estado: a.estado || "En curso", avance: Number(a.avance) || 0, direccion: a.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [] };
@@ -497,7 +556,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     for (let i = 0; i < 15; i++) {
       await new Promise(r => setTimeout(r, 2000));
       let cur = []; try { const r = await storage.get("ia_dialogo"); if (r?.value) cur = JSON.parse(r.value); } catch { }
-      const ans = cur.find(m => m.tipo === "a" && m.from === "vv" && (m.ts || 0) > q.ts);
+      const ans = cur.find(m => m.tipo === "a" && m.from === "vv" && (m.qid === q.id || m.to === "sebastian") && (m.ts || 0) > q.ts);
       if (ans) return ans.texto;
     }
     return "La IA de V+V no respondió (puede estar sin crédito, o la respuesta automática apagada). Igual, puedo responderte yo con los datos que tengo.";
@@ -516,6 +575,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (hist.length && hist[hist.length - 1].role === "user") hist[hist.length - 1] = { role: "user", content: blocks }; else hist.push({ role: "user", content: blocks });
     }
     const resp = await callAI(hist, buildSystem(), apiKey, useSearch);
+    if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(resp || ""))) { setMsgs(prev => [...prev, { role: "assistant", content: "⚠ Me quedé sin crédito de IA por ahora. Para que vuelva a funcionar, hay que recargar crédito de la API en console.anthropic.com (Plans & Billing). Avisá a quien maneja la cuenta." }]); setBusy(false); return; }
     const { limpio, accion } = parseAccion(resp);
     let extra = {};
     if (accion && accion.tipo === "pagar_mp") {
@@ -573,14 +633,32 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (ok) setMsgs(prev => [...prev, { role: "assistant", content: `✅ PDF generado y descargado: "${accion.titulo || "documento"}". Buscalo en tus Descargas.` }]);
       setBusy(false); return;
     }
+    if (accion && accion.tipo === "guardar_contacto") {
+      const arr = Array.isArray(accion.contactos) ? accion.contactos : [accion];
+      let cur = contactos || [];
+      try { const r = await storage.get("sebastian_contactos"); if (r?.value) cur = JSON.parse(r.value); } catch { }
+      const existTel = new Set(cur.map(c => String(c.telefono || "").replace(/\D/g, "")).filter(Boolean));
+      const nuevos = arr.filter(x => x && (x.nombre || x.telefono)).map(a => ({ id: uid() + Date.now() + Math.floor(Math.random() * 99999), nombre: a.nombre || "", telefono: String(a.telefono || "").replace(/[^\d+]/g, ""), email: a.email || "", alias: a.alias || "", nota: a.nota || "" })).filter(n => { const t = n.telefono.replace(/\D/g, ""); return !(t && existTel.has(t)); });
+      if (nuevos.length) await persistContactos([...cur, ...nuevos]);
+      setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `📇 Guardé ${nuevos.length} contacto${nuevos.length > 1 ? "s" : ""}:\n${nuevos.map(c => `• ${c.nombre}${c.telefono ? " — " + c.telefono : ""}`).join("\n")}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Contactos.` : "Esos contactos ya estaban cargados." }]);
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "cargar_gasto") {
-      const g = cargarGasto(accion);
-      setMsgs(prev => [...prev, { role: "assistant", content: `💸 Gasto cargado: ${g.concepto} · $${g.monto.toLocaleString("es-AR")} (${g.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Gastos.` }]);
+      const arr = Array.isArray(accion.gastos) ? accion.gastos : [accion];
+      const nuevos = arr.filter(x => x && (x.concepto || x.texto || x.monto != null)).map(a => ({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }));
+      if (nuevos.length) persistGastos([...nuevos, ...(gastos || [])]);
+      const total = nuevos.reduce((s, g) => s + g.monto, 0);
+      const detalle = nuevos.map(g => `• ${g.concepto} — $${g.monto.toLocaleString("es-AR")}`).join("\n");
+      setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `💸 Cargué ${nuevos.length} gasto${nuevos.length > 1 ? "s" : ""} (total $${total.toLocaleString("es-AR")}):\n${detalle}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Gastos.` : "No pude leer los gastos. Decímelos con concepto y monto." }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "cargar_pago") {
-      const p = cargarPago(accion);
-      setMsgs(prev => [...prev, { role: "assistant", content: `✅ Pago cargado: ${p.persona || "—"}${p.monto ? ` · $${p.monto.toLocaleString("es-AR")}` : ""}${p.obra ? ` · ${p.obra}` : ""} · ${p.estado}${p.metodo ? ` · ${p.metodo}` : ""} (${p.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Pagos y lo podés exportar a Excel.` }]);
+      const arr = Array.isArray(accion.pagos) ? accion.pagos : [accion];
+      const nuevos = arr.filter(x => x && (x.persona || x.monto != null)).map(a => { const obra = a.obra ? (db.obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(a.obra).toLowerCase())) : null; return { id: uid() + Date.now() + Math.floor(Math.random() * 9999), persona: a.persona || "", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, obra: (obra && obra.nombre) || a.obra || "", obra_id: (obra && obra.id) || "", estado: (a.estado || "pendiente").toLowerCase().includes("pag") ? "pagado" : "pendiente", metodo: a.metodo || "", nota: a.nota || "", fecha: a.fecha || hoyStr(), ts: Date.now() }; });
+      if (nuevos.length) persistPagos([...nuevos, ...(pagos || [])]);
+      const total = nuevos.reduce((s, p) => s + p.monto, 0);
+      const detalle = nuevos.map(p => `• ${p.persona || "—"} — $${p.monto.toLocaleString("es-AR")}${p.obra ? ` (${p.obra})` : ""} · ${p.estado}`).join("\n");
+      setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `✅ Cargué ${nuevos.length} pago${nuevos.length > 1 ? "s" : ""} (total $${total.toLocaleString("es-AR")}) con fecha ${hoyStr()}:\n${detalle}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Pagos, agrupados por día.` : "No pude leer los pagos. Decime persona y monto de cada uno." }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "whatsapp") {
@@ -594,7 +672,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setBusy(false); return;
     }
     if (accion && accion.tipo === "preguntar_ia") {
-      setMsgs(prev => [...prev, { role: "assistant", content: (limpio || "Consulto a la IA de V+V…") }]);
+      setMsgs(prev => [...prev, { role: "assistant", content: (limpio || "Se lo paso a V+V…") }]);
       const r = await preguntarIA(accion.texto);
       setMsgs(prev => [...prev, { role: "assistant", content: `🔗 IA de V+V: ${r}` }]);
       setBusy(false); return;
@@ -635,11 +713,11 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v19 · tabs-texto</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v34 · Finanzas {(finResumen || (finRaw && (finRaw.obras || []).length)) ? "✓" : "—"}</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["gastos", "Gastos"], ["agenda", "Agenda"], ["archivos", "Archivos"], ["modelos", "Modelos"], ["obras", "Obras"], ["contactos", "Contactos"], ["camaras", "Cámaras"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const cnt = id === "pagos" ? (pagos || []).length : id === "gastos" ? (gastos || []).length : id === "archivos" ? (archivos || []).length : id === "agenda" ? (agenda || []).length : id === "modelos" ? (modelos || []).length : id === "contactos" ? (contactos || []).length : id === "camaras" ? (camaras || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: vista === id ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["gastos", "Gastos"], ["agenda", "Agenda"], ["archivos", "Archivos"], ["modelos", "Modelos"], ["obras", "Obras"], ["contactos", "Contactos"], ["camaras", "Cámaras"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const cnt = id === "pagos" ? (pagos || []).length : id === "gastos" ? (gastos || []).length : id === "archivos" ? (archivos || []).length : id === "agenda" ? (agenda || []).length : id === "modelos" ? (modelos || []).length : id === "contactos" ? (contactos || []).length : id === "camaras" ? (camaras || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
@@ -650,7 +728,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "archivos" && <ArchivosBody archivos={archivos} cat={catArch} setCat={setCatArch} archRef={archRef} subir={subirArchivos} subiendo={subiendoArch} borrar={(id) => persistArch((archivos || []).filter(a => a.id !== id))} />}
     {vista === "modelos" && <ModelosBody modelos={modelos} sel={modeloSel} setSel={setModeloSel} subir={() => modeloRef.current && modeloRef.current.click()} borrar={(id) => { const next = (modelos || []).filter(m => m.id !== id); setModelos(next); if (modeloSel === id) setModeloSel(next[0]?.id || ""); storage.set("sebastian_modelos", JSON.stringify(next)).catch(() => { }); }} />}
-    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "" })} />}
+    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "" })} subirAObra={subirAObra} subiendo={subiendoArch} />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
     <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -726,19 +804,25 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pendiente</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: "#9A6B1E", marginTop: 3 }}>${totalPend.toLocaleString("es-AR")}</div></div>
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pagado</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totalPag.toLocaleString("es-AR")}</div></div>
     </div>
-    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px", lineHeight: 1.6 }}>Todavía no cargaste pagos.<br />Desde el Chat, decime por ejemplo:<br /><span style={{ color: T.sub }}>"cargá un pago a Humberto en Castores 475 de 50000 en efectivo"</span></div>}
-    {lista.map(p => (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `2px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{p.persona || "—"} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(p.monto || 0).toLocaleString("es-AR")}</span></div>
-          <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{p.obra || "sin obra"} · {p.fecha}{p.metodo ? ` · ${p.metodo}` : ""}{p.nota ? ` · ${p.nota}` : ""}</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: p.estado === "pagado" ? T.accent : "#B98A2E", border: `1px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: 5, padding: "2px 7px" }}>{p.estado}</span>
-          <button onClick={() => borrar(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer" }}>✕</button>
-        </div>
+    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px", lineHeight: 1.6 }}>Todavía no cargaste pagos.<br />Desde el Chat, decime por ejemplo:<br /><span style={{ color: T.sub }}>"cargá pagos: Humberto 50000 Castores efectivo, Juan 30000 pendiente, Luis 20000 pagado"</span></div>}
+    {(() => { const grupos = []; lista.forEach(p => { const k = p.fecha || "sin fecha"; let g = grupos.find(x => x.fecha === k); if (!g) { g = { fecha: k, items: [] }; grupos.push(g); } g.items.push(p); }); return grupos.map(g => { const esHoy = g.fecha === hoyStr(); const sub = g.items.reduce((a, p) => a + (p.monto || 0), 0); const subPend = g.items.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0); return (<div key={g.fecha} style={{ marginBottom: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "14px 0 8px", paddingBottom: 5, borderBottom: `1px solid ${esHoy ? BRASS : T.border}` }}>
+        <span style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: esHoy ? BRASS : T.sub }}>{esHoy ? "Hoy · " : ""}{g.fecha}</span>
+        <span style={{ fontSize: 11, color: T.muted, fontWeight: 700 }}>{g.items.length} pago{g.items.length > 1 ? "s" : ""} · ${sub.toLocaleString("es-AR")}{subPend > 0 ? ` (pend. $${subPend.toLocaleString("es-AR")})` : ""}</span>
       </div>
-    </div>))}
+      {g.items.map(p => (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `2px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{p.persona || "—"} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(p.monto || 0).toLocaleString("es-AR")}</span></div>
+            <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{p.obra || "sin obra"}{p.metodo ? ` · ${p.metodo}` : ""}{p.nota ? ` · ${p.nota}` : ""}</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: p.estado === "pagado" ? T.accent : "#B98A2E", border: `1px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: 5, padding: "2px 7px" }}>{p.estado}</span>
+            <button onClick={() => borrar(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer" }}>✕</button>
+          </div>
+        </div>
+      </div>))}
+    </div>); }); })()}
   </div>);
 }
 
@@ -799,7 +883,7 @@ function ArchivosBody({ archivos, cat, setCat, archRef, subir, subiendo, borrar 
   </div>);
 }
 
-function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva }) {
+function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra, subiendo }) {
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     {obraEdit && obraEdit._new && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Nueva obra</div>
@@ -836,6 +920,15 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva }) {
         </div>
         <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "" })} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Editar</button>
       </div>)}
+      {!(obraEdit && obraEdit.id === o.id) && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ display: "flex", gap: 7 }}>
+          <label style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: subiendo ? "default" : "pointer", opacity: subiendo ? .5 : 1 }}>📷 Foto<input type="file" accept="image/*" multiple disabled={subiendo} onChange={e => subirAObra(o.id, e, "foto")} style={{ display: "none" }} /></label>
+          <label style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: subiendo ? "default" : "pointer", opacity: subiendo ? .5 : 1 }}>📎 Archivo<input type="file" multiple disabled={subiendo} onChange={e => subirAObra(o.id, e, "archivo")} style={{ display: "none" }} /></label>
+        </div>
+        {subiendo && <div style={{ fontSize: 11, color: T.sub, textAlign: "center", marginTop: 6 }}>Subiendo…</div>}
+        {(o.fotos || []).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 9 }}>{(o.fotos || []).slice(0, 10).map((ft, i) => <a key={i} href={ft.url} target="_blank" rel="noreferrer"><img src={ft.url} alt="" style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 7, display: "block" }} /></a>)}</div>}
+        {(o.archivos || []).length > 0 && <div style={{ marginTop: 8 }}>{(o.archivos || []).map((ar, i) => <a key={i} href={ar.url} target="_blank" rel="noreferrer" download={ar.nombre} style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.accent, textDecoration: "underline", marginTop: 3 }}>📎 {ar.nombre}</a>)}</div>}
+      </div>}
     </div>))}
     <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>⚠ Los cambios en obras se sincronizan con la app de V+V (los ve tu equipo).</div>
   </div>);
@@ -860,11 +953,16 @@ function ModelosBody({ modelos, sel, setSel, subir, borrar }) {
 
 function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcono, subirFondo }) {
   const PRESETS = [
-    { n: "Oficina", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813" },
-    { n: "Grafito", accent: "#B08D57", navy: "#141414", bg: "#1B1B1D", card: "#232326", text: "#ECEAE4" },
-    { n: "Borgoña", accent: "#7A2E3A", navy: "#201314", bg: "#F5F0EE", card: "#FFFFFF", text: "#1E1517" },
-    { n: "Azul noche", accent: "#2E5A86", navy: "#0F1B2D", bg: "#EEF2F6", card: "#FFFFFF", text: "#14202E" },
-    { n: "Arena", accent: "#9A6B3F", navy: "#2A2118", bg: "#F7F2E9", card: "#FFFFFF", text: "#241C12" },
+    { n: "Oficina", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813", brass: "#A17C3E", borde: "#E5E1D6", sub: "#6E695E" },
+    { n: "Grafito", accent: "#B08D57", navy: "#141414", bg: "#1B1B1D", card: "#232326", text: "#ECEAE4", brass: "#B08D57", borde: "#33343A", sub: "#A8A69E" },
+    { n: "Borgoña", accent: "#7A2E3A", navy: "#201314", bg: "#F5F0EE", card: "#FFFFFF", text: "#1E1517", brass: "#B08D57", borde: "#E6DAD8", sub: "#6E5B5D" },
+    { n: "Azul noche", accent: "#2E5A86", navy: "#0F1B2D", bg: "#EEF2F6", card: "#FFFFFF", text: "#14202E", brass: "#B0894F", borde: "#DAE1EA", sub: "#5B6B7F" },
+    { n: "Arena", accent: "#9A6B3F", navy: "#2A2118", bg: "#F7F2E9", card: "#FFFFFF", text: "#241C12", brass: "#B08D57", borde: "#E8DFCF", sub: "#6E655A" },
+    { n: "Bosque", accent: "#2F5D3A", navy: "#10241A", bg: "#EFF4EE", card: "#FFFFFF", text: "#15291C", brass: "#C79A3E", borde: "#DCE7DA", sub: "#5C6E5C" },
+    { n: "Medianoche", accent: "#5B7CC7", navy: "#0B1220", bg: "#12182A", card: "#1B2236", text: "#E6EAF2", brass: "#8FA6D6", borde: "#2A3350", sub: "#9AA6C0" },
+    { n: "Cobre", accent: "#B5623A", navy: "#241812", bg: "#F8F1EC", card: "#FFFFFF", text: "#231610", brass: "#C08A5A", borde: "#EBDDD3", sub: "#736258" },
+    { n: "Pizarra", accent: "#475569", navy: "#1E293B", bg: "#F1F5F9", card: "#FFFFFF", text: "#0F172A", brass: "#94A3B8", borde: "#DDE3EB", sub: "#5B6B7F" },
+    { n: "Violeta", accent: "#6D4AA0", navy: "#1E1330", bg: "#F4F0FA", card: "#FFFFFF", text: "#1E1330", brass: "#B08D57", borde: "#E5DDF0", sub: "#6A5E7C" },
   ];
   const Row = ({ label, hint, children }) => (<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
     <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{label}</div>{hint && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{hint}</div>}</div>
@@ -880,7 +978,7 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
     </div>
     <Sec t="Estilos rápidos" />
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 4px" }}>
-      {PRESETS.map(p => <button key={p.n} onClick={() => saveCfg({ ...cfg, accent: p.accent, navy: p.navy, bg: p.bg, card: p.card, text: p.text })} style={{ display: "flex", alignItems: "center", gap: 7, background: T.card, border: `1px solid ${T.border}`, borderRadius: 20, padding: "6px 12px 6px 8px", cursor: "pointer" }}>
+      {PRESETS.map(p => <button key={p.n} onClick={() => saveCfg({ ...cfg, accent: p.accent, navy: p.navy, bg: p.bg, card: p.card, text: p.text, brass: p.brass || cfg.brass, borde: p.borde || cfg.borde, sub: p.sub || cfg.sub })} style={{ display: "flex", alignItems: "center", gap: 7, background: T.card, border: `1px solid ${T.border}`, borderRadius: 20, padding: "6px 12px 6px 8px", cursor: "pointer" }}>
         <span style={{ display: "flex" }}><span style={{ width: 14, height: 14, borderRadius: "50%", background: p.navy, border: "1px solid rgba(0,0,0,.1)" }} /><span style={{ width: 14, height: 14, borderRadius: "50%", background: p.accent, marginLeft: -5, border: "1px solid rgba(0,0,0,.1)" }} /><span style={{ width: 14, height: 14, borderRadius: "50%", background: p.bg, marginLeft: -5, border: "1px solid rgba(0,0,0,.12)" }} /></span>
         <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.n}</span>
       </button>)}
@@ -893,6 +991,8 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
     <Sec t="Tipografía" />
     <Row label="Títulos con serif" hint="Estilo clásico/gerencial en los títulos"><button onClick={() => setC("serif", !cfg.serif)} style={{ width: 44, height: 26, borderRadius: 13, background: cfg.serif ? T.accent : T.border, border: "none", position: "relative", cursor: "pointer" }}><span style={{ position: "absolute", top: 3, left: cfg.serif ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} /></button></Row>
     <Row label={`Tamaño de letra · ${cfg.escala || 100}%`}><input type="range" min="85" max="130" value={cfg.escala || 100} onChange={e => setC("escala", Number(e.target.value))} style={{ width: 140 }} /></Row>
+    <Row label="Tipo de letra"><select value={cfg.fontId || "inter"} onChange={e => setC("fontId", e.target.value)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 15, color: T.text }}>{Object.entries(FONTS).map(([id, f]) => <option key={id} value={id}>{f.n}</option>)}</select></Row>
+    <Row label="Estilo de esquinas"><div style={{ display: "flex", gap: 6 }}>{ESQUINAS.map(e => <button key={e.n} onClick={() => setC("rsm", e.v)} style={{ background: (cfg.rsm != null ? cfg.rsm : 10) === e.v ? T.accent : T.bg, color: (cfg.rsm != null ? cfg.rsm : 10) === e.v ? "#fff" : T.sub, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{e.n}</button>)}</div></Row>
 
     <Sec t="Colores" />
     <Row label="Acento (botones)"><Color k="accent" /></Row>
@@ -900,6 +1000,9 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
     <Row label="Fondo"><Color k="bg" /></Row>
     <Row label="Tarjetas"><Color k="card" /></Row>
     <Row label="Texto"><Color k="text" /></Row>
+    <Row label="Detalle dorado" hint="La línea fina y los rótulos"><Color k="brass" /></Row>
+    <Row label="Bordes"><Color k="borde" /></Row>
+    <Row label="Texto suave" hint="Subtítulos y notas"><Color k="sub" /></Row>
 
     <Sec t="Foto de fondo" />
     <input ref={fondoRef} type="file" accept="image/*" onChange={subirFondo} style={{ display: "none" }} />
@@ -956,11 +1059,48 @@ function GastosBody({ gastos, onAdd, exportar, borrar }) {
 
 function ContactosBody({ contactos, onSave }) {
   const [form, setForm] = React.useState(null);
+  const vcfRef = React.useRef(null);
   const lista = (contactos || []).slice().sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
   function guardar() { if (!form.nombre?.trim()) { alert("Poné al menos el nombre."); return; } const arr = form.id ? lista.map(c => c.id === form.id ? form : c) : [...lista, { ...form, id: uid() + Date.now() }]; onSave(arr); setForm(null); }
   function borrar(id) { if (confirm("¿Borrar este contacto?")) onSave(lista.filter(c => c.id !== id)); }
+  const limpiaTel = (t) => String(t || "").replace(/[^\d+]/g, "");
+  function agregarImportados(nuevos) {
+    if (!nuevos.length) { alert("No se seleccionó ningún contacto."); return; }
+    const existTel = new Set(lista.map(c => String(c.telefono || "").replace(/\D/g, "")).filter(Boolean));
+    const existNom = new Set(lista.map(c => (c.nombre || "").toLowerCase().trim()).filter(Boolean));
+    const add = nuevos.filter(n => { const t = String(n.telefono || "").replace(/\D/g, ""); const nm = (n.nombre || "").toLowerCase().trim(); if (t && existTel.has(t)) return false; if (!t && nm && existNom.has(nm)) return false; return n.nombre || t; }).map(n => ({ id: uid() + Date.now() + Math.floor(Math.random() * 99999), nombre: n.nombre || "", telefono: limpiaTel(n.telefono), email: n.email || "", alias: "", nota: "" }));
+    if (!add.length) { alert("Esos contactos ya estaban cargados."); return; }
+    onSave([...lista, ...add]);
+    alert(`Importé ${add.length} contacto${add.length > 1 ? "s" : ""} de la agenda.`);
+  }
+  async function importarAgenda() {
+    if (navigator.contacts && navigator.contacts.select) {
+      try {
+        const sel = await navigator.contacts.select(["name", "tel", "email"], { multiple: true });
+        agregarImportados((sel || []).map(c => ({ nombre: (c.name && c.name[0]) || "", telefono: (c.tel && c.tel[0]) || "", email: (c.email && c.email[0]) || "" })));
+      } catch (e) { }
+    } else { vcfRef.current?.click(); }
+  }
+  function parseVCard(text) {
+    const cards = String(text).split(/BEGIN:VCARD/i).slice(1);
+    return cards.map(card => {
+      const fn = (card.match(/\nFN[^:\n]*:(.+)/i) || [])[1] || (card.match(/\nN[^:\n]*:(.+)/i) || [])[1] || "";
+      const tel = (card.match(/\nTEL[^:\n]*:(.+)/i) || [])[1] || "";
+      const email = (card.match(/\nEMAIL[^:\n]*:(.+)/i) || [])[1] || "";
+      return { nombre: fn.replace(/;/g, " ").trim(), telefono: tel.trim(), email: email.trim() };
+    }).filter(c => c.nombre || c.telefono);
+  }
+  async function onVcf(e) {
+    const f = e.target.files?.[0]; if (!f) return; e.target.value = "";
+    try { const text = await f.text(); const nuevos = parseVCard(text); if (!nuevos.length) { alert("No encontré contactos en ese archivo. Tiene que ser un archivo .vcf (tarjeta de contacto)."); return; } agregarImportados(nuevos); }
+    catch { alert("No pude leer el archivo."); }
+  }
   const waLink = (c) => { const clean = String(c.telefono || "").replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : "549" + clean; return `https://wa.me/${num}`; };
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <input ref={vcfRef} type="file" accept=".vcf,text/vcard,text/x-vcard" multiple onChange={onVcf} style={{ display: "none" }} />
+    {!form && <button onClick={() => { try { window.location.href = "contacts://"; } catch { } setTimeout(() => { try { window.location.href = "mobilecontacts://"; } catch { } }, 400); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}>📱 Abrir mi agenda de contactos</button>}
+    {!form && <button onClick={importarAgenda} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}>📇 Importar contactos (archivo .vcf)</button>}
+    {!form && <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 14, padding: "0 2px" }}>Tocá <b>"Abrir mi agenda"</b> → elegí el contacto → <b>Compartir → Guardar en Archivos</b>. Después volvé y tocá <b>"Importar"</b> para subirlo. (En iPhone la app no puede leer la agenda sola; Apple lo bloquea.)</div>}
     {!form && <button onClick={() => setForm({ nombre: "", telefono: "", email: "", alias: "", nota: "" })} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Nuevo contacto favorito</button>}
     {form && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>{form.id ? "Editar contacto" : "Nuevo contacto"}</div>
@@ -970,7 +1110,7 @@ function ContactosBody({ contactos, onSave }) {
         <button onClick={guardar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
       </div>
     </div>}
-    {lista.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Sin contactos favoritos.<br />Cargalos y después decime: <span style={{ color: T.sub }}>"mandale un WhatsApp a Enrico"</span>.</div>}
+    {lista.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Sin contactos todavía.<br />Tocá <span style={{ color: T.sub }}>"📇 Importar de la agenda"</span> o cargá uno a mano. Después decime: <span style={{ color: T.sub }}>"pasame el contacto de Enrico"</span> o <span style={{ color: T.sub }}>"mandale un WhatsApp a Enrico"</span>.</div>}
     {lista.map(c => (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div style={{ minWidth: 0 }}>

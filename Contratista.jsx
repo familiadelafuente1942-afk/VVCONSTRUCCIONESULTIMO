@@ -107,6 +107,7 @@ export default function ContratistaApp() {
   }
 
   function nuevo() { setForm({ obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u" }], nota: "", fecha_pedido: new Date().toISOString().slice(0, 10), fecha_necesita: "" }); }
+  function editar(p) { setForm({ id: p.id, obra_id: p.obra_id, items: (p.items && p.items.length ? p.items.map(it => ({ nombre: it.nombre || "", cantidad: it.cantidad != null ? String(it.cantidad) : "", unidad: it.unidad || "u" })) : [{ nombre: "", cantidad: "", unidad: "u" }]), nota: p.nota || "", fecha_pedido: p.fecha_pedido || "", fecha_necesita: p.fecha_necesita || "" }); }
   function fmtISO(iso) { if (!iso) return ""; const [y, m, d] = String(iso).split("-"); return d && m && y ? `${d}/${m}/${y}` : iso; }
   function icsEntrega(p) {
     const dia = String(p.fecha_necesita || "").replace(/-/g, ""); if (dia.length !== 8) return "";
@@ -133,8 +134,14 @@ export default function ContratistaApp() {
   async function guardar() {
     const items = (form.items || []).filter(it => (it.nombre || "").trim()).map(it => ({ nombre: it.nombre.trim(), cantidad: it.cantidad != null ? String(it.cantidad) : "", unidad: it.unidad || "u" }));
     if (!items.length) { alert("Agregá al menos un material."); return; }
-    const p = { id: uid() + Date.now(), obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), fecha_pedido: form.fecha_pedido || "", fecha_necesita: form.fecha_necesita || "", ts: Date.now(), de: "contratista", empresa, leido: false, leidoFecha: "" };
     const r = await storage.get("vv_matpedidos"); let arr = []; if (r?.value) { try { arr = JSON.parse(r.value); } catch { } }
+    if (form.id) {
+      const next = arr.map(x => x.id === form.id ? { ...x, obra_id: form.obra_id, items, nota: form.nota || "", fecha_pedido: form.fecha_pedido || "", fecha_necesita: form.fecha_necesita || "", editadoFecha: hoyStr() } : x);
+      const pid = form.id; await persistMat(next); setForm(null); setWaFor(pid);
+      alert("✓ Pedido actualizado. Ya se ve así en V+V y Belfast. Podés reenviarlo por WhatsApp abajo.");
+      return;
+    }
+    const p = { id: uid() + Date.now(), obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), fecha_pedido: form.fecha_pedido || "", fecha_necesita: form.fecha_necesita || "", ts: Date.now(), de: "contratista", empresa, leido: false, leidoFecha: "" };
     await persistMat([p, ...arr]); setForm(null); setWaFor(p.id);
     pushNotify("Nuevo pedido de materiales", `${empresa}: ${items.map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ").slice(0, 90)}`, "");
     alert("✓ Pedido enviado a V+V y Belfast. Ahora podés mandarlo por WhatsApp al encargado de obra (abajo).");
@@ -217,7 +224,7 @@ export default function ContratistaApp() {
         </div>}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 7, gap: 8 }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado${p.leidoFecha ? " · " + p.leidoFecha : ""}` : "● Pendiente"}</div>
-          {mio && <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Eliminar</button>}
+          {mio && <div style={{ display: "flex", gap: 6, flexShrink: 0 }}><button onClick={() => editar(p)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button><button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Eliminar</button></div>}
         </div>
         {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 6 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
         <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 9, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Mandar por WhatsApp al encargado</button>
@@ -232,7 +239,7 @@ export default function ContratistaApp() {
 
     {form && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={() => setForm(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 620, padding: 20, maxHeight: "90vh", overflowY: "auto" }}>
-        <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 14 }}>Nuevo pedido de materiales</div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 14 }}>{form.id ? "Editar pedido de materiales" : "Nuevo pedido de materiales"}</div>
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
         <select value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px", fontSize: 14, color: T.text, margin: "6px 0 14px", boxSizing: "border-box" }}>
           {obras.length === 0 && <option value="">(sin obras cargadas)</option>}
@@ -258,7 +265,7 @@ export default function ContratistaApp() {
         </div>
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Nota (opcional)</label>
         <textarea value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} rows={2} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13.5, color: T.text, margin: "6px 0 14px", boxSizing: "border-box", resize: "vertical" }} />
-        <button onClick={guardar} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Enviar pedido</button>
+        <button onClick={guardar} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{form.id ? "Guardar cambios" : "Enviar pedido"}</button>
       </div>
     </div>}
   </div>);
