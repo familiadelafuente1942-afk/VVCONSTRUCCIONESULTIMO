@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v93 (IA: boton hablar cuadrado con logo centrado, mas grande)
+// VERSION: v94 (particulares: agregar rubros propios ademas de los 28 fijos)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -361,7 +361,7 @@ const RUBROS_PROPIA = ["Lote", "Movimiento de suelo", "Materiales gruesos", "Mat
 const usdFmt = (n) => "US$" + Math.round(n || 0).toLocaleString("es-AR");
 function arsUnif(c, cotU) { const n = num(c.monto); if (c.moneda === "ars") return n; if (c.moneda === "usd") return cotU > 0 ? n * cotU : num(c.montoArs); return num(c.montoArs); }
 function usdUnif(c, cotU) { const n = num(c.monto); if (c.moneda === "usd") return n; if (c.moneda === "ars") return cotU > 0 ? n / cotU : num(c.montoUsd); return num(c.montoUsd); }
-function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef, m2, cotU }) {
+function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef, m2, cotU, extra, onDelRubro }) {
   const M2 = num(m2); const CU = num(cotU);
   const [open, setOpen] = useState(false);
   const [monto, setMonto] = useState(""); const [moneda, setMoneda] = useState("ars"); const [cotiz, setCotiz] = useState(cotizDef || ""); const [nota, setNota] = useState(""); const [base, setBase] = useState("total");
@@ -369,8 +369,9 @@ function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef, m2, cotU 
   const agregar = () => { const mo = numMoney(monto); if (mo <= 0) return; const ct = numMoney(cotiz); const total = (base === "m2" && M2 > 0) ? mo * M2 : mo; let ars, usdv; if (moneda === "usd") { usdv = total; ars = ct > 0 ? total * ct : 0; } else { ars = total; usdv = ct > 0 ? total / ct : 0; } onAdd({ cat: rubro, moneda, monto: total, cotiz: ct, montoArs: ars, montoUsd: usdv, nota: nota.trim(), base, valorUnit: base === "m2" ? mo : null }); if (ct > 0) setCotizDef(String(ct)); setMonto(""); setNota(""); };
   return <div style={{ borderBottom: `1px solid ${T.border}`, padding: "9px 0" }}>
     <div onClick={() => setOpen(o => !o)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", gap: 8 }}>
-      <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{rubro}{items.length > 0 ? <span style={{ fontSize: 10, color: T.muted, fontWeight: 700, marginLeft: 6 }}>· {items.length} {items.length === 1 ? "carga" : "cargas"}</span> : ""}</span>
+      <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{rubro}{extra ? <span style={{ fontSize: 9, color: BRASS, fontWeight: 700, marginLeft: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>propio</span> : ""}{items.length > 0 ? <span style={{ fontSize: 10, color: T.muted, fontWeight: 700, marginLeft: 6 }}>· {items.length} {items.length === 1 ? "carga" : "cargas"}</span> : ""}</span>
       {(subArs > 0 || subUsd > 0) ? <span style={{ fontSize: 11.5, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}><b style={{ color: T.accent }}>{usdFmt(subUsd)}</b> <span style={{ color: T.muted }}>/ {money(subArs)}</span></span> : <span style={{ fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>＋ cargar</span>}
+      {extra && items.length === 0 && <button onClick={e => { e.stopPropagation(); onDelRubro && onDelRubro(); }} title="Quitar rubro" style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13, flexShrink: 0, marginLeft: 2 }}>🗑</button>}
     </div>
     {(subArs > 0 && M2 > 0) && <div style={{ fontSize: 10, color: T.muted, textAlign: "right", marginTop: 2 }}>{usdFmt(subUsd / M2)} / {money(subArs / M2)} por m²</div>}
     {open && <div style={{ marginTop: 8, background: T.bg, borderRadius: 9, padding: 10 }}>
@@ -396,6 +397,9 @@ function PropiasPanel({ data, save }) {
   const [nombre, setNombre] = useState(""); const [abrir, setAbrir] = useState(false); const [expandir, setExpandir] = useState({}); const [subiendo, setSubiendo] = useState(""); const [pdfHtml, setPdfHtml] = useState(null); const [m2n, setM2n] = useState("");
   const [cotizDef, setCotizDef] = useState(String(data.config?.cotizUSD || ""));
   const addPropia = () => { if (!nombre.trim()) return; save({ ...data, propias: [...propias, { id: uid(), nombre: nombre.trim(), m2: numMoney(m2n), ventaUsd: 0, ventaArs: 0, costos: [], adjuntos: [], ts: Date.now() }] }); setNombre(""); setM2n(""); setAbrir(false); };
+  const [rubroNuevo, setRubroNuevo] = useState({});
+  const addRubro = (pid) => { const nom = String(rubroNuevo[pid] || "").trim(); if (!nom) return; upd(pid, p => { const ex = p.rubrosExtra || []; if (RUBROS_PROPIA.some(r => r.toLowerCase() === nom.toLowerCase()) || ex.some(r => r.toLowerCase() === nom.toLowerCase())) return p; return { ...p, rubrosExtra: [...ex, nom] }; }); setRubroNuevo(s => ({ ...s, [pid]: "" })); };
+  const delRubro = (pid, nom) => upd(pid, p => ({ ...p, rubrosExtra: (p.rubrosExtra || []).filter(r => r !== nom) }));
   const upd = (pid, fn) => save({ ...data, config: { ...(data.config || {}), cotizUSD: numMoney(cotizDef) || data.config?.cotizUSD }, propias: propias.map(p => p.id === pid ? fn(p) : p) });
   const addCosto = (pid, c) => upd(pid, p => ({ ...p, costos: [...(p.costos || []), { id: uid(), ts: Date.now(), ...c }] }));
   const delCosto = (pid, cid) => upd(pid, p => ({ ...p, costos: (p.costos || []).filter(x => x.id !== cid) }));
@@ -433,7 +437,13 @@ function PropiasPanel({ data, save }) {
         {sup > 0 && (vU > 0 || vA > 0) && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "right", marginTop: 3 }}>Venta {vU > 0 ? usdFmt(vU / sup) : money(vA / sup)}/m² · Resultado {vU > 0 ? usdFmt(resU / sup) : money(resA / sup)}/m²</div>}
         {(() => { const rt = {}; costos.forEach(c => { rt[c.cat] = (rt[c.cat] || 0) + arsUnif(c, cotU); }); const arr = Object.entries(rt).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]); const top = arr.map(([k, v]) => ({ label: k, value: v })); return <div style={{ marginTop: 10 }}><GraficoTorta titulo="Costos por rubro" items={top} centro={money(totArs)} centroSub="inversión" /><GraficoBarras titulo="Costos por rubro (ranking)" items={top} />{(vU > 0 || vA > 0) && <GraficoBarras titulo="Inversión vs resultado" items={[{ label: "Inversión", value: totArs, color: "#C2410C" }, { label: "Resultado", value: Math.max(0, resA), color: T.ok }]} />}</div>; })()}
         <button onClick={() => setExpandir(e => ({ ...e, [p.id]: !e[p.id] }))} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>{exp ? "Ocultar rubros ▲" : "Cargar / ver rubros ▼"}</button>
-        {exp && <div style={{ marginTop: 8 }}>{RUBROS_PROPIA.map(r => <RubroRow key={r} rubro={r} items={costos.filter(c => c.cat === r)} onAdd={(c) => addCosto(p.id, c)} onDel={(cid) => delCosto(p.id, cid)} cotizDef={cotizDef} setCotizDef={setCotizDef} m2={sup} cotU={cotU} />)}</div>}
+        {exp && <div style={{ marginTop: 8 }}>
+          {(() => { const extra = p.rubrosExtra || []; const usados = [...new Set(costos.map(c => c.cat))]; const custom = [...extra, ...usados.filter(u => !RUBROS_PROPIA.includes(u) && !extra.includes(u))]; const todos = [...RUBROS_PROPIA, ...custom]; return todos.map(r => <RubroRow key={r} rubro={r} items={costos.filter(c => c.cat === r)} onAdd={(c) => addCosto(p.id, c)} onDel={(cid) => delCosto(p.id, cid)} cotizDef={cotizDef} setCotizDef={setCotizDef} m2={sup} cotU={cotU} extra={custom.includes(r)} onDelRubro={() => delRubro(p.id, r)} />); })()}
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <input value={rubroNuevo[p.id] || ""} onChange={e => setRubroNuevo(s => ({ ...s, [p.id]: e.target.value }))} onKeyDown={e => { if (e.key === "Enter") addRubro(p.id); }} placeholder="Nuevo rubro (ej: Domótica, Ascensor…)" style={{ ...inpSm, flex: 1 }} />
+            <button onClick={() => addRubro(p.id)} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>+ Rubro</button>
+          </div>
+        </div>}
         {(p.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>{(p.adjuntos || []).map(m => <div key={m.url} style={{ position: "relative" }}>{m.tipo === "video" ? <video src={m.url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover", background: "#000" }} /> : <img src={m.url} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover" }} />}<button onClick={() => delAdj(p.id, m.url)} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button></div>)}</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <label style={{ flex: 1, textAlign: "center", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{subiendo === p.id ? "Subiendo…" : "📷 Foto/video"}<input type="file" accept="image/*,video/*" multiple onChange={e => { subirAdj(p.id, e.target.files); e.target.value = ""; }} style={{ display: "none" }} /></label>
