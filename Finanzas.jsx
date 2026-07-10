@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v84 (gastos: asignar obra desde la planilla + IA anota gasto sin obra)
+// VERSION: v85 (IA: guarda conversacion, comprime fotos HEIC, botones hablar enfocan)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -1465,7 +1465,12 @@ function descAccion(a) {
   return op + (mtxt ? " " + mtxt : "") + (a.rubro ? ` · ${a.rubro}` : "") + " · " + (a.objetivo || "sin asignar");
 }
 function AsistenteCargaTab({ data, save }) {
-  const [texto, setTexto] = useState(""); const [files, setFiles] = useState([]); const [cargando, setCargando] = useState(false); const [msgs, setMsgs] = useState([]); const [acciones, setAcciones] = useState([]); const [error, setError] = useState(""); const [subLogo, setSubLogo] = useState(false); const [mostrarTexto, setMostrarTexto] = useState(false);
+  const [texto, setTexto] = useState(""); const [files, setFiles] = useState([]); const [cargando, setCargando] = useState(false); const [msgs, setMsgs] = useState(() => { try { const l = localStorage.getItem("vv_ia_chat"); return l ? JSON.parse(l) : []; } catch { return []; } }); const [acciones, setAcciones] = useState([]); const [error, setError] = useState(""); const [subLogo, setSubLogo] = useState(false); const [mostrarTexto, setMostrarTexto] = useState(false);
+  const taRef = useRef(null);
+  useEffect(() => { try { const s = JSON.stringify(msgs.slice(-40)); localStorage.setItem("vv_ia_chat", s); storage.set("vv_ia_chat", s); } catch { } }, [msgs]);
+  useEffect(() => { if (msgs.length === 0) { (async () => { try { const r = await storage.get("vv_ia_chat"); if (r && r.value) { const arr = JSON.parse(r.value); if (Array.isArray(arr) && arr.length) setMsgs(arr); } } catch { } })(); } }, []);
+  const enfocar = () => { setMostrarTexto(true); setTimeout(() => { try { taRef.current && taRef.current.focus(); } catch { } }, 60); };
+  const comprimirImg = (file) => new Promise((res) => { try { const img = new window.Image(); const url = URL.createObjectURL(file); img.onload = () => { let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height; const max = 1600; if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); } const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h); const durl = c.toDataURL("image/jpeg", 0.8); URL.revokeObjectURL(url); res({ b64: durl.split(",")[1], media: "image/jpeg" }); }; img.onerror = () => { URL.revokeObjectURL(url); res(null); }; img.src = url; } catch { res(null); } });
   async function subirLogo(file) { if (!file) return; setSubLogo(true); try { const url = await subirArchivo(file); if (url) save({ ...data, config: { ...(data.config || {}), logo: url } }); else alert("No se pudo subir el logo."); } catch { alert("No se pudo subir el logo."); } setSubLogo(false); }
   const ents = { cliente: (data.obras || []).map(o => o.nombre), particular: (data.propias || []).map(p => p.nombre), sociedad: (data.sociedad || []).map(s => s.nombre), edificio: (data.edificios || []).map(e => e.nombre) };
   const socNames = (data.sociedad || []).flatMap(s => (s.socios || []).map(so => so.nombre));
@@ -1482,14 +1487,14 @@ Listas actuales:
 Reglas: El usuario SIEMPRE indica dónde cargar (ej: "cargar en sociedad un pago para el plomero de 50000" => modelo sociedad, operacion gasto, rubro "plomero", monto 50000). Si dice "anotá/anótame un gasto" SIN decir la obra (ej: "anotá 50000 de nafta"), usá modelo "cliente", operacion "gasto", rubro el concepto (nafta), objetivo "" (queda sin asignar; el usuario le pone la obra después en la planilla de Gastos). Para CREAR un presupuesto de obra de cliente usá operacion "obra" con nombre, m2, precioM2 (precio de venta al cliente por m2), costoM2 (costo por m2), plazoMeses, anticipoPct y rubros [{nombre,pct}] si los da; lo que no diga, dejalo en null/0. Convertí montos a entero (2.000.500 => 2000500). "dólares/USD/u$s" => usd, si no aclara => ars. Para particular y edificio la operacion de costos es "costo". Para agenda usá operacion "contacto" (nombre + telefono; poné "socio" en rubro si es socio, si no cliente). Para borrar personas: tipo "borrar", operacion "contacto", nombre. Si un PDF/foto tiene varias líneas, una acción por línea. NUNCA borres algo si no estás seguro; ante la duda no lo pongas y pedí aclaración en "respuesta". Si falta info, confianza "baja" y detallá en "falta". Si el usuario solo pregunta o saluda, devolvé acciones vacías y respondé en "respuesta". Hoy es ${hoyISO()}.`;
   const toB64 = (f) => new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(",")[1]); rd.onerror = () => rej(new Error("no se pudo leer")); rd.readAsDataURL(f); });
   const hablar = (txt) => { try { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(txt); u.lang = "es-AR"; window.speechSynthesis.speak(u); } catch { } };
-  const escuchar = () => { try { const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) { alert("En el iPhone usá el micrófono del teclado para dictar dentro del cuadro de texto."); return; } const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = false; rec.onresult = (e) => setTexto(t => (t ? t + " " : "") + e.results[0][0].transcript); rec.start(); } catch { alert("Usá el micrófono del teclado para dictar."); } };
+  const escuchar = () => { try { const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) { enfocar(); alert("Para dictar en el iPhone: tocá el micrófono del teclado (al lado de la barra espaciadora)."); return; } const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = false; rec.onresult = (e) => setTexto(t => (t ? t + " " : "") + e.results[0][0].transcript); rec.onerror = () => enfocar(); rec.start(); } catch { enfocar(); alert("Usá el micrófono del teclado para dictar."); } };
   async function enviar() {
     if (!texto.trim() && !files.length) return;
     const userText = texto.trim() || "(archivos adjuntos)";
     setMsgs(m => [...m, { role: "user", text: userText }]); setTexto(""); setCargando(true); setError(""); setAcciones([]);
     try {
       const content = []; const extras = [];
-      for (const f of files) { if (f.type === "application/pdf") { const b64 = await toB64(f); content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }); } else if ((f.type || "").startsWith("image/")) { const b64 = await toB64(f); content.push({ type: "image", source: { type: "base64", media_type: f.type, data: b64 } }); } else { extras.push(f.name); } }
+      for (const f of files) { if (f.type === "application/pdf") { const b64 = await toB64(f); content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } }); } else if ((f.type || "").startsWith("image/")) { const c = await comprimirImg(f); if (c) content.push({ type: "image", source: { type: "base64", media_type: c.media, data: c.b64 } }); else { const b64 = await toB64(f); content.push({ type: "image", source: { type: "base64", media_type: f.type || "image/jpeg", data: b64 } }); } } else { extras.push(f.name); } }
       content.push({ type: "text", text: userText + (extras.length ? `\n(También adjunté archivos que no se leen solos: ${extras.join(", ")})` : "") });
       setFiles([]);
       const history = msgs.slice(-4).map(mm => ({ role: mm.role, content: mm.text }));
@@ -1501,7 +1506,7 @@ Reglas: El usuario SIEMPRE indica dónde cargar (ej: "cargar en sociedad un pago
       try { const j = txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1); parsed = JSON.parse(j); } catch { parsed.respuesta = txt || "No pude interpretarlo."; }
       setMsgs(m => [...m, { role: "assistant", text: parsed.respuesta || "Listo." }]);
       setAcciones((parsed.acciones || []).map(a => ({ ...a, _id: uid() })));
-    } catch (e) { setError("No pude procesarlo: " + (e && e.message)); setMsgs(m => [...m, { role: "assistant", text: "Tuve un problema para procesarlo. Probá de nuevo." }]); }
+    } catch (e) { setError("No pude procesarlo (" + (e && e.message) + "). Si es una foto o PDF muy pesado, probá con una más liviana o escribime los datos."); setMsgs(m => [...m, { role: "assistant", text: "Tuve un problema para procesarlo. Probá de nuevo o escribime los datos." }]); }
     setCargando(false);
   }
   const confirmar = (a) => { const nd = aplicarAccion(data, a); if (!nd) { alert("No pude aplicarlo. Revisá que la obra/persona exista y el nombre coincida."); return; } save(nd); setAcciones(prev => prev.filter(x => x._id !== a._id)); setMsgs(m => [...m, { role: "assistant", text: "✓ Cargado: " + descAccion(a) }]); };
@@ -1514,7 +1519,7 @@ Reglas: El usuario SIEMPRE indica dónde cargar (ej: "cargar en sociedad un pago
       <div style={{ fontSize: 13, color: T.sub, marginTop: 5, lineHeight: 1.4 }}>Hablale para cargar, o subí fotos/PDF.<br />Siempre te muestro qué entendí y vos confirmás.</div>
     </div>
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 16 }}>
-      <div onClick={() => setMostrarTexto(true)} style={{ width: "min(74vw, 250px)", aspectRatio: "1", background: T.card, border: `2px solid ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, position: "relative" }}>
+      <div onClick={enfocar} style={{ width: "min(74vw, 250px)", aspectRatio: "1", background: T.card, border: `2px solid ${T.accent}`, borderRadius: 22, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, position: "relative" }}>
         {data.config && data.config.logo ? <img src={data.config.logo} alt="logo" style={{ width: 96, height: 96, borderRadius: 18, objectFit: "cover", background: "#fff" }} /> : <div style={{ fontSize: 54 }}>🎙️</div>}
         <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>Hablarle a la IA</div>
         <label onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 10, right: 10, background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 9px", fontSize: 10.5, fontWeight: 700, color: T.sub, cursor: "pointer" }}>{subLogo ? "…" : "✎ logo"}<input type="file" accept="image/*" onChange={e => { subirLogo(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
@@ -1528,10 +1533,11 @@ Reglas: El usuario SIEMPRE indica dónde cargar (ej: "cargar en sociedad un pago
     </div>
     {files.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>{files.map((f, i) => <span key={i} style={{ fontSize: 11, background: T.al, color: T.sub, borderRadius: 7, padding: "5px 9px" }}>{f.type === "application/pdf" ? "📄" : "🖼"} {f.name.slice(0, 22)}</span>)}</div>}
     <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14 }}>
-      <textarea value={texto} onChange={e => setTexto(e.target.value)} placeholder='Escribile a la IA qué cargar…' style={{ ...inp, minHeight: 48, resize: "vertical", marginTop: 0, flex: 1 }} />
+      <textarea ref={taRef} value={texto} onChange={e => setTexto(e.target.value)} placeholder='Escribile a la IA qué cargar…' style={{ ...inp, minHeight: 48, resize: "vertical", marginTop: 0, flex: 1 }} />
       <button onClick={escuchar} title="Dictar" style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 11, padding: "12px 13px", fontSize: 17, cursor: "pointer" }}>🎤</button>
       <button onClick={enviar} disabled={cargando || (!texto.trim() && !files.length)} style={{ background: cargando || (!texto.trim() && !files.length) ? T.muted : T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px 18px", fontSize: 14, fontWeight: 800, cursor: cargando ? "default" : "pointer" }}>{cargando ? "…" : "Enviar"}</button>
     </div>
+    {msgs.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><span style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Conversación</span><button onClick={() => { setMsgs([]); setAcciones([]); try { localStorage.setItem("vv_ia_chat", "[]"); storage.set("vv_ia_chat", "[]"); } catch { } }} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>＋ Nueva</button></div>}
     {msgs.map((mm, i) => <div key={i} style={{ display: "flex", justifyContent: mm.role === "user" ? "flex-end" : "flex-start", marginBottom: 8 }}>
       <div style={{ maxWidth: "85%", background: mm.role === "user" ? T.accent : T.card, color: mm.role === "user" ? "#fff" : T.text, border: mm.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: 13, padding: "10px 13px", fontSize: 13, lineHeight: 1.45, boxShadow: SHDsm }}>
         {mm.text}
