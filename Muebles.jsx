@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v1 (Muebles: despiece automatico + optimizador de cortes + render 3D)
+// VERSION: v4 (Muebles: herrajes completos, puertas de vidrio y corredizas)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -31,12 +31,19 @@ const CFG_DEF = {
   placaW: 1830, placaH: 2600, kerf: 4, esp: 18, espFondo: 3,
   veta: false, luz: 3, retranqueo: 20, holgura: 2, correderaLuz: 13,
   precioPlaca: 0, precioCanto: 0, cantoEsp: 22, descontarFondo: true, travesanoH: 100,
+  alturaAlacena: 1400, espMesada: 30, solape: 25, descuentoRiel: 55,
+  precioBisagra: 0, precioCorredera: 0, precioRiel: 0, precioVidrio: 0, precioTirador: 0,
 };
+const VANO_DEF = { ancho: 3000, alto: 2600, prof: 600, paredB: 0 };
+const CORREDERAS = [250, 300, 350, 400, 450, 500, 550, 600];
+// Bisagras según alto de puerta (norma habitual)
+function nBisagras(alto) { const h = num(alto); if (h <= 900) return 2; if (h <= 1600) return 3; if (h <= 2000) return 4; if (h <= 2400) return 5; return 6; }
+function largoCorredera(profCaja) { const p = num(profCaja); let best = CORREDERAS[0]; for (const c of CORREDERAS) if (c <= p) best = c; return best; }
 const TIPOS = [["bajo", "Bajo mesada"], ["alacena", "Alacena"], ["placard", "Placard"], ["cajonera", "Cajonera"], ["generico", "Genérico"]];
 const DEF_TIPO = {
   bajo: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: true, armado: "lat" },
   alacena: { ancho: 600, alto: 700, prof: 320, zocalo: 0, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat" },
-  placard: { ancho: 1200, alto: 2400, prof: 600, zocalo: 80, estantes: 3, puertas: 2, cajones: 0, techoTravesanos: false, armado: "lat" },
+  placard: { ancho: 1200, alto: 2400, prof: 600, zocalo: 80, estantes: 3, puertas: 2, cajones: 0, techoTravesanos: false, armado: "lat", sistemaPuerta: "corrediza", matPuerta: "melamina" },
   cajonera: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 3, techoTravesanos: true, armado: "lat" },
   generico: { ancho: 600, alto: 800, prof: 400, zocalo: 0, estantes: 1, puertas: 0, cajones: 0, techoTravesanos: false, armado: "lat" },
 };
@@ -75,9 +82,12 @@ function despiece(m, cfg) {
   // Puertas
   const nPu = num(m.puertas);
   if (nPu > 0) {
-    const anchoPu = (A - (nPu - 1) * L - 2 * 1) / nPu;
-    const altoPu = Math.max(0, Hc - 2 * 1);
-    add(nPu > 1 ? "Puerta" : "Puerta", anchoPu, altoPu, nPu, "placa", 2 * (anchoPu + altoPu));
+    const corr = m.sistemaPuerta === "corrediza";
+    const sol = num(cfg.solape) || 25, dr = num(cfg.descuentoRiel) || 55;
+    const anchoPu = corr ? (A + sol * (nPu - 1)) / nPu : (A - (nPu - 1) * L - 2 * 1) / nPu;
+    const altoPu = corr ? Math.max(0, Hc - dr) : Math.max(0, Hc - 2 * 1);
+    if (m.matPuerta === "vidrio") p.push({ nombre: corr ? "Puerta vidrio corrediza" : "Puerta vidrio", w: Math.round(anchoPu), h: Math.round(altoPu), cant: nPu, mat: "vidrio", canto: 0 });
+    else add(corr ? "Puerta corrediza" : "Puerta", anchoPu, altoPu, nPu, "placa", 2 * (anchoPu + altoPu));
   }
   // Cajones
   const nCj = num(m.cajones);
@@ -155,54 +165,223 @@ function Render3D({ m, cfg, abierto }) {
   const A = num(m.ancho) || 1, H = num(m.alto) || 1, P = num(m.prof) || 1;
   const z = num(m.zocalo) || 0, Hc = Math.max(1, H - z);
   const Pc = Math.max(1, cfg.descontarFondo && m.fondo !== false ? P - ef : P);
-  const DX = 0.45, DY = 0.30;
-  const px = (x, y, zz) => x + DX * zz;
-  const py = (x, y, zz) => (H - y) - DY * zz;
-  const pt = (x, y, zz) => `${px(x, y, zz).toFixed(1)},${py(x, y, zz).toFixed(1)}`;
-  const quad = (a, b, c, d, fill, op, stroke) => <polygon points={`${pt(...a)} ${pt(...b)} ${pt(...c)} ${pt(...d)}`} fill={fill} fillOpacity={op == null ? 1 : op} stroke={stroke || "#2A3542"} strokeWidth="2.2" strokeLinejoin="round" />;
+  const [rot, setRot] = useState({ yaw: 28, pitch: 16 });
+  const drag = useRef(null);
+  const svgRef = useRef(null);
+
+  const onDown = (cx, cy) => { drag.current = { x: cx, y: cy, yaw: rot.yaw, pitch: rot.pitch }; };
+  const onMove = (cx, cy) => { const d = drag.current; if (!d) return; const yaw = d.yaw + (cx - d.x) * 0.45; let pitch = d.pitch - (cy - d.y) * 0.45; pitch = Math.max(-80, Math.min(80, pitch)); setRot({ yaw, pitch }); };
+  const onUp = () => { drag.current = null; };
+
+  // Rotación 3D real: yaw (eje Y) + pitch (eje X), luego proyección
+  const R = (x, y, zz) => {
+    const cx = A / 2, cy = H / 2, cz = Pc / 2;
+    let X = x - cx, Y = y - cy, Z = zz - cz;
+    const ry = rot.yaw * Math.PI / 180, rp = rot.pitch * Math.PI / 180;
+    let X1 = X * Math.cos(ry) + Z * Math.sin(ry);
+    let Z1 = -X * Math.sin(ry) + Z * Math.cos(ry);
+    let Y2 = Y * Math.cos(rp) - Z1 * Math.sin(rp);
+    let Z2 = Y * Math.sin(rp) + Z1 * Math.cos(rp);
+    return { x: X1, y: -Y2, z: Z2 };
+  };
+  const pt = (a) => { const p = R(a[0], a[1], a[2]); return `${p.x.toFixed(1)},${p.y.toFixed(1)}`; };
+  const prof = (pts) => pts.reduce((s, a) => s + R(a[0], a[1], a[2]).z, 0) / pts.length; // z medio para orden de dibujo
+
+  const caras = [];
+  const cara = (key, pts, fill, op) => caras.push({ key, pts, fill, op: op == null ? 1 : op, z: prof(pts) });
   const MEL = "#E4D5BE", MEL_D = "#C9B492", MEL_L = "#F1E7D6", FRENTE = "#D8C7AC", INT = "#EFE6D6";
-  const W = px(A, 0, Pc) + 20, HH = py(0, 0, 0) + 20;
-  const minX = Math.min(px(0, 0, 0), px(0, 0, Pc)) - 10, minY = Math.min(py(0, H, Pc), py(0, H, 0)) - 10;
   const nPu = num(m.puertas), nCj = num(m.cajones), nEst = num(m.estantes);
-  const est = []; for (let i = 1; i <= nEst; i++) est.push(z + (Hc / (nEst + 1)) * i);
-  const piezas = [];
-  // Fondo (atrás)
-  piezas.push(<g key="fondo">{quad([0, z, Pc], [A, z, Pc], [A, z + Hc, Pc], [0, z + Hc, Pc], INT, 1)}</g>);
-  // Interior: estantes
-  est.forEach((yy, i) => piezas.push(<g key={"est" + i}>
-    {quad([e, yy, 0], [A - e, yy, 0], [A - e, yy, Pc], [e, yy, Pc], MEL_L, 1)}
-    {quad([e, yy - e, 0], [A - e, yy - e, 0], [A - e, yy, 0], [e, yy, 0], MEL_D, 1)}
-  </g>));
-  // Piso y techo
-  piezas.push(<g key="piso">{quad([0, z + e, 0], [A, z + e, 0], [A, z + e, Pc], [0, z + e, Pc], MEL_L, 1)}</g>);
-  if (!m.techoTravesanos) piezas.push(<g key="techo">{quad([0, z + Hc - e, 0], [A, z + Hc - e, 0], [A, z + Hc - e, Pc], [0, z + Hc - e, Pc], MEL_L, 1)}</g>);
-  else piezas.push(<g key="trav">{quad([e, z + Hc - e, 0], [A - e, z + Hc - e, 0], [A - e, z + Hc - e, 90], [e, z + Hc - e, 90], MEL_L, 1)}{quad([e, z + Hc - e, Pc - 90], [A - e, z + Hc - e, Pc - 90], [A - e, z + Hc - e, Pc], [e, z + Hc - e, Pc], MEL_L, 1)}</g>);
-  // Laterales
-  piezas.push(<g key="lat">
-    {quad([0, z, 0], [0, z, Pc], [0, z + Hc, Pc], [0, z + Hc, 0], MEL_D, 1)}
-    {quad([A, z, 0], [A, z, Pc], [A, z + Hc, Pc], [A, z + Hc, 0], MEL, 1)}
-    {quad([A - e, z, 0], [A, z, 0], [A, z + Hc, 0], [A - e, z + Hc, 0], MEL_D, 1)}
-    {quad([0, z, 0], [e, z, 0], [e, z + Hc, 0], [0, z + Hc, 0], MEL_D, 1)}
-  </g>);
-  // Zócalo
-  if (z > 0) piezas.push(<g key="zoc">{quad([0, 0, 0], [A, 0, 0], [A, z, 0], [0, z, 0], "#8C99A6", 1)}</g>);
-  // Frentes
+  const L = num(cfg.luz) || 3;
+
+  cara("fondo", [[0, z, Pc], [A, z, Pc], [A, z + Hc, Pc], [0, z + Hc, Pc]], INT);
+  for (let i = 1; i <= nEst; i++) { const yy = z + (Hc / (nEst + 1)) * i; cara("est" + i, [[e, yy, 0], [A - e, yy, 0], [A - e, yy, Pc], [e, yy, Pc]], MEL_L); cara("estf" + i, [[e, yy - e, 0], [A - e, yy - e, 0], [A - e, yy, 0], [e, yy, 0]], MEL_D); }
+  cara("piso", [[0, z + e, 0], [A, z + e, 0], [A, z + e, Pc], [0, z + e, Pc]], MEL_L);
+  cara("pisoB", [[0, z, 0], [A, z, 0], [A, z, Pc], [0, z, Pc]], MEL_D);
+  if (!m.techoTravesanos) { cara("techo", [[0, z + Hc - e, 0], [A, z + Hc - e, 0], [A, z + Hc - e, Pc], [0, z + Hc - e, Pc]], MEL_L); cara("techoT", [[0, z + Hc, 0], [A, z + Hc, 0], [A, z + Hc, Pc], [0, z + Hc, Pc]], MEL); }
+  else { cara("tr1", [[e, z + Hc, 0], [A - e, z + Hc, 0], [A - e, z + Hc, 90], [e, z + Hc, 90]], MEL); cara("tr2", [[e, z + Hc, Pc - 90], [A - e, z + Hc, Pc - 90], [A - e, z + Hc, Pc], [e, z + Hc, Pc]], MEL); }
+  cara("latI", [[0, z, 0], [0, z, Pc], [0, z + Hc, Pc], [0, z + Hc, 0]], MEL_D);
+  cara("latIe", [[e, z, 0], [e, z, Pc], [e, z + Hc, Pc], [e, z + Hc, 0]], MEL_L);
+  cara("latD", [[A, z, 0], [A, z, Pc], [A, z + Hc, Pc], [A, z + Hc, 0]], MEL);
+  cara("latDe", [[A - e, z, 0], [A - e, z, Pc], [A - e, z + Hc, Pc], [A - e, z + Hc, 0]], MEL_L);
+  if (z > 0) cara("zoc", [[0, 0, 0], [A, 0, 0], [A, z, 0], [0, z, 0]], "#8C99A6");
   if (!abierto) {
-    if (nCj > 0) {
-      const L = num(cfg.luz) || 3, altoFr = (Hc - (nCj + 1) * L) / nCj;
-      for (let i = 0; i < nCj; i++) { const y0 = z + L + i * (altoFr + L); piezas.push(<g key={"cj" + i}>{quad([1, y0, 0], [A - 1, y0, 0], [A - 1, y0 + altoFr, 0], [1, y0 + altoFr, 0], FRENTE, 1)}<line x1={px(A / 2 - 60, 0, 0)} y1={py(0, y0 + altoFr / 2, 0)} x2={px(A / 2 + 60, 0, 0)} y2={py(0, y0 + altoFr / 2, 0)} stroke="#8A7A62" strokeWidth="5" strokeLinecap="round" /></g>); }
-    }
-    if (nPu > 0) {
-      const L = num(cfg.luz) || 3, aPu = (A - (nPu - 1) * L - 2) / nPu;
-      for (let i = 0; i < nPu; i++) { const x0 = 1 + i * (aPu + L); piezas.push(<g key={"pu" + i}>{quad([x0, z + 1, 0], [x0 + aPu, z + 1, 0], [x0 + aPu, z + Hc - 1, 0], [x0, z + Hc - 1, 0], FRENTE, 0.94)}<circle cx={px(x0 + (i === 0 && nPu > 1 ? aPu - 35 : 35), 0, 0)} cy={py(0, z + Hc / 2, 0)} r="9" fill="#6E6053" /></g>); }
-    }
+    if (nCj > 0) { const altoFr = (Hc - (nCj + 1) * L) / nCj; for (let i = 0; i < nCj; i++) { const y0 = z + L + i * (altoFr + L); cara("cj" + i, [[1, y0, 0], [A - 1, y0, 0], [A - 1, y0 + altoFr, 0], [1, y0 + altoFr, 0]], FRENTE); } }
+    if (nPu > 0) { const aPu = (A - (nPu - 1) * L - 2) / nPu; for (let i = 0; i < nPu; i++) { const x0 = 1 + i * (aPu + L); cara("pu" + i, [[x0, z + 1, 0], [x0 + aPu, z + 1, 0], [x0 + aPu, z + Hc - 1, 0], [x0, z + Hc - 1, 0]], FRENTE, 0.96); } }
   }
-  const vbW = Math.max(1, W - minX), vbH = Math.max(1, HH - minY);
+  caras.sort((a, b) => b.z - a.z); // painter: dibuja lo lejano primero
+
+  const todos = caras.flatMap(c => c.pts.map(a => R(a[0], a[1], a[2])));
+  const xs = todos.map(p => p.x), ys = todos.map(p => p.y);
+  const pad = Math.max(A, H, Pc) * 0.06;
+  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad, minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+
   return <div style={{ background: "#F7F4EE", borderRadius: 14, padding: 10, border: `1px solid ${T.border}` }}>
-    <svg viewBox={`${minX} ${minY} ${vbW} ${vbH}`} style={{ width: "100%", height: "auto", maxHeight: 340, display: "block" }} preserveAspectRatio="xMidYMid meet">{piezas}</svg>
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: T.muted, marginTop: 6, padding: "0 4px" }}>
+    <svg ref={svgRef} viewBox={`${minX} ${minY} ${Math.max(1, maxX - minX)} ${Math.max(1, maxY - minY)}`}
+      onMouseDown={ev => { ev.preventDefault(); onDown(ev.clientX, ev.clientY); }}
+      onMouseMove={ev => onMove(ev.clientX, ev.clientY)} onMouseUp={onUp} onMouseLeave={onUp}
+      onTouchStart={ev => { const t = ev.touches[0]; onDown(t.clientX, t.clientY); }}
+      onTouchMove={ev => { ev.preventDefault(); const t = ev.touches[0]; onMove(t.clientX, t.clientY); }}
+      onTouchEnd={onUp}
+      style={{ width: "100%", height: "auto", maxHeight: 320, display: "block", cursor: "grab", touchAction: "none" }} preserveAspectRatio="xMidYMid meet">
+      {caras.map(c => <polygon key={c.key} points={c.pts.map(pt).join(" ")} fill={c.fill} fillOpacity={c.op} stroke="#2A3542" strokeWidth={Math.max(A, H) / 380} strokeLinejoin="round" />)}
+    </svg>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+      <span style={{ fontSize: 15 }}>↻</span>
+      <input type="range" min="-180" max="180" value={Math.round(rot.yaw)} onChange={ev => setRot(r => ({ ...r, yaw: num(ev.target.value) }))} style={{ flex: 1, accentColor: T.accent }} />
+      <input type="range" min="-80" max="80" value={Math.round(rot.pitch)} onChange={ev => setRot(r => ({ ...r, pitch: num(ev.target.value) }))} style={{ flex: 1, accentColor: T.accent }} />
+    </div>
+    <div style={{ display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
+      {[["Frente", 0, 0], ["3/4", 28, 16], ["Lado", 90, 0], ["Arriba", 0, 70], ["Atrás", 180, 10]].map(([l, y, p]) => <button key={l} onClick={() => setRot({ yaw: y, pitch: p })} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+    </div>
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: T.muted, marginTop: 6, padding: "0 2px" }}>
       <span>Ancho {mm(A)} · Alto {mm(H)} · Prof {mm(P)} mm</span>
-      <span>{abierto ? "Interior" : "Cerrado"}</span>
+      <span>Arrastrá para girar</span>
+    </div>
+  </div>;
+}
+
+// ---------- HERRAJES Y VIDRIOS ----------
+function herrajes(muebles, cfg) {
+  const e = num(cfg.esp) || 18, ef = num(cfg.espFondo) || 3;
+  const acc = {}; const push = (k, cant, unidad, detalle, grupo) => { const key = k; if (!acc[key]) acc[key] = { item: k, cant: 0, unidad, detalle: detalle || "", grupo: grupo || "Herrajes" }; acc[key].cant += cant; };
+  let vidrioM2 = 0, marcoMl = 0;
+  muebles.forEach(m => {
+    const n = Math.max(1, num(m.cant) || 1);
+    const A = num(m.ancho), H = num(m.alto), P = num(m.prof);
+    const z = num(m.zocalo) || 0, Hc = Math.max(0, H - z);
+    const Pc = Math.max(0, cfg.descontarFondo && m.fondo !== false ? P - ef : P);
+    const nPu = num(m.puertas), nCj = num(m.cajones);
+    const corr = m.sistemaPuerta === "corrediza", vid = m.matPuerta === "vidrio";
+    if (nPu > 0) {
+      const sol = num(cfg.solape) || 25, dr = num(cfg.descuentoRiel) || 55;
+      const anchoPu = corr ? (A + sol * (nPu - 1)) / nPu : (A - (nPu - 1) * (num(cfg.luz) || 3) - 2) / nPu;
+      const altoPu = corr ? Math.max(0, Hc - dr) : Math.max(0, Hc - 2);
+      if (corr) {
+        push("Kit puerta corrediza (" + nPu + " hojas)", n, "kit", `${m.nombre} · ${nPu} hojas`, "Corredizas");
+        push("Riel superior + inferior", (A / 1000) * 2 * n, "m", "corredizas", "Corredizas");
+        push("Ruedas / carros para corrediza", nPu * 2 * n, "u", "2 por hoja", "Corredizas");
+      } else {
+        const bis = nBisagras(altoPu);
+        push(vid ? "Bisagra cazoleta para vidrio 35mm" : "Bisagra cazoleta 35mm", bis * nPu * n, "u", `${bis} por puerta de ${mm(altoPu)}mm`, "Bisagras");
+        push("Amortiguador / cierre suave", bis * nPu * n, "u", "1 por bisagra", "Bisagras");
+      }
+      push("Tirador", nPu * n, "u", "1 por puerta", "Tiradores");
+      if (vid) { vidrioM2 += (anchoPu * altoPu / 1e6) * nPu * n; marcoMl += (2 * (anchoPu + altoPu) / 1000) * nPu * n; }
+    }
+    if (nCj > 0) {
+      const profCaja = Math.max(0, Pc - 30);
+      const lc = largoCorredera(profCaja);
+      push(`Corredera telescópica ${lc}mm`, nCj * n, "par", `${nCj} cajón(es) · caja ${mm(profCaja)}mm`, "Correderas");
+      push("Tirador", nCj * n, "u", "1 por cajón", "Tiradores");
+    }
+    if (num(m.estantes) > 0) push("Soporte de estante", num(m.estantes) * 4 * n, "u", "4 por estante", "Estantes");
+    if (z > 0 && (m.tipo === "bajo" || m.tipo === "cajonera" || m.tipo === "placard")) push("Pata regulable", 4 * n, "u", "4 por módulo", "Zócalo");
+    if (m.tipo === "alacena") push("Colgador de alacena", 2 * n, "u", "2 por alacena", "Colgado");
+  });
+  const lista = Object.values(acc).map(x => ({ ...x, cant: Math.ceil(x.cant * 10) / 10 }));
+  return { lista, vidrioM2, marcoMl };
+}
+
+// ---------- VANO: vista en planta y de frente ----------
+const esAlacena = (m) => m.tipo === "alacena";
+const esAlto = (m) => m.tipo === "placard";
+function distribuir(muebles, pared) {
+  // Devuelve muebles de esa pared con su x acumulado, separados por fila (piso / colgado)
+  const de = muebles.filter(m => (m.pared || "A") === pared);
+  const piso = [], colg = [];
+  let xp = 0, xc = 0;
+  de.forEach(m => {
+    const A = num(m.ancho), n = Math.max(1, num(m.cant) || 1);
+    for (let i = 0; i < n; i++) {
+      if (esAlacena(m)) { colg.push({ m, x: xc, w: A }); xc += A; }
+      else { piso.push({ m, x: xp, w: A }); xp += A; }
+    }
+  });
+  return { piso, colg, anchoPiso: xp, anchoColg: xc };
+}
+function VanoVistas({ vano, muebles, cfg }) {
+  const [pared, setPared] = useState("A");
+  const W = num(vano.ancho) || 1, H = num(vano.alto) || 1, PR = num(vano.prof) || 600;
+  const WB = num(vano.paredB) || 0;
+  const anchoPared = pared === "B" ? WB : W;
+  const d = distribuir(muebles, pared);
+  const sobraPiso = anchoPared - d.anchoPiso, sobraColg = anchoPared - d.anchoColg;
+  const hAlac = num(cfg.alturaAlacena) || 1400, eMes = num(cfg.espMesada) || 30;
+  const COL = (m) => PALETA[(muebles.findIndex(x => x.id === m.id) + 1) % PALETA.length];
+
+  // --- PLANTA ---
+  const pad = Math.max(W, WB, PR) * 0.10 + 120;
+  const dPlan = distribuir(muebles, "A"), dPlanB = WB > 0 ? distribuir(muebles, "B") : null;
+  const planW = W + (WB > 0 ? PR : 0), planH = PR + (WB > 0 ? WB : 0);
+  const planta = <svg viewBox={`${-pad} ${-pad} ${planW + pad * 2} ${planH + pad * 1.5}`} style={{ width: "100%", height: "auto", maxHeight: 300, display: "block" }} preserveAspectRatio="xMidYMid meet">
+    {/* paredes */}
+    <line x1="0" y1="0" x2={W} y2="0" stroke="#334155" strokeWidth={Math.max(W, 1) / 90} strokeLinecap="square" />
+    {WB > 0 && <line x1="0" y1="0" x2="0" y2={WB} stroke="#334155" strokeWidth={Math.max(W, 1) / 90} strokeLinecap="square" />}
+    {/* muebles pared A (piso) */}
+    {dPlan.piso.map((it, i) => <g key={"a" + i}>
+      <rect x={it.x} y="0" width={it.w} height={PR} fill={COL(it.m)} fillOpacity="0.22" stroke={COL(it.m)} strokeWidth={W / 260} />
+      <text x={it.x + it.w / 2} y={PR / 2} textAnchor="middle" fontSize={W / 42} fill="#334155" fontWeight="700">{mm(it.w)}</text>
+    </g>)}
+    {/* alacenas pared A (punteadas, cuelgan sobre los bajos) */}
+    {dPlan.colg.map((it, i) => <rect key={"ac" + i} x={it.x} y="0" width={it.w} height={Math.min(PR, 350)} fill="none" stroke={COL(it.m)} strokeWidth={W / 320} strokeDasharray={`${W / 90},${W / 130}`} />)}
+    {/* pared B */}
+    {dPlanB && dPlanB.piso.map((it, i) => <g key={"b" + i}>
+      <rect x="0" y={it.x} width={PR} height={it.w} fill={COL(it.m)} fillOpacity="0.22" stroke={COL(it.m)} strokeWidth={W / 260} />
+      <text x={PR / 2} y={it.x + it.w / 2} textAnchor="middle" fontSize={W / 42} fill="#334155" fontWeight="700">{mm(it.w)}</text>
+    </g>)}
+    {/* cota del vano */}
+    <line x1="0" y1={-pad * 0.55} x2={W} y2={-pad * 0.55} stroke="#94A3B8" strokeWidth={W / 400} />
+    <line x1="0" y1={-pad * 0.7} x2="0" y2={-pad * 0.4} stroke="#94A3B8" strokeWidth={W / 400} />
+    <line x1={W} y1={-pad * 0.7} x2={W} y2={-pad * 0.4} stroke="#94A3B8" strokeWidth={W / 400} />
+    <text x={W / 2} y={-pad * 0.68} textAnchor="middle" fontSize={W / 34} fill="#475569" fontWeight="700">Vano {mm(W)} mm</text>
+    <text x={W / 2} y={PR + pad * 0.55} textAnchor="middle" fontSize={W / 40} fill={sobraPiso < 0 ? "#DC2626" : "#64748B"} fontWeight="700">{sobraPiso < 0 ? `Se pasan ${mm(-sobraPiso)} mm` : sobraPiso > 0 ? `Libre ${mm(sobraPiso)} mm` : "Justo"}</text>
+  </svg>;
+
+  // --- FRENTE ---
+  const padF = Math.max(anchoPared, H) * 0.10 + 100;
+  const frente = <svg viewBox={`${-padF} ${-padF * 0.5} ${anchoPared + padF * 2} ${H + padF * 1.4}`} style={{ width: "100%", height: "auto", maxHeight: 320, display: "block" }} preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width={anchoPared} height={H} fill="#FAFAF8" stroke="#334155" strokeWidth={anchoPared / 110} />
+    {/* piso: bajos, cajoneras, placares */}
+    {d.piso.map((it, i) => { const alt = num(it.m.alto); const y = H - alt; return <g key={"p" + i}>
+      <rect x={it.x} y={y} width={it.w} height={alt} fill={COL(it.m)} fillOpacity="0.22" stroke={COL(it.m)} strokeWidth={anchoPared / 260} />
+      <text x={it.x + it.w / 2} y={y + alt / 2} textAnchor="middle" fontSize={anchoPared / 40} fill="#334155" fontWeight="700">{mm(it.w)}</text>
+      <text x={it.x + it.w / 2} y={y + alt / 2 + anchoPared / 30} textAnchor="middle" fontSize={anchoPared / 52} fill="#64748B">{it.m.nombre}</text>
+    </g>; })}
+    {/* mesada sobre los bajos */}
+    {d.piso.filter(it => !esAlto(it.m)).length > 0 && (() => { const hb = Math.max(...d.piso.filter(it => !esAlto(it.m)).map(it => num(it.m.alto))); const anchoM = d.piso.filter(it => !esAlto(it.m)).reduce((s, it) => s + it.w, 0); return <rect x="0" y={H - hb - eMes} width={anchoM} height={eMes} fill="#64748B" />; })()}
+    {/* alacenas colgadas */}
+    {d.colg.map((it, i) => { const alt = num(it.m.alto); const y = H - hAlac - alt; return <g key={"c" + i}>
+      <rect x={it.x} y={y} width={it.w} height={alt} fill={COL(it.m)} fillOpacity="0.22" stroke={COL(it.m)} strokeWidth={anchoPared / 260} />
+      <text x={it.x + it.w / 2} y={y + alt / 2} textAnchor="middle" fontSize={anchoPared / 40} fill="#334155" fontWeight="700">{mm(it.w)}</text>
+    </g>; })}
+    {/* cotas */}
+    <text x={anchoPared / 2} y={H + padF * 0.55} textAnchor="middle" fontSize={anchoPared / 32} fill="#475569" fontWeight="700">Vano {mm(anchoPared)} × {mm(H)} mm</text>
+    {sobraPiso !== 0 && <rect x={d.anchoPiso} y={H - 100} width={Math.max(0, sobraPiso)} height="100" fill={sobraPiso < 0 ? "#DC2626" : "#22C55E"} fillOpacity="0.18" />}
+  </svg>;
+
+  return <div>
+    {WB > 0 && <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+      {[["A", `Pared A (${mm(W)})`], ["B", `Pared B (${mm(WB)})`]].map(([k, l]) => <button key={k} onClick={() => setPared(k)} style={{ flex: 1, background: pared === k ? T.accent : T.al, color: pared === k ? "#fff" : T.sub, border: `1px solid ${pared === k ? T.accent : T.border}`, borderRadius: 9, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+    </div>}
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: 11, marginBottom: 10, boxShadow: SHDsm }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 6 }}>Vista en planta</div>
+      <div style={{ background: "#F8FAFC", borderRadius: 10, padding: 8 }}>{planta}</div>
+    </div>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: 11, marginBottom: 10, boxShadow: SHDsm }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 6 }}>Vista de frente {WB > 0 ? `· Pared ${pared}` : ""}</div>
+      <div style={{ background: "#F8FAFC", borderRadius: 10, padding: 8 }}>{frente}</div>
+    </div>
+    <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ flex: 1, background: sobraPiso < 0 ? "rgba(220,38,38,.08)" : T.card, border: `1px solid ${sobraPiso < 0 ? "rgba(220,38,38,.4)" : T.border}`, borderRadius: 11, padding: "10px 12px" }}>
+        <div style={{ fontSize: 9.5, color: T.muted, fontWeight: 700, textTransform: "uppercase" }}>Bajos / placares</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: sobraPiso < 0 ? "#DC2626" : T.accent }}>{mm(d.anchoPiso)} / {mm(anchoPared)} mm</div>
+        <div style={{ fontSize: 10.5, color: sobraPiso < 0 ? "#DC2626" : T.sub, marginTop: 2, fontWeight: 700 }}>{sobraPiso < 0 ? `⚠ Se pasan ${mm(-sobraPiso)} mm` : sobraPiso > 0 ? `Libre: ${mm(sobraPiso)} mm` : "Entra justo ✓"}</div>
+      </div>
+      <div style={{ flex: 1, background: sobraColg < 0 ? "rgba(220,38,38,.08)" : T.card, border: `1px solid ${sobraColg < 0 ? "rgba(220,38,38,.4)" : T.border}`, borderRadius: 11, padding: "10px 12px" }}>
+        <div style={{ fontSize: 9.5, color: T.muted, fontWeight: 700, textTransform: "uppercase" }}>Alacenas</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: sobraColg < 0 ? "#DC2626" : T.accent }}>{mm(d.anchoColg)} / {mm(anchoPared)} mm</div>
+        <div style={{ fontSize: 10.5, color: sobraColg < 0 ? "#DC2626" : T.sub, marginTop: 2, fontWeight: 700 }}>{sobraColg < 0 ? `⚠ Se pasan ${mm(-sobraColg)} mm` : sobraColg > 0 ? `Libre: ${mm(sobraColg)} mm` : d.anchoColg === 0 ? "Sin alacenas" : "Entra justo ✓"}</div>
+      </div>
     </div>
   </div>;
 }
@@ -276,6 +455,8 @@ td{padding:6px 7px;border-bottom:1px solid #E8EAED}td.r{text-align:right;font-va
 ${resumen.costo > 0 ? `<div style="font-size:11px;margin:8px 0;color:#5B6673">Costo estimado de materiales: <b style="color:#0B1622;font-size:13px">${money(resumen.costo)}</b></div>` : ""}
 <h2>Despiece de piezas</h2>
 <table><thead><tr><th>Mueble</th><th>Pieza</th><th style="text-align:right">Ancho</th><th style="text-align:right">Alto</th><th style="text-align:right">Cant.</th><th>Material</th></tr></thead><tbody>${filas}</tbody></table>
+${(vidrios && vidrios.length) ? `<h2>Vidrios y marcos</h2><table><thead><tr><th>Mueble</th><th>Pieza</th><th style="text-align:right">Ancho</th><th style="text-align:right">Alto</th><th style="text-align:right">Cant.</th></tr></thead><tbody>${vidrios.map(p => `<tr><td>${p.mueble}</td><td>${p.nombre}</td><td class="r">${mm(p.w)}</td><td class="r">${mm(p.h)}</td><td class="r">${p.cant}</td></tr>`).join("")}</tbody></table><p style="font-size:11px;margin-top:6px;color:#5B6673">Total vidrio: <b>${herr.vidrioM2.toFixed(2)} m²</b> · Marco de aluminio: <b>${herr.marcoMl.toFixed(1)} m</b></p>` : ""}
+${(herr && herr.lista.length) ? `<h2>Herrajes</h2><table><thead><tr><th>Grupo</th><th>Item</th><th>Detalle</th><th style="text-align:right">Cant.</th></tr></thead><tbody>${herr.lista.map(h => `<tr><td>${h.grupo}</td><td>${h.item}</td><td style="color:#5B6673">${h.detalle}</td><td class="r"><b>${h.cant} ${h.unidad}</b></td></tr>`).join("")}</tbody></table>` : ""}
 <h2>Plan de corte · placas ${cfg.esp}mm</h2>${placas || "<p style='font-size:11px;color:#5B6673'>Sin piezas.</p>"}
 ${resFondo.placas.length ? `<h2>Plan de corte · fondos ${cfg.espFondo}mm</h2>${fondos}` : ""}
 ${resPlaca.noEntran.length || resFondo.noEntran.length ? `<p style="color:#B45309;font-size:11px;margin-top:10px"><b>Atención:</b> ${resPlaca.noEntran.length + resFondo.noEntran.length} pieza(s) no entran en la placa. Revisá las medidas.</p>` : ""}
@@ -288,14 +469,17 @@ export default function Muebles() {
   const [proyecto, setProyecto] = useState("");
   const [muebles, setMuebles] = useState([]);
   const [cfg, setCfg] = useState(CFG_DEF);
-  const [tab, setTab] = useState("muebles");
+  const [vano, setVano] = useState(VANO_DEF);
+  const [tab, setTab] = useState("vano");
   const [form, setForm] = useState(null);
   const [abierto, setAbierto] = useState({});
   const [pdfHtml, setPdfHtml] = useState(null);
   const [verCfg, setVerCfg] = useState(false);
 
-  useEffect(() => { (async () => { try { const r = await storage.get("vv_muebles"); if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); } } catch { } setCargando(false); })(); }, []);
-  const guardar = (next) => { const d = { proyecto: next.proyecto != null ? next.proyecto : proyecto, muebles: next.muebles || muebles, cfg: next.cfg || cfg }; if (next.proyecto != null) setProyecto(next.proyecto); if (next.muebles) setMuebles(next.muebles); if (next.cfg) setCfg(next.cfg); try { storage.set("vv_muebles", JSON.stringify(d)); } catch { } };
+  useEffect(() => { (async () => { try { const r = await storage.get("vv_muebles"); if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); } } catch { } setCargando(false); })(); }, []);
+  const guardar = (next) => { const d = { proyecto: next.proyecto != null ? next.proyecto : proyecto, muebles: next.muebles || muebles, cfg: next.cfg || cfg, vano: next.vano || vano }; if (next.proyecto != null) setProyecto(next.proyecto); if (next.muebles) setMuebles(next.muebles); if (next.cfg) setCfg(next.cfg); if (next.vano) setVano(next.vano); try { storage.set("vv_muebles", JSON.stringify(d)); } catch { } };
+  const setV = (k, v) => guardar({ vano: { ...vano, [k]: num(v) } });
+  const mover = (id, dir) => { const i = muebles.findIndex(m => m.id === id); const j = i + dir; if (i < 0 || j < 0 || j >= muebles.length) return; const arr = [...muebles]; const t = arr[i]; arr[i] = arr[j]; arr[j] = t; guardar({ muebles: arr }); };
 
   const nuevo = (tipo) => { const d = DEF_TIPO[tipo] || DEF_TIPO.generico; setForm({ id: "", tipo, nombre: (TIPOS.find(t => t[0] === tipo) || [])[1] || "Mueble", cant: 1, fondo: true, ...d }); };
   const editar = (m) => setForm({ ...m });
@@ -310,6 +494,8 @@ export default function Muebles() {
 
   // Cálculos
   const piezas = muebles.flatMap(m => despiece(m, cfg));
+  const herr = herrajes(muebles, cfg);
+  const vidrios = piezas.filter(p => p.mat === "vidrio");
   const resPlaca = optimizar(piezas, cfg, "placa");
   const resFondo = optimizar(piezas, { ...cfg, veta: false }, "fondo");
   const cantoMl = piezas.reduce((s, p) => s + (p.canto * p.cant), 0) / 1000;
@@ -330,10 +516,41 @@ export default function Muebles() {
       <div style={{ fontSize: 9.5, fontWeight: 600, color: BRASS, letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 2 }}>Despiece y optimización de cortes</div>
     </div>
     <div style={{ display: "flex", background: "rgba(255,255,255,.9)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 40 }}>
-      {[["muebles", "Muebles"], ["despiece", "Despiece"], ["cortes", "Cortes"]].map(([k, l]) => (
+      {[["vano", "Vano"], ["muebles", "Muebles"], ["despiece", "Despiece"], ["cortes", "Cortes"]].map(([k, l]) => (
         <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "12px 2px 10px", fontSize: 12.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative" }}>{l}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 26, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
       ))}
     </div>
+
+    {/* VANO */}
+    {tab === "vano" && <div style={{ padding: "14px 16px 40px" }}>
+      <input value={proyecto} onChange={e => guardar({ proyecto: e.target.value })} placeholder="Nombre del proyecto (ej: Cocina Canning 815)" style={{ ...inp, marginTop: 0, marginBottom: 12, fontWeight: 700 }} />
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: 13, marginBottom: 12, boxShadow: SHDsm }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Medidas del vano</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Ancho (mm)</label><input value={vano.ancho} onChange={e => setV("ancho", e.target.value)} inputMode="numeric" style={inp} /></div>
+          <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Alto (mm)</label><input value={vano.alto} onChange={e => setV("alto", e.target.value)} inputMode="numeric" style={inp} /></div>
+          <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Prof. (mm)</label><input value={vano.prof} onChange={e => setV("prof", e.target.value)} inputMode="numeric" style={inp} /></div>
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Pared B — en L (mm · 0 si es recto)</label>
+          <input value={vano.paredB} onChange={e => setV("paredB", e.target.value)} inputMode="numeric" style={inp} />
+        </div>
+      </div>
+      {muebles.length === 0 ? <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "24px 10px", lineHeight: 1.6 }}>Cargá el vano y después agregá muebles<br />en la solapa <b>Muebles</b> para verlos acomodados acá.</div> : <>
+        <VanoVistas vano={vano} muebles={muebles} cfg={cfg} />
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", margin: "16px 0 8px" }}>Orden en el vano (izquierda → derecha)</div>
+        {muebles.map((m, i) => <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "10px 12px", marginBottom: 7, boxShadow: SHDsm }}>
+          <span style={{ width: 12, height: 26, borderRadius: 4, background: PALETA[(i + 1) % PALETA.length], flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>{m.nombre}{num(m.cant) > 1 ? ` ×${m.cant}` : ""}</div>
+            <div style={{ fontSize: 10.5, color: T.muted }}>{mm(m.ancho)} mm · {esAlacena(m) ? "colgado" : "al piso"}{num(vano.paredB) > 0 ? ` · Pared ${m.pared || "A"}` : ""}</div>
+          </div>
+          {num(vano.paredB) > 0 && <button onClick={() => guardar({ muebles: muebles.map(x => x.id === m.id ? { ...x, pared: (x.pared || "A") === "A" ? "B" : "A" } : x) })} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Pared {(m.pared || "A") === "A" ? "B" : "A"}</button>}
+          <button onClick={() => mover(m.id, -1)} disabled={i === 0} style={{ background: T.al, border: `1px solid ${T.border}`, color: i === 0 ? T.muted : T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 13, fontWeight: 700, cursor: i === 0 ? "default" : "pointer" }}>←</button>
+          <button onClick={() => mover(m.id, 1)} disabled={i === muebles.length - 1} style={{ background: T.al, border: `1px solid ${T.border}`, color: i === muebles.length - 1 ? T.muted : T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 13, fontWeight: 700, cursor: i === muebles.length - 1 ? "default" : "pointer" }}>→</button>
+        </div>)}
+      </>}
+    </div>}
 
     {/* MUEBLES */}
     {tab === "muebles" && <div style={{ padding: "14px 16px 40px" }}>
@@ -384,7 +601,26 @@ export default function Muebles() {
             <span style={{ background: T.al, borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 800, color: T.accent, minWidth: 26, textAlign: "center" }}>{p.cant}</span>
           </div>)}
         </div>; })}
-        <button onClick={() => setPdfHtml(reporteHTML(proyecto, cfg, piezas, resPlaca, resFondo, resumen))} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Despiece + plan de corte en PDF</button>
+        {vidrios.length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: 12, marginBottom: 10, boxShadow: SHDsm }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 8, color: "#3D7EA6" }}>🪟 Vidrios y marcos</div>
+          {vidrios.map((p, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, padding: "7px 0", borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+            <span style={{ flex: 1 }}>{p.nombre}<span style={{ fontSize: 10, color: T.muted, marginLeft: 5 }}>{p.mueble}</span></span>
+            <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700, marginRight: 10 }}>{mm(p.w)} × {mm(p.h)}</span>
+            <span style={{ background: "rgba(61,126,166,.12)", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 800, color: "#3D7EA6", minWidth: 26, textAlign: "center" }}>{p.cant}</span>
+          </div>)}
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, paddingTop: 8, marginTop: 4, borderTop: `2px solid ${T.border}`, fontWeight: 800 }}><span>Total vidrio</span><span style={{ color: "#3D7EA6" }}>{herr.vidrioM2.toFixed(2)} m² · marco {herr.marcoMl.toFixed(1)} m</span></div>
+        </div>}
+        {herr.lista.length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: 12, marginBottom: 10, boxShadow: SHDsm }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 8 }}>🔩 Herrajes</div>
+          {[...new Set(herr.lista.map(h => h.grupo))].map(g => <div key={g} style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{g}</div>
+            {herr.lista.filter(h => h.grupo === g).map((h, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, padding: "6px 0", borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+              <span style={{ flex: 1 }}>{h.item}{h.detalle ? <span style={{ fontSize: 10, color: T.muted, display: "block" }}>{h.detalle}</span> : null}</span>
+              <span style={{ background: T.al, borderRadius: 6, padding: "3px 9px", fontSize: 11.5, fontWeight: 800, color: T.accent, whiteSpace: "nowrap" }}>{h.cant} {h.unidad}</span>
+            </div>)}
+          </div>)}
+        </div>}
+        <button onClick={() => setPdfHtml(reporteHTML(proyecto, cfg, piezas, resPlaca, resFondo, resumen, herr, vidrios))} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Despiece + herrajes + plan de corte en PDF</button>
       </>}
     </div>}
 
@@ -407,7 +643,7 @@ export default function Muebles() {
           <div style={{ fontSize: 11.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", margin: "14px 0 8px" }}>Fondos · {cfg.espFondo}mm</div>
           {resFondo.placas.map((pl, i) => <PlacaSVG key={"f" + i} pl={pl} PW={resFondo.PW} PH={resFondo.PH} n={i + 1} total={resFondo.placas.length} />)}
         </>}
-        <button onClick={() => setPdfHtml(reporteHTML(proyecto, cfg, piezas, resPlaca, resFondo, resumen))} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>Plan de corte en PDF (para el aserradero)</button>
+        <button onClick={() => setPdfHtml(reporteHTML(proyecto, cfg, piezas, resPlaca, resFondo, resumen, herr, vidrios))} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>Plan de corte en PDF (para el aserradero)</button>
       </>}
     </div>}
 
@@ -440,6 +676,21 @@ export default function Muebles() {
           <button onClick={() => setF("techoTravesanos", !form.techoTravesanos)} style={{ flex: 1, background: form.techoTravesanos ? T.accent : T.al, color: form.techoTravesanos ? "#fff" : T.sub, border: `1px solid ${form.techoTravesanos ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.techoTravesanos ? "✓ " : ""}Techo con travesaños</button>
           <button onClick={() => setF("fondo", form.fondo === false)} style={{ flex: 1, background: form.fondo !== false ? T.accent : T.al, color: form.fondo !== false ? "#fff" : T.sub, border: `1px solid ${form.fondo !== false ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.fondo !== false ? "✓ " : ""}Lleva fondo</button>
         </div>
+        {num(form.puertas) > 0 && <>
+          <div style={{ marginTop: 12 }}>
+            <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Sistema de puerta</label>
+            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              {[["batiente", "Batiente (bisagras)"], ["corrediza", "Corrediza (riel)"]].map(([k, l]) => <button key={k} onClick={() => setF("sistemaPuerta", k)} style={{ flex: 1, background: (form.sistemaPuerta || "batiente") === k ? T.accent : T.al, color: (form.sistemaPuerta || "batiente") === k ? "#fff" : T.sub, border: `1px solid ${(form.sistemaPuerta || "batiente") === k ? T.accent : T.border}`, borderRadius: 9, padding: "10px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+            </div>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Material de puerta</label>
+            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              {[["melamina", "Melamina 18mm"], ["vidrio", "Vidrio (marco alum.)"]].map(([k, l]) => <button key={k} onClick={() => setF("matPuerta", k)} style={{ flex: 1, background: (form.matPuerta || "melamina") === k ? T.accent : T.al, color: (form.matPuerta || "melamina") === k ? "#fff" : T.sub, border: `1px solid ${(form.matPuerta || "melamina") === k ? T.accent : T.border}`, borderRadius: 9, padding: "10px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+            </div>
+            <div style={{ fontSize: 10, color: T.muted, marginTop: 5 }}>{(form.matPuerta || "melamina") === "vidrio" ? "El vidrio no sale de la placa: va al listado de vidrios y marcos." : (form.sistemaPuerta === "corrediza" ? "Corredizas: las hojas se superponen " + (num(cfg.solape) || 25) + "mm." : "Batientes: bisagras cazoleta según el alto.")}</div>
+          </div>
+        </>}
         <div style={{ marginTop: 14 }}><Render3D m={form} cfg={cfg} abierto={num(form.puertas) === 0 && num(form.cajones) === 0} /></div>
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <button onClick={() => setForm(null)} style={{ flex: 1, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, borderRadius: 10, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
@@ -453,7 +704,7 @@ export default function Muebles() {
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", padding: 18, width: "100%", maxWidth: 680, maxHeight: "92vh", overflowY: "auto" }}>
         <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>Configuración</div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 14 }}>Placa, sierra, espesores y precios.</div>
-        {[["placaW", "Ancho de placa (mm)"], ["placaH", "Alto de placa (mm)"], ["esp", "Espesor placa (mm)"], ["espFondo", "Espesor fondo (mm)"], ["kerf", "Espesor de sierra / kerf (mm)"], ["luz", "Luz entre frentes (mm)"], ["retranqueo", "Retranqueo de estante (mm)"], ["holgura", "Holgura de estante (mm)"], ["correderaLuz", "Luz corredera por lado (mm)"], ["cantoEsp", "Ancho de canto (mm)"], ["precioPlaca", "Precio por placa ($)"], ["precioCanto", "Precio canto por metro ($)"]].map(([k, l]) => (
+        {[["placaW", "Ancho de placa (mm)"], ["placaH", "Alto de placa (mm)"], ["esp", "Espesor placa (mm)"], ["espFondo", "Espesor fondo (mm)"], ["kerf", "Espesor de sierra / kerf (mm)"], ["luz", "Luz entre frentes (mm)"], ["retranqueo", "Retranqueo de estante (mm)"], ["holgura", "Holgura de estante (mm)"], ["correderaLuz", "Luz corredera por lado (mm)"], ["cantoEsp", "Ancho de canto (mm)"], ["alturaAlacena", "Altura de alacenas al piso (mm)"], ["espMesada", "Espesor de mesada (mm)"], ["precioPlaca", "Precio por placa ($)"], ["precioCanto", "Precio canto por metro ($)"]].map(([k, l]) => (
           <div key={k} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 12, color: T.sub, flex: 1 }}>{l}</span>
             <input value={cfg[k]} onChange={e => setC(k, num(e.target.value))} inputMode="numeric" style={{ ...inpSm, width: 110, textAlign: "right" }} />
