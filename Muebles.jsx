@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v6 (Muebles: solapa Herrajes, bisagras codo 0/9/17, tipos de corredera)
+// VERSION: v7 (Muebles: catalogo Egger+Faplac, render realista, foto real de placa)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -33,6 +33,7 @@ const CFG_DEF = {
   precioPlaca: 0, precioCanto: 0, cantoEsp: 22, descontarFondo: true, travesanoH: 100,
   alturaAlacena: 1400, espMesada: 30, solape: 25, descuentoRiel: 55,
   tipoBisagra: "codo0", tipoCorredera: "telescopica", cierreSuave: true,
+  matCuerpo: "f_blanco", matFrente: "f_dakar",
   precioBisagra: 0, precioCorredera: 0, precioRiel: 0, precioVidrio: 0, precioTirador: 0,
 };
 const BISAGRAS = {
@@ -46,6 +47,37 @@ const CORREDERAS_T = {
   rodillo: { nom: "Corredera a rodillo (riel simple)", det: "extracción parcial, económica" },
 };
 const VANO_DEF = { ancho: 3000, alto: 2600, prof: 600, paredB: 0 };
+
+// ---------- CATÁLOGO DE PLACAS (Egger / Faplac) ----------
+// hex = color base aproximado para el render. Si cargás la FOTO de la placa, el render usa la foto real.
+// Medidas de tablero según proveedor: Egger 2800×2070 · Faplac melamina 1830×2750 · Faplac fondos 1830×2600
+const MATERIALES = [
+  // ---- EGGER (2800 × 2070) ----
+  { id: "e_h1145", marca: "Egger", cod: "H1145 ST10", nom: "Roble Bardolino Natural", hex: "#C9AD86", tipo: "madera", pw: 2800, ph: 2070 },
+  { id: "e_h3303", marca: "Egger", cod: "H3303 ST10", nom: "Roble Hamilton Natural", hex: "#BFA979", tipo: "madera", pw: 2800, ph: 2070 },
+  { id: "e_h1334", marca: "Egger", cod: "H1334 ST9", nom: "Roble Sorano Claro", hex: "#D4BFA3", tipo: "madera", pw: 2800, ph: 2070 },
+  { id: "e_h1312", marca: "Egger", cod: "H1312 ST10", nom: "Roble Whiteriver Blanqueado", hex: "#DED2C0", tipo: "madera", pw: 2800, ph: 2070 },
+  { id: "e_h1199", marca: "Egger", cod: "H1199 ST12", nom: "Roble Termo Negro", hex: "#4A403A", tipo: "madera", pw: 2800, ph: 2070 },
+  { id: "e_h1307", marca: "Egger", cod: "H1307 ST19", nom: "Nogal Warmia Marrón", hex: "#7A5A42", tipo: "madera", pw: 2800, ph: 2070 },
+  { id: "e_h1277", marca: "Egger", cod: "H1277 ST9", nom: "Acacia Lakeland Crema", hex: "#DCC9AC", tipo: "madera", pw: 2800, ph: 2070 },
+  { id: "e_h1225", marca: "Egger", cod: "H1225 ST12", nom: "Fresno Trondheim", hex: "#C4B49B", tipo: "madera", pw: 2800, ph: 2070 },
+  { id: "e_h305", marca: "Egger", cod: "H305 ST12", nom: "Roble Tonsberg Natural", hex: "#BFA47F", tipo: "madera", pw: 2800, ph: 2070 },
+  { id: "e_h309", marca: "Egger", cod: "H309 ST12", nom: "Roble Tonsberg Marrón Oscuro", hex: "#6B5340", tipo: "madera", pw: 2800, ph: 2070 },
+  { id: "e_w1100", marca: "Egger", cod: "W1100 PM", nom: "Blanco Alpino", hex: "#F2F1EC", tipo: "liso", pw: 2800, ph: 2070 },
+  { id: "e_u999", marca: "Egger", cod: "U999 ST19", nom: "Negro", hex: "#22242A", tipo: "liso", pw: 2800, ph: 2070 },
+  { id: "e_u961", marca: "Egger", cod: "U961 PM", nom: "Gris Grafito", hex: "#5C6067", tipo: "liso", pw: 2800, ph: 2070 },
+  // ---- FAPLAC (1830 × 2750) ----
+  { id: "f_dakar", marca: "Faplac", cod: "Roble Dakar", nom: "Roble Dakar (línea Maderas)", hex: "#B99A76", tipo: "madera", pw: 1830, ph: 2750 },
+  { id: "f_cedro", marca: "Faplac", cod: "Cedro", nom: "Cedro (línea Maderas / Nature)", hex: "#B08258", tipo: "madera", pw: 1830, ph: 2750 },
+  { id: "f_ebano", marca: "Faplac", cod: "Ébano Negro", nom: "Ébano Negro", hex: "#3A342F", tipo: "madera", pw: 1830, ph: 2750 },
+  { id: "f_nogal", marca: "Faplac", cod: "Nogal", nom: "Nogal", hex: "#7B5B41", tipo: "madera", pw: 1830, ph: 2750 },
+  { id: "f_paraiso", marca: "Faplac", cod: "Paraíso", nom: "Paraíso", hex: "#C6A882", tipo: "madera", pw: 1830, ph: 2750 },
+  { id: "f_blanco", marca: "Faplac", cod: "Blanco", nom: "Blanco", hex: "#F4F3EF", tipo: "liso", pw: 1830, ph: 2750 },
+  { id: "f_tapir", marca: "Faplac", cod: "Gris Tapir", nom: "Gris Tapir (Mesopotamia)", hex: "#8E8B85", tipo: "liso", pw: 1830, ph: 2750 },
+  { id: "f_caliza", marca: "Faplac", cod: "Caliza", nom: "Caliza (Mesopotamia)", hex: "#D9D3C8", tipo: "liso", pw: 1830, ph: 2750 },
+  { id: "f_jade", marca: "Faplac", cod: "Jade", nom: "Jade (Mesopotamia)", hex: "#6E8778", tipo: "liso", pw: 1830, ph: 2750 },
+];
+const matPorId = (id, extra) => [...(extra || []), ...MATERIALES].find(m => m.id === id) || MATERIALES[0];
 const CORREDERAS = [250, 300, 350, 400, 450, 500, 550, 600];
 // Bisagras según alto de puerta (norma habitual)
 function nBisagras(alto) { const h = num(alto); if (h <= 900) return 2; if (h <= 1600) return 3; if (h <= 2000) return 4; if (h <= 2400) return 5; return 6; }
@@ -171,70 +203,119 @@ function optimizar(piezas, cfg, mat) {
 }
 
 // ---------- RENDER 3D (proyección oblicua en SVG) ----------
-function Render3D({ m, cfg, abierto }) {
+function Render3D({ m, cfg, abierto, mats }) {
   const e = num(cfg.esp) || 18, ef = num(cfg.espFondo) || 3;
   const A = num(m.ancho) || 1, H = num(m.alto) || 1, P = num(m.prof) || 1;
   const z = num(m.zocalo) || 0, Hc = Math.max(1, H - z);
   const Pc = Math.max(1, cfg.descontarFondo && m.fondo !== false ? P - ef : P);
   const [rot, setRot] = useState({ yaw: 28, pitch: 16 });
   const drag = useRef(null);
-  const svgRef = useRef(null);
+  const uidR = useRef("r" + Math.random().toString(36).slice(2, 7));
+  const U = uidR.current;
+
+  const matCuerpo = matPorId(m.matCuerpo || cfg.matCuerpo, mats);
+  const matFrente = matPorId(m.matFrente || cfg.matFrente || m.matCuerpo || cfg.matCuerpo, mats);
 
   const onDown = (cx, cy) => { drag.current = { x: cx, y: cy, yaw: rot.yaw, pitch: rot.pitch }; };
   const onMove = (cx, cy) => { const d = drag.current; if (!d) return; const yaw = d.yaw + (cx - d.x) * 0.45; let pitch = d.pitch - (cy - d.y) * 0.45; pitch = Math.max(-80, Math.min(80, pitch)); setRot({ yaw, pitch }); };
   const onUp = () => { drag.current = null; };
 
-  // Rotación 3D real: yaw (eje Y) + pitch (eje X), luego proyección
   const R = (x, y, zz) => {
     const cx = A / 2, cy = H / 2, cz = Pc / 2;
-    let X = x - cx, Y = y - cy, Z = zz - cz;
+    const X = x - cx, Y = y - cy, Z = zz - cz;
     const ry = rot.yaw * Math.PI / 180, rp = rot.pitch * Math.PI / 180;
-    let X1 = X * Math.cos(ry) + Z * Math.sin(ry);
-    let Z1 = -X * Math.sin(ry) + Z * Math.cos(ry);
-    let Y2 = Y * Math.cos(rp) - Z1 * Math.sin(rp);
-    let Z2 = Y * Math.sin(rp) + Z1 * Math.cos(rp);
+    const X1 = X * Math.cos(ry) + Z * Math.sin(ry);
+    const Z1 = -X * Math.sin(ry) + Z * Math.cos(ry);
+    const Y2 = Y * Math.cos(rp) - Z1 * Math.sin(rp);
+    const Z2 = Y * Math.sin(rp) + Z1 * Math.cos(rp);
     return { x: X1, y: -Y2, z: Z2 };
   };
   const pt = (a) => { const p = R(a[0], a[1], a[2]); return `${p.x.toFixed(1)},${p.y.toFixed(1)}`; };
-  const prof = (pts) => pts.reduce((s, a) => s + R(a[0], a[1], a[2]).z, 0) / pts.length; // z medio para orden de dibujo
+  const prof = (pts) => pts.reduce((s, a) => s + R(a[0], a[1], a[2]).z, 0) / pts.length;
+  // Iluminación real: normal de la cara · dirección de luz
+  const luz = (pts) => {
+    const p0 = R(...pts[0]), p1 = R(...pts[1]), p2 = R(...pts[2]);
+    const u = { x: p1.x - p0.x, y: p1.y - p0.y, z: p1.z - p0.z };
+    const v = { x: p2.x - p0.x, y: p2.y - p0.y, z: p2.z - p0.z };
+    let n = { x: u.y * v.z - u.z * v.y, y: u.z * v.x - u.x * v.z, z: u.x * v.y - u.y * v.x };
+    const L = Math.hypot(n.x, n.y, n.z) || 1; n = { x: n.x / L, y: n.y / L, z: n.z / L };
+    const lz = { x: -0.35, y: -0.55, z: -0.76 }; // luz desde arriba-izquierda hacia el frente
+    const d = Math.abs(n.x * lz.x + n.y * lz.y + n.z * lz.z);
+    return { int: 0.55 + 0.45 * d, spec: Math.pow(d, 18) };
+  };
 
   const caras = [];
-  const cara = (key, pts, fill, op) => caras.push({ key, pts, fill, op: op == null ? 1 : op, z: prof(pts) });
-  const MEL = "#E4D5BE", MEL_D = "#C9B492", MEL_L = "#F1E7D6", FRENTE = "#D8C7AC", INT = "#EFE6D6";
+  const cara = (key, pts, mat, tint) => { const l = luz(pts); caras.push({ key, pts, mat, z: prof(pts), int: l.int, spec: l.spec, tint }); };
   const nPu = num(m.puertas), nCj = num(m.cajones), nEst = num(m.estantes);
   const L = num(cfg.luz) || 3;
+  const C = matCuerpo, F = matFrente;
 
-  cara("fondo", [[0, z, Pc], [A, z, Pc], [A, z + Hc, Pc], [0, z + Hc, Pc]], INT);
-  for (let i = 1; i <= nEst; i++) { const yy = z + (Hc / (nEst + 1)) * i; cara("est" + i, [[e, yy, 0], [A - e, yy, 0], [A - e, yy, Pc], [e, yy, Pc]], MEL_L); cara("estf" + i, [[e, yy - e, 0], [A - e, yy - e, 0], [A - e, yy, 0], [e, yy, 0]], MEL_D); }
-  cara("piso", [[0, z + e, 0], [A, z + e, 0], [A, z + e, Pc], [0, z + e, Pc]], MEL_L);
-  cara("pisoB", [[0, z, 0], [A, z, 0], [A, z, Pc], [0, z, Pc]], MEL_D);
-  if (!m.techoTravesanos) { cara("techo", [[0, z + Hc - e, 0], [A, z + Hc - e, 0], [A, z + Hc - e, Pc], [0, z + Hc - e, Pc]], MEL_L); cara("techoT", [[0, z + Hc, 0], [A, z + Hc, 0], [A, z + Hc, Pc], [0, z + Hc, Pc]], MEL); }
-  else { cara("tr1", [[e, z + Hc, 0], [A - e, z + Hc, 0], [A - e, z + Hc, 90], [e, z + Hc, 90]], MEL); cara("tr2", [[e, z + Hc, Pc - 90], [A - e, z + Hc, Pc - 90], [A - e, z + Hc, Pc], [e, z + Hc, Pc]], MEL); }
-  cara("latI", [[0, z, 0], [0, z, Pc], [0, z + Hc, Pc], [0, z + Hc, 0]], MEL_D);
-  cara("latIe", [[e, z, 0], [e, z, Pc], [e, z + Hc, Pc], [e, z + Hc, 0]], MEL_L);
-  cara("latD", [[A, z, 0], [A, z, Pc], [A, z + Hc, Pc], [A, z + Hc, 0]], MEL);
-  cara("latDe", [[A - e, z, 0], [A - e, z, Pc], [A - e, z + Hc, Pc], [A - e, z + Hc, 0]], MEL_L);
-  if (z > 0) cara("zoc", [[0, 0, 0], [A, 0, 0], [A, z, 0], [0, z, 0]], "#8C99A6");
+  cara("fondo", [[0, z, Pc], [A, z, Pc], [A, z + Hc, Pc], [0, z + Hc, Pc]], C);
+  for (let i = 1; i <= nEst; i++) { const yy = z + (Hc / (nEst + 1)) * i; cara("est" + i, [[e, yy, 0], [A - e, yy, 0], [A - e, yy, Pc], [e, yy, Pc]], C); cara("estf" + i, [[e, yy - e, 0], [A - e, yy - e, 0], [A - e, yy, 0], [e, yy, 0]], C); }
+  cara("piso", [[0, z + e, 0], [A, z + e, 0], [A, z + e, Pc], [0, z + e, Pc]], C);
+  cara("pisoB", [[0, z, 0], [A, z, 0], [A, z, Pc], [0, z, Pc]], C);
+  if (!m.techoTravesanos) { cara("techo", [[0, z + Hc - e, 0], [A, z + Hc - e, 0], [A, z + Hc - e, Pc], [0, z + Hc - e, Pc]], C); cara("techoT", [[0, z + Hc, 0], [A, z + Hc, 0], [A, z + Hc, Pc], [0, z + Hc, Pc]], C); }
+  else { cara("tr1", [[e, z + Hc, 0], [A - e, z + Hc, 0], [A - e, z + Hc, 90], [e, z + Hc, 90]], C); cara("tr2", [[e, z + Hc, Pc - 90], [A - e, z + Hc, Pc - 90], [A - e, z + Hc, Pc], [e, z + Hc, Pc]], C); }
+  cara("latI", [[0, z, 0], [0, z, Pc], [0, z + Hc, Pc], [0, z + Hc, 0]], C);
+  cara("latIe", [[e, z, 0], [e, z, Pc], [e, z + Hc, Pc], [e, z + Hc, 0]], C);
+  cara("latD", [[A, z, 0], [A, z, Pc], [A, z + Hc, Pc], [A, z + Hc, 0]], C);
+  cara("latDe", [[A - e, z, 0], [A - e, z, Pc], [A - e, z + Hc, Pc], [A - e, z + Hc, 0]], C);
+  if (z > 0) cara("zoc", [[0, 0, 0], [A, 0, 0], [A, z, 0], [0, z, 0]], C, "#000");
   if (!abierto) {
-    if (nCj > 0) { const altoFr = (Hc - (nCj + 1) * L) / nCj; for (let i = 0; i < nCj; i++) { const y0 = z + L + i * (altoFr + L); cara("cj" + i, [[1, y0, 0], [A - 1, y0, 0], [A - 1, y0 + altoFr, 0], [1, y0 + altoFr, 0]], FRENTE); } }
-    if (nPu > 0) { const aPu = (A - (nPu - 1) * L - 2) / nPu; for (let i = 0; i < nPu; i++) { const x0 = 1 + i * (aPu + L); cara("pu" + i, [[x0, z + 1, 0], [x0 + aPu, z + 1, 0], [x0 + aPu, z + Hc - 1, 0], [x0, z + Hc - 1, 0]], FRENTE, 0.96); } }
+    if (nCj > 0) { const altoFr = (Hc - (nCj + 1) * L) / nCj; for (let i = 0; i < nCj; i++) { const y0 = z + L + i * (altoFr + L); cara("cj" + i, [[1, y0, 0], [A - 1, y0, 0], [A - 1, y0 + altoFr, 0], [1, y0 + altoFr, 0]], F); } }
+    if (nPu > 0) {
+      const vid = m.matPuerta === "vidrio";
+      const corr = m.sistemaPuerta === "corrediza", sol = num(cfg.solape) || 25;
+      const aPu = corr ? (A + sol * (nPu - 1)) / nPu : (A - (nPu - 1) * L - 2) / nPu;
+      for (let i = 0; i < nPu; i++) { const x0 = corr ? i * (aPu - sol) : 1 + i * (aPu + L); cara("pu" + i, [[x0, z + 1, corr ? -6 : 0], [x0 + aPu, z + 1, corr ? -6 : 0], [x0 + aPu, z + Hc - 1, corr ? -6 : 0], [x0, z + Hc - 1, corr ? -6 : 0]], vid ? { id: "vidrio", hex: "#BBD3DE", tipo: "vidrio" } : F); }
+    }
   }
-  caras.sort((a, b) => b.z - a.z); // painter: dibuja lo lejano primero
+  caras.sort((a, b) => b.z - a.z);
 
   const todos = caras.flatMap(c => c.pts.map(a => R(a[0], a[1], a[2])));
   const xs = todos.map(p => p.x), ys = todos.map(p => p.y);
-  const pad = Math.max(A, H, Pc) * 0.06;
-  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad, minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+  const pad = Math.max(A, H, Pc) * 0.10;
+  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad, minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad * 1.3;
+  const usados = [...new Map(caras.map(c => [c.mat.id, c.mat])).values()];
+  const sombraY = maxY - pad * 1.1, cw = (maxX - minX);
 
-  return <div style={{ background: "#F7F4EE", borderRadius: 14, padding: 10, border: `1px solid ${T.border}` }}>
-    <svg ref={svgRef} viewBox={`${minX} ${minY} ${Math.max(1, maxX - minX)} ${Math.max(1, maxY - minY)}`}
+  return <div style={{ background: "linear-gradient(180deg,#FBFAF7 0%,#EFEDE8 100%)", borderRadius: 14, padding: 10, border: `1px solid ${T.border}` }}>
+    <svg viewBox={`${minX} ${minY} ${Math.max(1, maxX - minX)} ${Math.max(1, maxY - minY)}`}
       onMouseDown={ev => { ev.preventDefault(); onDown(ev.clientX, ev.clientY); }}
       onMouseMove={ev => onMove(ev.clientX, ev.clientY)} onMouseUp={onUp} onMouseLeave={onUp}
       onTouchStart={ev => { const t = ev.touches[0]; onDown(t.clientX, t.clientY); }}
       onTouchMove={ev => { ev.preventDefault(); const t = ev.touches[0]; onMove(t.clientX, t.clientY); }}
       onTouchEnd={onUp}
-      style={{ width: "100%", height: "auto", maxHeight: 320, display: "block", cursor: "grab", touchAction: "none" }} preserveAspectRatio="xMidYMid meet">
-      {caras.map(c => <polygon key={c.key} points={c.pts.map(pt).join(" ")} fill={c.fill} fillOpacity={c.op} stroke="#2A3542" strokeWidth={Math.max(A, H) / 380} strokeLinejoin="round" />)}
+      style={{ width: "100%", height: "auto", maxHeight: 340, display: "block", cursor: "grab", touchAction: "none" }} preserveAspectRatio="xMidYMid meet">
+      <defs>
+        {usados.map(mt => {
+          const gid = `${U}_g_${mt.id}`;
+          if (mt.foto) return <pattern key={gid} id={`${U}_p_${mt.id}`} patternUnits="objectBoundingBox" width="1" height="1"><image href={mt.foto} x="0" y="0" width="1" height="1" preserveAspectRatio="xMidYMid slice" /></pattern>;
+          if (mt.tipo === "madera") return <filter key={gid} id={`${U}_f_${mt.id}`} x="-2%" y="-2%" width="104%" height="104%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.006 0.42" numOctaves="4" seed={(mt.id || "x").length * 7} result="n" />
+            <feColorMatrix in="n" type="saturate" values="0" result="ng" />
+            <feComponentTransfer in="ng" result="nb"><feFuncA type="table" tableValues="0 0.30" /></feComponentTransfer>
+            <feBlend in="SourceGraphic" in2="nb" mode="multiply" />
+          </filter>;
+          return null;
+        })}
+        <radialGradient id={`${U}_sh`} cx="0.5" cy="0.5"><stop offset="0%" stopColor="#000" stopOpacity="0.30" /><stop offset="100%" stopColor="#000" stopOpacity="0" /></radialGradient>
+      </defs>
+      <ellipse cx={(minX + maxX) / 2} cy={sombraY} rx={cw * 0.36} ry={cw * 0.05} fill={`url(#${U}_sh)`} />
+      {caras.map(c => {
+        const mt = c.mat;
+        const base = mt.foto ? `url(#${U}_p_${mt.id})` : (mt.hex || "#DDD");
+        const filt = (!mt.foto && mt.tipo === "madera") ? `url(#${U}_f_${mt.id})` : undefined;
+        const pts = c.pts.map(pt).join(" ");
+        const sombra = Math.max(0, 1 - c.int);
+        return <g key={c.key}>
+          <polygon points={pts} fill={base} filter={filt} fillOpacity={mt.tipo === "vidrio" ? 0.55 : 1} stroke="none" />
+          {c.tint && <polygon points={pts} fill={c.tint} fillOpacity="0.35" />}
+          {sombra > 0.001 && <polygon points={pts} fill="#0A1420" fillOpacity={sombra * 0.75} />}
+          {c.spec > 0.02 && <polygon points={pts} fill="#FFFFFF" fillOpacity={c.spec * (mt.tipo === "vidrio" ? 0.5 : 0.16)} />}
+          <polygon points={pts} fill="none" stroke="#2A3542" strokeOpacity="0.5" strokeWidth={Math.max(A, H) / 900} strokeLinejoin="round" />
+        </g>;
+      })}
     </svg>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
       <span style={{ fontSize: 15 }}>↻</span>
@@ -244,9 +325,9 @@ function Render3D({ m, cfg, abierto }) {
     <div style={{ display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
       {[["Frente", 0, 0], ["3/4", 28, 16], ["Lado", 90, 0], ["Arriba", 0, 70], ["Atrás", 180, 10]].map(([l, y, p]) => <button key={l} onClick={() => setRot({ yaw: y, pitch: p })} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
     </div>
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: T.muted, marginTop: 6, padding: "0 2px" }}>
-      <span>Ancho {mm(A)} · Alto {mm(H)} · Prof {mm(P)} mm</span>
-      <span>Arrastrá para girar</span>
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.muted, marginTop: 6, padding: "0 2px", gap: 8 }}>
+      <span>{mm(A)}×{mm(H)}×{mm(P)} mm</span>
+      <span style={{ textAlign: "right" }}>{matCuerpo.marca} {matCuerpo.cod}{matFrente.id !== matCuerpo.id ? ` · frentes ${matFrente.cod}` : ""}</span>
     </div>
   </div>;
 }
@@ -501,20 +582,41 @@ export default function Muebles() {
   const [abierto, setAbierto] = useState({});
   const [pdfHtml, setPdfHtml] = useState(null);
   const [verCfg, setVerCfg] = useState(false);
+  const [matsCustom, setMatsCustom] = useState([]);
+  const [nuevoMat, setNuevoMat] = useState(null);
+  const todosMats = MATERIALES.map(b => matsCustom.find(c => c.id === b.id) || b).concat(matsCustom.filter(c => !MATERIALES.some(b => b.id === c.id)));
+  const subirFotoMat = (id, file) => {
+    if (!file) return;
+    try {
+      const img = new window.Image(); const url = URL.createObjectURL(file);
+      img.onload = () => {
+        let w = img.naturalWidth || 600, h = img.naturalHeight || 600; const max = 700;
+        if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+        const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h);
+        const durl = c.toDataURL("image/jpeg", 0.82); URL.revokeObjectURL(url);
+        const base = MATERIALES.find(x => x.id === id);
+        const yaEs = matsCustom.find(x => x.id === id);
+        const next = yaEs ? matsCustom.map(x => x.id === id ? { ...x, foto: durl } : x) : [...matsCustom, { ...(base || {}), foto: durl }];
+        setMatsCustom(next); guardar({ matsCustom: next });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); alert("No pude leer la imagen."); };
+      img.src = url;
+    } catch { alert("No pude subir la foto."); }
+  };
   const [refrescando, setRefrescando] = useState(false);
   const [okMsg, setOkMsg] = useState("");
   const actualizar = async () => {
     setRefrescando(true); setOkMsg("");
     try {
       const r = await storage.get("vv_muebles");
-      if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); }
+      if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); setMatsCustom(d.matsCustom || []); }
       setOkMsg("✓"); setTimeout(() => setOkMsg(""), 1600);
     } catch { setOkMsg("!"); setTimeout(() => setOkMsg(""), 1600); }
     setRefrescando(false);
   };
 
-  useEffect(() => { (async () => { try { const r = await storage.get("vv_muebles"); if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); } } catch { } setCargando(false); })(); }, []);
-  const guardar = (next) => { const d = { proyecto: next.proyecto != null ? next.proyecto : proyecto, muebles: next.muebles || muebles, cfg: next.cfg || cfg, vano: next.vano || vano }; if (next.proyecto != null) setProyecto(next.proyecto); if (next.muebles) setMuebles(next.muebles); if (next.cfg) setCfg(next.cfg); if (next.vano) setVano(next.vano); try { storage.set("vv_muebles", JSON.stringify(d)); } catch { } };
+  useEffect(() => { (async () => { try { const r = await storage.get("vv_muebles"); if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); setMatsCustom(d.matsCustom || []); } } catch { } setCargando(false); })(); }, []);
+  const guardar = (next) => { const d = { proyecto: next.proyecto != null ? next.proyecto : proyecto, muebles: next.muebles || muebles, cfg: next.cfg || cfg, vano: next.vano || vano, matsCustom: next.matsCustom || matsCustom }; if (next.proyecto != null) setProyecto(next.proyecto); if (next.muebles) setMuebles(next.muebles); if (next.cfg) setCfg(next.cfg); if (next.vano) setVano(next.vano); if (next.matsCustom) setMatsCustom(next.matsCustom); try { storage.set("vv_muebles", JSON.stringify(d)); } catch { } };
   const setV = (k, v) => guardar({ vano: { ...vano, [k]: num(v) } });
   const mover = (id, dir) => { const i = muebles.findIndex(m => m.id === id); const j = i + dir; if (i < 0 || j < 0 || j >= muebles.length) return; const arr = [...muebles]; const t = arr[i]; arr[i] = arr[j]; arr[j] = t; guardar({ muebles: arr }); };
 
@@ -530,11 +632,13 @@ export default function Muebles() {
   const borrarMueble = (id) => { if (confirm("¿Eliminar este mueble?")) guardar({ muebles: muebles.filter(m => m.id !== id) }); };
 
   // Cálculos
+  const matC = matPorId(cfg.matCuerpo, matsCustom);
+  const cfgP = { ...cfg, placaW: matC.pw || cfg.placaW, placaH: matC.ph || cfg.placaH };
   const piezas = muebles.flatMap(m => despiece(m, cfg));
   const herr = herrajes(muebles, cfg);
   const vidrios = piezas.filter(p => p.mat === "vidrio");
-  const resPlaca = optimizar(piezas, cfg, "placa");
-  const resFondo = optimizar(piezas, { ...cfg, veta: false }, "fondo");
+  const resPlaca = optimizar(piezas, cfgP, "placa");
+  const resFondo = optimizar(piezas, { ...cfgP, veta: false, placaW: 1830, placaH: 2600 }, "fondo");
   const cantoMl = piezas.reduce((s, p) => s + (p.canto * p.cant), 0) / 1000;
   const costo = resPlaca.placas.length * num(cfg.precioPlaca) + cantoMl * num(cfg.precioCanto);
   const resumen = { nPlacas: resPlaca.placas.length, nFondos: resFondo.placas.length, uso: resPlaca.uso, cantoMl, costo };
@@ -554,10 +658,51 @@ export default function Muebles() {
       <div style={{ fontSize: 9.5, fontWeight: 600, color: BRASS, letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 2 }}>Despiece y optimización de cortes</div>
     </div>
     <div style={{ display: "flex", background: "rgba(255,255,255,.9)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 40 }}>
-      {[["vano", "Vano"], ["muebles", "Muebles"], ["despiece", "Despiece"], ["herrajes", "Herrajes"], ["cortes", "Cortes"]].map(([k, l]) => (
+      {[["vano", "Vano"], ["muebles", "Muebles"], ["materiales", "Placas"], ["despiece", "Despiece"], ["herrajes", "Herrajes"], ["cortes", "Cortes"]].map(([k, l]) => (
         <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "12px 2px 10px", fontSize: 11.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative" }}>{l}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
       ))}
     </div>
+
+    {/* PLACAS / MATERIALES */}
+    {tab === "materiales" && <div style={{ padding: "14px 16px 40px" }}>
+      <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 15, padding: 14, marginBottom: 12, boxShadow: SHD }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: BRASS, letterSpacing: "0.12em", textTransform: "uppercase" }}>Placas del proyecto</div>
+        <div style={{ fontSize: 12.5, marginTop: 7, lineHeight: 1.6 }}>
+          Cuerpo: <b>{matPorId(cfg.matCuerpo, matsCustom).marca} · {matPorId(cfg.matCuerpo, matsCustom).nom}</b><br />
+          Frentes: <b>{matPorId(cfg.matFrente, matsCustom).marca} · {matPorId(cfg.matFrente, matsCustom).nom}</b>
+        </div>
+        <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.7)", marginTop: 7 }}>Tablero: {matPorId(cfg.matCuerpo, matsCustom).pw} × {matPorId(cfg.matCuerpo, matsCustom).ph} mm — el plan de corte usa esta medida.</div>
+      </div>
+      <div style={{ background: "rgba(176,137,79,.09)", border: `1px solid rgba(176,137,79,.35)`, borderRadius: 11, padding: "10px 12px", fontSize: 11.5, color: T.sub, marginBottom: 14, lineHeight: 1.55 }}>
+        <b style={{ color: T.text }}>Para que el render sea idéntico a la placa real:</b> tocá <b>📷</b> en el decorativo y subí la foto de la placa (del catálogo, del muestrario o de una placa). La app la usa como textura real en el 3D.
+      </div>
+      {["Egger", "Faplac"].map(marca => <div key={marca} style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>{marca} <span style={{ color: T.muted, fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>· tablero {MATERIALES.find(x => x.marca === marca).pw}×{MATERIALES.find(x => x.marca === marca).ph}</span></div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(148px,1fr))", gap: 8 }}>
+          {todosMats.filter(x => x.marca === marca).map(mt => {
+            const esC = cfg.matCuerpo === mt.id, esF = cfg.matFrente === mt.id;
+            return <div key={mt.id} style={{ background: T.card, border: `1.5px solid ${(esC || esF) ? T.accent : T.border}`, borderRadius: 11, overflow: "hidden", boxShadow: SHDsm }}>
+              <div style={{ height: 62, background: mt.foto ? `url(${mt.foto}) center/cover` : mt.hex, position: "relative" }}>
+                <label style={{ position: "absolute", top: 5, right: 5, background: "rgba(255,255,255,.9)", borderRadius: 6, padding: "3px 6px", fontSize: 11, cursor: "pointer" }}>📷<input type="file" accept="image/*" onChange={ev => { subirFotoMat(mt.id, ev.target.files && ev.target.files[0]); ev.target.value = ""; }} style={{ display: "none" }} /></label>
+                {mt.foto && <span style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(22,163,74,.92)", color: "#fff", borderRadius: 5, padding: "2px 6px", fontSize: 9, fontWeight: 800 }}>FOTO REAL</span>}
+              </div>
+              <div style={{ padding: "8px 9px" }}>
+                <div style={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.25 }}>{mt.nom}</div>
+                <div style={{ fontSize: 9.5, color: T.muted, marginTop: 1 }}>{mt.cod}</div>
+                <div style={{ display: "flex", gap: 4, marginTop: 7 }}>
+                  <button onClick={() => setC("matCuerpo", mt.id)} style={{ flex: 1, background: esC ? T.accent : T.al, color: esC ? "#fff" : T.sub, border: "none", borderRadius: 6, padding: "5px 2px", fontSize: 9.5, fontWeight: 800, cursor: "pointer" }}>{esC ? "✓ " : ""}Cuerpo</button>
+                  <button onClick={() => setC("matFrente", mt.id)} style={{ flex: 1, background: esF ? BRASS : T.al, color: esF ? "#fff" : T.sub, border: "none", borderRadius: 6, padding: "5px 2px", fontSize: 9.5, fontWeight: 800, cursor: "pointer" }}>{esF ? "✓ " : ""}Frentes</button>
+                </div>
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>)}
+      {muebles.length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: 12, boxShadow: SHDsm }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Vista previa</div>
+        <Render3D m={muebles[0]} cfg={cfg} abierto={false} mats={matsCustom} />
+      </div>}
+    </div>}
 
     {/* HERRAJES */}
     {tab === "herrajes" && <div style={{ padding: "14px 16px 40px" }}>
@@ -646,7 +791,7 @@ export default function Muebles() {
             <button onClick={() => borrarMueble(m.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✕</button>
           </div>
         </div>
-        <Render3D m={m} cfg={cfg} abierto={ab} />
+        <Render3D m={m} cfg={cfg} abierto={ab} mats={matsCustom} />
         <button onClick={() => setAbierto(s => ({ ...s, [m.id]: !s[m.id] }))} style={{ width: "100%", marginTop: 8, background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{ab ? "Ver cerrado" : "Ver interior"}</button>
       </div>; })}
 
@@ -764,7 +909,7 @@ export default function Muebles() {
             <div style={{ fontSize: 10, color: T.muted, marginTop: 5 }}>{(form.matPuerta || "melamina") === "vidrio" ? "El vidrio no sale de la placa: va al listado de vidrios y marcos." : (form.sistemaPuerta === "corrediza" ? "Corredizas: las hojas se superponen " + (num(cfg.solape) || 25) + "mm." : "Batientes: bisagras cazoleta según el alto.")}</div>
           </div>
         </>}
-        <div style={{ marginTop: 14 }}><Render3D m={form} cfg={cfg} abierto={num(form.puertas) === 0 && num(form.cajones) === 0} /></div>
+        <div style={{ marginTop: 14 }}><Render3D m={form} cfg={cfg} abierto={num(form.puertas) === 0 && num(form.cajones) === 0} mats={matsCustom} /></div>
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <button onClick={() => setForm(null)} style={{ flex: 1, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, borderRadius: 10, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
           <button onClick={guardarMueble} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 10, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Guardar mueble</button>
