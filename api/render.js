@@ -31,18 +31,24 @@ export default async function handler(req, res) {
     }
 
     let r;
-    if (imageB64) {
-      const mime = (String(imageB64).match(/^data:(image\/\w+);base64,/) || [])[1] || "image/png";
-      const ext = mime === "image/jpeg" ? "jpg" : mime === "image/webp" ? "webp" : "png";
-      const limpio = String(imageB64).replace(/^data:image\/\w+;base64,/, "");
-      const bin = Buffer.from(limpio, "base64");
+    // imagenes de referencia: el render del mueble + foto del ambiente + objetos de decoracion
+    const imgs = [];
+    if (imageB64) imgs.push(imageB64);
+    if (Array.isArray(body.imagesB64)) for (const x of body.imagesB64) if (x && imgs.length < 5) imgs.push(x);
+
+    if (imgs.length) {
       const fd = new FormData();
       fd.append("model", "gpt-image-1");
       fd.append("prompt", prompt);
       fd.append("size", size);
       fd.append("quality", quality);
       fd.append("input_fidelity", "high");
-      fd.append("image", new Blob([bin], { type: mime }), "diseno." + ext);
+      imgs.forEach((im, i) => {
+        const mime = (String(im).match(/^data:(image\/\w+);base64,/) || [])[1] || "image/png";
+        const ext = mime === "image/jpeg" ? "jpg" : mime === "image/webp" ? "webp" : "png";
+        const bin = Buffer.from(String(im).replace(/^data:image\/\w+;base64,/, ""), "base64");
+        fd.append("image[]", new Blob([bin], { type: mime }), `ref${i}.${ext}`);
+      });
       r = await fetch("https://api.openai.com/v1/images/edits", {
         method: "POST",
         headers: { Authorization: "Bearer " + key },
