@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v11 (Muebles: fix render roto en iPad + textos cortados)
+// VERSION: v13 (Muebles: motor 3D reescrito - sin deformaciones, descarte de caras ocultas)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -506,25 +506,29 @@ const hexRGB = (h) => { const s = String(h || "#ccc").replace("#", ""); return {
 const mezcla = (hex, k) => { const c = hexRGB(hex); const f = (v) => Math.max(0, Math.min(255, Math.round(v * k))); return `rgb(${f(c.r)},${f(c.g)},${f(c.b)})`; };
 
 function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
-  const [cam, setCam] = useState({ yaw: -16, pitch: 8, dist: 2.4 });
+  const [cam, setCam] = useState({ yaw: -18, pitch: 6, dist: 2.6 });
   const [verIA, setVerIA] = useState(false);
   const svgRef = useRef(null);
   const drag = useRef(null);
   const U = "esc";
-  const e = num(cfg.esp) || 18, ef = num(cfg.espFondo) || 3;
-  const W = num(vano.ancho) || 3000, HV = num(vano.alto) || 2600;
+  const ef = num(cfg.espFondo) || 3;
+  const W = Math.max(300, num(vano.ancho) || 3000);
+  const HV = Math.max(300, num(vano.alto) || 2600);
   const hAlac = num(cfg.alturaAlacena) || 1400, eMes = num(cfg.espMesada) || 30;
   const L = num(cfg.luz) || 3;
   const d = distribuir(muebles, "A");
+  const matC = matPorId(cfg.matCuerpo, mats), matF = matPorId(cfg.matFrente, mats);
 
   const onDown = (x, y) => { drag.current = { x, y, ...cam }; };
-  const onMove = (x, y) => { const g = drag.current; if (!g) return; setCam({ ...cam, yaw: g.yaw + (x - g.x) * 0.22, pitch: Math.max(-25, Math.min(45, g.pitch - (y - g.y) * 0.18)) }); };
+  const onMove = (x, y) => { const g = drag.current; if (!g) return; setCam({ ...cam, yaw: g.yaw + (x - g.x) * 0.22, pitch: Math.max(-20, Math.min(40, g.pitch - (y - g.y) * 0.16)) }); };
   const onUp = () => { drag.current = null; };
 
-  // centro de escena y cámara en perspectiva
-  const cx = W / 2, cy = HV * 0.45, cz = 300;
-  const escala = Math.max(W, HV);
-  const D = escala * cam.dist, F = escala * 1.55;
+  const anchoTotal = Math.max(W, d.anchoPiso, d.anchoColg, 600);
+  const profMax = Math.max(300, ...muebles.map(m => num(m.prof) || 0));
+  const escala = Math.max(anchoTotal, HV);
+  const D = escala * (2.2 + cam.dist), F = escala * 1.5;   // cámara siempre lejos: sin perspectiva extrema
+  const cx = anchoTotal / 2, cy = HV * 0.42, cz = profMax / 2;
+
   const proj = (x, y, z) => {
     const X = x - cx, Y = y - cy, Z = z - cz;
     const ry = cam.yaw * Math.PI / 180, rp = cam.pitch * Math.PI / 180;
@@ -532,99 +536,115 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
     const Z1 = -X * Math.sin(ry) + Z * Math.cos(ry);
     const Y2 = Y * Math.cos(rp) - Z1 * Math.sin(rp);
     const Z2 = Y * Math.sin(rp) + Z1 * Math.cos(rp);
-    const dist = D - Z2;                       // profundidad respecto de la cámara
-    const k = F / Math.max(escala * 0.35, dist); // perspectiva real
+    const dist = Math.max(escala * 0.9, D - Z2);           // nunca cerca de 0 -> no hay agujas
+    const k = F / dist;
     return { x: X1 * k, y: -Y2 * k, dist };
   };
   const P = (a) => { const p = proj(a[0], a[1], a[2]); return `${p.x.toFixed(1)},${p.y.toFixed(1)}`; };
   const zMed = (pts) => pts.reduce((s, a) => s + proj(a[0], a[1], a[2]).dist, 0) / pts.length;
-  const normalLuz = (pts) => {
+  // área con signo: si es negativa la cara mira para atrás -> no se dibuja
+  const areaSigno = (pts) => { const q = pts.map(a => proj(a[0], a[1], a[2])); let s = 0; for (let i = 0; i < q.length; i++) { const j = (i + 1) % q.length; s += q[i].x * q[j].y - q[j].x * q[i].y; } return s / 2; };
+  const luzCara = (pts) => {
     const q = pts.map(a => { const X = a[0] - cx, Y = a[1] - cy, Z = a[2] - cz; const ry = cam.yaw * Math.PI / 180, rp = cam.pitch * Math.PI / 180; const X1 = X * Math.cos(ry) + Z * Math.sin(ry); const Z1 = -X * Math.sin(ry) + Z * Math.cos(ry); return { x: X1, y: Y * Math.cos(rp) - Z1 * Math.sin(rp), z: Y * Math.sin(rp) + Z1 * Math.cos(rp) }; });
     const u = { x: q[1].x - q[0].x, y: q[1].y - q[0].y, z: q[1].z - q[0].z };
     const v = { x: q[2].x - q[0].x, y: q[2].y - q[0].y, z: q[2].z - q[0].z };
     let n = { x: u.y * v.z - u.z * v.y, y: u.z * v.x - u.x * v.z, z: u.x * v.y - u.y * v.x };
     const len = Math.hypot(n.x, n.y, n.z) || 1; n = { x: n.x / len, y: n.y / len, z: n.z / len };
-    const lz = { x: -0.42, y: 0.66, z: 0.62 };
+    const lz = { x: -0.40, y: 0.64, z: 0.66 };
     const dp = Math.abs(n.x * lz.x + n.y * lz.y + n.z * lz.z);
-    return { int: 0.48 + 0.52 * dp, spec: Math.pow(dp, 22) };
+    return { int: 0.50 + 0.50 * dp, spec: Math.pow(dp, 20) };
   };
 
   const caras = [];
-  const addCara = (key, pts, mat, opts) => { const l = normalLuz(pts); caras.push({ key, pts, mat, z: zMed(pts), int: l.int, spec: l.spec, ...(opts || {}) }); };
+  const addCara = (key, pts, mat, opts) => {
+    if (areaSigno(pts) <= 0) return;                       // cara que no se ve: se descarta
+    const l = luzCara(pts);
+    caras.push({ key, pts, mat, z: zMed(pts), int: l.int, spec: l.spec, ...(opts || {}) });
+  };
 
-  const matC = matPorId(cfg.matCuerpo, mats), matF = matPorId(cfg.matFrente, mats);
-  const MESADA = { id: "mesada", hex: "#3C4048", tipo: "liso", gloss: 0.5 };
+  const MESADA = { id: "mesada", hex: "#33373E", tipo: "liso", gloss: true };
+  const ZOCALO = { id: "zoc", hex: "#22252A", tipo: "liso" };
+  const TIRA = { id: "tira", hex: "#9AA1AA", tipo: "liso" };
 
-  // Caja / cuerpo de cada módulo
-  const modulo = (it, base, colgado) => {
+  // Caja cerrada: frente + laterales + techo + piso (sin interior: no se ve y ensuciaba el dibujo)
+  const modulo = (it, base) => {
     const m = it.m, A = it.w, x0 = it.x;
-    const alt = num(m.alto), pf = num(m.prof), zc = num(m.zocalo) || 0;
-    const y0 = base, Hc = alt - zc;
+    const alt = num(m.alto) || 700, pf = Math.max(100, num(m.prof) || 500), zc = num(m.zocalo) || 0;
+    const y0 = base + zc, Hc = Math.max(50, alt - zc);
     const mc = matPorId(m.matCuerpo || cfg.matCuerpo, mats), mf = matPorId(m.matFrente || cfg.matFrente, mats);
-    const zF = 0, zB = pf; // z=0 frente, z=pf fondo (pared al fondo)
-    // interior
-    addCara(`f${x0}${base}`, [[x0, y0 + zc, zB], [x0 + A, y0 + zc, zB], [x0 + A, y0 + zc + Hc, zB], [x0, y0 + zc + Hc, zB]], mc, { ao: 0.5 });
-    // laterales, piso, techo
-    addCara(`li${x0}${base}`, [[x0, y0 + zc, zF], [x0, y0 + zc, zB], [x0, y0 + zc + Hc, zB], [x0, y0 + zc + Hc, zF]], mc);
-    addCara(`ld${x0}${base}`, [[x0 + A, y0 + zc, zF], [x0 + A, y0 + zc, zB], [x0 + A, y0 + zc + Hc, zB], [x0 + A, y0 + zc + Hc, zF]], mc);
-    addCara(`tp${x0}${base}`, [[x0, y0 + zc + Hc, zF], [x0 + A, y0 + zc + Hc, zF], [x0 + A, y0 + zc + Hc, zB], [x0, y0 + zc + Hc, zB]], mc);
-    if (zc > 0) addCara(`zo${x0}`, [[x0, y0, zF + 20], [x0 + A, y0, zF + 20], [x0 + A, y0 + zc, zF + 20], [x0, y0 + zc, zF + 20]], { id: "zoc", hex: "#23262B", tipo: "liso" }, { ao: 0.6 });
-    // frentes
+    const x1 = x0 + A, y1 = y0 + Hc, zF = 0, zB = pf;
     const nPu = num(m.puertas), nCj = num(m.cajones);
-    const corr = m.sistemaPuerta === "corrediza", vid = m.matPuerta === "vidrio";
+    const vid = m.matPuerta === "vidrio";
+    const cerrado = nPu > 0 || nCj > 0;
+    // laterales / techo / piso (winding para que el signo de área los oculte solo)
+    addCara(`li${x0}${base}`, [[x0, y0, zF], [x0, y1, zF], [x0, y1, zB], [x0, y0, zB]], mc);
+    addCara(`ld${x0}${base}`, [[x1, y0, zB], [x1, y1, zB], [x1, y1, zF], [x1, y0, zF]], mc);
+    addCara(`tp${x0}${base}`, [[x0, y1, zF], [x0, y1, zB], [x1, y1, zB], [x1, y1, zF]], mc);
+    addCara(`pi${x0}${base}`, [[x0, y0, zB], [x0, y0, zF], [x1, y0, zF], [x1, y0, zB]], mc);
+    addCara(`fo${x0}${base}`, [[x0, y0, zB], [x1, y0, zB], [x1, y1, zB], [x0, y1, zB]], mc, { ao: 0.35 });
+    if (!cerrado) { // sin puertas: se ve el interior (fondo + estantes)
+      const nEst = num(m.estantes);
+      for (let i = 1; i <= nEst; i++) { const yy = y0 + (Hc / (nEst + 1)) * i; addCara(`es${x0}${base}${i}`, [[x0, yy, zF], [x1, yy, zF], [x1, yy, zB], [x0, yy, zB]], mc); }
+      addCara(`in${x0}${base}`, [[x0, y0, zB - 1], [x0, y1, zB - 1], [x1, y1, zB - 1], [x1, y0, zB - 1]], mc, { ao: 0.5 });
+    }
+    if (zc > 0) addCara(`zo${x0}${base}`, [[x0, base, zF + 25], [x1, base, zF + 25], [x1, base + zc, zF + 25], [x0, base + zc, zF + 25]], ZOCALO, { ao: 0.55 });
+    // frentes
+    const zP = zF - 18;
     if (nCj > 0) {
       const aF = (Hc - (nCj + 1) * L) / nCj;
       for (let i = 0; i < nCj; i++) {
-        const yy = y0 + zc + L + i * (aF + L);
-        addCara(`cj${x0}${i}`, [[x0 + 1, yy, zF - 18], [x0 + A - 1, yy, zF - 18], [x0 + A - 1, yy + aF, zF - 18], [x0 + 1, yy + aF, zF - 18]], mf, { frente: true });
-        caras.push({ key: `tir${x0}${i}`, tirador: true, pts: [[x0 + A * 0.28, yy + aF * 0.62, zF - 30], [x0 + A * 0.72, yy + aF * 0.62, zF - 30], [x0 + A * 0.72, yy + aF * 0.62 + 16, zF - 30], [x0 + A * 0.28, yy + aF * 0.62 + 16, zF - 30]], z: zMed([[x0 + A * 0.5, yy, zF - 30]]), mat: { hex: "#8A8F98" }, int: 1, spec: 0.8 });
+        const yy = y0 + L + i * (aF + L);
+        addCara(`cj${x0}${base}${i}`, [[x0 + 1, yy, zP], [x0 + A - 1, yy, zP], [x0 + A - 1, yy + aF, zP], [x0 + 1, yy + aF, zP]], mf, { frente: true });
+        const ty = yy + aF * 0.68;
+        addCara(`tc${x0}${base}${i}`, [[x0 + A * 0.30, ty, zP - 14], [x0 + A * 0.70, ty, zP - 14], [x0 + A * 0.70, ty + 18, zP - 14], [x0 + A * 0.30, ty + 18, zP - 14]], TIRA, { tirador: true });
       }
     }
     if (nPu > 0) {
-      const sol = num(cfg.solape) || 25;
+      const corr = m.sistemaPuerta === "corrediza", sol = num(cfg.solape) || 25;
       const aPu = corr ? (A + sol * (nPu - 1)) / nPu : (A - (nPu - 1) * L - 2) / nPu;
       for (let i = 0; i < nPu; i++) {
         const px = corr ? x0 + i * (aPu - sol) : x0 + 1 + i * (aPu + L);
-        const zz = corr ? zF - 26 - (i % 2) * 20 : zF - 18;
-        addCara(`pu${x0}${i}`, [[px, y0 + zc + 1, zz], [px + aPu, y0 + zc + 1, zz], [px + aPu, y0 + zc + Hc - 1, zz], [px, y0 + zc + Hc - 1, zz]], vid ? { id: "vid", hex: "#C3D7E0", tipo: "vidrio", gloss: 0.9 } : mf, { frente: true });
-        const tx = (i === 0 && nPu > 1) ? px + aPu - 45 : px + 45;
-        caras.push({ key: `tirp${x0}${i}`, tirador: true, pts: [[tx - 7, y0 + zc + Hc * 0.42, zz - 12], [tx + 7, y0 + zc + Hc * 0.42, zz - 12], [tx + 7, y0 + zc + Hc * 0.42 + 130, zz - 12], [tx - 7, y0 + zc + Hc * 0.42 + 130, zz - 12]], z: zMed([[tx, y0 + zc + Hc * 0.5, zz - 12]]), mat: { hex: "#8A8F98" }, int: 1, spec: 0.85 });
+        const zz = corr ? zP - (i % 2) * 22 : zP;
+        addCara(`pu${x0}${base}${i}`, [[px, y0 + 1, zz], [px + aPu, y0 + 1, zz], [px + aPu, y1 - 1, zz], [px, y1 - 1, zz]], vid ? { id: "vid", hex: "#C3D7E0", tipo: "vidrio", gloss: true } : mf, { frente: true });
+        const tx = (i === 0 && nPu > 1) ? px + aPu - 48 : px + 48;
+        const ty = y0 + Hc * 0.40;
+        addCara(`tp${x0}${base}${i}`, [[tx - 8, ty, zz - 14], [tx + 8, ty, zz - 14], [tx + 8, ty + Math.min(140, Hc * 0.3), zz - 14], [tx - 8, ty + Math.min(140, Hc * 0.3), zz - 14]], TIRA, { tirador: true });
       }
     }
   };
 
-  // pared y piso
-  const FONDO_Z = 900;
-  addCara("pared", [[-500, 0, FONDO_Z], [W + 500, 0, FONDO_Z], [W + 500, HV + 400, FONDO_Z], [-500, HV + 400, FONDO_Z]], { id: "pared", hex: "#E9E6E0", tipo: "liso" }, { pared: true });
-  addCara("piso", [[-500, 0, -900], [W + 500, 0, -900], [W + 500, 0, FONDO_Z], [-500, 0, FONDO_Z]], { id: "piso", hex: "#B9B0A4", tipo: "liso" }, { piso: true });
+  // Piso: sólo bajo los muebles (nada de planos gigantes que se deformaban)
+  const anchoPiso = Math.max(d.anchoPiso, d.anchoColg, 600);
+  addCara("piso", [[-250, 0, -700], [anchoPiso + 250, 0, -700], [anchoPiso + 250, 0, profMax + 60], [-250, 0, profMax + 60]], { id: "piso", hex: "#B5ADA2", tipo: "liso" }, { piso: true });
 
-  // bajos + mesada + alacenas
-  d.piso.forEach(it => modulo(it, 0, false));
-  const hayBajos = d.piso.filter(it => !esAlto(it.m));
-  if (hayBajos.length) {
-    const hb = Math.max(...hayBajos.map(it => num(it.m.alto)));
-    const anchoM = hayBajos.reduce((s, it) => s + it.w, 0);
-    const pM = Math.max(...hayBajos.map(it => num(it.m.prof))) + 25;
-    addCara("mesada", [[0, hb + eMes, -25], [anchoM, hb + eMes, -25], [anchoM, hb + eMes, pM], [0, hb + eMes, pM]], MESADA, { gloss: true });
-    addCara("mesadaF", [[0, hb, -25], [anchoM, hb, -25], [anchoM, hb + eMes, -25], [0, hb + eMes, -25]], MESADA);
+  d.piso.forEach(it => modulo(it, 0));
+  const bajos = d.piso.filter(it => !esAlto(it.m));
+  if (bajos.length) {
+    const hb = Math.max(...bajos.map(it => num(it.m.alto) || 860));
+    const anchoM = bajos.reduce((s, it) => s + it.w, 0);
+    const pM = Math.max(...bajos.map(it => num(it.m.prof) || 580)) + 25;
+    addCara("mesada", [[-8, hb + eMes, -25], [-8, hb + eMes, pM], [anchoM + 8, hb + eMes, pM], [anchoM + 8, hb + eMes, -25]], MESADA, { gloss: true });
+    addCara("mesadaF", [[-8, hb, -25], [anchoM + 8, hb, -25], [anchoM + 8, hb + eMes, -25], [-8, hb + eMes, -25]], MESADA);
   }
-  d.colg.forEach(it => modulo(it, hAlac, true));
+  d.colg.forEach(it => modulo(it, hAlac));
   caras.sort((a, b) => b.z - a.z);
 
   const pts0 = caras.flatMap(c => c.pts.map(a => proj(a[0], a[1], a[2])));
   const xs = pts0.map(p => p.x), ys = pts0.map(p => p.y);
-  const mnX = Math.min(...xs), mxX = Math.max(...xs), mnY = Math.min(...ys), mxY = Math.max(...ys);
-  const pd = (mxX - mnX) * 0.04;
+  const mnX = xs.length ? Math.min(...xs) : -100, mxX = xs.length ? Math.max(...xs) : 100;
+  const mnY = ys.length ? Math.min(...ys) : -100, mxY = ys.length ? Math.max(...ys) : 100;
+  const pd = Math.max(20, (mxX - mnX) * 0.06);
+  const vbX = mnX - pd, vbY = mnY - pd, vbW = Math.max(10, (mxX - mnX) + pd * 2), vbH = Math.max(10, (mxY - mnY) + pd * 2);
   const usados = [...new Map(caras.filter(c => c.mat && c.mat.id).map(c => [c.mat.id, c.mat])).values()];
 
   return <div style={{ position: "fixed", inset: 0, background: "#11151B", zIndex: 600, display: "flex", flexDirection: "column" }}>
     <div style={{ display: "flex", gap: 8, padding: "10px 12px", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
       <button onClick={onClose} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
       <div style={{ color: "#fff", fontSize: 13, fontWeight: 700, flex: 1 }}>Render final</div>
-      {[["Frente", -2, 4], ["3/4", -18, 8], ["Lateral", -42, 10], ["Alto", -14, 30]].map(([l, y, p]) => <button key={l} onClick={() => setCam(c => ({ ...c, yaw: y, pitch: p }))} style={{ background: "rgba(255,255,255,.1)", color: "#fff", border: "none", borderRadius: 7, padding: "7px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+      {[["Frente", 0, 3], ["3/4", -18, 6], ["Lateral", -40, 8], ["Alto", -14, 28]].map(([l, y, p]) => <button key={l} onClick={() => setCam(c => ({ ...c, yaw: y, pitch: p }))} style={{ background: "rgba(255,255,255,.1)", color: "#fff", border: "none", borderRadius: 7, padding: "7px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
     </div>
-    <div style={{ flex: 1, minHeight: 0, background: "radial-gradient(ellipse at 50% 35%, #2A3038 0%, #11151B 75%)" }}>
-      <svg ref={svgRef} viewBox={`${mnX - pd} ${mnY - pd} ${(mxX - mnX) + pd * 2} ${(mxY - mnY) + pd * 2}`}
+    <div style={{ flex: 1, minHeight: 0, background: "linear-gradient(180deg, #E8E4DD 0%, #CFC9C0 55%, #B7B0A6 100%)" }}>
+      <svg ref={svgRef} viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
         onMouseDown={ev => { ev.preventDefault(); onDown(ev.clientX, ev.clientY); }} onMouseMove={ev => onMove(ev.clientX, ev.clientY)} onMouseUp={onUp} onMouseLeave={onUp}
         onTouchStart={ev => { const t = ev.touches[0]; onDown(t.clientX, t.clientY); }} onTouchMove={ev => { ev.preventDefault(); const t = ev.touches[0]; onMove(t.clientX, t.clientY); }} onTouchEnd={onUp}
         style={{ width: "100%", height: "100%", display: "block", cursor: "grab", touchAction: "none" }} preserveAspectRatio="xMidYMid meet">
@@ -635,26 +655,20 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
               <rect x="0" y="0" width="1" height="1" fill={mt.hex} />
               {vetaBandas(mt.hex, mt.id).map((b, i) => <rect key={i} x={b.x} y="0" width={b.w} height="1" fill={mezcla(mt.hex, b.k)} opacity={b.o} />)}
             </pattern> : null))}
-          <linearGradient id={`${U}_ao`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#000" stopOpacity="0" /><stop offset="100%" stopColor="#000" stopOpacity="0.5" /></linearGradient>
-          <linearGradient id={`${U}_gl`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fff" stopOpacity="0.30" /><stop offset="45%" stopColor="#fff" stopOpacity="0.05" /><stop offset="100%" stopColor="#fff" stopOpacity="0" /></linearGradient>
-          <linearGradient id={`${U}_wall`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fff" stopOpacity="0.35" /><stop offset="100%" stopColor="#000" stopOpacity="0.18" /></linearGradient>
-          <linearGradient id={`${U}_flr`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#000" stopOpacity="0.35" /><stop offset="100%" stopColor="#fff" stopOpacity="0.12" /></linearGradient>
+          <linearGradient id={`${U}_ao`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#000" stopOpacity="0" /><stop offset="100%" stopColor="#000" stopOpacity="0.45" /></linearGradient>
+          <linearGradient id={`${U}_gl`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fff" stopOpacity="0.28" /><stop offset="50%" stopColor="#fff" stopOpacity="0.04" /><stop offset="100%" stopColor="#fff" stopOpacity="0" /></linearGradient>
         </defs>
         {caras.map(c => {
           const mt = c.mat || {}; const pts = c.pts.map(P).join(" ");
-          if (c.tirador) return <polygon key={c.key} points={pts} fill="#9AA1AA" stroke="#5C6169" strokeWidth={escala / 900} rx="4" />;
           const base = (mt.foto || mt.tipo === "madera") ? `url(#${U}_p_${mt.id})` : (mt.hex || "#ccc");
           const oscuro = cfg.sinSombras ? 0 : Math.max(0, 1 - c.int);
           return <g key={c.key}>
-            <polygon points={pts} fill={base} fillOpacity={mt.tipo === "vidrio" ? 0.42 : 1} />
-            {c.pared && <polygon points={pts} fill={`url(#${U}_wall)`} />}
-            {c.piso && <polygon points={pts} fill={`url(#${U}_flr)`} />}
-            {oscuro > 0.001 && <polygon points={pts} fill="#080D14" fillOpacity={oscuro * 0.78} />}
+            <polygon points={pts} fill={base} fillOpacity={mt.tipo === "vidrio" ? 0.45 : 1} />
             {c.ao && !cfg.sinSombras && <polygon points={pts} fill={`url(#${U}_ao)`} fillOpacity={c.ao} />}
-            {(c.gloss || mt.gloss || mt.tipo === "vidrio") && <polygon points={pts} fill={`url(#${U}_gl)`} />}
-            {c.spec > 0.02 && <polygon points={pts} fill="#fff" fillOpacity={c.spec * (mt.tipo === "vidrio" ? 0.55 : mt.gloss ? 0.35 : 0.14)} />}
-            {c.frente && <polygon points={pts} fill="none" stroke="#000" strokeOpacity="0.30" strokeWidth={escala / 700} strokeLinejoin="round" />}
-            {!c.frente && !c.pared && !c.piso && <polygon points={pts} fill="none" stroke="#000" strokeOpacity="0.16" strokeWidth={escala / 1300} strokeLinejoin="round" />}
+            {oscuro > 0.001 && <polygon points={pts} fill="#0A1018" fillOpacity={oscuro * 0.62} />}
+            {(c.gloss || mt.gloss) && <polygon points={pts} fill={`url(#${U}_gl)`} />}
+            {!cfg.sinSombras && c.spec > 0.03 && <polygon points={pts} fill="#fff" fillOpacity={c.spec * (mt.gloss ? 0.30 : 0.12)} />}
+            <polygon points={pts} fill="none" stroke="#1B2430" strokeOpacity={c.frente ? 0.34 : 0.18} strokeWidth={escala / (c.frente ? 800 : 1400)} strokeLinejoin="round" />
           </g>;
         })}
       </svg>
@@ -662,7 +676,7 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
     <div style={{ padding: "10px 14px calc(10px + env(safe-area-inset-bottom))", background: "#11151B", borderTop: "1px solid rgba(255,255,255,.08)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ color: "rgba(255,255,255,.55)", fontSize: 11, fontWeight: 700 }}>Zoom</span>
-        <input type="range" min="150" max="420" value={Math.round(cam.dist * 100)} onChange={ev => setCam(c => ({ ...c, dist: num(ev.target.value) / 100 }))} style={{ flex: 1, accentColor: BRASS }} />
+        <input type="range" min="10" max="200" value={Math.round(cam.dist * 40)} onChange={ev => setCam(c => ({ ...c, dist: num(ev.target.value) / 40 }))} style={{ flex: 1, accentColor: BRASS }} />
       </div>
       <button onClick={() => setVerIA(true)} style={{ width: "100%", marginTop: 10, background: `linear-gradient(135deg, ${BRASS}, #8E6C3A)`, color: "#fff", border: "none", borderRadius: 11, padding: "14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>✨ Convertir en render fotorrealista</button>
       <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10.5, marginTop: 6, textAlign: "center" }}>Arrastrá para girar · {matC.marca} {matC.nom} (cuerpo) · {matF.nom} (frentes)</div>
@@ -710,12 +724,14 @@ function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, onClose }) {
       const url = URL.createObjectURL(b);
       const im = new window.Image();
       im.onload = () => {
-        const W = 1024, H = Math.round(W * (im.height || 700) / (im.width || 1024));
-        const c = document.createElement("canvas"); c.width = W; c.height = H;
-        const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
-        ctx.drawImage(im, 0, 0, W, H);
-        URL.revokeObjectURL(url);
-        try { resolve(c.toDataURL("image/png")); } catch { resolve(""); }
+        try {
+          const W = 768, H = Math.max(1, Math.round(W * (im.height || 540) / (im.width || 768)));
+          const c = document.createElement("canvas"); c.width = W; c.height = H;
+          const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+          ctx.drawImage(im, 0, 0, W, H);
+          URL.revokeObjectURL(url);
+          resolve(c.toDataURL("image/jpeg", 0.8)); // JPEG: mucho más liviano que PNG
+        } catch { resolve(""); }
       };
       im.onerror = () => { URL.revokeObjectURL(url); resolve(""); };
       im.src = url;
@@ -726,10 +742,18 @@ function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, onClose }) {
     setGen(true); setErr(""); setImg("");
     try {
       const prompt = promptEscena(proyecto, vano, muebles, cfg, mats, op);
-      const imageB64 = usarRef ? await svgAPng() : "";
+      let imageB64 = "";
+      if (usarRef) {
+        imageB64 = await svgAPng();
+        // si por lo que sea pesa mucho, se manda sin referencia antes que fallar
+        if (imageB64 && imageB64.length > 3200000) imageB64 = "";
+      }
       const r = await fetch("/api/render", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, imageB64: imageB64 || undefined, size: "1536x1024", quality: "high" }) });
-      const d = await r.json();
-      if (!r.ok || !d.image) throw new Error((d.error && d.error.message) || "No se pudo generar el render.");
+      const txt = await r.text();
+      let d = null;
+      try { d = JSON.parse(txt); } catch { throw new Error(`El servidor respondió ${r.status}. ${txt.slice(0, 160) || "Sin detalle."}`); }
+      if (!r.ok) throw new Error((d && d.error && d.error.message) || `Error ${r.status} al generar el render.`);
+      if (!d.image) throw new Error("La IA no devolvió imagen.");
       setImg(d.image);
     } catch (e) { setErr(e.message || "Error al generar el render."); }
     setGen(false);
