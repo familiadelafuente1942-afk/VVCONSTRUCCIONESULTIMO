@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v98 (particulares: toggle con/sin lote siempre visible + deteccion robusta)
+// VERSION: v100 (IA Finanzas: rojo inmediato al escuchar + tocar de nuevo corta)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -1555,8 +1555,9 @@ function contextoDatos(data) {
   return txt.length > 16000 ? txt.slice(0, 16000) + "\n…(recortado)" : txt;
 }
 function AsistenteCargaTab({ data, save }) {
-  const [texto, setTexto] = useState(""); const [files, setFiles] = useState([]); const [cargando, setCargando] = useState(false); const [msgs, setMsgs] = useState(() => { try { const l = localStorage.getItem("vv_ia_chat"); return l ? JSON.parse(l) : []; } catch { return []; } }); const [acciones, setAcciones] = useState([]); const [error, setError] = useState(""); const [subLogo, setSubLogo] = useState(false); const [mostrarTexto, setMostrarTexto] = useState(false);
+  const [texto, setTexto] = useState(""); const [files, setFiles] = useState([]); const [cargando, setCargando] = useState(false); const [msgs, setMsgs] = useState(() => { try { const l = localStorage.getItem("vv_ia_chat"); return l ? JSON.parse(l) : []; } catch { return []; } }); const [acciones, setAcciones] = useState([]); const [error, setError] = useState(""); const [subLogo, setSubLogo] = useState(false); const [mostrarTexto, setMostrarTexto] = useState(false); const [escuchando, setEscuchando] = useState(false);
   const taRef = useRef(null);
+  const recRef = useRef(null);
   const endRef = useRef(null);
   useEffect(() => { try { endRef.current && endRef.current.scrollIntoView({ behavior: "smooth", block: "end" }); } catch { } }, [msgs, cargando, acciones]);
   useEffect(() => { try { const s = JSON.stringify(msgs.slice(-40)); localStorage.setItem("vv_ia_chat", s); storage.set("vv_ia_chat", s); } catch { } }, [msgs]);
@@ -1584,12 +1585,14 @@ ${contextoDatos(data)}`;
   const toB64 = (f) => new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(",")[1]); rd.onerror = () => rej(new Error("no se pudo leer")); rd.readAsDataURL(f); });
   const hablar = (txt) => { try { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(txt); u.lang = "es-AR"; window.speechSynthesis.speak(u); } catch { } };
   const escuchar = () => {
+    if (escuchando && recRef.current) { try { recRef.current.stop(); } catch { } setEscuchando(false); return; }
     try {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) { enfocar(); alert("Para dictar en el iPhone: tocá el micrófono del teclado (al lado de la barra espaciadora) y cuando termines, tocá Enviar."); return; }
-      const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = true;
+      const rec = new SR(); recRef.current = rec; rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = true;
       let finalTxt = ""; let timer = null;
       const cerrarYEnviar = () => { try { rec.stop(); } catch { } };
+      rec.onstart = () => setEscuchando(true);
       rec.onresult = (e) => {
         let interim = "";
         for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) finalTxt += t + " "; else interim += t; }
@@ -1597,10 +1600,10 @@ ${contextoDatos(data)}`;
         if (timer) clearTimeout(timer);
         timer = setTimeout(cerrarYEnviar, 3000);
       };
-      rec.onend = () => { if (timer) clearTimeout(timer); const t = finalTxt.trim(); if (t) { setTexto(t); setTimeout(() => enviar(t), 100); } };
-      rec.onerror = () => { if (timer) clearTimeout(timer); enfocar(); };
-      rec.start();
-    } catch { enfocar(); alert("Usá el micrófono del teclado para dictar."); }
+      rec.onend = () => { setEscuchando(false); if (timer) clearTimeout(timer); const t = finalTxt.trim(); if (t) { setTexto(t); setTimeout(() => enviar(t), 100); } };
+      rec.onerror = () => { setEscuchando(false); if (timer) clearTimeout(timer); enfocar(); };
+      setEscuchando(true); rec.start();
+    } catch { setEscuchando(false); enfocar(); alert("Usá el micrófono del teclado para dictar."); }
   };
   async function enviar(override) {
     const base = (typeof override === "string" ? override : texto).trim();
@@ -1671,9 +1674,9 @@ ${contextoDatos(data)}`;
     </div>
     <div style={{ position: "sticky", bottom: 0, background: T.bg, borderTop: `1px solid ${T.border}`, padding: "10px 12px calc(10px + env(safe-area-inset-bottom))", boxShadow: "0 -4px 14px rgba(15,27,45,.06)" }}>
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 9 }}>
-        <div onClick={escuchar} style={{ width: 132, height: 132, background: T.card, border: `2px solid ${T.accent}`, borderRadius: 20, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, position: "relative" }}>
-          {data.config && data.config.logo ? <img src={data.config.logo} alt="logo" style={{ width: 74, height: 74, borderRadius: 14, objectFit: "cover", background: "#fff" }} /> : <span style={{ fontSize: 42 }}>🎤</span>}
-          <span style={{ fontSize: 12, fontWeight: 800, color: T.accent }}>Hablarle a la IA</span>
+        <div onClick={escuchar} style={{ width: 132, height: 132, background: escuchando ? "#FEF2F2" : T.card, border: `2px solid ${escuchando ? "#DC2626" : T.accent}`, borderRadius: 20, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, position: "relative" }}>
+          {data.config && data.config.logo ? <img src={data.config.logo} alt="logo" style={{ width: 74, height: 74, borderRadius: 14, objectFit: "cover", background: "#fff", opacity: escuchando ? 0.6 : 1 }} /> : <span style={{ fontSize: 42 }}>🎤</span>}
+          <span style={{ fontSize: 12, fontWeight: 800, color: escuchando ? "#DC2626" : T.accent }}>{escuchando ? "Escuchando…" : "Hablarle a la IA"}</span>
           <label onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 5, right: 6, background: T.al, border: `1px solid ${T.border}`, borderRadius: 7, padding: "2px 6px", fontSize: 9, fontWeight: 700, color: T.sub, cursor: "pointer" }}>{subLogo ? "…" : "✎"}<input type="file" accept="image/*" onChange={e => { subirLogo(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
         </div>
       </div>
