@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v14 (Muebles: guardar render en iPhone/iPad + link para WhatsApp)
+// VERSION: v16 (Muebles: electrodomesticos, isla con banquetas, camara mas abierta)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -55,7 +55,7 @@ const CORREDERAS_T = {
   oculta: { nom: "Corredera oculta undermount", det: "bajo cajón, cierre suave" },
   rodillo: { nom: "Corredera a rodillo (riel simple)", det: "extracción parcial, económica" },
 };
-const VANO_DEF = { ancho: 3000, alto: 2600, prof: 600, paredB: 0 };
+const VANO_DEF = { ancho: 3000, alto: 2600, prof: 600, paredB: 0, isla: false, islaSep: 1100, islaVoladizo: 300, banquetas: 3 };
 
 // ---------- CATÁLOGO DE PLACAS (Egger / Faplac) ----------
 // hex = color base aproximado para el render. Si cargás la FOTO de la placa, el render usa la foto real.
@@ -91,12 +91,25 @@ const CORREDERAS = [250, 300, 350, 400, 450, 500, 550, 600];
 // Bisagras según alto de puerta (norma habitual)
 function nBisagras(alto) { const h = num(alto); if (h <= 900) return 2; if (h <= 1600) return 3; if (h <= 2000) return 4; if (h <= 2400) return 5; return 6; }
 function largoCorredera(profCaja) { const p = num(profCaja); let best = CORREDERAS[0]; for (const c of CORREDERAS) if (c <= p) best = c; return best; }
-const TIPOS = [["bajo", "Bajo mesada"], ["alacena", "Alacena"], ["placard", "Placard"], ["cajonera", "Cajonera"], ["generico", "Genérico"]];
+const TIPOS = [["bajo", "Bajo mesada"], ["alacena", "Alacena"], ["placard", "Placard"], ["cajonera", "Cajonera"], ["electro", "Electrodoméstico"], ["generico", "Genérico"]];
+// Electrodomésticos: si "mueble" es true, se corta la caja que lo aloja (columna/bajo). Si no, va suelto (heladera).
+const ELECTROS = {
+  anafe: { nom: "Anafe / cocina", ancho: 600, alto: 860, prof: 580, zona: "piso", mueble: true, en: "induction cooktop set into the countertop, with base cabinet below" },
+  horno: { nom: "Horno empotrado", ancho: 600, alto: 860, prof: 580, zona: "piso", mueble: true, en: "built-in stainless steel oven in the base unit" },
+  columna: { nom: "Columna horno + micro", ancho: 600, alto: 2100, prof: 580, zona: "piso", mueble: true, en: "tall appliance column with a built-in oven and a microwave stacked above" },
+  microondas: { nom: "Microondas", ancho: 600, alto: 400, prof: 380, zona: "colgado", mueble: true, en: "built-in microwave" },
+  campana: { nom: "Campana", ancho: 600, alto: 600, prof: 500, zona: "colgado", mueble: false, en: "stainless steel extractor hood above the cooktop" },
+  heladera: { nom: "Heladera", ancho: 700, alto: 1800, prof: 700, zona: "piso", mueble: false, en: "large stainless steel french-door refrigerator" },
+  lavavajillas: { nom: "Lavavajillas", ancho: 600, alto: 860, prof: 580, zona: "piso", mueble: false, en: "integrated dishwasher" },
+  bacha: { nom: "Bacha / pileta", ancho: 800, alto: 860, prof: 580, zona: "piso", mueble: true, en: "undermount sink with a black mixer tap" },
+  cafetera: { nom: "Cafetera", ancho: 300, alto: 400, prof: 400, zona: "mesada", mueble: false, en: "espresso machine on the countertop" },
+};
 const DEF_TIPO = {
   bajo: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: true, armado: "lat" },
   alacena: { ancho: 600, alto: 700, prof: 320, zocalo: 0, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat" },
   placard: { ancho: 1200, alto: 2400, prof: 600, zocalo: 80, estantes: 3, puertas: 2, cajones: 0, techoTravesanos: false, armado: "lat", sistemaPuerta: "corrediza", matPuerta: "melamina" },
   cajonera: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 3, techoTravesanos: true, armado: "lat" },
+  electro: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 0, techoTravesanos: true, armado: "lat", electro: "anafe" },
   generico: { ancho: 600, alto: 800, prof: 400, zocalo: 0, estantes: 1, puertas: 0, cajones: 0, techoTravesanos: false, armado: "lat" },
 };
 
@@ -131,6 +144,11 @@ function despiece(m, cfg) {
   if (m.fondo !== false) add("Fondo", A, Hc, 1, "fondo", 0);
   // Zócalo
   if (z > 0) add("Zócalo", A, z, 1, "placa", A);
+  // Electrodoméstico: si no lleva mueble (heladera, campana, lavavajillas) no se corta nada
+  if (m.tipo === "electro") {
+    const E = ELECTROS[m.electro] || ELECTROS.anafe;
+    if (!E.mueble) return [];
+  }
   // Puertas
   const nPu = num(m.puertas);
   if (nPu > 0) {
@@ -392,15 +410,18 @@ function herrajes(muebles, cfg) {
 // ---------- VANO: vista en planta y de frente ----------
 const esAlacena = (m) => m.tipo === "alacena";
 const esAlto = (m) => m.tipo === "placard";
-function distribuir(muebles, pared) {
-  // Devuelve muebles de esa pared con su x acumulado, separados por fila (piso / colgado)
-  const de = muebles.filter(m => (m.pared || "A") === pared);
+const zonaElectro = (m) => { const E = ELECTROS[m.electro]; return E ? E.zona : "piso"; };
+const esColgado = (m) => m.tipo === "alacena" || (m.tipo === "electro" && zonaElectro(m) === "colgado");
+function distribuir(muebles, pared, zona) {
+  // Devuelve muebles de esa pared/zona con su x acumulado, separados por fila (piso / colgado)
+  const de = muebles.filter(m => (m.pared || "A") === pared && (m.zona || "pared") === (zona || "pared"));
   const piso = [], colg = [];
   let xp = 0, xc = 0;
   de.forEach(m => {
     const A = num(m.ancho), n = Math.max(1, num(m.cant) || 1);
+    if (m.tipo === "electro" && zonaElectro(m) === "mesada") return; // cafetera: solo decorativa
     for (let i = 0; i < n; i++) {
-      if (esAlacena(m)) { colg.push({ m, x: xc, w: A }); xc += A; }
+      if (esColgado(m)) { colg.push({ m, x: xc, w: A }); xc += A; }
       else { piso.push({ m, x: xp, w: A }); xp += A; }
     }
   });
@@ -510,11 +531,71 @@ function vetaBandas(hex, seed) {
   return bandas;
 }
 
+// ---------- NIVEL / PLOMADA (sensores del iPhone) ----------
+function Nivel({ onClose }) {
+  const [ang, setAng] = useState({ beta: 0, gamma: 0 });
+  const [permiso, setPermiso] = useState(typeof DeviceOrientationEvent === "undefined" || typeof DeviceOrientationEvent.requestPermission !== "function");
+  useEffect(() => {
+    if (!permiso) return;
+    const h = (e) => setAng({ beta: e.beta || 0, gamma: e.gamma || 0 });
+    window.addEventListener("deviceorientation", h, true);
+    return () => window.removeEventListener("deviceorientation", h, true);
+  }, [permiso]);
+  const pedir = async () => { try { const r = await DeviceOrientationEvent.requestPermission(); if (r === "granted") setPermiso(true); else alert("Necesito permiso para usar los sensores."); } catch { alert("No pude activar los sensores."); } };
+  const g = ang.gamma, b = ang.beta;
+  const nivelado = Math.abs(g) < 0.6;
+  const plomada = Math.abs(Math.abs(b) - 90) < 0.6;
+  return <div style={{ position: "fixed", inset: 0, background: "#0C1016", zIndex: 700, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", gap: 8, padding: "10px 12px", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+      <button onClick={onClose} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
+      <div style={{ color: "#fff", fontSize: 13.5, fontWeight: 700 }}>Nivel y plomada</div>
+    </div>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 22, padding: 20 }}>
+      {!permiso ? <button onClick={pedir} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 12, padding: "16px 26px", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>Activar sensores</button> : <>
+        <div style={{ width: 250, height: 250, borderRadius: "50%", border: `3px solid ${nivelado ? "#16A34A" : "rgba(255,255,255,.2)"}`, position: "relative", background: "rgba(255,255,255,.04)" }}>
+          <div style={{ position: "absolute", left: 0, right: 0, top: "50%", height: 1, background: "rgba(255,255,255,.25)" }} />
+          <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", width: 1, background: "rgba(255,255,255,.25)" }} />
+          <div style={{ position: "absolute", width: 54, height: 54, borderRadius: "50%", background: nivelado ? "#16A34A" : BRASS, left: `calc(50% - 27px + ${Math.max(-95, Math.min(95, g * 4))}px)`, top: `calc(50% - 27px + ${Math.max(-95, Math.min(95, (b - 90) * 2))}px)`, boxShadow: "0 4px 18px rgba(0,0,0,.5)", transition: "background .2s" }} />
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 42, fontWeight: 800, color: nivelado ? "#16A34A" : "#fff", fontVariantNumeric: "tabular-nums" }}>{g.toFixed(1)}°</div>
+          <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.55)", marginTop: 4 }}>Inclinación lateral {nivelado ? "· NIVELADO ✓" : ""}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: plomada ? "#16A34A" : "rgba(255,255,255,.7)", marginTop: 14, fontVariantNumeric: "tabular-nums" }}>{(Math.abs(b) - 90).toFixed(1)}° <span style={{ fontSize: 12, fontWeight: 600 }}>a plomo {plomada ? "✓" : ""}</span></div>
+        </div>
+        <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.4)", textAlign: "center", lineHeight: 1.6, maxWidth: 300 }}>Apoyá el borde del teléfono contra la pared o el mueble.<br />Verde = a nivel / a plomo.</div>
+      </>}
+    </div>
+  </div>;
+}
+
+// ---------- LEER MEDIDAS DE UNA FOTO (IA) ----------
+async function leerMedidasIA(dataUrl) {
+  const m = String(dataUrl).match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!m) throw new Error("Imagen inválida.");
+  const body = {
+    model: "claude-sonnet-5", max_tokens: 500,
+    messages: [{
+      role: "user", content: [
+        { type: "image", source: { type: "base64", media_type: m[1], data: m[2] } },
+        { type: "text", text: 'Esta imagen es una captura de la app Medir del iPhone, un plano, o una foto de un ambiente con medidas anotadas. Leé las medidas del VANO (el hueco donde va un mueble de cocina o placard). Respondé SOLO con un JSON, sin texto alrededor: {"ancho":N,"alto":N,"prof":N,"nota":"texto corto"} donde N son milímetros (si ves metros, convertí: 3,45 m = 3450). Si alguna medida no aparece, poné 0. En "nota" explicá brevemente de dónde sacaste los números.' }
+      ]
+    }]
+  };
+  const r = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const txt = await r.text();
+  let d = null; try { d = JSON.parse(txt); } catch { throw new Error(`El servidor respondió ${r.status}.`); }
+  if (!r.ok) throw new Error((d && d.error && d.error.message) || "Error de la IA.");
+  const t = (d.content || []).map(x => x.text || "").join("");
+  const j = t.match(/\{[\s\S]*\}/);
+  if (!j) throw new Error("No pude leer medidas en esa imagen.");
+  return JSON.parse(j[0]);
+}
+
 // ---------- RENDER FINAL FOTORREALISTA (escena completa en perspectiva) ----------
 const hexRGB = (h) => { const s = String(h || "#ccc").replace("#", ""); return { r: parseInt(s.slice(0, 2), 16) || 200, g: parseInt(s.slice(2, 4), 16) || 200, b: parseInt(s.slice(4, 6), 16) || 200 }; };
 const mezcla = (hex, k) => { const c = hexRGB(hex); const f = (v) => Math.max(0, Math.min(255, Math.round(v * k))); return `rgb(${f(c.r)},${f(c.g)},${f(c.b)})`; };
 
-function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
+function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
   const [cam, setCam] = useState({ yaw: -18, pitch: 6, dist: 2.6 });
   const [verIA, setVerIA] = useState(false);
   const svgRef = useRef(null);
@@ -525,7 +606,9 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
   const HV = Math.max(300, num(vano.alto) || 2600);
   const hAlac = num(cfg.alturaAlacena) || 1400, eMes = num(cfg.espMesada) || 30;
   const L = num(cfg.luz) || 3;
-  const d = distribuir(muebles, "A");
+  const d = distribuir(muebles, "A", "pared");
+  const dI = distribuir(muebles, "A", "isla");
+  const hayIsla = !!vano.isla && (dI.piso.length > 0 || dI.colg.length > 0);
   const matC = matPorId(cfg.matCuerpo, mats), matF = matPorId(cfg.matFrente, mats);
 
   const onDown = (x, y) => { drag.current = { x, y, ...cam }; };
@@ -534,9 +617,10 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
 
   const anchoTotal = Math.max(W, d.anchoPiso, d.anchoColg, 600);
   const profMax = Math.max(300, ...muebles.map(m => num(m.prof) || 0));
-  const escala = Math.max(anchoTotal, HV);
+  const zExtra = (vano.isla ? (num(vano.islaSep) || 1100) + 900 : 0);
+  const escala = Math.max(anchoTotal, HV, zExtra * 1.1);
   const D = escala * (2.2 + cam.dist), F = escala * 1.5;   // cámara siempre lejos: sin perspectiva extrema
-  const cx = anchoTotal / 2, cy = HV * 0.42, cz = profMax / 2;
+  const cx = anchoTotal / 2, cy = HV * 0.42, cz = (profMax - zExtra) / 2;
 
   const proj = (x, y, z) => {
     const X = x - cx, Y = y - cy, Z = z - cz;
@@ -566,7 +650,7 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
 
   const caras = [];
   const addCara = (key, pts, mat, opts) => {
-    if (areaSigno(pts) <= 0) return;                       // cara que no se ve: se descarta
+    if (areaSigno(pts) >= 0) return;                       // cara que mira para el otro lado: no se dibuja
     const l = luzCara(pts);
     caras.push({ key, pts, mat, z: zMed(pts), int: l.int, spec: l.spec, ...(opts || {}) });
   };
@@ -574,6 +658,9 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
   const MESADA = { id: "mesada", hex: "#33373E", tipo: "liso", gloss: true };
   const ZOCALO = { id: "zoc", hex: "#22252A", tipo: "liso" };
   const TIRA = { id: "tira", hex: "#9AA1AA", tipo: "liso" };
+  const INOX = { id: "inox", hex: "#8D939B", tipo: "liso", gloss: true };
+  const VIDRIO_N = { id: "vidn", hex: "#1A1D22", tipo: "liso", gloss: true };
+  const BANQ = { id: "banq", hex: "#26292E", tipo: "liso" };
 
   // Caja cerrada: frente + laterales + techo + piso (sin interior: no se ve y ensuciaba el dibujo)
   const modulo = (it, base) => {
@@ -584,7 +671,8 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
     const x1 = x0 + A, y1 = y0 + Hc, zF = 0, zB = pf;
     const nPu = num(m.puertas), nCj = num(m.cajones);
     const vid = m.matPuerta === "vidrio";
-    const cerrado = nPu > 0 || nCj > 0;
+    const E = m.tipo === "electro" ? (ELECTROS[m.electro] || ELECTROS.anafe) : null;
+    const cerrado = nPu > 0 || nCj > 0 || !!E;
     // laterales / techo / piso (winding para que el signo de área los oculte solo)
     addCara(`li${x0}${base}`, [[x0, y0, zF], [x0, y1, zF], [x0, y1, zB], [x0, y0, zB]], mc);
     addCara(`ld${x0}${base}`, [[x1, y0, zB], [x1, y1, zB], [x1, y1, zF], [x1, y0, zF]], mc);
@@ -599,6 +687,23 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
     if (zc > 0) addCara(`zo${x0}${base}`, [[x0, base, zF + 25], [x1, base, zF + 25], [x1, base + zc, zF + 25], [x0, base + zc, zF + 25]], ZOCALO, { ao: 0.55 });
     // frentes
     const zP = zF - 18;
+    if (E) {
+      const k = m.electro;
+      if (k === "heladera") { addCara(`he${x0}${base}`, [[x0 + 2, base, zP], [x1 - 2, base, zP], [x1 - 2, base + alt, zP], [x0 + 2, base + alt, zP]], INOX, { frente: true, gloss: true });
+        addCara(`hep${x0}${base}`, [[x0 + A / 2 - 3, base + alt * 0.25, zP - 8], [x0 + A / 2 + 3, base + alt * 0.25, zP - 8], [x0 + A / 2 + 3, base + alt * 0.75, zP - 8], [x0 + A / 2 - 3, base + alt * 0.75, zP - 8]], TIRA, { tirador: true }); }
+      else if (k === "campana") { const yc = base; addCara(`ca${x0}`, [[x0 + 40, yc, zP], [x1 - 40, yc, zP], [x1 - 40, yc + Hc, zP], [x0 + 40, yc + Hc, zP]], INOX, { frente: true, gloss: true });
+        addCara(`cab${x0}`, [[x0, yc, zP], [x1, yc, zP], [x1, yc + 60, zP], [x0, yc + 60, zP]], INOX, { frente: true }); }
+      else if (k === "columna") { addCara(`co1${x0}`, [[x0 + 2, y0 + Hc * 0.10, zP], [x1 - 2, y0 + Hc * 0.10, zP], [x1 - 2, y0 + Hc * 0.38, zP], [x0 + 2, y0 + Hc * 0.38, zP]], VIDRIO_N, { frente: true, gloss: true });
+        addCara(`co2${x0}`, [[x0 + 2, y0 + Hc * 0.42, zP], [x1 - 2, y0 + Hc * 0.42, zP], [x1 - 2, y0 + Hc * 0.62, zP], [x0 + 2, y0 + Hc * 0.62, zP]], VIDRIO_N, { frente: true, gloss: true });
+        addCara(`co3${x0}`, [[x0 + 2, y0 + Hc * 0.66, zP], [x1 - 2, y0 + Hc * 0.66, zP], [x1 - 2, y1 - 2, zP], [x0 + 2, y1 - 2, zP]], mf, { frente: true }); }
+      else if (k === "microondas") { addCara(`mi${x0}${base}`, [[x0 + 2, y0 + 2, zP], [x1 - 2, y0 + 2, zP], [x1 - 2, y1 - 2, zP], [x0 + 2, y1 - 2, zP]], VIDRIO_N, { frente: true, gloss: true }); }
+      else if (k === "horno") { addCara(`ho${x0}${base}`, [[x0 + 2, y0 + Hc * 0.30, zP], [x1 - 2, y0 + Hc * 0.30, zP], [x1 - 2, y1 - 2, zP], [x0 + 2, y1 - 2, zP]], VIDRIO_N, { frente: true, gloss: true });
+        addCara(`hoc${x0}${base}`, [[x0 + 2, y0 + 2, zP], [x1 - 2, y0 + 2, zP], [x1 - 2, y0 + Hc * 0.26, zP], [x0 + 2, y0 + Hc * 0.26, zP]], mf, { frente: true }); }
+      else if (k === "lavavajillas") { addCara(`lv${x0}${base}`, [[x0 + 2, y0 + 2, zP], [x1 - 2, y0 + 2, zP], [x1 - 2, y1 - 2, zP], [x0 + 2, y1 - 2, zP]], INOX, { frente: true, gloss: true }); }
+      else { // anafe / bacha: frente de mueble comun
+        addCara(`fe${x0}${base}`, [[x0 + 2, y0 + 2, zP], [x1 - 2, y0 + 2, zP], [x1 - 2, y1 - 2, zP], [x0 + 2, y1 - 2, zP]], mf, { frente: true });
+      }
+    }
     if (nCj > 0) {
       const aF = (Hc - (nCj + 1) * L) / nCj;
       for (let i = 0; i < nCj; i++) {
@@ -624,7 +729,8 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
 
   // Piso: sólo bajo los muebles (nada de planos gigantes que se deformaban)
   const anchoPiso = Math.max(d.anchoPiso, d.anchoColg, 600);
-  addCara("piso", [[-250, 0, -700], [anchoPiso + 250, 0, -700], [anchoPiso + 250, 0, profMax + 60], [-250, 0, profMax + 60]], { id: "piso", hex: "#B5ADA2", tipo: "liso" }, { piso: true });
+  const zPisoF = -(zExtra + 500) || -700;
+  addCara("piso", [[-350, 0, zPisoF], [anchoPiso + 350, 0, zPisoF], [anchoPiso + 350, 0, profMax + 60], [-350, 0, profMax + 60]], { id: "piso", hex: "#B5ADA2", tipo: "liso" }, { piso: true });
 
   d.piso.forEach(it => modulo(it, 0));
   const bajos = d.piso.filter(it => !esAlto(it.m));
@@ -636,6 +742,49 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
     addCara("mesadaF", [[-8, hb, -25], [anchoM + 8, hb, -25], [anchoM + 8, hb + eMes, -25], [-8, hb + eMes, -25]], MESADA);
   }
   d.colg.forEach(it => modulo(it, hAlac));
+
+  // anafe y bacha: se ven sobre la mesada
+  d.piso.forEach(it => {
+    if (it.m.tipo !== "electro") return;
+    const k = it.m.electro, hb = num(it.m.alto) || 860, pf = num(it.m.prof) || 580;
+    const yT = hb + eMes + 1;
+    if (k === "anafe") { addCara(`an${it.x}`, [[it.x + 30, yT, 60], [it.x + 30, yT, pf - 90], [it.x + it.w - 30, yT, pf - 90], [it.x + it.w - 30, yT, 60]], VIDRIO_N, { gloss: true }); }
+    if (k === "bacha") { addCara(`ba${it.x}`, [[it.x + 60, yT, 80], [it.x + 60, yT, pf - 110], [it.x + it.w - 60, yT, pf - 110], [it.x + it.w - 60, yT, 80]], INOX, { gloss: true, ao: 0.5 }); }
+  });
+
+  // ---- ISLA ----
+  if (hayIsla) {
+    const sep = Math.max(600, num(vano.islaSep) || 1100);
+    const vol = num(vano.islaVoladizo) || 300;
+    const profI = Math.max(400, ...dI.piso.map(it => num(it.m.prof) || 600));
+    const zIF = -(sep + profI), zIB = -sep;                 // isla adelante de los bajos
+    const anchoI = dI.anchoPiso || 1200;
+    const altoI = Math.max(...dI.piso.map(it => num(it.m.alto) || 900), 900);
+    // módulos de la isla (frentes miran hacia la pared)
+    dI.piso.forEach(it => {
+      const m = it.m, A = it.w, x0 = it.x, zc = num(m.zocalo) || 0;
+      const y0 = zc, y1 = num(m.alto), x1 = x0 + A;
+      const mc = matPorId(m.matCuerpo || cfg.matCuerpo, mats), mf = matPorId(m.matFrente || cfg.matFrente, mats);
+      addCara(`isL${x0}`, [[x0, y0, zIF], [x0, y1, zIF], [x0, y1, zIB], [x0, y0, zIB]], mc);
+      addCara(`isR${x0}`, [[x1, y0, zIB], [x1, y1, zIB], [x1, y1, zIF], [x1, y0, zIF]], mc);
+      addCara(`isB${x0}`, [[x0, y0, zIF], [x1, y0, zIF], [x1, y1, zIF], [x0, y1, zIF]], mf, { frente: true });   // cara que da a las banquetas
+      addCara(`isF${x0}`, [[x0, y0, zIB], [x0, y1, zIB], [x1, y1, zIB], [x1, y0, zIB]], mf, { frente: true });   // cara hacia la pared
+      if (zc > 0) addCara(`isZ${x0}`, [[x0, 0, zIF + 25], [x1, 0, zIF + 25], [x1, zc, zIF + 25], [x0, zc, zIF + 25]], ZOCALO, { ao: 0.6 });
+    });
+    // mesada con voladizo hacia las banquetas
+    const yM = altoI + eMes;
+    addCara("islaMes", [[-10, yM, zIF - vol], [anchoI + 10, yM, zIF - vol], [anchoI + 10, yM, zIB + 10], [-10, yM, zIB + 10]], MESADA, { gloss: true });
+    addCara("islaMesF", [[-10, altoI, zIF - vol], [-10, yM, zIF - vol], [anchoI + 10, yM, zIF - vol], [anchoI + 10, altoI, zIF - vol]], MESADA);
+    // banquetas
+    const nB = Math.max(0, num(vano.banquetas) || 0);
+    for (let i = 0; i < nB; i++) {
+      const bx = anchoI * ((i + 1) / (nB + 1)), bz = zIF - vol - 180, aB = 680, sw = 190;
+      addCara(`bq${i}`, [[bx - sw / 2, aB, bz - sw / 2], [bx + sw / 2, aB, bz - sw / 2], [bx + sw / 2, aB, bz + sw / 2], [bx - sw / 2, aB, bz + sw / 2]], BANQ);           // asiento
+      addCara(`bqf${i}`, [[bx - sw / 2, aB - 40, bz - sw / 2], [bx - sw / 2, aB, bz - sw / 2], [bx + sw / 2, aB, bz - sw / 2], [bx + sw / 2, aB - 40, bz - sw / 2]], BANQ); // canto
+      addCara(`bqp${i}`, [[bx - 22, 0, bz - 22], [bx - 22, aB - 40, bz - 22], [bx + 22, aB - 40, bz - 22], [bx + 22, 0, bz - 22]], BANQ);                                   // caño
+      addCara(`bqr${i}`, [[bx - sw / 2, aB, bz + sw / 2], [bx + sw / 2, aB, bz + sw / 2], [bx + sw / 2, aB + 330, bz + sw / 2], [bx - sw / 2, aB + 330, bz + sw / 2]], BANQ); // respaldo
+    }
+  }
   caras.sort((a, b) => b.z - a.z);
 
   const pts0 = caras.flatMap(c => c.pts.map(a => proj(a[0], a[1], a[2])));
@@ -690,35 +839,61 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
       <button onClick={() => setVerIA(true)} style={{ width: "100%", marginTop: 10, background: `linear-gradient(135deg, ${BRASS}, #8E6C3A)`, color: "#fff", border: "none", borderRadius: 11, padding: "14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>✨ Convertir en render fotorrealista</button>
       <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10.5, marginTop: 6, textAlign: "center" }}>Arrastrá para girar · {matC.marca} {matC.nom} (cuerpo) · {matF.nom} (frentes)</div>
     </div>
-    {verIA && <RenderIA proyecto={proyecto} vano={vano} muebles={muebles} cfg={cfg} mats={mats} refSvg={svgRef} onClose={() => setVerIA(false)} />}
+    {verIA && <RenderIA proyecto={proyecto} vano={vano} muebles={muebles} cfg={cfg} mats={mats} refSvg={svgRef} fotoAmbiente={vano.foto} deco={deco} onClose={() => setVerIA(false)} />}
   </div>;
 }
 
 // ---------- RENDER FOTORREALISTA CON IA (OpenAI gpt-image-1) ----------
+const PAREDES = [["blanco", "Blanco", "plain white painted wall"], ["gris", "Gris cemento", "smooth grey microcement wall"], ["ladrillo", "Ladrillo negro", "dark charcoal brick wall"], ["lamas", "Lamas de madera", "vertical wood slat panelling (fluted wood) on the wall"], ["piedra", "Piedra natural", "natural stone cladding wall"], ["porcelanato", "Porcelanato símil mármol", "large-format marble-look porcelain slab wall"]];
+const PISOS = [["porcelanato", "Porcelanato claro", "large format light beige porcelain tile floor"], ["madera", "Madera clara", "light oak wood-look plank floor"], ["cemento", "Cemento alisado", "polished concrete floor"], ["oscuro", "Porcelanato oscuro", "dark grey porcelain tile floor"]];
+const LUCES = [["led", "LED bajo alacena", "warm LED strip lighting under the wall cabinets"], ["spots", "Spots en cielorraso", "recessed ceiling spotlights"], ["estantes", "Luz en estantes", "warm LED lighting inside the open shelves"], ["colgante", "Colgantes sobre isla", "pendant lights hanging over the island"], ["perimetral", "Luz perimetral", "cove lighting around the ceiling perimeter"]];
+const DECOS = [["plantas", "Plantas", "small potted green plants"], ["floreros", "Floreros / vasijas", "sculptural ceramic vases and vessels"], ["vajilla", "Vajilla", "ceramic bowls and mugs neatly arranged"], ["libros", "Libros", "a few stacked design books"], ["frutas", "Frutera", "a bowl with fresh fruit"], ["cafetera", "Cafetera", "an espresso machine on the counter"], ["banquetas", "Banquetas", "black bar stools at the counter"], ["campana", "Campana", "a stainless steel extractor hood"]];
+
 function promptEscena(proyecto, vano, muebles, cfg, mats, opciones) {
   const mc = matPorId(cfg.matCuerpo, mats), mf = matPorId(cfg.matFrente, mats);
   const d = distribuir(muebles, "A");
-  const desc = (arr) => arr.map(it => `${mm(it.w)}mm wide ${it.m.tipo === "cajonera" ? `drawer unit with ${num(it.m.cajones)} drawers` : it.m.tipo === "placard" ? "tall wardrobe" : num(it.m.puertas) > 0 ? `cabinet with ${num(it.m.puertas)} ${it.m.sistemaPuerta === "corrediza" ? "sliding" : "hinged"} ${it.m.matPuerta === "vidrio" ? "glass" : "flat slab"} door(s)` : "open shelf unit"}`).join(", ");
+  const desc = (arr) => arr.map(it => `${mm(it.w)}mm wide ${it.m.tipo === "electro" ? ((ELECTROS[it.m.electro] || {}).en || "appliance") : it.m.tipo === "cajonera" ? `drawer unit with ${num(it.m.cajones)} drawers` : it.m.tipo === "placard" ? "tall wardrobe" : num(it.m.puertas) > 0 ? `cabinet with ${num(it.m.puertas)} ${it.m.sistemaPuerta === "corrediza" ? "sliding" : "hinged"} ${it.m.matPuerta === "vidrio" ? "glass" : "flat slab"} door(s)` : "open shelf unit"}`).join(", ");
   const bajos = d.piso.length ? `Base run (floor cabinets), left to right: ${desc(d.piso)}.` : "";
   const alac = d.colg.length ? `Wall-mounted upper cabinets at ${mm(num(cfg.alturaAlacena))}mm from floor, left to right: ${desc(d.colg)}.` : "";
-  const luz = opciones.luz === "noche" ? "Evening scene, warm LED strip lighting under the wall cabinets and ceiling spotlights, cozy dim ambient light, glowing accents" : "Bright natural daylight from a window on the left, soft daylight, airy";
-  const est = opciones.estilo === "clasico" ? "classic elegant Scandinavian style, subtle detailing" : opciones.estilo === "industrial" ? "industrial style, matte black metal accents, concrete backsplash" : "modern minimalist high-end style, handleless slab fronts, clean lines";
-  return `Photorealistic professional interior architectural photograph of a custom fitted kitchen, rendered from the provided technical design. IMPORTANT: keep exactly the same layout, proportions, number of cabinets, cabinet widths and positions as the reference image — do not add or remove cabinets, do not change the composition.
+  const els = muebles.filter(m => m.tipo === "electro").map(m => (ELECTROS[m.electro] || {}).en).filter(Boolean);
+  const elec = els.length ? `Appliances (must appear, exactly these): ${els.join("; ")}.` : "";
+  const dI = distribuir(muebles, "A", "isla");
+  const isla = (vano.isla && dI.piso.length) ? `There is a KITCHEN ISLAND in front of the base run, ${mm(dI.anchoPiso)}mm long, separated ${mm(num(vano.islaSep))}mm from the cabinets, with a ${mm(num(vano.islaVoladizo))}mm countertop overhang and ${num(vano.banquetas)} bar stools tucked under it. Frame the shot WIDER so the whole island and the stools are fully visible.` : "";
+  const par = (PAREDES.find(x => x[0] === opciones.pared) || PAREDES[0])[2];
+  const pis = (PISOS.find(x => x[0] === opciones.piso) || PISOS[0])[2];
+  const luces = (opciones.luces || []).map(k => (LUCES.find(x => x[0] === k) || [])[2]).filter(Boolean);
+  const decos = (opciones.deco || []).map(k => (DECOS.find(x => x[0] === k) || [])[2]).filter(Boolean);
+  const amb = opciones.luz === "noche" ? "Evening scene, dim warm ambient light, cosy atmosphere, glowing accents" : "Bright natural daylight, soft shadows, airy";
+  const est = opciones.estilo === "clasico" ? "classic elegant Scandinavian style" : opciones.estilo === "industrial" ? "industrial style with matte black metal accents" : "modern minimalist high-end style, handleless slab fronts, clean lines";
+  const refs = [];
+  if (opciones.hayDiseno) refs.push("the first reference image is the technical 3D design of the cabinets");
+  if (opciones.hayAmbiente) refs.push("another reference image is a photo of the REAL room where this goes — reproduce that room (its walls, floor, openings, light) as the background");
+  if (opciones.nDeco > 0) refs.push(`the last ${opciones.nDeco} reference image(s) are the client's own decorative objects — place them naturally on the counter and shelves, keeping their exact shape and finish`);
+  return `Photorealistic professional interior architectural photograph of a custom fitted kitchen/cabinetry, built from the provided design.
+CRITICAL: keep exactly the same layout, proportions, number of cabinets, cabinet widths and positions as the design reference. Do not add or remove cabinets. Do not change the composition.
+${refs.length ? "Reference images: " + refs.join("; ") + "." : ""}
 
-Project: ${proyecto || "Custom kitchen"}. Wall opening ${mm(num(vano.ancho))}mm wide by ${mm(num(vano.alto))}mm high, cabinet depth ${mm(num(vano.prof))}mm.
+Project: ${proyecto || "Custom kitchen"}. Wall opening ${mm(num(vano.ancho))}mm wide × ${mm(num(vano.alto))}mm high, cabinet depth ${mm(num(vano.prof))}mm.
 ${bajos}
 ${alac}
-Cabinet carcass finish: ${mc.marca} ${mc.nom} melamine (${mc.tipo === "madera" ? "realistic wood grain" : "solid matte colour"}, colour ${mc.hex}).
-Door and drawer front finish: ${mf.marca} ${mf.nom} melamine (${mf.tipo === "madera" ? "realistic natural wood grain running vertically" : "solid matte colour"}, colour ${mf.hex}).
-Countertop: ${opciones.mesada || "black granite/quartz, 30mm thick, subtle polished reflection"}.
-Hardware: slim ${opciones.tirador || "brushed stainless steel bar handles"}.
-${est}. ${luz}.
-Light oak wood-look floor, plain neutral wall, backsplash between counter and upper cabinets.${opciones.extra ? " " + opciones.extra : ""}
-Shot with a 24mm wide-angle lens, eye level, sharp focus, realistic materials and reflections, high dynamic range, ultra-detailed, 8k architectural visualization. No text, no watermarks, no people.`;
+${elec}
+${isla}
+Carcass finish: ${mc.marca} ${mc.nom} melamine (${mc.tipo === "madera" ? "realistic wood grain" : "solid matte colour"}, colour ${mc.hex}).
+Door and drawer front finish: ${mf.marca} ${mf.nom} melamine (${mf.tipo === "madera" ? "realistic natural wood grain" : "solid matte colour"}, colour ${mf.hex}).
+Countertop: ${opciones.mesada || "black granite, 30mm thick, polished"}.
+Handles: ${opciones.tirador || "slim brushed steel bar handles"}.
+Wall behind and around: ${par}${opciones.colorPared ? ` in colour ${opciones.colorPared}` : ""}. Floor: ${pis}.
+${luces.length ? "Lighting: " + luces.join(", ") + "." : ""}
+${decos.length ? "Styling / props: " + decos.join(", ") + "." : ""}
+${est}. ${amb}.${opciones.extra ? " " + opciones.extra : ""}
+Shot with a 24mm wide-angle lens at eye level, sharp focus, realistic materials and reflections, high dynamic range, ultra-detailed, 8k architectural visualization. No text, no watermarks, no people.`;
 }
 
-function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, onClose }) {
-  const [op, setOp] = useState({ estilo: "moderno", luz: "noche", mesada: "", tirador: "", extra: "" });
+function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, fotoAmbiente, deco, onClose }) {
+  const [op, setOp] = useState({ estilo: "moderno", luz: "noche", mesada: "", tirador: "", extra: "", pared: "blanco", piso: "porcelanato", luces: ["led", "spots"], deco: ["plantas"] });
+  const [usarAmb, setUsarAmb] = useState(!!fotoAmbiente);
+  const [decoSel, setDecoSel] = useState([]);
+  const tog = (k, v) => setOp(o => ({ ...o, [k]: (o[k] || []).includes(v) ? o[k].filter(x => x !== v) : [...(o[k] || []), v] }));
   const [gen, setGen] = useState(false);
   const [img, setImg] = useState("");
   const [err, setErr] = useState("");
@@ -776,14 +951,16 @@ function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, onClose }) {
   const generar = async () => {
     setGen(true); setErr(""); setImg(""); setLink("");
     try {
-      const prompt = promptEscena(proyecto, vano, muebles, cfg, mats, op);
       let imageB64 = "";
       if (usarRef) {
         imageB64 = await svgAPng();
-        // si por lo que sea pesa mucho, se manda sin referencia antes que fallar
         if (imageB64 && imageB64.length > 3200000) imageB64 = "";
       }
-      const r = await fetch("/api/render", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, imageB64: imageB64 || undefined, size: "1536x1024", quality: "high" }) });
+      const extras = [];
+      if (usarAmb && fotoAmbiente) extras.push(fotoAmbiente);
+      decoSel.forEach(id => { const o = (deco || []).find(x => x.id === id); if (o && o.foto) extras.push(o.foto); });
+      const prompt = promptEscena(proyecto, vano, muebles, cfg, mats, { ...op, hayDiseno: !!imageB64, hayAmbiente: !!(usarAmb && fotoAmbiente), nDeco: decoSel.length });
+      const r = await fetch("/api/render", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, imageB64: imageB64 || undefined, imagesB64: extras, size: "1536x1024", quality: "high" }) });
       const txt = await r.text();
       let d = null;
       try { d = JSON.parse(txt); } catch { throw new Error(`El servidor respondió ${r.status}. ${txt.slice(0, 160) || "Sin detalle."}`); }
@@ -836,6 +1013,41 @@ function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, onClose }) {
             <input value={op.tirador} onChange={e => setOp(o => ({ ...o, tirador: e.target.value }))} placeholder="Tiradores (ej: negro mate, sin tirador / uñero)" style={{ width: "100%", background: "rgba(255,255,255,.08)", border: "none", borderRadius: 9, padding: "12px", fontSize: 15, color: "#fff", boxSizing: "border-box", marginBottom: 8 }} />
             <input value={op.extra} onChange={e => setOp(o => ({ ...o, extra: e.target.value }))} placeholder="Extras (ej: isla con banquetas, heladera inox, campana)" style={{ width: "100%", background: "rgba(255,255,255,.08)", border: "none", borderRadius: 9, padding: "12px", fontSize: 15, color: "#fff", boxSizing: "border-box" }} />
           </div>
+          <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 12, padding: 13, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 9 }}>Pared y piso</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: 6, marginBottom: 8 }}>
+              {PAREDES.map(([k, l]) => <button key={k} onClick={() => setOp(o => ({ ...o, pared: k }))} style={{ background: op.pared === k ? T.accent : "rgba(255,255,255,.08)", color: "#fff", border: "none", borderRadius: 8, padding: "10px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 11.5, color: "rgba(255,255,255,.6)" }}>Color de pared</span>
+              <input value={op.colorPared || ""} onChange={e => setOp(o => ({ ...o, colorPared: e.target.value }))} placeholder="ej: verde oliva, beige" style={{ flex: 1, background: "rgba(255,255,255,.08)", border: "none", borderRadius: 8, padding: "10px", fontSize: 14, color: "#fff", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: 6 }}>
+              {PISOS.map(([k, l]) => <button key={k} onClick={() => setOp(o => ({ ...o, piso: k }))} style={{ background: op.piso === k ? BRASS : "rgba(255,255,255,.08)", color: "#fff", border: "none", borderRadius: 8, padding: "10px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+            </div>
+          </div>
+          <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 12, padding: 13, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 9 }}>Luces</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 6 }}>
+              {LUCES.map(([k, l]) => <button key={k} onClick={() => tog("luces", k)} style={{ background: (op.luces || []).includes(k) ? T.accent : "rgba(255,255,255,.08)", color: "#fff", border: "none", borderRadius: 8, padding: "10px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{(op.luces || []).includes(k) ? "✓ " : ""}{l}</button>)}
+            </div>
+          </div>
+          <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 12, padding: 13, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 9 }}>Decoración</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: 6 }}>
+              {DECOS.map(([k, l]) => <button key={k} onClick={() => tog("deco", k)} style={{ background: (op.deco || []).includes(k) ? T.accent : "rgba(255,255,255,.08)", color: "#fff", border: "none", borderRadius: 8, padding: "10px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{(op.deco || []).includes(k) ? "✓ " : ""}{l}</button>)}
+            </div>
+            {(deco || []).length > 0 && <>
+              <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", margin: "11px 0 7px" }}>Tus objetos (la IA los coloca en la escena):</div>
+              <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                {deco.map(o => { const sel = decoSel.includes(o.id); return <button key={o.id} onClick={() => setDecoSel(s => sel ? s.filter(x => x !== o.id) : [...s, o.id])} style={{ width: 62, height: 62, borderRadius: 10, border: `2px solid ${sel ? BRASS : "rgba(255,255,255,.15)"}`, background: `url(${o.foto}) center/cover`, cursor: "pointer", position: "relative", padding: 0 }}>{sel && <span style={{ position: "absolute", top: 2, right: 3, background: BRASS, color: "#fff", borderRadius: 5, fontSize: 9, fontWeight: 800, padding: "1px 4px" }}>✓</span>}</button>; })}
+              </div>
+            </>}
+          </div>
+          {fotoAmbiente && <button onClick={() => setUsarAmb(v => !v)} style={{ width: "100%", background: usarAmb ? "rgba(27,58,91,.5)" : "rgba(255,255,255,.06)", border: `1px solid ${usarAmb ? T.accent : "rgba(255,255,255,.12)"}`, color: "#fff", borderRadius: 10, padding: "12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 10, textAlign: "left", display: "flex", alignItems: "center", gap: 10 }}>
+            <img src={fotoAmbiente} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} />
+            <span>{usarAmb ? "✓ " : ""}Usar la foto del ambiente real<div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", fontWeight: 600, marginTop: 2 }}>La IA reproduce tu ambiente como fondo.</div></span>
+          </button>}
           <button onClick={() => setUsarRef(v => !v)} style={{ width: "100%", background: usarRef ? "rgba(27,58,91,.5)" : "rgba(255,255,255,.06)", border: `1px solid ${usarRef ? T.accent : "rgba(255,255,255,.12)"}`, color: "#fff", borderRadius: 10, padding: "12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 12, textAlign: "left" }}>
             {usarRef ? "✓ " : ""}Respetar mi diseño (usa tu render como guía)
             <div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", fontWeight: 600, marginTop: 3 }}>Con esto la IA mantiene tus módulos y medidas en vez de inventar una cocina.</div>
@@ -943,6 +1155,25 @@ export default function Muebles() {
   const [matsCustom, setMatsCustom] = useState([]);
   const [nuevoMat, setNuevoMat] = useState(null);
   const [verRender, setVerRender] = useState(false);
+  const [verNivel, setVerNivel] = useState(false);
+  const [deco, setDeco] = useState([]);
+  const [leyendo, setLeyendo] = useState(false);
+  const comprimir = (file, max) => new Promise((res) => { try { const img = new window.Image(); const u = URL.createObjectURL(file); img.onload = () => { let w = img.naturalWidth || 800, h = img.naturalHeight || 600; const M = max || 1100; if (w > M || h > M) { const k = M / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); } const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h); URL.revokeObjectURL(u); res(c.toDataURL("image/jpeg", 0.82)); }; img.onerror = () => { URL.revokeObjectURL(u); res(""); }; img.src = u; } catch { res(""); } });
+  const leerMedidas = async (file) => {
+    if (!file) return; setLeyendo(true);
+    try {
+      const durl = await comprimir(file, 1400);
+      const r = await leerMedidasIA(durl);
+      const next = { ...vano }; let hubo = false;
+      ["ancho", "alto", "prof"].forEach(k => { if (num(r[k]) > 0) { next[k] = num(r[k]); hubo = true; } });
+      if (hubo) { guardar({ vano: next }); alert(`✓ Medidas leídas:\nAncho ${mm(next.ancho)} · Alto ${mm(next.alto)} · Prof ${mm(next.prof)} mm${r.nota ? "\n\n" + r.nota : ""}`); }
+      else alert("No encontré medidas en esa imagen. Probá con una captura de la app Medir o una foto donde se vean los números.");
+    } catch (e) { alert(e.message || "No pude leer las medidas."); }
+    setLeyendo(false);
+  };
+  const subirFotoVano = async (file) => { if (!file) return; const d = await comprimir(file, 1200); if (d) guardar({ vano: { ...vano, foto: d } }); };
+  const subirDeco = async (file) => { if (!file) return; const d = await comprimir(file, 800); if (d) { const next = [...deco, { id: uid(), nombre: "Objeto", foto: d }]; setDeco(next); guardar({ deco: next }); } };
+  const borrarDeco = (id) => { const next = deco.filter(x => x.id !== id); setDeco(next); guardar({ deco: next }); };
   const todosMats = MATERIALES.map(b => matsCustom.find(c => c.id === b.id) || b).concat(matsCustom.filter(c => !MATERIALES.some(b => b.id === c.id)));
   const subirFotoMat = (id, file) => {
     if (!file) return;
@@ -974,8 +1205,8 @@ export default function Muebles() {
     setRefrescando(false);
   };
 
-  useEffect(() => { (async () => { try { const r = await storage.get("vv_muebles"); if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); setMatsCustom(d.matsCustom || []); } } catch { } setCargando(false); })(); }, []);
-  const guardar = (next) => { const d = { proyecto: next.proyecto != null ? next.proyecto : proyecto, muebles: next.muebles || muebles, cfg: next.cfg || cfg, vano: next.vano || vano, matsCustom: next.matsCustom || matsCustom }; if (next.proyecto != null) setProyecto(next.proyecto); if (next.muebles) setMuebles(next.muebles); if (next.cfg) setCfg(next.cfg); if (next.vano) setVano(next.vano); if (next.matsCustom) setMatsCustom(next.matsCustom); try { storage.set("vv_muebles", JSON.stringify(d)); } catch { } };
+  useEffect(() => { (async () => { try { const r = await storage.get("vv_muebles"); if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); setMatsCustom(d.matsCustom || []); setDeco(d.deco || []); } } catch { } setCargando(false); })(); }, []);
+  const guardar = (next) => { const d = { proyecto: next.proyecto != null ? next.proyecto : proyecto, muebles: next.muebles || muebles, cfg: next.cfg || cfg, vano: next.vano || vano, matsCustom: next.matsCustom || matsCustom, deco: next.deco || deco }; if (next.proyecto != null) setProyecto(next.proyecto); if (next.muebles) setMuebles(next.muebles); if (next.cfg) setCfg(next.cfg); if (next.vano) setVano(next.vano); if (next.matsCustom) setMatsCustom(next.matsCustom); if (next.deco) setDeco(next.deco); try { storage.set("vv_muebles", JSON.stringify(d)); } catch { } };
   const setV = (k, v) => guardar({ vano: { ...vano, [k]: num(v) } });
   const mover = (id, dir) => { const i = muebles.findIndex(m => m.id === id); const j = i + dir; if (i < 0 || j < 0 || j >= muebles.length) return; const arr = [...muebles]; const t = arr[i]; arr[i] = arr[j]; arr[j] = t; guardar({ muebles: arr }); };
 
@@ -1111,6 +1342,39 @@ export default function Muebles() {
         <div style={{ marginTop: 10 }}>
           <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Pared B — en L (mm · 0 si es recto)</label>
           <input value={vano.paredB} onChange={e => setV("paredB", e.target.value)} inputMode="numeric" style={inp} />
+        </div>
+        <div style={{ marginTop: 12, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+          <button onClick={() => guardar({ vano: { ...vano, isla: !vano.isla } })} style={{ width: "100%", background: vano.isla ? T.accent : T.al, color: vano.isla ? "#fff" : T.sub, border: `1px solid ${vano.isla ? T.accent : T.border}`, borderRadius: 10, padding: "13px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{vano.isla ? "✓ " : ""}🏝 Cocina con isla</button>
+          {vano.isla && <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7, marginTop: 9 }}>
+              {[["islaSep", "Separación"], ["islaVoladizo", "Voladizo"], ["banquetas", "Banquetas"]].map(([k, l]) => <div key={k}>
+                <label style={{ fontSize: 10, color: T.sub, fontWeight: 700 }}>{l}</label>
+                <input value={vano[k]} onChange={e => setV(k, e.target.value)} inputMode="numeric" style={{ ...inp, padding: "11px 10px", fontSize: 15 }} />
+              </div>)}
+            </div>
+            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>Separación y voladizo en mm. En cada mueble elegí <b>«En la isla»</b> para que vaya ahí.</div>
+          </>}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginTop: 12 }}>
+          <button onClick={() => setVerNivel(true)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 10, padding: "12px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>📐 Nivel y plomada</button>
+          <label style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 10, padding: "12px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center" }}>{leyendo ? "Leyendo…" : "📷 Leer medidas"}<input type="file" accept="image/*" onChange={e => { leerMedidas(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
+        </div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>Medí con la app <b>Medir</b> del iPhone, sacá captura y subila en «Leer medidas»: la IA carga el vano sola.</div>
+        <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, background: T.card, border: `1px dashed ${T.border}`, borderRadius: 10, padding: 10, cursor: "pointer" }}>
+          {vano.foto ? <img src={vano.foto} alt="" style={{ width: 52, height: 52, borderRadius: 8, objectFit: "cover" }} /> : <span style={{ fontSize: 22 }}>🖼</span>}
+          <span style={{ fontSize: 12, fontWeight: 700, color: T.accent, flex: 1 }}>{vano.foto ? "Cambiar foto del ambiente" : "Subir foto del ambiente / vano"}<div style={{ fontSize: 10, color: T.muted, fontWeight: 600, marginTop: 2 }}>Se usa como fondo real en el render IA.</div></span>
+          <input type="file" accept="image/*" onChange={e => { subirFotoVano(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} />
+        </label>
+      </div>
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: 13, marginBottom: 12, boxShadow: SHDsm }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Objetos de decoración</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 9, lineHeight: 1.5 }}>Subí fotos de tus piezas (floreros, bandejas, etc). Después las elegís antes del render y la IA las coloca en la escena.</div>
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          {deco.map(o => <div key={o.id} style={{ position: "relative" }}>
+            <div style={{ width: 66, height: 66, borderRadius: 10, background: `url(${o.foto}) center/cover`, border: `1px solid ${T.border}` }} />
+            <button onClick={() => borrarDeco(o.id)} style={{ position: "absolute", top: -5, right: -5, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>)}
+          <label style={{ width: 66, height: 66, borderRadius: 10, border: `1px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: T.muted, cursor: "pointer" }}>＋<input type="file" accept="image/*" onChange={e => { subirDeco(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
         </div>
       </div>
       {muebles.length === 0 ? <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "24px 10px", lineHeight: 1.6 }}>Cargá el vano y después agregá muebles<br />en la solapa <b>Muebles</b> para verlos acomodados acá.</div> : <>
@@ -1255,6 +1519,19 @@ export default function Muebles() {
           <button onClick={() => setF("techoTravesanos", !form.techoTravesanos)} style={{ flex: 1, background: form.techoTravesanos ? T.accent : T.al, color: form.techoTravesanos ? "#fff" : T.sub, border: `1px solid ${form.techoTravesanos ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.techoTravesanos ? "✓ " : ""}Techo con travesaños</button>
           <button onClick={() => setF("fondo", form.fondo === false)} style={{ flex: 1, background: form.fondo !== false ? T.accent : T.al, color: form.fondo !== false ? "#fff" : T.sub, border: `1px solid ${form.fondo !== false ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.fondo !== false ? "✓ " : ""}Lleva fondo</button>
         </div>
+        {form.tipo === "electro" && <div style={{ marginTop: 12 }}>
+          <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>¿Qué electrodoméstico?</label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(104px,1fr))", gap: 6, marginTop: 6 }}>
+            {Object.entries(ELECTROS).map(([k, E]) => <button key={k} onClick={() => setForm(f => ({ ...f, electro: k, ancho: E.ancho, alto: E.alto, prof: E.prof }))} style={{ background: form.electro === k ? T.accent : T.al, color: form.electro === k ? "#fff" : T.sub, border: `1px solid ${form.electro === k ? T.accent : T.border}`, borderRadius: 8, padding: "9px 4px", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{form.electro === k ? "✓ " : ""}{E.nom}</button>)}
+          </div>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>{(ELECTROS[form.electro] || ELECTROS.anafe).mueble ? "Se corta la caja que lo aloja (va al despiece)." : "Va suelto: no genera cortes de placa."}</div>
+        </div>}
+        <div style={{ marginTop: 12 }}>
+          <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>¿Dónde va?</label>
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            {[["pared", "Contra la pared"], ["isla", "En la isla"]].map(([k, l]) => <button key={k} onClick={() => setF("zona", k)} style={{ flex: 1, background: (form.zona || "pared") === k ? T.accent : T.al, color: (form.zona || "pared") === k ? "#fff" : T.sub, border: `1px solid ${(form.zona || "pared") === k ? T.accent : T.border}`, borderRadius: 9, padding: "10px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+          </div>
+        </div>
         {num(form.puertas) > 0 && <>
           <div style={{ marginTop: 12 }}>
             <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Sistema de puerta</label>
@@ -1320,7 +1597,8 @@ export default function Muebles() {
       </div>
     </div>}
 
-    {verRender && <RenderEscena vano={vano} muebles={muebles} cfg={cfg} mats={matsCustom} proyecto={proyecto} onClose={() => setVerRender(false)} />}
+    {verNivel && <Nivel onClose={() => setVerNivel(false)} />}
+    {verRender && <RenderEscena vano={vano} muebles={muebles} cfg={cfg} mats={matsCustom} proyecto={proyecto} deco={deco} onClose={() => setVerRender(false)} />}
     {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
   </div>;
 }
