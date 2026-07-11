@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v7 (Muebles: catalogo Egger+Faplac, render realista, foto real de placa)
+// VERSION: v10 (Muebles: render fotorrealista IA con OpenAI gpt-image-1)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -33,7 +33,7 @@ const CFG_DEF = {
   precioPlaca: 0, precioCanto: 0, cantoEsp: 22, descontarFondo: true, travesanoH: 100,
   alturaAlacena: 1400, espMesada: 30, solape: 25, descuentoRiel: 55,
   tipoBisagra: "codo0", tipoCorredera: "telescopica", cierreSuave: true,
-  matCuerpo: "f_blanco", matFrente: "f_dakar",
+  matCuerpo: "f_blanco", matFrente: "f_dakar", sinSombras: false,
   precioBisagra: 0, precioCorredera: 0, precioRiel: 0, precioVidrio: 0, precioTirador: 0,
 };
 const BISAGRAS = {
@@ -275,9 +275,8 @@ function Render3D({ m, cfg, abierto, mats }) {
   const todos = caras.flatMap(c => c.pts.map(a => R(a[0], a[1], a[2])));
   const xs = todos.map(p => p.x), ys = todos.map(p => p.y);
   const pad = Math.max(A, H, Pc) * 0.10;
-  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad, minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad * 1.3;
+  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad, minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
   const usados = [...new Map(caras.map(c => [c.mat.id, c.mat])).values()];
-  const sombraY = maxY - pad * 1.1, cw = (maxX - minX);
 
   return <div style={{ background: "linear-gradient(180deg,#FBFAF7 0%,#EFEDE8 100%)", borderRadius: 14, padding: 10, border: `1px solid ${T.border}` }}>
     <svg viewBox={`${minX} ${minY} ${Math.max(1, maxX - minX)} ${Math.max(1, maxY - minY)}`}
@@ -299,20 +298,18 @@ function Render3D({ m, cfg, abierto, mats }) {
           </filter>;
           return null;
         })}
-        <radialGradient id={`${U}_sh`} cx="0.5" cy="0.5"><stop offset="0%" stopColor="#000" stopOpacity="0.30" /><stop offset="100%" stopColor="#000" stopOpacity="0" /></radialGradient>
       </defs>
-      <ellipse cx={(minX + maxX) / 2} cy={sombraY} rx={cw * 0.36} ry={cw * 0.05} fill={`url(#${U}_sh)`} />
       {caras.map(c => {
         const mt = c.mat;
         const base = mt.foto ? `url(#${U}_p_${mt.id})` : (mt.hex || "#DDD");
         const filt = (!mt.foto && mt.tipo === "madera") ? `url(#${U}_f_${mt.id})` : undefined;
         const pts = c.pts.map(pt).join(" ");
-        const sombra = Math.max(0, 1 - c.int);
+        const sombra = cfg.sinSombras ? 0 : Math.max(0, 1 - c.int);
         return <g key={c.key}>
           <polygon points={pts} fill={base} filter={filt} fillOpacity={mt.tipo === "vidrio" ? 0.55 : 1} stroke="none" />
           {c.tint && <polygon points={pts} fill={c.tint} fillOpacity="0.35" />}
-          {sombra > 0.001 && <polygon points={pts} fill="#0A1420" fillOpacity={sombra * 0.75} />}
-          {c.spec > 0.02 && <polygon points={pts} fill="#FFFFFF" fillOpacity={c.spec * (mt.tipo === "vidrio" ? 0.5 : 0.16)} />}
+          {sombra > 0.001 && <polygon points={pts} fill="#0A1420" fillOpacity={sombra * 0.45} />}
+          {!cfg.sinSombras && c.spec > 0.02 && <polygon points={pts} fill="#FFFFFF" fillOpacity={c.spec * (mt.tipo === "vidrio" ? 0.5 : 0.14)} />}
           <polygon points={pts} fill="none" stroke="#2A3542" strokeOpacity="0.5" strokeWidth={Math.max(A, H) / 900} strokeLinejoin="round" />
         </g>;
       })}
@@ -491,6 +488,291 @@ function VanoVistas({ vano, muebles, cfg }) {
   </div>;
 }
 
+// ---------- RENDER FINAL FOTORREALISTA (escena completa en perspectiva) ----------
+const hexRGB = (h) => { const s = String(h || "#ccc").replace("#", ""); return { r: parseInt(s.slice(0, 2), 16) || 200, g: parseInt(s.slice(2, 4), 16) || 200, b: parseInt(s.slice(4, 6), 16) || 200 }; };
+const mezcla = (hex, k) => { const c = hexRGB(hex); const f = (v) => Math.max(0, Math.min(255, Math.round(v * k))); return `rgb(${f(c.r)},${f(c.g)},${f(c.b)})`; };
+
+function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
+  const [cam, setCam] = useState({ yaw: -16, pitch: 8, dist: 2.4 });
+  const [verIA, setVerIA] = useState(false);
+  const svgRef = useRef(null);
+  const drag = useRef(null);
+  const U = "esc";
+  const e = num(cfg.esp) || 18, ef = num(cfg.espFondo) || 3;
+  const W = num(vano.ancho) || 3000, HV = num(vano.alto) || 2600;
+  const hAlac = num(cfg.alturaAlacena) || 1400, eMes = num(cfg.espMesada) || 30;
+  const L = num(cfg.luz) || 3;
+  const d = distribuir(muebles, "A");
+
+  const onDown = (x, y) => { drag.current = { x, y, ...cam }; };
+  const onMove = (x, y) => { const g = drag.current; if (!g) return; setCam({ ...cam, yaw: g.yaw + (x - g.x) * 0.22, pitch: Math.max(-25, Math.min(45, g.pitch - (y - g.y) * 0.18)) }); };
+  const onUp = () => { drag.current = null; };
+
+  // centro de escena y cámara en perspectiva
+  const cx = W / 2, cy = HV * 0.45, cz = 300;
+  const escala = Math.max(W, HV);
+  const D = escala * cam.dist, F = escala * 1.55;
+  const proj = (x, y, z) => {
+    const X = x - cx, Y = y - cy, Z = z - cz;
+    const ry = cam.yaw * Math.PI / 180, rp = cam.pitch * Math.PI / 180;
+    const X1 = X * Math.cos(ry) + Z * Math.sin(ry);
+    const Z1 = -X * Math.sin(ry) + Z * Math.cos(ry);
+    const Y2 = Y * Math.cos(rp) - Z1 * Math.sin(rp);
+    const Z2 = Y * Math.sin(rp) + Z1 * Math.cos(rp);
+    const dist = D - Z2;                       // profundidad respecto de la cámara
+    const k = F / Math.max(escala * 0.35, dist); // perspectiva real
+    return { x: X1 * k, y: -Y2 * k, dist };
+  };
+  const P = (a) => { const p = proj(a[0], a[1], a[2]); return `${p.x.toFixed(1)},${p.y.toFixed(1)}`; };
+  const zMed = (pts) => pts.reduce((s, a) => s + proj(a[0], a[1], a[2]).dist, 0) / pts.length;
+  const normalLuz = (pts) => {
+    const q = pts.map(a => { const X = a[0] - cx, Y = a[1] - cy, Z = a[2] - cz; const ry = cam.yaw * Math.PI / 180, rp = cam.pitch * Math.PI / 180; const X1 = X * Math.cos(ry) + Z * Math.sin(ry); const Z1 = -X * Math.sin(ry) + Z * Math.cos(ry); return { x: X1, y: Y * Math.cos(rp) - Z1 * Math.sin(rp), z: Y * Math.sin(rp) + Z1 * Math.cos(rp) }; });
+    const u = { x: q[1].x - q[0].x, y: q[1].y - q[0].y, z: q[1].z - q[0].z };
+    const v = { x: q[2].x - q[0].x, y: q[2].y - q[0].y, z: q[2].z - q[0].z };
+    let n = { x: u.y * v.z - u.z * v.y, y: u.z * v.x - u.x * v.z, z: u.x * v.y - u.y * v.x };
+    const len = Math.hypot(n.x, n.y, n.z) || 1; n = { x: n.x / len, y: n.y / len, z: n.z / len };
+    const lz = { x: -0.42, y: 0.66, z: 0.62 };
+    const dp = Math.abs(n.x * lz.x + n.y * lz.y + n.z * lz.z);
+    return { int: 0.48 + 0.52 * dp, spec: Math.pow(dp, 22) };
+  };
+
+  const caras = [];
+  const addCara = (key, pts, mat, opts) => { const l = normalLuz(pts); caras.push({ key, pts, mat, z: zMed(pts), int: l.int, spec: l.spec, ...(opts || {}) }); };
+
+  const matC = matPorId(cfg.matCuerpo, mats), matF = matPorId(cfg.matFrente, mats);
+  const MESADA = { id: "mesada", hex: "#3C4048", tipo: "liso", gloss: 0.5 };
+
+  // Caja / cuerpo de cada módulo
+  const modulo = (it, base, colgado) => {
+    const m = it.m, A = it.w, x0 = it.x;
+    const alt = num(m.alto), pf = num(m.prof), zc = num(m.zocalo) || 0;
+    const y0 = base, Hc = alt - zc;
+    const mc = matPorId(m.matCuerpo || cfg.matCuerpo, mats), mf = matPorId(m.matFrente || cfg.matFrente, mats);
+    const zF = 0, zB = pf; // z=0 frente, z=pf fondo (pared al fondo)
+    // interior
+    addCara(`f${x0}${base}`, [[x0, y0 + zc, zB], [x0 + A, y0 + zc, zB], [x0 + A, y0 + zc + Hc, zB], [x0, y0 + zc + Hc, zB]], mc, { ao: 0.5 });
+    // laterales, piso, techo
+    addCara(`li${x0}${base}`, [[x0, y0 + zc, zF], [x0, y0 + zc, zB], [x0, y0 + zc + Hc, zB], [x0, y0 + zc + Hc, zF]], mc);
+    addCara(`ld${x0}${base}`, [[x0 + A, y0 + zc, zF], [x0 + A, y0 + zc, zB], [x0 + A, y0 + zc + Hc, zB], [x0 + A, y0 + zc + Hc, zF]], mc);
+    addCara(`tp${x0}${base}`, [[x0, y0 + zc + Hc, zF], [x0 + A, y0 + zc + Hc, zF], [x0 + A, y0 + zc + Hc, zB], [x0, y0 + zc + Hc, zB]], mc);
+    if (zc > 0) addCara(`zo${x0}`, [[x0, y0, zF + 20], [x0 + A, y0, zF + 20], [x0 + A, y0 + zc, zF + 20], [x0, y0 + zc, zF + 20]], { id: "zoc", hex: "#23262B", tipo: "liso" }, { ao: 0.6 });
+    // frentes
+    const nPu = num(m.puertas), nCj = num(m.cajones);
+    const corr = m.sistemaPuerta === "corrediza", vid = m.matPuerta === "vidrio";
+    if (nCj > 0) {
+      const aF = (Hc - (nCj + 1) * L) / nCj;
+      for (let i = 0; i < nCj; i++) {
+        const yy = y0 + zc + L + i * (aF + L);
+        addCara(`cj${x0}${i}`, [[x0 + 1, yy, zF - 18], [x0 + A - 1, yy, zF - 18], [x0 + A - 1, yy + aF, zF - 18], [x0 + 1, yy + aF, zF - 18]], mf, { frente: true });
+        caras.push({ key: `tir${x0}${i}`, tirador: true, pts: [[x0 + A * 0.28, yy + aF * 0.62, zF - 30], [x0 + A * 0.72, yy + aF * 0.62, zF - 30], [x0 + A * 0.72, yy + aF * 0.62 + 16, zF - 30], [x0 + A * 0.28, yy + aF * 0.62 + 16, zF - 30]], z: zMed([[x0 + A * 0.5, yy, zF - 30]]), mat: { hex: "#8A8F98" }, int: 1, spec: 0.8 });
+      }
+    }
+    if (nPu > 0) {
+      const sol = num(cfg.solape) || 25;
+      const aPu = corr ? (A + sol * (nPu - 1)) / nPu : (A - (nPu - 1) * L - 2) / nPu;
+      for (let i = 0; i < nPu; i++) {
+        const px = corr ? x0 + i * (aPu - sol) : x0 + 1 + i * (aPu + L);
+        const zz = corr ? zF - 26 - (i % 2) * 20 : zF - 18;
+        addCara(`pu${x0}${i}`, [[px, y0 + zc + 1, zz], [px + aPu, y0 + zc + 1, zz], [px + aPu, y0 + zc + Hc - 1, zz], [px, y0 + zc + Hc - 1, zz]], vid ? { id: "vid", hex: "#C3D7E0", tipo: "vidrio", gloss: 0.9 } : mf, { frente: true });
+        const tx = (i === 0 && nPu > 1) ? px + aPu - 45 : px + 45;
+        caras.push({ key: `tirp${x0}${i}`, tirador: true, pts: [[tx - 7, y0 + zc + Hc * 0.42, zz - 12], [tx + 7, y0 + zc + Hc * 0.42, zz - 12], [tx + 7, y0 + zc + Hc * 0.42 + 130, zz - 12], [tx - 7, y0 + zc + Hc * 0.42 + 130, zz - 12]], z: zMed([[tx, y0 + zc + Hc * 0.5, zz - 12]]), mat: { hex: "#8A8F98" }, int: 1, spec: 0.85 });
+      }
+    }
+  };
+
+  // pared y piso
+  const FONDO_Z = 900;
+  addCara("pared", [[-500, 0, FONDO_Z], [W + 500, 0, FONDO_Z], [W + 500, HV + 400, FONDO_Z], [-500, HV + 400, FONDO_Z]], { id: "pared", hex: "#E9E6E0", tipo: "liso" }, { pared: true });
+  addCara("piso", [[-500, 0, -900], [W + 500, 0, -900], [W + 500, 0, FONDO_Z], [-500, 0, FONDO_Z]], { id: "piso", hex: "#B9B0A4", tipo: "liso" }, { piso: true });
+
+  // bajos + mesada + alacenas
+  d.piso.forEach(it => modulo(it, 0, false));
+  const hayBajos = d.piso.filter(it => !esAlto(it.m));
+  if (hayBajos.length) {
+    const hb = Math.max(...hayBajos.map(it => num(it.m.alto)));
+    const anchoM = hayBajos.reduce((s, it) => s + it.w, 0);
+    const pM = Math.max(...hayBajos.map(it => num(it.m.prof))) + 25;
+    addCara("mesada", [[0, hb + eMes, -25], [anchoM, hb + eMes, -25], [anchoM, hb + eMes, pM], [0, hb + eMes, pM]], MESADA, { gloss: true });
+    addCara("mesadaF", [[0, hb, -25], [anchoM, hb, -25], [anchoM, hb + eMes, -25], [0, hb + eMes, -25]], MESADA);
+  }
+  d.colg.forEach(it => modulo(it, hAlac, true));
+  caras.sort((a, b) => b.z - a.z);
+
+  const pts0 = caras.flatMap(c => c.pts.map(a => proj(a[0], a[1], a[2])));
+  const xs = pts0.map(p => p.x), ys = pts0.map(p => p.y);
+  const mnX = Math.min(...xs), mxX = Math.max(...xs), mnY = Math.min(...ys), mxY = Math.max(...ys);
+  const pd = (mxX - mnX) * 0.04;
+  const usados = [...new Map(caras.filter(c => c.mat && c.mat.id).map(c => [c.mat.id, c.mat])).values()];
+
+  return <div style={{ position: "fixed", inset: 0, background: "#11151B", zIndex: 600, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", gap: 8, padding: "10px 12px", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+      <button onClick={onClose} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
+      <div style={{ color: "#fff", fontSize: 13, fontWeight: 700, flex: 1 }}>Render final</div>
+      {[["Frente", -2, 4], ["3/4", -18, 8], ["Lateral", -42, 10], ["Alto", -14, 30]].map(([l, y, p]) => <button key={l} onClick={() => setCam(c => ({ ...c, yaw: y, pitch: p }))} style={{ background: "rgba(255,255,255,.1)", color: "#fff", border: "none", borderRadius: 7, padding: "7px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+    </div>
+    <div style={{ flex: 1, minHeight: 0, background: "radial-gradient(ellipse at 50% 35%, #2A3038 0%, #11151B 75%)" }}>
+      <svg ref={svgRef} viewBox={`${mnX - pd} ${mnY - pd} ${(mxX - mnX) + pd * 2} ${(mxY - mnY) + pd * 2}`}
+        onMouseDown={ev => { ev.preventDefault(); onDown(ev.clientX, ev.clientY); }} onMouseMove={ev => onMove(ev.clientX, ev.clientY)} onMouseUp={onUp} onMouseLeave={onUp}
+        onTouchStart={ev => { const t = ev.touches[0]; onDown(t.clientX, t.clientY); }} onTouchMove={ev => { ev.preventDefault(); const t = ev.touches[0]; onMove(t.clientX, t.clientY); }} onTouchEnd={onUp}
+        style={{ width: "100%", height: "100%", display: "block", cursor: "grab", touchAction: "none" }} preserveAspectRatio="xMidYMid meet">
+        <defs>
+          {usados.map(mt => mt.foto
+            ? <pattern key={mt.id} id={`${U}_p_${mt.id}`} patternUnits="objectBoundingBox" width="1" height="1"><image href={mt.foto} x="0" y="0" width="1" height="1" preserveAspectRatio="xMidYMid slice" /></pattern>
+            : (mt.tipo === "madera" ? <filter key={mt.id} id={`${U}_f_${mt.id}`} x="-2%" y="-2%" width="104%" height="104%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.005 0.5" numOctaves="5" seed={(mt.id || "x").length * 5} result="n" />
+              <feColorMatrix in="n" type="saturate" values="0" result="g" />
+              <feComponentTransfer in="g" result="b"><feFuncA type="table" tableValues="0 0.34" /></feComponentTransfer>
+              <feBlend in="SourceGraphic" in2="b" mode="multiply" />
+            </filter> : null))}
+          <linearGradient id={`${U}_ao`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#000" stopOpacity="0" /><stop offset="100%" stopColor="#000" stopOpacity="0.5" /></linearGradient>
+          <linearGradient id={`${U}_gl`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fff" stopOpacity="0.30" /><stop offset="45%" stopColor="#fff" stopOpacity="0.05" /><stop offset="100%" stopColor="#fff" stopOpacity="0" /></linearGradient>
+          <linearGradient id={`${U}_wall`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fff" stopOpacity="0.35" /><stop offset="100%" stopColor="#000" stopOpacity="0.18" /></linearGradient>
+          <linearGradient id={`${U}_flr`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#000" stopOpacity="0.35" /><stop offset="100%" stopColor="#fff" stopOpacity="0.12" /></linearGradient>
+          <filter id={`${U}_blur`}><feGaussianBlur stdDeviation={escala / 90} /></filter>
+        </defs>
+        {caras.map(c => {
+          const mt = c.mat || {}; const pts = c.pts.map(P).join(" ");
+          if (c.tirador) return <polygon key={c.key} points={pts} fill="#9AA1AA" stroke="#5C6169" strokeWidth={escala / 900} rx="4" />;
+          const base = mt.foto ? `url(#${U}_p_${mt.id})` : (mt.hex || "#ccc");
+          const filt = (!mt.foto && mt.tipo === "madera") ? `url(#${U}_f_${mt.id})` : undefined;
+          const oscuro = cfg.sinSombras ? 0 : Math.max(0, 1 - c.int);
+          return <g key={c.key}>
+            <polygon points={pts} fill={base} filter={filt} fillOpacity={mt.tipo === "vidrio" ? 0.42 : 1} />
+            {c.pared && <polygon points={pts} fill={`url(#${U}_wall)`} />}
+            {c.piso && <polygon points={pts} fill={`url(#${U}_flr)`} />}
+            {oscuro > 0.001 && <polygon points={pts} fill="#080D14" fillOpacity={oscuro * 0.78} />}
+            {c.ao && !cfg.sinSombras && <polygon points={pts} fill={`url(#${U}_ao)`} fillOpacity={c.ao} />}
+            {(c.gloss || mt.gloss || mt.tipo === "vidrio") && <polygon points={pts} fill={`url(#${U}_gl)`} />}
+            {c.spec > 0.02 && <polygon points={pts} fill="#fff" fillOpacity={c.spec * (mt.tipo === "vidrio" ? 0.55 : mt.gloss ? 0.35 : 0.14)} />}
+            {c.frente && <polygon points={pts} fill="none" stroke="#000" strokeOpacity="0.30" strokeWidth={escala / 700} strokeLinejoin="round" />}
+            {!c.frente && !c.pared && !c.piso && <polygon points={pts} fill="none" stroke="#000" strokeOpacity="0.16" strokeWidth={escala / 1300} strokeLinejoin="round" />}
+          </g>;
+        })}
+      </svg>
+    </div>
+    <div style={{ padding: "10px 14px calc(10px + env(safe-area-inset-bottom))", background: "#11151B", borderTop: "1px solid rgba(255,255,255,.08)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ color: "rgba(255,255,255,.55)", fontSize: 11, fontWeight: 700 }}>Zoom</span>
+        <input type="range" min="150" max="420" value={Math.round(cam.dist * 100)} onChange={ev => setCam(c => ({ ...c, dist: num(ev.target.value) / 100 }))} style={{ flex: 1, accentColor: BRASS }} />
+      </div>
+      <button onClick={() => setVerIA(true)} style={{ width: "100%", marginTop: 10, background: `linear-gradient(135deg, ${BRASS}, #8E6C3A)`, color: "#fff", border: "none", borderRadius: 11, padding: "14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>✨ Convertir en render fotorrealista</button>
+      <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10.5, marginTop: 6, textAlign: "center" }}>Arrastrá para girar · {matC.marca} {matC.nom} (cuerpo) · {matF.nom} (frentes)</div>
+    </div>
+    {verIA && <RenderIA proyecto={proyecto} vano={vano} muebles={muebles} cfg={cfg} mats={mats} refSvg={svgRef} onClose={() => setVerIA(false)} />}
+  </div>;
+}
+
+// ---------- RENDER FOTORREALISTA CON IA (OpenAI gpt-image-1) ----------
+function promptEscena(proyecto, vano, muebles, cfg, mats, opciones) {
+  const mc = matPorId(cfg.matCuerpo, mats), mf = matPorId(cfg.matFrente, mats);
+  const d = distribuir(muebles, "A");
+  const desc = (arr) => arr.map(it => `${mm(it.w)}mm wide ${it.m.tipo === "cajonera" ? `drawer unit with ${num(it.m.cajones)} drawers` : it.m.tipo === "placard" ? "tall wardrobe" : num(it.m.puertas) > 0 ? `cabinet with ${num(it.m.puertas)} ${it.m.sistemaPuerta === "corrediza" ? "sliding" : "hinged"} ${it.m.matPuerta === "vidrio" ? "glass" : "flat slab"} door(s)` : "open shelf unit"}`).join(", ");
+  const bajos = d.piso.length ? `Base run (floor cabinets), left to right: ${desc(d.piso)}.` : "";
+  const alac = d.colg.length ? `Wall-mounted upper cabinets at ${mm(num(cfg.alturaAlacena))}mm from floor, left to right: ${desc(d.colg)}.` : "";
+  const luz = opciones.luz === "noche" ? "Evening scene, warm LED strip lighting under the wall cabinets and ceiling spotlights, cozy dim ambient light, glowing accents" : "Bright natural daylight from a window on the left, soft daylight, airy";
+  const est = opciones.estilo === "clasico" ? "classic elegant Scandinavian style, subtle detailing" : opciones.estilo === "industrial" ? "industrial style, matte black metal accents, concrete backsplash" : "modern minimalist high-end style, handleless slab fronts, clean lines";
+  return `Photorealistic professional interior architectural photograph of a custom fitted kitchen, rendered from the provided technical design. IMPORTANT: keep exactly the same layout, proportions, number of cabinets, cabinet widths and positions as the reference image — do not add or remove cabinets, do not change the composition.
+
+Project: ${proyecto || "Custom kitchen"}. Wall opening ${mm(num(vano.ancho))}mm wide by ${mm(num(vano.alto))}mm high, cabinet depth ${mm(num(vano.prof))}mm.
+${bajos}
+${alac}
+Cabinet carcass finish: ${mc.marca} ${mc.nom} melamine (${mc.tipo === "madera" ? "realistic wood grain" : "solid matte colour"}, colour ${mc.hex}).
+Door and drawer front finish: ${mf.marca} ${mf.nom} melamine (${mf.tipo === "madera" ? "realistic natural wood grain running vertically" : "solid matte colour"}, colour ${mf.hex}).
+Countertop: ${opciones.mesada || "black granite/quartz, 30mm thick, subtle polished reflection"}.
+Hardware: slim ${opciones.tirador || "brushed stainless steel bar handles"}.
+${est}. ${luz}.
+Light oak wood-look floor, plain neutral wall, backsplash between counter and upper cabinets.${opciones.extra ? " " + opciones.extra : ""}
+Shot with a 24mm wide-angle lens, eye level, sharp focus, realistic materials and reflections, high dynamic range, ultra-detailed, 8k architectural visualization. No text, no watermarks, no people.`;
+}
+
+function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, onClose }) {
+  const [op, setOp] = useState({ estilo: "moderno", luz: "noche", mesada: "", tirador: "", extra: "" });
+  const [gen, setGen] = useState(false);
+  const [img, setImg] = useState("");
+  const [err, setErr] = useState("");
+  const [usarRef, setUsarRef] = useState(true);
+
+  const svgAPng = () => new Promise((resolve) => {
+    try {
+      const el = refSvg && refSvg.current;
+      if (!el) return resolve("");
+      const xml = new XMLSerializer().serializeToString(el);
+      const b = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(b);
+      const im = new window.Image();
+      im.onload = () => {
+        const W = 1024, H = Math.round(W * (im.height || 700) / (im.width || 1024));
+        const c = document.createElement("canvas"); c.width = W; c.height = H;
+        const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+        ctx.drawImage(im, 0, 0, W, H);
+        URL.revokeObjectURL(url);
+        try { resolve(c.toDataURL("image/png")); } catch { resolve(""); }
+      };
+      im.onerror = () => { URL.revokeObjectURL(url); resolve(""); };
+      im.src = url;
+    } catch { resolve(""); }
+  });
+
+  const generar = async () => {
+    setGen(true); setErr(""); setImg("");
+    try {
+      const prompt = promptEscena(proyecto, vano, muebles, cfg, mats, op);
+      const imageB64 = usarRef ? await svgAPng() : "";
+      const r = await fetch("/api/render", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, imageB64: imageB64 || undefined, size: "1536x1024", quality: "high" }) });
+      const d = await r.json();
+      if (!r.ok || !d.image) throw new Error((d.error && d.error.message) || "No se pudo generar el render.");
+      setImg(d.image);
+    } catch (e) { setErr(e.message || "Error al generar el render."); }
+    setGen(false);
+  };
+
+  return <div style={{ position: "fixed", inset: 0, background: "#0C1016", zIndex: 700, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", gap: 8, padding: "10px 12px", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+      <button onClick={onClose} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
+      <div style={{ color: "#fff", fontSize: 13.5, fontWeight: 700, flex: 1 }}>Render fotorrealista IA</div>
+      {img && <a href={img} download={`render-${(proyecto || "mueble").replace(/\s+/g, "-")}.png`} style={{ background: BRASS, color: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Guardar</a>}
+    </div>
+    <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+      {img ? <>
+        <img src={img} alt="render" style={{ width: "100%", borderRadius: 12, display: "block", boxShadow: "0 10px 40px rgba(0,0,0,.5)" }} />
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button onClick={() => setImg("")} style={{ flex: 1, background: "rgba(255,255,255,.12)", color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cambiar opciones</button>
+          <button onClick={generar} disabled={gen} style={{ flex: 1, background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Generar otra</button>
+        </div>
+        <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10.5, marginTop: 10, textAlign: "center", lineHeight: 1.5 }}>Render generado por IA a partir de tu diseño. Es una imagen de presentación: las medidas exactas están en el despiece y el plan de corte.</div>
+      </> : <>
+        {gen ? <div style={{ textAlign: "center", padding: "60px 20px", color: "#fff" }}>
+          <div style={{ fontSize: 34, marginBottom: 14 }}>🎨</div>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Generando el render…</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginTop: 6 }}>Tarda entre 20 y 60 segundos. No cierres la pantalla.</div>
+        </div> : <>
+          <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 12, padding: 13, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 9 }}>Ambiente</div>
+            {[["luz", [["noche", "Noche (LED cálido)"], ["dia", "Día (luz natural)"]]], ["estilo", [["moderno", "Moderno minimal"], ["clasico", "Clásico nórdico"], ["industrial", "Industrial"]]]].map(([k, opts]) => (
+              <div key={k} style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                {opts.map(([v, l]) => <button key={v} onClick={() => setOp(o => ({ ...o, [k]: v }))} style={{ flex: 1, background: op[k] === v ? T.accent : "rgba(255,255,255,.08)", color: "#fff", border: "none", borderRadius: 8, padding: "10px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+              </div>
+            ))}
+          </div>
+          <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 12, padding: 13, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 9 }}>Detalles (opcional)</div>
+            <input value={op.mesada} onChange={e => setOp(o => ({ ...o, mesada: e.target.value }))} placeholder="Mesada (ej: granito negro, Silestone blanco)" style={{ width: "100%", background: "rgba(255,255,255,.08)", border: "none", borderRadius: 9, padding: "12px", fontSize: 15, color: "#fff", boxSizing: "border-box", marginBottom: 8 }} />
+            <input value={op.tirador} onChange={e => setOp(o => ({ ...o, tirador: e.target.value }))} placeholder="Tiradores (ej: negro mate, sin tirador / uñero)" style={{ width: "100%", background: "rgba(255,255,255,.08)", border: "none", borderRadius: 9, padding: "12px", fontSize: 15, color: "#fff", boxSizing: "border-box", marginBottom: 8 }} />
+            <input value={op.extra} onChange={e => setOp(o => ({ ...o, extra: e.target.value }))} placeholder="Extras (ej: isla con banquetas, heladera inox, campana)" style={{ width: "100%", background: "rgba(255,255,255,.08)", border: "none", borderRadius: 9, padding: "12px", fontSize: 15, color: "#fff", boxSizing: "border-box" }} />
+          </div>
+          <button onClick={() => setUsarRef(v => !v)} style={{ width: "100%", background: usarRef ? "rgba(27,58,91,.5)" : "rgba(255,255,255,.06)", border: `1px solid ${usarRef ? T.accent : "rgba(255,255,255,.12)"}`, color: "#fff", borderRadius: 10, padding: "12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 12, textAlign: "left" }}>
+            {usarRef ? "✓ " : ""}Respetar mi diseño (usa tu render como guía)
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", fontWeight: 600, marginTop: 3 }}>Con esto la IA mantiene tus módulos y medidas en vez de inventar una cocina.</div>
+          </button>
+          {err && <div style={{ background: "rgba(220,38,38,.15)", border: "1px solid rgba(220,38,38,.4)", color: "#FCA5A5", borderRadius: 10, padding: "11px 13px", fontSize: 12, marginBottom: 12, lineHeight: 1.5 }}>{err}</div>}
+          <button onClick={generar} style={{ width: "100%", background: `linear-gradient(135deg, ${BRASS}, #8E6C3A)`, color: "#fff", border: "none", borderRadius: 12, padding: "16px", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>Generar render fotorrealista</button>
+          <div style={{ color: "rgba(255,255,255,.35)", fontSize: 10.5, marginTop: 10, textAlign: "center", lineHeight: 1.5 }}>Usa la API de OpenAI (gpt-image-1). Costo aproximado: USD 0,04–0,17 por imagen, se factura a tu cuenta de OpenAI.</div>
+        </>}
+      </>}
+    </div>
+  </div>;
+}
+
 // ---------- PLANO DE CORTE ----------
 function PlacaSVG({ pl, PW, PH, n, total }) {
   const esc = 100 / PW;
@@ -584,6 +866,7 @@ export default function Muebles() {
   const [verCfg, setVerCfg] = useState(false);
   const [matsCustom, setMatsCustom] = useState([]);
   const [nuevoMat, setNuevoMat] = useState(null);
+  const [verRender, setVerRender] = useState(false);
   const todosMats = MATERIALES.map(b => matsCustom.find(c => c.id === b.id) || b).concat(matsCustom.filter(c => !MATERIALES.some(b => b.id === c.id)));
   const subirFotoMat = (id, file) => {
     if (!file) return;
@@ -755,6 +1038,7 @@ export default function Muebles() {
         </div>
       </div>
       {muebles.length === 0 ? <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "24px 10px", lineHeight: 1.6 }}>Cargá el vano y después agregá muebles<br />en la solapa <b>Muebles</b> para verlos acomodados acá.</div> : <>
+        <button onClick={() => setVerRender(true)} style={{ width: "100%", background: `linear-gradient(135deg, #1B3A5B, ${T.navy})`, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 12, padding: "15px", fontSize: 14.5, fontWeight: 800, cursor: "pointer", marginBottom: 12, boxShadow: SHD }}>🎬 Ver render final del mueble armado</button>
         <VanoVistas vano={vano} muebles={muebles} cfg={cfg} />
         <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", margin: "16px 0 8px" }}>Orden en el vano (izquierda → derecha)</div>
         {muebles.map((m, i) => <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "10px 12px", marginBottom: 7, boxShadow: SHDsm }}>
@@ -779,6 +1063,7 @@ export default function Muebles() {
         <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "10px 12px", boxShadow: SHDsm }}><div style={{ fontSize: 9.5, color: T.muted, fontWeight: 700, textTransform: "uppercase" }}>Piezas</div><div style={{ fontSize: 20, fontWeight: 800 }}>{totalPiezas}</div></div>
       </div>}
 
+      {muebles.length > 0 && <button onClick={() => setVerRender(true)} style={{ width: "100%", background: `linear-gradient(135deg, #1B3A5B, ${T.navy})`, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 12, padding: "14px", fontSize: 14, fontWeight: 800, cursor: "pointer", marginBottom: 12, boxShadow: SHD }}>🎬 Ver render final del mueble armado</button>}
       {muebles.map(m => { const ab = !!abierto[m.id]; return <div key={m.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 15, padding: 13, marginBottom: 12, boxShadow: SHDsm }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10, gap: 8 }}>
           <div style={{ minWidth: 0 }}>
@@ -948,6 +1233,7 @@ export default function Muebles() {
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button onClick={() => setC("veta", !cfg.veta)} style={{ flex: 1, background: cfg.veta ? T.accent : T.al, color: cfg.veta ? "#fff" : T.sub, border: `1px solid ${cfg.veta ? T.accent : T.border}`, borderRadius: 9, padding: "12px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{cfg.veta ? "✓ " : ""}Respetar veta</button>
+          <button onClick={() => setC("sinSombras", !cfg.sinSombras)} style={{ flex: 1, background: cfg.sinSombras ? T.accent : T.al, color: cfg.sinSombras ? "#fff" : T.sub, border: `1px solid ${cfg.sinSombras ? T.accent : T.border}`, borderRadius: 9, padding: "12px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{cfg.sinSombras ? "✓ " : ""}Render sin sombras</button>
           <button onClick={() => setC("cierreSuave", !cfg.cierreSuave)} style={{ flex: 1, background: cfg.cierreSuave ? T.accent : T.al, color: cfg.cierreSuave ? "#fff" : T.sub, border: `1px solid ${cfg.cierreSuave ? T.accent : T.border}`, borderRadius: 9, padding: "12px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{cfg.cierreSuave ? "✓ " : ""}Cierre suave</button>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -958,6 +1244,7 @@ export default function Muebles() {
       </div>
     </div>}
 
+    {verRender && <RenderEscena vano={vano} muebles={muebles} cfg={cfg} mats={matsCustom} proyecto={proyecto} onClose={() => setVerRender(false)} />}
     {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
   </div>;
 }
