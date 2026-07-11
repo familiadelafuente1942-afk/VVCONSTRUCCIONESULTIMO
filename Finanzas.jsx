@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v100 (IA Finanzas: rojo inmediato al escuchar + tocar de nuevo corta)
+// VERSION: v102 (IA Finanzas: chat con scroll interno propio, respuesta siempre visible)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -1559,7 +1559,7 @@ function AsistenteCargaTab({ data, save }) {
   const taRef = useRef(null);
   const recRef = useRef(null);
   const endRef = useRef(null);
-  useEffect(() => { try { endRef.current && endRef.current.scrollIntoView({ behavior: "smooth", block: "end" }); } catch { } }, [msgs, cargando, acciones]);
+  useEffect(() => { const id = setTimeout(() => { try { endRef.current && endRef.current.scrollIntoView({ behavior: "smooth", block: "end" }); } catch { } }, 80); return () => clearTimeout(id); }, [msgs, cargando, acciones]);
   useEffect(() => { try { const s = JSON.stringify(msgs.slice(-40)); localStorage.setItem("vv_ia_chat", s); storage.set("vv_ia_chat", s); } catch { } }, [msgs]);
   useEffect(() => { if (msgs.length === 0) { (async () => { try { const r = await storage.get("vv_ia_chat"); if (r && r.value) { const arr = JSON.parse(r.value); if (Array.isArray(arr) && arr.length) setMsgs(arr); } } catch { } })(); } }, []);
   const enfocar = () => { setMostrarTexto(true); setTimeout(() => { try { taRef.current && taRef.current.focus(); } catch { } }, 60); };
@@ -1632,8 +1632,8 @@ ${contextoDatos(data)}`;
   const descartar = (id) => setAcciones(prev => prev.filter(x => x._id !== id));
   const vacio = msgs.length === 0 && acciones.length === 0 && !cargando;
   const charla = msgs.length > 0 || acciones.length > 0 || cargando;
-  return (<div style={{ display: "flex", flexDirection: "column", minHeight: "78vh" }}>
-    <div style={{ flex: 1, padding: "14px 16px 8px" }}>
+  return (<div style={{ height: "calc(100dvh - 132px)", display: "flex", flexDirection: "column" }}>
+    <div style={{ flex: 1, overflowY: "auto", minHeight: 0, WebkitOverflowScrolling: "touch", padding: "14px 16px 12px" }}>
       {!charla && <div style={{ textAlign: "center", margin: "8px 0 4px" }}>
         <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.14em", textTransform: "uppercase" }}>Asistente V+V</div>
         <div style={{ fontSize: 13, color: T.sub, marginTop: 6, lineHeight: 1.45 }}>Tocá el botón de abajo para hablarle, o escribí.<br />Podés preguntarle cuánto se pagó/gastó, cargar gastos, armar presupuestos o redactar un WhatsApp. Siempre confirmás vos.</div>
@@ -1672,7 +1672,7 @@ ${contextoDatos(data)}`;
       </div>); })}
       <div ref={endRef} />
     </div>
-    <div style={{ position: "sticky", bottom: 0, background: T.bg, borderTop: `1px solid ${T.border}`, padding: "10px 12px calc(10px + env(safe-area-inset-bottom))", boxShadow: "0 -4px 14px rgba(15,27,45,.06)" }}>
+    <div style={{ flexShrink: 0, background: T.bg, borderTop: `1px solid ${T.border}`, padding: "10px 12px calc(10px + env(safe-area-inset-bottom))", boxShadow: "0 -4px 14px rgba(15,27,45,.06)" }}>
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 9 }}>
         <div onClick={escuchar} style={{ width: 132, height: 132, background: escuchando ? "#FEF2F2" : T.card, border: `2px solid ${escuchando ? "#DC2626" : T.accent}`, borderRadius: 20, boxShadow: SHD, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, position: "relative" }}>
           {data.config && data.config.logo ? <img src={data.config.logo} alt="logo" style={{ width: 74, height: 74, borderRadius: 14, objectFit: "cover", background: "#fff", opacity: escuchando ? 0.6 : 1 }} /> : <span style={{ fontSize: 42 }}>🎤</span>}
