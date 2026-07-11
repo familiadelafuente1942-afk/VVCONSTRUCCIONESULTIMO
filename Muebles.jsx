@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v10 (Muebles: render fotorrealista IA con OpenAI gpt-image-1)
+// VERSION: v11 (Muebles: fix render roto en iPad + textos cortados)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -288,25 +288,21 @@ function Render3D({ m, cfg, abierto, mats }) {
       style={{ width: "100%", height: "auto", maxHeight: 340, display: "block", cursor: "grab", touchAction: "none" }} preserveAspectRatio="xMidYMid meet">
       <defs>
         {usados.map(mt => {
-          const gid = `${U}_g_${mt.id}`;
-          if (mt.foto) return <pattern key={gid} id={`${U}_p_${mt.id}`} patternUnits="objectBoundingBox" width="1" height="1"><image href={mt.foto} x="0" y="0" width="1" height="1" preserveAspectRatio="xMidYMid slice" /></pattern>;
-          if (mt.tipo === "madera") return <filter key={gid} id={`${U}_f_${mt.id}`} x="-2%" y="-2%" width="104%" height="104%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.006 0.42" numOctaves="4" seed={(mt.id || "x").length * 7} result="n" />
-            <feColorMatrix in="n" type="saturate" values="0" result="ng" />
-            <feComponentTransfer in="ng" result="nb"><feFuncA type="table" tableValues="0 0.30" /></feComponentTransfer>
-            <feBlend in="SourceGraphic" in2="nb" mode="multiply" />
-          </filter>;
+          if (mt.foto) return <pattern key={mt.id} id={`${U}_p_${mt.id}`} patternUnits="objectBoundingBox" width="1" height="1"><image href={mt.foto} x="0" y="0" width="1" height="1" preserveAspectRatio="xMidYMid slice" /></pattern>;
+          if (mt.tipo === "madera") return <pattern key={mt.id} id={`${U}_p_${mt.id}`} patternUnits="objectBoundingBox" patternContentUnits="objectBoundingBox" width="1" height="1">
+            <rect x="0" y="0" width="1" height="1" fill={mt.hex} />
+            {vetaBandas(mt.hex, mt.id).map((b, i) => <rect key={i} x={b.x} y="0" width={b.w} height="1" fill={mezcla(mt.hex, b.k)} opacity={b.o} />)}
+          </pattern>;
           return null;
         })}
       </defs>
       {caras.map(c => {
         const mt = c.mat;
-        const base = mt.foto ? `url(#${U}_p_${mt.id})` : (mt.hex || "#DDD");
-        const filt = (!mt.foto && mt.tipo === "madera") ? `url(#${U}_f_${mt.id})` : undefined;
+        const base = (mt.foto || mt.tipo === "madera") ? `url(#${U}_p_${mt.id})` : (mt.hex || "#DDD");
         const pts = c.pts.map(pt).join(" ");
         const sombra = cfg.sinSombras ? 0 : Math.max(0, 1 - c.int);
         return <g key={c.key}>
-          <polygon points={pts} fill={base} filter={filt} fillOpacity={mt.tipo === "vidrio" ? 0.55 : 1} stroke="none" />
+          <polygon points={pts} fill={base} fillOpacity={mt.tipo === "vidrio" ? 0.55 : 1} stroke="none" />
           {c.tint && <polygon points={pts} fill={c.tint} fillOpacity="0.35" />}
           {sombra > 0.001 && <polygon points={pts} fill="#0A1420" fillOpacity={sombra * 0.45} />}
           {!cfg.sinSombras && c.spec > 0.02 && <polygon points={pts} fill="#FFFFFF" fillOpacity={c.spec * (mt.tipo === "vidrio" ? 0.5 : 0.14)} />}
@@ -415,7 +411,7 @@ function VanoVistas({ vano, muebles, cfg }) {
   const pad = Math.max(W, WB, PR) * 0.10 + 120;
   const dPlan = distribuir(muebles, "A"), dPlanB = WB > 0 ? distribuir(muebles, "B") : null;
   const planW = W + (WB > 0 ? PR : 0), planH = PR + (WB > 0 ? WB : 0);
-  const planta = <svg viewBox={`${-pad} ${-pad} ${planW + pad * 2} ${planH + pad * 1.5}`} style={{ width: "100%", height: "auto", maxHeight: 300, display: "block" }} preserveAspectRatio="xMidYMid meet">
+  const planta = <svg viewBox={`${-pad} ${-pad} ${planW + pad * 2} ${planH + pad * 2.6}`} style={{ width: "100%", height: "auto", maxHeight: 340, display: "block" }} preserveAspectRatio="xMidYMid meet">
     {/* paredes */}
     <line x1="0" y1="0" x2={W} y2="0" stroke="#334155" strokeWidth={Math.max(W, 1) / 90} strokeLinecap="square" />
     {WB > 0 && <line x1="0" y1="0" x2="0" y2={WB} stroke="#334155" strokeWidth={Math.max(W, 1) / 90} strokeLinecap="square" />}
@@ -441,7 +437,7 @@ function VanoVistas({ vano, muebles, cfg }) {
 
   // --- FRENTE ---
   const padF = Math.max(anchoPared, H) * 0.10 + 100;
-  const frente = <svg viewBox={`${-padF} ${-padF * 0.5} ${anchoPared + padF * 2} ${H + padF * 1.4}`} style={{ width: "100%", height: "auto", maxHeight: 320, display: "block" }} preserveAspectRatio="xMidYMid meet">
+  const frente = <svg viewBox={`${-padF} ${-padF * 0.7} ${anchoPared + padF * 2} ${H + padF * 2.1}`} style={{ width: "100%", height: "auto", maxHeight: 360, display: "block" }} preserveAspectRatio="xMidYMid meet">
     <rect x="0" y="0" width={anchoPared} height={H} fill="#FAFAF8" stroke="#334155" strokeWidth={anchoPared / 110} />
     {/* piso: bajos, cajoneras, placares */}
     {d.piso.map((it, i) => { const alt = num(it.m.alto); const y = H - alt; return <g key={"p" + i}>
@@ -486,6 +482,23 @@ function VanoVistas({ vano, muebles, cfg }) {
       </div>
     </div>
   </div>;
+}
+
+
+// Veta de madera por bandas (robusta en Safari; los filtros feTurbulence rompen el SVG en iPad)
+function vetaBandas(hex, seed) {
+  let x = (String(seed || "s").split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 97) + 3;
+  const rnd = () => { x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648; };
+  const bandas = [];
+  let px = 0;
+  while (px < 1) {
+    const w = 0.012 + rnd() * 0.05;
+    const k = 0.86 + rnd() * 0.22;
+    const o = 0.18 + rnd() * 0.5;
+    bandas.push({ x: px, w: Math.min(w, 1 - px), k, o });
+    px += w + rnd() * 0.03;
+  }
+  return bandas;
 }
 
 // ---------- RENDER FINAL FOTORREALISTA (escena completa en perspectiva) ----------
@@ -618,26 +631,22 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, onClose }) {
         <defs>
           {usados.map(mt => mt.foto
             ? <pattern key={mt.id} id={`${U}_p_${mt.id}`} patternUnits="objectBoundingBox" width="1" height="1"><image href={mt.foto} x="0" y="0" width="1" height="1" preserveAspectRatio="xMidYMid slice" /></pattern>
-            : (mt.tipo === "madera" ? <filter key={mt.id} id={`${U}_f_${mt.id}`} x="-2%" y="-2%" width="104%" height="104%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.005 0.5" numOctaves="5" seed={(mt.id || "x").length * 5} result="n" />
-              <feColorMatrix in="n" type="saturate" values="0" result="g" />
-              <feComponentTransfer in="g" result="b"><feFuncA type="table" tableValues="0 0.34" /></feComponentTransfer>
-              <feBlend in="SourceGraphic" in2="b" mode="multiply" />
-            </filter> : null))}
+            : (mt.tipo === "madera" ? <pattern key={mt.id} id={`${U}_p_${mt.id}`} patternUnits="objectBoundingBox" patternContentUnits="objectBoundingBox" width="1" height="1">
+              <rect x="0" y="0" width="1" height="1" fill={mt.hex} />
+              {vetaBandas(mt.hex, mt.id).map((b, i) => <rect key={i} x={b.x} y="0" width={b.w} height="1" fill={mezcla(mt.hex, b.k)} opacity={b.o} />)}
+            </pattern> : null))}
           <linearGradient id={`${U}_ao`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#000" stopOpacity="0" /><stop offset="100%" stopColor="#000" stopOpacity="0.5" /></linearGradient>
           <linearGradient id={`${U}_gl`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fff" stopOpacity="0.30" /><stop offset="45%" stopColor="#fff" stopOpacity="0.05" /><stop offset="100%" stopColor="#fff" stopOpacity="0" /></linearGradient>
           <linearGradient id={`${U}_wall`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fff" stopOpacity="0.35" /><stop offset="100%" stopColor="#000" stopOpacity="0.18" /></linearGradient>
           <linearGradient id={`${U}_flr`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#000" stopOpacity="0.35" /><stop offset="100%" stopColor="#fff" stopOpacity="0.12" /></linearGradient>
-          <filter id={`${U}_blur`}><feGaussianBlur stdDeviation={escala / 90} /></filter>
         </defs>
         {caras.map(c => {
           const mt = c.mat || {}; const pts = c.pts.map(P).join(" ");
           if (c.tirador) return <polygon key={c.key} points={pts} fill="#9AA1AA" stroke="#5C6169" strokeWidth={escala / 900} rx="4" />;
-          const base = mt.foto ? `url(#${U}_p_${mt.id})` : (mt.hex || "#ccc");
-          const filt = (!mt.foto && mt.tipo === "madera") ? `url(#${U}_f_${mt.id})` : undefined;
+          const base = (mt.foto || mt.tipo === "madera") ? `url(#${U}_p_${mt.id})` : (mt.hex || "#ccc");
           const oscuro = cfg.sinSombras ? 0 : Math.max(0, 1 - c.int);
           return <g key={c.key}>
-            <polygon points={pts} fill={base} filter={filt} fillOpacity={mt.tipo === "vidrio" ? 0.42 : 1} />
+            <polygon points={pts} fill={base} fillOpacity={mt.tipo === "vidrio" ? 0.42 : 1} />
             {c.pared && <polygon points={pts} fill={`url(#${U}_wall)`} />}
             {c.piso && <polygon points={pts} fill={`url(#${U}_flr)`} />}
             {oscuro > 0.001 && <polygon points={pts} fill="#080D14" fillOpacity={oscuro * 0.78} />}
