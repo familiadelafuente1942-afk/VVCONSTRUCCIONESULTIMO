@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v4 (Muebles: herrajes completos, puertas de vidrio y corredizas)
+// VERSION: v6 (Muebles: solapa Herrajes, bisagras codo 0/9/17, tipos de corredera)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -32,7 +32,18 @@ const CFG_DEF = {
   veta: false, luz: 3, retranqueo: 20, holgura: 2, correderaLuz: 13,
   precioPlaca: 0, precioCanto: 0, cantoEsp: 22, descontarFondo: true, travesanoH: 100,
   alturaAlacena: 1400, espMesada: 30, solape: 25, descuentoRiel: 55,
+  tipoBisagra: "codo0", tipoCorredera: "telescopica", cierreSuave: true,
   precioBisagra: 0, precioCorredera: 0, precioRiel: 0, precioVidrio: 0, precioTirador: 0,
+};
+const BISAGRAS = {
+  codo0: { nom: "Bisagra cazoleta 35 mm · CODO 0", det: "puerta superpuesta (tapa el lateral)" },
+  codo9: { nom: "Bisagra cazoleta 35 mm · CODO 9", det: "puerta semi-superpuesta (2 puertas en un lateral)" },
+  codo17: { nom: "Bisagra cazoleta 35 mm · CODO 17", det: "puerta interior (entre laterales)" },
+};
+const CORREDERAS_T = {
+  telescopica: { nom: "Corredera telescópica de bolillas 45 mm", det: "extracción total" },
+  oculta: { nom: "Corredera oculta undermount", det: "bajo cajón, cierre suave" },
+  rodillo: { nom: "Corredera a rodillo (riel simple)", det: "extracción parcial, económica" },
 };
 const VANO_DEF = { ancho: 3000, alto: 2600, prof: 600, paredB: 0 };
 const CORREDERAS = [250, 300, 350, 400, 450, 500, 550, 600];
@@ -242,8 +253,11 @@ function Render3D({ m, cfg, abierto }) {
 
 // ---------- HERRAJES Y VIDRIOS ----------
 function herrajes(muebles, cfg) {
-  const e = num(cfg.esp) || 18, ef = num(cfg.espFondo) || 3;
-  const acc = {}; const push = (k, cant, unidad, detalle, grupo) => { const key = k; if (!acc[key]) acc[key] = { item: k, cant: 0, unidad, detalle: detalle || "", grupo: grupo || "Herrajes" }; acc[key].cant += cant; };
+  const ef = num(cfg.espFondo) || 3;
+  const acc = {}; const push = (k, cant, unidad, detalle, grupo) => { if (!acc[k]) acc[k] = { item: k, cant: 0, unidad, detalle: detalle || "", grupo: grupo || "Herrajes", muebles: [] }; acc[k].cant += cant; };
+  const addM = (k, nombre) => { if (acc[k] && !acc[k].muebles.includes(nombre)) acc[k].muebles.push(nombre); };
+  const BIS = BISAGRAS[cfg.tipoBisagra] || BISAGRAS.codo0;
+  const CORR = CORREDERAS_T[cfg.tipoCorredera] || CORREDERAS_T.telescopica;
   let vidrioM2 = 0, marcoMl = 0;
   muebles.forEach(m => {
     const n = Math.max(1, num(m.cant) || 1);
@@ -252,33 +266,43 @@ function herrajes(muebles, cfg) {
     const Pc = Math.max(0, cfg.descontarFondo && m.fondo !== false ? P - ef : P);
     const nPu = num(m.puertas), nCj = num(m.cajones);
     const corr = m.sistemaPuerta === "corrediza", vid = m.matPuerta === "vidrio";
+    const nom = m.nombre || "Mueble";
     if (nPu > 0) {
       const sol = num(cfg.solape) || 25, dr = num(cfg.descuentoRiel) || 55;
       const anchoPu = corr ? (A + sol * (nPu - 1)) / nPu : (A - (nPu - 1) * (num(cfg.luz) || 3) - 2) / nPu;
       const altoPu = corr ? Math.max(0, Hc - dr) : Math.max(0, Hc - 2);
       if (corr) {
-        push("Kit puerta corrediza (" + nPu + " hojas)", n, "kit", `${m.nombre} · ${nPu} hojas`, "Corredizas");
-        push("Riel superior + inferior", (A / 1000) * 2 * n, "m", "corredizas", "Corredizas");
-        push("Ruedas / carros para corrediza", nPu * 2 * n, "u", "2 por hoja", "Corredizas");
+        const k1 = `Kit riel para puerta corrediza · ${nPu} hojas`;
+        push(k1, n, "kit", `hoja ${mm(anchoPu)}×${mm(altoPu)} mm`, "Puertas corredizas"); addM(k1, nom);
+        const k2 = "Riel superior + inferior (aluminio)";
+        push(k2, (A / 1000) * 2 * n, "m", "largo del mueble ×2", "Puertas corredizas"); addM(k2, nom);
+        const k3 = "Ruedas / carros de corrediza";
+        push(k3, nPu * 2 * n, "u", "2 por hoja", "Puertas corredizas"); addM(k3, nom);
+        const k4 = "Tope y guía inferior";
+        push(k4, nPu * n, "u", "1 por hoja", "Puertas corredizas"); addM(k4, nom);
       } else {
         const bis = nBisagras(altoPu);
-        push(vid ? "Bisagra cazoleta para vidrio 35mm" : "Bisagra cazoleta 35mm", bis * nPu * n, "u", `${bis} por puerta de ${mm(altoPu)}mm`, "Bisagras");
-        push("Amortiguador / cierre suave", bis * nPu * n, "u", "1 por bisagra", "Bisagras");
+        const k1 = vid ? "Bisagra cazoleta PARA VIDRIO 35 mm · codo 0" : BIS.nom;
+        push(k1, bis * nPu * n, "u", `${bis} por puerta (alto ${mm(altoPu)} mm) · ${vid ? "sin perforar el vidrio" : BIS.det}`, "Bisagras"); addM(k1, nom);
+        const k2 = "Base / pie de bisagra (cruz)";
+        push(k2, bis * nPu * n, "u", "1 por bisagra", "Bisagras"); addM(k2, nom);
+        if (cfg.cierreSuave) { const k3 = "Amortiguador de cierre suave"; push(k3, bis * nPu * n, "u", "1 por bisagra", "Bisagras"); addM(k3, nom); }
       }
-      push("Tirador", nPu * n, "u", "1 por puerta", "Tiradores");
+      const kt = "Tirador de puerta"; push(kt, nPu * n, "u", "1 por puerta", "Tiradores"); addM(kt, nom);
       if (vid) { vidrioM2 += (anchoPu * altoPu / 1e6) * nPu * n; marcoMl += (2 * (anchoPu + altoPu) / 1000) * nPu * n; }
     }
     if (nCj > 0) {
       const profCaja = Math.max(0, Pc - 30);
       const lc = largoCorredera(profCaja);
-      push(`Corredera telescópica ${lc}mm`, nCj * n, "par", `${nCj} cajón(es) · caja ${mm(profCaja)}mm`, "Correderas");
-      push("Tirador", nCj * n, "u", "1 por cajón", "Tiradores");
+      const k1 = `${CORR.nom} · ${lc} mm`;
+      push(k1, nCj * n, "par", `${CORR.det} · caja de ${mm(profCaja)} mm de profundidad`, "Correderas"); addM(k1, nom);
+      const kt = "Tirador de cajón"; push(kt, nCj * n, "u", "1 por cajón", "Tiradores"); addM(kt, nom);
     }
-    if (num(m.estantes) > 0) push("Soporte de estante", num(m.estantes) * 4 * n, "u", "4 por estante", "Estantes");
-    if (z > 0 && (m.tipo === "bajo" || m.tipo === "cajonera" || m.tipo === "placard")) push("Pata regulable", 4 * n, "u", "4 por módulo", "Zócalo");
-    if (m.tipo === "alacena") push("Colgador de alacena", 2 * n, "u", "2 por alacena", "Colgado");
+    if (num(m.estantes) > 0) { const k = "Soporte de estante"; push(k, num(m.estantes) * 4 * n, "u", "4 por estante", "Estantes"); addM(k, nom); }
+    if (z > 0 && (m.tipo === "bajo" || m.tipo === "cajonera" || m.tipo === "placard")) { const k = "Pata regulable"; push(k, 4 * n, "u", "4 por módulo", "Zócalo y colgado"); addM(k, nom); }
+    if (m.tipo === "alacena") { const k = "Colgador de alacena (par)"; push(k, 2 * n, "u", "2 por alacena", "Zócalo y colgado"); addM(k, nom); }
   });
-  const lista = Object.values(acc).map(x => ({ ...x, cant: Math.ceil(x.cant * 10) / 10 }));
+  const lista = Object.values(acc).map(x => ({ ...x, cant: Math.round(x.cant * 10) / 10 }));
   return { lista, vidrioM2, marcoMl };
 }
 
@@ -456,7 +480,9 @@ ${resumen.costo > 0 ? `<div style="font-size:11px;margin:8px 0;color:#5B6673">Co
 <h2>Despiece de piezas</h2>
 <table><thead><tr><th>Mueble</th><th>Pieza</th><th style="text-align:right">Ancho</th><th style="text-align:right">Alto</th><th style="text-align:right">Cant.</th><th>Material</th></tr></thead><tbody>${filas}</tbody></table>
 ${(vidrios && vidrios.length) ? `<h2>Vidrios y marcos</h2><table><thead><tr><th>Mueble</th><th>Pieza</th><th style="text-align:right">Ancho</th><th style="text-align:right">Alto</th><th style="text-align:right">Cant.</th></tr></thead><tbody>${vidrios.map(p => `<tr><td>${p.mueble}</td><td>${p.nombre}</td><td class="r">${mm(p.w)}</td><td class="r">${mm(p.h)}</td><td class="r">${p.cant}</td></tr>`).join("")}</tbody></table><p style="font-size:11px;margin-top:6px;color:#5B6673">Total vidrio: <b>${herr.vidrioM2.toFixed(2)} m²</b> · Marco de aluminio: <b>${herr.marcoMl.toFixed(1)} m</b></p>` : ""}
-${(herr && herr.lista.length) ? `<h2>Herrajes</h2><table><thead><tr><th>Grupo</th><th>Item</th><th>Detalle</th><th style="text-align:right">Cant.</th></tr></thead><tbody>${herr.lista.map(h => `<tr><td>${h.grupo}</td><td>${h.item}</td><td style="color:#5B6673">${h.detalle}</td><td class="r"><b>${h.cant} ${h.unidad}</b></td></tr>`).join("")}</tbody></table>` : ""}
+${(herr && herr.lista.length) ? `<h2>Herrajes · lista de compra</h2>
+<p style="font-size:11px;color:#5B6673;margin-bottom:6px">Bisagras: <b style="color:#0B1622">${(BISAGRAS[cfg.tipoBisagra] || BISAGRAS.codo0).nom}</b> (${(BISAGRAS[cfg.tipoBisagra] || BISAGRAS.codo0).det}) · Correderas: <b style="color:#0B1622">${(CORREDERAS_T[cfg.tipoCorredera] || CORREDERAS_T.telescopica).nom}</b></p>
+<table><thead><tr><th>Grupo</th><th>Herraje</th><th>Detalle</th><th>En</th><th style="text-align:right">Cantidad</th></tr></thead><tbody>${herr.lista.map(h => `<tr><td>${h.grupo}</td><td><b>${h.item}</b></td><td style="color:#5B6673;font-size:10px">${h.detalle}</td><td style="color:#5B6673;font-size:10px">${(h.muebles || []).join(", ")}</td><td class="r"><b style="font-size:12px">${h.cant} ${h.unidad}</b></td></tr>`).join("")}</tbody></table>` : ""}
 <h2>Plan de corte · placas ${cfg.esp}mm</h2>${placas || "<p style='font-size:11px;color:#5B6673'>Sin piezas.</p>"}
 ${resFondo.placas.length ? `<h2>Plan de corte · fondos ${cfg.espFondo}mm</h2>${fondos}` : ""}
 ${resPlaca.noEntran.length || resFondo.noEntran.length ? `<p style="color:#B45309;font-size:11px;margin-top:10px"><b>Atención:</b> ${resPlaca.noEntran.length + resFondo.noEntran.length} pieza(s) no entran en la placa. Revisá las medidas.</p>` : ""}
@@ -475,6 +501,17 @@ export default function Muebles() {
   const [abierto, setAbierto] = useState({});
   const [pdfHtml, setPdfHtml] = useState(null);
   const [verCfg, setVerCfg] = useState(false);
+  const [refrescando, setRefrescando] = useState(false);
+  const [okMsg, setOkMsg] = useState("");
+  const actualizar = async () => {
+    setRefrescando(true); setOkMsg("");
+    try {
+      const r = await storage.get("vv_muebles");
+      if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); }
+      setOkMsg("✓"); setTimeout(() => setOkMsg(""), 1600);
+    } catch { setOkMsg("!"); setTimeout(() => setOkMsg(""), 1600); }
+    setRefrescando(false);
+  };
 
   useEffect(() => { (async () => { try { const r = await storage.get("vv_muebles"); if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); } } catch { } setCargando(false); })(); }, []);
   const guardar = (next) => { const d = { proyecto: next.proyecto != null ? next.proyecto : proyecto, muebles: next.muebles || muebles, cfg: next.cfg || cfg, vano: next.vano || vano }; if (next.proyecto != null) setProyecto(next.proyecto); if (next.muebles) setMuebles(next.muebles); if (next.cfg) setCfg(next.cfg); if (next.vano) setVano(next.vano); try { storage.set("vv_muebles", JSON.stringify(d)); } catch { } };
@@ -511,15 +548,51 @@ export default function Muebles() {
   return <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif", color: T.text }}>
     <style>{`*{-webkit-font-smoothing:antialiased}*:focus{outline:none}body{margin:0}input:focus,select:focus{border-color:${BRASS}!important}button{-webkit-tap-highlight-color:transparent}`}</style>
     <div style={{ background: `linear-gradient(180deg, #0E1B2B 0%, ${T.navy} 100%)`, color: "#fff", padding: "18px 20px 16px", textAlign: "center", position: "relative" }}>
+      <button onClick={actualizar} title="Actualizar" style={{ position: "absolute", top: 14, left: 14, background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, height: 34, padding: "0 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>↻ {okMsg || (refrescando ? "..." : "Actualizar")}</button>
       <button onClick={() => setVerCfg(true)} style={{ position: "absolute", top: 14, right: 14, background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, width: 34, height: 34, fontSize: 15, cursor: "pointer" }}>⚙︎</button>
       <div style={{ fontSize: 16, fontWeight: 700 }}>V+V Muebles</div>
       <div style={{ fontSize: 9.5, fontWeight: 600, color: BRASS, letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 2 }}>Despiece y optimización de cortes</div>
     </div>
     <div style={{ display: "flex", background: "rgba(255,255,255,.9)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 40 }}>
-      {[["vano", "Vano"], ["muebles", "Muebles"], ["despiece", "Despiece"], ["cortes", "Cortes"]].map(([k, l]) => (
-        <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "12px 2px 10px", fontSize: 12.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative" }}>{l}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 26, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
+      {[["vano", "Vano"], ["muebles", "Muebles"], ["despiece", "Despiece"], ["herrajes", "Herrajes"], ["cortes", "Cortes"]].map(([k, l]) => (
+        <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "12px 2px 10px", fontSize: 11.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative" }}>{l}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
       ))}
     </div>
+
+    {/* HERRAJES */}
+    {tab === "herrajes" && <div style={{ padding: "14px 16px 40px" }}>
+      {muebles.length === 0 ? <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 10px" }}>Cargá muebles para ver la lista de herrajes.</div> : <>
+        <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 15, padding: 15, marginBottom: 12, boxShadow: SHD }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: BRASS, letterSpacing: "0.12em", textTransform: "uppercase" }}>Lista de compra</div>
+          <div style={{ fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>
+            Bisagras: <b>{(BISAGRAS[cfg.tipoBisagra] || BISAGRAS.codo0).nom.replace("Bisagra cazoleta 35 mm · ", "")}</b><br />
+            Correderas: <b>{(CORREDERAS_T[cfg.tipoCorredera] || CORREDERAS_T.telescopica).nom}</b>
+          </div>
+          <button onClick={() => setVerCfg(true)} style={{ marginTop: 9, background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Cambiar tipo de herraje</button>
+        </div>
+        {[...new Set(herr.lista.map(h => h.grupo))].map(g => <div key={g} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: 12, marginBottom: 10, boxShadow: SHDsm }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>{g}</div>
+          {herr.lista.filter(h => h.grupo === g).map((h, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.3 }}>{h.item}</div>
+              {h.detalle && <div style={{ fontSize: 10.5, color: T.sub, marginTop: 2 }}>{h.detalle}</div>}
+              {h.muebles.length > 0 && <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>En: {h.muebles.join(", ")}</div>}
+            </div>
+            <span style={{ background: T.al, borderRadius: 8, padding: "6px 11px", fontSize: 14, fontWeight: 800, color: T.accent, whiteSpace: "nowrap", flexShrink: 0 }}>{h.cant} {h.unidad}</span>
+          </div>)}
+        </div>)}
+        {vidrios.length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: 12, marginBottom: 10, boxShadow: SHDsm }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: "#3D7EA6", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>🪟 Vidrios y marcos</div>
+          {vidrios.map((p, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, padding: "8px 0", borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+            <span style={{ flex: 1 }}>{p.nombre}<span style={{ fontSize: 10, color: T.muted, display: "block" }}>{p.mueble}</span></span>
+            <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700, marginRight: 10 }}>{mm(p.w)} × {mm(p.h)}</span>
+            <span style={{ background: "rgba(61,126,166,.12)", borderRadius: 8, padding: "6px 11px", fontSize: 13, fontWeight: 800, color: "#3D7EA6" }}>{p.cant}</span>
+          </div>)}
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, paddingTop: 9, marginTop: 4, borderTop: `2px solid ${T.border}`, fontWeight: 800 }}><span>Total</span><span style={{ color: "#3D7EA6" }}>{herr.vidrioM2.toFixed(2)} m² vidrio · {herr.marcoMl.toFixed(1)} m marco</span></div>
+        </div>}
+        <button onClick={() => setPdfHtml(reporteHTML(proyecto, cfg, piezas, resPlaca, resFondo, resumen, herr, vidrios))} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Lista de herrajes + despiece en PDF</button>
+      </>}
+    </div>}
 
     {/* VANO */}
     {tab === "vano" && <div style={{ padding: "14px 16px 40px" }}>
@@ -710,8 +783,29 @@ export default function Muebles() {
             <input value={cfg[k]} onChange={e => setC(k, num(e.target.value))} inputMode="numeric" style={{ ...inpSm, width: 110, textAlign: "right" }} />
           </div>
         ))}
+        <div style={{ marginTop: 14 }}>
+          <label style={{ fontSize: 11.5, color: T.sub, fontWeight: 800, textTransform: "uppercase" }}>Tipo de bisagra</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+            {Object.entries(BISAGRAS).map(([k, v]) => <button key={k} onClick={() => setC("tipoBisagra", k)} style={{ textAlign: "left", background: cfg.tipoBisagra === k ? T.al : T.card, color: T.text, border: `1.5px solid ${cfg.tipoBisagra === k ? T.accent : T.border}`, borderRadius: 9, padding: "10px 12px", cursor: "pointer" }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: cfg.tipoBisagra === k ? T.accent : T.text }}>{cfg.tipoBisagra === k ? "✓ " : ""}{v.nom}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{v.det}</div>
+            </button>)}
+          </div>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <label style={{ fontSize: 11.5, color: T.sub, fontWeight: 800, textTransform: "uppercase" }}>Tipo de corredera</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+            {Object.entries(CORREDERAS_T).map(([k, v]) => <button key={k} onClick={() => setC("tipoCorredera", k)} style={{ textAlign: "left", background: cfg.tipoCorredera === k ? T.al : T.card, color: T.text, border: `1.5px solid ${cfg.tipoCorredera === k ? T.accent : T.border}`, borderRadius: 9, padding: "10px 12px", cursor: "pointer" }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: cfg.tipoCorredera === k ? T.accent : T.text }}>{cfg.tipoCorredera === k ? "✓ " : ""}{v.nom}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{v.det}</div>
+            </button>)}
+          </div>
+        </div>
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button onClick={() => setC("veta", !cfg.veta)} style={{ flex: 1, background: cfg.veta ? T.accent : T.al, color: cfg.veta ? "#fff" : T.sub, border: `1px solid ${cfg.veta ? T.accent : T.border}`, borderRadius: 9, padding: "12px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{cfg.veta ? "✓ " : ""}Respetar veta</button>
+          <button onClick={() => setC("cierreSuave", !cfg.cierreSuave)} style={{ flex: 1, background: cfg.cierreSuave ? T.accent : T.al, color: cfg.cierreSuave ? "#fff" : T.sub, border: `1px solid ${cfg.cierreSuave ? T.accent : T.border}`, borderRadius: 9, padding: "12px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{cfg.cierreSuave ? "✓ " : ""}Cierre suave</button>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button onClick={() => setC("descontarFondo", !cfg.descontarFondo)} style={{ flex: 1, background: cfg.descontarFondo ? T.accent : T.al, color: cfg.descontarFondo ? "#fff" : T.sub, border: `1px solid ${cfg.descontarFondo ? T.accent : T.border}`, borderRadius: 9, padding: "12px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{cfg.descontarFondo ? "✓ " : ""}Descontar fondo de la prof.</button>
         </div>
         <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>Respetar veta: las piezas no se rotan al optimizar (usa más placas pero mantiene el sentido del dibujo). Descontar fondo: la profundidad que cargás incluye el fondo aplicado atrás.</div>
