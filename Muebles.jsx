@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v13 (Muebles: motor 3D reescrito - sin deformaciones, descarte de caras ocultas)
+// VERSION: v14 (Muebles: guardar render en iPhone/iPad + link para WhatsApp)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -12,6 +12,15 @@ const storage = {
   get: async (key) => { try { const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { method: "GET", headers: SH(), mode: "cors" }); if (r.ok) { const d = await r.json(); if (d && d.length > 0) return { value: d[0].value }; } } catch { } try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; } },
 };
 const uid = () => Math.random().toString(36).slice(2, 9);
+async function subirRender(dataUrl) {
+  try {
+    const b = await (await fetch(dataUrl)).blob();
+    const path = `muebles/render-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.png`;
+    const r = await fetch(`${SUPA_URL}/storage/v1/object/bco-media/${path}`, { method: "POST", headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": "image/png", "x-upsert": "true" }, body: b });
+    if (r.ok) return `${SUPA_URL}/storage/v1/object/public/bco-media/${path}`;
+  } catch { }
+  return "";
+}
 const num = (v) => { const n = Number(String(v == null ? "" : v).replace(/[^\d.-]/g, "")); return isNaN(n) ? 0 : n; };
 const mm = (n) => Math.round(n) + "";
 const money = (n) => "$" + Math.round(n || 0).toLocaleString("es-AR");
@@ -714,6 +723,32 @@ function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, onClose }) {
   const [img, setImg] = useState("");
   const [err, setErr] = useState("");
   const [usarRef, setUsarRef] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [link, setLink] = useState("");
+
+  const guardarImg = async () => {
+    if (!img || guardando) return;
+    setGuardando(true);
+    const nombre = `render-${(proyecto || "mueble").replace(/\s+/g, "-").slice(0, 30)}.png`;
+    try {
+      const blob = await (await fetch(img)).blob();
+      const file = new File([blob], nombre, { type: "image/png" });
+      // iPhone/iPad: compartir nativo -> "Guardar en Fotos"
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: proyecto || "Render" });
+        setGuardando(false); return;
+      }
+      // resto: descarga normal
+      const u = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = u; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(u), 4000);
+    } catch {
+      // último recurso: subirla y dar el link
+      const url = await subirRender(img);
+      if (url) setLink(url); else alert("Mantené el dedo apretado sobre la imagen y elegí «Guardar en Fotos».");
+    }
+    setGuardando(false);
+  };
 
   const svgAPng = () => new Promise((resolve) => {
     try {
@@ -739,7 +774,7 @@ function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, onClose }) {
   });
 
   const generar = async () => {
-    setGen(true); setErr(""); setImg("");
+    setGen(true); setErr(""); setImg(""); setLink("");
     try {
       const prompt = promptEscena(proyecto, vano, muebles, cfg, mats, op);
       let imageB64 = "";
@@ -763,7 +798,7 @@ function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, onClose }) {
     <div style={{ display: "flex", gap: 8, padding: "10px 12px", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
       <button onClick={onClose} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
       <div style={{ color: "#fff", fontSize: 13.5, fontWeight: 700, flex: 1 }}>Render fotorrealista IA</div>
-      {img && <a href={img} download={`render-${(proyecto || "mueble").replace(/\s+/g, "-")}.png`} style={{ background: BRASS, color: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Guardar</a>}
+      {img && <button onClick={guardarImg} disabled={guardando} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{guardando ? "..." : "Guardar"}</button>}
     </div>
     <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
       {img ? <>
@@ -772,7 +807,15 @@ function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, onClose }) {
           <button onClick={() => setImg("")} style={{ flex: 1, background: "rgba(255,255,255,.12)", color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cambiar opciones</button>
           <button onClick={generar} disabled={gen} style={{ flex: 1, background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Generar otra</button>
         </div>
-        <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10.5, marginTop: 10, textAlign: "center", lineHeight: 1.5 }}>Render generado por IA a partir de tu diseño. Es una imagen de presentación: las medidas exactas están en el despiece y el plan de corte.</div>
+        <button onClick={async () => { if (link) return; setGuardando(true); const u = await subirRender(img); setGuardando(false); if (u) setLink(u); else alert("No pude subir la imagen."); }} style={{ width: "100%", marginTop: 8, background: "rgba(255,255,255,.08)", color: "#fff", border: "1px solid rgba(255,255,255,.16)", borderRadius: 10, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{guardando ? "Subiendo…" : link ? "✓ Link listo" : "Crear link para mandar por WhatsApp"}</button>
+        {link && <div style={{ marginTop: 8 }}>
+          <a href={link} target="_blank" rel="noreferrer" style={{ display: "block", color: BRASS, fontSize: 11.5, wordBreak: "break-all", textDecoration: "none", background: "rgba(176,137,79,.1)", padding: "10px 12px", borderRadius: 9 }}>{link}</a>
+          <a href={`https://wa.me/?text=${encodeURIComponent((proyecto ? proyecto + " — " : "") + "Render: " + link)}`} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", marginTop: 8, background: "#25D366", color: "#fff", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>Enviar por WhatsApp</a>
+        </div>}
+        <div style={{ color: "rgba(255,255,255,.45)", fontSize: 11, marginTop: 12, textAlign: "center", lineHeight: 1.6 }}>
+          <b style={{ color: "rgba(255,255,255,.7)" }}>En iPhone/iPad:</b> tocá <b>Guardar</b> y elegí «Guardar en Fotos».<br />También podés mantener el dedo apretado sobre la imagen.
+        </div>
+        <div style={{ color: "rgba(255,255,255,.35)", fontSize: 10.5, marginTop: 8, textAlign: "center", lineHeight: 1.5 }}>Render generado por IA. Las medidas exactas están en el despiece y el plan de corte.</div>
       </> : <>
         {gen ? <div style={{ textAlign: "center", padding: "60px 20px", color: "#fff" }}>
           <div style={{ fontSize: 34, marginBottom: 14 }}>🎨</div>
