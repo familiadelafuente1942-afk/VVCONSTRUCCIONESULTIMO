@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v34 (Muebles: 4 sistemas de rebatible - compas, piston, Aventos HK, cable)
+// VERSION: v36 (Muebles: FICHA TECNICA - vistas acotadas, corte, despiece explotado)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -979,6 +979,43 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
       <rect x={it.x} y={y} width={it.w} height={alt} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? anchoPared / 130 : anchoPared / 260} />
       {nM > 1 && Array.from({ length: nM - 1 }).map((_, k) => <line key={"dv" + k} x1={it.x + it.w * ((k + 1) / nM)} y1={y} x2={it.x + it.w * ((k + 1) / nM)} y2={y + alt} stroke={COL(it.m)} strokeWidth={anchoPared / 400} strokeDasharray={`${anchoPared / 90},${anchoPared / 140}`} />)}
       {ab && <rect x={it.x + 18} y={y + 18} width={Math.max(0, it.w - 36)} height={Math.max(0, alt - 36)} fill="#0B1622" fillOpacity="0.13" stroke="none" />}
+      {!ab && num(it.m.puertas) > 0 && (() => {
+        const e2 = num(cfg.esp) || 18, hol2 = num(cfg.holguraEmb) || 2, z2 = num(it.m.zocalo) || 0;
+        const emb2 = it.m.montaje === "embutida";
+        const ap2 = it.m.apertura || (it.m.sistemaPuerta === "corrediza" ? "corrediza" : "der");
+        const nP = num(it.m.puertas);
+        const horiz2 = (APERTURAS[ap2] || APERTURAS.der).eje === "horizontal";
+        const px0 = emb2 ? it.x + e2 + hol2 : it.x + 1;
+        const pw0 = emb2 ? it.w - 2 * e2 - 2 * hol2 : it.w - 2;
+        const py0 = (emb2 ? y + e2 + hol2 : y + 1);
+        const ph0 = (emb2 ? alt - z2 - 2 * e2 - 2 * hol2 : alt - z2 - 2);
+        const nH = horiz2 ? 1 : nP, nV = horiz2 ? nP : 1;
+        const sw2 = anchoPared / 420;
+        return <g>
+          {Array.from({ length: nP }).map((_, k) => {
+            const bw = horiz2 ? pw0 : pw0 / nP, bh = horiz2 ? ph0 / nP : ph0;
+            const bx = horiz2 ? px0 : px0 + k * bw, by = horiz2 ? py0 + k * bh : py0;
+            // símbolo de apertura (el "pico" apunta al lado que abre; el vértice está en la bisagra)
+            let sim = null;
+            const cxm = bx + bw / 2, cym = by + bh / 2;
+            if (ap2 === "der" || (ap2 === "doble" && k === nP - 1)) sim = `${bx},${by} ${bx + bw},${cym} ${bx},${by + bh}`;
+            else if (ap2 === "izq" || (ap2 === "doble" && k === 0)) sim = `${bx + bw},${by} ${bx},${cym} ${bx + bw},${by + bh}`;
+            else if (ap2 === "arriba") sim = `${bx},${by + bh} ${cxm},${by} ${bx + bw},${by + bh}`;
+            else if (ap2 === "abajo") sim = `${bx},${by} ${cxm},${by + bh} ${bx + bw},${by}`;
+            return <g key={"pu" + k}>
+              <rect x={bx} y={by} width={bw} height={bh} fill={emb2 ? "#fff" : "none"} fillOpacity={emb2 ? 0.5 : 0} stroke={COL(it.m)} strokeWidth={sw2 * 1.6} />
+              {sim && <polyline points={sim} fill="none" stroke={BRASS} strokeWidth={sw2} strokeDasharray={`${anchoPared / 140},${anchoPared / 200}`} />}
+              {ap2 === "corrediza" && <g>
+                <line x1={bx + bw * 0.25} y1={cym} x2={bx + bw * 0.75} y2={cym} stroke={BRASS} strokeWidth={sw2 * 1.4} />
+                <polygon points={`${bx + bw * 0.75},${cym} ${bx + bw * 0.62},${cym - bh * 0.05} ${bx + bw * 0.62},${cym + bh * 0.05}`} fill={BRASS} />
+                <polygon points={`${bx + bw * 0.25},${cym} ${bx + bw * 0.38},${cym - bh * 0.05} ${bx + bw * 0.38},${cym + bh * 0.05}`} fill={BRASS} />
+              </g>}
+              {ap2 === "oscilo" && <text x={cxm} y={cym} textAnchor="middle" fontSize={anchoPared / 55} fill={BRASS} fontWeight="800">oscilo</text>}
+            </g>;
+          })}
+          {emb2 && <text x={it.x + it.w / 2} y={y + alt - 8} textAnchor="middle" fontSize={anchoPared / 70} fill={T.muted}>embutida</text>}
+        </g>;
+      })()}
       {it.m.unido && i > 0 && <g>
         <line x1={it.x} y1={y + 8} x2={it.x} y2={y + alt - 8} stroke={BRASS} strokeWidth={anchoPared / 200} />
         <circle cx={it.x} cy={y + alt / 2} r={anchoPared / 70} fill={BRASS} />
@@ -1155,6 +1192,7 @@ const mezcla = (hex, k) => { const c = hexRGB(hex); const f = (v) => Math.max(0,
 
 function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
   const [cam, setCam] = useState({ yaw: -18, pitch: 6, dist: 2.6 });
+  const [abrir, setAbrir] = useState(0);          // 0 = cerrada · 1 = abierta del todo
   const [verIA, setVerIA] = useState(false);
   const svgRef = useRef(null);
   const drag = useRef(null);
@@ -1208,7 +1246,7 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
 
   const caras = [];
   const addCara = (key, pts, mat, opts) => {
-    if (areaSigno(pts) >= 0) return;                       // cara que mira para el otro lado: no se dibuja
+    if (areaSigno(pts) >= 0 && !(opts && opts.doble)) return; // cara oculta (la puerta abierta se ve de los dos lados)
     const l = luzCara(pts);
     caras.push({ key, pts, mat, z: zMed(pts), int: l.int, spec: l.spec, ...(opts || {}) });
   };
@@ -1236,6 +1274,13 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
     const E = m.tipo === "electro" ? (ELECTROS[m.electro] || ELECTROS.anafe) : null;
     const cerrado = nPu > 0 || nCj > 0 || !!E;
     const eG = num(cfg.esp) || 18;
+    // CANTOS DEL CUERPO: se ven de frente. Con puerta superpuesta quedan tapados;
+    // con puerta embutida quedan a la vista alrededor de la puerta. Es LA diferencia.
+    const cantoM = { id: mc.id + "_c", hex: mezcla(mc.hex, 0.94), tipo: "liso" };
+    addCara(`cL${x0}${base}`, [[x0, y0, zF], [x0 + eG, y0, zF], [x0 + eG, y1, zF], [x0, y1, zF]], cantoM, { ao: 0.9 });
+    addCara(`cR${x0}${base}`, [[x1 - eG, y0, zF], [x1, y0, zF], [x1, y1, zF], [x1 - eG, y1, zF]], cantoM, { ao: 0.9 });
+    addCara(`cB${x0}${base}`, [[x0 + eG, y0, zF], [x1 - eG, y0, zF], [x1 - eG, y0 + eG, zF], [x0 + eG, y0 + eG, zF]], cantoM, { ao: 0.9 });
+    addCara(`cT${x0}${base}`, [[x0 + eG, y1 - eG, zF], [x1 - eG, y1 - eG, zF], [x1 - eG, y1, zF], [x0 + eG, y1, zF]], cantoM, { ao: 0.9 });
     if (abierto) addCara(`nf${x0}${base}`, [[x0 + eG, y0, zB - 6], [x1 - eG, y0, zB - 6], [x1 - eG, y1, zB - 6], [x0 + eG, y1, zB - 6]], mezclaMat(mc, 0.82), { ao: 0.55 });
     // laterales / techo / piso (winding para que el signo de área los oculte solo)
     addCara(`li${x0}${base}`, [[x0, y0, zF], [x0, y1, zF], [x0, y1, zB], [x0, y0, zB]], mc);
@@ -1291,14 +1336,36 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
           : (A - (nHoja - 1) * L - 2) / nHoja;
       const zPu = embR ? zF + 1 : zP;                        // embutida al ras, superpuesta por delante
       const xIni = embR ? x0 + eG + holR : x0 + 1;
+      // ---- ABRIR: la puerta gira sobre su bisagra ----
+      const AB = Math.max(0, Math.min(1, abrir));
+      const girar = (pts, eje, hx, hy, zz2, ang) => {
+        if (!ang) return pts;
+        const t = ang * Math.PI / 180;
+        return pts.map(([x, y, z]) => {
+          if (eje === "v") { const dx = x - hx; return [hx + dx * Math.cos(t), y, zz2 - Math.abs(dx) * Math.sin(t)]; }
+          const dy = y - hy; return [x, hy + dy * Math.cos(t), zz2 - Math.abs(dy) * Math.sin(t)];
+        });
+      };
       for (let i = 0; i < nPu; i++) {
-        const px = corr ? x0 + i * (aPu - sol) : horiz ? xIni : xIni + i * (aPu + L);
+        const desliz = corr ? aPu * 0.9 * AB * (i === 0 ? 1 : -1) : 0;
+        const px = (corr ? x0 + i * (aPu - sol) : horiz ? xIni : xIni + i * (aPu + L)) + desliz;
         const zz = corr ? zP - (i % 2) * 22 : zPu;
         const hUtil = embR ? Hc - 2 * eG - 2 * holR : Hc - 2;
         const hPu2 = horiz ? (hUtil - (nPu - 1) * L) / nPu : hUtil;
         const yA = (embR ? y0 + eG + holR : y0 + 1) + (horiz ? i * (hPu2 + L) : 0);
         const yB = yA + hPu2;
-        addCara(`pu${x0}${base}${i}`, [[px, yA, zz], [px + aPu, yA, zz], [px + aPu, yB, zz], [px, yB, zz]], vid ? { id: "vid", hex: "#C3D7E0", tipo: "vidrio", gloss: true } : mf, { frente: true });
+        let pts = [[px, yA, zz], [px + aPu, yA, zz], [px + aPu, yB, zz], [px, yB, zz]];
+        if (!corr && AB > 0.01) {
+          const ang = (horiz ? 78 : 100) * AB;
+          if (apR === "arriba") pts = girar(pts, "h", 0, yB, zz, ang);
+          else if (apR === "abajo") pts = girar(pts, "h", 0, yA, zz, ang);
+          else if (apR === "oscilo") pts = girar(pts, "h", 0, yA, zz, 14 * AB);
+          else if (apR === "izq") pts = girar(pts, "v", px, 0, zz, ang);
+          else if (apR === "doble") pts = girar(pts, "v", i === 0 ? px : px + aPu, 0, zz, ang);
+          else pts = girar(pts, "v", px + aPu, 0, zz, ang);
+        }
+        addCara(`pu${x0}${base}${i}`, pts, vid ? { id: "vid", hex: "#C3D7E0", tipo: "vidrio", gloss: true } : mf, { frente: true, doble: AB > 0.01 });
+        if (AB > 0.01) continue;                              // puerta abierta: sin tirador
         const tx = horiz ? px + aPu / 2 : (i === 0 && nPu > 1) ? px + aPu - 48 : px + 48;
         const ty = horiz ? yA + hPu2 * 0.5 : y0 + Hc * 0.40;
         addCara(`tp${x0}${base}${i}`, [[tx - 8, ty, zz - 14], [tx + 8, ty, zz - 14], [tx + 8, ty + Math.min(140, Hc * 0.3), zz - 14], [tx - 8, ty + Math.min(140, Hc * 0.3), zz - 14]], TIRA, { tirador: true });
@@ -1436,8 +1503,13 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
     </div>
     <div style={{ padding: "10px 14px calc(10px + env(safe-area-inset-bottom))", background: "#11151B", borderTop: "1px solid rgba(255,255,255,.08)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ color: "rgba(255,255,255,.55)", fontSize: 11, fontWeight: 700 }}>Zoom</span>
+        <span style={{ color: "rgba(255,255,255,.55)", fontSize: 11, fontWeight: 700, width: 44 }}>Zoom</span>
         <input type="range" min="10" max="200" value={Math.round(cam.dist * 40)} onChange={ev => setCam(c => ({ ...c, dist: num(ev.target.value) / 40 }))} style={{ flex: 1, accentColor: BRASS }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+        <span style={{ color: abrir > 0 ? BRASS : "rgba(255,255,255,.55)", fontSize: 11, fontWeight: 800, width: 44 }}>🚪 Abrir</span>
+        <input type="range" min="0" max="100" value={Math.round(abrir * 100)} onChange={ev => setAbrir(num(ev.target.value) / 100)} style={{ flex: 1, accentColor: BRASS }} />
+        <button onClick={() => setAbrir(abrir > 0.5 ? 0 : 1)} style={{ background: abrir > 0.5 ? BRASS : "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>{abrir > 0.5 ? "Cerrar" : "Abrir todo"}</button>
       </div>
       <button onClick={() => setVerIA(true)} style={{ width: "100%", marginTop: 10, background: `linear-gradient(135deg, ${BRASS}, #8E6C3A)`, color: "#fff", border: "none", borderRadius: 11, padding: "14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>✨ Convertir en render fotorrealista</button>
       <div style={{ color: "rgba(255,255,255,.4)", fontSize: 10.5, marginTop: 6, textAlign: "center" }}>Arrastrá para girar · {matC.marca} {matC.nom} (cuerpo) · {matF.nom} (frentes)</div>
@@ -1685,6 +1757,321 @@ function PlacaSVG({ pl, PW, PH, n, total }) {
       })}
     </svg>
   </div>;
+}
+
+// ============ FICHA TÉCNICA DE FABRICACIÓN ============
+// Plancha con: especificaciones · vista frontal / lateral / interior / corte
+// · despiece explotado numerado · tabla de piezas · herrajes · notas.
+
+// --- cota acotada (línea con flechas + texto) ---
+function cota(x1, y1, x2, y2, txt, lado) {
+  const G = "#334155", F = 5;
+  const hor = Math.abs(y2 - y1) < 0.01;
+  const t = 8;
+  if (hor) {
+    const y = y1;
+    return `<g>
+      <line x1="${x1}" y1="${y - t}" x2="${x1}" y2="${y + t}" stroke="${G}" stroke-width="1"/>
+      <line x1="${x2}" y1="${y - t}" x2="${x2}" y2="${y + t}" stroke="${G}" stroke-width="1"/>
+      <line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${G}" stroke-width="1"/>
+      <polygon points="${x1},${y} ${x1 + F * 1.6},${y - F * 0.6} ${x1 + F * 1.6},${y + F * 0.6}" fill="${G}"/>
+      <polygon points="${x2},${y} ${x2 - F * 1.6},${y - F * 0.6} ${x2 - F * 1.6},${y + F * 0.6}" fill="${G}"/>
+      <rect x="${(x1 + x2) / 2 - 20}" y="${y - 8}" width="40" height="16" fill="#fff"/>
+      <text x="${(x1 + x2) / 2}" y="${y + 4}" text-anchor="middle" font-size="11" fill="${G}" font-weight="600">${txt}</text>
+    </g>`;
+  }
+  const x = x1;
+  return `<g>
+    <line x1="${x - t}" y1="${y1}" x2="${x + t}" y2="${y1}" stroke="${G}" stroke-width="1"/>
+    <line x1="${x - t}" y1="${y2}" x2="${x + t}" y2="${y2}" stroke="${G}" stroke-width="1"/>
+    <line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${G}" stroke-width="1"/>
+    <polygon points="${x},${y1} ${x - F * 0.6},${y1 + F * 1.6} ${x + F * 0.6},${y1 + F * 1.6}" fill="${G}"/>
+    <polygon points="${x},${y2} ${x - F * 0.6},${y2 - F * 1.6} ${x + F * 0.6},${y2 - F * 1.6}" fill="${G}"/>
+    <rect x="${x - 20}" y="${(y1 + y2) / 2 - 8}" width="40" height="16" fill="#fff"/>
+    <text x="${x}" y="${(y1 + y2) / 2 + 4}" text-anchor="middle" font-size="11" fill="${G}" font-weight="600">${txt}</text>
+  </g>`;
+}
+
+const M2 = (mmv) => (mmv / 1000).toFixed(2);           // milímetros -> metros con 2 decimales
+
+// --- caja en isométrico (para el despiece explotado) ---
+function cajaISO(ox, oy, w, h, d, hex, num) {
+  const K = 0.5, KY = 0.28;                             // proyección isométrica suave
+  const P = (x, y, z) => [ox + x - z * K, oy - y + z * KY];
+  const p = (a) => a.map(c => c.join(",")).join(" ");
+  const os = (hx, k) => {                               // sombreado por cara
+    const n2 = parseInt(hx.slice(1), 16);
+    const r = Math.round(((n2 >> 16) & 255) * k), g = Math.round(((n2 >> 8) & 255) * k), b = Math.round((n2 & 255) * k);
+    return `rgb(${r},${g},${b})`;
+  };
+  const frente = [P(0, 0, 0), P(w, 0, 0), P(w, h, 0), P(0, h, 0)];
+  const techo = [P(0, h, 0), P(w, h, 0), P(w, h, d), P(0, h, d)];
+  const lado = [P(w, 0, 0), P(w, 0, d), P(w, h, d), P(w, h, 0)];
+  const cx = ox + w / 2 - d * K / 2, cy = oy - h / 2 + d * KY / 2;
+  return `<g>
+    <polygon points="${p(frente)}" fill="${os(hex, 1)}" stroke="#94A3B8" stroke-width="0.7"/>
+    <polygon points="${p(techo)}" fill="${os(hex, 1.1 > 1 ? 1 : 1.1)}" stroke="#94A3B8" stroke-width="0.7" opacity="0.92"/>
+    <polygon points="${p(lado)}" fill="${os(hex, 0.78)}" stroke="#94A3B8" stroke-width="0.7"/>
+    ${num ? `<circle cx="${cx}" cy="${cy}" r="10" fill="#fff" stroke="#334155" stroke-width="1"/>
+    <text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#0B1622">${num}</text>` : ""}
+  </g>`;
+}
+
+// ---- las 4 vistas acotadas + corte ----
+function vistasHTML(m, cfg, mats) {
+  const e = num(cfg.esp) || 18;
+  const A = num(m.ancho), H = num(m.alto), P = num(m.prof);
+  const z = num(m.zocalo) || 0, zRet = num(cfg.zocaloRetiro) || 80;
+  const Hc = Math.max(0, H - z);
+  const nEst = num(m.estantes) || 0;
+  const emb = m.montaje === "embutida";
+  const hol = num(cfg.holguraEmb) || 2;
+  const ap = m.apertura || "der";
+  const mc = matPorId(m.matCuerpo || cfg.matCuerpo, mats);
+  const hex = mc.hex || "#D8CEC2";
+  const G = "#334155", L = "#94A3B8";
+
+  // escala: que el mueble entre en ~300px
+  const S = 300 / Math.max(A, H, 400);
+  const w = A * S, h = H * S, pf = P * S, hc = Hc * S, zz = z * S, ee = Math.max(2, e * S);
+
+  const M = 46;                                          // margen para las cotas
+  const VB = (ww, hh) => `viewBox="0 0 ${ww} ${hh}" width="100%" style="max-width:${ww}px"`;
+
+  // ---------- VISTA FRONTAL ----------
+  const fW = w + M * 2, fH = h + M * 2;
+  const fx = M, fy = M;
+  const puW = emb ? w - 2 * ee - 2 * hol * S : w - 2;
+  const puH = emb ? hc - 2 * ee - 2 * hol * S : hc - 2;
+  const pux = emb ? fx + ee + hol * S : fx + 1;
+  const puy = emb ? fy + ee + hol * S : fy + 1;
+  const frontal = `<svg ${VB(fW, fH)}>
+    <rect x="${fx}" y="${fy}" width="${w}" height="${h}" fill="${hex}" fill-opacity="0.35" stroke="${G}" stroke-width="1.4"/>
+    ${num(m.puertas) > 0 ? `<rect x="${pux}" y="${puy}" width="${puW}" height="${puH}" fill="${hex}" fill-opacity="0.6" stroke="${G}" stroke-width="1.2"/>` : ""}
+    ${cota(fx, fy - 20, fx + w, fy - 20, M2(A), "arr")}
+    ${cota(fx - 22, fy, fx - 22, fy + h, M2(H), "izq")}
+  </svg>`;
+
+  // ---------- VISTA LATERAL ----------
+  const lW = pf + M * 2, lH = h + M * 2;
+  const lateral = `<svg ${VB(lW, lH)}>
+    <rect x="${M}" y="${M}" width="${pf}" height="${h}" fill="${hex}" fill-opacity="0.35" stroke="${G}" stroke-width="1.4"/>
+    <line x1="${M}" y1="${M + ee}" x2="${M + pf}" y2="${M + ee}" stroke="${G}" stroke-width="0.8"/>
+    ${cota(M, M - 20, M + pf, M - 20, M2(P), "arr")}
+    ${cota(M - 22, M, M - 22, M + h, M2(H), "izq")}
+  </svg>`;
+
+  // ---------- VISTA INTERIOR (puerta abierta) ----------
+  const iW = w + M * 2, iH = h + M * 2 + (ap === "abajo" ? pf * 0.9 : 40);
+  const ix = M, iy = M;
+  const luzInt = w - 2 * ee;
+  let estantes = "", cotasEst = "";
+  const hLibre = hc - 2 * ee;
+  for (let k = 1; k <= nEst; k++) {
+    const yE = iy + zz + ee + (hLibre / (nEst + 1)) * k;
+    estantes += `<rect x="${ix + ee}" y="${yE}" width="${luzInt}" height="${ee}" fill="${hex}" stroke="${G}" stroke-width="1"/>`;
+    cotasEst += cota(ix + w * 0.30, k === 1 ? iy + zz + ee : iy + zz + ee + (hLibre / (nEst + 1)) * (k - 1) + ee, ix + w * 0.30, yE, M2(hLibre / (nEst + 1)), "izq");
+  }
+  const yUlt = iy + zz + ee + (hLibre / (nEst + 1)) * nEst + (nEst ? ee : 0);
+  cotasEst += cota(ix + w * 0.30, yUlt, ix + w * 0.30, iy + hc + zz - ee, M2(hLibre / (nEst + 1)), "izq");
+  // la puerta abatida
+  const pAb = ap === "abajo"
+    ? `<g><rect x="${ix}" y="${iy + h}" width="${w}" height="${Math.min(pf, 60)}" fill="${hex}" fill-opacity="0.5" stroke="${G}" stroke-width="1.2"/>
+       <line x1="${ix + 10}" y1="${iy + h - 30}" x2="${ix + 40}" y2="${iy + h + 12}" stroke="${G}" stroke-width="1.4"/>
+       <line x1="${ix + w - 10}" y1="${iy + h - 30}" x2="${ix + w - 40}" y2="${iy + h + 12}" stroke="${G}" stroke-width="1.4"/>
+       <text x="${ix + w / 2}" y="${iy + h + Math.min(pf, 60) + 14}" text-anchor="middle" font-size="9.5" fill="${L}">puerta rebatible abierta</text></g>`
+    : "";
+  const interior = `<svg ${VB(iW, iH)}>
+    <rect x="${ix}" y="${iy}" width="${w}" height="${h}" fill="none" stroke="${G}" stroke-width="1.4"/>
+    <rect x="${ix}" y="${iy}" width="${ee}" height="${h}" fill="${hex}" stroke="${G}" stroke-width="0.8"/>
+    <rect x="${ix + w - ee}" y="${iy}" width="${ee}" height="${h}" fill="${hex}" stroke="${G}" stroke-width="0.8"/>
+    <rect x="${ix + ee}" y="${iy}" width="${luzInt}" height="${ee}" fill="${hex}" stroke="${G}" stroke-width="0.8"/>
+    <rect x="${ix + ee}" y="${iy + hc + zz - ee}" width="${luzInt}" height="${ee}" fill="${hex}" stroke="${G}" stroke-width="0.8"/>
+    ${estantes}${pAb}
+    ${cota(ix + ee, iy + h - zz - 14, ix + w - ee, iy + h - zz - 14, M2(A - 2 * e), "arr")}
+    ${cota(ix - 22, iy, ix - 22, iy + h, M2(H), "izq")}
+    ${cotasEst}
+  </svg>`;
+
+  // ---------- CORTE LATERAL ----------
+  const cW = pf + M * 2 + 110, cH = h + M * 2;
+  const cx0 = M, cy0 = M;
+  const yEst1 = nEst > 0 ? cy0 + zz + ee + (hLibre / (nEst + 1)) : 0;
+  const corte = `<svg ${VB(cW, cH)}>
+    <rect x="${cx0 - 10}" y="${cy0 - 6}" width="10" height="${h + 12}" fill="#E2E8F0" stroke="${L}" stroke-width="0.6"/>
+    <text x="${cx0 - 5}" y="${cy0 + h + 18}" text-anchor="middle" font-size="8" fill="${L}">pared</text>
+    <rect x="${cx0}" y="${cy0}" width="${pf}" height="${ee}" fill="${hex}" stroke="${G}" stroke-width="1"/>
+    <rect x="${cx0}" y="${cy0 + hc - ee}" width="${pf}" height="${ee}" fill="${hex}" stroke="${G}" stroke-width="1"/>
+    <rect x="${cx0}" y="${cy0}" width="${Math.max(2, 3 * S * 1)}" height="${hc}" fill="#CBD5E1" stroke="${G}" stroke-width="0.6"/>
+    ${nEst > 0 ? `<rect x="${cx0 + 4}" y="${yEst1}" width="${pf - 10}" height="${ee}" fill="${hex}" stroke="${G}" stroke-width="1"/>
+      <line x1="${cx0 + pf}" y1="${yEst1 + ee / 2}" x2="${cx0 + pf + 40}" y2="${yEst1 + ee / 2}" stroke="${G}" stroke-width="0.7"/>
+      <circle cx="${cx0 + pf - 4}" cy="${yEst1 + ee / 2}" r="2" fill="${G}"/>
+      <text x="${cx0 + pf + 44}" y="${yEst1 + ee / 2 + 3.5}" font-size="9" fill="${G}">Estante fijo</text>` : ""}
+    ${z > 0 ? `<rect x="${cx0 + zRet * S}" y="${cy0 + hc}" width="${Math.max(2, ee)}" height="${zz}" fill="#94A3B8" stroke="${G}" stroke-width="0.8"/>
+      <text x="${cx0 + zRet * S + 14}" y="${cy0 + hc + zz - 2}" font-size="8" fill="${L}">zócalo retranqueado</text>` : ""}
+    ${num(m.puertas) > 0 && ap === "abajo" ? `<rect x="${cx0 - 4}" y="${cy0 + hc + 4}" width="${Math.max(60, pf)}" height="${Math.max(2, ee)}" fill="${hex}" stroke="${G}" stroke-width="1"/>
+      <line x1="${cx0 + pf + 20}" y1="${cy0 + hc + 6}" x2="${cx0 + pf + 44}" y2="${cy0 + hc + 6}" stroke="${G}" stroke-width="0.7"/>
+      <text x="${cx0 + pf + 48}" y="${cy0 + hc + 3}" font-size="9" fill="${G}">Puerta rebatible</text>
+      <text x="${cx0 + pf + 48}" y="${cy0 + hc + 14}" font-size="9" fill="${G}">hacia abajo</text>` : ""}
+    ${num(m.puertas) > 0 && ap !== "abajo" ? `<rect x="${cx0 + (emb ? 2 : -Math.max(2, ee))}" y="${cy0 + (emb ? ee : 0)}" width="${Math.max(2, ee)}" height="${emb ? hc - 2 * ee : hc}" fill="${hex}" stroke="${G}" stroke-width="1"/>
+      <text x="${cx0 + pf + 10}" y="${cy0 + 12}" font-size="9" fill="${G}">Puerta ${emb ? "embutida" : "superpuesta"}</text>` : ""}
+  </svg>`;
+
+  // ---------- FRONTAL Y LATERAL CON ZÓCALO ----------
+  const zFrontal = z > 0 ? `<svg ${VB(fW, fH)}>
+    <rect x="${fx}" y="${fy}" width="${w}" height="${hc}" fill="${hex}" fill-opacity="0.35" stroke="${G}" stroke-width="1.4"/>
+    <rect x="${fx + 10}" y="${fy + hc}" width="${w - 20}" height="${zz}" fill="#94A3B8" fill-opacity="0.5" stroke="${G}" stroke-width="1"/>
+    ${cota(fx, fy - 20, fx + w, fy - 20, M2(A), "arr")}
+    ${cota(fx - 22, fy, fx - 22, fy + hc, M2(Hc), "izq")}
+    ${cota(fx + w + 16, fy + hc, fx + w + 16, fy + hc + zz, M2(z), "der")}
+  </svg>` : "";
+  const zLateral = z > 0 ? `<svg ${VB(lW, lH)}>
+    <rect x="${M}" y="${M}" width="${pf}" height="${hc}" fill="${hex}" fill-opacity="0.35" stroke="${G}" stroke-width="1.4"/>
+    <rect x="${M + zRet * S}" y="${M + hc}" width="${pf - zRet * S}" height="${zz}" fill="#94A3B8" fill-opacity="0.5" stroke="${G}" stroke-width="1"/>
+    ${cota(M, M - 20, M + pf, M - 20, M2(P), "arr")}
+    ${cota(M - 22, M, M - 22, M + hc, M2(Hc), "izq")}
+    ${cota(M + pf + 16, M + hc, M + pf + 16, M + hc + zz, M2(zRet), "der")}
+  </svg>` : "";
+
+  return { frontal, lateral, interior, corte, zFrontal, zLateral };
+}
+
+// ---- DESPIECE EXPLOTADO numerado (isométrico) ----
+function explotadoHTML(m, cfg, mats, piezas) {
+  const mc = matPorId(m.matCuerpo || cfg.matCuerpo, mats);
+  const hex = mc.hex || "#D8CEC2";
+  const e = num(cfg.esp) || 18;
+  const A = num(m.ancho), H = num(m.alto), P = num(m.prof);
+  const S = 190 / Math.max(A, H, P, 400);
+  const w = A * S, h = H * S, d = P * S, ee = Math.max(3, e * S);
+  const W = 470, HH = 330;
+  let g = "";
+  // cada pieza se separa de su lugar para que se vea
+  const cx = 165, cy = 250;
+  const orden = [];
+  const push = (nom, svg) => { orden.push(nom); g += svg; };
+  push("Tapa superior",  cajaISO(cx,        cy - h - 58, w, ee, d, hex, 1));
+  push("Fondo trasero",  cajaISO(cx + 22,   cy - h * 0.45, w - 2 * ee, h * 0.72, ee, hex, 5));
+  push("Lateral izq",    cajaISO(cx - 92,   cy - h * 0.30, ee, h * 0.82, d, hex, 3));
+  push("Lateral der",    cajaISO(cx + w + 30, cy - h * 0.30, ee, h * 0.82, d, hex, 4));
+  push("Estante fijo",   cajaISO(cx + 14,   cy - h * 0.10, w - 2 * ee, ee, d * 0.88, hex, 6));
+  push("Base inferior",  cajaISO(cx,        cy + 22, w, ee, d, hex, 2));
+  push("Puerta",         cajaISO(cx - 20,   cy + 74, w - 2 * ee, ee, d * 0.9, hex, 7));
+  return `<svg viewBox="0 0 ${W} ${HH}" width="100%" style="max-width:${W}px">${g}</svg>`;
+}
+
+// ---- TABLA DE PIEZAS (numerada, en metros) ----
+function tablaFicha(piezas, cfg) {
+  const filas = piezas.map((p, i) => `<tr>
+    <td class="c">${i + 1}</td>
+    <td>${p.nombre}</td>
+    <td class="c">${p.cant}</td>
+    <td>${p.mat === "fondo" ? "MDF" : p.mat === "vidrio" ? "Vidrio" : "MDF / Melamina"}</td>
+    <td class="c">${p.mat === "fondo" ? cfg.espFondo : p.mat === "vidrio" ? 4 : cfg.esp} mm</td>
+    <td class="c"><b>${M2(p.w)} × ${M2(p.h)}</b></td>
+  </tr>`).join("");
+  return `<table class="tp"><thead><tr><th>N°</th><th>PIEZA</th><th>CANT.</th><th>MATERIAL</th><th>ESPESOR</th><th>MEDIDAS (m)</th></tr></thead><tbody>${filas}</tbody></table>`;
+}
+
+// ---- LA PLANCHA COMPLETA ----
+function fichaHTML(m, cfg, mats, proyecto) {
+  const e = num(cfg.esp) || 18;
+  const A = num(m.ancho), H = num(m.alto), P = num(m.prof), z = num(m.zocalo) || 0;
+  const zRet = num(cfg.zocaloRetiro) || 80;
+  const piezas = despiece({ ...m, cant: 1 }, cfg);
+  const h = herrajes([{ ...m, cant: 1 }], cfg);
+  const V = vistasHTML(m, cfg, mats);
+  const emb = m.montaje === "embutida";
+  const ap = m.apertura || "der";
+  const AP = APERTURAS[ap] || APERTURAS.der;
+  const sistId = m.sistReb || (ap === "arriba" ? "piston" : "compas");
+  const S = SIST_REB[sistId];
+  const mc = matPorId(m.matCuerpo || cfg.matCuerpo, mats);
+  const profUtil = P - (cfg.descontarFondo ? num(cfg.espFondo) : 0) - 20;
+
+  const specs = [
+    `Largo: <b>${M2(A)} m</b>`,
+    `Profundidad: <b>${M2(P)} m</b>`,
+    `Alto: <b>${M2(H)} m</b>`,
+    num(m.estantes) > 0 ? `${m.estantes} estante(s) fijo(s) interno(s)` : null,
+    num(m.puertas) > 0 ? `Puerta <b>${AP.nom.toLowerCase()}</b> y <b>${emb ? "embutida" : "superpuesta"}</b>` : null,
+    num(m.cajones) > 0 ? `${m.cajones} cajón(es)` : null,
+    (ap === "arriba" || ap === "abajo") && S ? `Sistema de herraje: <b>${S.nom.toLowerCase()}</b>` : null,
+    z > 0 ? `Apoyado en el piso con zócalo retranqueado` : `Apoyado directo en el piso`,
+    `Cuerpo: <b>${mc.marca || ""} ${mc.nom}</b>`,
+  ].filter(Boolean).map(x => `<li>${x}</li>`).join("");
+
+  const herrLista = h.lista.filter(x => !/Peso estimado/.test(x.item))
+    .map(x => `<li><b>${x.cant}</b> &nbsp;${x.item}</li>`).join("");
+  const peso = h.lista.find(x => /Peso estimado/.test(x.item));
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Ficha — ${m.nombre}</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;color:#0B1622;padding:18px 20px 30px;font-size:11px;background:#fff}
+.hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid ${BRASS};padding-bottom:8px;margin-bottom:14px}
+.hd h1{font-size:18px;letter-spacing:-.01em}
+.hd .sub{font-size:9px;color:#5B6673;text-transform:uppercase;letter-spacing:.12em;font-weight:700;margin-top:2px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+.card{border:1px solid #D8DEE6;border-radius:7px;padding:10px;page-break-inside:avoid}
+.tt{font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#1B3A5B;margin-bottom:8px;text-align:center}
+.tl{font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#1B3A5B;margin-bottom:7px}
+ul{list-style:none}
+li{padding:3px 0 3px 12px;position:relative;line-height:1.45}
+li:before{content:"•";position:absolute;left:0;color:${BRASS};font-weight:800}
+.tp{width:100%;border-collapse:collapse;font-size:10px}
+.tp th{background:#EEF2F7;text-align:left;padding:6px 7px;font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:#5B6673;border:1px solid #D8DEE6}
+.tp td{padding:5px 7px;border:1px solid #E8EAED}
+.tp td.c{text-align:center;font-variant-numeric:tabular-nums}
+.sv{display:flex;justify-content:center;align-items:center;min-height:80px}
+.nota{background:#F6F8FB;border-radius:6px;padding:9px 11px;font-size:9.5px;color:#5B6673;line-height:1.6}
+.pill{display:inline-block;background:rgba(176,137,79,.14);color:#7A5C33;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:800}
+@media print{.card{page-break-inside:avoid}body{padding:0}}
+</style></head><body>
+<div class="hd">
+  <div><h1>${m.nombre || "Mueble"}</h1><div class="sub">${proyecto || "Proyecto"} · V+V · Ficha de fabricación</div></div>
+  <div style="text-align:right;font-size:9.5px;color:#5B6673">${fmtISO(hoyISO())}<br/>Placa ${cfg.esp} mm · sierra ${cfg.kerf} mm</div>
+</div>
+
+<div class="g4" style="margin-bottom:14px">
+  <div class="card"><div class="tt">Vista frontal</div><div class="sv">${V.frontal}</div></div>
+  <div class="card"><div class="tt">Vista lateral</div><div class="sv">${V.lateral}</div></div>
+  <div class="card"><div class="tt">Vista interior</div><div class="sv">${V.interior}</div></div>
+  <div class="card"><div class="tt">Corte lateral</div><div class="sv">${V.corte}</div></div>
+</div>
+
+<div class="grid" style="margin-bottom:14px">
+  <div class="card"><div class="tl">Especificaciones</div><ul>${specs}</ul></div>
+  <div class="card"><div class="tl">Despiece explotado</div><div class="sv">${explotadoHTML(m, cfg, mats, piezas)}</div></div>
+</div>
+
+${z > 0 ? `<div class="g4" style="margin-bottom:14px">
+  <div class="card"><div class="tt">Frontal con zócalo</div><div class="sv">${V.zFrontal}</div></div>
+  <div class="card"><div class="tt">Lateral con zócalo</div><div class="sv">${V.zLateral}</div></div>
+  <div class="card" style="grid-column:span 2"><div class="tl">Zócalo retranqueado</div>
+    <div class="nota">El cuerpo apoya sobre un zócalo de <b>${z} mm</b> de alto, retirado <b>${zRet} mm</b> hacia adentro. Genera la sombra que hace ver el mueble "flotando" y protege el frente de los golpes del zócalo del piso.</div>
+  </div>
+</div>` : ""}
+<div class="card" style="margin-bottom:14px">
+  <div class="tl">Despiece de piezas</div>
+  ${tablaFicha(piezas, cfg)}
+</div>
+
+<div class="grid">
+  <div class="card"><div class="tl">Herrajes</div><ul>${herrLista}</ul>
+    ${peso ? `<div class="nota" style="margin-top:8px">⚖ <b>${peso.item}</b><br/>Pedí el herraje por este peso, no por la medida.</div>` : ""}
+  </div>
+  <div class="card"><div class="tl">Notas</div>
+    <ul>
+      <li>Todas las dimensiones están en <b>metros</b>.</li>
+      <li>Profundidad interna útil: <b>${M2(profUtil)} m</b> (aprox.).</li>
+      ${z > 0 ? `<li>Zócalo retranqueado: <b>${z} mm</b> de alto × <b>${zRet} mm</b> de profundidad.</li>` : ""}
+      ${num(m.puertas) > 0 ? `<li>Puerta <b>${emb ? "embutida" : "superpuesta"}</b>: ${emb ? `deja ${num(cfg.holguraEmb) || 2} mm de luz alrededor · bisagra codo 17` : "tapa el canto de los laterales · bisagra codo 0"}.</li>` : ""}
+    </ul>
+    <div class="nota" style="margin-top:8px">Las medidas pueden variar ± 2 mm según la tolerancia de corte.</div>
+  </div>
+</div>
+</body></html>`;
 }
 
 // ---------- PDF ----------
@@ -2200,6 +2587,7 @@ export default function Muebles() {
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             <button onClick={() => editar(m)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+            <button onClick={() => setPdfHtml(fichaHTML(m, cfgP, matsCustom, proyecto))} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>📐 Ficha técnica</button>
             <button onClick={() => borrarMueble(m.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✕</button>
           </div>
         </div>
