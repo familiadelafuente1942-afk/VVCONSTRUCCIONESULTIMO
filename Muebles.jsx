@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v32 (Muebles: cuerpo unido - modulos distintos que forman un solo mueble)
+// VERSION: v33 (Muebles: puerta superpuesta o embutida + apertura izq/der/arriba/abajo/oscilo/corrediza)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -40,6 +40,7 @@ const PALETA = ["#1B3A5B", "#B0894F", "#3D7EA6", "#7A9E7E", "#C1666B", "#6B5B95"
 
 // ---------- CONFIG DEFAULT ----------
 const CFG_DEF = {
+  holguraEmb: 2,
   placaW: 1830, placaH: 2600, kerf: 4, esp: 18, espFondo: 3,
   veta: false, luz: 3, retranqueo: 20, holgura: 2, correderaLuz: 13,
   precioPlaca: 0, precioCanto: 0, cantoEsp: 22, descontarFondo: true, travesanoH: 100,
@@ -47,6 +48,19 @@ const CFG_DEF = {
   tipoBisagra: "codo0", tipoCorredera: "telescopica", cierreSuave: true,
   matCuerpo: "f_blanco", matFrente: "f_dakar", sinSombras: false,
   precioBisagra: 0, precioCorredera: 0, precioRiel: 0, precioVidrio: 0, precioTirador: 0,
+};
+const MONTAJES = [
+  ["superpuesta", "Superpuesta", "La puerta va SOBRE el canto de los laterales: tapa todo el mueble."],
+  ["embutida", "Embutida", "La puerta va ADENTRO, al ras: se ven los cantos del cuerpo alrededor."],
+];
+const APERTURAS = {
+  izq:      { nom: "Batiente ◀ izquierda", eje: "vertical", en: "hinged door opening to the left" },
+  der:      { nom: "Batiente ▶ derecha",   eje: "vertical", en: "hinged door opening to the right" },
+  doble:    { nom: "Doble ◀▶",             eje: "vertical", en: "double hinged doors" },
+  arriba:   { nom: "Rebatible ▲ arriba",   eje: "horizontal", en: "lift-up flap door with gas pistons" },
+  abajo:    { nom: "Rebatible ▼ abajo",    eje: "horizontal", en: "drop-down flap door" },
+  oscilo:   { nom: "Oscilobatiente",       eje: "vertical", en: "tilt-and-turn door" },
+  corrediza:{ nom: "Corrediza ⇄",          eje: "vertical", en: "sliding doors" },
 };
 const BISAGRAS = {
   codo0: { nom: "Bisagra cazoleta 35 mm · CODO 0", det: "puerta superpuesta (tapa el lateral)" },
@@ -130,6 +144,7 @@ const ELECTROS = {
   bacha: { nom: "Bacha / pileta", ancho: 800, alto: 860, prof: 580, zona: "piso", mueble: true, en: "undermount sink with a black mixer tap" },
   cafetera: { nom: "Cafetera", ancho: 300, alto: 400, prof: 400, zona: "mesada", mueble: false, en: "espresso machine on the countertop" },
 };
+const DEF_PUERTA = { montaje: "superpuesta", apertura: "der" };
 const DEF_TIPO = {
   bajo: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: true, armado: "lat" },
   alacena: { ancho: 600, alto: 700, prof: 320, zocalo: 0, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat" },
@@ -270,15 +285,29 @@ function despiece(m, cfg) {
     const E = ELECTROS[m.electro] || ELECTROS.anafe;
     if (!E.mueble) return [];
   }
-  // Puertas
+  // Puertas — montaje (superpuesta / embutida) y apertura
   const nPu = abierto ? 0 : num(m.puertas);
   if (nPu > 0) {
-    const corr = m.sistemaPuerta === "corrediza";
+    const ap = m.apertura || (m.sistemaPuerta === "corrediza" ? "corrediza" : "der");
+    const AP = APERTURAS[ap] || APERTURAS.der;
+    const emb = m.montaje === "embutida";
+    const corr = ap === "corrediza";
     const sol = num(cfg.solape) || 25, dr = num(cfg.descuentoRiel) || 55;
-    const anchoPu = corr ? (A + sol * (nPu - 1)) / nPu : (A - (nPu - 1) * L - 2 * 1) / nPu;
-    const altoPu = corr ? Math.max(0, Hc - dr) : Math.max(0, Hc - 2 * 1);
-    if (m.matPuerta === "vidrio") p.push({ nombre: corr ? "Puerta vidrio corrediza" : "Puerta vidrio", w: Math.round(anchoPu), h: Math.round(altoPu), cant: nPu, mat: "vidrio", canto: 0 });
-    else add(corr ? "Puerta corrediza" : "Puerta", anchoPu, altoPu, nPu, "placa", 2 * (anchoPu + altoPu));
+    const hol = Math.max(1, num(cfg.holguraEmb) || 2);       // luz alrededor de la puerta embutida
+    // superficie que tiene que tapar la puerta
+    let anchoUtil, altoUtil;
+    if (corr)      { anchoUtil = A + sol * (nPu - 1); altoUtil = Math.max(0, Hc - dr); }
+    else if (emb)  { anchoUtil = Math.max(0, A - 2 * e - 2 * hol); altoUtil = Math.max(0, Hc - 2 * e - 2 * hol); }
+    else           { anchoUtil = Math.max(0, A - 2 * 1);         altoUtil = Math.max(0, Hc - 2 * 1); }
+    // el reparto: si abre para arriba o abajo, la puerta es una sola tapa horizontal
+    const horizontal = AP.eje === "horizontal";
+    const nH = horizontal ? 1 : nPu;
+    const anchoPu = corr ? anchoUtil / nPu : (anchoUtil - (nH - 1) * L) / nH;
+    const altoPu = horizontal ? (altoUtil - (nPu - 1) * L) / nPu : altoUtil;
+    const nomBase = corr ? "Puerta corrediza" : emb ? "Puerta embutida" : "Puerta superpuesta";
+    const nota = `${emb ? "Embutida (adentro del cuerpo)" : corr ? "Corrediza" : "Superpuesta (sobre el canto)"} · ${AP.nom}`;
+    if (m.matPuerta === "vidrio") p.push({ nombre: nomBase + " · vidrio", w: Math.round(anchoPu), h: Math.round(altoPu), cant: horizontal ? nPu : nPu, mat: "vidrio", canto: 0, nota });
+    else { add(nomBase, anchoPu, altoPu, nPu, "placa", 2 * (anchoPu + altoPu)); const ult = p[p.length - 1]; if (ult) ult.nota = nota; }
   }
   // Cajones
   const nCj = abierto ? 0 : num(m.cajones);
@@ -562,13 +591,37 @@ function herrajes(muebles, cfg) {
     const z = num(m.zocalo) || 0, Hc = Math.max(0, H - z);
     const Pc = Math.max(0, cfg.descontarFondo && m.fondo !== false ? P - ef : P);
     const nPu = num(m.puertas), nCj = num(m.cajones);
-    const corr = m.sistemaPuerta === "corrediza", vid = m.matPuerta === "vidrio";
+    const ap = m.apertura || (m.sistemaPuerta === "corrediza" ? "corrediza" : "der");
+    const AP = APERTURAS[ap] || APERTURAS.der;
+    const emb = m.montaje === "embutida";
+    const corr = ap === "corrediza", vid = m.matPuerta === "vidrio";
     const nom = m.nombre || "Mueble";
     if (nPu > 0) {
       const sol = num(cfg.solape) || 25, dr = num(cfg.descuentoRiel) || 55;
-      const anchoPu = corr ? (A + sol * (nPu - 1)) / nPu : (A - (nPu - 1) * (num(cfg.luz) || 3) - 2) / nPu;
-      const altoPu = corr ? Math.max(0, Hc - dr) : Math.max(0, Hc - 2);
-      if (corr) {
+      const e2 = num(cfg.esp) || 18, hol = Math.max(1, num(cfg.holguraEmb) || 2);
+      const anchoPu = corr ? (A + sol * (nPu - 1)) / nPu : emb ? (A - 2 * e2 - 2 * hol) / (AP.eje === "horizontal" ? 1 : nPu) : (A - (nPu - 1) * (num(cfg.luz) || 3) - 2) / (AP.eje === "horizontal" ? 1 : nPu);
+      const altoPu = corr ? Math.max(0, Hc - dr) : AP.eje === "horizontal" ? Math.max(0, (emb ? Hc - 2 * e2 - 2 * hol : Hc - 2) / nPu) : Math.max(0, emb ? Hc - 2 * e2 - 2 * hol : Hc - 2);
+      // ---- REBATIBLES (arriba / abajo) y OSCILOBATIENTE: otros herrajes ----
+      if (ap === "arriba") {
+        const kb = emb ? "Bisagra cazoleta codo 17 (embutida)" : "Bisagra cazoleta codo 0 (superpuesta)";
+        push(kb, 2 * nPu * n, "u", "2 por tapa, arriba", "Rebatible ▲"); addM(kb, nom);
+        const kp = "Pistón a gas / compás elevable";
+        push(kp, 2 * nPu * n, "u", `2 por tapa · calcular por peso (tapa ${mm(anchoPu)}×${mm(altoPu)} mm)`, "Rebatible ▲"); addM(kp, nom);
+        const kt = "Tirador";
+        push(kt, nPu * n, "u", "1 por tapa", "Tiradores"); addM(kt, nom);
+      } else if (ap === "abajo") {
+        const kb = emb ? "Bisagra cazoleta codo 17 (embutida)" : "Bisagra cazoleta codo 0 (superpuesta)";
+        push(kb, 2 * nPu * n, "u", "2 por tapa, abajo", "Rebatible ▼"); addM(kb, nom);
+        const kc = "Compás / brazo de puerta abatible";
+        push(kc, 2 * nPu * n, "u", "2 por tapa, freno de caída", "Rebatible ▼"); addM(kc, nom);
+        const kt = "Tirador";
+        push(kt, nPu * n, "u", "1 por tapa", "Tiradores"); addM(kt, nom);
+      } else if (ap === "oscilo") {
+        const ko = "Herraje oscilobatiente";
+        push(ko, nPu * n, "kit", `1 kit por hoja (${mm(anchoPu)}×${mm(altoPu)} mm)`, "Oscilobatiente"); addM(ko, nom);
+        const kt = "Manija oscilobatiente";
+        push(kt, nPu * n, "u", "1 por hoja", "Oscilobatiente"); addM(kt, nom);
+      } else if (corr) {
         const k1 = `Kit riel para puerta corrediza · ${nPu} hojas`;
         push(k1, n, "kit", `hoja ${mm(anchoPu)}×${mm(altoPu)} mm`, "Puertas corredizas"); addM(k1, nom);
         const k2 = "Riel superior + inferior (aluminio)";
@@ -579,13 +632,13 @@ function herrajes(muebles, cfg) {
         push(k4, nPu * n, "u", "1 por hoja", "Puertas corredizas"); addM(k4, nom);
       } else {
         const bis = nBisagras(altoPu);
-        const k1 = vid ? "Bisagra cazoleta PARA VIDRIO 35 mm · codo 0" : BIS.nom;
+        const k1 = vid ? "Bisagra cazoleta PARA VIDRIO 35 mm" : emb ? "Bisagra cazoleta codo 17 (puerta EMBUTIDA)" : BIS.nom;
         push(k1, bis * nPu * n, "u", `${bis} por puerta (alto ${mm(altoPu)} mm) · ${vid ? "sin perforar el vidrio" : BIS.det}`, "Bisagras"); addM(k1, nom);
         const k2 = "Base / pie de bisagra (cruz)";
         push(k2, bis * nPu * n, "u", "1 por bisagra", "Bisagras"); addM(k2, nom);
         if (cfg.cierreSuave) { const k3 = "Amortiguador de cierre suave"; push(k3, bis * nPu * n, "u", "1 por bisagra", "Bisagras"); addM(k3, nom); }
       }
-      const kt = "Tirador de puerta"; push(kt, nPu * n, "u", "1 por puerta", "Tiradores"); addM(kt, nom);
+      if (ap !== "arriba" && ap !== "abajo" && ap !== "oscilo") { const kt = "Tirador de puerta"; push(kt, nPu * n, "u", "1 por puerta", "Tiradores"); addM(kt, nom); }
       if (vid) { vidrioM2 += (anchoPu * altoPu / 1e6) * nPu * n; marcoMl += (2 * (anchoPu + altoPu) / 1000) * nPu * n; }
     }
     if (nCj > 0) {
@@ -1178,14 +1231,29 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
       }
     }
     if (nPu > 0) {
-      const corr = m.sistemaPuerta === "corrediza", sol = num(cfg.solape) || 25;
-      const aPu = corr ? (A + sol * (nPu - 1)) / nPu : (A - (nPu - 1) * L - 2) / nPu;
+      const apR = m.apertura || (m.sistemaPuerta === "corrediza" ? "corrediza" : "der");
+      const APR = APERTURAS[apR] || APERTURAS.der;
+      const corr = apR === "corrediza", sol = num(cfg.solape) || 25;
+      const embR = m.montaje === "embutida";
+      const holR = Math.max(1, num(cfg.holguraEmb) || 2);
+      const horiz = APR.eje === "horizontal";
+      const nHoja = horiz ? 1 : nPu;
+      // embutida: la puerta va ADENTRO (al ras del canto). superpuesta: por delante.
+      const aPu = corr ? (A + sol * (nPu - 1)) / nPu
+        : embR ? (A - 2 * eG - 2 * holR) / nHoja
+          : (A - (nHoja - 1) * L - 2) / nHoja;
+      const zPu = embR ? zF + 1 : zP;                        // embutida al ras, superpuesta por delante
+      const xIni = embR ? x0 + eG + holR : x0 + 1;
       for (let i = 0; i < nPu; i++) {
-        const px = corr ? x0 + i * (aPu - sol) : x0 + 1 + i * (aPu + L);
-        const zz = corr ? zP - (i % 2) * 22 : zP;
-        addCara(`pu${x0}${base}${i}`, [[px, y0 + 1, zz], [px + aPu, y0 + 1, zz], [px + aPu, y1 - 1, zz], [px, y1 - 1, zz]], vid ? { id: "vid", hex: "#C3D7E0", tipo: "vidrio", gloss: true } : mf, { frente: true });
-        const tx = (i === 0 && nPu > 1) ? px + aPu - 48 : px + 48;
-        const ty = y0 + Hc * 0.40;
+        const px = corr ? x0 + i * (aPu - sol) : horiz ? xIni : xIni + i * (aPu + L);
+        const zz = corr ? zP - (i % 2) * 22 : zPu;
+        const hUtil = embR ? Hc - 2 * eG - 2 * holR : Hc - 2;
+        const hPu2 = horiz ? (hUtil - (nPu - 1) * L) / nPu : hUtil;
+        const yA = (embR ? y0 + eG + holR : y0 + 1) + (horiz ? i * (hPu2 + L) : 0);
+        const yB = yA + hPu2;
+        addCara(`pu${x0}${base}${i}`, [[px, yA, zz], [px + aPu, yA, zz], [px + aPu, yB, zz], [px, yB, zz]], vid ? { id: "vid", hex: "#C3D7E0", tipo: "vidrio", gloss: true } : mf, { frente: true });
+        const tx = horiz ? px + aPu / 2 : (i === 0 && nPu > 1) ? px + aPu - 48 : px + 48;
+        const ty = horiz ? yA + hPu2 * 0.5 : y0 + Hc * 0.40;
         addCara(`tp${x0}${base}${i}`, [[tx - 8, ty, zz - 14], [tx + 8, ty, zz - 14], [tx + 8, ty + Math.min(140, Hc * 0.3), zz - 14], [tx - 8, ty + Math.min(140, Hc * 0.3), zz - 14]], TIRA, { tirador: true });
       }
     }
@@ -2254,6 +2322,30 @@ export default function Muebles() {
           </div>
           {enL && num(vano.paredB) > 0 && <div style={{ fontSize: 10, color: T.muted, marginTop: 5 }}>La pared B arranca después de la esquina: quedan {mm(Math.max(0, num(vano.paredB) - num(vano.prof)))} mm útiles.</div>}
         </div>
+        {num(form.puertas) > 0 && !form.abierto && <div style={{ marginTop: 12, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>La puerta</div>
+          <label style={{ fontSize: 10.5, color: T.sub, fontWeight: 700 }}>¿Cómo se monta?</label>
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            {MONTAJES.map(([k, l]) => { const act = (form.montaje || "superpuesta") === k; return <button key={k} onClick={() => setF("montaje", k)} style={{ flex: 1, background: act ? T.accent : T.al, color: act ? "#fff" : T.sub, border: `1px solid ${act ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{act ? "✓ " : ""}{l}</button>; })}
+          </div>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>{(MONTAJES.find(x => x[0] === (form.montaje || "superpuesta")) || MONTAJES[0])[2]}</div>
+          <div style={{ display: "flex", gap: 9, alignItems: "center", background: T.al, borderRadius: 9, padding: 9, marginTop: 8 }}>
+            <svg viewBox="0 0 120 60" style={{ width: 96, flexShrink: 0 }}>
+              <rect x="8" y="8" width="46" height="44" fill="none" stroke={T.sub} strokeWidth="2" />
+              <rect x="6" y="6" width="50" height="48" fill={BRASS} fillOpacity="0.5" stroke={BRASS} strokeWidth="2" />
+              <text x="31" y="58" textAnchor="middle" fontSize="7" fill={T.sub}>superpuesta</text>
+              <rect x="66" y="8" width="46" height="44" fill="none" stroke={T.sub} strokeWidth="2" />
+              <rect x="72" y="14" width="34" height="32" fill={BRASS} fillOpacity="0.5" stroke={BRASS} strokeWidth="2" />
+              <text x="89" y="58" textAnchor="middle" fontSize="7" fill={T.sub}>embutida</text>
+            </svg>
+            <div style={{ fontSize: 10, color: T.muted, lineHeight: 1.5 }}>La <b>embutida</b> lleva bisagra <b>codo 17</b> y deja {mm(num(cfg.holguraEmb) || 2)} mm de luz alrededor.</div>
+          </div>
+          <label style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, display: "block", marginTop: 12 }}>¿Cómo abre?</label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 6, marginTop: 6 }}>
+            {Object.entries(APERTURAS).map(([k, v]) => { const act = (form.apertura || "der") === k; return <button key={k} onClick={() => setForm(f => ({ ...f, apertura: k, sistemaPuerta: k === "corrediza" ? "corrediza" : "batiente" }))} style={{ background: act ? BRASS : T.al, color: act ? "#fff" : T.sub, border: `1px solid ${act ? BRASS : T.border}`, borderRadius: 8, padding: "11px 5px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{act ? "✓ " : ""}{v.nom}</button>; })}
+          </div>
+          {(form.apertura === "arriba" || form.apertura === "abajo") && <div style={{ background: "rgba(176,137,79,.10)", borderRadius: 8, padding: "9px 11px", marginTop: 7, fontSize: 10.5, color: T.sub, lineHeight: 1.5 }}>La tapa es <b>una sola pieza horizontal</b>. Si ponés más de 1, se apilan una arriba de la otra. Lleva <b>{form.apertura === "arriba" ? "pistón a gas" : "compás de freno"}</b>: la lista de herrajes ya lo calcula.</div>}
+        </div>}
         {num(form.puertas) > 0 && <>
           <div style={{ marginTop: 12 }}>
             <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Sistema de puerta</label>
