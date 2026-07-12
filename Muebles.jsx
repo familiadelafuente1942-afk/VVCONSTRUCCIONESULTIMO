@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v19 (Muebles: girar la planta + mover modulos desde la planta)
+// VERSION: v22 (Muebles: fix - el panel de la L ya no se cierra al borrar el numero)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -55,7 +55,7 @@ const CORREDERAS_T = {
   oculta: { nom: "Corredera oculta undermount", det: "bajo cajón, cierre suave" },
   rodillo: { nom: "Corredera a rodillo (riel simple)", det: "extracción parcial, económica" },
 };
-const VANO_DEF = { ancho: 3000, alto: 2600, prof: 600, paredB: 0, orient: 0, isla: false, islaAncho: 2400, islaProf: 900, islaAlto: 900, islaSep: 1100, islaVoladizo: 300, banquetas: 3 };
+const VANO_DEF = { ancho: 3000, alto: 2600, prof: 600, paredB: 0, enL: false, orient: 0, isla: false, islaAncho: 2400, islaProf: 900, islaAlto: 900, islaSep: 1100, islaVoladizo: 300, banquetas: 3 };
 
 // ---------- CATÁLOGO DE PLACAS (Egger / Faplac) ----------
 // hex = color base aproximado para el render. Si cargás la FOTO de la placa, el render usa la foto real.
@@ -91,7 +91,7 @@ const CORREDERAS = [250, 300, 350, 400, 450, 500, 550, 600];
 // Bisagras según alto de puerta (norma habitual)
 function nBisagras(alto) { const h = num(alto); if (h <= 900) return 2; if (h <= 1600) return 3; if (h <= 2000) return 4; if (h <= 2400) return 5; return 6; }
 function largoCorredera(profCaja) { const p = num(profCaja); let best = CORREDERAS[0]; for (const c of CORREDERAS) if (c <= p) best = c; return best; }
-const TIPOS = [["bajo", "Bajo mesada"], ["alacena", "Alacena"], ["placard", "Placard"], ["cajonera", "Cajonera"], ["electro", "Electrodoméstico"], ["generico", "Genérico"]];
+const TIPOS = [["bajo", "Bajo mesada"], ["alacena", "Alacena"], ["esquinero", "Esquinero"], ["placard", "Placard"], ["cajonera", "Cajonera"], ["electro", "Electrodoméstico"], ["generico", "Genérico"]];
 // Electrodomésticos: si "mueble" es true, se corta la caja que lo aloja (columna/bajo). Si no, va suelto (heladera).
 const ELECTROS = {
   anafe: { nom: "Anafe / cocina", ancho: 600, alto: 860, prof: 580, zona: "piso", mueble: true, en: "induction cooktop set into the countertop, with base cabinet below" },
@@ -109,6 +109,7 @@ const DEF_TIPO = {
   alacena: { ancho: 600, alto: 700, prof: 320, zocalo: 0, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat" },
   placard: { ancho: 1200, alto: 2400, prof: 600, zocalo: 80, estantes: 3, puertas: 2, cajones: 0, techoTravesanos: false, armado: "lat", sistemaPuerta: "corrediza", matPuerta: "melamina" },
   cajonera: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 3, techoTravesanos: true, armado: "lat" },
+  esquinero: { ancho: 900, alto: 860, prof: 900, zocalo: 100, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat", esquineroAlto: false },
   electro: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 0, techoTravesanos: true, armado: "lat", electro: "anafe" },
   generico: { ancho: 600, alto: 800, prof: 400, zocalo: 0, estantes: 1, puertas: 0, cajones: 0, techoTravesanos: false, armado: "lat" },
 };
@@ -144,6 +145,21 @@ function despiece(m, cfg) {
   if (m.fondo !== false) add("Fondo", A, Hc, 1, "fondo", 0);
   // Zócalo
   if (z > 0) add("Zócalo", A, z, 1, "placa", A);
+  // ESQUINERO: caja en la esquina, frente en diagonal
+  if (m.tipo === "esquinero") {
+    const S = Math.max(300, num(m.ancho) || 900);      // lado del cuadrado de la esquina
+    const Hc2 = Math.max(0, num(m.alto) - (num(m.zocalo) || 0));
+    const p2 = [];
+    const add2 = (nombre, w, h, cant, mat, canto, nota) => p2.push({ nombre, w: Math.round(w), h: Math.round(h), cant, mat: mat || "placa", canto: Math.round(canto || 0), mueble: m.nombre, nota });
+    add2("Lateral (contra pared)", S - e, Hc2, 2, "placa", Hc2);
+    add2("Piso ✂ recortar en diagonal", S, S, 1, "placa", 0, "Cortar la esquina en diagonal");
+    add2("Techo ✂ recortar en diagonal", S, S, 1, "placa", 0, "Cortar la esquina en diagonal");
+    const anchoDiag = Math.round(Math.SQRT2 * (S - e)) - 20;
+    if (num(m.puertas) > 0) add2("Puerta diagonal", anchoDiag / Math.max(1, num(m.puertas)), Hc2 - 2, num(m.puertas), "placa", 2 * (anchoDiag / Math.max(1, num(m.puertas)) + Hc2));
+    for (let i = 0; i < num(m.estantes); i++) add2("Estante ✂ diagonal", S - e, S - e, 1, "placa", 0, "Cortar en diagonal");
+    const nn = Math.max(1, num(m.cant) || 1);
+    return p2.map(x => ({ ...x, cant: x.cant * nn }));
+  }
   // Electrodoméstico: si no lleva mueble (heladera, campana, lavavajillas) no se corta nada
   if (m.tipo === "electro") {
     const E = ELECTROS[m.electro] || ELECTROS.anafe;
@@ -411,21 +427,23 @@ function herrajes(muebles, cfg) {
 const esAlacena = (m) => m.tipo === "alacena";
 const esAlto = (m) => m.tipo === "placard";
 const zonaElectro = (m) => { const E = ELECTROS[m.electro]; return E ? E.zona : "piso"; };
-const esColgado = (m) => m.tipo === "alacena" || (m.tipo === "electro" && zonaElectro(m) === "colgado");
+const esColgado = (m) => m.tipo === "alacena" || (m.tipo === "esquinero" && !!m.esquineroAlto) || (m.tipo === "electro" && zonaElectro(m) === "colgado");
 function distribuir(muebles, pared, zona) {
-  // Devuelve muebles de esa pared/zona con su x acumulado, separados por fila (piso / colgado)
+  // Devuelve muebles de esa pared/zona con su x acumulado, separados por fila (piso / colgado).
+  // Los esquineros van aparte: ocupan la esquina, no la fila.
   const de = muebles.filter(m => (m.pared || "A") === pared && (m.zona || "pared") === (zona || "pared"));
-  const piso = [], colg = [];
+  const piso = [], colg = [], esq = [];
   let xp = 0, xc = 0;
   de.forEach(m => {
     const A = num(m.ancho), n = Math.max(1, num(m.cant) || 1);
     if (m.tipo === "electro" && zonaElectro(m) === "mesada") return; // cafetera: solo decorativa
+    if (m.tipo === "esquinero") { esq.push({ m, x: 0, w: A }); return; }
     for (let i = 0; i < n; i++) {
       if (esColgado(m)) { colg.push({ m, x: xc, w: A }); xc += A; }
       else { piso.push({ m, x: xp, w: A }); xp += A; }
     }
   });
-  return { piso, colg, anchoPiso: xp, anchoColg: xc };
+  return { piso, colg, esq, anchoPiso: xp, anchoColg: xc };
 }
 function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar }) {
   const [pared, setPared] = useState("A");
@@ -433,7 +451,8 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
   const rot = num(vano.orient) || 0;
   const W = num(vano.ancho) || 1, H = num(vano.alto) || 1, PR = num(vano.prof) || 600;
   const WB = num(vano.paredB) || 0;
-  const anchoPared = pared === "B" ? WB : W;
+  const utilB = Math.max(0, WB - PR);                       // la esquina la ocupa la pared A
+  const anchoPared = pared === "B" ? utilB : W;
   const d = distribuir(muebles, pared);
   const sobraPiso = anchoPared - d.anchoPiso, sobraColg = anchoPared - d.anchoColg;
   const hAlac = num(cfg.alturaAlacena) || 1400, eMes = num(cfg.espMesada) || 30;
@@ -451,7 +470,7 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
   const iYv = iY2 + iVol;                  // borde del voladizo (donde van las banquetas)
   const pad = Math.max(W, WB, PR) * 0.10 + 120;
   const planW = Math.max(W, hayIsla ? iAn : 0) + (WB > 0 ? PR : 0);
-  const planH = (hayIsla ? iYv + 520 : PR) + (WB > 0 ? WB : 0);
+  const planH = Math.max(hayIsla ? iYv + 520 : PR, WB > 0 ? WB + 260 : 0);
   const vbW0 = planW + pad * 2, vbH0 = planH + pad * 2.6, vbX0 = -pad, vbY0 = -pad;
   const ccx = vbX0 + vbW0 / 2, ccy = vbY0 + vbH0 / 2;
   const gira = rot === 90 || rot === 270;
@@ -463,20 +482,45 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
    <g transform={rot ? `rotate(${rot} ${ccx} ${ccy})` : undefined}>
     {/* paredes */}
     <line x1="0" y1="0" x2={W} y2="0" stroke="#334155" strokeWidth={Math.max(W, 1) / 90} strokeLinecap="square" />
-    {WB > 0 && <line x1="0" y1="0" x2="0" y2={WB} stroke="#334155" strokeWidth={Math.max(W, 1) / 90} strokeLinecap="square" />}
+    {WB > 0 && <>
+      <line x1="0" y1="0" x2="0" y2={WB} stroke="#334155" strokeWidth={Math.max(W, 1) / 90} strokeLinecap="square" />
+      {/* esquina: la ocupa la pared A */}
+      <rect x="0" y="0" width={PR} height={PR} fill="#94A3B8" fillOpacity="0.14" stroke="#94A3B8" strokeWidth={W / 500} strokeDasharray={`${W / 120},${W / 170}`} />
+      <Txt x={PR / 2} y={PR * 0.78} textAnchor="middle" fontSize={W / 66} fill="#64748B" fontWeight="700">esquina</Txt>
+      {/* cota pared B */}
+      <line x1={-pad * 0.42} y1="0" x2={-pad * 0.42} y2={WB} stroke="#94A3B8" strokeWidth={W / 450} />
+      <line x1={-pad * 0.52} y1="0" x2={-pad * 0.32} y2="0" stroke="#94A3B8" strokeWidth={W / 450} />
+      <line x1={-pad * 0.52} y1={WB} x2={-pad * 0.32} y2={WB} stroke="#94A3B8" strokeWidth={W / 450} />
+      <Txt x={-pad * 0.55} y={WB / 2} textAnchor="middle" fontSize={W / 40} fill="#475569" fontWeight="700" transform={`rotate(${-90 - rot} ${-pad * 0.55} ${WB / 2})`}>Pared B {mm(WB)} mm</Txt>
+    </>}
     {/* muebles pared A (piso) — tocá uno para moverlo */}
     {dPlan.piso.map((it, i) => { const es = sel === it.m.id; return <g key={"a" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
       <rect x={it.x} y="0" width={it.w} height={PR} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
       <Txt x={it.x + it.w / 2} y={PR / 2} textAnchor="middle" fontSize={W / 42} fill="#334155" fontWeight="700">{mm(it.w)}</Txt>
       <Txt x={it.x + it.w / 2} y={PR / 2 + W / 32} textAnchor="middle" fontSize={W / 60} fill="#64748B">{it.m.nombre}</Txt>
     </g>; })}
-    {/* alacenas pared A (punteadas, cuelgan sobre los bajos) */}
-    {dPlan.colg.map((it, i) => <rect key={"ac" + i} x={it.x} y="0" width={it.w} height={Math.min(PR, 350)} fill="none" stroke={COL(it.m)} strokeWidth={W / 320} strokeDasharray={`${W / 90},${W / 130}`} />)}
-    {/* pared B */}
-    {dPlanB && dPlanB.piso.map((it, i) => { const es = sel === it.m.id; return <g key={"b" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
-      <rect x="0" y={it.x} width={PR} height={it.w} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
-      <Txt x={PR / 2} y={it.x + it.w / 2} textAnchor="middle" fontSize={W / 42} fill="#334155" fontWeight="700">{mm(it.w)}</Txt>
+    {/* alacenas pared A (punteadas, cuelgan sobre los bajos) — también se pueden mover */}
+    {dPlan.colg.map((it, i) => { const es = sel === it.m.id; return <g key={"ac" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
+      <rect x={it.x} y="0" width={it.w} height={Math.min(PR, 350)} fill={es ? COL(it.m) : "none"} fillOpacity={es ? 0.35 : 0} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 150 : W / 320} strokeDasharray={`${W / 90},${W / 130}`} />
+      {es && <Txt x={it.x + it.w / 2} y={Math.min(PR, 350) * 0.42} textAnchor="middle" fontSize={W / 55} fill={BRASS} fontWeight="800">alacena</Txt>}
     </g>; })}
+    {/* pared B */}
+    {dPlanB && dPlanB.piso.map((it, i) => { const es = sel === it.m.id; const y0 = PR + it.x; return <g key={"b" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
+      <rect x="0" y={y0} width={PR} height={it.w} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
+      <Txt x={PR / 2} y={y0 + it.w / 2} textAnchor="middle" fontSize={W / 46} fill="#334155" fontWeight="700">{mm(it.w)}</Txt>
+    </g>; })}
+    {dPlanB && dPlanB.colg.map((it, i) => { const es = sel === it.m.id; return <g key={"bc" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
+      <rect x="0" y={PR + it.x} width={Math.min(PR, 350)} height={it.w} fill={es ? COL(it.m) : "none"} fillOpacity={es ? 0.35 : 0} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 150 : W / 320} strokeDasharray={`${W / 90},${W / 130}`} />
+    </g>; })}
+    {WB > 0 && (() => { const libre = utilB - dPlanB.anchoPiso; return <Txt x={PR + pad * 0.10} y={PR + dPlanB.anchoPiso + pad * 0.20} fontSize={W / 46} fill={libre < 0 ? "#DC2626" : "#64748B"} fontWeight="700">B: {libre < 0 ? `se pasan ${mm(-libre)}` : libre > 0 ? `libre ${mm(libre)}` : "justo"}</Txt>; })()}
+    {/* ---- ESQUINERO ---- */}
+    {dPlan.esq && dPlan.esq.map((it, i) => { const es = sel === it.m.id; const S = it.w; const alto = esColgado(it.m) || it.m.esquineroAlto;
+      return <g key={"eq" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
+        <polygon points={`0,0 ${S},0 0,${S}`} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.25} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} strokeDasharray={alto ? `${W / 90},${W / 130}` : undefined} />
+        <line x1={S} y1="0" x2="0" y2={S} stroke={es ? BRASS : COL(it.m)} strokeWidth={W / 150} />
+        <Txt x={S * 0.30} y={S * 0.32} textAnchor="middle" fontSize={W / 52} fill="#334155" fontWeight="700">{mm(S)}</Txt>
+        <Txt x={S * 0.30} y={S * 0.32 + W / 40} textAnchor="middle" fontSize={W / 66} fill="#64748B">esquinero</Txt>
+      </g>; })}
     {/* ---- ISLA ---- */}
     {hayIsla && <g>
       {/* voladizo de la mesada */}
@@ -544,13 +588,15 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
       <div style={{ background: "#F8FAFC", borderRadius: 10, padding: 8 }}>{planta}</div>
       {selM ? <div style={{ marginTop: 9, background: "rgba(176,137,79,.10)", border: `1.5px solid ${BRASS}`, borderRadius: 11, padding: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
-          <span style={{ fontSize: 13, fontWeight: 800, flex: 1 }}>{selM.nombre} <span style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>{mm(selM.ancho)}mm</span></span>
+          <span style={{ fontSize: 13, fontWeight: 800, flex: 1 }}>{selM.nombre} <span style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>{mm(selM.ancho)}mm · {selM.tipo === "esquinero" ? "esquinero" : esColgado(selM) ? "fila de arriba (colgado)" : "fila de abajo (piso)"}</span></span>
           <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: 2 }}>✕</button>
         </div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 7 }}>
-          <button onClick={() => onReordenar && onReordenar(selM.id, -1)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 9, padding: "12px 6px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>◀ Correr</button>
-          <button onClick={() => onReordenar && onReordenar(selM.id, 1)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 9, padding: "12px 6px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Correr ▶</button>
-        </div>
+        {selM.tipo === "esquinero"
+          ? <div style={{ fontSize: 11, color: T.sub, background: T.card, borderRadius: 9, padding: "10px 12px", marginBottom: 7, lineHeight: 1.5 }}>El esquinero va fijo en la esquina. Cambiale la medida del lado en «Editar».</div>
+          : <div style={{ display: "flex", gap: 6, marginBottom: 7 }}>
+            <button onClick={() => onReordenar && onReordenar(selM.id, -1)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 9, padding: "12px 6px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>◀ Correr</button>
+            <button onClick={() => onReordenar && onReordenar(selM.id, 1)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 9, padding: "12px 6px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Correr ▶</button>
+          </div>}
         <div style={{ fontSize: 10, color: T.muted, fontWeight: 700, textTransform: "uppercase", marginBottom: 5 }}>Mover a</div>
         <div style={{ display: "flex", gap: 6, marginBottom: 7 }}>
           {[["A", "pared", `Pared A`], ...(WB > 0 ? [["B", "pared", "Pared B"]] : []), ...(vano.isla ? [["A", "isla", "🏝 Isla"]] : [])].map(([p, z, l]) => {
@@ -1240,12 +1286,15 @@ export default function Muebles() {
   const [matsCustom, setMatsCustom] = useState([]);
   const [nuevoMat, setNuevoMat] = useState(null);
   const [verRender, setVerRender] = useState(false);
+  const enL = vano.enL === undefined ? num(vano.paredB) > 0 : !!vano.enL;
   const [verNivel, setVerNivel] = useState(false);
   const reordenar = (id, dir) => {
     const i = muebles.findIndex(m => m.id === id); if (i < 0) return;
-    const mm2 = muebles[i], grupo = muebles.filter(x => (x.pared || "A") === (mm2.pared || "A") && (x.zona || "pared") === (mm2.zona || "pared"));
+    const a = muebles[i];
+    // misma pared, misma zona Y misma fila (los bajos se corren entre bajos; las alacenas entre alacenas)
+    const grupo = muebles.filter(x => (x.pared || "A") === (a.pared || "A") && (x.zona || "pared") === (a.zona || "pared") && esColgado(x) === esColgado(a) && x.tipo !== "esquinero");
     const gi = grupo.findIndex(x => x.id === id), gj = gi + dir;
-    if (gj < 0 || gj >= grupo.length) return;                 // ya está en la punta
+    if (gi < 0 || gj < 0 || gj >= grupo.length) return;        // ya está en la punta
     const j = muebles.findIndex(x => x.id === grupo[gj].id);
     const next = [...muebles]; next[i] = muebles[j]; next[j] = muebles[i];
     guardar({ muebles: next });
@@ -1436,9 +1485,25 @@ export default function Muebles() {
           <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Alto (mm)</label><input value={vano.alto} onChange={e => setV("alto", e.target.value)} inputMode="numeric" style={inp} /></div>
           <div style={{ flex: 1 }}><label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Prof. (mm)</label><input value={vano.prof} onChange={e => setV("prof", e.target.value)} inputMode="numeric" style={inp} /></div>
         </div>
-        <div style={{ marginTop: 10 }}>
-          <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Pared B — en L (mm · 0 si es recto)</label>
-          <input value={vano.paredB} onChange={e => setV("paredB", e.target.value)} inputMode="numeric" style={inp} />
+        <div style={{ marginTop: 12, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+          <button onClick={() => { const on = !enL; guardar({ vano: { ...vano, enL: on, paredB: on ? (num(vano.paredB) || 2400) : 0 } }); }} style={{ width: "100%", background: enL ? T.accent : T.al, color: enL ? "#fff" : T.sub, border: `1px solid ${enL ? T.accent : T.border}`, borderRadius: 10, padding: "13px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{enL ? "✓ " : ""}📐 Cocina en L (dos paredes)</button>
+          {enL && <div style={{ marginTop: 9 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", background: "rgba(176,137,79,.08)", borderRadius: 10, padding: 10 }}>
+              <svg viewBox="0 0 100 80" style={{ width: 78, flexShrink: 0 }}>
+                <line x1="12" y1="12" x2="88" y2="12" stroke={T.navy} strokeWidth="4" />
+                <line x1="12" y1="12" x2="12" y2="70" stroke={BRASS} strokeWidth="4" />
+                <rect x="12" y="12" width="76" height="14" fill={T.navy} fillOpacity="0.18" />
+                <rect x="12" y="26" width="14" height="44" fill={BRASS} fillOpacity="0.3" />
+                <text x="52" y="9" textAnchor="middle" fontSize="8" fill={T.navy} fontWeight="700">Pared A</text>
+                <text x="34" y="52" fontSize="8" fill={BRASS} fontWeight="700">Pared B</text>
+              </svg>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 10.5, color: T.sub, fontWeight: 700 }}>Largo de la pared B (mm)</label>
+                <input value={vano.paredB} onChange={e => setV("paredB", e.target.value)} inputMode="numeric" placeholder="ej: 2400" style={{ ...inp, padding: "11px 10px", fontSize: 16, borderColor: num(vano.paredB) > 0 ? T.border : "#F0A500" }} />
+              </div>
+            </div>
+            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 7, lineHeight: 1.55 }}>La <b>pared A</b> es la del ancho del vano ({mm(num(vano.ancho))} mm). La <b>pared B</b> arranca en la esquina y va perpendicular. En cada mueble elegís en qué pared va.</div>
+          </div>}
         </div>
         <div style={{ marginTop: 12, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
           <button onClick={() => guardar({ vano: { ...vano, isla: !vano.isla } })} style={{ width: "100%", background: vano.isla ? T.accent : T.al, color: vano.isla ? "#fff" : T.sub, border: `1px solid ${vano.isla ? T.accent : T.border}`, borderRadius: 10, padding: "13px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{vano.isla ? "✓ " : ""}🏝 Cocina con isla</button>
@@ -1626,6 +1691,13 @@ export default function Muebles() {
           <button onClick={() => setF("techoTravesanos", !form.techoTravesanos)} style={{ flex: 1, background: form.techoTravesanos ? T.accent : T.al, color: form.techoTravesanos ? "#fff" : T.sub, border: `1px solid ${form.techoTravesanos ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.techoTravesanos ? "✓ " : ""}Techo con travesaños</button>
           <button onClick={() => setF("fondo", form.fondo === false)} style={{ flex: 1, background: form.fondo !== false ? T.accent : T.al, color: form.fondo !== false ? "#fff" : T.sub, border: `1px solid ${form.fondo !== false ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.fondo !== false ? "✓ " : ""}Lleva fondo</button>
         </div>
+        {form.tipo === "esquinero" && <div style={{ marginTop: 12 }}>
+          <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Tipo de esquinero</label>
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            {[[false, "Bajo (a nivel mesada)"], [true, "Alto (colgado)"]].map(([k, l]) => <button key={String(k)} onClick={() => setForm(f => ({ ...f, esquineroAlto: k, alto: k ? 700 : 860, prof: k ? 350 : 900, ancho: k ? 350 : 900, zocalo: k ? 0 : 100 }))} style={{ flex: 1, background: !!form.esquineroAlto === k ? T.accent : T.al, color: !!form.esquineroAlto === k ? "#fff" : T.sub, border: `1px solid ${!!form.esquineroAlto === k ? T.accent : T.border}`, borderRadius: 9, padding: "10px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+          </div>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>El <b>Ancho</b> es el lado del cuadrado de la esquina. El frente sale en diagonal ({mm(Math.round(Math.SQRT2 * (num(form.ancho) - 18)) - 20)} mm).</div>
+        </div>}
         {form.tipo === "electro" && <div style={{ marginTop: 12 }}>
           <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>¿Qué electrodoméstico?</label>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(104px,1fr))", gap: 6, marginTop: 6 }}>
@@ -1635,9 +1707,13 @@ export default function Muebles() {
         </div>}
         <div style={{ marginTop: 12 }}>
           <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>¿Dónde va?</label>
-          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-            {[["pared", "Contra la pared"], ["isla", "En la isla"]].map(([k, l]) => <button key={k} onClick={() => setF("zona", k)} style={{ flex: 1, background: (form.zona || "pared") === k ? T.accent : T.al, color: (form.zona || "pared") === k ? "#fff" : T.sub, border: `1px solid ${(form.zona || "pared") === k ? T.accent : T.border}`, borderRadius: 9, padding: "10px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+          <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+            {[["pared", "A", "Pared A"], ...(enL ? [["pared", "B", "Pared B"]] : []), ...(vano.isla ? [["isla", "A", "🏝 En la isla"]] : [])].map(([z, p, l]) => {
+              const act = (form.zona || "pared") === z && (z === "isla" || (form.pared || "A") === p);
+              return <button key={z + p} onClick={() => setForm(f => ({ ...f, zona: z, pared: p }))} style={{ flex: "1 1 30%", background: act ? T.accent : T.al, color: act ? "#fff" : T.sub, border: `1px solid ${act ? T.accent : T.border}`, borderRadius: 9, padding: "10px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{act ? "✓ " : ""}{l}</button>;
+            })}
           </div>
+          {enL && num(vano.paredB) > 0 && <div style={{ fontSize: 10, color: T.muted, marginTop: 5 }}>La pared B arranca después de la esquina: quedan {mm(Math.max(0, num(vano.paredB) - num(vano.prof)))} mm útiles.</div>}
         </div>
         {num(form.puertas) > 0 && <>
           <div style={{ marginTop: 12 }}>
