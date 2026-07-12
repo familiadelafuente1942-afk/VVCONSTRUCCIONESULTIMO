@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v28 (Muebles: varios proyectos, cada uno arranca de cero)
+// VERSION: v29 (Muebles: mueble corrido - un piso y un techo para varios modulos)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -94,7 +94,7 @@ const CORREDERAS = [250, 300, 350, 400, 450, 500, 550, 600];
 // Bisagras según alto de puerta (norma habitual)
 function nBisagras(alto) { const h = num(alto); if (h <= 900) return 2; if (h <= 1600) return 3; if (h <= 2000) return 4; if (h <= 2400) return 5; return 6; }
 function largoCorredera(profCaja) { const p = num(profCaja); let best = CORREDERAS[0]; for (const c of CORREDERAS) if (c <= p) best = c; return best; }
-const TIPOS = [["bajo", "Bajo mesada"], ["alacena", "Alacena"], ["esquinero", "Esquinero"], ["placard", "Placard"], ["cajonera", "Cajonera"], ["electro", "Electrodoméstico"], ["generico", "Genérico"]];
+const TIPOS = [["bajo", "Bajo mesada"], ["alacena", "Alacena"], ["corrido", "Mueble corrido"], ["esquinero", "Esquinero"], ["placard", "Placard"], ["cajonera", "Cajonera"], ["electro", "Electrodoméstico"], ["generico", "Genérico"]];
 // Electrodomésticos: si "mueble" es true, se corta la caja que lo aloja (columna/bajo). Si no, va suelto (heladera).
 const ELECTROS = {
   anafe: { nom: "Anafe / cocina", ancho: 600, alto: 860, prof: 580, zona: "piso", mueble: true, en: "induction cooktop set into the countertop, with base cabinet below" },
@@ -112,6 +112,7 @@ const DEF_TIPO = {
   alacena: { ancho: 600, alto: 700, prof: 320, zocalo: 0, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat" },
   placard: { ancho: 1200, alto: 2400, prof: 600, zocalo: 80, estantes: 3, puertas: 2, cajones: 0, techoTravesanos: false, armado: "lat", sistemaPuerta: "corrediza", matPuerta: "melamina" },
   cajonera: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 3, techoTravesanos: true, armado: "lat" },
+  corrido: { ancho: 3000, alto: 860, prof: 580, zocalo: 100, modulos: 5, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat", corridoAlto: false },
   esquinero: { ancho: 900, alto: 860, prof: 900, zocalo: 100, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat", esquineroAlto: false },
   electro: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 0, techoTravesanos: true, armado: "lat", electro: "anafe" },
   generico: { ancho: 600, alto: 800, prof: 400, zocalo: 0, estantes: 1, puertas: 0, cajones: 0, techoTravesanos: false, armado: "lat" },
@@ -128,6 +129,81 @@ function despiece(m, cfg) {
   const L = num(cfg.luz) || 3, RT = num(cfg.retranqueo) || 0, HG = num(cfg.holgura) || 0;
   const p = [];
   const add = (nombre, w, h, cant, mat, canto) => { if (w > 0 && h > 0 && cant > 0) p.push({ nombre, w: Math.round(w), h: Math.round(h), cant, mat: mat || "placa", canto: Math.round(canto || 0) }); };
+
+  // ===== MUEBLE CORRIDO: un solo piso y un solo techo para todos los módulos =====
+  if (m.tipo === "corrido") {
+    const n = Math.max(1, num(m.modulos) || 1);
+    const nDiv = n - 1;                                   // divisiones verticales interiores
+    const largoTapa = m.armado === "tp" ? A : Math.max(0, A - 2 * e);   // piso y techo enteros
+    const altoLat = m.armado === "tp" ? Math.max(0, Hc - 2 * e) : Hc;
+    const altoDiv = Math.max(0, Hc - 2 * e);              // las divisiones van entre piso y techo
+    // luz interior de cada módulo
+    const luzMod = Math.max(0, (A - 2 * e - nDiv * e) / n);
+
+    // ¿entra a lo largo de la placa? Si no, se empalma cortando SOBRE una división.
+    const maxL = Math.max(num(cfg.placaW) || 1830, num(cfg.placaH) || 2600);
+    const paso = luzMod + e;                              // de división a división
+    const partir = (largo) => {
+      if (largo <= maxL) return [largo];
+      const modsPorTramo = Math.max(1, Math.floor(maxL / paso));
+      const tr = [];
+      let restanMods = n, restaLargo = largo;
+      while (restanMods > 0) {
+        const k = Math.min(modsPorTramo, restanMods);
+        const esUlt = (restanMods - k) <= 0;
+        const l = esUlt ? restaLargo : k * paso;
+        tr.push(Math.min(l, restaLargo));
+        restaLargo -= l; restanMods -= k;
+        if (restaLargo <= 0) break;
+      }
+      return tr.filter(x => x > 0);
+    };
+    const addCorrido = (base, largo, alto2, mat) => {
+      const tr = partir(largo);
+      if (tr.length === 1) add(`${base} ⟵ 1 pieza entera`, largo, alto2, 1, mat, largo);
+      else tr.forEach((l, i) => add(`${base} · tramo ${i + 1}/${tr.length}`, l, alto2, 1, mat, l));
+      return tr.length;
+    };
+    let empalmes = 0;
+    if (m.armado === "tp") {
+      empalmes = Math.max(empalmes, addCorrido("Techo corrido", A, Pc, "placa") - 1);
+      addCorrido("Piso corrido", A, Pc, "placa");
+      add("Lateral exterior", Pc, altoLat, 2, "placa", altoLat);
+    } else {
+      add("Lateral exterior", Pc, altoLat, 2, "placa", altoLat);
+      empalmes = Math.max(empalmes, addCorrido("Piso corrido", largoTapa, Pc, "placa") - 1);
+      if (m.techoTravesanos) add("Travesaño", Math.min(largoTapa, maxL), num(cfg.travesanoH) || 100, 2, "placa", Math.min(largoTapa, maxL));
+      else addCorrido("Techo corrido", largoTapa, Pc, "placa");
+    }
+    if (nDiv > 0) add("División interior", Pc, altoDiv, nDiv, "placa", altoDiv);
+    // por módulo
+    const nEstM = num(m.estantes);
+    if (nEstM > 0) add("Estante", Math.max(0, luzMod - HG), Math.max(0, Pc - RT), nEstM * n, "placa", Math.max(0, luzMod - HG));
+    if (m.fondo !== false) {
+      const maxF = Math.max(num(cfg.placaW) || 1830, num(cfg.placaH) || 2600);
+      if (A <= maxF) add("Fondo", A, Hc, 1, "fondo", 0);
+      else add("Fondo (por módulo)", Math.max(0, luzMod + e), Hc, n, "fondo", 0);
+    }
+    if (z > 0) addCorrido("Zócalo corrido", A, z, "placa");
+    // frentes por módulo
+    const nCjM = num(m.cajones), nPuM = num(m.puertas);
+    const anchoFrente = luzMod + e - L;                   // el frente tapa media división de cada lado
+    if (nCjM > 0) {
+      const altoF = Math.max(0, (Hc - (nCjM + 1) * L) / nCjM);
+      add("Frente de cajón", anchoFrente, altoF, nCjM * n, "placa", 2 * (anchoFrente + altoF));
+      const lc = largoCorredera(P, cfg);
+      add("Lateral de cajón", lc, Math.max(0, altoF - 40), 2 * nCjM * n, "placa", 0);
+      add("Frente/Contraf. cajón", Math.max(0, luzMod - 2 * num(cfg.correderaLuz) - 2 * e), Math.max(0, altoF - 40), 2 * nCjM * n, "placa", 0);
+      add("Piso de cajón", Math.max(0, luzMod - 2 * num(cfg.correderaLuz)), lc, nCjM * n, "fondo", 0);
+    } else if (nPuM > 0) {
+      const aPu = Math.max(0, (anchoFrente - (nPuM - 1) * L) / nPuM);
+      const hPu = Math.max(0, Hc - L);
+      const mat = m.matPuerta === "vidrio" ? "vidrio" : "placa";
+      add(nPuM > 1 ? "Puerta (por módulo)" : "Puerta", aPu, hPu, nPuM * n, mat, mat === "placa" ? 2 * (aPu + hPu) : 0);
+    }
+    const nn = Math.max(1, num(m.cant) || 1);
+    return p.map(x => ({ ...x, mueble: m.nombre, cant: x.cant * nn, nota: x.nombre.indexOf("corrido") >= 0 ? `Corre a lo largo de los ${n} módulos` : undefined }));
+  }
 
   if (m.armado === "tp") {
     // Techo y piso enteros; laterales entre ellos
@@ -693,8 +769,10 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
     <rect x="0" y="0" width={anchoPared} height={H} fill="#FAFAF8" stroke="#334155" strokeWidth={anchoPared / 110} />
     {/* piso: bajos, cajoneras, placares */}
     {d.piso.map((it, i) => { const alt = num(it.m.alto); const y = H - alt; const es = sel === K(it), ar = arrF && arrF.id === K(it);
+      const nM = it.m.tipo === "corrido" ? Math.max(1, num(it.m.modulos) || 1) : 0;
       return <g key={"p" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarF(ev, it)} onMouseDown={ev => bajarF(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
       <rect x={it.x} y={y} width={it.w} height={alt} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? anchoPared / 130 : anchoPared / 260} />
+      {nM > 1 && Array.from({ length: nM - 1 }).map((_, k) => <line key={"dv" + k} x1={it.x + it.w * ((k + 1) / nM)} y1={y} x2={it.x + it.w * ((k + 1) / nM)} y2={y + alt} stroke={COL(it.m)} strokeWidth={anchoPared / 400} strokeDasharray={`${anchoPared / 90},${anchoPared / 140}`} />)}
       <text x={it.x + it.w / 2} y={y + alt / 2} textAnchor="middle" fontSize={anchoPared / 40} fill="#334155" fontWeight="700">{mm(it.w)}</text>
       <text x={it.x + it.w / 2} y={y + alt / 2 + anchoPared / 30} textAnchor="middle" fontSize={anchoPared / 52} fill="#64748B">{it.m.nombre}</text>
     </g>; })}
@@ -1995,6 +2073,26 @@ export default function Muebles() {
           <button onClick={() => setF("techoTravesanos", !form.techoTravesanos)} style={{ flex: 1, background: form.techoTravesanos ? T.accent : T.al, color: form.techoTravesanos ? "#fff" : T.sub, border: `1px solid ${form.techoTravesanos ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.techoTravesanos ? "✓ " : ""}Techo con travesaños</button>
           <button onClick={() => setF("fondo", form.fondo === false)} style={{ flex: 1, background: form.fondo !== false ? T.accent : T.al, color: form.fondo !== false ? "#fff" : T.sub, border: `1px solid ${form.fondo !== false ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.fondo !== false ? "✓ " : ""}Lleva fondo</button>
         </div>
+        {form.tipo === "corrido" && (() => {
+          const nMod = Math.max(1, num(form.modulos) || 1);
+          const luzMod = Math.max(0, (num(form.ancho) - 2 * num(cfg.esp) - (nMod - 1) * num(cfg.esp)) / nMod);
+          const maxL = Math.max(num(cfg.placaW), num(cfg.placaH));
+          const largoTapa = form.armado === "tp" ? num(form.ancho) : num(form.ancho) - 2 * num(cfg.esp);
+          const hayEmpalme = largoTapa > maxL;
+          return <div style={{ marginTop: 12 }}>
+            <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>¿En cuántos módulos se divide?</label>
+            <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+              {[2, 3, 4, 5, 6, 7, 8].map(k => <button key={k} onClick={() => setF("modulos", k)} style={{ flex: "1 1 11%", background: nMod === k ? T.accent : T.al, color: nMod === k ? "#fff" : T.sub, border: `1px solid ${nMod === k ? T.accent : T.border}`, borderRadius: 8, padding: "11px 4px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>{k}</button>)}
+            </div>
+            <div style={{ background: "rgba(176,137,79,.10)", borderRadius: 9, padding: "10px 11px", marginTop: 9, fontSize: 11, color: T.sub, lineHeight: 1.6 }}>
+              <b>Un solo piso y un solo techo</b> corridos a lo largo de todo el mueble, con <b>{nMod - 1} división(es)</b> vertical(es) adentro.<br />
+              Luz de cada módulo: <b style={{ color: T.accent }}>{mm(Math.round(luzMod))} mm</b>. Puertas, cajones y estantes se cargan <b>por módulo</b>.
+            </div>
+            {hayEmpalme && <div style={{ background: "rgba(240,165,0,.14)", border: "1px solid rgba(240,165,0,.4)", borderRadius: 9, padding: "10px 11px", marginTop: 7, fontSize: 11, color: "#8A6100", lineHeight: 1.55 }}>
+              ⚠ El piso/techo mide <b>{mm(Math.round(largoTapa))} mm</b> y la placa da hasta <b>{mm(maxL)} mm</b>. Se cortan <b>en tramos</b>, empalmando justo <b>sobre una división</b> (queda oculto). El despiece ya te los da partidos.
+            </div>}
+          </div>;
+        })()}
         {form.tipo === "esquinero" && <div style={{ marginTop: 12 }}>
           <label style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Tipo de esquinero</label>
           <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
