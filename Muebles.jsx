@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v16 (Muebles: electrodomesticos, isla con banquetas, camara mas abierta)
+// VERSION: v17 (Muebles: medidas propias de la isla)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -55,7 +55,7 @@ const CORREDERAS_T = {
   oculta: { nom: "Corredera oculta undermount", det: "bajo cajón, cierre suave" },
   rodillo: { nom: "Corredera a rodillo (riel simple)", det: "extracción parcial, económica" },
 };
-const VANO_DEF = { ancho: 3000, alto: 2600, prof: 600, paredB: 0, isla: false, islaSep: 1100, islaVoladizo: 300, banquetas: 3 };
+const VANO_DEF = { ancho: 3000, alto: 2600, prof: 600, paredB: 0, isla: false, islaAncho: 2400, islaProf: 900, islaAlto: 900, islaSep: 1100, islaVoladizo: 300, banquetas: 3 };
 
 // ---------- CATÁLOGO DE PLACAS (Egger / Faplac) ----------
 // hex = color base aproximado para el render. Si cargás la FOTO de la placa, el render usa la foto real.
@@ -608,7 +608,7 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
   const L = num(cfg.luz) || 3;
   const d = distribuir(muebles, "A", "pared");
   const dI = distribuir(muebles, "A", "isla");
-  const hayIsla = !!vano.isla && (dI.piso.length > 0 || dI.colg.length > 0);
+  const hayIsla = !!vano.isla;
   const matC = matPorId(cfg.matCuerpo, mats), matF = matPorId(cfg.matFrente, mats);
 
   const onDown = (x, y) => { drag.current = { x, y, ...cam }; };
@@ -617,7 +617,7 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
 
   const anchoTotal = Math.max(W, d.anchoPiso, d.anchoColg, 600);
   const profMax = Math.max(300, ...muebles.map(m => num(m.prof) || 0));
-  const zExtra = (vano.isla ? (num(vano.islaSep) || 1100) + 900 : 0);
+  const zExtra = (vano.isla ? (num(vano.islaSep) || 1100) + (num(vano.islaProf) || 900) + (num(vano.islaVoladizo) || 0) + 700 : 0);
   const escala = Math.max(anchoTotal, HV, zExtra * 1.1);
   const D = escala * (2.2 + cam.dist), F = escala * 1.5;   // cámara siempre lejos: sin perspectiva extrema
   const cx = anchoTotal / 2, cy = HV * 0.42, cz = (profMax - zExtra) / 2;
@@ -728,7 +728,7 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
   };
 
   // Piso: sólo bajo los muebles (nada de planos gigantes que se deformaban)
-  const anchoPiso = Math.max(d.anchoPiso, d.anchoColg, 600);
+  const anchoPiso = Math.max(d.anchoPiso, d.anchoColg, vano.isla ? num(vano.islaAncho) || 2400 : 0, 600);
   const zPisoF = -(zExtra + 500) || -700;
   addCara("piso", [[-350, 0, zPisoF], [anchoPiso + 350, 0, zPisoF], [anchoPiso + 350, 0, profMax + 60], [-350, 0, profMax + 60]], { id: "piso", hex: "#B5ADA2", tipo: "liso" }, { piso: true });
 
@@ -752,33 +752,52 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
     if (k === "bacha") { addCara(`ba${it.x}`, [[it.x + 60, yT, 80], [it.x + 60, yT, pf - 110], [it.x + it.w - 60, yT, pf - 110], [it.x + it.w - 60, yT, 80]], INOX, { gloss: true, ao: 0.5 }); }
   });
 
-  // ---- ISLA ----
+  // ---- ISLA ---- (medidas propias, definidas en el Vano)
   if (hayIsla) {
-    const sep = Math.max(600, num(vano.islaSep) || 1100);
-    const vol = num(vano.islaVoladizo) || 300;
-    const profI = Math.max(400, ...dI.piso.map(it => num(it.m.prof) || 600));
+    const sep = Math.max(300, num(vano.islaSep) || 1100);
+    const vol = Math.max(0, num(vano.islaVoladizo) || 0);
+    const anchoI = Math.max(400, num(vano.islaAncho) || 2400);
+    const profI = Math.max(300, num(vano.islaProf) || 900);
+    const altoI = Math.max(500, num(vano.islaAlto) || 900);
     const zIF = -(sep + profI), zIB = -sep;                 // isla adelante de los bajos
-    const anchoI = dI.anchoPiso || 1200;
-    const altoI = Math.max(...dI.piso.map(it => num(it.m.alto) || 900), 900);
-    // módulos de la isla (frentes miran hacia la pared)
-    dI.piso.forEach(it => {
-      const m = it.m, A = it.w, x0 = it.x, zc = num(m.zocalo) || 0;
-      const y0 = zc, y1 = num(m.alto), x1 = x0 + A;
-      const mc = matPorId(m.matCuerpo || cfg.matCuerpo, mats), mf = matPorId(m.matFrente || cfg.matFrente, mats);
-      addCara(`isL${x0}`, [[x0, y0, zIF], [x0, y1, zIF], [x0, y1, zIB], [x0, y0, zIB]], mc);
-      addCara(`isR${x0}`, [[x1, y0, zIB], [x1, y1, zIB], [x1, y1, zIF], [x1, y0, zIF]], mc);
-      addCara(`isB${x0}`, [[x0, y0, zIF], [x1, y0, zIF], [x1, y1, zIF], [x0, y1, zIF]], mf, { frente: true });   // cara que da a las banquetas
-      addCara(`isF${x0}`, [[x0, y0, zIB], [x0, y1, zIB], [x1, y1, zIB], [x1, y0, zIB]], mf, { frente: true });   // cara hacia la pared
-      if (zc > 0) addCara(`isZ${x0}`, [[x0, 0, zIF + 25], [x1, 0, zIF + 25], [x1, zc, zIF + 25], [x0, zc, zIF + 25]], ZOCALO, { ao: 0.6 });
-    });
-    // mesada con voladizo hacia las banquetas
+    const zocI = num((dI.piso[0] || {}).m ? dI.piso[0].m.zocalo : 100) || 100;
+    // cuerpo de la isla (con sus medidas). Si hay módulos, se dibujan sus frentes encima.
+    addCara("islaL", [[0, zocI, zIF], [0, altoI, zIF], [0, altoI, zIB], [0, zocI, zIB]], matC);
+    addCara("islaR", [[anchoI, zocI, zIB], [anchoI, altoI, zIB], [anchoI, altoI, zIF], [anchoI, zocI, zIF]], matC);
+    addCara("islaPared", [[0, zocI, zIB], [0, altoI, zIB], [anchoI, altoI, zIB], [anchoI, zocI, zIB]], matF, { frente: true });
+    addCara("islaZoc", [[0, 0, zIF + 25], [anchoI, 0, zIF + 25], [anchoI, zocI, zIF + 25], [0, zocI, zIF + 25]], ZOCALO, { ao: 0.6 });
+    // frentes que dan a las banquetas: los módulos de la isla, escalados al ancho de la isla
+    const totM = dI.anchoPiso || 0;
+    if (totM > 0) {
+      dI.piso.forEach(it => {
+        const m = it.m, x0 = (it.x / totM) * anchoI, x1 = ((it.x + it.w) / totM) * anchoI;
+        const mf = matPorId(m.matFrente || cfg.matFrente, mats);
+        const nCjI = num(m.cajones), Hi = altoI - zocI;
+        if (nCjI > 0) {
+          const aF = (Hi - (nCjI + 1) * L) / nCjI;
+          for (let i = 0; i < nCjI; i++) { const yy = zocI + L + i * (aF + L);
+            addCara(`isc${x0}${i}`, [[x0 + 1, yy, zIF - 18], [x1 - 1, yy, zIF - 18], [x1 - 1, yy + aF, zIF - 18], [x0 + 1, yy + aF, zIF - 18]], mf, { frente: true });
+            const ty = yy + aF * 0.68;
+            addCara(`ist${x0}${i}`, [[x0 + (x1 - x0) * 0.3, ty, zIF - 32], [x0 + (x1 - x0) * 0.7, ty, zIF - 32], [x0 + (x1 - x0) * 0.7, ty + 18, zIF - 32], [x0 + (x1 - x0) * 0.3, ty + 18, zIF - 32]], TIRA, { tirador: true });
+          }
+        } else {
+          addCara(`isf${x0}`, [[x0 + 1, zocI + 1, zIF - 18], [x1 - 1, zocI + 1, zIF - 18], [x1 - 1, altoI - 1, zIF - 18], [x0 + 1, altoI - 1, zIF - 18]], mf, { frente: true });
+        }
+      });
+    } else {
+      addCara("islaFrente", [[0, zocI, zIF], [anchoI, zocI, zIF], [anchoI, altoI, zIF], [0, altoI, zIF]], matF, { frente: true });
+    }
+    // anafe de la isla, sobre la mesada
     const yM = altoI + eMes;
-    addCara("islaMes", [[-10, yM, zIF - vol], [anchoI + 10, yM, zIF - vol], [anchoI + 10, yM, zIB + 10], [-10, yM, zIB + 10]], MESADA, { gloss: true });
-    addCara("islaMesF", [[-10, altoI, zIF - vol], [-10, yM, zIF - vol], [anchoI + 10, yM, zIF - vol], [anchoI + 10, altoI, zIF - vol]], MESADA);
+    const anafeI = dI.piso.find(it => it.m.tipo === "electro" && it.m.electro === "anafe");
+    if (anafeI) addCara("islaAnafe", [[anchoI * 0.32, yM + 1, zIB - 120], [anchoI * 0.32, yM + 1, zIF + 120], [anchoI * 0.68, yM + 1, zIF + 120], [anchoI * 0.68, yM + 1, zIB - 120]], VIDRIO_N, { gloss: true });
+    // mesada con voladizo hacia las banquetas
+    addCara("islaMes", [[-12, yM, zIF - vol], [-12, yM, zIB + 12], [anchoI + 12, yM, zIB + 12], [anchoI + 12, yM, zIF - vol]], MESADA, { gloss: true });
+    addCara("islaMesF", [[-12, altoI, zIF - vol], [anchoI + 12, altoI, zIF - vol], [anchoI + 12, yM, zIF - vol], [-12, yM, zIF - vol]], MESADA);
     // banquetas
     const nB = Math.max(0, num(vano.banquetas) || 0);
     for (let i = 0; i < nB; i++) {
-      const bx = anchoI * ((i + 1) / (nB + 1)), bz = zIF - vol - 180, aB = 680, sw = 190;
+      const bx = anchoI * ((i + 1) / (nB + 1)), bz = zIF - vol - 180, aB = Math.max(500, altoI - 220), sw = 190;
       addCara(`bq${i}`, [[bx - sw / 2, aB, bz - sw / 2], [bx + sw / 2, aB, bz - sw / 2], [bx + sw / 2, aB, bz + sw / 2], [bx - sw / 2, aB, bz + sw / 2]], BANQ);           // asiento
       addCara(`bqf${i}`, [[bx - sw / 2, aB - 40, bz - sw / 2], [bx - sw / 2, aB, bz - sw / 2], [bx + sw / 2, aB, bz - sw / 2], [bx + sw / 2, aB - 40, bz - sw / 2]], BANQ); // canto
       addCara(`bqp${i}`, [[bx - 22, 0, bz - 22], [bx - 22, aB - 40, bz - 22], [bx + 22, aB - 40, bz - 22], [bx + 22, 0, bz - 22]], BANQ);                                   // caño
@@ -858,7 +877,7 @@ function promptEscena(proyecto, vano, muebles, cfg, mats, opciones) {
   const els = muebles.filter(m => m.tipo === "electro").map(m => (ELECTROS[m.electro] || {}).en).filter(Boolean);
   const elec = els.length ? `Appliances (must appear, exactly these): ${els.join("; ")}.` : "";
   const dI = distribuir(muebles, "A", "isla");
-  const isla = (vano.isla && dI.piso.length) ? `There is a KITCHEN ISLAND in front of the base run, ${mm(dI.anchoPiso)}mm long, separated ${mm(num(vano.islaSep))}mm from the cabinets, with a ${mm(num(vano.islaVoladizo))}mm countertop overhang and ${num(vano.banquetas)} bar stools tucked under it. Frame the shot WIDER so the whole island and the stools are fully visible.` : "";
+  const isla = vano.isla ? `There is a KITCHEN ISLAND in front of the base run: ${mm(num(vano.islaAncho))}mm long × ${mm(num(vano.islaProf))}mm deep × ${mm(num(vano.islaAlto))}mm high, separated ${mm(num(vano.islaSep))}mm from the base cabinets, with a ${mm(num(vano.islaVoladizo))}mm countertop overhang on the seating side and ${num(vano.banquetas)} bar stools tucked under it${dI.piso.length ? `. The island fronts are: ${desc(dI.piso)}` : ""}. Frame the shot WIDER (step back) so the whole island and all the stools are fully visible in the composition.` : "";
   const par = (PAREDES.find(x => x[0] === opciones.pared) || PAREDES[0])[2];
   const pis = (PISOS.find(x => x[0] === opciones.piso) || PISOS[0])[2];
   const luces = (opciones.luces || []).map(k => (LUCES.find(x => x[0] === k) || [])[2]).filter(Boolean);
@@ -1346,13 +1365,23 @@ export default function Muebles() {
         <div style={{ marginTop: 12, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
           <button onClick={() => guardar({ vano: { ...vano, isla: !vano.isla } })} style={{ width: "100%", background: vano.isla ? T.accent : T.al, color: vano.isla ? "#fff" : T.sub, border: `1px solid ${vano.isla ? T.accent : T.border}`, borderRadius: 10, padding: "13px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{vano.isla ? "✓ " : ""}🏝 Cocina con isla</button>
           {vano.isla && <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7, marginTop: 9 }}>
-              {[["islaSep", "Separación"], ["islaVoladizo", "Voladizo"], ["banquetas", "Banquetas"]].map(([k, l]) => <div key={k}>
-                <label style={{ fontSize: 10, color: T.sub, fontWeight: 700 }}>{l}</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7, marginTop: 10 }}>
+              {[["islaAncho", "Ancho"], ["islaProf", "Profundidad"], ["islaAlto", "Alto"]].map(([k, l]) => <div key={k}>
+                <label style={{ fontSize: 10, color: T.sub, fontWeight: 700 }}>{l} (mm)</label>
                 <input value={vano[k]} onChange={e => setV(k, e.target.value)} inputMode="numeric" style={{ ...inp, padding: "11px 10px", fontSize: 15 }} />
               </div>)}
             </div>
-            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>Separación y voladizo en mm. En cada mueble elegí <b>«En la isla»</b> para que vaya ahí.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7, marginTop: 8 }}>
+              {[["islaSep", "Separación"], ["islaVoladizo", "Voladizo"], ["banquetas", "Banquetas"]].map(([k, l]) => <div key={k}>
+                <label style={{ fontSize: 10, color: T.sub, fontWeight: 700 }}>{l}{k === "banquetas" ? "" : " (mm)"}</label>
+                <input value={vano[k]} onChange={e => setV(k, e.target.value)} inputMode="numeric" style={{ ...inp, padding: "11px 10px", fontSize: 15 }} />
+              </div>)}
+            </div>
+            <div style={{ background: "rgba(176,137,79,.08)", borderRadius: 8, padding: "9px 11px", marginTop: 9, fontSize: 10.5, color: T.sub, lineHeight: 1.6 }}>
+              <b>Separación:</b> distancia libre entre los bajos y la isla (circulación; se recomienda 900–1200 mm).<br />
+              <b>Voladizo:</b> cuánto sobresale la mesada del lado de las banquetas (para las piernas; 250–350 mm).<br />
+              En cada mueble elegí <b>«En la isla»</b> y sus frentes se reparten en ese ancho.
+            </div>
           </>}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginTop: 12 }}>
