@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v30 (Muebles: rack de TV escalonado - retiro, elevacion, nichos abiertos)
+// VERSION: v32 (Muebles: cuerpo unido - modulos distintos que forman un solo mueble)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -88,6 +88,29 @@ const MATERIALES = [
   { id: "f_tapir", marca: "Faplac", cod: "Gris Tapir", nom: "Gris Tapir (Mesopotamia)", hex: "#8E8B85", tipo: "liso", pw: 1830, ph: 2750 },
   { id: "f_caliza", marca: "Faplac", cod: "Caliza", nom: "Caliza (Mesopotamia)", hex: "#D9D3C8", tipo: "liso", pw: 1830, ph: 2750 },
   { id: "f_jade", marca: "Faplac", cod: "Jade", nom: "Jade (Mesopotamia)", hex: "#6E8778", tipo: "liso", pw: 1830, ph: 2750 },
+
+  // ---- MASISA (hoy EGGER Argentina) · placa 1830 × 2600 · con su textura de fábrica ----
+  { id: "m_teca", marca: "Masisa", cod: "Esencia", nom: "Teca Limo", hex: "#8A7360", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_mikado", marca: "Masisa", cod: "M028", nom: "Mikado", hex: "#A8845C", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_rantracita", marca: "Masisa", cod: "M034", nom: "Roble Antracita", hex: "#3A3733", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_rmoro", marca: "Masisa", cod: "M053", nom: "Roble Moro", hex: "#6B4F3A", tipo: "madera", text: "Poro Natural", pw: 1830, ph: 2600 },
+  { id: "m_coigue", marca: "Masisa", cod: "M068", nom: "Coigüe Chocolate", hex: "#4A3728", tipo: "madera", text: "Poro Natural", pw: 1830, ph: 2600 },
+  { id: "m_fresno", marca: "Masisa", cod: "M060", nom: "Fresno Humo", hex: "#7E7469", tipo: "madera", text: "Naturale", pw: 1830, ph: 2600 },
+  { id: "m_fogon", marca: "Masisa", cod: "M104", nom: "Fogón", hex: "#96543A", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_moscova", marca: "Masisa", cod: "M095", nom: "Moscova", hex: "#9C8A76", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_namazonico", marca: "Masisa", cod: "—", nom: "Nogal Amazónico", hex: "#6E4B33", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_nafricano", marca: "Masisa", cod: "—", nom: "Nogal Africano", hex: "#5A3C2A", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_olmo", marca: "Masisa", cod: "—", nom: "Olmo Alpino", hex: "#B9A88F", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_acacia", marca: "Masisa", cod: "—", nom: "Acacia Arena", hex: "#C7AE8B", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_carvalo", marca: "Masisa", cod: "—", nom: "Carvalo", hex: "#A98F6F", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_lino", marca: "Masisa", cod: "—", nom: "Lino", hex: "#D6CDBF", tipo: "madera", text: "Softwood", pw: 1830, ph: 2600 },
+  { id: "m_concreto", marca: "Masisa", cod: "—", nom: "Concreto Metropolitan", hex: "#8E8E8B", tipo: "liso", text: "Texstone", pw: 1830, ph: 2600 },
+  { id: "m_sierra", marca: "Masisa", cod: "—", nom: "Sierra", hex: "#7A6A58", tipo: "liso", text: "Texstone", pw: 1830, ph: 2600 },
+  { id: "m_magma", marca: "Masisa", cod: "—", nom: "Magma", hex: "#4A4744", tipo: "liso", text: "Texstone", pw: 1830, ph: 2600 },
+  { id: "m_vison", marca: "Masisa", cod: "—", nom: "Visón", hex: "#9B8E80", tipo: "liso", text: "Soft", pw: 1830, ph: 2600 },
+  { id: "m_sahara", marca: "Masisa", cod: "—", nom: "Sahara", hex: "#C2B49A", tipo: "liso", text: "Soft", pw: 1830, ph: 2600 },
+  { id: "m_grafito", marca: "Masisa", cod: "—", nom: "Gris Grafito", hex: "#55585B", tipo: "liso", text: "Soft", pw: 1830, ph: 2600 },
+  { id: "m_negrosoft", marca: "Masisa", cod: "—", nom: "Negro Soft", hex: "#1E1E1E", tipo: "liso", text: "Soft", pw: 1830, ph: 2600 },
 ];
 const matPorId = (id, extra) => [...(extra || []), ...MATERIALES].find(m => m.id === id) || MATERIALES[0];
 const CORREDERAS = [250, 300, 350, 400, 450, 500, 550, 600];
@@ -112,7 +135,7 @@ const DEF_TIPO = {
   alacena: { ancho: 600, alto: 700, prof: 320, zocalo: 0, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat" },
   placard: { ancho: 1200, alto: 2400, prof: 600, zocalo: 80, estantes: 3, puertas: 2, cajones: 0, techoTravesanos: false, armado: "lat", sistemaPuerta: "corrediza", matPuerta: "melamina" },
   cajonera: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 3, techoTravesanos: true, armado: "lat" },
-  rack: { ancho: 900, alto: 400, prof: 400, zocalo: 0, estantes: 0, puertas: 0, cajones: 1, techoTravesanos: false, armado: "tp", abierto: false, retiro: 0, elevacion: 0 },
+  rack: { ancho: 900, alto: 400, prof: 400, zocalo: 0, unido: false, estantes: 0, puertas: 0, cajones: 1, techoTravesanos: false, armado: "tp", abierto: false, retiro: 0, elevacion: 0 },
   corrido: { ancho: 3000, alto: 860, prof: 580, zocalo: 100, modulos: 5, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat", corridoAlto: false },
   esquinero: { ancho: 900, alto: 860, prof: 900, zocalo: 100, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat", esquineroAlto: false },
   electro: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 0, techoTravesanos: true, armado: "lat", electro: "anafe" },
@@ -275,6 +298,81 @@ function despiece(m, cfg) {
 }
 
 // ---------- OPTIMIZADOR DE CORTES (guillotina, best-area-fit) ----------
+// ===== CUERPO UNIDO: varios módulos distintos armados como un solo mueble =====
+// Comparten el lateral entre uno y otro. Si además coinciden en alto y fondo,
+// el piso y el techo salen corridos (partidos en tramos si no entran en la placa).
+function despieceTodo(muebles, cfg) {
+  const e = num(cfg.esp) || 18;
+  const maxL = Math.max(num(cfg.placaW) || 1830, num(cfg.placaH) || 2600);
+  let out = [];
+  const yaHecho = new Set();
+
+  // recorro cada fila (pared A/B, piso/colgado, isla) en orden
+  const filas = [];
+  ["A", "B"].forEach(pd => ["pared", "isla"].forEach(zn => {
+    const d = distribuir(muebles, pd, zn);
+    if (d.piso.length) filas.push(d.piso);
+    if (d.colg.length) filas.push(d.colg);
+  }));
+
+  filas.forEach(fila => {
+    // armo los grupos de instancias consecutivas unidas
+    const grupos = [];
+    fila.forEach((it, i) => {
+      const une = !!it.m.unido && i > 0;                    // se pega al de la izquierda
+      const mismoM = i > 0 && fila[i - 1].m.id === it.m.id && !!it.m.unido;
+      if (grupos.length && (une || mismoM)) grupos[grupos.length - 1].push(it);
+      else grupos.push([it]);
+    });
+    grupos.forEach(g => {
+      const k = g.length;
+      g.forEach(it => yaHecho.add(it.m.id + "#" + (it.i || 0)));
+      // piezas base de cada instancia (1 unidad)
+      let piezas = [];
+      g.forEach(it => { const p = despiece({ ...it.m, cant: 1 }, cfg); piezas = piezas.concat(p.map(x => ({ ...x, _m: it.m }))); });
+      if (k === 1) { out = out.concat(piezas); return; }
+
+      // --- comparten laterales: k módulos -> k+1 laterales (en vez de 2k) ---
+      const uniformes = g.every(it => num(it.m.alto) === num(g[0].m.alto) && num(it.m.prof) === num(g[0].m.prof) && num(it.m.zocalo) === num(g[0].m.zocalo) && (it.m.armado || "lat") === (g[0].m.armado || "lat"));
+      let quitarLat = k - 1;
+      piezas = piezas.filter(p => {
+        if (quitarLat > 0 && /^Lateral/.test(p.nombre)) {
+          if (p.cant > 1) { p.cant -= 1; quitarLat--; return true; }
+          quitarLat--; return false;
+        }
+        return true;
+      });
+      // los laterales que quedan SON los verticales del cuerpo: 2 exteriores + (k-1) divisiones
+      piezas.forEach(p => { if (/^Lateral/.test(p.nombre)) { p.nombre = "Vertical (lateral o división)"; p.nota = `Cuerpo unido de ${k} módulos: 2 laterales + ${k - 1} división(es)`; } });
+      const anchoTotal = g.reduce((a, it) => a + num(it.m.ancho), 0);
+
+      // --- si son parejos: piso, techo y zócalo CORRIDOS ---
+      if (uniformes) {
+        const m0 = g[0].m;
+        const Pc = Math.max(0, cfg.descontarFondo && m0.fondo !== false ? num(m0.prof) - num(cfg.espFondo) : num(m0.prof));
+        const largo = (m0.armado === "tp") ? anchoTotal : Math.max(0, anchoTotal - 2 * e);
+        const z = num(m0.zocalo) || 0;
+        piezas = piezas.filter(p => !/^Piso$|^Techo$|^Zócalo$/.test(p.nombre));
+        const partir = (L) => { if (L <= maxL) return [L]; const n = Math.ceil(L / maxL); const t = []; for (let i = 0; i < n; i++) t.push(Math.round(L / n)); return t; };
+        const addC = (base, L, H) => { const tr = partir(L); tr.forEach((l, i) => piezas.push({ nombre: tr.length > 1 ? `${base} corrido · tramo ${i + 1}/${tr.length}` : `${base} corrido ⟵ 1 pieza`, w: Math.round(l), h: Math.round(H), cant: 1, mat: "placa", canto: Math.round(l), mueble: "Cuerpo unido", nota: `Corre a lo largo de los ${k} módulos` })); };
+        addC("Piso", largo, Pc);
+        if (!m0.techoTravesanos) addC("Techo", largo, Pc);
+        if (z > 0) addC("Zócalo", anchoTotal, z);
+      }
+      out = out.concat(piezas);
+    });
+  });
+
+  // los que no están en ninguna fila (esquineros, electros sueltos, etc.)
+  muebles.forEach(m => {
+    const n = Math.max(1, num(m.cant) || 1);
+    let faltan = 0;
+    for (let i = 0; i < n; i++) if (!yaHecho.has(m.id + "#" + i)) faltan++;
+    if (faltan > 0) out = out.concat(despiece({ ...m, cant: faltan }, cfg));
+  });
+  return out.map(p => { const q = { ...p }; delete q._m; return q; });
+}
+
 function optimizar(piezas, cfg, mat) {
   const PW = num(cfg.placaW) || 1830, PH = num(cfg.placaH) || 2600, K = num(cfg.kerf) || 0;
   const veta = !!cfg.veta;
@@ -781,6 +879,11 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
       <rect x={it.x} y={y} width={it.w} height={alt} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? anchoPared / 130 : anchoPared / 260} />
       {nM > 1 && Array.from({ length: nM - 1 }).map((_, k) => <line key={"dv" + k} x1={it.x + it.w * ((k + 1) / nM)} y1={y} x2={it.x + it.w * ((k + 1) / nM)} y2={y + alt} stroke={COL(it.m)} strokeWidth={anchoPared / 400} strokeDasharray={`${anchoPared / 90},${anchoPared / 140}`} />)}
       {ab && <rect x={it.x + 18} y={y + 18} width={Math.max(0, it.w - 36)} height={Math.max(0, alt - 36)} fill="#0B1622" fillOpacity="0.13" stroke="none" />}
+      {it.m.unido && i > 0 && <g>
+        <line x1={it.x} y1={y + 8} x2={it.x} y2={y + alt - 8} stroke={BRASS} strokeWidth={anchoPared / 200} />
+        <circle cx={it.x} cy={y + alt / 2} r={anchoPared / 70} fill={BRASS} />
+        <text x={it.x} y={y + alt / 2 + anchoPared / 130} textAnchor="middle" fontSize={anchoPared / 60} fill="#fff" fontWeight="800">🔗</text>
+      </g>}
       {elev > 0 && <line x1={it.x} y1={H} x2={it.x + it.w} y2={H} stroke="#94A3B8" strokeWidth={anchoPared / 500} strokeDasharray={`${anchoPared / 100},${anchoPared / 150}`} />}
       <text x={it.x + it.w / 2} y={y + alt / 2} textAnchor="middle" fontSize={anchoPared / 40} fill="#334155" fontWeight="700">{mm(it.w)}</text>
       <text x={it.x + it.w / 2} y={y + alt / 2 + anchoPared / 30} textAnchor="middle" fontSize={anchoPared / 52} fill="#64748B">{it.m.nombre}</text>
@@ -1764,7 +1867,7 @@ export default function Muebles() {
   // Cálculos
   const matC = matPorId(cfg.matCuerpo, matsCustom);
   const cfgP = { ...cfg, placaW: matC.pw || cfg.placaW, placaH: matC.ph || cfg.placaH };
-  const piezas = muebles.flatMap(m => despiece(m, cfg));
+  const piezas = despieceTodo(muebles, cfg);
   const herr = herrajes(muebles, cfg);
   const vidrios = piezas.filter(p => p.mat === "vidrio");
   const resPlaca = optimizar(piezas, cfgP, "placa");
@@ -1806,7 +1909,7 @@ export default function Muebles() {
       <div style={{ background: "rgba(176,137,79,.09)", border: `1px solid rgba(176,137,79,.35)`, borderRadius: 11, padding: "10px 12px", fontSize: 11.5, color: T.sub, marginBottom: 14, lineHeight: 1.55 }}>
         <b style={{ color: T.text }}>Para que el render sea idéntico a la placa real:</b> tocá <b>📷</b> en el decorativo y subí la foto de la placa (del catálogo, del muestrario o de una placa). La app la usa como textura real en el 3D.
       </div>
-      {["Egger", "Faplac"].map(marca => <div key={marca} style={{ marginBottom: 16 }}>
+      {["Masisa", "Egger", "Faplac"].map(marca => <div key={marca} style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>{marca} <span style={{ color: T.muted, fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>· tablero {MATERIALES.find(x => x.marca === marca).pw}×{MATERIALES.find(x => x.marca === marca).ph}</span></div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(148px,1fr))", gap: 8 }}>
           {todosMats.filter(x => x.marca === marca).map(mt => {
@@ -1818,7 +1921,7 @@ export default function Muebles() {
               </div>
               <div style={{ padding: "8px 9px" }}>
                 <div style={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.25 }}>{mt.nom}</div>
-                <div style={{ fontSize: 9.5, color: T.muted, marginTop: 1 }}>{mt.cod}</div>
+                <div style={{ fontSize: 9.5, color: T.muted, marginTop: 1 }}>{mt.cod}{mt.text ? ` · ${mt.text}` : ""}</div>
                 <div style={{ display: "flex", gap: 4, marginTop: 7 }}>
                   <button onClick={() => setC("matCuerpo", mt.id)} style={{ flex: 1, background: esC ? T.accent : T.al, color: esC ? "#fff" : T.sub, border: "none", borderRadius: 6, padding: "5px 2px", fontSize: 9.5, fontWeight: 800, cursor: "pointer" }}>{esC ? "✓ " : ""}Cuerpo</button>
                   <button onClick={() => setC("matFrente", mt.id)} style={{ flex: 1, background: esF ? BRASS : T.al, color: esF ? "#fff" : T.sub, border: "none", borderRadius: 6, padding: "5px 2px", fontSize: 9.5, fontWeight: 800, cursor: "pointer" }}>{esF ? "✓ " : ""}Frentes</button>
@@ -2088,8 +2191,11 @@ export default function Muebles() {
           <button onClick={() => setF("techoTravesanos", !form.techoTravesanos)} style={{ flex: 1, background: form.techoTravesanos ? T.accent : T.al, color: form.techoTravesanos ? "#fff" : T.sub, border: `1px solid ${form.techoTravesanos ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.techoTravesanos ? "✓ " : ""}Techo con travesaños</button>
           <button onClick={() => setF("fondo", form.fondo === false)} style={{ flex: 1, background: form.fondo !== false ? T.accent : T.al, color: form.fondo !== false ? "#fff" : T.sub, border: `1px solid ${form.fondo !== false ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.fondo !== false ? "✓ " : ""}Lleva fondo</button>
         </div>
-        {(form.tipo === "rack" || form.tipo === "generico" || form.tipo === "bajo" || form.tipo === "alacena") && <div style={{ marginTop: 12, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Posición y tipo de caja</div>
+        {(form.tipo === "rack" || form.tipo === "generico" || form.tipo === "bajo" || form.tipo === "alacena" || form.tipo === "cajonera") && <div style={{ marginTop: 12, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Cuerpo unido</div>
+          <button onClick={() => setF("unido", !form.unido)} style={{ width: "100%", background: form.unido ? BRASS : T.al, color: form.unido ? "#fff" : T.sub, border: `1px solid ${form.unido ? BRASS : T.border}`, borderRadius: 9, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{form.unido ? "🔗 " : ""}Unir con el módulo de la izquierda</button>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>Se arma como <b>un solo mueble</b>: comparten el lateral (uno en vez de dos). Si además coinciden el alto y el fondo, el <b>piso y el techo salen corridos</b>.</div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginTop: 14, marginBottom: 8 }}>Posición y tipo de caja</div>
           <button onClick={() => setF("abierto", !form.abierto)} style={{ width: "100%", background: form.abierto ? T.accent : T.al, color: form.abierto ? "#fff" : T.sub, border: `1px solid ${form.abierto ? T.accent : T.border}`, borderRadius: 9, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>{form.abierto ? "✓ " : ""}Nicho abierto (sin puerta ni cajón)</button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
             <div>
