@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v22 (Muebles: fix - el panel de la L ya no se cierra al borrar el numero)
+// VERSION: v23 (Muebles: arrastrar modulos con el dedo en la planta)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -445,9 +445,11 @@ function distribuir(muebles, pared, zona) {
   });
   return { piso, colg, esq, anchoPiso: xp, anchoColg: xc };
 }
-function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar }) {
+function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar, onMover }) {
   const [pared, setPared] = useState("A");
   const [sel, setSel] = useState(null);
+  const [arr, setArr] = useState(null);      // { id, x, y, destino }
+  const svgP = useRef(null);
   const rot = num(vano.orient) || 0;
   const W = num(vano.ancho) || 1, H = num(vano.alto) || 1, PR = num(vano.prof) || 600;
   const WB = num(vano.paredB) || 0;
@@ -465,11 +467,12 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
   const iAn = Math.max(400, num(vano.islaAncho) || 2400), iPr = Math.max(300, num(vano.islaProf) || 900);
   const iSep = Math.max(100, num(vano.islaSep) || 1100), iVol = Math.max(0, num(vano.islaVoladizo) || 0);
   const nBanq = Math.max(0, num(vano.banquetas) || 0);
+  const iX = WB > 0 ? PR + 250 : 0;        // si hay pared B, la isla arranca despues de ella
   const iY = PR + iSep;                    // arranca la isla
   const iY2 = iY + iPr;                    // termina la isla
   const iYv = iY2 + iVol;                  // borde del voladizo (donde van las banquetas)
   const pad = Math.max(W, WB, PR) * 0.10 + 120;
-  const planW = Math.max(W, hayIsla ? iAn : 0) + (WB > 0 ? PR : 0);
+  const planW = Math.max(W, hayIsla ? iX + iAn : 0) + (WB > 0 ? PR : 0);
   const planH = Math.max(hayIsla ? iYv + 520 : PR, WB > 0 ? WB + 260 : 0);
   const vbW0 = planW + pad * 2, vbH0 = planH + pad * 2.6, vbX0 = -pad, vbY0 = -pad;
   const ccx = vbX0 + vbW0 / 2, ccy = vbY0 + vbH0 / 2;
@@ -478,7 +481,49 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
   const VBX = ccx - VBW / 2, VBY = ccy - VBH / 2;
   const Txt = (p) => <text {...p} transform={rot ? `rotate(${-rot} ${p.x} ${p.y})` : undefined} />;
   const selM = sel ? muebles.find(m => m.id === sel) : null;
-  const planta = <svg viewBox={`${VBX} ${VBY} ${VBW} ${VBH}`} style={{ width: "100%", height: "auto", maxHeight: 360, display: "block" }} preserveAspectRatio="xMidYMid meet">
+
+  // --- ARRASTRE CON EL DEDO ---
+  const aCoords = (ev) => {                              // pantalla -> coordenadas del plano (deshace el giro)
+    const sv = svgP.current; if (!sv || !sv.getScreenCTM) return null;
+    const ctm = sv.getScreenCTM(); if (!ctm) return null;
+    const t = (ev.touches && ev.touches[0]) || ev;
+    const px = t.clientX, py = t.clientY;
+    const inv = ctm.inverse();
+    let x = inv.a * px + inv.c * py + inv.e;
+    let y = inv.b * px + inv.d * py + inv.f;
+    if (rot) {                                            // rotación inversa alrededor del centro
+      const r = -rot * Math.PI / 180, dx = x - ccx, dy = y - ccy;
+      x = ccx + dx * Math.cos(r) - dy * Math.sin(r);
+      y = ccy + dx * Math.sin(r) + dy * Math.cos(r);
+    }
+    return { x, y };
+  };
+  // ¿en qué zona soltó? y ¿en qué posición de la fila?
+  const destinoDe = (p, m) => {
+    if (!p || !m) return null;
+    const colg = esColgado(m);
+    // 1) pared B: franja vertical pegada a la esquina.  2) isla: más abajo y a la derecha.  3) si no, pared A.
+    const enB = WB > 0 && p.x < PR + 120 && p.y > PR - 60 && p.y < PR + WB + 120;
+    const enIsla = hayIsla && !enB && p.y > iY - 250 && p.x > iX - 250;
+    const pared2 = enB ? "B" : "A", zona2 = enIsla ? "isla" : "pared";
+    const g = distribuir(muebles.filter(x => x.id !== m.id), pared2, zona2);
+    const fila = colg ? g.colg : g.piso;
+    let coord = enB ? (p.y - PR) : enIsla ? ((p.x - iX) / Math.max(1, iAn)) * (g.anchoPiso || 1) : p.x;
+    let idx = 0, vistos = new Set();
+    for (const it of fila) { if (coord > it.x + it.w / 2) { if (!vistos.has(it.m.id)) { vistos.add(it.m.id); idx++; } } }
+    return { pared: pared2, zona: zona2, idx, colg };
+  };
+  const bajarDedo = (ev, m) => { ev.stopPropagation(); const p = aCoords(ev); setArr({ id: m.id, x: p ? p.x : 0, y: p ? p.y : 0, destino: null }); setSel(m.id); };
+  const moverDedo = (ev) => { if (!arr) return; ev.preventDefault(); const p = aCoords(ev); if (!p) return; const m = muebles.find(x => x.id === arr.id); setArr({ ...arr, x: p.x, y: p.y, destino: destinoDe(p, m) }); };
+  const soltarDedo = () => {
+    if (arr && arr.destino && onMover) { const d = arr.destino; onMover(arr.id, d.pared, d.zona, d.idx); }
+    setArr(null);
+  };
+  const arrM = arr ? muebles.find(x => x.id === arr.id) : null;
+  const planta = <svg ref={svgP} viewBox={`${VBX} ${VBY} ${VBW} ${VBH}`}
+    onTouchMove={moverDedo} onTouchEnd={soltarDedo} onTouchCancel={soltarDedo}
+    onMouseMove={ev => arr && moverDedo(ev)} onMouseUp={soltarDedo} onMouseLeave={soltarDedo}
+    style={{ width: "100%", height: "auto", maxHeight: 380, display: "block", touchAction: arr ? "none" : "auto", userSelect: "none" }} preserveAspectRatio="xMidYMid meet">
    <g transform={rot ? `rotate(${rot} ${ccx} ${ccy})` : undefined}>
     {/* paredes */}
     <line x1="0" y1="0" x2={W} y2="0" stroke="#334155" strokeWidth={Math.max(W, 1) / 90} strokeLinecap="square" />
@@ -494,18 +539,18 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
       <Txt x={-pad * 0.55} y={WB / 2} textAnchor="middle" fontSize={W / 40} fill="#475569" fontWeight="700" transform={`rotate(${-90 - rot} ${-pad * 0.55} ${WB / 2})`}>Pared B {mm(WB)} mm</Txt>
     </>}
     {/* muebles pared A (piso) — tocá uno para moverlo */}
-    {dPlan.piso.map((it, i) => { const es = sel === it.m.id; return <g key={"a" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
+    {dPlan.piso.map((it, i) => { const es = sel === it.m.id, ar = arr && arr.id === it.m.id; return <g key={"a" + i} onClick={() => setSel(es ? null : it.m.id)} onTouchStart={ev => bajarDedo(ev, it.m)} onMouseDown={ev => bajarDedo(ev, it.m)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
       <rect x={it.x} y="0" width={it.w} height={PR} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
       <Txt x={it.x + it.w / 2} y={PR / 2} textAnchor="middle" fontSize={W / 42} fill="#334155" fontWeight="700">{mm(it.w)}</Txt>
       <Txt x={it.x + it.w / 2} y={PR / 2 + W / 32} textAnchor="middle" fontSize={W / 60} fill="#64748B">{it.m.nombre}</Txt>
     </g>; })}
     {/* alacenas pared A (punteadas, cuelgan sobre los bajos) — también se pueden mover */}
-    {dPlan.colg.map((it, i) => { const es = sel === it.m.id; return <g key={"ac" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
+    {dPlan.colg.map((it, i) => { const es = sel === it.m.id, ar = arr && arr.id === it.m.id; return <g key={"ac" + i} onClick={() => setSel(es ? null : it.m.id)} onTouchStart={ev => bajarDedo(ev, it.m)} onMouseDown={ev => bajarDedo(ev, it.m)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
       <rect x={it.x} y="0" width={it.w} height={Math.min(PR, 350)} fill={es ? COL(it.m) : "none"} fillOpacity={es ? 0.35 : 0} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 150 : W / 320} strokeDasharray={`${W / 90},${W / 130}`} />
       {es && <Txt x={it.x + it.w / 2} y={Math.min(PR, 350) * 0.42} textAnchor="middle" fontSize={W / 55} fill={BRASS} fontWeight="800">alacena</Txt>}
     </g>; })}
     {/* pared B */}
-    {dPlanB && dPlanB.piso.map((it, i) => { const es = sel === it.m.id; const y0 = PR + it.x; return <g key={"b" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
+    {dPlanB && dPlanB.piso.map((it, i) => { const es = sel === it.m.id, ar = arr && arr.id === it.m.id; const y0 = PR + it.x; return <g key={"b" + i} onClick={() => setSel(es ? null : it.m.id)} onTouchStart={ev => bajarDedo(ev, it.m)} onMouseDown={ev => bajarDedo(ev, it.m)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
       <rect x="0" y={y0} width={PR} height={it.w} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
       <Txt x={PR / 2} y={y0 + it.w / 2} textAnchor="middle" fontSize={W / 46} fill="#334155" fontWeight="700">{mm(it.w)}</Txt>
     </g>; })}
@@ -524,26 +569,26 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
     {/* ---- ISLA ---- */}
     {hayIsla && <g>
       {/* voladizo de la mesada */}
-      <rect x={-12} y={iY} width={iAn + 24} height={iPr + iVol} fill="#94A3B8" fillOpacity="0.10" stroke="#94A3B8" strokeWidth={W / 420} strokeDasharray={`${W / 110},${W / 160}`} />
+      <rect x={iX - 12} y={iY} width={iAn + 24} height={iPr + iVol} fill="#94A3B8" fillOpacity="0.10" stroke="#94A3B8" strokeWidth={W / 420} strokeDasharray={`${W / 110},${W / 160}`} />
       {/* cuerpo de la isla */}
       {dIsla.piso.length > 0 ? dIsla.piso.map((it, i) => {
-        const x0 = (it.x / (dIsla.anchoPiso || 1)) * iAn, w0 = (it.w / (dIsla.anchoPiso || 1)) * iAn;
-        const es = sel === it.m.id;
-        return <g key={"is" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
+        const x0 = iX + (it.x / (dIsla.anchoPiso || 1)) * iAn, w0 = (it.w / (dIsla.anchoPiso || 1)) * iAn;
+        const es = sel === it.m.id, ar = arr && arr.id === it.m.id;
+        return <g key={"is" + i} onClick={() => setSel(es ? null : it.m.id)} onTouchStart={ev => bajarDedo(ev, it.m)} onMouseDown={ev => bajarDedo(ev, it.m)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
           <rect x={x0} y={iY} width={w0} height={iPr} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
           <Txt x={x0 + w0 / 2} y={iY + iPr / 2 + W / 110} textAnchor="middle" fontSize={W / 46} fill="#334155" fontWeight="700">{mm(Math.round(w0))}</Txt>
         </g>;
-      }) : <rect x="0" y={iY} width={iAn} height={iPr} fill={BRASS} fillOpacity="0.16" stroke={BRASS} strokeWidth={W / 260} />}
+      }) : <rect x={iX} y={iY} width={iAn} height={iPr} fill={BRASS} fillOpacity="0.16" stroke={BRASS} strokeWidth={W / 260} />}
       {/* banquetas */}
-      {Array.from({ length: nBanq }).map((_, i) => { const bx = iAn * ((i + 1) / (nBanq + 1)); return <circle key={"bq" + i} cx={bx} cy={iYv + 170} r={W / 26} fill="#334155" fillOpacity="0.28" stroke="#334155" strokeWidth={W / 500} />; })}
+      {Array.from({ length: nBanq }).map((_, i) => { const bx = iX + iAn * ((i + 1) / (nBanq + 1)); return <circle key={"bq" + i} cx={bx} cy={iYv + 170} r={W / 26} fill="#334155" fillOpacity="0.28" stroke="#334155" strokeWidth={W / 500} />; })}
       {/* cota separación */}
-      <line x1={iAn + pad * 0.30} y1={PR} x2={iAn + pad * 0.30} y2={iY} stroke="#DC2626" strokeWidth={W / 450} />
-      <line x1={iAn + pad * 0.22} y1={PR} x2={iAn + pad * 0.38} y2={PR} stroke="#DC2626" strokeWidth={W / 450} />
-      <line x1={iAn + pad * 0.22} y1={iY} x2={iAn + pad * 0.38} y2={iY} stroke="#DC2626" strokeWidth={W / 450} />
-      <Txt x={iAn + pad * 0.44} y={PR + iSep / 2} fontSize={W / 44} fill="#DC2626" fontWeight="700">Paso {mm(iSep)}</Txt>
+      <line x1={iX + iAn + pad * 0.30} y1={PR} x2={iX + iAn + pad * 0.30} y2={iY} stroke="#DC2626" strokeWidth={W / 450} />
+      <line x1={iX + iAn + pad * 0.22} y1={PR} x2={iX + iAn + pad * 0.38} y2={PR} stroke="#DC2626" strokeWidth={W / 450} />
+      <line x1={iX + iAn + pad * 0.22} y1={iY} x2={iX + iAn + pad * 0.38} y2={iY} stroke="#DC2626" strokeWidth={W / 450} />
+      <Txt x={iX + iAn + pad * 0.44} y={PR + iSep / 2} fontSize={W / 44} fill="#DC2626" fontWeight="700">Paso {mm(iSep)}</Txt>
       {/* cota ancho de isla */}
-      <line x1="0" y1={iYv + 330} x2={iAn} y2={iYv + 330} stroke="#94A3B8" strokeWidth={W / 450} />
-      <Txt x={iAn / 2} y={iYv + 470} textAnchor="middle" fontSize={W / 40} fill="#475569" fontWeight="700">Isla {mm(iAn)} × {mm(iPr)} mm{iVol > 0 ? ` · voladizo ${mm(iVol)}` : ""}</Txt>
+      <line x1={iX} y1={iYv + 330} x2={iX + iAn} y2={iYv + 330} stroke="#94A3B8" strokeWidth={W / 450} />
+      <Txt x={iX + iAn / 2} y={iYv + 470} textAnchor="middle" fontSize={W / 40} fill="#475569" fontWeight="700">Isla {mm(iAn)} × {mm(iPr)} mm{iVol > 0 ? ` · voladizo ${mm(iVol)}` : ""}</Txt>
     </g>}
     {/* cota del vano */}
     <line x1="0" y1={-pad * 0.55} x2={W} y2={-pad * 0.55} stroke="#94A3B8" strokeWidth={W / 400} />
@@ -551,6 +596,29 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
     <line x1={W} y1={-pad * 0.7} x2={W} y2={-pad * 0.4} stroke="#94A3B8" strokeWidth={W / 400} />
     <Txt x={W / 2} y={-pad * 0.68} textAnchor="middle" fontSize={W / 34} fill="#475569" fontWeight="700">Vano {mm(W)} mm</Txt>
     <Txt x={W / 2} y={PR + pad * 0.34} textAnchor="middle" fontSize={W / 40} fill={sobraPiso < 0 ? "#DC2626" : "#64748B"} fontWeight="700">{sobraPiso < 0 ? `Se pasan ${mm(-sobraPiso)} mm` : sobraPiso > 0 ? `Libre ${mm(sobraPiso)} mm` : "Justo"}</Txt>
+    {/* ---- ARRASTRE: dónde va a caer ---- */}
+    {arr && arr.destino && arrM && (() => {
+      const d = arr.destino;
+      const g = distribuir(muebles.filter(x => x.id !== arrM.id), d.pared, d.zona);
+      const fila = d.colg ? g.colg : g.piso;
+      // posición del corte
+      let corte = 0, cont = 0; const vistos = new Set();
+      for (const it of fila) { if (cont >= d.idx) break; if (!vistos.has(it.m.id)) { vistos.add(it.m.id); cont++; } corte = it.x + it.w; }
+      const A2 = num(arrM.ancho);
+      if (d.zona === "isla") { const k = iAn / Math.max(1, (g.anchoPiso + A2)); return <g>
+        <rect x={iX + corte * k} y={iY} width={A2 * k} height={iPr} fill={BRASS} fillOpacity="0.35" stroke={BRASS} strokeWidth={W / 150} />
+        <Txt x={iX + corte * k + (A2 * k) / 2} y={iY + iPr / 2} textAnchor="middle" fontSize={W / 46} fill="#7A5A2A" fontWeight="800">aquí</Txt>
+      </g>; }
+      if (d.pared === "B") return <g>
+        <rect x="0" y={PR + corte} width={PR} height={A2} fill={BRASS} fillOpacity="0.35" stroke={BRASS} strokeWidth={W / 150} />
+        <Txt x={PR / 2} y={PR + corte + A2 / 2} textAnchor="middle" fontSize={W / 46} fill="#7A5A2A" fontWeight="800">aquí</Txt>
+      </g>;
+      const alto2 = d.colg ? Math.min(PR, 350) : PR;
+      return <g>
+        <rect x={corte} y="0" width={A2} height={alto2} fill={BRASS} fillOpacity="0.35" stroke={BRASS} strokeWidth={W / 150} />
+        <Txt x={corte + A2 / 2} y={alto2 / 2} textAnchor="middle" fontSize={W / 46} fill="#7A5A2A" fontWeight="800">aquí</Txt>
+      </g>;
+    })()}
    </g>
   </svg>;
 
@@ -1300,6 +1368,19 @@ export default function Muebles() {
     guardar({ muebles: next });
   };
   const cambiarZona = (id, pared, zona) => guardar({ muebles: muebles.map(m => m.id === id ? { ...m, pared, zona } : m) });
+  const moverA = (id, pared, zona, idx) => {
+    const item = muebles.find(m => m.id === id); if (!item) return;
+    const nuevo = { ...item, pared, zona };
+    const sinEl = muebles.filter(m => m.id !== id);
+    const grupo = sinEl.filter(m => (m.pared || "A") === pared && (m.zona || "pared") === zona && esColgado(m) === esColgado(nuevo) && m.tipo !== "esquinero");
+    const k = Math.max(0, Math.min(num(idx), grupo.length));
+    let pos;
+    if (grupo.length === 0) pos = sinEl.length;
+    else if (k >= grupo.length) pos = sinEl.findIndex(m => m.id === grupo[grupo.length - 1].id) + 1;
+    else pos = sinEl.findIndex(m => m.id === grupo[k].id);
+    const next = [...sinEl]; next.splice(pos, 0, nuevo);
+    guardar({ muebles: next });
+  };
   const editarPorId = (id) => { const m = muebles.find(x => x.id === id); if (m) { setForm({ ...m }); setTab("muebles"); } };
   const girarPlanta = (r) => guardar({ vano: { ...vano, orient: r } });
   const [deco, setDeco] = useState([]);
@@ -1551,7 +1632,7 @@ export default function Muebles() {
       </div>
       {muebles.length === 0 ? <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "24px 10px", lineHeight: 1.6 }}>Cargá el vano y después agregá muebles<br />en la solapa <b>Muebles</b> para verlos acomodados acá.</div> : <>
         <button onClick={() => setVerRender(true)} style={{ width: "100%", background: `linear-gradient(135deg, #1B3A5B, ${T.navy})`, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 12, padding: "15px", fontSize: 14.5, fontWeight: 800, cursor: "pointer", marginBottom: 12, boxShadow: SHD }}>🎬 Ver render final del mueble armado</button>
-        <VanoVistas vano={vano} muebles={muebles} cfg={cfg} onReordenar={reordenar} onZona={cambiarZona} onEditar={editarPorId} onGirar={girarPlanta} />
+        <VanoVistas vano={vano} muebles={muebles} cfg={cfg} onReordenar={reordenar} onZona={cambiarZona} onEditar={editarPorId} onGirar={girarPlanta} onMover={moverA} />
         <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", margin: "16px 0 8px" }}>Orden en el vano (izquierda → derecha)</div>
         {muebles.map((m, i) => <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "10px 12px", marginBottom: 7, boxShadow: SHDsm }}>
           <span style={{ width: 12, height: 26, borderRadius: 4, background: PALETA[(i + 1) % PALETA.length], flexShrink: 0 }} />
