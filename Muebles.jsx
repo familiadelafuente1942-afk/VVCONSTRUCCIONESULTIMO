@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v33 (Muebles: puerta superpuesta o embutida + apertura izq/der/arriba/abajo/oscilo/corrediza)
+// VERSION: v34 (Muebles: 4 sistemas de rebatible - compas, piston, Aventos HK, cable)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -61,6 +61,52 @@ const APERTURAS = {
   abajo:    { nom: "Rebatible ▼ abajo",    eje: "horizontal", en: "drop-down flap door" },
   oscilo:   { nom: "Oscilobatiente",       eje: "vertical", en: "tilt-and-turn door" },
   corrediza:{ nom: "Corrediza ⇄",          eje: "vertical", en: "sliding doors" },
+};
+// Sistemas para puertas rebatibles (arriba / abajo)
+const SIST_REB = {
+  compas: {
+    nom: "Compás lateral",
+    det: "Los brazos limitan la apertura a 90° o al ángulo que quieras.",
+    uso: "Cocina y bibliotecas. Económico y robusto.",
+    para: ["arriba", "abajo"],
+    porTapa: [
+      ["Compás lateral (par izq/der)", 1, "par", "Limita la apertura al ángulo elegido"],
+      ["Bisagra cazoleta 35 mm", 2, "u", "2 por tapa, sobre el eje de giro"],
+    ],
+  },
+  piston: {
+    nom: "Pistón a gas",
+    det: "Sostiene y amortigua la puerta.",
+    uso: "Para frentes pesados. Se puede combinar con cierre suave.",
+    para: ["arriba", "abajo"],
+    porTapa: [
+      ["Pistón a gas", 2, "u", "2 por tapa · elegir el newtonaje por PESO del frente"],
+      ["Soporte de pistón (base + rótula)", 2, "juego", "1 por pistón"],
+      ["Bisagra cazoleta 35 mm", 2, "u", "2 por tapa"],
+    ],
+  },
+  aventos: {
+    nom: "Blum AVENTOS HK",
+    det: "Sistema plegable premium. Apertura muy suave y gran regulación.",
+    uso: "Muebles de diseño y cocinas de alta gama.",
+    para: ["arriba"],
+    porTapa: [
+      ["Blum AVENTOS HK · brazo elevador (par)", 1, "par", "Elegir la fuerza según ancho × peso del frente"],
+      ["AVENTOS HK · tapas cubre-brazo", 1, "juego", "Estético, tapa el mecanismo"],
+      ["Bisagra CLIP top 110°", 2, "u", "2 por tapa"],
+      ["AVENTOS · placa de montaje", 2, "u", "1 por brazo"],
+    ],
+  },
+  cable: {
+    nom: "Cable / cinta de retención",
+    det: "La puerta queda horizontal al abrir.",
+    uso: "Bares, escritorios abatibles, muebles auxiliares. Muy limpio.",
+    para: ["abajo"],
+    porTapa: [
+      ["Cable o cinta de retención", 2, "u", "2 por tapa · frena la puerta en horizontal"],
+      ["Bisagra cazoleta 35 mm", 2, "u", "2 por tapa, en el borde inferior"],
+    ],
+  },
 };
 const BISAGRAS = {
   codo0: { nom: "Bisagra cazoleta 35 mm · CODO 0", det: "puerta superpuesta (tapa el lateral)" },
@@ -602,18 +648,19 @@ function herrajes(muebles, cfg) {
       const anchoPu = corr ? (A + sol * (nPu - 1)) / nPu : emb ? (A - 2 * e2 - 2 * hol) / (AP.eje === "horizontal" ? 1 : nPu) : (A - (nPu - 1) * (num(cfg.luz) || 3) - 2) / (AP.eje === "horizontal" ? 1 : nPu);
       const altoPu = corr ? Math.max(0, Hc - dr) : AP.eje === "horizontal" ? Math.max(0, (emb ? Hc - 2 * e2 - 2 * hol : Hc - 2) / nPu) : Math.max(0, emb ? Hc - 2 * e2 - 2 * hol : Hc - 2);
       // ---- REBATIBLES (arriba / abajo) y OSCILOBATIENTE: otros herrajes ----
-      if (ap === "arriba") {
-        const kb = emb ? "Bisagra cazoleta codo 17 (embutida)" : "Bisagra cazoleta codo 0 (superpuesta)";
-        push(kb, 2 * nPu * n, "u", "2 por tapa, arriba", "Rebatible ▲"); addM(kb, nom);
-        const kp = "Pistón a gas / compás elevable";
-        push(kp, 2 * nPu * n, "u", `2 por tapa · calcular por peso (tapa ${mm(anchoPu)}×${mm(altoPu)} mm)`, "Rebatible ▲"); addM(kp, nom);
-        const kt = "Tirador";
-        push(kt, nPu * n, "u", "1 por tapa", "Tiradores"); addM(kt, nom);
-      } else if (ap === "abajo") {
-        const kb = emb ? "Bisagra cazoleta codo 17 (embutida)" : "Bisagra cazoleta codo 0 (superpuesta)";
-        push(kb, 2 * nPu * n, "u", "2 por tapa, abajo", "Rebatible ▼"); addM(kb, nom);
-        const kc = "Compás / brazo de puerta abatible";
-        push(kc, 2 * nPu * n, "u", "2 por tapa, freno de caída", "Rebatible ▼"); addM(kc, nom);
+      if (ap === "arriba" || ap === "abajo") {
+        const sistId = m.sistReb || (ap === "arriba" ? "piston" : "compas");
+        const S = SIST_REB[sistId] || SIST_REB.compas;
+        const grupo = `Rebatible ${ap === "arriba" ? "▲" : "▼"} · ${S.nom}`;
+        // peso aproximado del frente (melamina 18 mm ≈ 11,5 kg/m²) para dimensionar el herraje
+        const kg = (anchoPu * altoPu / 1e6) * 11.5;
+        S.porTapa.forEach(([item, cant, unidad, detalle]) => {
+          const it2 = emb && /cazoleta 35/.test(item) ? "Bisagra cazoleta 35 mm · codo 17 (embutida)" : item;
+          push(it2, cant * nPu * n, unidad, detalle, grupo); addM(it2, nom);
+        });
+        const kpeso = `Peso estimado del frente: ${kg.toFixed(1)} kg`;
+        push(kpeso, nPu * n, "tapa", `${mm(anchoPu)} × ${mm(altoPu)} mm de melamina 18 mm · pedir el herraje POR ESTE PESO`, grupo); addM(kpeso, nom);
+        if (cfg.cierreSuave && sistId === "piston") { const kcs = "Amortiguador de cierre suave"; push(kcs, 2 * nPu * n, "u", "se combina con el pistón", grupo); addM(kcs, nom); }
         const kt = "Tirador";
         push(kt, nPu * n, "u", "1 por tapa", "Tiradores"); addM(kt, nom);
       } else if (ap === "oscilo") {
@@ -2344,7 +2391,31 @@ export default function Muebles() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 6, marginTop: 6 }}>
             {Object.entries(APERTURAS).map(([k, v]) => { const act = (form.apertura || "der") === k; return <button key={k} onClick={() => setForm(f => ({ ...f, apertura: k, sistemaPuerta: k === "corrediza" ? "corrediza" : "batiente" }))} style={{ background: act ? BRASS : T.al, color: act ? "#fff" : T.sub, border: `1px solid ${act ? BRASS : T.border}`, borderRadius: 8, padding: "11px 5px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{act ? "✓ " : ""}{v.nom}</button>; })}
           </div>
-          {(form.apertura === "arriba" || form.apertura === "abajo") && <div style={{ background: "rgba(176,137,79,.10)", borderRadius: 8, padding: "9px 11px", marginTop: 7, fontSize: 10.5, color: T.sub, lineHeight: 1.5 }}>La tapa es <b>una sola pieza horizontal</b>. Si ponés más de 1, se apilan una arriba de la otra. Lleva <b>{form.apertura === "arriba" ? "pistón a gas" : "compás de freno"}</b>: la lista de herrajes ya lo calcula.</div>}
+          {(form.apertura === "arriba" || form.apertura === "abajo") && (() => {
+            const dispo = Object.entries(SIST_REB).filter(([, v]) => v.para.includes(form.apertura));
+            const sel2 = form.sistReb && SIST_REB[form.sistReb] && SIST_REB[form.sistReb].para.includes(form.apertura) ? form.sistReb : (form.apertura === "arriba" ? "piston" : "compas");
+            const S = SIST_REB[sel2];
+            const e2 = num(cfg.esp) || 18, hol2 = num(cfg.holguraEmb) || 2;
+            const emb2 = form.montaje === "embutida";
+            const aP = emb2 ? num(form.ancho) - 2 * e2 - 2 * hol2 : num(form.ancho) - 2;
+            const hUt = (emb2 ? (num(form.alto) - num(form.zocalo) - 2 * e2 - 2 * hol2) : (num(form.alto) - num(form.zocalo) - 2));
+            const hP = (hUt - (num(form.puertas) - 1) * num(cfg.luz)) / Math.max(1, num(form.puertas));
+            const kg = (aP * hP / 1e6) * 11.5;
+            return <div style={{ marginTop: 9 }}>
+              <label style={{ fontSize: 10.5, color: T.sub, fontWeight: 700 }}>Sistema del rebatible</label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 6, marginTop: 6 }}>
+                {dispo.map(([k, v]) => { const act = sel2 === k; return <button key={k} onClick={() => setF("sistReb", k)} style={{ background: act ? T.accent : T.al, color: act ? "#fff" : T.sub, border: `1px solid ${act ? T.accent : T.border}`, borderRadius: 8, padding: "10px 6px", fontSize: 11, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>{act ? "✓ " : ""}{v.nom}</button>; })}
+              </div>
+              <div style={{ background: "rgba(176,137,79,.10)", borderRadius: 8, padding: "10px 11px", marginTop: 7, fontSize: 10.5, color: T.sub, lineHeight: 1.6 }}>
+                <b>{S.nom}:</b> {S.det}<br />{S.uso}
+                <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${T.border}` }}>
+                  Tapa: <b>{mm(Math.round(aP))} × {mm(Math.round(hP))} mm</b> · peso estimado <b style={{ color: T.accent }}>{kg.toFixed(1)} kg</b> en melamina 18 mm.<br />
+                  <span style={{ color: T.muted }}>Pedí el herraje <b>por ese peso</b>, no por el tamaño.</span>
+                </div>
+              </div>
+              <div style={{ fontSize: 10, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>La tapa es una <b>sola pieza horizontal</b>. Si ponés más de 1, se apilan una arriba de la otra.</div>
+            </div>;
+          })()}
         </div>}
         {num(form.puertas) > 0 && <>
           <div style={{ marginTop: 12 }}>
