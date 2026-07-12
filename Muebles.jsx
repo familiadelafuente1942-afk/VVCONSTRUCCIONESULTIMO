@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v37 (Muebles: ficha tecnica apaisada en 1 hoja, dibujos corregidos)
+// VERSION: v38 (Muebles: FIX render - se cortaba al pasarlo a imagen; mas aire en el encuadre)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -1461,7 +1461,7 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
   const xs = pts0.map(p => p.x), ys = pts0.map(p => p.y);
   const mnX = xs.length ? Math.min(...xs) : -100, mxX = xs.length ? Math.max(...xs) : 100;
   const mnY = ys.length ? Math.min(...ys) : -100, mxY = ys.length ? Math.max(...ys) : 100;
-  const pd = Math.max(20, (mxX - mnX) * 0.06);
+  const pd = Math.max(60, Math.max(mxX - mnX, mxY - mnY) * 0.10);   // aire en los 4 lados
   const vbX = mnX - pd, vbY = mnY - pd, vbW = Math.max(10, (mxX - mnX) + pd * 2), vbH = Math.max(10, (mxY - mnY) + pd * 2);
   const usados = [...new Map(caras.filter(c => c.mat && c.mat.id).map(c => [c.mat.id, c.mat])).values()];
 
@@ -1602,20 +1602,34 @@ function RenderIA({ proyecto, vano, muebles, cfg, mats, refSvg, fotoAmbiente, de
 
   const svgAPng = () => new Promise((resolve) => {
     try {
-      const el = refSvg && refSvg.current;
-      if (!el) return resolve("");
+      const el0 = refSvg && refSvg.current;
+      if (!el0) return resolve("");
+      // El <svg> en pantalla es width:100%/height:100%: si lo serializo así, el navegador
+      // no sabe qué tamaño tiene y lo rasteriza a 300×150 -> SE CORTA TODO.
+      // Por eso lo clono y le pongo el tamaño REAL que sale del viewBox.
+      const vbs = (el0.getAttribute("viewBox") || "").trim().split(/\s+/).map(Number);
+      const vw = (vbs.length === 4 && vbs[2] > 0) ? vbs[2] : 1000;
+      const vh = (vbs.length === 4 && vbs[3] > 0) ? vbs[3] : 750;
+      const el = el0.cloneNode(true);
+      el.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      el.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+      el.setAttribute("width", String(Math.round(vw)));
+      el.setAttribute("height", String(Math.round(vh)));
+      el.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      el.removeAttribute("style");                       // saco el width:100%/height:100%
       const xml = new XMLSerializer().serializeToString(el);
-      const b = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+      const b = new Blob(['<?xml version="1.0" encoding="UTF-8"?>' + xml], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(b);
       const im = new window.Image();
       im.onload = () => {
         try {
-          const W = 768, H = Math.max(1, Math.round(W * (im.height || 540) / (im.width || 768)));
+          const W = 1024;                                // referencia de diseño para la IA
+          const H = Math.max(1, Math.round(W * vh / vw));
           const c = document.createElement("canvas"); c.width = W; c.height = H;
-          const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
-          ctx.drawImage(im, 0, 0, W, H);
+          const ctx = c.getContext("2d"); ctx.fillStyle = "#11151B"; ctx.fillRect(0, 0, W, H);
+          ctx.drawImage(im, 0, 0, W, H);                 // el SVG entero, sin recortar
           URL.revokeObjectURL(url);
-          resolve(c.toDataURL("image/jpeg", 0.8)); // JPEG: mucho más liviano que PNG
+          resolve(c.toDataURL("image/jpeg", 0.82));
         } catch { resolve(""); }
       };
       im.onerror = () => { URL.revokeObjectURL(url); resolve(""); };
