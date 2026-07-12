@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v29 (Muebles: mueble corrido - un piso y un techo para varios modulos)
+// VERSION: v30 (Muebles: rack de TV escalonado - retiro, elevacion, nichos abiertos)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -94,7 +94,7 @@ const CORREDERAS = [250, 300, 350, 400, 450, 500, 550, 600];
 // Bisagras según alto de puerta (norma habitual)
 function nBisagras(alto) { const h = num(alto); if (h <= 900) return 2; if (h <= 1600) return 3; if (h <= 2000) return 4; if (h <= 2400) return 5; return 6; }
 function largoCorredera(profCaja) { const p = num(profCaja); let best = CORREDERAS[0]; for (const c of CORREDERAS) if (c <= p) best = c; return best; }
-const TIPOS = [["bajo", "Bajo mesada"], ["alacena", "Alacena"], ["corrido", "Mueble corrido"], ["esquinero", "Esquinero"], ["placard", "Placard"], ["cajonera", "Cajonera"], ["electro", "Electrodoméstico"], ["generico", "Genérico"]];
+const TIPOS = [["bajo", "Bajo mesada"], ["alacena", "Alacena"], ["rack", "Rack / TV"], ["corrido", "Mueble corrido"], ["esquinero", "Esquinero"], ["placard", "Placard"], ["cajonera", "Cajonera"], ["electro", "Electrodoméstico"], ["generico", "Genérico"]];
 // Electrodomésticos: si "mueble" es true, se corta la caja que lo aloja (columna/bajo). Si no, va suelto (heladera).
 const ELECTROS = {
   anafe: { nom: "Anafe / cocina", ancho: 600, alto: 860, prof: 580, zona: "piso", mueble: true, en: "induction cooktop set into the countertop, with base cabinet below" },
@@ -112,6 +112,7 @@ const DEF_TIPO = {
   alacena: { ancho: 600, alto: 700, prof: 320, zocalo: 0, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat" },
   placard: { ancho: 1200, alto: 2400, prof: 600, zocalo: 80, estantes: 3, puertas: 2, cajones: 0, techoTravesanos: false, armado: "lat", sistemaPuerta: "corrediza", matPuerta: "melamina" },
   cajonera: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 3, techoTravesanos: true, armado: "lat" },
+  rack: { ancho: 900, alto: 400, prof: 400, zocalo: 0, estantes: 0, puertas: 0, cajones: 1, techoTravesanos: false, armado: "tp", abierto: false, retiro: 0, elevacion: 0 },
   corrido: { ancho: 3000, alto: 860, prof: 580, zocalo: 100, modulos: 5, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat", corridoAlto: false },
   esquinero: { ancho: 900, alto: 860, prof: 900, zocalo: 100, estantes: 1, puertas: 1, cajones: 0, techoTravesanos: false, armado: "lat", esquineroAlto: false },
   electro: { ancho: 600, alto: 860, prof: 580, zocalo: 100, estantes: 0, puertas: 0, cajones: 0, techoTravesanos: true, armado: "lat", electro: "anafe" },
@@ -239,13 +240,15 @@ function despiece(m, cfg) {
     const nn = Math.max(1, num(m.cant) || 1);
     return p2.map(x => ({ ...x, cant: x.cant * nn }));
   }
+  // Módulo ABIERTO (nicho): caja sin frente
+  const abierto = !!m.abierto;
   // Electrodoméstico: si no lleva mueble (heladera, campana, lavavajillas) no se corta nada
   if (m.tipo === "electro") {
     const E = ELECTROS[m.electro] || ELECTROS.anafe;
     if (!E.mueble) return [];
   }
   // Puertas
-  const nPu = num(m.puertas);
+  const nPu = abierto ? 0 : num(m.puertas);
   if (nPu > 0) {
     const corr = m.sistemaPuerta === "corrediza";
     const sol = num(cfg.solape) || 25, dr = num(cfg.descuentoRiel) || 55;
@@ -255,7 +258,7 @@ function despiece(m, cfg) {
     else add(corr ? "Puerta corrediza" : "Puerta", anchoPu, altoPu, nPu, "placa", 2 * (anchoPu + altoPu));
   }
   // Cajones
-  const nCj = num(m.cajones);
+  const nCj = abierto ? 0 : num(m.cajones);
   if (nCj > 0) {
     const altoFr = (Hc - (nCj + 1) * L) / nCj;
     const anchoFr = A - 2 * 1;
@@ -659,10 +662,13 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
       <Txt x={-pad * 0.55} y={WB / 2} textAnchor="middle" fontSize={W / 40} fill="#475569" fontWeight="700" transform={`rotate(${-90 - rot} ${-pad * 0.55} ${WB / 2})`}>Pared B {mm(WB)} mm</Txt>
     </>}
     {/* muebles pared A (piso) — tocá uno para moverlo */}
-    {dPlan.piso.map((it, i) => { const es = sel === K(it), ar = arr && arr.id === K(it); return <g key={"a" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarDedo(ev, it)} onMouseDown={ev => bajarDedo(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
-      <rect x={it.x} y="0" width={it.w} height={PR} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
-      <Txt x={it.x + it.w / 2} y={PR / 2} textAnchor="middle" fontSize={W / 42} fill="#334155" fontWeight="700">{mm(it.w)}</Txt>
-      <Txt x={it.x + it.w / 2} y={PR / 2 + W / 32} textAnchor="middle" fontSize={W / 60} fill="#64748B">{it.m.nombre}</Txt>
+    {dPlan.piso.map((it, i) => { const es = sel === K(it), ar = arr && arr.id === K(it);
+      const pMod = num(it.m.prof) || PR, ret = num(it.m.retiro) || 0;
+      const yMod = Math.max(0, PR - pMod - ret);          // pegado a la pared, con su retiro
+      return <g key={"a" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarDedo(ev, it)} onMouseDown={ev => bajarDedo(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
+      <rect x={it.x} y={yMod} width={it.w} height={pMod} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
+      <Txt x={it.x + it.w / 2} y={yMod + pMod / 2} textAnchor="middle" fontSize={W / 42} fill="#334155" fontWeight="700">{mm(it.w)}</Txt>
+      <Txt x={it.x + it.w / 2} y={yMod + pMod / 2 + W / 32} textAnchor="middle" fontSize={W / 60} fill="#64748B">{it.m.nombre}{num(it.m.retiro) > 0 ? ` ↰${mm(num(it.m.retiro))}` : ""}</Txt>
     </g>; })}
     {/* alacenas pared A (punteadas, cuelgan sobre los bajos) — también se pueden mover */}
     {dPlan.colg.map((it, i) => { const es = sel === K(it), ar = arr && arr.id === K(it); return <g key={"ac" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarDedo(ev, it)} onMouseDown={ev => bajarDedo(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
@@ -768,11 +774,14 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
     style={{ width: "100%", height: "auto", maxHeight: 380, display: "block", touchAction: arrF ? "none" : "auto", userSelect: "none" }} preserveAspectRatio="xMidYMid meet">
     <rect x="0" y="0" width={anchoPared} height={H} fill="#FAFAF8" stroke="#334155" strokeWidth={anchoPared / 110} />
     {/* piso: bajos, cajoneras, placares */}
-    {d.piso.map((it, i) => { const alt = num(it.m.alto); const y = H - alt; const es = sel === K(it), ar = arrF && arrF.id === K(it);
+    {d.piso.map((it, i) => { const alt = num(it.m.alto); const elev = num(it.m.elevacion) || 0; const y = H - alt - elev; const es = sel === K(it), ar = arrF && arrF.id === K(it);
       const nM = it.m.tipo === "corrido" ? Math.max(1, num(it.m.modulos) || 1) : 0;
+      const ab = !!it.m.abierto;
       return <g key={"p" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarF(ev, it)} onMouseDown={ev => bajarF(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
       <rect x={it.x} y={y} width={it.w} height={alt} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? anchoPared / 130 : anchoPared / 260} />
       {nM > 1 && Array.from({ length: nM - 1 }).map((_, k) => <line key={"dv" + k} x1={it.x + it.w * ((k + 1) / nM)} y1={y} x2={it.x + it.w * ((k + 1) / nM)} y2={y + alt} stroke={COL(it.m)} strokeWidth={anchoPared / 400} strokeDasharray={`${anchoPared / 90},${anchoPared / 140}`} />)}
+      {ab && <rect x={it.x + 18} y={y + 18} width={Math.max(0, it.w - 36)} height={Math.max(0, alt - 36)} fill="#0B1622" fillOpacity="0.13" stroke="none" />}
+      {elev > 0 && <line x1={it.x} y1={H} x2={it.x + it.w} y2={H} stroke="#94A3B8" strokeWidth={anchoPared / 500} strokeDasharray={`${anchoPared / 100},${anchoPared / 150}`} />}
       <text x={it.x + it.w / 2} y={y + alt / 2} textAnchor="middle" fontSize={anchoPared / 40} fill="#334155" fontWeight="700">{mm(it.w)}</text>
       <text x={it.x + it.w / 2} y={y + alt / 2 + anchoPared / 30} textAnchor="middle" fontSize={anchoPared / 52} fill="#64748B">{it.m.nombre}</text>
     </g>; })}
@@ -1001,6 +1010,7 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
     caras.push({ key, pts, mat, z: zMed(pts), int: l.int, spec: l.spec, ...(opts || {}) });
   };
 
+  const mezclaMat = (mt, k) => ({ id: mt.id + "_int", hex: mezcla(mt.hex, k), tipo: "liso" });
   const MESADA = { id: "mesada", hex: "#33373E", tipo: "liso", gloss: true };
   const ZOCALO = { id: "zoc", hex: "#22252A", tipo: "liso" };
   const TIRA = { id: "tira", hex: "#9AA1AA", tipo: "liso" };
@@ -1012,13 +1022,18 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
   const modulo = (it, base) => {
     const m = it.m, A = it.w, x0 = it.x;
     const alt = num(m.alto) || 700, pf = Math.max(100, num(m.prof) || 500), zc = num(m.zocalo) || 0;
-    const y0 = base + zc, Hc = Math.max(50, alt - zc);
+    const elev = num(m.elevacion) || 0;                     // despegado del piso
+    const ret = num(m.retiro) || 0;                         // corrido hacia atrás
+    const y0 = base + elev + zc, Hc = Math.max(50, alt - zc);
     const mc = matPorId(m.matCuerpo || cfg.matCuerpo, mats), mf = matPorId(m.matFrente || cfg.matFrente, mats);
-    const x1 = x0 + A, y1 = y0 + Hc, zF = 0, zB = pf;
-    const nPu = num(m.puertas), nCj = num(m.cajones);
+    const x1 = x0 + A, y1 = y0 + Hc, zF = ret, zB = ret + pf;
+    const abierto = !!m.abierto;
+    const nPu = abierto ? 0 : num(m.puertas), nCj = abierto ? 0 : num(m.cajones);
     const vid = m.matPuerta === "vidrio";
     const E = m.tipo === "electro" ? (ELECTROS[m.electro] || ELECTROS.anafe) : null;
     const cerrado = nPu > 0 || nCj > 0 || !!E;
+    const eG = num(cfg.esp) || 18;
+    if (abierto) addCara(`nf${x0}${base}`, [[x0 + eG, y0, zB - 6], [x1 - eG, y0, zB - 6], [x1 - eG, y1, zB - 6], [x0 + eG, y1, zB - 6]], mezclaMat(mc, 0.82), { ao: 0.55 });
     // laterales / techo / piso (winding para que el signo de área los oculte solo)
     addCara(`li${x0}${base}`, [[x0, y0, zF], [x0, y1, zF], [x0, y1, zB], [x0, y0, zB]], mc);
     addCara(`ld${x0}${base}`, [[x1, y0, zB], [x1, y1, zB], [x1, y1, zF], [x1, y0, zF]], mc);
@@ -2073,6 +2088,22 @@ export default function Muebles() {
           <button onClick={() => setF("techoTravesanos", !form.techoTravesanos)} style={{ flex: 1, background: form.techoTravesanos ? T.accent : T.al, color: form.techoTravesanos ? "#fff" : T.sub, border: `1px solid ${form.techoTravesanos ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.techoTravesanos ? "✓ " : ""}Techo con travesaños</button>
           <button onClick={() => setF("fondo", form.fondo === false)} style={{ flex: 1, background: form.fondo !== false ? T.accent : T.al, color: form.fondo !== false ? "#fff" : T.sub, border: `1px solid ${form.fondo !== false ? T.accent : T.border}`, borderRadius: 9, padding: "11px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{form.fondo !== false ? "✓ " : ""}Lleva fondo</button>
         </div>
+        {(form.tipo === "rack" || form.tipo === "generico" || form.tipo === "bajo" || form.tipo === "alacena") && <div style={{ marginTop: 12, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Posición y tipo de caja</div>
+          <button onClick={() => setF("abierto", !form.abierto)} style={{ width: "100%", background: form.abierto ? T.accent : T.al, color: form.abierto ? "#fff" : T.sub, border: `1px solid ${form.abierto ? T.accent : T.border}`, borderRadius: 9, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>{form.abierto ? "✓ " : ""}Nicho abierto (sin puerta ni cajón)</button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+            <div>
+              <label style={{ fontSize: 10.5, color: T.sub, fontWeight: 700 }}>Retiro (mm)</label>
+              <input value={form.retiro || 0} onChange={e => setF("retiro", e.target.value)} inputMode="numeric" style={{ ...inp, padding: "11px 10px", fontSize: 15 }} />
+              <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3 }}>Cuánto se corre hacia atrás. Para el escalonado.</div>
+            </div>
+            <div>
+              <label style={{ fontSize: 10.5, color: T.sub, fontWeight: 700 }}>Elevación (mm)</label>
+              <input value={form.elevacion || 0} onChange={e => setF("elevacion", e.target.value)} inputMode="numeric" style={{ ...inp, padding: "11px 10px", fontSize: 15 }} />
+              <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3 }}>Despegado del piso. 0 = apoyado.</div>
+            </div>
+          </div>
+        </div>}
         {form.tipo === "corrido" && (() => {
           const nMod = Math.max(1, num(form.modulos) || 1);
           const luzMod = Math.max(0, (num(form.ancho) - 2 * num(cfg.esp) - (nMod - 1) * num(cfg.esp)) / nMod);
