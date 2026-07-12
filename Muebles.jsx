@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v38 (Muebles: FIX render - se cortaba al pasarlo a imagen; mas aire en el encuadre)
+// VERSION: v40 (Muebles: FIX render - pared B, isla y esquineros no se dibujaban)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -1245,10 +1245,12 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
   };
 
   const caras = [];
+  let TF = null;                                        // transformación activa (pared B / isla)
   const addCara = (key, pts, mat, opts) => {
-    if (areaSigno(pts) >= 0 && !(opts && opts.doble)) return; // cara oculta (la puerta abierta se ve de los dos lados)
-    const l = luzCara(pts);
-    caras.push({ key, pts, mat, z: zMed(pts), int: l.int, spec: l.spec, ...(opts || {}) });
+    const P = TF ? pts.map(TF) : pts;
+    if (areaSigno(P) >= 0 && !(opts && opts.doble)) return; // cara oculta (la puerta abierta se ve de los dos lados)
+    const l = luzCara(P);
+    caras.push({ key, pts: P, mat, z: zMed(P), int: l.int, spec: l.spec, ...(opts || {}) });
   };
 
   const mezclaMat = (mt, k) => ({ id: mt.id + "_int", hex: mezcla(mt.hex, k), tipo: "liso" });
@@ -1378,7 +1380,32 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
   const zPisoF = -(zExtra + 500) || -700;
   addCara("piso", [[-350, 0, zPisoF], [anchoPiso + 350, 0, zPisoF], [anchoPiso + 350, 0, profMax + 60], [-350, 0, profMax + 60]], { id: "piso", hex: "#B5ADA2", tipo: "liso" }, { piso: true });
 
+  const dB = distribuir(muebles, "B", "pared");
   d.piso.forEach(it => modulo(it, 0));
+  // ESQUINEROS: van en la esquina, fuera de la fila. Antes NO SE DIBUJABAN (mueble invisible).
+  d.esq.forEach((it, k) => {
+    const m = it.m, S = Math.max(300, num(m.ancho) || 900);
+    const alt = num(m.alto) || 860, zc = num(m.zocalo) || 0;
+    const colgado = !!m.esquineroAlto;
+    const base = colgado ? hAlac : 0;
+    const y0 = base + zc, y1 = base + alt, Hc2 = Math.max(50, alt - zc);
+    const x0 = -S - 40 - k * 4, x1 = -40 - k * 4;        // apoyado en la esquina, a la izquierda de la fila
+    const zF2 = 0, zB2 = S;
+    const mc2 = matPorId(m.matCuerpo || cfg.matCuerpo, mats);
+    const mf2 = matPorId(m.matFrente || cfg.matFrente, mats);
+    const eG2 = num(cfg.esp) || 18;
+    // caja
+    addCara(`eqL${k}`, [[x0, y0, zF2], [x0, y1, zF2], [x0, y1, zB2], [x0, y0, zB2]], mc2);
+    addCara(`eqR${k}`, [[x1, y0, zB2], [x1, y1, zB2], [x1, y1, zF2], [x1, y0, zF2]], mc2);
+    addCara(`eqT${k}`, [[x0, y1, zF2], [x1, y1, zF2], [x1, y1, zB2], [x0, y1, zB2]], mc2);
+    addCara(`eqB${k}`, [[x0, y0, zB2], [x1, y0, zB2], [x1, y0, zF2], [x0, y0, zF2]], mc2);
+    // FRENTE EN DIAGONAL (lo que define al esquinero)
+    addCara(`eqF${k}`, [[x1, y0, zF2 - 18], [x1, y1, zF2 - 18], [x0, y1, zB2 - 18], [x0, y0, zB2 - 18]], mf2, { frente: true, doble: true });
+    // tirador
+    const tx2 = (x0 + x1) / 2, tz2 = (zF2 + zB2) / 2 - 26;
+    addCara(`eqTi${k}`, [[tx2 - 8, y0 + Hc2 * 0.42, tz2], [tx2 + 8, y0 + Hc2 * 0.42, tz2], [tx2 + 8, y0 + Hc2 * 0.42 + Math.min(140, Hc2 * 0.3), tz2], [tx2 - 8, y0 + Hc2 * 0.42 + Math.min(140, Hc2 * 0.3), tz2]], TIRA, { frente: true, doble: true });
+    if (zc > 0) addCara(`eqZ${k}`, [[x0, base, zF2 + 25], [x1, base, zF2 + 25], [x1, base + zc, zF2 + 25], [x0, base + zc, zF2 + 25]], ZOCALO, { frente: true });
+  });
   const bajos = d.piso.filter(it => !esAlto(it.m));
   if (bajos.length) {
     const hb = Math.max(...bajos.map(it => num(it.m.alto) || 860));
@@ -1388,6 +1415,45 @@ function RenderEscena({ vano, muebles, cfg, mats, proyecto, deco, onClose }) {
     addCara("mesadaF", [[-8, hb, -25], [anchoM + 8, hb, -25], [anchoM + 8, hb + eMes, -25], [-8, hb + eMes, -25]], MESADA);
   }
   d.colg.forEach(it => modulo(it, hAlac));
+
+  // ===== PARED B (la otra pared de la L) — antes NO SE DIBUJABA =====
+  if (dB.piso.length || dB.colg.length) {
+    const anchoA = Math.max(600, d.anchoPiso || 0, d.anchoColg || 0);
+    const profA = Math.max(...muebles.filter(m => (m.pared || "A") === "A").map(m => num(m.prof) || 580), 580);
+    // giro de 90°: el frente pasa a mirar hacia el centro del ambiente
+    TF = (p) => [p[2] + anchoA + 20, p[1], -p[0] - profA * 0.15];
+    dB.piso.forEach(it => modulo(it, 0));
+    const bajosB = dB.piso.filter(it => !esAlto(it.m));
+    if (bajosB.length) {
+      const hbB = Math.max(...bajosB.map(it => num(it.m.alto) || 860));
+      const anchoMB = bajosB.reduce((s2, it) => s2 + it.w, 0);
+      const pMB = Math.max(...bajosB.map(it => num(it.m.prof) || 580)) + 25;
+      addCara("mesadaB", [[-8, hbB + eMes, -25], [-8, hbB + eMes, pMB], [anchoMB + 8, hbB + eMes, pMB], [anchoMB + 8, hbB + eMes, -25]], MESADA, { gloss: true });
+      addCara("mesadaBF", [[-8, hbB, -25], [anchoMB + 8, hbB, -25], [anchoMB + 8, hbB + eMes, -25], [-8, hbB + eMes, -25]], MESADA, { frente: true, gloss: true });
+    }
+    dB.colg.forEach(it => modulo(it, hAlac));
+    TF = null;
+  }
+
+  // ===== ISLA — los muebles puestos en la isla =====
+  if (dI.piso.length || dI.colg.length) {
+    const iSep = num(vano.islaSep) || 900, iX = num(vano.islaX) || 0;
+    const profA2 = Math.max(...muebles.filter(m => (m.zona || "pared") === "pared").map(m => num(m.prof) || 580), 580);
+    const zIsla = -(profA2 + iSep);
+    TF = (num(vano.islaRot) === 90)
+      ? (p) => [p[2] + iX + 200, p[1], -p[0] + zIsla]        // isla girada 90°
+      : (p) => [p[0] + iX, p[1], p[2] + zIsla];              // isla paralela
+    dI.piso.forEach(it => modulo(it, 0));
+    const bajosI = dI.piso.filter(it => !esAlto(it.m));
+    if (bajosI.length) {
+      const hbI = Math.max(...bajosI.map(it => num(it.m.alto) || 860));
+      const anchoMI = bajosI.reduce((s2, it) => s2 + it.w, 0);
+      const pMI = Math.max(...bajosI.map(it => num(it.m.prof) || 580)) + 25;
+      addCara("mesadaI", [[-8, hbI + eMes, -25], [-8, hbI + eMes, pMI], [anchoMI + 8, hbI + eMes, pMI], [anchoMI + 8, hbI + eMes, -25]], MESADA, { gloss: true });
+      addCara("mesadaIF", [[-8, hbI, -25], [anchoMI + 8, hbI, -25], [anchoMI + 8, hbI + eMes, -25], [-8, hbI + eMes, -25]], MESADA, { frente: true, gloss: true });
+    }
+    TF = null;
+  }
 
   // anafe y bacha: se ven sobre la mesada
   d.piso.forEach(it => {
@@ -1866,7 +1932,7 @@ function vistasHTML(m, cfg, mats) {
   const lW = ML + pf + MR, lH = MT + h + MB;
   const lateral = svg(lW, lH, `
     <rect x="${ML}" y="${MT}" width="${pf}" height="${hc}" fill="${hex}" fill-opacity="0.4" stroke="${G}" stroke-width="1.5"/>
-    ${z > 0 ? `<rect x="${ML + zRet * S}" y="${MT + hc}" width="${pf - zRet * S}" height="${zz}" fill="${HB}" stroke="${G}" stroke-width="1"/>` : ""}
+    ${z > 0 ? `<rect x="${ML}" y="${MT + hc}" width="${pf - zRet * S}" height="${zz}" fill="${HB}" stroke="${G}" stroke-width="1"/>` : ""}
     ${cota(ML, MT - 22, ML + pf, MT - 22, M2(P))}
     ${cota(ML - 26, MT, ML - 26, MT + h, M2(H))}`);
 
@@ -1904,26 +1970,46 @@ function vistasHTML(m, cfg, mats) {
     ${cotasE}`);
 
   // ================= CORTE LATERAL =================
-  const LAB = 150;                                        // lugar para las referencias
-  const cW = ML + pf + LAB, cH = MT + h + MB + (ap === "abajo" ? 30 : 0);
+  // Convención: la PARED está a la izquierda. El FRENTE del mueble mira a la DERECHA.
+  //   fondo -> contra la pared (izq) · puerta -> al frente (der) · zócalo -> retirado DESDE EL FRENTE
+  const LAB = 155;
+  const vuelo = ap === "abajo" ? pf + 14 : 0;                 // la tapa abierta se proyecta hacia adelante
+  const cW = ML + pf + Math.max(LAB, vuelo + 90);
+  const cH = MT + h + MB + (ap === "abajo" ? 26 : 0);
   const cx0 = ML, cy0 = MT;
-  const yEst = nEst > 0 ? cy0 + ee + (hLibre / nH) : 0;
-  const ref = (x1, y1, x2, txt) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y1}" stroke="${G}" stroke-width="0.7"/>
-    <circle cx="${x1}" cy="${y1}" r="2.2" fill="${G}"/>
-    <text x="${x2 + 5}" y="${y1 + 3.5}" font-size="9.5" fill="${G}">${txt}</text>`;
+  const xFrente = cx0 + pf;                                    // cara del frente
+  const yEstC = nEst > 0 ? cy0 + ee + (hLibre / nH) : 0;
+  const ref = (px, py, txt) => {
+    const xt = xFrente + Math.max(26, vuelo + 10);
+    return `<line x1="${px}" y1="${py}" x2="${xt - 4}" y2="${py}" stroke="${G}" stroke-width="0.7"/>
+      <circle cx="${px}" cy="${py}" r="2.2" fill="${G}"/>
+      <text x="${xt}" y="${py + 3.4}" font-size="9.5" fill="${G}">${txt}</text>`;
+  };
+  const hatch = `<pattern id="hx" patternUnits="userSpaceOnUse" width="5" height="5"><path d="M0,5 L5,0" stroke="#B6BFCA" stroke-width="0.8"/></pattern>`;
   const corte = svg(cW, cH, `
-    <rect x="${cx0 - 12}" y="${cy0 - 8}" width="12" height="${h + 16}" fill="#E2E8F0" stroke="${L}" stroke-width="0.6"/>
+    <defs>${hatch}</defs>
+    <rect x="${cx0 - 13}" y="${cy0 - 10}" width="13" height="${h + 20}" fill="url(#hx)" stroke="${L}" stroke-width="0.7"/>
+    <text x="${cx0 - 6}" y="${cy0 + h + 24}" text-anchor="middle" font-size="8" fill="${L}">pared</text>
+
+    <rect x="${cx0}" y="${cy0}" width="${eef}" height="${hc}" fill="${HB}" stroke="${G}" stroke-width="1"/>
     <rect x="${cx0}" y="${cy0}" width="${pf}" height="${ee}" fill="${hex}" stroke="${G}" stroke-width="1.2"/>
     <rect x="${cx0}" y="${cy0 + hc - ee}" width="${pf}" height="${ee}" fill="${hex}" stroke="${G}" stroke-width="1.2"/>
-    <rect x="${cx0 + pf - eef}" y="${cy0}" width="${eef}" height="${hc}" fill="${HB}" stroke="${G}" stroke-width="0.8"/>
-    ${nEst > 0 ? `<rect x="${cx0 + 3}" y="${yEst}" width="${pf - eef - 3}" height="${ee}" fill="${hex}" stroke="${G}" stroke-width="1.2"/>
-      ${ref(cx0 + pf - eef - 6, yEst + ee / 2, cx0 + pf + 22, "Estante fijo")}` : ""}
-    ${z > 0 ? `<rect x="${cx0 + zRet * S}" y="${cy0 + hc}" width="${Math.max(2.5, ee)}" height="${zz}" fill="${HB}" stroke="${G}" stroke-width="1"/>
-      ${ref(cx0 + zRet * S + 2, cy0 + hc + zz / 2, cx0 + pf + 22, "Zócalo retranqueado")}` : ""}
-    ${num(m.puertas) > 0 && ap === "abajo" ? `<rect x="${cx0 - 3}" y="${cy0 + hc + zz + 8}" width="${pf}" height="${Math.max(2.5, ee)}" fill="${hex}" stroke="${G}" stroke-width="1.2"/>
-      ${ref(cx0 + pf - 8, cy0 + hc + zz + 10, cx0 + pf + 22, "Puerta rebatible abajo")}` : ""}
-    ${num(m.puertas) > 0 && ap !== "abajo" ? `<rect x="${cx0 + (emb ? 1 : -Math.max(2.5, ee))}" y="${cy0 + (emb ? ee + hol * S : 0)}" width="${Math.max(2.5, ee)}" height="${emb ? hc - 2 * ee - 2 * hol * S : hc}" fill="${hex}" stroke="${G}" stroke-width="1.2"/>
-      ${ref(cx0 + 2, cy0 + hc * 0.55, cx0 + pf + 22, "Puerta " + (emb ? "embutida" : "superpuesta"))}` : ""}
+    ${ref(cx0 + eef / 2, cy0 + hc * 0.30, "Fondo (contra la pared)")}
+
+    ${nEst > 0 ? `<rect x="${cx0 + eef}" y="${yEstC}" width="${pf - eef - 8}" height="${ee}" fill="${hex}" stroke="${G}" stroke-width="1.2"/>
+      ${ref(cx0 + pf * 0.55, yEstC + ee / 2, "Estante fijo")}` : ""}
+
+    ${z > 0 ? `<rect x="${xFrente - zRet * S - Math.max(2.5, ee)}" y="${cy0 + hc}" width="${Math.max(2.5, ee)}" height="${zz}" fill="${HB}" stroke="${G}" stroke-width="1"/>
+      ${ref(xFrente - zRet * S - 1, cy0 + hc + zz / 2, "Zócalo retranqueado " + zRet + " mm")}` : ""}
+
+    ${num(m.puertas) > 0 && ap === "abajo" ? `
+      <rect x="${xFrente}" y="${cy0 + hc - Math.max(2.5, ee)}" width="${vuelo - 14}" height="${Math.max(2.5, ee)}" fill="${hex}" stroke="${G}" stroke-width="1.2"/>
+      <path d="M ${xFrente + 4} ${cy0 + hc - 12} A 26 26 0 0 1 ${xFrente + 22} ${cy0 + hc - 4}" fill="none" stroke="${L}" stroke-width="0.8" stroke-dasharray="2,2"/>
+      ${ref(xFrente + (vuelo - 14) * 0.6, cy0 + hc - ee / 2, "Puerta rebatible abajo (abierta)")}` : ""}
+    ${num(m.puertas) > 0 && ap !== "abajo" ? `
+      <rect x="${emb ? xFrente - Math.max(2.5, ee) - hol * S : xFrente}" y="${cy0 + (emb ? ee + hol * S : 0)}" width="${Math.max(2.5, ee)}" height="${emb ? hc - 2 * ee - 2 * hol * S : hc}" fill="${hex}" stroke="${G}" stroke-width="1.2"/>
+      ${ref(emb ? xFrente - Math.max(2.5, ee) / 2 - hol * S : xFrente + Math.max(2.5, ee) / 2, cy0 + hc * 0.62, "Puerta " + (emb ? "embutida" : "superpuesta"))}` : ""}
+
     ${cota(cx0, cy0 - 22, cx0 + pf, cy0 - 22, M2(P))}
     ${cota(cx0 - 30, cy0, cx0 - 30, cy0 + hc, M2(Hc))}`);
 
@@ -1936,10 +2022,10 @@ function vistasHTML(m, cfg, mats) {
     ${cota(fx + w + 20, fy + hc, fx + w + 20, fy + hc + zz, M2(z))}`) : "";
   const zLateral = z > 0 ? svg(lW + 30, lH, `
     <rect x="${ML}" y="${MT}" width="${pf}" height="${hc}" fill="${hex}" fill-opacity="0.4" stroke="${G}" stroke-width="1.5"/>
-    <rect x="${ML + zRet * S}" y="${MT + hc}" width="${pf - zRet * S}" height="${zz}" fill="${HB}" stroke="${G}" stroke-width="1"/>
+    <rect x="${ML}" y="${MT + hc}" width="${pf - zRet * S}" height="${zz}" fill="${HB}" stroke="${G}" stroke-width="1"/>
     ${cota(ML, MT - 22, ML + pf, MT - 22, M2(P))}
     ${cota(ML - 26, MT, ML - 26, MT + hc, M2(Hc))}
-    ${cota(ML + pf + 20, MT + hc, ML + pf + 20, MT + hc + zz, M2(zRet))}`) : "";
+    ${cota(ML + pf - zRet * S, MT + hc + zz + 16, ML + pf, MT + hc + zz + 16, M2(zRet))}`) : "";
 
   return { frontal, lateral, interior, corte, zFrontal, zLateral };
 }
