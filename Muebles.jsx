@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v26 (Muebles: mover y quitar de a UN modulo, no todo el grupo)
+// VERSION: v28 (Muebles: varios proyectos, cada uno arranca de cero)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
 
+const KEY_IDX = "vv_muebles_idx";
+const KEY_P = (id) => "vv_muebles_p_" + id;
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
 const storage = {
   set: async (key, value) => { try { localStorage.setItem(key, value); } catch { } try { await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); } catch { } return { value }; },
   get: async (key) => { try { const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { method: "GET", headers: SH(), mode: "cors" }); if (r.ok) { const d = await r.json(); if (d && d.length > 0) return { value: d[0].value }; } } catch { } try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; } },
+  del: async (key) => { try { localStorage.removeItem(key); } catch { } try { await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key), { method: "DELETE", headers: SH() }); } catch { } },
 };
 const uid = () => Math.random().toString(36).slice(2, 9);
 async function subirRender(dataUrl) {
@@ -1375,14 +1378,37 @@ function PlacaSVG({ pl, PW, PH, n, total }) {
 
 // ---------- PDF ----------
 function PdfOverlay({ html, onClose }) {
-  const ref = useRef(null);
-  const imprimir = () => { try { const w = ref.current && ref.current.contentWindow; if (w) { w.focus(); w.print(); } } catch { alert("No se pudo abrir la impresión."); } };
-  return <div style={{ position: "fixed", inset: 0, background: T.navy, zIndex: 500, display: "flex", flexDirection: "column" }}>
-    <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: T.navy, borderBottom: "1px solid rgba(255,255,255,.1)", alignItems: "center" }}>
+  // iOS NO imprime iframes: se imprime la ventana principal ocultando todo salvo el reporte.
+  const css = (String(html).match(/<style>([\s\S]*?)<\/style>/) || [])[1] || "";
+  const cuerpo = (String(html).match(/<body>([\s\S]*?)<\/body>/) || [])[1] || String(html);
+  const cssLocal = css.replace(/\*\s*\{/g, "#vvpdf *{").replace(/(^|[}\s])body\s*\{/g, "$1#vvpdf{");
+  const imprimir = () => { try { window.print(); } catch { alert("No se pudo abrir la impresión."); } };
+  const abrirPestana = () => {
+    try {
+      const b = new Blob([html], { type: "text/html" });
+      const u = URL.createObjectURL(b);
+      const a = document.createElement("a"); a.href = u; a.target = "_blank"; a.rel = "noopener";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(u), 60000);
+    } catch { alert("No se pudo abrir."); }
+  };
+  return <div style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 500, display: "flex", flexDirection: "column" }}>
+    <style dangerouslySetInnerHTML={{ __html: cssLocal + `
+      #vvpdf{max-width:900px;margin:0 auto}
+      @media print{
+        body *{visibility:hidden !important}
+        #vvpdf,#vvpdf *{visibility:visible !important}
+        #vvpdf{position:absolute !important;left:0;top:0;width:100%;max-width:none;padding:0 !important}
+        .vv-noprint{display:none !important}
+      }` }} />
+    <div className="vv-noprint" style={{ display: "flex", gap: 8, padding: "10px 12px", background: T.navy, alignItems: "center", flexShrink: 0 }}>
       <button onClick={onClose} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "10px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
-      <button onClick={imprimir} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Guardar / Imprimir</button>
+      <button onClick={imprimir} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Guardar PDF / Imprimir</button>
+      <button onClick={abrirPestana} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "10px 14px", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>Abrir aparte</button>
     </div>
-    <iframe ref={ref} srcDoc={html} title="pdf" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    <div style={{ flex: 1, overflow: "auto", background: "#fff", WebkitOverflowScrolling: "touch" }}>
+      <div id="vvpdf" dangerouslySetInnerHTML={{ __html: cuerpo }} />
+    </div>
   </div>;
 }
 
@@ -1397,7 +1423,7 @@ function svgPlacaHTML(pl, PW, PH, n, total) {
   <svg viewBox="-8 -8 ${PW + 16} ${PH + 16}" width="100%" style="max-height:640px"><rect x="0" y="0" width="${PW}" height="${PH}" fill="#fff" stroke="#94A3B8" stroke-width="6"/>${piezas}</svg></div>`;
 }
 
-function reporteHTML(proyecto, cfg, piezas, resPlaca, resFondo, resumen) {
+function reporteHTML(proyecto, cfg, piezas, resPlaca, resFondo, resumen, herr, vidrios) {
   const filas = piezas.map(p => `<tr><td>${p.mueble}</td><td>${p.nombre}</td><td class="r">${mm(p.w)}</td><td class="r">${mm(p.h)}</td><td class="r">${p.cant}</td><td>${p.mat === "fondo" ? "Fondo " + cfg.espFondo + "mm" : "Placa " + cfg.esp + "mm"}</td></tr>`).join("");
   const placas = resPlaca.placas.map((pl, i) => svgPlacaHTML(pl, resPlaca.PW, resPlaca.PH, i + 1, resPlaca.placas.length)).join("");
   const fondos = resFondo.placas.map((pl, i) => svgPlacaHTML(pl, resFondo.PW, resFondo.PH, i + 1, resFondo.placas.length)).join("");
@@ -1433,6 +1459,9 @@ ${resPlaca.noEntran.length || resFondo.noEntran.length ? `<p style="color:#B4530
 export default function Muebles() {
   const [cargando, setCargando] = useState(true);
   const [proyecto, setProyecto] = useState("");
+  const [proys, setProys] = useState([]);          // [{id, nombre}]
+  const [actual, setActual] = useState(null);      // id del proyecto abierto
+  const [verProys, setVerProys] = useState(false);
   const [muebles, setMuebles] = useState([]);
   const [cfg, setCfg] = useState(CFG_DEF);
   const [vano, setVano] = useState(VANO_DEF);
@@ -1537,15 +1566,94 @@ export default function Muebles() {
   const actualizar = async () => {
     setRefrescando(true); setOkMsg("");
     try {
-      const r = await storage.get("vv_muebles");
+      const r = await storage.get(actual ? KEY_P(actual) : "vv_muebles");
       if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); setMatsCustom(d.matsCustom || []); }
       setOkMsg("✓"); setTimeout(() => setOkMsg(""), 1600);
     } catch { setOkMsg("!"); setTimeout(() => setOkMsg(""), 1600); }
     setRefrescando(false);
   };
 
-  useEffect(() => { (async () => { try { const r = await storage.get("vv_muebles"); if (r && r.value) { const d = JSON.parse(r.value); setProyecto(d.proyecto || ""); setMuebles(d.muebles || []); setCfg({ ...CFG_DEF, ...(d.cfg || {}) }); setVano({ ...VANO_DEF, ...(d.vano || {}) }); setMatsCustom(d.matsCustom || []); setDeco(d.deco || []); } } catch { } setCargando(false); })(); }, []);
-  const guardar = (next) => { const d = { proyecto: next.proyecto != null ? next.proyecto : proyecto, muebles: next.muebles || muebles, cfg: next.cfg || cfg, vano: next.vano || vano, matsCustom: next.matsCustom || matsCustom, deco: next.deco || deco }; if (next.proyecto != null) setProyecto(next.proyecto); if (next.muebles) setMuebles(next.muebles); if (next.cfg) setCfg(next.cfg); if (next.vano) setVano(next.vano); if (next.matsCustom) setMatsCustom(next.matsCustom); if (next.deco) setDeco(next.deco); try { storage.set("vv_muebles", JSON.stringify(d)); } catch { } };
+  const aplicar = (d) => {
+    setProyecto((d && d.proyecto) || "");
+    setMuebles((d && d.muebles) || []);
+    setCfg({ ...CFG_DEF, ...((d && d.cfg) || {}) });
+    setVano({ ...VANO_DEF, ...((d && d.vano) || {}) });
+    setMatsCustom((d && d.matsCustom) || []);
+    setDeco((d && d.deco) || []);
+    setForm({ ...DEF_TIPO.bajo, tipo: "bajo", nombre: "", cant: 1 });
+    setTab("vano");
+  };
+  const cargarProyecto = async (id) => {
+    setCargando(true);
+    try { const r = await storage.get(KEY_P(id)); aplicar(r && r.value ? JSON.parse(r.value) : null); } catch { aplicar(null); }
+    setActual(id);
+    try { storage.set(KEY_IDX, JSON.stringify({ lista: proys, actual: id })); } catch { }
+    setCargando(false);
+  };
+  useEffect(() => { (async () => {
+    try {
+      const ri = await storage.get(KEY_IDX);
+      if (ri && ri.value) {
+        const idx = JSON.parse(ri.value);
+        const lista = idx.lista || [];
+        setProys(lista);
+        const id = idx.actual || (lista[0] && lista[0].id);
+        if (id) { const r = await storage.get(KEY_P(id)); aplicar(r && r.value ? JSON.parse(r.value) : null); setActual(id); }
+      } else {
+        // primera vez: si había un proyecto viejo, lo importo
+        const r = await storage.get("vv_muebles");
+        const d = r && r.value ? JSON.parse(r.value) : null;
+        const id = uid();
+        const nom = (d && d.proyecto) || "Proyecto 1";
+        const lista = [{ id, nombre: nom }];
+        setProys(lista); setActual(id); aplicar(d);
+        try { storage.set(KEY_IDX, JSON.stringify({ lista, actual: id })); if (d) storage.set(KEY_P(id), JSON.stringify(d)); } catch { }
+      }
+    } catch { }
+    setCargando(false);
+  })(); }, []);
+  const guardar = (next) => {
+    const d = { proyecto: next.proyecto != null ? next.proyecto : proyecto, muebles: next.muebles || muebles, cfg: next.cfg || cfg, vano: next.vano || vano, matsCustom: next.matsCustom || matsCustom, deco: next.deco || deco };
+    if (next.proyecto != null) setProyecto(next.proyecto);
+    if (next.muebles) setMuebles(next.muebles);
+    if (next.cfg) setCfg(next.cfg);
+    if (next.vano) setVano(next.vano);
+    if (next.matsCustom) setMatsCustom(next.matsCustom);
+    if (next.deco) setDeco(next.deco);
+    const id = actual;
+    try {
+      if (id) storage.set(KEY_P(id), JSON.stringify(d));
+      if (next.proyecto != null) {
+        const lista = proys.map(p => p.id === id ? { ...p, nombre: next.proyecto || "Sin nombre" } : p);
+        setProys(lista);
+        storage.set(KEY_IDX, JSON.stringify({ lista, actual: id }));
+      }
+    } catch { }
+  };
+  // --- PROYECTOS ---
+  const nuevoProyecto = () => {
+    const nom = (window.prompt("Nombre del proyecto nuevo:", "") || "").trim();
+    if (!nom) return;
+    const id = uid();
+    const lista = [...proys, { id, nombre: nom }];
+    setProys(lista); setActual(id);
+    aplicar({ proyecto: nom });                       // TODO EN CERO
+    try { storage.set(KEY_IDX, JSON.stringify({ lista, actual: id })); storage.set(KEY_P(id), JSON.stringify({ proyecto: nom, muebles: [], cfg: CFG_DEF, vano: VANO_DEF, matsCustom: [], deco: [] })); } catch { }
+    setVerProys(false);
+  };
+  const abrirProyecto = async (id) => { setVerProys(false); await cargarProyecto(id); };
+  const borrarProyecto = (id) => {
+    const p = proys.find(x => x.id === id); if (!p) return;
+    if (!window.confirm(`¿Borrar el proyecto "${p.nombre}"?\nSe pierden sus muebles, medidas y cortes.`)) return;
+    const lista = proys.filter(x => x.id !== id);
+    setProys(lista);
+    try { storage.del(KEY_P(id)); } catch { }
+    if (id === actual) {
+      if (lista.length) { cargarProyecto(lista[0].id); }
+      else { const nid = uid(); const l2 = [{ id: nid, nombre: "Proyecto 1" }]; setProys(l2); setActual(nid); aplicar(null); try { storage.set(KEY_IDX, JSON.stringify({ lista: l2, actual: nid })); } catch { } return; }
+    }
+    try { storage.set(KEY_IDX, JSON.stringify({ lista, actual: id === actual ? (lista[0] && lista[0].id) : actual })); } catch { }
+  };
   const setV = (k, v) => guardar({ vano: { ...vano, [k]: num(v) } });
   const mover = (id, dir) => { const i = muebles.findIndex(m => m.id === id); const j = i + dir; if (i < 0 || j < 0 || j >= muebles.length) return; const arr = [...muebles]; const t = arr[i]; arr[i] = arr[j]; arr[j] = t; guardar({ muebles: arr }); };
 
@@ -1670,7 +1778,10 @@ export default function Muebles() {
 
     {/* VANO */}
     {tab === "vano" && <div style={{ padding: "14px 16px 40px" }}>
-      <input value={proyecto} onChange={e => guardar({ proyecto: e.target.value })} placeholder="Nombre del proyecto (ej: Cocina Canning 815)" style={{ ...inp, marginTop: 0, marginBottom: 12, fontWeight: 700 }} />
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        <input value={proyecto} onChange={e => guardar({ proyecto: e.target.value })} placeholder="Nombre del proyecto (ej: Cocina Canning 815)" style={{ ...inp, marginTop: 0, marginBottom: 0, fontWeight: 700, flex: 1 }} />
+        <button onClick={() => setVerProys(true)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 10, padding: "0 14px", fontSize: 13, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>Proyectos ({proys.length})</button>
+      </div>
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: 13, marginBottom: 12, boxShadow: SHDsm }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Medidas del vano</div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -1973,6 +2084,26 @@ export default function Muebles() {
       </div>
     </div>}
 
+    {verProys && <div style={{ position: "fixed", inset: 0, background: "rgba(11,22,34,.55)", zIndex: 600, display: "flex", alignItems: "flex-end" }} onClick={() => setVerProys(false)}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.bg, width: "100%", maxHeight: "82vh", borderRadius: "18px 18px 0 0", padding: 16, overflowY: "auto", boxShadow: "0 -8px 40px rgba(0,0,0,.3)" }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, flex: 1 }}>Proyectos</div>
+          <button onClick={() => setVerProys(false)} style={{ background: "none", border: "none", fontSize: 20, color: T.muted, cursor: "pointer" }}>✕</button>
+        </div>
+        <button onClick={nuevoProyecto} style={{ width: "100%", background: BRASS, color: "#fff", border: "none", borderRadius: 11, padding: "14px", fontSize: 14, fontWeight: 800, cursor: "pointer", marginBottom: 12 }}>➕ Proyecto nuevo (todo en cero)</button>
+        {proys.map(p => {
+          const act = p.id === actual;
+          return <div key={p.id} style={{ display: "flex", gap: 8, alignItems: "center", background: act ? "rgba(176,137,79,.12)" : T.card, border: `1px solid ${act ? BRASS : T.border}`, borderRadius: 11, padding: 11, marginBottom: 7 }}>
+            <button onClick={() => abrirProyecto(p.id)} style={{ flex: 1, background: "none", border: "none", textAlign: "left", cursor: "pointer", padding: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: act ? BRASS : T.txt }}>{act ? "✓ " : ""}{p.nombre}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{act ? `${muebles.length} tipo(s) de mueble · vano ${mm(num(vano.ancho))}mm` : "Tocá para abrirlo"}</div>
+            </button>
+            <button onClick={() => borrarProyecto(p.id)} style={{ background: "rgba(220,38,38,.10)", color: "#DC2626", border: "1px solid rgba(220,38,38,.3)", borderRadius: 8, padding: "9px 11px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>🗑</button>
+          </div>;
+        })}
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 10, lineHeight: 1.5 }}>Cada proyecto guarda sus propios muebles, vano, materiales, isla y decoración. Al crear uno nuevo arrancás de cero.</div>
+      </div>
+    </div>}
     {verNivel && <Nivel onClose={() => setVerNivel(false)} />}
     {verRender && <RenderEscena vano={vano} muebles={muebles} cfg={cfg} mats={matsCustom} proyecto={proyecto} deco={deco} onClose={() => setVerRender(false)} />}
     {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
