@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v25 (Muebles: seleccionar, mover y quitar desde planta Y frente)
+// VERSION: v26 (Muebles: mover y quitar de a UN modulo, no todo el grupo)
 
 // V+V MUEBLES — Diseño y corte de muebles de cocina y placares (placa 18 mm)
 // Cargás medidas → render 3D → despiece automático → optimización de cortes en placas → PDF para el aserradero.
@@ -437,10 +437,10 @@ function distribuir(muebles, pared, zona) {
   de.forEach(m => {
     const A = num(m.ancho), n = Math.max(1, num(m.cant) || 1);
     if (m.tipo === "electro" && zonaElectro(m) === "mesada") return; // cafetera: solo decorativa
-    if (m.tipo === "esquinero") { esq.push({ m, x: 0, w: A }); return; }
+    if (m.tipo === "esquinero") { esq.push({ m, x: 0, w: A, i: 0 }); return; }
     for (let i = 0; i < n; i++) {
-      if (esColgado(m)) { colg.push({ m, x: xc, w: A }); xc += A; }
-      else { piso.push({ m, x: xp, w: A }); xp += A; }
+      if (esColgado(m)) { colg.push({ m, x: xc, w: A, i }); xc += A; }
+      else { piso.push({ m, x: xp, w: A, i }); xp += A; }
     }
   });
   return { piso, colg, esq, anchoPiso: xp, anchoColg: xc };
@@ -485,7 +485,9 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
   const VBW = gira ? vbH0 : vbW0, VBH = gira ? vbW0 : vbH0;
   const VBX = ccx - VBW / 2, VBY = ccy - VBH / 2;
   const Txt = (p) => <text {...p} transform={rot ? `rotate(${-rot} ${p.x} ${p.y})` : undefined} />;
-  const selM = sel ? muebles.find(m => m.id === sel) : null;
+  const K = (it) => `${it.m.id}#${it.i || 0}`;                    // clave de la instancia
+  const selId = sel ? String(sel).split("#")[0] : null;
+  const selM = selId ? muebles.find(m => m.id === selId) : null;
 
   // --- ARRASTRE CON EL DEDO ---
   const aCoords = (ev) => {                              // pantalla -> coordenadas del plano (deshace el giro)
@@ -518,13 +520,13 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
     for (const it of fila) { if (coord > it.x + it.w / 2) { if (!vistos.has(it.m.id)) { vistos.add(it.m.id); idx++; } } }
     return { pared: pared2, zona: zona2, idx, colg };
   };
-  const bajarDedo = (ev, m) => { ev.stopPropagation(); const p = aCoords(ev); setArr({ id: m.id, x: p ? p.x : 0, y: p ? p.y : 0, destino: null }); setSel(m.id); };
-  const moverDedo = (ev) => { if (!arr) return; ev.preventDefault(); const p = aCoords(ev); if (!p) return; const m = muebles.find(x => x.id === arr.id); setArr({ ...arr, x: p.x, y: p.y, destino: destinoDe(p, m) }); };
+  const bajarDedo = (ev, it) => { ev.stopPropagation(); const p = aCoords(ev); setArr({ id: K(it), mid: it.m.id, i: it.i || 0, x: p ? p.x : 0, y: p ? p.y : 0, destino: null }); setSel(K(it)); };
+  const moverDedo = (ev) => { if (!arr) return; ev.preventDefault(); const p = aCoords(ev); if (!p) return; const m = muebles.find(x => x.id === arr.mid); setArr({ ...arr, x: p.x, y: p.y, destino: destinoDe(p, m) }); };
   const soltarDedo = () => {
-    if (arr && arr.destino && onMover) { const d = arr.destino; onMover(arr.id, d.pared, d.zona, d.idx); }
+    if (arr && arr.destino && onMover) { const d = arr.destino; onMover(arr.mid, arr.i, d.pared, d.zona, d.idx); }
     setArr(null);
   };
-  const arrM = arr ? muebles.find(x => x.id === arr.id) : null;
+  const arrM = arr ? muebles.find(x => x.id === arr.mid) : null;
   // arrastre de la ISLA entera
   const [arrIsla, setArrIsla] = useState(null);
   const bajarIsla = (ev) => { ev.stopPropagation(); const p = aCoords(ev); if (!p) return; setArrIsla({ px: p.x, py: p.y, x0: iX, sep0: iSep }); };
@@ -555,10 +557,10 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
     for (const it of fila) { if (x > it.x + it.w / 2) { if (!vistos.has(it.m.id)) { vistos.add(it.m.id); idx++; } } }
     return idx;
   };
-  const bajarF = (ev, m) => { ev.stopPropagation(); setSel(m.id); const x = xFrente(ev); setArrF({ id: m.id, x: x || 0, idx: null }); };
-  const moverF = (ev) => { if (!arrF) return; ev.preventDefault(); const x = xFrente(ev); if (x == null) return; const m = muebles.find(z => z.id === arrF.id); if (!m) return; setArrF({ ...arrF, x, idx: idxFrente(x, m) }); };
-  const soltarF = () => { if (arrF && arrF.idx != null && onMover) { const m = muebles.find(z => z.id === arrF.id); if (m) onMover(m.id, pared, "pared", arrF.idx); } setArrF(null); };
-  const arrFM = arrF ? muebles.find(z => z.id === arrF.id) : null;
+  const bajarF = (ev, it) => { ev.stopPropagation(); setSel(K(it)); const x = xFrente(ev); setArrF({ id: K(it), mid: it.m.id, i: it.i || 0, x: x || 0, idx: null }); };
+  const moverF = (ev) => { if (!arrF) return; ev.preventDefault(); const x = xFrente(ev); if (x == null) return; const m = muebles.find(z => z.id === arrF.mid); if (!m) return; setArrF({ ...arrF, x, idx: idxFrente(x, m) }); };
+  const soltarF = () => { if (arrF && arrF.idx != null && onMover) onMover(arrF.mid, arrF.i, pared, "pared", arrF.idx); setArrF(null); };
+  const arrFM = arrF ? muebles.find(z => z.id === arrF.mid) : null;
   const planta = <svg ref={svgP} viewBox={`${VBX} ${VBY} ${VBW} ${VBH}`}
     onTouchMove={ev => { moverDedo(ev); moverIsla(ev); }} onTouchEnd={() => { soltarDedo(); soltarIsla(); }} onTouchCancel={() => { soltarDedo(); soltarIsla(); }}
     onMouseMove={ev => { if (arr) moverDedo(ev); if (arrIsla) moverIsla(ev); }} onMouseUp={() => { soltarDedo(); soltarIsla(); }} onMouseLeave={() => { soltarDedo(); soltarIsla(); }}
@@ -578,28 +580,28 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
       <Txt x={-pad * 0.55} y={WB / 2} textAnchor="middle" fontSize={W / 40} fill="#475569" fontWeight="700" transform={`rotate(${-90 - rot} ${-pad * 0.55} ${WB / 2})`}>Pared B {mm(WB)} mm</Txt>
     </>}
     {/* muebles pared A (piso) — tocá uno para moverlo */}
-    {dPlan.piso.map((it, i) => { const es = sel === it.m.id, ar = arr && arr.id === it.m.id; return <g key={"a" + i} onClick={() => setSel(es ? null : it.m.id)} onTouchStart={ev => bajarDedo(ev, it.m)} onMouseDown={ev => bajarDedo(ev, it.m)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
+    {dPlan.piso.map((it, i) => { const es = sel === K(it), ar = arr && arr.id === K(it); return <g key={"a" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarDedo(ev, it)} onMouseDown={ev => bajarDedo(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
       <rect x={it.x} y="0" width={it.w} height={PR} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
       <Txt x={it.x + it.w / 2} y={PR / 2} textAnchor="middle" fontSize={W / 42} fill="#334155" fontWeight="700">{mm(it.w)}</Txt>
       <Txt x={it.x + it.w / 2} y={PR / 2 + W / 32} textAnchor="middle" fontSize={W / 60} fill="#64748B">{it.m.nombre}</Txt>
     </g>; })}
     {/* alacenas pared A (punteadas, cuelgan sobre los bajos) — también se pueden mover */}
-    {dPlan.colg.map((it, i) => { const es = sel === it.m.id, ar = arr && arr.id === it.m.id; return <g key={"ac" + i} onClick={() => setSel(es ? null : it.m.id)} onTouchStart={ev => bajarDedo(ev, it.m)} onMouseDown={ev => bajarDedo(ev, it.m)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
+    {dPlan.colg.map((it, i) => { const es = sel === K(it), ar = arr && arr.id === K(it); return <g key={"ac" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarDedo(ev, it)} onMouseDown={ev => bajarDedo(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
       <rect x={it.x} y="0" width={it.w} height={Math.min(PR, 350)} fill={es ? COL(it.m) : "none"} fillOpacity={es ? 0.35 : 0} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 150 : W / 320} strokeDasharray={`${W / 90},${W / 130}`} />
       {es && <Txt x={it.x + it.w / 2} y={Math.min(PR, 350) * 0.42} textAnchor="middle" fontSize={W / 55} fill={BRASS} fontWeight="800">alacena</Txt>}
     </g>; })}
     {/* pared B */}
-    {dPlanB && dPlanB.piso.map((it, i) => { const es = sel === it.m.id, ar = arr && arr.id === it.m.id; const y0 = PR + it.x; return <g key={"b" + i} onClick={() => setSel(es ? null : it.m.id)} onTouchStart={ev => bajarDedo(ev, it.m)} onMouseDown={ev => bajarDedo(ev, it.m)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
+    {dPlanB && dPlanB.piso.map((it, i) => { const es = sel === K(it), ar = arr && arr.id === K(it); const y0 = PR + it.x; return <g key={"b" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarDedo(ev, it)} onMouseDown={ev => bajarDedo(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
       <rect x="0" y={y0} width={PR} height={it.w} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
       <Txt x={PR / 2} y={y0 + it.w / 2} textAnchor="middle" fontSize={W / 46} fill="#334155" fontWeight="700">{mm(it.w)}</Txt>
     </g>; })}
-    {dPlanB && dPlanB.colg.map((it, i) => { const es = sel === it.m.id; return <g key={"bc" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
+    {dPlanB && dPlanB.colg.map((it, i) => { const es = sel === K(it); return <g key={"bc" + i} onClick={() => setSel(es ? null : K(it))} style={{ cursor: "pointer" }}>
       <rect x="0" y={PR + it.x} width={Math.min(PR, 350)} height={it.w} fill={es ? COL(it.m) : "none"} fillOpacity={es ? 0.35 : 0} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 150 : W / 320} strokeDasharray={`${W / 90},${W / 130}`} />
     </g>; })}
     {WB > 0 && (() => { const libre = utilB - dPlanB.anchoPiso; return <Txt x={PR + pad * 0.10} y={PR + dPlanB.anchoPiso + pad * 0.20} fontSize={W / 46} fill={libre < 0 ? "#DC2626" : "#64748B"} fontWeight="700">B: {libre < 0 ? `se pasan ${mm(-libre)}` : libre > 0 ? `libre ${mm(libre)}` : "justo"}</Txt>; })()}
     {/* ---- ESQUINERO ---- */}
-    {dPlan.esq && dPlan.esq.map((it, i) => { const es = sel === it.m.id; const S = it.w; const alto = esColgado(it.m) || it.m.esquineroAlto;
-      return <g key={"eq" + i} onClick={() => setSel(es ? null : it.m.id)} style={{ cursor: "pointer" }}>
+    {dPlan.esq && dPlan.esq.map((it, i) => { const es = sel === K(it); const S = it.w; const alto = esColgado(it.m) || it.m.esquineroAlto;
+      return <g key={"eq" + i} onClick={() => setSel(es ? null : K(it))} style={{ cursor: "pointer" }}>
         <polygon points={`0,0 ${S},0 0,${S}`} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.25} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} strokeDasharray={alto ? `${W / 90},${W / 130}` : undefined} />
         <line x1={S} y1="0" x2="0" y2={S} stroke={es ? BRASS : COL(it.m)} strokeWidth={W / 150} />
         <Txt x={S * 0.30} y={S * 0.32} textAnchor="middle" fontSize={W / 52} fill="#334155" fontWeight="700">{mm(S)}</Txt>
@@ -614,10 +616,10 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
       {/* cuerpo de la isla */}
       {dIsla.piso.length > 0 ? dIsla.piso.map((it, i) => {
         const t = it.x / (dIsla.anchoPiso || 1), tw = it.w / (dIsla.anchoPiso || 1);
-        const es = sel === it.m.id, ar = arr && arr.id === it.m.id;
+        const es = sel === K(it), ar = arr && arr.id === K(it);
         const rx = iRot === 90 ? iX : iX + t * iW, ry = iRot === 90 ? iY + t * iD : iY;
         const rw = iRot === 90 ? iW : tw * iW, rh = iRot === 90 ? tw * iD : iD;
-        return <g key={"is" + i} onClick={() => setSel(es ? null : it.m.id)} onTouchStart={ev => bajarDedo(ev, it.m)} onMouseDown={ev => bajarDedo(ev, it.m)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
+        return <g key={"is" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarDedo(ev, it)} onMouseDown={ev => bajarDedo(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
           <rect x={rx} y={ry} width={rw} height={rh} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? W / 130 : W / 260} />
           <Txt x={rx + rw / 2} y={ry + rh / 2 + W / 110} textAnchor="middle" fontSize={W / 46} fill="#334155" fontWeight="700">{mm(it.w)}</Txt>
         </g>;
@@ -687,8 +689,8 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
     style={{ width: "100%", height: "auto", maxHeight: 380, display: "block", touchAction: arrF ? "none" : "auto", userSelect: "none" }} preserveAspectRatio="xMidYMid meet">
     <rect x="0" y="0" width={anchoPared} height={H} fill="#FAFAF8" stroke="#334155" strokeWidth={anchoPared / 110} />
     {/* piso: bajos, cajoneras, placares */}
-    {d.piso.map((it, i) => { const alt = num(it.m.alto); const y = H - alt; const es = sel === it.m.id, ar = arrF && arrF.id === it.m.id;
-      return <g key={"p" + i} onClick={() => setSel(es ? null : it.m.id)} onTouchStart={ev => bajarF(ev, it.m)} onMouseDown={ev => bajarF(ev, it.m)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
+    {d.piso.map((it, i) => { const alt = num(it.m.alto); const y = H - alt; const es = sel === K(it), ar = arrF && arrF.id === K(it);
+      return <g key={"p" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarF(ev, it)} onMouseDown={ev => bajarF(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
       <rect x={it.x} y={y} width={it.w} height={alt} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? anchoPared / 130 : anchoPared / 260} />
       <text x={it.x + it.w / 2} y={y + alt / 2} textAnchor="middle" fontSize={anchoPared / 40} fill="#334155" fontWeight="700">{mm(it.w)}</text>
       <text x={it.x + it.w / 2} y={y + alt / 2 + anchoPared / 30} textAnchor="middle" fontSize={anchoPared / 52} fill="#64748B">{it.m.nombre}</text>
@@ -696,8 +698,8 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
     {/* mesada sobre los bajos */}
     {d.piso.filter(it => !esAlto(it.m)).length > 0 && (() => { const hb = Math.max(...d.piso.filter(it => !esAlto(it.m)).map(it => num(it.m.alto))); const anchoM = d.piso.filter(it => !esAlto(it.m)).reduce((s, it) => s + it.w, 0); return <rect x="0" y={H - hb - eMes} width={anchoM} height={eMes} fill="#64748B" />; })()}
     {/* alacenas colgadas */}
-    {d.colg.map((it, i) => { const alt = num(it.m.alto); const y = H - hAlac - alt; const es = sel === it.m.id, ar = arrF && arrF.id === it.m.id;
-      return <g key={"c" + i} onClick={() => setSel(es ? null : it.m.id)} onTouchStart={ev => bajarF(ev, it.m)} onMouseDown={ev => bajarF(ev, it.m)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
+    {d.colg.map((it, i) => { const alt = num(it.m.alto); const y = H - hAlac - alt; const es = sel === K(it), ar = arrF && arrF.id === K(it);
+      return <g key={"c" + i} onClick={() => setSel(es ? null : K(it))} onTouchStart={ev => bajarF(ev, it)} onMouseDown={ev => bajarF(ev, it)} style={{ cursor: "grab", opacity: ar ? 0.35 : 1 }}>
       <rect x={it.x} y={y} width={it.w} height={alt} fill={COL(it.m)} fillOpacity={es ? 0.5 : 0.22} stroke={es ? BRASS : COL(it.m)} strokeWidth={es ? anchoPared / 130 : anchoPared / 260} />
       <text x={it.x + it.w / 2} y={y + alt / 2} textAnchor="middle" fontSize={anchoPared / 40} fill="#334155" fontWeight="700">{mm(it.w)}</text>
       <text x={it.x + it.w / 2} y={y + alt / 2 + anchoPared / 30} textAnchor="middle" fontSize={anchoPared / 55} fill="#64748B">{it.m.nombre}</text>
@@ -722,7 +724,7 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
 
   const barra = selM ? <div style={{ marginTop: 9, background: "rgba(176,137,79,.10)", border: `1.5px solid ${BRASS}`, borderRadius: 11, padding: 10 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
-      <span style={{ fontSize: 13, fontWeight: 800, flex: 1 }}>{selM.nombre} <span style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>{mm(selM.ancho)}mm · {selM.tipo === "esquinero" ? "esquinero" : esColgado(selM) ? "fila de arriba (colgado)" : "fila de abajo (piso)"}</span></span>
+      <span style={{ fontSize: 13, fontWeight: 800, flex: 1 }}>{selM.nombre} <span style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>{mm(selM.ancho)}mm · {selM.tipo === "esquinero" ? "esquinero" : esColgado(selM) ? "colgado" : "piso"}{num(selM.cant) > 1 ? ` · 1 de ${num(selM.cant)}` : ""}</span></span>
       <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: 2 }}>✕</button>
     </div>
     {selM.tipo === "esquinero"
@@ -731,6 +733,7 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
         <button onClick={() => onReordenar && onReordenar(selM.id, -1)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 9, padding: "12px 6px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>◀ Correr</button>
         <button onClick={() => onReordenar && onReordenar(selM.id, 1)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 9, padding: "12px 6px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Correr ▶</button>
       </div>}
+    {num(selM.cant) > 1 && <div style={{ fontSize: 10, color: T.sub, background: "rgba(176,137,79,.12)", borderRadius: 7, padding: "7px 9px", marginBottom: 7, lineHeight: 1.45 }}>Hay <b>{num(selM.cant)}</b> iguales. Lo que hagas acá afecta <b>solo a este</b>: se separa del grupo.</div>}
     <div style={{ fontSize: 10, color: T.muted, fontWeight: 700, textTransform: "uppercase", marginBottom: 5 }}>Mover a</div>
     <div style={{ display: "flex", gap: 6, marginBottom: 7 }}>
       {[["A", "pared", "Pared A"], ...(WB > 0 ? [["B", "pared", "Pared B"]] : []), ...(vano.isla ? [["A", "isla", "🏝 Isla"]] : [])].map(([p, z, l]) => {
@@ -740,7 +743,7 @@ function VanoVistas({ vano, muebles, cfg, onReordenar, onZona, onEditar, onGirar
     </div>
     <div style={{ display: "flex", gap: 6 }}>
       <button onClick={() => { onEditar && onEditar(selM.id); setSel(null); }} style={{ flex: 2, background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Editar medidas</button>
-      <button onClick={() => { if (window.confirm(`¿Quitar "${selM.nombre}" del proyecto?`)) { onBorrar && onBorrar(selM.id); setSel(null); } }} style={{ flex: 1, background: "rgba(220,38,38,.10)", color: "#DC2626", border: "1px solid rgba(220,38,38,.35)", borderRadius: 9, padding: "12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>🗑 Quitar</button>
+      <button onClick={() => { const n = num(selM.cant) || 1; if (window.confirm(n > 1 ? `¿Quitar UNO de los ${n} "${selM.nombre}"?\n(Quedan ${n - 1})` : `¿Quitar "${selM.nombre}"?`)) { onBorrar && onBorrar(selM.id); setSel(null); } }} style={{ flex: 1, background: "rgba(220,38,38,.10)", color: "#DC2626", border: "1px solid rgba(220,38,38,.35)", borderRadius: 9, padding: "12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>🗑 Quitar {num(selM.cant) > 1 ? "1" : ""}</button>
     </div>
   </div> : <div style={{ fontSize: 10.5, color: T.muted, marginTop: 7, textAlign: "center", lineHeight: 1.5 }}>✋ <b>Arrastrá un módulo con el dedo</b> para reubicarlo · tocalo para editarlo o quitarlo.</div>;
 
@@ -1443,22 +1446,37 @@ export default function Muebles() {
   const [verRender, setVerRender] = useState(false);
   const enL = vano.enL === undefined ? num(vano.paredB) > 0 : !!vano.enL;
   const [verNivel, setVerNivel] = useState(false);
+  // Separa UNA unidad de un mueble con cantidad > 1. Devuelve [arrayNuevo, idDeLaUnidad]
+  const separarUno = (arr, id) => {
+    const i = arr.findIndex(m => m.id === id); if (i < 0) return [arr, id];
+    const m = arr[i];
+    if (Math.max(1, num(m.cant) || 1) <= 1) return [arr, id];
+    const nid = uid();
+    const next = [...arr];
+    next[i] = { ...m, cant: num(m.cant) - 1 };
+    next.splice(i + 1, 0, { ...m, id: nid, cant: 1 });
+    return [next, nid];
+  };
   const reordenar = (id, dir) => {
-    const i = muebles.findIndex(m => m.id === id); if (i < 0) return;
-    const a = muebles[i];
-    // misma pared, misma zona Y misma fila (los bajos se corren entre bajos; las alacenas entre alacenas)
-    const grupo = muebles.filter(x => (x.pared || "A") === (a.pared || "A") && (x.zona || "pared") === (a.zona || "pared") && esColgado(x) === esColgado(a) && x.tipo !== "esquinero");
-    const gi = grupo.findIndex(x => x.id === id), gj = gi + dir;
-    if (gi < 0 || gj < 0 || gj >= grupo.length) return;        // ya está en la punta
-    const j = muebles.findIndex(x => x.id === grupo[gj].id);
-    const next = [...muebles]; next[i] = muebles[j]; next[j] = muebles[i];
+    let [arr, mid] = separarUno(muebles, id);           // si eran varios, se corre solo uno
+    const i = arr.findIndex(m => m.id === mid); if (i < 0) return;
+    const a = arr[i];
+    const grupo = arr.filter(x => (x.pared || "A") === (a.pared || "A") && (x.zona || "pared") === (a.zona || "pared") && esColgado(x) === esColgado(a) && x.tipo !== "esquinero");
+    const gi = grupo.findIndex(x => x.id === mid), gj = gi + dir;
+    if (gi < 0 || gj < 0 || gj >= grupo.length) { if (arr !== muebles) guardar({ muebles: arr }); return; }
+    const j = arr.findIndex(x => x.id === grupo[gj].id);
+    const next = [...arr]; next[i] = arr[j]; next[j] = arr[i];
     guardar({ muebles: next });
   };
-  const cambiarZona = (id, pared, zona) => guardar({ muebles: muebles.map(m => m.id === id ? { ...m, pared, zona } : m) });
-  const moverA = (id, pared, zona, idx) => {
-    const item = muebles.find(m => m.id === id); if (!item) return;
+  const cambiarZona = (id, pared, zona) => {
+    const [arr, mid] = separarUno(muebles, id);         // mueve una sola unidad
+    guardar({ muebles: arr.map(m => m.id === mid ? { ...m, pared, zona } : m) });
+  };
+  const moverA = (id, inst, pared, zona, idx) => {
+    const [arr, mid] = separarUno(muebles, id);        // arrastro UNA unidad, no el bloque
+    const item = arr.find(m => m.id === mid); if (!item) return;
     const nuevo = { ...item, pared, zona };
-    const sinEl = muebles.filter(m => m.id !== id);
+    const sinEl = arr.filter(m => m.id !== mid);
     const grupo = sinEl.filter(m => (m.pared || "A") === pared && (m.zona || "pared") === zona && esColgado(m) === esColgado(nuevo) && m.tipo !== "esquinero");
     const k = Math.max(0, Math.min(num(idx), grupo.length));
     let pos;
@@ -1471,7 +1489,12 @@ export default function Muebles() {
   const editarPorId = (id) => { const m = muebles.find(x => x.id === id); if (m) { setForm({ ...m }); setTab("muebles"); } };
   const girarPlanta = (r) => guardar({ vano: { ...vano, orient: r } });
   const ajustarIsla = (campos) => guardar({ vano: { ...vano, ...campos } });
-  const quitarMueble = (id) => guardar({ muebles: muebles.filter(m => m.id !== id) });
+  const quitarMueble = (id) => {
+    const m = muebles.find(x => x.id === id); if (!m) return;
+    const n = Math.max(1, num(m.cant) || 1);
+    if (n > 1) guardar({ muebles: muebles.map(x => x.id === id ? { ...x, cant: n - 1 } : x) });  // saca UNO
+    else guardar({ muebles: muebles.filter(x => x.id !== id) });
+  };
   const [deco, setDeco] = useState([]);
   const [leyendo, setLeyendo] = useState(false);
   const comprimir = (file, max) => new Promise((res) => { try { const img = new window.Image(); const u = URL.createObjectURL(file); img.onload = () => { let w = img.naturalWidth || 800, h = img.naturalHeight || 600; const M = max || 1100; if (w > M || h > M) { const k = M / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); } const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h); URL.revokeObjectURL(u); res(c.toDataURL("image/jpeg", 0.82)); }; img.onerror = () => { URL.revokeObjectURL(u); res(""); }; img.src = u; } catch { res(""); } });
