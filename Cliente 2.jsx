@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-
+// VERSION: v6 (Cliente: informes se descargan de verdad, sin depender de conexion)
 // ════════════════════════════════════════════════════════════════════
 // PANEL DE CLIENTE — App independiente y descargable
 // Mismo backend Supabase que la app de V+V → los datos se comparten.
@@ -92,12 +92,72 @@ function fileToDataUrl(f, maxW = 1400) {
   });
 }
 
+// Descarga REAL de un archivo: fetch + blob + URL local, para que quede guardado
+// en el dispositivo (Files del iPad, Descargas de la compu) y se pueda abrir después
+// SIN conexión. El atributo download="" de un <a> normal NO funciona con URLs de
+// otro dominio (como las del bucket de Supabase) — el navegador lo ignora y solo
+// navega a verlo online, exigiendo conexión cada vez que se quiere abrir.
+async function descargarArchivo(url, nombre) {
+  if (!url) return false;
+  try {
+    if (url.startsWith("data:")) {
+      const a = document.createElement("a");
+      a.href = url; a.download = nombre || "archivo";
+      document.body.appendChild(a); a.click(); a.remove();
+      return true;
+    }
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("no se pudo descargar");
+    const blob = await r.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl; a.download = nombre || "archivo";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+    return true;
+  } catch {
+    try { window.open(url, "_blank"); } catch { }
+    return false;
+  }
+}
+
 const FORCE_CLOUD = (() => { try { return new URLSearchParams(window.location.search).has("sync"); } catch { return false; } })();
 const lastWrite = {};
 function useStored(key, def) {
   const [v, setV] = useState(() => { try { const l = localStorage.getItem(key); return l ? JSON.parse(l) : def; } catch { return def; } });
-  useEffect(() => { (async () => { const r = await storage.get(key); if (r?.value) { try { const d = JSON.parse(r.value); if (Date.now() - (lastWrite[key] || 0) < 8000) return; if (FORCE_CLOUD) { setV(d); try { localStorage.setItem(key, r.value); } catch { } } else { setV(cur => JSON.stringify(d) !== JSON.stringify(cur) ? d : cur); } } catch { } } })(); }, [key]);
-  const set = useCallback(u => { setV(prev => { const n = typeof u === 'function' ? u(prev) : u; const j = JSON.stringify(n); lastWrite[key] = Date.now(); try { localStorage.setItem(key, j); } catch { } storage.set(key, j); return n; }); }, [key]);
+  // Gana el MÁS RECIENTE (por sello de fecha), no el más grande: si no, un borrado
+  // hecho en V+V (que achica la lista) se descarta acá y la obra borrada vuelve.
+  useEffect(() => {
+    (async () => {
+      const r = await storage.get(key);
+      if (!r?.value) return;
+      try {
+        const d = JSON.parse(r.value);
+        if (Date.now() - (lastWrite[key] || 0) < 8000) return;
+        if (FORCE_CLOUD) { setV(d); try { localStorage.setItem(key, r.value); } catch { } return; }
+        const rTs = await storage.get(key + "__ts");
+        const cloudTs = Number(rTs?.value || 0);
+        let localTs = 0;
+        try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
+        if (cloudTs >= localTs) {
+          setV(cur => JSON.stringify(d) !== JSON.stringify(cur) ? d : cur);
+          try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+        }
+      } catch { }
+    })();
+  }, [key]);
+  const set = useCallback(u => {
+    setV(prev => {
+      const n = typeof u === 'function' ? u(prev) : u;
+      const j = JSON.stringify(n);
+      const ts = Date.now();
+      lastWrite[key] = ts;
+      try { localStorage.setItem(key, j); localStorage.setItem(key + "__ts", String(ts)); } catch { }
+      storage.set(key, j);
+      storage.set(key + "__ts", String(ts));
+      return n;
+    });
+  }, [key]);
   return [v, set];
 }
 
@@ -272,6 +332,15 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
     setSubP(false); e.target.value = "";
     if (nuevos.some(n => !String(n.url || "").startsWith("http"))) alert("⚠ El plano quedó en este dispositivo pero NO se subió a la nube (bucket 'bco-media' en Supabase). Configuralo para que V+V y la IA lo puedan ver.");
   }
+  function borrarObra(o) {
+    if (!setObras) return;
+    const nom = String(o.nombre || "").trim();
+    const esc = prompt(`BORRAR LA OBRA "${nom}"\n\nSe borra en las dos apps (Cliente y V+V) y no se puede deshacer.\nSe pierden sus tareas, planos e informes.\n\nEscribí el nombre de la obra para confirmar:`);
+    if (esc == null) return;
+    if (esc.trim().toLowerCase() !== nom.toLowerCase()) { alert("El nombre no coincide. No borré nada."); return; }
+    setObras(prev => prev.filter(x => x.id !== o.id));
+    alert(`Obra "${nom}" borrada.`);
+  }
   function borrarPlano(obra, id) { if (confirm("¿Eliminar este plano?") && setObras) setObras(prev => prev.map(o => o.id === obra.id ? { ...o, planos: (o.planos || []).filter(x => x.id !== id) } : o)); }
   const [ecoUnlocked, setEcoUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState("");
@@ -308,7 +377,11 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
         return (<Card T={T} key={o.id} style={{ padding: 15, marginBottom: 11 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{o.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{o.sector} · {o.inicio} → {o.cierre}</div></div>
-            <Badge c={e.c} b={e.b}>{e.l}</Badge>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+              <Badge c={e.c} b={e.b}>{e.l}</Badge>
+              {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra"
+                style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>🗑</button>}
+            </div>
           </div>
           <div style={{ margin: "12px 0 6px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 5 }}><span style={{ color: T.sub, fontWeight: 600 }}>Avance de obra</span><span style={{ color: T.accent, fontWeight: 800 }}>{o.avance}%</span></div>
@@ -677,10 +750,10 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
         let arr = JSON.parse(r.value);
         if (iaSeen.current < 0) iaSeen.current = arr.length;
         else if (arr.length > iaSeen.current) {
-          const nuevos = arr.slice(iaSeen.current); iaSeen.current = arr.length;
-          setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "cliente" ? cfg.nombre : "V+V"} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
+          const nuevos = arr.slice(iaSeen.current).filter(m => m.from === "cliente" || m.to === "cliente" || (m.from === "vv" && m.tipo === "q" && !m.to)); iaSeen.current = arr.length;
+          if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "cliente" ? cfg.nombre : "V+V"} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
         }
-        const pend = arr.find(m => m.from !== "cliente" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
+        const pend = arr.find(m => m.from === "vv" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
         if (pend && !iaBusy.current && cfg?.iaAuto !== false) {
           iaBusy.current = true;
           try {
@@ -698,7 +771,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
             const pedsNext = [np, ...peds]; try { localStorage.setItem("vv_pedidos", JSON.stringify(pedsNext)); } catch { } await storage.set("vv_pedidos", JSON.stringify(pedsNext)).catch(() => { });
             textoResp = `No tengo ese dato en la app de ${cfg.nombre}. Lo derivé al personal de ${cfg.nombre} como URGENTE (quedó en Pedidos). Respondemos apenas lo tengan.`;
           }
-          arr2.push({ id: uid() + Date.now(), from: "cliente", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
+          arr2.push({ id: uid() + Date.now(), from: "cliente", to: pend.from, qid: pend.id, texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
           try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
           await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
           } catch { }
@@ -847,7 +920,11 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
               </div>
               <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 230 }}>{ult?.porIA ? "🤖 " : ""}{ult?.texto}</div>
             </div>
-            <Badge c={e.c} b={e.b}>{e.l}</Badge>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+              <Badge c={e.c} b={e.b}>{e.l}</Badge>
+              {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra"
+                style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>🗑</button>}
+            </div>
           </div>
         </Card>); })}
       </>}
@@ -1049,7 +1126,7 @@ function InformesScreen({ T, obras, formularios = [] }) {
         <div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>{open.obra} · {open.fecha}</div>
         <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 12 }}>{open.titulo || "Informe"}</div>
         {open.texto && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "14px 15px", fontSize: 12.5, color: T.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{open.texto}</div>}
-        {(open.archivos || []).map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 8, fontSize: 13, fontWeight: 700, color: T.accent }}>📎 {a.nombre}</a>)}
+        {(open.archivos || []).map((a, i) => <button key={i} onClick={() => descargarArchivo(a.url, a.nombre)} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, background: "none", border: "none", padding: 0, fontSize: 13, fontWeight: 700, color: T.accent, cursor: "pointer" }}>⬇ {a.nombre}</button>)}
       </div>
     </div>}
   </div>);
@@ -1249,6 +1326,7 @@ function ClienteApp() {
   const T = theme(cfg.accent);
   const [screen, setScreen] = useState("asistente");
   const [obras, setObras] = useStored("vv_obras", []);
+  useEffect(() => { if (localStorage.getItem("purge_canning_bf_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_bf_v1", "1"); } catch { } } catch { } })(); }, []);
   const [tareas, setTareas] = useStored("vv_tareas", []);
   const [mensajes, setMensajes] = useStored("vv_mensajes", []);
   const [archivosCliente, setArchivosCliente] = useStored("cliente_archivos", []);

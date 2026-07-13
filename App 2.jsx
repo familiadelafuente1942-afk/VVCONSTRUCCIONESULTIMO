@@ -83,6 +83,37 @@ const storage = {
 const SUPA_BUCKET = "bco-media";
 const SUPA_STORAGE_URL = SUPA_URL + "/storage/v1";
 
+// Descarga REAL de un archivo: fetch + blob + URL local, para que quede guardado
+// en el dispositivo (Files del iPad, Descargas de la compu) y se pueda abrir después
+// SIN conexión. El atributo download="" de un <a> normal NO funciona con URLs de
+// otro dominio (como las del bucket de Supabase) — el navegador lo ignora y solo
+// navega a verlo online, lo que exige conexión cada vez que se quiere abrir.
+async function descargarArchivo(url, nombre) {
+    if (!url) return false;
+    try {
+        if (url.startsWith("data:")) {
+            // ya es local (base64): esto sí funciona directo con el atributo download
+            const a = document.createElement("a");
+            a.href = url; a.download = nombre || "archivo";
+            document.body.appendChild(a); a.click(); a.remove();
+            return true;
+        }
+        const r = await fetch(url);
+        if (!r.ok) throw new Error("no se pudo descargar");
+        const blob = await r.blob();
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objUrl; a.download = nombre || "archivo";
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+        return true;
+    } catch {
+        // sin conexión o el archivo no está disponible: al menos intento abrirlo
+        try { window.open(url, "_blank"); } catch { }
+        return false;
+    }
+}
+
 const mediaStorage = {
     // Subir un archivo (recibe dataURL base64) → devuelve URL pública
     upload: async (path, dataUrl) => {
@@ -184,12 +215,17 @@ function useStoredState(key, defaultValue) {
                         setState(cloudData);
                         try { localStorage.setItem(key, r.value); } catch { }
                     } else {
-                        // Uso normal: la nube gana solo si tiene más datos que el local
-                        setState(local => {
-                            const localSize = JSON.stringify(local).length;
-                            const cloudSize = JSON.stringify(cloudData).length;
-                            return cloudSize > localSize ? cloudData : local;
-                        });
+                        // Gana el MÁS RECIENTE, no el más grande.
+                        // (Antes ganaba el más grande: como borrar SIEMPRE achica los datos,
+                        //  la versión con la obra borrada se descartaba y la obra resucitaba.)
+                        const rTs = await storage.get(key + "__ts");
+                        const cloudTs = Number(rTs?.value || 0);
+                        let localTs = 0;
+                        try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
+                        if (cloudTs >= localTs) {
+                            setState(cloudData);
+                            try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+                        }
                     }
                 }
             } catch { }
@@ -203,9 +239,11 @@ function useStoredState(key, defaultValue) {
             const next = typeof updater === 'function' ? updater(prev) : updater;
             // Guardar inmediatamente en ambos lados
             const json = JSON.stringify(next);
-            lastWrite[key] = Date.now();
-            try { localStorage.setItem(key, json); } catch { }
-            storage.set(key, json).catch(() => {});
+            const ts = Date.now();
+            lastWrite[key] = ts;
+            try { localStorage.setItem(key, json); localStorage.setItem(key + "__ts", String(ts)); } catch { }
+            storage.set(key, json).catch(() => { });
+            storage.set(key + "__ts", String(ts)).catch(() => { });   // sello de fecha: para saber cuál es el más nuevo
             return next;
         });
     }, [key]);
@@ -536,7 +574,7 @@ function Dashboard({ lics, obras, personal, alerts, setView, setDetailObraId, re
             <div style={{ fontSize: 20, fontWeight: 800, color: "#fff" }}>{t(cfg, 'dash_titulo')}</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginTop: 4 }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginTop: 16 }}>
-                {[{ l: t(cfg, 'dash_proyectoes'), v: lics.filter(l => !["adjudicada", "descartada"].includes(l.estado)).length, c: "#7E9CB8" }, { l: t(cfg, 'dash_obras_activas'), v: obras.filter(o => o.estado === "curso").length, c: "#5E8C7B" }, { l: t(cfg, 'dash_alertas'), v: alerts.length, c: "#B0894F" }, { l: t(cfg, 'dash_personal'), v: personal.length, c: "#8A8FA3" }].map(k => (
+                {[{ l: t(cfg, 'dash_proyectoes'), v: lics.filter(l => !["adjudicada", "descartada"].includes(l.estado)).length, c: "#7E9CB8" }, { l: t(cfg, 'dash_obras_activas'), v: obras.filter(o => o.estado === "curso").length, c: "#5E8C7B" }, { l: t(cfg, 'dash_personal'), v: personal.length, c: "#8A8FA3" }].map(k => (
                     <div key={k.l} style={{ background: "rgba(255,255,255,.08)", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
                         <div style={{ fontSize: 22, fontWeight: 800, color: k.c }}>{k.v}</div>
                         <div style={{ fontSize: 9, color: "rgba(255,255,255,.5)", marginTop: 2, lineHeight: 1.3 }}>{k.l}</div>
@@ -552,37 +590,6 @@ function Dashboard({ lics, obras, personal, alerts, setView, setDetailObraId, re
                     <div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{pendObras ? `Obras: ${pendObras}` : "Tocá para ver"} →</div>
                 </div>
             </div>}
-            {alerts.length > 0 && (<div style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Alertas ({alerts.length})</div>
-                    <button onClick={() => setView("seguimiento")} style={{ fontSize: 12, color: T.accent, background: "none", border: "none", fontWeight: 600, cursor: "pointer" }}>Ver todas →</button>
-                </div>
-                {/* Alertas de alta prioridad primero */}
-                {alerts.filter(a => a.prioridad === 'alta').slice(0, 5).map(a => (
-                    <div key={a.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 12px", marginBottom: 6 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#EF4444", flexShrink: 0, marginTop: 4 }} />
-                        <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, flex: 1 }}>{a.msg}</div>
-                    </div>
-                ))}
-                {/* Alertas medias (máx 4) */}
-                {alerts.filter(a => a.prioridad === 'media').slice(0, 4).map(a => (
-                    <div key={a.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", marginBottom: 6 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#F59E0B", flexShrink: 0, marginTop: 4 }} />
-                        <div style={{ fontSize: 12, color: T.text, lineHeight: 1.5, flex: 1 }}>{a.msg}</div>
-                    </div>
-                ))}
-                {alerts.filter(a => a.prioridad === 'media').length > 4 && (
-                    <button onClick={() => setView("seguimiento")} style={{ width: "100%", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "8px", fontSize: 12, color: "#92400E", fontWeight: 600, cursor: "pointer", textAlign: "center" }}>
-                        + {alerts.filter(a => a.prioridad === 'media').length - 4} alertas más → Ver seguimiento
-                    </button>
-                )}
-            </div>)}
-            {alerts.length === 0 && (
-                <div style={{ background: "#ECFDF5", border: "1px solid #86EFAC", borderRadius: 10, padding: "12px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#10B981", flexShrink: 0 }} />
-                    <div style={{ fontSize: 12, color: "#15803D", fontWeight: 600 }}>✓ Todo en orden — sin alertas activas</div>
-                </div>
-            )}
             <div style={{ marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t(cfg, 'dash_obras_curso')}</div>
@@ -1136,15 +1143,22 @@ function TabInformes({ detail, upd }) {
     async function handleFile(e) {
         const files = Array.from(e.target.files);
         const nuevos = [];
+        let fallaron = 0;
         for (const f of files) {
-            const url = await toDataUrl(f);
+            // Subo el archivo real al bucket (como fotos y planos) en vez de embeber
+            // el base64 en la ficha de la obra: eso infla la sincronización con Cliente
+            // y puede fallar en silencio con archivos grandes.
+            const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+            const remoteUrl = await mediaStorage.upload(`informes/${uid()}_${f.name.replace(/\W+/g, "_")}`, dataUrl);
+            if (!remoteUrl) fallaron++;
             nuevos.push({
                 id: uid(), ts: Date.now(), titulo: form.titulo || f.name.replace(/\.[^.]+$/, ''),
                 tipo: form.tipo || subTab, fecha: form.fecha || new Date().toLocaleDateString('es-AR'),
                 notas: form.notas, nombre: f.name, ext: f.name.split('.').pop().toUpperCase(),
-                url, size: (f.size / 1024).toFixed(0) + 'KB', cargado: new Date().toLocaleDateString('es-AR'),
+                url: remoteUrl || dataUrl, size: (f.size / 1024).toFixed(0) + 'KB', cargado: new Date().toLocaleDateString('es-AR'),
             });
         }
+        if (fallaron) alert(`⚠ ${fallaron} archivo(s) quedaron guardados en este dispositivo, pero no se pudieron subir a la nube. No van a verse desde Cliente ni desde otro dispositivo hasta que los vuelvas a cargar con conexión.`);
         upd(detail.id, { informes: [...nuevos, ...informes] });
         setForm({ titulo: '', tipo: 'diario', fecha: '', notas: '' });
         setShowNew(false);
@@ -1173,9 +1187,7 @@ function TabInformes({ detail, upd }) {
                     <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{inf.fecha} · {inf.size}</div>
                 </div>
                 <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                    <a href={inf.url} download={inf.nombre} style={{ textDecoration: "none" }}>
-                        <button style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>↓</button>
-                    </a>
+                    <button onClick={() => descargarArchivo(inf.url, inf.nombre)} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>↓</button>
                     <button onClick={() => upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) })} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
                 </div>
             </div>))}
@@ -1548,7 +1560,6 @@ const SAMPLE_OBRAS = [
   { id:"o1", nombre:"Castores 475", ap:"norte", sector:"Vivienda PB+1", estado:"curso", avance:68, inicio:"10/03/26", cierre:"30/08/26", monto:"12.400.000 $", pagado:8100000, obs:[{id:"b1",txt:"Hormigón visto terminado en PB.",fecha:"20/06/26"}], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
   { id:"o2", nombre:"Puentes 132", ap:"norte", sector:"Refacción integral", estado:"curso", avance:41, inicio:"02/04/26", cierre:"15/09/26", monto:"7.900.000 $", pagado:3000000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
   { id:"o3", nombre:"Golf 2–93", ap:"caba", sector:"Obra nueva", estado:"curso", avance:23, inicio:"20/05/26", cierre:"20/12/26", monto:"21.000.000 $", pagado:0, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
-  { id:"o4", nombre:"Canning 815", ap:"sur", sector:"Fachada Alucobond", estado:"pausada", avance:88, inicio:"05/01/26", cierre:"10/07/26", monto:"15.500.000 $", pagado:13600000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
   { id:"o5", nombre:"A 37", ap:"caba", sector:"Fit-out comercial", estado:"terminada", avance:100, inicio:"01/11/25", cierre:"28/02/26", monto:"9.200.000 $", pagado:9200000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
 ];
 const SAMPLE_LICS = [
@@ -1563,7 +1574,6 @@ const SAMPLE_PERSONAL = [
 ];
 const SAMPLE_ALERTS = [
   { id:"a1", msg:"Marcos Giménez: ART vence en 3 días", prioridad:"alta" },
-  { id:"a2", msg:"Canning 815: 88% pagado pero obra pausada", prioridad:"alta" },
   { id:"a3", msg:"Obra Saavedra: presentación de avance pendiente", prioridad:"media" },
 ];
 
@@ -2304,7 +2314,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)})`).join("\n");
     const li = lics.map(l => `· ${l.nombre} (${l.estado}, ${l.monto || "s/monto"}, ${l.sector})`).join("\n");
     const pe = personal.map(p => `· ${p.nombre} — ${p.rol || ""} en ${((p.obra_ids && p.obra_ids.length) ? p.obra_ids : (p.obra_id ? [p.obra_id] : [])).map(id => obraNom(obras, id)).filter(n => n && n !== "—").join(", ") || "sin obra asignada"}${p.empresa ? ` [${p.empresa}]` : ""}${p.telefono ? ` · WhatsApp ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.adjuntos || []).length ? ` · ${p.adjuntos.length} adjunto(s)` : ""}`).join("\n");
-    const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "vv" ? "enviado a" : "recibido de"} ${p.de === "vv" ? cn : cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
+    const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${esDeCasa(p.de) ? (p.de === "sebastian" ? "consulta interna de Tita" : p.de === "nicolas" ? "consulta interna del asist. de Nicolás" : "enviado a " + cn) : "recibido de " + cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
     const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional.
 
@@ -2418,6 +2428,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       return { role: m.role, content: typeof m.content === "string" ? m.content : m.content };
     });
     const r = await callAI(apiMsgs, buildSystem(), apiKey, useSearch);
+    if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(r || ""))) { setMsgs(prev => [...prev, { role: "assistant", content: "⚠ Me quedé sin crédito de IA por ahora. Para que vuelva a funcionar, hay que recargar crédito de la API en console.anthropic.com (Plans & Billing)." }]); setLoading(false); return; }
     const { limpio, accion } = parseAccion(r);
     let extra = {};
     if (accion && accion.tipo === "traer_plano") {
@@ -2511,7 +2522,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
             const pedsNext = [np, ...peds]; try { localStorage.setItem("vv_pedidos", JSON.stringify(pedsNext)); } catch { } await storage.set("vv_pedidos", JSON.stringify(pedsNext)).catch(() => { });
             textoResp = `No tengo ese dato en la app de V+V. Lo derivé al personal de V+V como URGENTE (quedó en Pedidos). Te respondemos apenas lo tengan.`;
           }
-          arr2.push({ id: uid() + Date.now(), from: "vv", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
+          arr2.push({ id: uid() + Date.now(), from: "vv", to: pend.from, qid: pend.id, texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
           try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
           await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
           } catch { }
@@ -2521,7 +2532,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         const rp = await storage.get("vv_pedidos");
         if (rp?.value) {
           const peds = JSON.parse(rp.value);
-          const incoming = peds.filter(p => p.para === "vv" && p.de !== "vv");
+          const incoming = peds.filter(p => p.para === "vv" && !esDeCasa(p.de));
           if (pedSeen.current === null) pedSeen.current = new Set(incoming.map(p => p.id));
           else {
             const nuevos = incoming.filter(p => !pedSeen.current.has(p.id));
@@ -2546,7 +2557,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v10 sonnet5" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v23 limpia-canning" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -3234,6 +3245,7 @@ function AlertasWaView({ db, onBack }) {
 const PEDIDO_ESTADOS = { abierto:{l:"Abierto",c:"#F59E0B",b:"#FFFBEB"}, en_proceso:{l:"En proceso",c:"#3B82F6",b:"#EFF6FF"}, respondido:{l:"Respondido",c:"#8B5CF6",b:"#F5F3FF"}, resuelto:{l:"Resuelto",c:"#16A34A",b:"#ECFDF5"} };
 const PEDIDO_MAX_IA = 4; // tope de intercambios automáticos IA↔IA por pedido
 function parseAccion(texto){ const t=texto||""; let m=t.match(/```accion\s*([\s\S]*?)```/i)||t.match(/```accion\s*([\s\S]*)$/i); if(!m) return {limpio:texto,accion:null}; let raw=m[1].trim(); let a=null; try{a=JSON.parse(raw);}catch{ const i=raw.indexOf("{"),j=raw.lastIndexOf("}"); if(i>=0&&j>i){ try{a=JSON.parse(raw.slice(i,j+1));}catch{} } } return {limpio:(t.replace(m[0],"").trim()||"Listo."),accion:a}; }
+function esDeCasa(de){ return de === "vv" || de === "sebastian" || de === "nicolas"; }
 function nuevoPedido({de,para,asunto,detalle,prioridad,obra_id}){ const f=hoyStr(),ts=Date.now(); return {id:uid()+ts, de, para, asunto:asunto||"(sin asunto)", estado:"abierto", prioridad:prioridad||"media", obra_id:obra_id||"", fecha:f, ts, iaTurns:0, hilo:[{de,texto:detalle||asunto||"",fecha:f,ts,porIA:false}]}; }
 async function aplicarPedidos(setPedidos, fn){ let arr=[]; try{const r=await storage.get("vv_pedidos"); if(r?.value) arr=JSON.parse(r.value);}catch{} const next=fn(arr.slice()); setPedidos(next); return next; }
 async function ejecutarAccion(accion, miSide, ctx){
@@ -3295,14 +3307,15 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   const fileRef = useRef(null);
   async function addAdj(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await toDataUrl(f); const url = await uploadFoto(data, "pedidos", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url, img: f.type.startsWith("image/") }); } setAdj(p => [...p, ...nuevos]); e.target.value = ""; }
 
-  useEffect(() => { const pull = async () => { try { const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch {} }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
+  useEffect(() => { const pull = async () => { try { if (Date.now() - (lastWrite["vv_pedidos"] || 0) < 8000) return; const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch {} }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
 
-  const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : p.de === miSide);
+  const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : esDeCasa(p.de));
   const cur = open ? pedidos.find(p => p.id === open) : null;
   function crear() { if (!nuevo.asunto?.trim()) return; aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: miSide, para: "cliente", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }), ...arr]); setNuevo(null); }
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
   function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
+  function borrarMsgHilo(pedidoId, idx) { if (!confirm("¿Eliminar este mensaje/archivo del hilo?")) return; aplicarPedidos(setPedidos, arr => arr.map(x => x.id === pedidoId ? { ...x, hilo: (x.hilo || []).filter((_, j) => j !== idx) } : x)); }
   async function responderIA(p) {
     setIaLoad(true);
     const hist = p.hilo.map(h => `${h.de === miSide ? "Nosotros (V+V)" : otroNom}: ${h.texto}`).join("\n");
@@ -3310,7 +3323,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
     const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey, false);
     setReply(r); setIaLoad(false);
   }
-  const persp = (h) => h.de === miSide;
+  const persp = (h) => esDeCasa(h.de);
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="pedidos" label="Pedidos · Seguimiento" sub={`Gestión de temas con ${otroNom}`} onBack={onBack} />
@@ -3335,7 +3348,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
               {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "2px 7px" }}>🏗 {obraNom(obras, p.obra_id)}</span>}
               {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "#FEF2F2", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
-              <span style={{ fontSize: 10.5, color: T.muted }}>{p.de === miSide ? "Enviado" : "Recibido"} · {p.fecha}</span>
+              <span style={{ fontSize: 10.5, color: T.muted }}>{esDeCasa(p.de) ? (p.de === "sebastian" || p.de === "nicolas" ? "Interno" : "Enviado") : "Recibido"} · {p.fecha}</span>
             </div>
             <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>{ult?.porIA ? "🤖 " : ""}{ult?.texto}</div>
           </div>
@@ -3351,7 +3364,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
           <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{cur.asunto}</div>
           <Badge color={e.c} bg={e.b}>{e.l}</Badge>
         </div>
-        <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{cur.de === miSide ? `Enviado a ${otroNom}` : `Recibido de ${otroNom}`} · {cur.fecha} · prioridad {cur.prioridad}</div>
+        <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{esDeCasa(cur.de) ? (cur.de === "sebastian" ? "Consulta interna · Tita" : cur.de === "nicolas" ? "Consulta interna · Nicolás" : `Enviado a ${otroNom}`) : `Recibido de ${otroNom}`} · {cur.fecha} · prioridad {cur.prioridad}</div>
         {cur.obra_id && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 6, padding: "4px 10px", marginTop: 8 }}>🏗 Obra: {obraNom(obras, cur.obra_id)}</div>}
         <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
           {Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{v.l}</button>)}
@@ -3365,7 +3378,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
             {h.texto}
             {(h.archivos || []).map((a, j) => a.img ? <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 7 }}><img src={a.url} alt={a.nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} /></a> : <a key={j} href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}>📎 {a.nombre}</a>)}
           </div>
-          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "🤖 IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}</div>
+          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "🤖 IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}{mine && i > 0 && <span onClick={() => borrarMsgHilo(cur.id, i)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
         </div>
       </div>); })}
       <div style={{ marginTop: 12 }}>
@@ -3373,8 +3386,8 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
         {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>{a.img ? "🖼" : "📎"} {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button onClick={() => fileRef.current?.click()} style={{ width: 44, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, fontSize: 17, cursor: "pointer" }}>＋</button>
-          <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{iaLoad ? "Redactando…" : "🤖 Redactar con IA"}</button>
+          <button onClick={() => fileRef.current?.click()} style={{ background: T.al, color: T.accent, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>📎 Adjuntar</button>
+          <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{iaLoad ? "Redactando…" : "🤖 IA"}</button>
           <PBtn onClick={() => responder(cur.id, reply, false, adj)} style={{ flex: 1 }}>Enviar</PBtn>
         </div>
       </div>
@@ -3860,7 +3873,7 @@ function AvanceView({ obras, avance, setAvance, apiKey }) {
         {obras.length === 0 && <option value="">No hay obras</option>}
         {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
       </select>
-      <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onFoto} style={{ display: "none" }} />
+      <input ref={fileRef} type="file" accept="image/*" onChange={onFoto} style={{ display: "none" }} />
       <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Analizando…" : "📷 Tomar / subir foto de hoy"}</button>
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: sacá la foto siempre desde el mismo lugar y ángulo para que la comparación sea más precisa. El % es una estimación visual, no una medición exacta.</div>
@@ -3907,10 +3920,10 @@ function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
           </div>
         </div>
         <nav style={{ maxWidth:1180, margin:"0 auto", padding:"4px 12px 0", display:"flex", gap:2, justifyContent:"center", flexWrap:"wrap" }}>
-          {WEB_NAV.map(n=>{ const active=view===n.id; return (
-            <button key={n.id} onClick={()=>go(n.id)} style={{ position:"relative", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, fontWeight:active?800:600, color:active?T.accent:T.sub, letterSpacing:"0.02em", borderBottom:`2px solid ${active?BRASS:"transparent"}`, whiteSpace:"nowrap", cursor:"pointer" }}>
+          {WEB_NAV.map(n=>{ const active=view===n.id; const hayNuevo=cnt(n.id) > 0; return (
+            <button key={n.id} onClick={()=>go(n.id)} style={{ position:"relative", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, fontWeight:(active||hayNuevo)?800:600, color:hayNuevo?"#EF4444":(active?T.accent:T.sub), letterSpacing:"0.02em", borderBottom:`2px solid ${active?BRASS:"transparent"}`, whiteSpace:"nowrap", cursor:"pointer" }}>
               {n.label}
-              {cnt(n.id) > 0 && <span style={{ position:"absolute", top:3, right:2, background:"#EF4444", color:"#fff", borderRadius:9, minWidth:16, height:16, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px" }}>{cnt(n.id) > 99 ? "99+" : cnt(n.id)}</span>}
+              {hayNuevo && <span style={{ position:"absolute", top:3, right:2, background:"#EF4444", color:"#fff", borderRadius:9, minWidth:16, height:16, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px" }}>{cnt(n.id) > 99 ? "99+" : cnt(n.id)}</span>}
             </button>
           ); })}
         </nav>
@@ -4041,6 +4054,7 @@ function App() {
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   const [iaDialogo, setIaDialogo] = useState([]);
+  useEffect(() => { if (localStorage.getItem("purge_canning_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_v1", "1"); } catch { } } catch { } })(); }, []);
   useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
