@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v106 (Finanzas: tabla de la Camara al lado, se carga de un toque)
+// VERSION: v107 (Finanzas: boton REDETERMINAR PRECIO con chequeo previo + historial)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -413,6 +413,11 @@ function RedeterminacionTab({ obras, data, save }) {
     } catch (e) { setErrBusq(e.message || "No pude buscar. Revisá la conexión."); }
     setBuscando(false);
   };
+  // huella de los índices del período: si cambia alguno, el "chequeado" se cae solo
+  const huella = meses.slice(1).map(mm => `${mm}:${cac[mm] != null ? cac[mm] : "-"}`).join("|") + "|" + mesBase + "|" + base;
+  const verificado = cot.verifHuella === huella;
+  const setVerificado = (v) => setCot("verifHuella", v ? huella : "");
+
   const ref = data.cacRef || null;
   const refDe = (mm) => (ref && (ref.meses || []).find(x => x.mes === mm)) || null;
   const usarRef = (mm, v) => setIndice(mm, v);
@@ -421,6 +426,43 @@ function RedeterminacionTab({ obras, data, save }) {
     const next = { ...(data.cacMensual || {}) };
     (ref.meses || []).forEach(x => { if (meses.includes(x.mes)) next[x.mes] = Number(x.variacion); });
     save({ ...data, cacMensual: next });
+  };
+
+  // ---- REDETERMINAR: el precio ajustado pasa a ser el nuevo precio base ----
+  const redeterminar = () => {
+    if (!verificado) return;
+    const obraLig = (obras || []).find(o => o.id === cot.obraId);
+    const detalle = `Base ${money(base)}/m² (${nomMes(mesBase)}) → ${money(precioRedet)}/m² (${nomMes(mesHasta)})\nCAC acumulado: ${acumPct.toFixed(2)}% en ${filas.length - 1} mes(es)` +
+      (costoBase > 0 ? `\nCosto: ${money(costoBase)} → ${money(costoRedet)}/m²` : "") +
+      (obraLig ? `\n\nTambién se actualiza la obra "${obraLig.nombre}" y su mes base pasa a ${nomMes(mesHasta)}.` : "");
+    if (!window.confirm("REDETERMINAR EL PRECIO\n\n" + detalle + "\n\n¿Confirmás?")) return;
+
+    const hist = [...(data.redetHist || []), {
+      id: uid() + Date.now(), ts: Date.now(),
+      baseAnt: base, mesAnt: mesBase, baseNuevo: Math.round(precioRedet), mesNuevo: mesHasta,
+      costoAnt: costoBase || null, costoNuevo: costoBase > 0 ? Math.round(costoRedet) : null,
+      acum: Number(acumPct.toFixed(2)), meses: filas.length - 1,
+      obra: obraLig ? obraLig.nombre : "", obraId: obraLig ? obraLig.id : "",
+    }];
+    const obrasNext = obraLig
+      ? (data.obras || []).map(o => o.id === obraLig.id
+        ? { ...o, precioCliente: Math.round(precioRedet), costoM2: costoBase > 0 ? Math.round(costoRedet) : o.costoM2, mesBase: mesHasta }
+        : o)
+      : (data.obras || []);
+    save({
+      ...data,
+      obras: obrasNext,
+      redetHist: hist,
+      redet: {
+        ...cot,
+        base: fmtMiles(Math.round(precioRedet)),          // el nuevo precio ES la base
+        costoBase: costoBase > 0 ? fmtMiles(Math.round(costoRedet)) : cot.costoBase,
+        mesBase: mesHasta,                                 // y el mes base avanza
+        mesHasta: mesHasta,
+        verifHuella: "",                                   // se descheckea: es otro período
+      },
+    });
+    alert(`Precio redeterminado.\n\nNuevo precio base: ${money(precioRedet)}/m² desde ${nomMes(mesHasta)}.` + (obraLig ? `\nObra "${obraLig.nombre}" actualizada.` : ""));
   };
 
   // ---- traer el precio de una obra que ya tenés ----
@@ -519,6 +561,44 @@ function RedeterminacionTab({ obras, data, save }) {
 
     {faltan > 0 && <div style={{ background: "rgba(240,165,0,.12)", border: "1px solid rgba(240,165,0,.35)", borderRadius: 10, padding: "11px 12px", marginBottom: 12, fontSize: 11.5, color: "#8A6100", lineHeight: 1.55 }}>
       ⚠ Faltan <b>{faltan}</b> mes(es) de índice CAC. Los estoy tomando como <b>0%</b>: el precio de arriba está <b>por debajo del real</b>. Cargalos abajo.
+    </div>}
+
+    {/* CHEQUEO + REDETERMINAR */}
+    <div style={{ background: T.card, border: `2px solid ${verificado ? "#16A34A" : T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
+      <button onClick={() => setVerificado(!verificado)} disabled={filas.length < 2}
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, background: verificado ? "rgba(22,163,74,.10)" : T.al, border: `1px solid ${verificado ? "#16A34A" : T.border}`, borderRadius: 10, padding: "12px", cursor: filas.length < 2 ? "default" : "pointer", textAlign: "left" }}>
+        <span style={{ width: 24, height: 24, borderRadius: 6, border: `2px solid ${verificado ? "#16A34A" : T.border}`, background: verificado ? "#16A34A" : "transparent", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, flexShrink: 0 }}>{verificado ? "✓" : ""}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: verificado ? "#16A34A" : T.sub, lineHeight: 1.4 }}>Chequeé los índices CAC. Están todos bien cargados.</span>
+      </button>
+
+      {faltan > 0 && verificado && <div style={{ fontSize: 10.5, color: "#8A6100", marginTop: 7, lineHeight: 1.5 }}>⚠ Igual te faltan {faltan} mes(es): el precio va a quedar por debajo del real.</div>}
+
+      <button onClick={redeterminar} disabled={!verificado}
+        style={{ width: "100%", marginTop: 10, background: verificado ? `linear-gradient(135deg, ${BRASS}, #C89A5E)` : T.border, color: verificado ? "#fff" : T.muted, border: "none", borderRadius: 11, padding: "16px", fontSize: 15, fontWeight: 800, letterSpacing: "0.02em", cursor: verificado ? "pointer" : "default", boxShadow: verificado ? "0 4px 14px rgba(176,137,79,.35)" : "none" }}>
+        REDETERMINAR PRECIO
+      </button>
+      <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5, textAlign: "center" }}>
+        {verificado
+          ? <>El precio pasa a ser <b style={{ color: BRASS }}>{money(precioRedet)}/m²</b> con mes base <b>{nomMes(mesHasta)}</b>{cot.obraId ? ", y se actualiza la obra ligada" : ""}.</>
+          : "Marcá la casilla de arriba para habilitarlo."}
+      </div>
+      {(obras || []).length > 0 && <div style={{ marginTop: 9 }}>
+        <label style={lb}>Obra a redeterminar (opcional)</label>
+        <select value={cot.obraId || ""} onChange={e => setCot("obraId", e.target.value)} style={{ ...inp2, fontSize: 13.5 }}>
+          <option value="">— ninguna: solo redeterminar el precio de acá —</option>
+          {(obras || []).map(o => <option key={o.id} value={o.id}>{o.nombre} ({money(o.precioCliente)}/m², base {nomMes(o.mesBase)})</option>)}
+        </select>
+      </div>}
+    </div>
+
+    {/* HISTORIAL */}
+    {(data.redetHist || []).length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Redeterminaciones hechas</div>
+      {[...(data.redetHist || [])].reverse().map(h => <div key={h.id} style={{ borderLeft: `3px solid ${BRASS}`, paddingLeft: 10, marginBottom: 10 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 800 }}>{money(h.baseAnt)} → <span style={{ color: BRASS }}>{money(h.baseNuevo)}</span> /m²</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{nomMes(h.mesAnt)} → {nomMes(h.mesNuevo)} · CAC {h.acum}% en {h.meses} mes(es){h.obra ? ` · ${h.obra}` : ""}</div>
+        <div style={{ fontSize: 9.5, color: T.muted }}>{new Date(h.ts).toLocaleDateString("es-AR")}</div>
+      </div>)}
     </div>}
 
     {/* 3 · PASARLO A UNA OBRA */}
