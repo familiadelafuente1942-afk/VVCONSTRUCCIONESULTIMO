@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v107 (Finanzas: boton REDETERMINAR PRECIO con chequeo previo + historial)
+// VERSION: v108 (Finanzas: FIX - el ajuste es por MANO DE OBRA, no por el indice general)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -325,22 +325,41 @@ function mensajeCertificadoTexto(obra, data, certsDe, indices) {
     `El PDF del certificado te lo adjunto aparte. Cualquier cosa avisame. Saludos.`;
 }
 
-// Busca el índice CAC en internet (la IA con búsqueda web, del lado del servidor).
-// NO escribe nada solo: devuelve los valores para que los revises y confirmes.
-async function buscarCAC(desde, hasta) {
-  const sys = `Sos un asistente de datos para una constructora argentina. Buscá en internet el ÍNDICE DE LA CÁMARA ARGENTINA DE LA CONSTRUCCIÓN (CAC) — el "Índice del Costo de la Construcción" que publica la CAC.
-Necesito la VARIACIÓN MENSUAL en porcentaje (ej: 3.5 significa +3,5% respecto del mes anterior) para cada mes del período pedido.
-Buscá en fuentes oficiales: camarco.org.ar, o los informes de la CAC. Si un mes todavía no fue publicado, NO lo inventes: omitilo.
-Respondé ÚNICAMENTE con un JSON válido, sin texto alrededor y sin markdown:
-{"meses":[{"mes":"AAAA-MM","variacion":3.5,"indice":1234.56}],"fuente":"URL de donde lo sacaste","nota":"aclaración breve si hace falta"}
-El campo "indice" es opcional (el número índice, si lo encontrás). El campo "variacion" es obligatorio y es un número, no un texto.
-Si no encontrás datos confiables, devolvé {"meses":[],"fuente":"","nota":"por qué no lo encontraste"}.`;
+// Componentes del índice de la construcción. Lo que se ajusta en los contratos de
+// mano de obra NO es el índice general (que promedia materiales), sino el capítulo MANO DE OBRA.
+const CAC_COMP = {
+  mo: { nom: "Mano de obra", det: "Capítulo Mano de Obra del índice de la construcción. Es el que corresponde si lo que ajustás es mano de obra.", en: "Mano de Obra (labour) chapter" },
+  mat: { nom: "Materiales", det: "Capítulo Materiales. Se mueve muy distinto de la mano de obra.", en: "Materiales (materials) chapter" },
+  gral: { nom: "General", det: "Índice general: promedia materiales + mano de obra + gastos generales. NO sirve si ajustás solo mano de obra.", en: "General index (all chapters)" },
+};
+
+// Busca el índice en internet (la IA con búsqueda web, del lado del servidor).
+// NO escribe nada solo: devuelve los valores para que los revises.
+async function buscarCAC(desde, hasta, comp) {
+  const C = CAC_COMP[comp] || CAC_COMP.mo;
+  const sys = `Sos un asistente de datos para una constructora argentina.
+Buscá en internet la VARIACIÓN MENSUAL (%) del capítulo **${C.en}** del Índice del Costo de la Construcción argentino.
+
+MUY IMPORTANTE: NO quiero el índice general ni el nivel general. Quiero EXCLUSIVAMENTE el capítulo/rubro **${C.nom}**.
+Si la fuente publica el índice desagregado por capítulos (Materiales / Mano de Obra / Gastos Generales), tomá SOLO el de ${C.nom}.
+Si solo encontrás el nivel general y no el capítulo desagregado, NO lo devuelvas: informalo en "nota".
+
+Fuentes válidas, en este orden:
+1. Cámara Argentina de la Construcción (camarco.org.ar) — su índice de costos con apertura por capítulo.
+2. INDEC — Índice del Costo de la Construcción (ICC) en el Gran Buenos Aires, capítulo ${C.nom}.
+Aclará SIEMPRE en "fuente" de cuál de las dos salió, porque no dan lo mismo.
+
+Respondé ÚNICAMENTE con JSON válido, sin markdown ni texto alrededor:
+{"meses":[{"mes":"AAAA-MM","variacion":3.5,"indice":1234.56}],"fuente":"nombre + URL","capitulo":"${C.nom}","nota":"aclaración breve"}
+"variacion" = variación mensual en % respecto del mes anterior, número (ej: 3.5). Obligatorio.
+Si un mes no fue publicado todavía, omitilo. NUNCA inventes un valor.
+Si no encontrás el capítulo desagregado, devolvé {"meses":[],"fuente":"","capitulo":"${C.nom}","nota":"explicá qué encontraste y qué no"}.`;
   const body = {
     model: "claude-sonnet-5",
-    max_tokens: 2000,
+    max_tokens: 2500,
     system: sys,
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 6 }],
-    messages: [{ role: "user", content: `Traeme la variación mensual del índice CAC desde ${desde} hasta ${hasta} inclusive. Solo el JSON.` }],
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }],
+    messages: [{ role: "user", content: `Variación mensual del capítulo ${C.nom} desde ${desde} hasta ${hasta} inclusive. Solo el JSON.` }],
   };
   const r = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const d = await r.json();
@@ -349,7 +368,10 @@ Si no encontrás datos confiables, devolvé {"meses":[],"fuente":"","nota":"por 
   const m = texto.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("La IA no devolvió datos usables.");
   const j = JSON.parse(m[0]);
-  return { meses: (j.meses || []).filter(x => x && x.mes && x.variacion != null && isFinite(Number(x.variacion))), fuente: j.fuente || "", nota: j.nota || "" };
+  return {
+    meses: (j.meses || []).filter(x => x && x.mes && x.variacion != null && isFinite(Number(x.variacion))),
+    fuente: j.fuente || "", capitulo: j.capitulo || C.nom, nota: j.nota || "", comp,
+  };
 }
 
 // ============ REDETERMINACIÓN (CAC acumulativo) ============
@@ -359,6 +381,10 @@ Si no encontrás datos confiables, devolvé {"meses":[],"fuente":"","nota":"por 
 // el mes viejo, los certificados volverían a aplicar el mismo CAC (lo contaría dos veces).
 function RedeterminacionTab({ obras, data, save }) {
   const cac = data.cacMensual || {};
+  const comp = data.cacComp || "mo";                      // por defecto: MANO DE OBRA
+  const setComp = (c) => save({ ...data, cacComp: c });
+  const hayCargados = Object.keys(cac).length > 0;
+  const sinMarcar = hayCargados && !data.cacComp;         // cargados antes de que existiera el selector
   const [buscando, setBuscando] = useState(false);
   const [errBusq, setErrBusq] = useState("");
   const cot = data.redet || {};
@@ -404,12 +430,12 @@ function RedeterminacionTab({ obras, data, save }) {
     try {
       const pedir = meses.slice(1);
       if (!pedir.length) { setErrBusq("Elegí un período primero."); setBuscando(false); return; }
-      const res = await buscarCAC(pedir[0], pedir[pedir.length - 1]);
+      const res = await buscarCAC(pedir[0], pedir[pedir.length - 1], comp);
       if (!res.meses.length) { setErrBusq(res.nota || "No encontré datos de CAC para ese período."); setBuscando(false); return; }
       // se guarda como TABLA DE REFERENCIA, aparte de tu planilla. No cambia ningún cálculo.
       const refPrev = (data.cacRef && data.cacRef.meses) || [];
       const mapa = {}; refPrev.forEach(x => { mapa[x.mes] = x; }); res.meses.forEach(x => { mapa[x.mes] = x; });
-      save({ ...data, cacRef: { meses: Object.values(mapa).sort((a, b) => a.mes < b.mes ? -1 : 1), fuente: res.fuente, nota: res.nota, ts: Date.now() } });
+      save({ ...data, cacComp: comp, cacRef: { meses: Object.values(mapa).sort((a, b) => a.mes < b.mes ? -1 : 1), fuente: res.fuente, capitulo: res.capitulo, nota: res.nota, comp, ts: Date.now() } });
     } catch (e) { setErrBusq(e.message || "No pude buscar. Revisá la conexión."); }
     setBuscando(false);
   };
@@ -421,6 +447,10 @@ function RedeterminacionTab({ obras, data, save }) {
   const ref = data.cacRef || null;
   const refDe = (mm) => (ref && (ref.meses || []).find(x => x.mes === mm)) || null;
   const usarRef = (mm, v) => setIndice(mm, v);
+  const borrarIndices = () => {
+    if (!window.confirm("Borrar TODOS los índices cargados.\n\nSe borran de la planilla y de los certificados que los usan.\n¿Seguro?")) return;
+    save({ ...data, cacMensual: {}, cacRef: null, cacComp: comp, redet: { ...cot, verifHuella: "" } });
+  };
   const cargarTodosRef = () => {
     if (!ref) return;
     const next = { ...(data.cacMensual || {}) };
@@ -636,11 +666,33 @@ function RedeterminacionTab({ obras, data, save }) {
       </div>}
     </div>
 
+    {/* QUÉ ÍNDICE SE AJUSTA */}
+    <div style={{ background: T.card, border: `2px solid ${comp === "mo" ? T.border : "#DC2626"}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>¿Qué índice ajusta el contrato?</div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {Object.entries(CAC_COMP).map(([k, v]) => { const act = comp === k;
+          return <button key={k} onClick={() => setComp(k)} style={{ flex: 1, background: act ? (k === "mo" ? "#16A34A" : "#DC2626") : T.al, color: act ? "#fff" : T.sub, border: `1px solid ${act ? (k === "mo" ? "#16A34A" : "#DC2626") : T.border}`, borderRadius: 9, padding: "11px 4px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>{act ? "✓ " : ""}{v.nom}</button>; })}
+      </div>
+      <div style={{ fontSize: 10.5, color: T.sub, marginTop: 8, lineHeight: 1.55 }}>{(CAC_COMP[comp] || CAC_COMP.mo).det}</div>
+      {comp !== "mo" && <div style={{ background: "rgba(220,38,38,.08)", border: "1px solid rgba(220,38,38,.3)", borderRadius: 8, padding: "9px 11px", marginTop: 8, fontSize: 11, color: "#DC2626", lineHeight: 1.5 }}>
+        ⚠ Si lo que ajustás es <b>mano de obra</b>, este índice no corresponde: mezcla el precio de los materiales, que se mueve muy distinto.
+      </div>}
+      {sinMarcar && <div style={{ background: "rgba(220,38,38,.10)", border: "1px solid rgba(220,38,38,.35)", borderRadius: 9, padding: "11px 12px", marginTop: 9, fontSize: 11.5, color: "#DC2626", lineHeight: 1.55 }}>
+        <b>⚠ Los índices que tenés cargados pueden ser del índice GENERAL.</b><br />
+        Se cargaron antes de que existiera este selector, así que no sé de qué capítulo son. Si ajustás mano de obra, <b>están mal</b>. Borralos y traé los de mano de obra.
+        <button onClick={borrarIndices} style={{ width: "100%", marginTop: 9, background: "#DC2626", color: "#fff", border: "none", borderRadius: 8, padding: "11px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Borrar los índices cargados y empezar de nuevo</button>
+      </div>}
+      {hayCargados && !sinMarcar && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>{Object.keys(cac).length} mes(es) cargados como <b style={{ color: comp === "mo" ? "#16A34A" : "#DC2626" }}>{(CAC_COMP[comp] || CAC_COMP.mo).nom}</b></span>
+        <button onClick={borrarIndices} style={{ background: "none", border: "none", color: "#DC2626", fontSize: 10.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>borrar todos</button>
+      </div>}
+    </div>
+
     {/* TABLA DE LA CÁMARA — queda al lado, para copiar de un toque */}
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase" }}>Tabla de la Cámara (CAC)</div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase" }}>Tabla · {(CAC_COMP[comp] || CAC_COMP.mo).nom}</div>
           {ref && ref.ts && <div style={{ fontSize: 9.5, color: T.muted, marginTop: 2 }}>Traída el {new Date(ref.ts).toLocaleDateString("es-AR")}</div>}
         </div>
         <button onClick={buscarEnInternet} disabled={buscando} style={{ background: buscando ? T.border : T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "9px 13px", fontSize: 11.5, fontWeight: 800, cursor: buscando ? "default" : "pointer", whiteSpace: "nowrap" }}>
@@ -665,7 +717,11 @@ function RedeterminacionTab({ obras, data, save }) {
           })}
         </div>
         <button onClick={cargarTodosRef} style={{ width: "100%", marginTop: 9, background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "12px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>Cargar todos de una vez</button>
-        {ref.fuente && <a href={ref.fuente} target="_blank" rel="noreferrer" style={{ display: "block", fontSize: 10, color: T.accent, marginTop: 8, wordBreak: "break-all", textDecoration: "none" }}>Fuente: {ref.fuente}</a>}
+        {ref.comp && ref.comp !== comp && <div style={{ background: "rgba(220,38,38,.10)", border: "1px solid rgba(220,38,38,.35)", borderRadius: 8, padding: "9px 11px", marginTop: 8, fontSize: 11, color: "#DC2626", lineHeight: 1.5 }}>
+          ⚠ Esta tabla es de <b>{(CAC_COMP[ref.comp] || {}).nom}</b>, pero elegiste <b>{(CAC_COMP[comp] || {}).nom}</b>. Volvé a traerla.
+        </div>}
+        {ref.capitulo && <div style={{ fontSize: 10.5, color: T.sub, marginTop: 8 }}>Capítulo: <b>{ref.capitulo}</b></div>}
+        {ref.fuente && <a href={ref.fuente} target="_blank" rel="noreferrer" style={{ display: "block", fontSize: 10, color: T.accent, marginTop: 4, wordBreak: "break-all", textDecoration: "none" }}>Fuente: {ref.fuente}</a>}
         {ref.nota && <div style={{ fontSize: 10.5, color: T.sub, marginTop: 5, lineHeight: 1.45 }}>{ref.nota}</div>}
         <div style={{ background: "rgba(240,165,0,.10)", borderRadius: 7, padding: "8px 10px", marginTop: 8, fontSize: 10, color: "#8A6100", lineHeight: 1.5 }}>
           Estos valores los trajo la IA de internet. Contrastalos con el informe de la Cámara antes de certificar.
@@ -678,7 +734,7 @@ function RedeterminacionTab({ obras, data, save }) {
       <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Cómo se arma, mes por mes</div>
       <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Cada ajuste va <b>sobre el monto ya ajustado</b>. Cargá el % CAC de cada mes.</div>
       <div style={{ display: "grid", gridTemplateColumns: "52px 62px 54px 1fr", gap: 5, fontSize: 9, color: T.muted, fontWeight: 700, textTransform: "uppercase", paddingBottom: 6, borderBottom: `1px solid ${T.border}` }}>
-        <div>Mes</div><div>Tu %</div><div style={{ color: BRASS }}>Cámara</div><div style={{ textAlign: "right" }}>Precio /m²</div>
+        <div>Mes</div><div>Tu %</div><div style={{ color: BRASS }}>{comp === "mo" ? "M. obra" : comp === "mat" ? "Materi." : "General"}</div><div style={{ textAlign: "right" }}>Precio /m²</div>
       </div>
       {filas.map((f, i) => { const rf = refDe(f.mes);
         return <div key={f.mes} style={{ display: "grid", gridTemplateColumns: "52px 62px 54px 1fr", gap: 5, alignItems: "center", padding: "7px 0", borderBottom: i < filas.length - 1 ? `1px solid ${T.border}` : "none" }}>
