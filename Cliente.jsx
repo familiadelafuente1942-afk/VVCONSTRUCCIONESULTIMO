@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-// VERSION: v5 (Cliente: borrar obras + FIX sync - el borrado ya no resucita)
+// VERSION: v8 (Cliente: FIX Pedidos rompia por bug de copiado - ReferenceError setObras/o/borrarObra)
 // ════════════════════════════════════════════════════════════════════
 // PANEL DE CLIENTE — App independiente y descargable
 // Mismo backend Supabase que la app de V+V → los datos se comparten.
@@ -90,6 +90,69 @@ function fileToDataUrl(f, maxW = 1400) {
     };
     reader.onerror = rej; reader.readAsDataURL(f);
   });
+}
+
+// ── CACHÉ LOCAL DE ARCHIVOS (IndexedDB) ─────────────────────────────
+// La primera vez que se abre un archivo en ESTE dispositivo hace falta conexión
+// para traerlo. Pero a partir de ahí queda GUARDADO ACÁ (en este teléfono/iPad,
+// no en la nube), y las próximas veces se abre directo desde esa copia local,
+// sin volver a pedirle nada a Supabase. Por eso antes "quedaba pensando" sin
+// conexión: siempre iba a buscarlo al servidor, nunca se quedaba con una copia.
+const CACHE_DB = "vv_archivos_cache", CACHE_STORE = "files";
+function abrirCacheDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(CACHE_DB, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(CACHE_STORE); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function cacheGet(url) {
+  try {
+    const db = await abrirCacheDB();
+    return await new Promise((res, rej) => {
+      const r = db.transaction(CACHE_STORE, "readonly").objectStore(CACHE_STORE).get(url);
+      r.onsuccess = () => res(r.result || null);
+      r.onerror = () => rej(r.error);
+    });
+  } catch { return null; }
+}
+async function cachePut(url, blob) {
+  try {
+    const db = await abrirCacheDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(CACHE_STORE, "readwrite");
+      tx.objectStore(CACHE_STORE).put(blob, url);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch { }
+}
+// Abre un archivo usando la copia local si ya está en este dispositivo (funciona
+// SIN conexión). Si todavía no está, la trae una vez (necesita conexión esa
+// primera vez) y la guarda para que la próxima sea instantánea y offline.
+async function abrirArchivo(url, nombre) {
+  if (!url) return { ok: false, motivo: "sin-url" };
+  if (url.startsWith("data:")) { window.open(url, "_blank"); return { ok: true }; }
+  let blob = await cacheGet(url);
+  let nuevo = false;
+  if (!blob) {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, motivo: "sin-conexion" };
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("no se pudo traer");
+      blob = await r.blob();
+      nuevo = true;
+    } catch { return { ok: false, motivo: "sin-conexion" }; }
+  }
+  const objUrl = URL.createObjectURL(blob);
+  window.open(objUrl, "_blank");
+  if (nuevo) cachePut(url, blob);
+  return { ok: true, nuevo };
+}
+async function descargarArchivo(url, nombre) {
+  const r = await abrirArchivo(url, nombre);
+  if (!r.ok) alert("Este archivo todavía no está guardado en este dispositivo.\n\nAbrilo una vez con conexión y, de ahí en adelante, se va a poder ver sin internet.");
+  return r.ok;
 }
 
 const FORCE_CLOUD = (() => { try { return new URLSearchParams(window.location.search).has("sync"); } catch { return false; } })();
@@ -880,7 +943,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
         <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>{Pill("todos", "Todos")}{Pill("recibidos", "Recibidos")}{Pill("enviados", "Enviados")}</div>
         <button onClick={() => setNuevo({ asunto: "", detalle: "", prioridad: "media", obra_id: obras[0]?.id || "" })} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, marginBottom: 16 }}>＋ Nuevo pedido a V+V</button>
         {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 18px" }}>Sin pedidos. Creá uno o pedíselo al Asistente IA.</div>}
-        {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado]; const ult = p.hilo[p.hilo.length - 1]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9 }}>
+        {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado] || PEDIDO_ESTADOS.abierto; const ult = (p.hilo || [])[p.hilo?.length - 1]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9 }}>
           <div onClick={() => { setOpen(p.id); setReply(""); }} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>
@@ -893,13 +956,11 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
               <Badge c={e.c} b={e.b}>{e.l}</Badge>
-              {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra"
-                style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>🗑</button>}
             </div>
           </div>
         </Card>); })}
       </>}
-      {cur && (() => { const e = PEDIDO_ESTADOS[cur.estado]; return (<>
+      {cur && (() => { const e = PEDIDO_ESTADOS[cur.estado] || PEDIDO_ESTADOS.abierto; return (<>
         <button onClick={() => setOpen(null)} style={{ background: "none", border: "none", color: T.accent, fontSize: 12.5, fontWeight: 700, marginBottom: 12 }}>← Volver</button>
         <Card T={T} style={{ padding: 14, marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}><div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{cur.asunto}</div><Badge c={e.c} b={e.b}>{e.l}</Badge></div>
@@ -1097,7 +1158,7 @@ function InformesScreen({ T, obras, formularios = [] }) {
         <div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>{open.obra} · {open.fecha}</div>
         <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 12 }}>{open.titulo || "Informe"}</div>
         {open.texto && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "14px 15px", fontSize: 12.5, color: T.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{open.texto}</div>}
-        {(open.archivos || []).map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 8, fontSize: 13, fontWeight: 700, color: T.accent }}>📎 {a.nombre}</a>)}
+        {(open.archivos || []).map((a, i) => <button key={i} onClick={() => descargarArchivo(a.url, a.nombre)} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, background: "none", border: "none", padding: 0, fontSize: 13, fontWeight: 700, color: T.accent, cursor: "pointer" }}>⬇ {a.nombre}</button>)}
       </div>
     </div>}
   </div>);
