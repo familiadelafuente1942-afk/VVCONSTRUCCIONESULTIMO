@@ -14,6 +14,37 @@ const storage = {
   get: async (key) => { try { const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { headers: SH(), mode: "cors" }); if (r.ok) { const d = await r.json(); if (d && d.length) return { value: d[0].value }; } } catch { } try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; } },
 };
 const uid = () => Math.random().toString(36).slice(2, 9);
+// Las fechas se guardan como texto "DD/MM/AA". Ordenarlas como texto ordena POR EL DÍA
+// ("01/12/26" < "02/01/26" => diciembre antes que enero). Hay que convertirlas a fecha real.
+const fechaMs = (f, hora) => {
+  const t = String(f || "").trim();
+  if (!t) return 8.64e15;                                  // sin fecha: al final
+  let d, mth, y;
+  let m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);   // DD/MM/AA o DD/MM/AAAA
+  if (m) { d = +m[1]; mth = +m[2]; y = +m[3]; }
+  else {
+    m = t.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);       // AAAA-MM-DD
+    if (m) { y = +m[1]; mth = +m[2]; d = +m[3]; }
+    else return 8.64e15;
+  }
+  if (y < 100) y += 2000;
+  const hm = String(hora || "").match(/^(\d{1,2})[:.]?(\d{2})?/);
+  const hh = hm ? +hm[1] : 0, mi = hm && hm[2] ? +hm[2] : 0;
+  const dt = new Date(y, mth - 1, d, hh, mi);
+  return isNaN(dt.getTime()) ? 8.64e15 : dt.getTime();
+};
+const inicioDeHoy = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const cuandoEs = (ms) => {
+  if (ms >= 8.6e15) return "";
+  const h0 = inicioDeHoy(), dia = 86400000;
+  const dif = Math.floor((ms - h0) / dia);
+  if (dif < 0) return `hace ${Math.abs(dif)} día${Math.abs(dif) === 1 ? "" : "s"}`;
+  if (dif === 0) return "HOY";
+  if (dif === 1) return "MAÑANA";
+  if (dif < 7) return `en ${dif} días`;
+  if (dif < 30) { const k = Math.round(dif / 7); return `en ${k} semana${k === 1 ? "" : "s"}`; }
+  const k = Math.round(dif / 30); return `en ${k} mes${k === 1 ? "" : "es"}`;
+};
 const hoyStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
 const BUCKET = "bco-media";
 async function subirBucket(dataUrl, nombre) {
@@ -422,7 +453,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
   function agendarEvento(a) {
     const ev = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), hora: a.hora || "", titulo: a.titulo || a.texto || "Evento", nota: a.nota || "", ts: Date.now() };
-    persistAgenda([...(agenda || []), ev].sort((x, y) => (x.fecha + (x.hora || "")).localeCompare(y.fecha + (y.hora || ""))));
+    persistAgenda([...(agenda || []), ev].sort((x, y) => fechaMs(x.fecha, x.hora) - fechaMs(y.fecha, y.hora)));
     return ev;
   }
   function guardarObra() {
@@ -853,7 +884,12 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }
 
 function AgendaBody({ agenda, onAdd, onDel }) {
   const [f, setF] = useState({ fecha: "", hora: "", titulo: "", nota: "" });
-  const lista = (agenda || []).slice().sort((a, b) => (a.fecha + (a.hora || "")).localeCompare(b.fecha + (b.hora || "")));
+  // Lo PRÓXIMO primero (de la fecha más cercana a la más lejana). Lo vencido, aparte y abajo.
+  const h0 = inicioDeHoy();
+  const conMs = (agenda || []).map(e => ({ ...e, _ms: fechaMs(e.fecha, e.hora) }));
+  const proximos = conMs.filter(e => e._ms >= h0).sort((a, b) => a._ms - b._ms);
+  const pasados = conMs.filter(e => e._ms < h0).sort((a, b) => b._ms - a._ms);   // el más reciente arriba
+  const lista = proximos;
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo evento</div>
@@ -866,13 +902,26 @@ function AgendaBody({ agenda, onAdd, onDel }) {
       <button onClick={() => { if (!f.titulo.trim()) { alert("Poné un título."); return; } onAdd({ ...f, fecha: f.fecha || hoyStr() }); setF({ fecha: "", hora: "", titulo: "", nota: "" }); }} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋ Agendar</button>
     </div>
     {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px", lineHeight: 1.6 }}>Agenda vacía.<br />Desde el Chat podés decir: <span style={{ color: T.sub }}>"agendá reunión con Belfast el jueves a las 10"</span></div>}
-    {lista.map(e => (<div key={e.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: BRASS }}>{e.fecha}{e.hora ? ` · ${e.hora}` : ""}</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginTop: 2 }}>{e.titulo}</div>
+    {proximos.length > 0 && <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Próximos ({proximos.length})</div>}
+    {proximos.map(e => { const cu = cuandoEs(e._ms); const hoy = cu === "HOY", man = cu === "MAÑANA";
+      return (<div key={e.id} style={{ background: T.card, border: `1px solid ${hoy ? BRASS : T.border}`, borderLeft: `3px solid ${hoy ? "#DC2626" : man ? BRASS : T.border}`, borderRadius: 11, padding: 12, marginBottom: 8, display: "flex", gap: 10, alignItems: "flex-start", justifyContent: "space-between" }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: BRASS }}>{e.fecha}{e.hora ? ` · ${e.hora}` : ""}</span>
+          {cu && <span style={{ fontSize: 9.5, fontWeight: 800, color: hoy ? "#fff" : man ? "#fff" : T.sub, background: hoy ? "#DC2626" : man ? BRASS : T.al, borderRadius: 5, padding: "2px 6px" }}>{cu}</span>}
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginTop: 3 }}>{e.titulo}</div>
         {e.nota && <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{e.nota}</div>}
       </div>
-      <button onClick={() => onDel(e.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer" }}>✕</button>
+      <button onClick={() => onDel(e.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: 2 }}>🗑</button>
+    </div>); })}
+    {pasados.length > 0 && <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", margin: "18px 0 8px" }}>Ya pasaron ({pasados.length})</div>}
+    {pasados.map(e => (<div key={e.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: 11, marginBottom: 7, display: "flex", gap: 10, alignItems: "flex-start", justifyContent: "space-between", opacity: 0.55 }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted }}>{e.fecha}{e.hora ? ` · ${e.hora}` : ""} · {cuandoEs(e._ms)}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: T.sub, marginTop: 2 }}>{e.titulo}</div>
+      </div>
+      <button onClick={() => onDel(e.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: 2 }}>🗑</button>
     </div>))}
   </div>);
 }
