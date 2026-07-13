@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v104 (Finanzas: REDETERMINACION CAC acumulativa, crea la obra con el precio ajustado)
+// VERSION: v106 (Finanzas: tabla de la Camara al lado, se carga de un toque)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -325,6 +325,33 @@ function mensajeCertificadoTexto(obra, data, certsDe, indices) {
     `El PDF del certificado te lo adjunto aparte. Cualquier cosa avisame. Saludos.`;
 }
 
+// Busca el índice CAC en internet (la IA con búsqueda web, del lado del servidor).
+// NO escribe nada solo: devuelve los valores para que los revises y confirmes.
+async function buscarCAC(desde, hasta) {
+  const sys = `Sos un asistente de datos para una constructora argentina. Buscá en internet el ÍNDICE DE LA CÁMARA ARGENTINA DE LA CONSTRUCCIÓN (CAC) — el "Índice del Costo de la Construcción" que publica la CAC.
+Necesito la VARIACIÓN MENSUAL en porcentaje (ej: 3.5 significa +3,5% respecto del mes anterior) para cada mes del período pedido.
+Buscá en fuentes oficiales: camarco.org.ar, o los informes de la CAC. Si un mes todavía no fue publicado, NO lo inventes: omitilo.
+Respondé ÚNICAMENTE con un JSON válido, sin texto alrededor y sin markdown:
+{"meses":[{"mes":"AAAA-MM","variacion":3.5,"indice":1234.56}],"fuente":"URL de donde lo sacaste","nota":"aclaración breve si hace falta"}
+El campo "indice" es opcional (el número índice, si lo encontrás). El campo "variacion" es obligatorio y es un número, no un texto.
+Si no encontrás datos confiables, devolvé {"meses":[],"fuente":"","nota":"por qué no lo encontraste"}.`;
+  const body = {
+    model: "claude-sonnet-5",
+    max_tokens: 2000,
+    system: sys,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 6 }],
+    messages: [{ role: "user", content: `Traeme la variación mensual del índice CAC desde ${desde} hasta ${hasta} inclusive. Solo el JSON.` }],
+  };
+  const r = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message || "Error de la IA");
+  const texto = (d.content || []).filter(c => c.type === "text").map(c => c.text).join("\n");
+  const m = texto.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error("La IA no devolvió datos usables.");
+  const j = JSON.parse(m[0]);
+  return { meses: (j.meses || []).filter(x => x && x.mes && x.variacion != null && isFinite(Number(x.variacion))), fuente: j.fuente || "", nota: j.nota || "" };
+}
+
 // ============ REDETERMINACIÓN (CAC acumulativo) ============
 // Toma un precio de m² y le aplica el CAC mes a mes SOBRE EL MONTO YA AJUSTADO.
 // El precio redeterminado baja a una obra nueva como precio base del presupuesto.
@@ -332,6 +359,8 @@ function mensajeCertificadoTexto(obra, data, certsDe, indices) {
 // el mes viejo, los certificados volverían a aplicar el mismo CAC (lo contaría dos veces).
 function RedeterminacionTab({ obras, data, save }) {
   const cac = data.cacMensual || {};
+  const [buscando, setBuscando] = useState(false);
+  const [errBusq, setErrBusq] = useState("");
   const cot = data.redet || {};
   const setCot = (k, v) => save({ ...data, redet: { ...cot, [k]: v } });
   const setIndice = (mes, valor) => {
@@ -368,6 +397,31 @@ function RedeterminacionTab({ obras, data, save }) {
   const nomMes = (mm) => { if (!mm) return ""; const [y, m] = String(mm).split("-"); return ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][+m - 1] + " " + y.slice(2); };
   const inp2 = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 9, padding: "12px", fontSize: 16, color: T.text, width: "100%", boxSizing: "border-box" };
   const lb = { fontSize: 10.5, color: T.sub, fontWeight: 700, display: "block", marginBottom: 4 };
+
+  // ---- buscar el CAC en internet (la IA propone; vos confirmás) ----
+  const buscarEnInternet = async () => {
+    setErrBusq(""); setBuscando(true);
+    try {
+      const pedir = meses.slice(1);
+      if (!pedir.length) { setErrBusq("Elegí un período primero."); setBuscando(false); return; }
+      const res = await buscarCAC(pedir[0], pedir[pedir.length - 1]);
+      if (!res.meses.length) { setErrBusq(res.nota || "No encontré datos de CAC para ese período."); setBuscando(false); return; }
+      // se guarda como TABLA DE REFERENCIA, aparte de tu planilla. No cambia ningún cálculo.
+      const refPrev = (data.cacRef && data.cacRef.meses) || [];
+      const mapa = {}; refPrev.forEach(x => { mapa[x.mes] = x; }); res.meses.forEach(x => { mapa[x.mes] = x; });
+      save({ ...data, cacRef: { meses: Object.values(mapa).sort((a, b) => a.mes < b.mes ? -1 : 1), fuente: res.fuente, nota: res.nota, ts: Date.now() } });
+    } catch (e) { setErrBusq(e.message || "No pude buscar. Revisá la conexión."); }
+    setBuscando(false);
+  };
+  const ref = data.cacRef || null;
+  const refDe = (mm) => (ref && (ref.meses || []).find(x => x.mes === mm)) || null;
+  const usarRef = (mm, v) => setIndice(mm, v);
+  const cargarTodosRef = () => {
+    if (!ref) return;
+    const next = { ...(data.cacMensual || {}) };
+    (ref.meses || []).forEach(x => { if (meses.includes(x.mes)) next[x.mes] = Number(x.variacion); });
+    save({ ...data, cacMensual: next });
+  };
 
   // ---- traer el precio de una obra que ya tenés ----
   const traerDeObra = (id) => {
@@ -502,21 +556,68 @@ function RedeterminacionTab({ obras, data, save }) {
       </div>}
     </div>
 
+    {/* TABLA DE LA CÁMARA — queda al lado, para copiar de un toque */}
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase" }}>Tabla de la Cámara (CAC)</div>
+          {ref && ref.ts && <div style={{ fontSize: 9.5, color: T.muted, marginTop: 2 }}>Traída el {new Date(ref.ts).toLocaleDateString("es-AR")}</div>}
+        </div>
+        <button onClick={buscarEnInternet} disabled={buscando} style={{ background: buscando ? T.border : T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "9px 13px", fontSize: 11.5, fontWeight: 800, cursor: buscando ? "default" : "pointer", whiteSpace: "nowrap" }}>
+          {buscando ? "Buscando…" : ref ? "↻ Actualizar" : "🌐 Traer la tabla"}
+        </button>
+      </div>
+      {errBusq && <div style={{ background: "rgba(220,38,38,.08)", border: "1px solid rgba(220,38,38,.3)", borderRadius: 8, padding: "9px 11px", marginBottom: 9, fontSize: 11.5, color: "#DC2626", lineHeight: 1.5 }}>{errBusq}</div>}
+
+      {!ref && !buscando && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.55, padding: "6px 0" }}>Tocá <b>Traer la tabla</b> y te dejo acá al costado los valores publicados por la Cámara, para que los cargues de un toque sin salir de la app.</div>}
+
+      {ref && (ref.meses || []).length > 0 && <>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+          {(ref.meses || []).map(x => {
+            const puesto = cac[x.mes] != null && Number(cac[x.mes]) === Number(x.variacion);
+            const distinto = cac[x.mes] != null && Number(cac[x.mes]) !== Number(x.variacion);
+            return <button key={x.mes} onClick={() => usarRef(x.mes, x.variacion)}
+              style={{ background: puesto ? "rgba(22,163,74,.10)" : distinto ? "rgba(220,38,38,.08)" : T.al, border: `1px solid ${puesto ? "rgba(22,163,74,.4)" : distinto ? "rgba(220,38,38,.35)" : T.border}`, borderRadius: 9, padding: "9px 6px", cursor: "pointer", textAlign: "center" }}>
+              <div style={{ fontSize: 9.5, color: T.muted, fontWeight: 700, textTransform: "uppercase" }}>{nomMes(x.mes)}</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: puesto ? "#16A34A" : T.text, marginTop: 1 }}>{Number(x.variacion).toFixed(2)}%</div>
+              <div style={{ fontSize: 8.5, color: puesto ? "#16A34A" : distinto ? "#DC2626" : BRASS, fontWeight: 700, marginTop: 2 }}>{puesto ? "✓ cargado" : distinto ? "≠ " + cac[x.mes] + "%" : "tocá para usar"}</div>
+            </button>;
+          })}
+        </div>
+        <button onClick={cargarTodosRef} style={{ width: "100%", marginTop: 9, background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "12px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>Cargar todos de una vez</button>
+        {ref.fuente && <a href={ref.fuente} target="_blank" rel="noreferrer" style={{ display: "block", fontSize: 10, color: T.accent, marginTop: 8, wordBreak: "break-all", textDecoration: "none" }}>Fuente: {ref.fuente}</a>}
+        {ref.nota && <div style={{ fontSize: 10.5, color: T.sub, marginTop: 5, lineHeight: 1.45 }}>{ref.nota}</div>}
+        <div style={{ background: "rgba(240,165,0,.10)", borderRadius: 7, padding: "8px 10px", marginTop: 8, fontSize: 10, color: "#8A6100", lineHeight: 1.5 }}>
+          Estos valores los trajo la IA de internet. Contrastalos con el informe de la Cámara antes de certificar.
+        </div>
+      </>}
+    </div>
+
     {/* 4 · LA CUENTA MES POR MES */}
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Cómo se arma, mes por mes</div>
       <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Cada ajuste va <b>sobre el monto ya ajustado</b>. Cargá el % CAC de cada mes.</div>
-      <div style={{ display: "grid", gridTemplateColumns: "60px 70px 1fr 1fr", gap: 5, fontSize: 9.5, color: T.muted, fontWeight: 700, textTransform: "uppercase", paddingBottom: 6, borderBottom: `1px solid ${T.border}` }}>
-        <div>Mes</div><div>% CAC</div><div style={{ textAlign: "right" }}>Ajuste</div><div style={{ textAlign: "right" }}>Precio /m²</div>
+      <div style={{ display: "grid", gridTemplateColumns: "52px 62px 54px 1fr", gap: 5, fontSize: 9, color: T.muted, fontWeight: 700, textTransform: "uppercase", paddingBottom: 6, borderBottom: `1px solid ${T.border}` }}>
+        <div>Mes</div><div>Tu %</div><div style={{ color: BRASS }}>Cámara</div><div style={{ textAlign: "right" }}>Precio /m²</div>
       </div>
-      {filas.map((f, i) => <div key={f.mes} style={{ display: "grid", gridTemplateColumns: "60px 70px 1fr 1fr", gap: 5, alignItems: "center", padding: "7px 0", borderBottom: i < filas.length - 1 ? `1px solid ${T.border}` : "none" }}>
-        <div style={{ fontSize: 11.5, fontWeight: 700, color: f.primero ? T.muted : T.text }}>{nomMes(f.mes)}</div>
-        <div>{f.primero ? <span style={{ fontSize: 10.5, color: T.muted }}>base</span>
+      {filas.map((f, i) => { const rf = refDe(f.mes);
+        return <div key={f.mes} style={{ display: "grid", gridTemplateColumns: "52px 62px 54px 1fr", gap: 5, alignItems: "center", padding: "7px 0", borderBottom: i < filas.length - 1 ? `1px solid ${T.border}` : "none" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: f.primero ? T.muted : T.text }}>{nomMes(f.mes)}</div>
+        <div>{f.primero ? <span style={{ fontSize: 10, color: T.muted }}>base</span>
           : <input value={cac[f.mes] != null ? cac[f.mes] : ""} onChange={e => setIndice(f.mes, e.target.value)} inputMode="decimal" placeholder="—"
-            style={{ width: "100%", background: f.provisorio ? "rgba(240,165,0,.10)" : T.bg, border: `1px solid ${f.provisorio ? "rgba(240,165,0,.5)" : T.border}`, borderRadius: 7, padding: "7px 5px", fontSize: 13, color: T.text, textAlign: "center", boxSizing: "border-box" }} />}</div>
-        <div style={{ textAlign: "right", fontSize: 11.5, color: f.primero ? T.muted : "#16A34A", fontWeight: 600 }}>{f.primero ? "—" : "+" + money(f.ajuste)}</div>
-        <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 800 }}>{money(f.precio)}</div>
-      </div>)}
+            style={{ width: "100%", background: f.provisorio ? "rgba(240,165,0,.10)" : T.bg, border: `1px solid ${f.provisorio ? "rgba(240,165,0,.5)" : T.border}`, borderRadius: 7, padding: "7px 4px", fontSize: 13, color: T.text, textAlign: "center", boxSizing: "border-box" }} />}</div>
+        {/* EL VALOR DE LA CÁMARA, AL LADO: un toque y se carga */}
+        <div>{f.primero ? <span style={{ fontSize: 9.5, color: T.muted }}>—</span>
+          : rf ? <button onClick={() => usarRef(f.mes, rf.variacion)}
+              style={{ width: "100%", background: cac[f.mes] != null && Number(cac[f.mes]) === Number(rf.variacion) ? "rgba(22,163,74,.12)" : "rgba(176,137,79,.14)", border: `1px solid ${cac[f.mes] != null && Number(cac[f.mes]) === Number(rf.variacion) ? "rgba(22,163,74,.4)" : BRASS}`, color: cac[f.mes] != null && Number(cac[f.mes]) === Number(rf.variacion) ? "#16A34A" : BRASS, borderRadius: 6, padding: "7px 2px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>
+              {Number(rf.variacion).toFixed(1)}
+            </button>
+            : <span style={{ fontSize: 9.5, color: T.muted, display: "block", textAlign: "center" }}>—</span>}</div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800 }}>{money(f.precio)}</div>
+          {!f.primero && <div style={{ fontSize: 9.5, color: "#16A34A", fontWeight: 600 }}>+{money(f.ajuste)}</div>}
+        </div>
+      </div>; })}
       {filas.length > 2 && <div style={{ background: T.al, borderRadius: 8, padding: "9px 10px", marginTop: 10, fontSize: 11, color: T.sub, lineHeight: 1.55 }}>
         Si sumaras los % ({sumaSimple.toFixed(2)}%) te daría <b>{money(base * (1 + sumaSimple / 100))}</b>. El acumulativo real da <b style={{ color: BRASS }}>{money(precioRedet)}</b> — <b>{money(precioRedet - base * (1 + sumaSimple / 100))}</b> más por m².
       </div>}
