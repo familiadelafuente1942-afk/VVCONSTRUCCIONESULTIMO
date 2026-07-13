@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-
+// VERSION: v9 (Cliente: FIX estado de pedidos - ya no viaja a la nube antes de cada toque)
 // ════════════════════════════════════════════════════════════════════
 // PANEL DE CLIENTE — App independiente y descargable
 // Mismo backend Supabase que la app de V+V → los datos se comparten.
@@ -92,12 +92,106 @@ function fileToDataUrl(f, maxW = 1400) {
   });
 }
 
+// ── CACHÉ LOCAL DE ARCHIVOS (IndexedDB) ─────────────────────────────
+// La primera vez que se abre un archivo en ESTE dispositivo hace falta conexión
+// para traerlo. Pero a partir de ahí queda GUARDADO ACÁ (en este teléfono/iPad,
+// no en la nube), y las próximas veces se abre directo desde esa copia local,
+// sin volver a pedirle nada a Supabase. Por eso antes "quedaba pensando" sin
+// conexión: siempre iba a buscarlo al servidor, nunca se quedaba con una copia.
+const CACHE_DB = "vv_archivos_cache", CACHE_STORE = "files";
+function abrirCacheDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(CACHE_DB, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(CACHE_STORE); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function cacheGet(url) {
+  try {
+    const db = await abrirCacheDB();
+    return await new Promise((res, rej) => {
+      const r = db.transaction(CACHE_STORE, "readonly").objectStore(CACHE_STORE).get(url);
+      r.onsuccess = () => res(r.result || null);
+      r.onerror = () => rej(r.error);
+    });
+  } catch { return null; }
+}
+async function cachePut(url, blob) {
+  try {
+    const db = await abrirCacheDB();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(CACHE_STORE, "readwrite");
+      tx.objectStore(CACHE_STORE).put(blob, url);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch { }
+}
+// Abre un archivo usando la copia local si ya está en este dispositivo (funciona
+// SIN conexión). Si todavía no está, la trae una vez (necesita conexión esa
+// primera vez) y la guarda para que la próxima sea instantánea y offline.
+async function abrirArchivo(url, nombre) {
+  if (!url) return { ok: false, motivo: "sin-url" };
+  if (url.startsWith("data:")) { window.open(url, "_blank"); return { ok: true }; }
+  let blob = await cacheGet(url);
+  let nuevo = false;
+  if (!blob) {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, motivo: "sin-conexion" };
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("no se pudo traer");
+      blob = await r.blob();
+      nuevo = true;
+    } catch { return { ok: false, motivo: "sin-conexion" }; }
+  }
+  const objUrl = URL.createObjectURL(blob);
+  window.open(objUrl, "_blank");
+  if (nuevo) cachePut(url, blob);
+  return { ok: true, nuevo };
+}
+async function descargarArchivo(url, nombre) {
+  const r = await abrirArchivo(url, nombre);
+  if (!r.ok) alert("Este archivo todavía no está guardado en este dispositivo.\n\nAbrilo una vez con conexión y, de ahí en adelante, se va a poder ver sin internet.");
+  return r.ok;
+}
+
 const FORCE_CLOUD = (() => { try { return new URLSearchParams(window.location.search).has("sync"); } catch { return false; } })();
 const lastWrite = {};
 function useStored(key, def) {
   const [v, setV] = useState(() => { try { const l = localStorage.getItem(key); return l ? JSON.parse(l) : def; } catch { return def; } });
-  useEffect(() => { (async () => { const r = await storage.get(key); if (r?.value) { try { const d = JSON.parse(r.value); if (Date.now() - (lastWrite[key] || 0) < 8000) return; if (FORCE_CLOUD) { setV(d); try { localStorage.setItem(key, r.value); } catch { } } else { setV(cur => JSON.stringify(d) !== JSON.stringify(cur) ? d : cur); } } catch { } } })(); }, [key]);
-  const set = useCallback(u => { setV(prev => { const n = typeof u === 'function' ? u(prev) : u; const j = JSON.stringify(n); lastWrite[key] = Date.now(); try { localStorage.setItem(key, j); } catch { } storage.set(key, j); return n; }); }, [key]);
+  // Gana el MÁS RECIENTE (por sello de fecha), no el más grande: si no, un borrado
+  // hecho en V+V (que achica la lista) se descarta acá y la obra borrada vuelve.
+  useEffect(() => {
+    (async () => {
+      const r = await storage.get(key);
+      if (!r?.value) return;
+      try {
+        const d = JSON.parse(r.value);
+        if (Date.now() - (lastWrite[key] || 0) < 8000) return;
+        if (FORCE_CLOUD) { setV(d); try { localStorage.setItem(key, r.value); } catch { } return; }
+        const rTs = await storage.get(key + "__ts");
+        const cloudTs = Number(rTs?.value || 0);
+        let localTs = 0;
+        try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
+        if (cloudTs >= localTs) {
+          setV(cur => JSON.stringify(d) !== JSON.stringify(cur) ? d : cur);
+          try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+        }
+      } catch { }
+    })();
+  }, [key]);
+  const set = useCallback(u => {
+    setV(prev => {
+      const n = typeof u === 'function' ? u(prev) : u;
+      const j = JSON.stringify(n);
+      const ts = Date.now();
+      lastWrite[key] = ts;
+      try { localStorage.setItem(key, j); localStorage.setItem(key + "__ts", String(ts)); } catch { }
+      storage.set(key, j);
+      storage.set(key + "__ts", String(ts));
+      return n;
+    });
+  }, [key]);
   return [v, set];
 }
 
@@ -140,7 +234,19 @@ const PEDIDO_ESTADOS = { abierto: { l: "Abierto", c: "#F59E0B", b: "#FFFBEB" }, 
 const PEDIDO_MAX_IA = 4;
 function parseAccion(texto) { const m = (texto || "").match(/```accion\s*([\s\S]*?)```/i); if (!m) return { limpio: texto, accion: null }; let a = null; try { a = JSON.parse(m[1].trim()); } catch { } return { limpio: (texto.replace(m[0], "").trim() || "Listo."), accion: a }; }
 function nuevoPedido({ de, para, asunto, detalle, prioridad, obra_id }) { const f = hoyStr(), ts = Date.now(); return { id: uid() + ts, de, para, asunto: asunto || "(sin asunto)", estado: "abierto", prioridad: prioridad || "media", obra_id: obra_id || "", fecha: f, ts, iaTurns: 0, hilo: [{ de, texto: detalle || asunto || "", fecha: f, ts, porIA: false }] }; }
-async function aplicarPedidos(setPedidos, fn) { let arr = []; try { const r = await storage.get("vv_pedidos"); if (r?.value) arr = JSON.parse(r.value); } catch { } const next = fn(arr.slice()); setPedidos(next); return next; }
+// Antes: iba a buscar la lista ENTERA a la nube antes de aplicar cualquier cambio (incluso
+// tocar un simple botón de estado). Eso hacía que cada toque dependiera de la red y tardara;
+// y si dos cambios se cruzaban (dos toques seguidos, o un toque justo cuando el sondeo
+// periódico corría), el que terminaba de bajar de la nube DESPUÉS pisaba al otro — por eso
+// a veces "no dejaba seleccionar" el estado: el toque se aplicaba y al ratito quedaba pisado
+// por una lectura vieja. Ahora aplica el cambio directo sobre el estado que React YA tiene
+// actualizado (mantenido al día por el sondeo) — instantáneo, sin depender de la red, y sin
+// la carrera entre dos escrituras que se cruzan.
+function aplicarPedidos(setPedidos, fn) {
+  let next;
+  setPedidos(prev => { next = fn((prev || []).slice()); return next; });
+  return next;
+}
 async function ejecutarAccion(accion, miSide, ctx) {
   ctx = ctx || {};
   const setPedidos = ctx.setPedidos;
@@ -272,6 +378,15 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
     setSubP(false); e.target.value = "";
     if (nuevos.some(n => !String(n.url || "").startsWith("http"))) alert("⚠ El plano quedó en este dispositivo pero NO se subió a la nube (bucket 'bco-media' en Supabase). Configuralo para que V+V y la IA lo puedan ver.");
   }
+  function borrarObra(o) {
+    if (!setObras) return;
+    const nom = String(o.nombre || "").trim();
+    const esc = prompt(`BORRAR LA OBRA "${nom}"\n\nSe borra en las dos apps (Cliente y V+V) y no se puede deshacer.\nSe pierden sus tareas, planos e informes.\n\nEscribí el nombre de la obra para confirmar:`);
+    if (esc == null) return;
+    if (esc.trim().toLowerCase() !== nom.toLowerCase()) { alert("El nombre no coincide. No borré nada."); return; }
+    setObras(prev => prev.filter(x => x.id !== o.id));
+    alert(`Obra "${nom}" borrada.`);
+  }
   function borrarPlano(obra, id) { if (confirm("¿Eliminar este plano?") && setObras) setObras(prev => prev.map(o => o.id === obra.id ? { ...o, planos: (o.planos || []).filter(x => x.id !== id) } : o)); }
   const [ecoUnlocked, setEcoUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState("");
@@ -308,7 +423,11 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
         return (<Card T={T} key={o.id} style={{ padding: 15, marginBottom: 11 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{o.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{o.sector} · {o.inicio} → {o.cierre}</div></div>
-            <Badge c={e.c} b={e.b}>{e.l}</Badge>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+              <Badge c={e.c} b={e.b}>{e.l}</Badge>
+              {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra"
+                style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>🗑</button>}
+            </div>
           </div>
           <div style={{ margin: "12px 0 6px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 5 }}><span style={{ color: T.sub, fontWeight: 600 }}>Avance de obra</span><span style={{ color: T.accent, fontWeight: 800 }}>{o.avance}%</span></div>
@@ -815,7 +934,26 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   const [iaLoad, setIaLoad] = useState(false);
   const fileRef = useRef(null);
   async function addAdj(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url, img: f.type.startsWith("image/") }); } setAdj(p => [...p, ...nuevos]); e.target.value = ""; }
-  useEffect(() => { const pull = async () => { try { if (Date.now() - (lastWrite["vv_pedidos"] || 0) < 8000) return; const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
+  useEffect(() => {
+    // Antes comparaba CONTENIDO ("¿la nube dice algo distinto?") y si difería lo aplicaba
+    // y lo volvía a guardar. Si esa lectura llegaba un instante antes de que un borrado
+    // terminara de guardarse en la nube, traía la versión VIEJA y, al re-guardarla, LA
+    // RESUCITABA. Ahora compara MARCA DE TIEMPO: solo adopta la nube si es más nueva que
+    // lo último que este dispositivo ya escribió o aceptó.
+    const pull = async () => {
+      try {
+        const rTs = await storage.get("vv_pedidos__ts");
+        const cloudTs = Number(rTs?.value || 0);
+        if (cloudTs <= (lastWrite["vv_pedidos"] || 0)) return;
+        const r = await storage.get("vv_pedidos");
+        if (r?.value) { lastWrite["vv_pedidos"] = cloudTs; setPedidos(JSON.parse(r.value)); }
+      } catch { }
+    };
+    pull(); const iv = setInterval(pull, 4000);
+    const onVis = () => { if (document.visibilityState === "visible") pull(); };
+    document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); };
+  }, []);
   const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : p.de === miSide);
   const cur = open ? pedidos.find(p => p.id === open) : null;
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "";
@@ -836,7 +974,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
         <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>{Pill("todos", "Todos")}{Pill("recibidos", "Recibidos")}{Pill("enviados", "Enviados")}</div>
         <button onClick={() => setNuevo({ asunto: "", detalle: "", prioridad: "media", obra_id: obras[0]?.id || "" })} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, marginBottom: 16 }}>＋ Nuevo pedido a V+V</button>
         {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 18px" }}>Sin pedidos. Creá uno o pedíselo al Asistente IA.</div>}
-        {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado]; const ult = p.hilo[p.hilo.length - 1]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9 }}>
+        {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado] || PEDIDO_ESTADOS.abierto; const ult = (p.hilo || [])[p.hilo?.length - 1]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9 }}>
           <div onClick={() => { setOpen(p.id); setReply(""); }} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>
@@ -847,11 +985,13 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
               </div>
               <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 230 }}>{ult?.porIA ? "🤖 " : ""}{ult?.texto}</div>
             </div>
-            <Badge c={e.c} b={e.b}>{e.l}</Badge>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+              <Badge c={e.c} b={e.b}>{e.l}</Badge>
+            </div>
           </div>
         </Card>); })}
       </>}
-      {cur && (() => { const e = PEDIDO_ESTADOS[cur.estado]; return (<>
+      {cur && (() => { const e = PEDIDO_ESTADOS[cur.estado] || PEDIDO_ESTADOS.abierto; return (<>
         <button onClick={() => setOpen(null)} style={{ background: "none", border: "none", color: T.accent, fontSize: 12.5, fontWeight: 700, marginBottom: 12 }}>← Volver</button>
         <Card T={T} style={{ padding: 14, marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}><div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{cur.asunto}</div><Badge c={e.c} b={e.b}>{e.l}</Badge></div>
@@ -1049,7 +1189,7 @@ function InformesScreen({ T, obras, formularios = [] }) {
         <div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>{open.obra} · {open.fecha}</div>
         <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 12 }}>{open.titulo || "Informe"}</div>
         {open.texto && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "14px 15px", fontSize: 12.5, color: T.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{open.texto}</div>}
-        {(open.archivos || []).map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 8, fontSize: 13, fontWeight: 700, color: T.accent }}>📎 {a.nombre}</a>)}
+        {(open.archivos || []).map((a, i) => <button key={i} onClick={() => descargarArchivo(a.url, a.nombre)} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, background: "none", border: "none", padding: 0, fontSize: 13, fontWeight: 700, color: T.accent, cursor: "pointer" }}>⬇ {a.nombre}</button>)}
       </div>
     </div>}
   </div>);
@@ -1249,6 +1389,7 @@ function ClienteApp() {
   const T = theme(cfg.accent);
   const [screen, setScreen] = useState("asistente");
   const [obras, setObras] = useStored("vv_obras", []);
+  useEffect(() => { if (localStorage.getItem("purge_canning_bf_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_bf_v1", "1"); } catch { } } catch { } })(); }, []);
   const [tareas, setTareas] = useStored("vv_tareas", []);
   const [mensajes, setMensajes] = useStored("vv_mensajes", []);
   const [archivosCliente, setArchivosCliente] = useStored("cliente_archivos", []);
