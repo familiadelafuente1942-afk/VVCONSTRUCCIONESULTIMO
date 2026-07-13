@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-// VERSION: v102 (IA Finanzas: chat con scroll interno propio, respuesta siempre visible)
+// VERSION: v103 (Finanzas: COTIZADOR con ajuste CAC acumulativo/compuesto)
 
 // V+V FINANZAS — Presupuesto simple (m² × precio) · Costo dividido en rubros (contratistas)
 // 4 solapas: Presupuesto · Cert.Costo · Cert.Cliente · Resultado(PIN)
@@ -66,6 +66,9 @@ const esImprev = (cat) => IMPREV_CATS.includes(cat);
 function logH(d, accion) { const h = d.historial || []; return { ...d, historial: [...h, { id: Math.random().toString(36).slice(2, 9), accion, t: new Date().toLocaleString("es-AR"), ts: Date.now() }].slice(-250) }; }
 const mesDe = (iso) => String(iso || "").slice(0, 7);
 const mesLabel = (m) => { if (!m) return "—"; const [y, mm] = m.split("-"); const N = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]; return `${N[Number(mm) - 1] || mm}/${y.slice(2)}`; };
+// cacRate() devuelve el ajuste de QUINCENA (raíz del mensual, porque se aplica 2 veces al mes).
+// Para el cotizador hace falta el ajuste MENSUAL completo:
+function cacMes(mes, cac) { const p = (cac || {})[mes]; if (p == null || String(p).trim() === "") return { rate: 0, provisorio: true }; return { rate: num(p) / 100, provisorio: false }; }
 function cacRate(mes, cac) { const p = (cac || {})[mes]; if (p == null || String(p).trim() === "") return { rate: 0, provisorio: true }; return { rate: Math.sqrt(1 + num(p) / 100) - 1, provisorio: false }; }
 function addMonthYM(ym, n) { const [y, m] = String(ym).split("-").map(Number); const d = new Date(y, (m - 1) + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; }
 function redetReplay(cert, obra, certsDeObra, cac) {
@@ -321,6 +324,150 @@ function mensajeCertificadoTexto(obra, data, certsDe, indices) {
     `Saldo por cobrar: ${money(resto)}\n\n` +
     `El PDF del certificado te lo adjunto aparte. Cualquier cosa avisame. Saludos.`;
 }
+
+// ============ COTIZADOR CON AJUSTE CAC (acumulativo / compuesto) ============
+// Arranca de un precio base y le va aplicando el % de cada mes SOBRE EL MONTO YA AJUSTADO.
+// No es sumar los porcentajes: es multiplicar (1+r1)·(1+r2)·… Da más y es lo correcto.
+function CotizadorTab({ data, save }) {
+  const cac = data.cacMensual || {};
+  const cot = data.cotizador || {};
+  const setCot = (k, v) => save({ ...data, cotizador: { ...cot, [k]: v } });
+  const setIndice = (mes, valor) => {
+    const next = { ...(data.cacMensual || {}) };
+    if (String(valor).trim() === "") delete next[mes]; else next[mes] = num(valor);
+    save({ ...data, cacMensual: next });
+  };
+
+  const base = num(cot.base) || 409000;
+  const mesBase = cot.mesBase || mesDe(new Date().toISOString().slice(0, 10));
+  const mesHasta = cot.mesHasta || mesBase;
+  const m2 = num(cot.m2) || 0;
+  const ivaOn = cot.iva !== false;
+  const IVA = 0.21;
+
+  // meses desde el base hasta el de hoy (o el que elijas)
+  const meses = [];
+  let ym = mesBase;
+  let guard = 0;
+  while (ym <= mesHasta && guard++ < 240) { meses.push(ym); ym = addMonthYM(ym, 1); }
+
+  // ACUMULACIÓN COMPUESTA: cada ajuste se aplica sobre el monto ya ajustado
+  let factor = 1, faltan = 0;
+  const filas = meses.map((mm, i) => {
+    if (i === 0) return { mes: mm, rate: 0, factor: 1, precio: base, primero: true };
+    const r = cacMes(mm, cac);
+    if (r.provisorio) faltan++;
+    const antes = base * factor;
+    factor *= (1 + r.rate);
+    const precio = base * factor;
+    return { mes: mm, rate: r.rate, provisorio: r.provisorio, factor, precio, ajuste: precio - antes, antes };
+  });
+
+  const precioFinal = base * factor;
+  const acumPct = (factor - 1) * 100;
+  const sumaSimple = filas.slice(1).reduce((a, f) => a + f.rate, 0) * 100;   // el error clásico
+  const totalSinIva = m2 > 0 ? precioFinal * m2 : precioFinal;
+  const totalConIva = totalSinIva * (1 + IVA);
+
+  const nomMes = (mm) => { const [y, m] = mm.split("-"); return ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][+m - 1] + " " + y.slice(2); };
+  const inp2 = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 9, padding: "12px 12px", fontSize: 16, color: T.text, width: "100%", boxSizing: "border-box" };
+  const lb = { fontSize: 10.5, color: T.sub, fontWeight: 700, display: "block", marginBottom: 4 };
+
+  const copiar = () => {
+    const t = `COTIZACIÓN CON AJUSTE CAC\nPrecio base (${nomMes(mesBase)}): ${money(base)}${m2 ? " /m²" : ""}\nAjuste acumulado: ${acumPct.toFixed(2)}%\nPrecio a ${nomMes(mesHasta)}: ${money(precioFinal)}${m2 ? " /m²" : ""}\n${m2 ? `Superficie: ${m2} m²\nTotal sin IVA: ${money(totalSinIva)}\n` : ""}${ivaOn ? `IVA 21%: ${money(totalSinIva * IVA)}\nTOTAL con IVA: ${money(totalConIva)}` : ""}`;
+    try { navigator.clipboard.writeText(t); alert("Copiado."); } catch { alert(t); }
+  };
+
+  return <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 30px" }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Punto de partida</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div>
+          <label style={lb}>Precio base {m2 > 0 ? "por m²" : ""}</label>
+          <input value={cot.base != null ? cot.base : 409000} onChange={e => setCot("base", e.target.value)} inputMode="numeric" style={inp2} />
+        </div>
+        <div>
+          <label style={lb}>Mes de ese precio</label>
+          <input type="month" value={mesBase} onChange={e => setCot("mesBase", e.target.value)} style={inp2} />
+        </div>
+        <div>
+          <label style={lb}>Superficie (m²) — opcional</label>
+          <input value={cot.m2 || ""} onChange={e => setCot("m2", e.target.value)} inputMode="decimal" placeholder="dejalo vacío si cotizás el m²" style={inp2} />
+        </div>
+        <div>
+          <label style={lb}>Ajustar hasta</label>
+          <input type="month" value={mesHasta} onChange={e => setCot("mesHasta", e.target.value)} style={inp2} />
+        </div>
+      </div>
+      <button onClick={() => setCot("iva", !ivaOn)} style={{ width: "100%", marginTop: 9, background: ivaOn ? T.accent : T.al, color: ivaOn ? "#fff" : T.sub, border: `1px solid ${ivaOn ? T.accent : T.border}`, borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{ivaOn ? "✓ " : ""}Agregar IVA 21% al total</button>
+    </div>
+
+    {/* RESULTADO */}
+    <div style={{ background: `linear-gradient(135deg, ${T.navy}, #1B3A5B)`, borderRadius: 14, padding: 16, marginBottom: 12, color: "#fff" }}>
+      <div style={{ fontSize: 10.5, opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>Precio ajustado a {nomMes(mesHasta)}</div>
+      <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 4 }}>{money(precioFinal)}{m2 > 0 ? <span style={{ fontSize: 15, opacity: 0.7 }}> /m²</span> : ""}</div>
+      <div style={{ fontSize: 12, opacity: 0.8, marginTop: 3 }}>Partiendo de {money(base)} en {nomMes(mesBase)}</div>
+      <div style={{ height: 1, background: "rgba(255,255,255,.15)", margin: "12px 0" }} />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 5 }}>
+        <span style={{ opacity: 0.75 }}>Ajuste acumulado ({filas.length - 1} meses)</span>
+        <b style={{ color: BRASS }}>{acumPct.toFixed(2)} %</b>
+      </div>
+      {m2 > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 5 }}>
+        <span style={{ opacity: 0.75 }}>{m2} m² × {money(precioFinal)}</span>
+        <b>{money(totalSinIva)}</b>
+      </div>}
+      {ivaOn && <>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 5 }}>
+          <span style={{ opacity: 0.75 }}>IVA 21%</span><b>{money(totalSinIva * IVA)}</b>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 800, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.15)" }}>
+          <span>TOTAL con IVA</span><span style={{ color: BRASS }}>{money(totalConIva)}</span>
+        </div>
+      </>}
+      <button onClick={copiar} style={{ width: "100%", marginTop: 12, background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Copiar la cotización</button>
+    </div>
+
+    {faltan > 0 && <div style={{ background: "rgba(240,165,0,.12)", border: "1px solid rgba(240,165,0,.35)", borderRadius: 10, padding: "11px 12px", marginBottom: 12, fontSize: 11.5, color: "#8A6100", lineHeight: 1.55 }}>
+      ⚠ Te faltan cargar <b>{faltan}</b> mes(es) de índice CAC. Esos meses los estoy tomando como <b>0%</b>, así que el precio de arriba está <b>por debajo del real</b>. Cargalos en la tabla.
+    </div>}
+
+    {/* LA CUENTA, MES POR MES */}
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Cómo se arma, mes por mes</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Cada ajuste se aplica <b>sobre el monto ya ajustado</b>, no sobre el original. Cargá el % de cada mes.</div>
+      <div style={{ display: "grid", gridTemplateColumns: "62px 74px 1fr 1fr", gap: 5, fontSize: 9.5, color: T.muted, fontWeight: 700, textTransform: "uppercase", paddingBottom: 6, borderBottom: `1px solid ${T.border}` }}>
+        <div>Mes</div><div>% CAC</div><div style={{ textAlign: "right" }}>Ajuste</div><div style={{ textAlign: "right" }}>Precio</div>
+      </div>
+      {filas.map((f, i) => <div key={f.mes} style={{ display: "grid", gridTemplateColumns: "62px 74px 1fr 1fr", gap: 5, alignItems: "center", padding: "7px 0", borderBottom: i < filas.length - 1 ? `1px solid ${T.border}` : "none" }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: f.primero ? T.muted : T.text }}>{nomMes(f.mes)}</div>
+        <div>
+          {f.primero ? <span style={{ fontSize: 10.5, color: T.muted }}>base</span>
+            : <input value={cac[f.mes] != null ? cac[f.mes] : ""} onChange={e => setIndice(f.mes, e.target.value)} inputMode="decimal" placeholder="—"
+              style={{ width: "100%", background: f.provisorio ? "rgba(240,165,0,.10)" : T.bg, border: `1px solid ${f.provisorio ? "rgba(240,165,0,.5)" : T.border}`, borderRadius: 7, padding: "7px 6px", fontSize: 13, color: T.text, textAlign: "center", boxSizing: "border-box" }} />}
+        </div>
+        <div style={{ textAlign: "right", fontSize: 11.5, color: f.primero ? T.muted : "#16A34A", fontWeight: 600 }}>{f.primero ? "—" : "+" + money(f.ajuste)}</div>
+        <div style={{ textAlign: "right", fontSize: 12.5, fontWeight: 800, color: T.text }}>{money(f.precio)}</div>
+      </div>)}
+    </div>
+
+    {/* POR QUÉ NO SE SUMAN LOS PORCENTAJES */}
+    {filas.length > 2 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginTop: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Acumulativo vs sumar los %</div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 6 }}>
+        <span style={{ color: T.muted }}>Si sumaras los % ({sumaSimple.toFixed(2)}%)</span>
+        <span style={{ color: T.muted }}>{money(base * (1 + sumaSimple / 100))}</span>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, fontWeight: 700 }}>
+        <span>Acumulativo real ({acumPct.toFixed(2)}%)</span>
+        <span style={{ color: BRASS }}>{money(precioFinal)}</span>
+      </div>
+      <div style={{ background: T.al, borderRadius: 8, padding: "9px 10px", marginTop: 9, fontSize: 11, color: T.sub, lineHeight: 1.55 }}>
+        Diferencia: <b style={{ color: BRASS }}>{money(precioFinal - base * (1 + sumaSimple / 100))}</b>. Sumar los porcentajes te deja plata en la mesa. El correcto es el acumulativo.
+      </div>
+    </div>}
+  </div>;
+}
+
 function AgendaTab({ obras, certs, certsDe, indices, data, save }) {
   const contactos = data.contactos || [];
   const [nombre, setNombre] = useState(""); const [telefono, setTelefono] = useState(""); const [tipo, setTipo] = useState("cliente"); const [obraId, setObraId] = useState("");
@@ -563,11 +710,12 @@ export default function App() {
       </div>
     </div>
     <div style={{ display: "flex", background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
-      {[["ia", "✨ IA"], ["presupuesto", "Presupuestos"], ["costo", "Cert.", "costo"], ["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]].map(([k, l1, l2]) => (
+      {[["ia", "✨ IA"], ["cotizador", "Cotizador"], ["presupuesto", "Presupuestos"], ["costo", "Cert.", "costo"], ["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]].map(([k, l1, l2]) => (
         <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "10px 1px 9px", fontSize: 10.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative", letterSpacing: "-0.01em", lineHeight: 1.2 }}>{l1}{l2 ? <><br />{l2}</> : ""}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
       ))}
     </div>
     <div className="vv-body">
+      {tab === "cotizador" && <CotizadorTab data={data} save={save} />}
       {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
       {tab === "costo" && <CertTab modo="costo" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
       {tab === "cliente" && <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
