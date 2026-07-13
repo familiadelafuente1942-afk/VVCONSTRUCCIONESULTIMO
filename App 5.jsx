@@ -31,21 +31,58 @@ const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Aut
 // Supabase es la nube (asíncrona, para sincronización entre dispositivos).
 // NUNCA se pisa un dato nuevo con uno viejo del servidor.
 
+// Aviso simple, no intrusivo, de que un guardado en la nube falló: guarda la clave y
+// dispara un evento que un pequeño cartel (montado una sola vez en la raíz) escucha.
+let ultimoAviso = 0;
+function avisarErrorSync(key) {
+    const ahora = Date.now();
+    if (ahora - ultimoAviso < 8000) return; // no lo repito si ya avisé hace poco
+    ultimoAviso = ahora;
+    try { window.dispatchEvent(new CustomEvent("vv-sync-error", { detail: { key } })); } catch { }
+}
+
+function SyncBanner() {
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    const onErr = () => {
+      setMsg("No se pudo guardar en la nube. Se guardó en este aparato — revisá la conexión y volvé a intentar.");
+      setTimeout(() => setMsg(""), 7000);
+    };
+    window.addEventListener("vv-sync-error", onErr);
+    return () => window.removeEventListener("vv-sync-error", onErr);
+  }, []);
+  if (!msg) return null;
+  return (<div style={{ position: "fixed", left: 12, right: 12, bottom: 12, zIndex: 9999, background: "#DC2626", color: "#fff", borderRadius: 10, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.25)", display: "flex", alignItems: "center", gap: 8 }}>
+    <span>⚠</span><span style={{ flex: 1 }}>{msg}</span>
+    <button onClick={() => setMsg("")} style={{ background: "rgba(255,255,255,.2)", border: "none", color: "#fff", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>OK</button>
+  </div>);
+}
+
 const storage = {
     // Escribe SIEMPRE en localStorage primero (síncrono, instantáneo)
     // Luego intenta Supabase en background sin bloquear
     set: async (key, value) => {
         // 1. localStorage primero — nunca falla, inmediato
         try { localStorage.setItem(key, value); } catch { }
-        // 2. Supabase en background
+        // 2. Supabase en background — ANTES no revisaba si el servidor aceptó el guardado
+        // (solo atrapaba fallas de RED, no un error HTTP como 403/413/500). Un permiso mal
+        // puesto o un archivo demasiado grande podían fallar en silencio: quedaba guardado
+        // acá, pero nunca llegaba a la nube — y por eso "resucitaba" o "no se quedaba" al
+        // rato. Ahora revisa la respuesta de verdad y reintenta una vez antes de avisar.
+        const intentar = () => fetch(SUPA_URL + "/rest/v1/bco_storage", {
+            method: "POST",
+            headers: { ...SH(), "Prefer": "resolution=merge-duplicates" },
+            body: JSON.stringify({ key, value })
+        });
         try {
-            await fetch(SUPA_URL + "/rest/v1/bco_storage", {
-                method: "POST",
-                headers: { ...SH(), "Prefer": "resolution=merge-duplicates" },
-                body: JSON.stringify({ key, value })
-            });
-        } catch { }
-        return { value };
+            let r = await intentar();
+            if (!r.ok) r = await intentar(); // un reintento antes de darlo por perdido
+            if (!r.ok) { avisarErrorSync(key); return { value, ok: false }; }
+        } catch {
+            avisarErrorSync(key);
+            return { value, ok: false };
+        }
+        return { value, ok: true };
     },
     // Lee: intenta Supabase, fallback a localStorage
     get: async (key) => {
@@ -82,6 +119,69 @@ const storage = {
 // La URL pública reemplaza al base64 — reduce el egress drásticamente.
 const SUPA_BUCKET = "bco-media";
 const SUPA_STORAGE_URL = SUPA_URL + "/storage/v1";
+
+// ── CACHÉ LOCAL DE ARCHIVOS (IndexedDB) ─────────────────────────────
+// La primera vez que se abre un archivo en ESTE dispositivo hace falta conexión
+// para traerlo. Pero a partir de ahí queda GUARDADO ACÁ (en esta compu/tablet,
+// no en la nube), y las próximas veces se abre directo desde esa copia local,
+// sin volver a pedirle nada a Supabase. Antes siempre iba a buscarlo al servidor,
+// por eso "quedaba pensando" sin conexión: nunca se quedaba con una copia propia.
+const CACHE_DB = "vv_archivos_cache", CACHE_STORE = "files";
+function abrirCacheDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(CACHE_DB, 1);
+        req.onupgradeneeded = () => { req.result.createObjectStore(CACHE_STORE); };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+async function cacheGet(url) {
+    try {
+        const db = await abrirCacheDB();
+        return await new Promise((res, rej) => {
+            const r = db.transaction(CACHE_STORE, "readonly").objectStore(CACHE_STORE).get(url);
+            r.onsuccess = () => res(r.result || null);
+            r.onerror = () => rej(r.error);
+        });
+    } catch { return null; }
+}
+async function cachePut(url, blob) {
+    try {
+        const db = await abrirCacheDB();
+        await new Promise((res, rej) => {
+            const tx = db.transaction(CACHE_STORE, "readwrite");
+            tx.objectStore(CACHE_STORE).put(blob, url);
+            tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+        });
+    } catch { }
+}
+// Abre un archivo usando la copia local si ya está en este dispositivo (funciona
+// SIN conexión). Si todavía no está, la trae una vez (necesita conexión esa
+// primera vez) y la guarda para que la próxima sea instantánea y offline.
+async function abrirArchivo(url, nombre) {
+    if (!url) return { ok: false, motivo: "sin-url" };
+    if (url.startsWith("data:")) { window.open(url, "_blank"); return { ok: true }; }
+    let blob = await cacheGet(url);
+    let nuevo = false;
+    if (!blob) {
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, motivo: "sin-conexion" };
+        try {
+            const r = await fetch(url);
+            if (!r.ok) throw new Error("no se pudo traer");
+            blob = await r.blob();
+            nuevo = true;
+        } catch { return { ok: false, motivo: "sin-conexion" }; }
+    }
+    const objUrl = URL.createObjectURL(blob);
+    window.open(objUrl, "_blank");
+    if (nuevo) cachePut(url, blob);
+    return { ok: true, nuevo };
+}
+async function descargarArchivo(url, nombre) {
+    const r = await abrirArchivo(url, nombre);
+    if (!r.ok) alert("Este archivo todavía no está guardado en este dispositivo.\n\nAbrilo una vez con conexión y, de ahí en adelante, se va a poder ver sin internet.");
+    return r.ok;
+}
 
 const mediaStorage = {
     // Subir un archivo (recibe dataURL base64) → devuelve URL pública
@@ -184,12 +284,17 @@ function useStoredState(key, defaultValue) {
                         setState(cloudData);
                         try { localStorage.setItem(key, r.value); } catch { }
                     } else {
-                        // Uso normal: la nube gana solo si tiene más datos que el local
-                        setState(local => {
-                            const localSize = JSON.stringify(local).length;
-                            const cloudSize = JSON.stringify(cloudData).length;
-                            return cloudSize > localSize ? cloudData : local;
-                        });
+                        // Gana el MÁS RECIENTE, no el más grande.
+                        // (Antes ganaba el más grande: como borrar SIEMPRE achica los datos,
+                        //  la versión con la obra borrada se descartaba y la obra resucitaba.)
+                        const rTs = await storage.get(key + "__ts");
+                        const cloudTs = Number(rTs?.value || 0);
+                        let localTs = 0;
+                        try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
+                        if (cloudTs >= localTs) {
+                            setState(cloudData);
+                            try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+                        }
                     }
                 }
             } catch { }
@@ -203,9 +308,11 @@ function useStoredState(key, defaultValue) {
             const next = typeof updater === 'function' ? updater(prev) : updater;
             // Guardar inmediatamente en ambos lados
             const json = JSON.stringify(next);
-            lastWrite[key] = Date.now();
-            try { localStorage.setItem(key, json); } catch { }
-            storage.set(key, json).catch(() => {});
+            const ts = Date.now();
+            lastWrite[key] = ts;
+            try { localStorage.setItem(key, json); localStorage.setItem(key + "__ts", String(ts)); } catch { }
+            storage.set(key, json).catch(() => { });
+            storage.set(key + "__ts", String(ts)).catch(() => { });   // sello de fecha: para saber cuál es el más nuevo
             return next;
         });
     }, [key]);
@@ -661,7 +768,7 @@ function Proyectos({ lics, setLics, requireAuth, cfg, obras, setObras }) {
         }));
     }
     function add() {
-        if (!form.nombre.trim()) return;
+        if (!String(form.nombre || "").trim()) return;
         const apFinal = form.ap || UBICS[0]?.id || 'aep';
         setLics(p => [...p, { ...form, ap: apFinal, id: uid() }]);
         setForm({ nombre: "", ap: UBICS[0]?.id || '', estado: "visitar", monto: "", fecha: "", sector: "", docs: {} });
@@ -737,22 +844,22 @@ function Proyectos({ lics, setLics, requireAuth, cfg, obras, setObras }) {
             })}
         </div>
         {showNew && (<Sheet title="Nueva proyecto" onClose={() => setShowNew(false)}>
-            <Field label="Nombre"><TInput value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Refacción Terminal B" /></Field>
+            <Field label="Nombre"><TInput value={form.nombre || ""} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Refacción Terminal B" /></Field>
             <FieldRow>
                 <Field label={getLabelUbic(cfg)}>
                     <Sel value={form.ap || UBICS[0]?.id || ''} onChange={e => setForm(p => ({ ...p, ap: e.target.value }))}>
                         {UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}
                     </Sel>
                 </Field>
-                <Field label="Estado"><Sel value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))}>{LIC_ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</Sel></Field>
+                <Field label="Estado"><Sel value={form.estado || ""} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))}>{LIC_ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</Sel></Field>
             </FieldRow>
             <FieldRow>
-                <Field label="Monto"><MontoInput value={form.monto} onChange={v => setForm(p => ({ ...p, monto: v }))} placeholder="0 $" /></Field>
-                <Field label="Sector"><TInput value={form.sector} onChange={e => setForm(p => ({ ...p, sector: e.target.value }))} placeholder="Terminal A" /></Field>
+                <Field label="Monto"><MontoInput value={form.monto || ""} onChange={v => setForm(p => ({ ...p, monto: v }))} placeholder="0 $" /></Field>
+                <Field label="Sector"><TInput value={form.sector || ""} onChange={e => setForm(p => ({ ...p, sector: e.target.value }))} placeholder="Terminal A" /></Field>
             </FieldRow>
-            <Field label="Fecha"><TInput value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aa" /></Field>
+            <Field label="Fecha"><TInput value={form.fecha || ""} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aa" /></Field>
             <div style={{ marginBottom: 14 }}><Lbl>Documentos</Lbl><DocMultiGrid docs={form.docs} onUpload={handleNewDoc} onRemove={(did, fileId) => removeNewDoc(did, fileId)} refs={newDocRefs} prefix="new" /></div>
-            <PBtn full onClick={add} disabled={!form.nombre.trim()}>Crear proyecto</PBtn>
+            <PBtn full onClick={add} disabled={!String(form.nombre || "").trim()}>Crear proyecto</PBtn>
         </Sheet>)}
         {detail && (<Sheet title={detail.nombre} onClose={() => setShowDetail(null)}>
             <Field label="Nombre"><TInput value={detail.nombre} onChange={e => setLics(p => p.map(l => l.id === detail.id ? { ...l, nombre: e.target.value } : l))} placeholder="Nombre de la proyecto" /></Field>
@@ -1105,15 +1212,22 @@ function TabInformes({ detail, upd }) {
     async function handleFile(e) {
         const files = Array.from(e.target.files);
         const nuevos = [];
+        let fallaron = 0;
         for (const f of files) {
-            const url = await toDataUrl(f);
+            // Subo el archivo real al bucket (como fotos y planos) en vez de embeber
+            // el base64 en la ficha de la obra: eso infla la sincronización con Cliente
+            // y puede fallar en silencio con archivos grandes.
+            const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+            const remoteUrl = await mediaStorage.upload(`informes/${uid()}_${f.name.replace(/\W+/g, "_")}`, dataUrl);
+            if (!remoteUrl) fallaron++;
             nuevos.push({
                 id: uid(), ts: Date.now(), titulo: form.titulo || f.name.replace(/\.[^.]+$/, ''),
                 tipo: form.tipo || subTab, fecha: form.fecha || new Date().toLocaleDateString('es-AR'),
                 notas: form.notas, nombre: f.name, ext: f.name.split('.').pop().toUpperCase(),
-                url, size: (f.size / 1024).toFixed(0) + 'KB', cargado: new Date().toLocaleDateString('es-AR'),
+                url: remoteUrl || dataUrl, size: (f.size / 1024).toFixed(0) + 'KB', cargado: new Date().toLocaleDateString('es-AR'),
             });
         }
+        if (fallaron) alert(`⚠ ${fallaron} archivo(s) quedaron guardados en este dispositivo, pero no se pudieron subir a la nube. No van a verse desde Cliente ni desde otro dispositivo hasta que los vuelvas a cargar con conexión.`);
         upd(detail.id, { informes: [...nuevos, ...informes] });
         setForm({ titulo: '', tipo: 'diario', fecha: '', notas: '' });
         setShowNew(false);
@@ -1142,19 +1256,17 @@ function TabInformes({ detail, upd }) {
                     <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{inf.fecha} · {inf.size}</div>
                 </div>
                 <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                    <a href={inf.url} download={inf.nombre} style={{ textDecoration: "none" }}>
-                        <button style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>↓</button>
-                    </a>
+                    <button onClick={() => descargarArchivo(inf.url, inf.nombre)} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>↓</button>
                     <button onClick={() => upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) })} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
                 </div>
             </div>))}
         {showNew && (<Sheet title={`Subir informe ${tp?.label}`} onClose={() => setShowNew(false)}>
-            <Field label="Título (opcional)"><TInput value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} placeholder="Título del informe" /></Field>
+            <Field label="Título (opcional)"><TInput value={form.titulo || ""} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} placeholder="Título del informe" /></Field>
             <FieldRow>
-                <Field label="Tipo"><Sel value={form.tipo} onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))}>{TIPOS_INF.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</Sel></Field>
-                <Field label="Fecha"><TInput value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aa" /></Field>
+                <Field label="Tipo"><Sel value={form.tipo || ""} onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))}>{TIPOS_INF.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</Sel></Field>
+                <Field label="Fecha"><TInput value={form.fecha || ""} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aa" /></Field>
             </FieldRow>
-            <Field label="Notas"><textarea value={form.notas} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} placeholder="Observaciones..." rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} /></Field>
+            <Field label="Notas"><textarea value={form.notas || ""} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} placeholder="Observaciones..." rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} /></Field>
             <PBtn full onClick={() => fileRef.current?.click()}>📎 Seleccionar archivo</PBtn>
         </Sheet>)}
     </div>);
@@ -1188,7 +1300,7 @@ function TabGastos({ detail, upd }) {
     }
 
     function agregar() {
-        if (!form.desc.trim() || !form.monto) return;
+        if (!String(form.desc || "").trim() || !form.monto) return;
         const nuevo = { id: uid(), ...form };
         upd(detail.id, { gastos: [...gastos, nuevo] });
         setForm({ desc: '', tipo: 'viatico', monto: '', fecha: new Date().toLocaleDateString('es-AR'), quien: '', comprobante: null });
@@ -1254,7 +1366,7 @@ function TabGastos({ detail, upd }) {
 
         {showNew && (<Sheet title="Cargar gasto" onClose={() => setShowNew(false)}>
             <Field label="Descripción">
-                <TInput value={form.desc} onChange={e => setForm(p => ({ ...p, desc: e.target.value }))} placeholder="Ej: Cemento Portland 25kg" />
+                <TInput value={form.desc || ""} onChange={e => setForm(p => ({ ...p, desc: e.target.value }))} placeholder="Ej: Cemento Portland 25kg" />
             </Field>
             <Lbl>Tipo de gasto</Lbl>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 12 }}>
@@ -1264,14 +1376,14 @@ function TabGastos({ detail, upd }) {
             </div>
             <FieldRow>
                 <Field label="Monto ($)">
-                    <MontoInput value={form.monto} onChange={v => setForm(p => ({ ...p, monto: v }))} placeholder="0 $" />
+                    <MontoInput value={form.monto || ""} onChange={v => setForm(p => ({ ...p, monto: v }))} placeholder="0 $" />
                 </Field>
                 <Field label="Fecha">
-                    <TInput value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aa" />
+                    <TInput value={form.fecha || ""} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aa" />
                 </Field>
             </FieldRow>
             <Field label="Quién realizó el gasto (opcional)">
-                <TInput value={form.quien} onChange={e => setForm(p => ({ ...p, quien: e.target.value }))} placeholder="Nombre del trabajador" />
+                <TInput value={form.quien || ""} onChange={e => setForm(p => ({ ...p, quien: e.target.value }))} placeholder="Nombre del trabajador" />
             </Field>
             <Field label="Comprobante (foto o PDF)">
                 <input ref={compRef} type="file" accept="image/*,.pdf" onChange={handleComp} style={{ display: "none" }} />
@@ -1286,7 +1398,7 @@ function TabGastos({ detail, upd }) {
                     </button>
                 )}
             </Field>
-            <PBtn full onClick={agregar} disabled={!form.desc.trim() || !form.monto}>Guardar gasto</PBtn>
+            <PBtn full onClick={agregar} disabled={!String(form.desc || "").trim() || !form.monto}>Guardar gasto</PBtn>
         </Sheet>)}
     </div>);
 }
@@ -1307,7 +1419,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
     }, [UBICS.length]);
 
     function add() {
-        if (!form.nombre.trim()) return;
+        if (!String(form.nombre || "").trim()) return;
         const apFinal = form.ap || UBICS[0]?.id || defaultAp;
         setObras(p => [...p, { ...form, ap: apFinal, id: uid(), avance: parseInt(form.avance) || 0, pagado: 0, obs: [], fotos: [], archivos: [], informes: [], docs: {} }]);
         setForm({ nombre: "", ap: UBICS[0]?.id || defaultAp, sector: "", estado: "pendiente", avance: 0, inicio: "", cierre: "" });
@@ -1486,20 +1598,20 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
             })}
         </div>
         {showNew && (<Sheet title={t(cfg, 'obras_nueva')} onClose={() => setShowNew(false)}>
-            <Field label={t(cfg, 'obras_titulo')}><TInput value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Refacción Terminal B" /></Field>
+            <Field label={t(cfg, 'obras_titulo')}><TInput value={form.nombre || ""} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Refacción Terminal B" /></Field>
             <FieldRow>
-                <Field label={getLabelUbic(cfg)}><Sel value={form.ap} onChange={e => setForm(p => ({ ...p, ap: e.target.value }))}>{UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}</Sel></Field>
-                <Field label={t(cfg, 'obras_estado')}><Sel value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))}>{OBRA_ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</Sel></Field>
+                <Field label={getLabelUbic(cfg)}><Sel value={form.ap || ""} onChange={e => setForm(p => ({ ...p, ap: e.target.value }))}>{UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}</Sel></Field>
+                <Field label={t(cfg, 'obras_estado')}><Sel value={form.estado || ""} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))}>{OBRA_ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</Sel></Field>
             </FieldRow>
             <FieldRow>
-                <Field label={t(cfg, 'obras_sector')}><TInput value={form.sector} onChange={e => setForm(p => ({ ...p, sector: e.target.value }))} placeholder="Sector A" /></Field>
-                <Field label={`${t(cfg, 'obras_avance')} %`}><TInput type="number" value={form.avance} onChange={e => setForm(p => ({ ...p, avance: e.target.value }))} placeholder="0" /></Field>
+                <Field label={t(cfg, 'obras_sector')}><TInput value={form.sector || ""} onChange={e => setForm(p => ({ ...p, sector: e.target.value }))} placeholder="Sector A" /></Field>
+                <Field label={`${t(cfg, 'obras_avance')} %`}><TInput type="number" value={form.avance || ""} onChange={e => setForm(p => ({ ...p, avance: e.target.value }))} placeholder="0" /></Field>
             </FieldRow>
             <FieldRow>
-                <Field label={t(cfg, 'obras_inicio')}><TInput value={form.inicio} onChange={e => setForm(p => ({ ...p, inicio: e.target.value }))} placeholder="dd/mm/aa" /></Field>
-                <Field label={t(cfg, 'obras_cierre')}><TInput value={form.cierre} onChange={e => setForm(p => ({ ...p, cierre: e.target.value }))} placeholder="dd/mm/aa" /></Field>
+                <Field label={t(cfg, 'obras_inicio')}><TInput value={form.inicio || ""} onChange={e => setForm(p => ({ ...p, inicio: e.target.value }))} placeholder="dd/mm/aa" /></Field>
+                <Field label={t(cfg, 'obras_cierre')}><TInput value={form.cierre || ""} onChange={e => setForm(p => ({ ...p, cierre: e.target.value }))} placeholder="dd/mm/aa" /></Field>
             </FieldRow>
-            <PBtn full onClick={add} disabled={!form.nombre.trim()}>{t(cfg, 'obras_nueva')}</PBtn>
+            <PBtn full onClick={add} disabled={!String(form.nombre || "").trim()}>{t(cfg, 'obras_nueva')}</PBtn>
         </Sheet>)}
     </div>);
 }
@@ -1517,7 +1629,6 @@ const SAMPLE_OBRAS = [
   { id:"o1", nombre:"Castores 475", ap:"norte", sector:"Vivienda PB+1", estado:"curso", avance:68, inicio:"10/03/26", cierre:"30/08/26", monto:"12.400.000 $", pagado:8100000, obs:[{id:"b1",txt:"Hormigón visto terminado en PB.",fecha:"20/06/26"}], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
   { id:"o2", nombre:"Puentes 132", ap:"norte", sector:"Refacción integral", estado:"curso", avance:41, inicio:"02/04/26", cierre:"15/09/26", monto:"7.900.000 $", pagado:3000000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
   { id:"o3", nombre:"Golf 2–93", ap:"caba", sector:"Obra nueva", estado:"curso", avance:23, inicio:"20/05/26", cierre:"20/12/26", monto:"21.000.000 $", pagado:0, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
-  { id:"o4", nombre:"Canning 815", ap:"sur", sector:"Fachada Alucobond", estado:"pausada", avance:88, inicio:"05/01/26", cierre:"10/07/26", monto:"15.500.000 $", pagado:13600000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
   { id:"o5", nombre:"A 37", ap:"caba", sector:"Fit-out comercial", estado:"terminada", avance:100, inicio:"01/11/25", cierre:"28/02/26", monto:"9.200.000 $", pagado:9200000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
 ];
 const SAMPLE_LICS = [
@@ -1532,7 +1643,6 @@ const SAMPLE_PERSONAL = [
 ];
 const SAMPLE_ALERTS = [
   { id:"a1", msg:"Marcos Giménez: ART vence en 3 días", prioridad:"alta" },
-  { id:"a2", msg:"Canning 815: 88% pagado pero obra pausada", prioridad:"alta" },
   { id:"a3", msg:"Obra Saavedra: presentación de avance pendiente", prioridad:"media" },
 ];
 
@@ -1831,7 +1941,7 @@ function MatPedidosView({ db, cfg, onBack }) {
       </Card>); })}
     </div>
     {form && <Sheet title="Nuevo pedido de materiales" onClose={() => setForm(null)}>
-      <Field label="Obra"><Sel value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      <Field label="Obra"><Sel value={form.obra_id || ""} onChange={e => setForm({ ...form, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", margin: "6px 0 8px" }}>Materiales</div>
       {form.items.map((it, i) => (<div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
         <input value={it.nombre} onChange={e => setItem(i, "nombre", e.target.value)} placeholder="Material" style={{ flex: 2, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px", fontSize: 13, color: T.text }} />
@@ -1840,7 +1950,7 @@ function MatPedidosView({ db, cfg, onBack }) {
         {form.items.length > 1 && <button onClick={() => delItem(i)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer" }}>✕</button>}
       </div>))}
       <button onClick={addItem} style={{ background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>＋ Agregar material</button>
-      <Field label="Nota (opcional)"><textarea value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} rows={2} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} /></Field>
+      <Field label="Nota (opcional)"><textarea value={form.nota || ""} onChange={e => setForm({ ...form, nota: e.target.value })} rows={2} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} /></Field>
       <PBtn full onClick={guardar} style={{ marginTop: 6 }}>Enviar pedido a {cn}</PBtn>
     </Sheet>}
   </div>);
@@ -2127,9 +2237,9 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
     <AddFab onClick={() => setForm({ nombre: "", rol: ROLES[0], empresa: cfg?.empresa || "V+V Construcciones", obra_id: obras[0]?.id || "", telefono: "", foto: "", docs: {} })} label="Trabajador" />
 
     {form && <Sheet title={form.id ? "Editar trabajador" : "Nuevo trabajador"} onClose={() => setForm(null)}>
-      <Field label="Nombre y apellido"><TInput value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Juan Pérez" /></Field>
+      <Field label="Nombre y apellido"><TInput value={form.nombre || ""} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Juan Pérez" /></Field>
       <FieldRow>
-        <Field label="Rol"><Sel value={form.rol} onChange={e => setForm({ ...form, rol: e.target.value })}>{ROLES.map(r => <option key={r}>{r}</option>)}</Sel></Field>
+        <Field label="Rol"><Sel value={form.rol || ""} onChange={e => setForm({ ...form, rol: e.target.value })}>{ROLES.map(r => <option key={r}>{r}</option>)}</Sel></Field>
       </FieldRow>
       <Field label="Obras asignadas (tocá para elegir varias)">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
@@ -2138,8 +2248,8 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
         </div>
       </Field>
       <FieldRow>
-        <Field label="Empresa"><TInput value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></Field>
-        <Field label="WhatsApp"><TInput value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="549114..." /></Field>
+        <Field label="Empresa"><TInput value={form.empresa || ""} onChange={e => setForm({ ...form, empresa: e.target.value })} /></Field>
+        <Field label="WhatsApp"><TInput value={form.telefono || ""} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="549114..." /></Field>
         <FieldRow>
           <Field label="DNI"><TInput value={form.dni || ""} onChange={e => setForm({ ...form, dni: e.target.value })} placeholder="30.123.456" /></Field>
           <Field label="CUIL"><TInput value={form.cuil || ""} onChange={e => setForm({ ...form, cuil: e.target.value })} placeholder="20-30123456-3" /></Field>
@@ -2387,6 +2497,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       return { role: m.role, content: typeof m.content === "string" ? m.content : m.content };
     });
     const r = await callAI(apiMsgs, buildSystem(), apiKey, useSearch);
+    if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(r || ""))) { setMsgs(prev => [...prev, { role: "assistant", content: "⚠ Me quedé sin crédito de IA por ahora. Para que vuelva a funcionar, hay que recargar crédito de la API en console.anthropic.com (Plans & Billing)." }]); setLoading(false); return; }
     const { limpio, accion } = parseAccion(r);
     let extra = {};
     if (accion && accion.tipo === "traer_plano") {
@@ -2515,7 +2626,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v17 canal-directo" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v23 limpia-canning" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -2631,12 +2742,12 @@ function MaterialesView({ db, onBack }) {
     </div>
     <AddFab onClick={() => setForm({ nombre: "", cantidad: "", unidad: "u", precio: "" })} label="Material" />
     {form && <Sheet title={form.id ? "Material" : "Nuevo material"} onClose={() => setForm(null)}>
-      <Field label="Material"><TInput value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Cemento Portland" /></Field>
+      <Field label="Material"><TInput value={form.nombre || ""} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Cemento Portland" /></Field>
       <FieldRow>
-        <Field label="Cantidad"><TInput type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} /></Field>
-        <Field label="Unidad"><TInput value={form.unidad} onChange={e => setForm({ ...form, unidad: e.target.value })} placeholder="u, m², bolsa…" /></Field>
+        <Field label="Cantidad"><TInput type="number" value={form.cantidad || ""} onChange={e => setForm({ ...form, cantidad: e.target.value })} /></Field>
+        <Field label="Unidad"><TInput value={form.unidad || ""} onChange={e => setForm({ ...form, unidad: e.target.value })} placeholder="u, m², bolsa…" /></Field>
       </FieldRow>
-      <Field label="Precio unitario ($)"><TInput type="number" value={form.precio} onChange={e => setForm({ ...form, precio: e.target.value })} /></Field>
+      <Field label="Precio unitario ($)"><TInput type="number" value={form.precio || ""} onChange={e => setForm({ ...form, precio: e.target.value })} /></Field>
       <Adjuntos items={form.adjuntos} onChange={next => setForm({ ...form, adjuntos: next })} />
       <PBtn full onClick={guardar} style={{ marginTop: 10 }}>{form.id ? "Guardar" : "Agregar material"}</PBtn>
     </Sheet>}
@@ -2668,14 +2779,14 @@ function SubcontratosView({ db, onBack }) {
     </div>
     <AddFab onClick={() => setForm({ empresa: "", rubro: "", obra_id: obras[0]?.id || "", monto: "", estado: "presupuestado" })} label="Subcontrato" />
     {form && <Sheet title={form.id ? "Editar subcontrato" : "Nuevo subcontrato"} onClose={() => setForm(null)}>
-      <Field label="Empresa / contratista"><TInput value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></Field>
+      <Field label="Empresa / contratista"><TInput value={form.empresa || ""} onChange={e => setForm({ ...form, empresa: e.target.value })} /></Field>
       <FieldRow>
-        <Field label="Rubro"><TInput value={form.rubro} onChange={e => setForm({ ...form, rubro: e.target.value })} placeholder="Yesería, electricidad…" /></Field>
-        <Field label="Obra"><Sel value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        <Field label="Rubro"><TInput value={form.rubro || ""} onChange={e => setForm({ ...form, rubro: e.target.value })} placeholder="Yesería, electricidad…" /></Field>
+        <Field label="Obra"><Sel value={form.obra_id || ""} onChange={e => setForm({ ...form, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       </FieldRow>
       <FieldRow>
-        <Field label="Monto"><TInput value={form.monto} onChange={e => setForm({ ...form, monto: formatMonto(e.target.value) })} placeholder="0 $" /></Field>
-        <Field label="Estado"><Sel value={form.estado} onChange={e => setForm({ ...form, estado: e.target.value })}>{estados.map(x => <option key={x.id} value={x.id}>{x.id}</option>)}</Sel></Field>
+        <Field label="Monto"><TInput value={form.monto || ""} onChange={e => setForm({ ...form, monto: formatMonto(e.target.value) })} placeholder="0 $" /></Field>
+        <Field label="Estado"><Sel value={form.estado || ""} onChange={e => setForm({ ...form, estado: e.target.value })}>{estados.map(x => <option key={x.id} value={x.id}>{x.id}</option>)}</Sel></Field>
       </FieldRow>
       <PBtn full onClick={guardar} style={{ marginTop: 6 }}>{form.id ? "Guardar" : "Agregar"}</PBtn>
     </Sheet>}
@@ -2752,9 +2863,9 @@ function InformesView({ db, apiKey, onBack }) {
       <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center", marginTop: 8, lineHeight: 1.5 }}>Los informes ya aparecen solos en la pestaña Informes de Belfast. Con este botón, además le llega un aviso a Mensajes.</div>
     </Sheet>}
     {nuevo && <Sheet title="Nuevo informe técnico" onClose={() => setNuevo(null)}>
-      <Field label="Obra"><Sel value={nuevo.obra_id} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
-      <Field label="Título"><TInput value={nuevo.titulo} onChange={e => setNuevo({ ...nuevo, titulo: e.target.value })} placeholder="Ej: Inspección estructural PB" /></Field>
-      <Field label="Detalle"><textarea value={nuevo.texto} onChange={e => setNuevo({ ...nuevo, texto: e.target.value })} rows={5} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>
+      <Field label="Obra"><Sel value={nuevo.obra_id || ""} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      <Field label="Título"><TInput value={nuevo.titulo || ""} onChange={e => setNuevo({ ...nuevo, titulo: e.target.value })} placeholder="Ej: Inspección estructural PB" /></Field>
+      <Field label="Detalle"><textarea value={nuevo.texto || ""} onChange={e => setNuevo({ ...nuevo, texto: e.target.value })} rows={5} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>
       <input ref={fileRef} type="file" multiple onChange={addArch} style={{ display: "none" }} />
       <button onClick={() => fileRef.current?.click()} style={{ width: "100%", background: T.bg, border: `1px dashed ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, color: T.sub, cursor: "pointer", marginBottom: 8 }}>📎 Adjuntar archivos {(nuevo.archivos || []).length ? `(${nuevo.archivos.length})` : ""}</button>
       <PBtn full onClick={guardarManual}>Guardar informe</PBtn>
@@ -2800,12 +2911,12 @@ function GanttView({ db, onBack }) {
     </div>
     <AddFab onClick={() => setForm({ nombre: "", inicio: hoyStr(), fin: "", avance: 0 })} label="Tarea" />
     {form && <Sheet title="Nueva tarea" onClose={() => setForm(null)}>
-      <Field label="Tarea"><TInput value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Hormigonado de losa" /></Field>
+      <Field label="Tarea"><TInput value={form.nombre || ""} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Hormigonado de losa" /></Field>
       <FieldRow>
-        <Field label="Inicio (dd/mm/aa)"><TInput value={form.inicio} onChange={e => setForm({ ...form, inicio: e.target.value })} /></Field>
-        <Field label="Fin (dd/mm/aa)"><TInput value={form.fin} onChange={e => setForm({ ...form, fin: e.target.value })} /></Field>
+        <Field label="Inicio (dd/mm/aa)"><TInput value={form.inicio || ""} onChange={e => setForm({ ...form, inicio: e.target.value })} /></Field>
+        <Field label="Fin (dd/mm/aa)"><TInput value={form.fin || ""} onChange={e => setForm({ ...form, fin: e.target.value })} /></Field>
       </FieldRow>
-      <Field label={`Avance: ${form.avance}%`}><input type="range" min="0" max="100" value={form.avance} onChange={e => setForm({ ...form, avance: Number(e.target.value) })} style={{ width: "100%", accentColor: T.accent }} /></Field>
+      <Field label={`Avance: ${form.avance}%`}><input type="range" min="0" max="100" value={form.avance || ""} onChange={e => setForm({ ...form, avance: Number(e.target.value) })} style={{ width: "100%", accentColor: T.accent }} /></Field>
       <PBtn full onClick={guardar} style={{ marginTop: 6 }}>Agregar tarea</PBtn>
     </Sheet>}
   </div>);
@@ -2835,13 +2946,13 @@ function ContactosView({ db, onBack }) {
     </div>
     <AddFab onClick={() => setForm({ nombre: "", empresa: "", rol: "", email: "", telefono: "" })} label="Contacto" />
     {form && <Sheet title={form.id ? "Editar contacto" : "Nuevo contacto"} onClose={() => setForm(null)}>
-      <Field label="Nombre"><TInput value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} /></Field>
+      <Field label="Nombre"><TInput value={form.nombre || ""} onChange={e => setForm({ ...form, nombre: e.target.value })} /></Field>
       <FieldRow>
-        <Field label="Empresa"><TInput value={form.empresa} onChange={e => setForm({ ...form, empresa: e.target.value })} /></Field>
-        <Field label="Rol"><TInput value={form.rol} onChange={e => setForm({ ...form, rol: e.target.value })} /></Field>
+        <Field label="Empresa"><TInput value={form.empresa || ""} onChange={e => setForm({ ...form, empresa: e.target.value })} /></Field>
+        <Field label="Rol"><TInput value={form.rol || ""} onChange={e => setForm({ ...form, rol: e.target.value })} /></Field>
       </FieldRow>
-      <Field label="Email"><TInput value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} type="email" /></Field>
-      <Field label="Teléfono / WhatsApp"><TInput value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} /></Field>
+      <Field label="Email"><TInput value={form.email || ""} onChange={e => setForm({ ...form, email: e.target.value })} type="email" /></Field>
+      <Field label="Teléfono / WhatsApp"><TInput value={form.telefono || ""} onChange={e => setForm({ ...form, telefono: e.target.value })} /></Field>
       <PBtn full onClick={guardar} style={{ marginTop: 6 }}>{form.id ? "Guardar" : "Agregar"}</PBtn>
     </Sheet>}
   </div>);
@@ -2869,11 +2980,11 @@ function ProveedoresView({ db, onBack }) {
     </div>
     <AddFab onClick={() => setForm({ nombre: "", rubro: "", email: "", telefono: "" })} label="Proveedor" />
     {form && <Sheet title={form.id ? "Editar proveedor" : "Nuevo proveedor"} onClose={() => setForm(null)}>
-      <Field label="Nombre / razón social"><TInput value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} /></Field>
-      <Field label="Rubro"><TInput value={form.rubro} onChange={e => setForm({ ...form, rubro: e.target.value })} placeholder="Corralón, aberturas, hierros…" /></Field>
+      <Field label="Nombre / razón social"><TInput value={form.nombre || ""} onChange={e => setForm({ ...form, nombre: e.target.value })} /></Field>
+      <Field label="Rubro"><TInput value={form.rubro || ""} onChange={e => setForm({ ...form, rubro: e.target.value })} placeholder="Corralón, aberturas, hierros…" /></Field>
       <FieldRow>
-        <Field label="Teléfono"><TInput value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} /></Field>
-        <Field label="Email"><TInput value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
+        <Field label="Teléfono"><TInput value={form.telefono || ""} onChange={e => setForm({ ...form, telefono: e.target.value })} /></Field>
+        <Field label="Email"><TInput value={form.email || ""} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
       </FieldRow>
       <PBtn full onClick={guardar} style={{ marginTop: 6 }}>{form.id ? "Guardar" : "Agregar"}</PBtn>
     </Sheet>}
@@ -2940,10 +3051,10 @@ function VigilanciaView({ db, onBack }) {
     </Sheet>}
     {form && <Sheet title="Nueva novedad" onClose={() => setForm(null)}>
       <FieldRow>
-        <Field label="Obra"><Sel value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
-        <Field label="Nivel"><Sel value={form.nivel} onChange={e => setForm({ ...form, nivel: e.target.value })}>{niveles.map(n => <option key={n.id} value={n.id}>{n.id}</option>)}</Sel></Field>
+        <Field label="Obra"><Sel value={form.obra_id || ""} onChange={e => setForm({ ...form, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        <Field label="Nivel"><Sel value={form.nivel || ""} onChange={e => setForm({ ...form, nivel: e.target.value })}>{niveles.map(n => <option key={n.id} value={n.id}>{n.id}</option>)}</Sel></Field>
       </FieldRow>
-      <Field label="Descripción"><textarea value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} rows={4} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>
+      <Field label="Descripción"><textarea value={form.nota || ""} onChange={e => setForm({ ...form, nota: e.target.value })} rows={4} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>
       <PBtn full onClick={guardar} style={{ marginTop: 6 }}>Registrar</PBtn>
     </Sheet>}
   </div>);
@@ -3123,12 +3234,12 @@ function HerramientasView({ db, onBack }) {
     </div>
     <AddFab onClick={() => setForm({ nombre: "", cantidad: "1", obra_id: obras[0]?.id || "", estado: "ok" })} label="Herramienta" />
     {form && <Sheet title={form.id ? "Editar herramienta" : "Nueva herramienta"} onClose={() => setForm(null)}>
-      <Field label="Herramienta / equipo"><TInput value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Amoladora Bosch" /></Field>
+      <Field label="Herramienta / equipo"><TInput value={form.nombre || ""} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Amoladora Bosch" /></Field>
       <FieldRow>
-        <Field label="Cantidad"><TInput type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} /></Field>
-        <Field label="Estado"><Sel value={form.estado} onChange={e => setForm({ ...form, estado: e.target.value })}>{est.map(x => <option key={x.id} value={x.id}>{x.id}</option>)}</Sel></Field>
+        <Field label="Cantidad"><TInput type="number" value={form.cantidad || ""} onChange={e => setForm({ ...form, cantidad: e.target.value })} /></Field>
+        <Field label="Estado"><Sel value={form.estado || ""} onChange={e => setForm({ ...form, estado: e.target.value })}>{est.map(x => <option key={x.id} value={x.id}>{x.id}</option>)}</Sel></Field>
       </FieldRow>
-      <Field label="Obra / ubicación"><Sel value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}><option value="">Depósito</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      <Field label="Obra / ubicación"><Sel value={form.obra_id || ""} onChange={e => setForm({ ...form, obra_id: e.target.value })}><option value="">Depósito</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       <Adjuntos items={form.adjuntos} onChange={next => setForm({ ...form, adjuntos: next })} />
       <PBtn full onClick={guardar} style={{ marginTop: 10 }}>{form.id ? "Guardar" : "Agregar"}</PBtn>
     </Sheet>}
@@ -3205,7 +3316,19 @@ const PEDIDO_MAX_IA = 4; // tope de intercambios automáticos IA↔IA por pedido
 function parseAccion(texto){ const t=texto||""; let m=t.match(/```accion\s*([\s\S]*?)```/i)||t.match(/```accion\s*([\s\S]*)$/i); if(!m) return {limpio:texto,accion:null}; let raw=m[1].trim(); let a=null; try{a=JSON.parse(raw);}catch{ const i=raw.indexOf("{"),j=raw.lastIndexOf("}"); if(i>=0&&j>i){ try{a=JSON.parse(raw.slice(i,j+1));}catch{} } } return {limpio:(t.replace(m[0],"").trim()||"Listo."),accion:a}; }
 function esDeCasa(de){ return de === "vv" || de === "sebastian" || de === "nicolas"; }
 function nuevoPedido({de,para,asunto,detalle,prioridad,obra_id}){ const f=hoyStr(),ts=Date.now(); return {id:uid()+ts, de, para, asunto:asunto||"(sin asunto)", estado:"abierto", prioridad:prioridad||"media", obra_id:obra_id||"", fecha:f, ts, iaTurns:0, hilo:[{de,texto:detalle||asunto||"",fecha:f,ts,porIA:false}]}; }
-async function aplicarPedidos(setPedidos, fn){ let arr=[]; try{const r=await storage.get("vv_pedidos"); if(r?.value) arr=JSON.parse(r.value);}catch{} const next=fn(arr.slice()); setPedidos(next); return next; }
+// Antes: iba a buscar la lista ENTERA a la nube antes de aplicar cualquier cambio (incluso
+// tocar un simple botón de estado). Eso hacía que cada toque dependiera de la red y tardara;
+// y si dos cambios se cruzaban (dos toques seguidos, o un toque justo cuando el sondeo
+// periódico corría), el que terminaba de bajar de la nube DESPUÉS pisaba al otro — por eso
+// a veces "no dejaba seleccionar" el estado: el toque se aplicaba y al toque siguiente (o al
+// ratito) quedaba pisado por una lectura vieja. Ahora aplica el cambio directo sobre el estado
+// que React YA tiene actualizado (mantenido al día por el sondeo) — instantáneo, sin depender
+// de la red, y sin la carrera entre dos escrituras que se cruzan.
+function aplicarPedidos(setPedidos, fn) {
+  let next;
+  setPedidos(prev => { next = fn((prev || []).slice()); return next; });
+  return next;
+}
 async function ejecutarAccion(accion, miSide, ctx){
   ctx = ctx || {};
   const setPedidos = ctx.setPedidos;
@@ -3265,7 +3388,27 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   const fileRef = useRef(null);
   async function addAdj(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await toDataUrl(f); const url = await uploadFoto(data, "pedidos", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url, img: f.type.startsWith("image/") }); } setAdj(p => [...p, ...nuevos]); e.target.value = ""; }
 
-  useEffect(() => { const pull = async () => { try { if (Date.now() - (lastWrite["vv_pedidos"] || 0) < 8000) return; const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch {} }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
+  useEffect(() => {
+    // Antes: comparaba el CONTENIDO ("¿la nube dice algo distinto a lo que tengo?") y si
+    // difería, lo aplicaba y lo volvía a guardar. El problema: si esta lectura llega un
+    // instante antes de que un borrado termine de guardarse en la nube, trae la versión
+    // VIEJA (con el pedido borrado adentro) y, al re-guardarla, LO RESUCITA para todo el mundo.
+    // Ahora compara MARCA DE TIEMPO: solo adopta la nube si es más nueva que lo último que
+    // este dispositivo ya escribió o aceptó — así un dato viejo nunca puede pisar uno nuevo.
+    const pull = async () => {
+      try {
+        const rTs = await storage.get("vv_pedidos__ts");
+        const cloudTs = Number(rTs?.value || 0);
+        if (cloudTs <= (lastWrite["vv_pedidos"] || 0)) return; // no es más nuevo: no lo toco
+        const r = await storage.get("vv_pedidos");
+        if (r?.value) { lastWrite["vv_pedidos"] = cloudTs; setPedidos(JSON.parse(r.value)); }
+      } catch { }
+    };
+    pull(); const iv = setInterval(pull, 4000);
+    const onVis = () => { if (document.visibilityState === "visible") pull(); };
+    document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); };
+  }, []);
 
   const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : esDeCasa(p.de));
   const cur = open ? pedidos.find(p => p.id === open) : null;
@@ -3273,6 +3416,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
   function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
+  function borrarMsgHilo(pedidoId, idx) { if (!confirm("¿Eliminar este mensaje/archivo del hilo?")) return; aplicarPedidos(setPedidos, arr => arr.map(x => x.id === pedidoId ? { ...x, hilo: (x.hilo || []).filter((_, j) => j !== idx) } : x)); }
   async function responderIA(p) {
     setIaLoad(true);
     const hist = p.hilo.map(h => `${h.de === miSide ? "Nosotros (V+V)" : otroNom}: ${h.texto}`).join("\n");
@@ -3335,7 +3479,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
             {h.texto}
             {(h.archivos || []).map((a, j) => a.img ? <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 7 }}><img src={a.url} alt={a.nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} /></a> : <a key={j} href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}>📎 {a.nombre}</a>)}
           </div>
-          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "🤖 IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}</div>
+          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "🤖 IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}{mine && i > 0 && <span onClick={() => borrarMsgHilo(cur.id, i)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
         </div>
       </div>); })}
       <div style={{ marginTop: 12 }}>
@@ -3352,11 +3496,11 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
 
     {!cur && <AddFab onClick={() => setNuevo({ asunto: "", detalle: "", prioridad: "media", obra_id: "" })} label="Pedido" />}
     {nuevo && <Sheet title={`Nuevo pedido a ${otroNom}`} onClose={() => setNuevo(null)}>
-      <Field label="Asunto"><TInput value={nuevo.asunto} onChange={e => setNuevo({ ...nuevo, asunto: e.target.value })} placeholder="Ej: Definiciones de terminaciones PB" /></Field>
-      <Field label="Detalle / solicitud"><textarea value={nuevo.detalle} onChange={e => setNuevo({ ...nuevo, detalle: e.target.value })} rows={4} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>
+      <Field label="Asunto"><TInput value={nuevo.asunto || ""} onChange={e => setNuevo({ ...nuevo, asunto: e.target.value })} placeholder="Ej: Definiciones de terminaciones PB" /></Field>
+      <Field label="Detalle / solicitud"><textarea value={nuevo.detalle || ""} onChange={e => setNuevo({ ...nuevo, detalle: e.target.value })} rows={4} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>
       <FieldRow>
-        <Field label="Prioridad"><Sel value={nuevo.prioridad} onChange={e => setNuevo({ ...nuevo, prioridad: e.target.value })}><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option></Sel></Field>
-        <Field label="Obra"><Sel value={nuevo.obra_id} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })}><option value="">—</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        <Field label="Prioridad"><Sel value={nuevo.prioridad || ""} onChange={e => setNuevo({ ...nuevo, prioridad: e.target.value })}><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option></Sel></Field>
+        <Field label="Obra"><Sel value={nuevo.obra_id || ""} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })}><option value="">—</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       </FieldRow>
       <PBtn full onClick={crear} style={{ marginTop: 6 }}>Crear y enviar</PBtn>
     </Sheet>}
@@ -3988,12 +4132,18 @@ function App() {
     const pullAll = async () => {
       for (const [key, setter] of stores) {
         try {
-          if (Date.now() - (lastWrite[key] || 0) < 6000) continue; // recién editado acá: no tocar
+          // Antes: si la nube decía algo distinto a lo último guardado localmente, se
+          // adoptaba sin más. El problema es que "distinto" no quiere decir "más nuevo":
+          // una lectura que llega justo antes de que un borrado termine de propagarse en
+          // la nube trae la versión VIEJA, y al adoptarla (el setter también persiste)
+          // ese borrado queda pisado y el ítem borrado reaparece. Ahora se compara la
+          // MARCA DE TIEMPO: solo se adopta si la nube es más nueva que lo que ya tengo.
+          const rTs = await storage.get(key + "__ts");
+          const cloudTs = Number(rTs?.value || 0);
+          if (cloudTs <= (lastWrite[key] || 0)) continue;
           const r = await storage.get(key);
           if (!r?.value) continue;
-          const localRaw = storage.getLocal(key)?.value;
-          if (r.value === localRaw) continue; // sin cambios
-          if (alive) setter(JSON.parse(r.value)); // adoptar lo último de la nube
+          if (alive) { lastWrite[key] = cloudTs; setter(JSON.parse(r.value)); }
         } catch { }
       }
     };
@@ -4011,6 +4161,7 @@ function App() {
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   const [iaDialogo, setIaDialogo] = useState([]);
+  useEffect(() => { if (localStorage.getItem("purge_canning_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_v1", "1"); } catch { } } catch { } })(); }, []);
   useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
@@ -4050,6 +4201,7 @@ function App() {
         </div>
         <WebFooter cfg={cfg} />
       </div>
+      <SyncBanner />
     </div>
   );
 }
