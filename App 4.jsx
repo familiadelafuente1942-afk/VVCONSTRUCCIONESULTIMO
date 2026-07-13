@@ -31,21 +31,58 @@ const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Aut
 // Supabase es la nube (asíncrona, para sincronización entre dispositivos).
 // NUNCA se pisa un dato nuevo con uno viejo del servidor.
 
+// Aviso simple, no intrusivo, de que un guardado en la nube falló: guarda la clave y
+// dispara un evento que un pequeño cartel (montado una sola vez en la raíz) escucha.
+let ultimoAviso = 0;
+function avisarErrorSync(key) {
+    const ahora = Date.now();
+    if (ahora - ultimoAviso < 8000) return; // no lo repito si ya avisé hace poco
+    ultimoAviso = ahora;
+    try { window.dispatchEvent(new CustomEvent("vv-sync-error", { detail: { key } })); } catch { }
+}
+
+function SyncBanner() {
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    const onErr = () => {
+      setMsg("No se pudo guardar en la nube. Se guardó en este aparato — revisá la conexión y volvé a intentar.");
+      setTimeout(() => setMsg(""), 7000);
+    };
+    window.addEventListener("vv-sync-error", onErr);
+    return () => window.removeEventListener("vv-sync-error", onErr);
+  }, []);
+  if (!msg) return null;
+  return (<div style={{ position: "fixed", left: 12, right: 12, bottom: 12, zIndex: 9999, background: "#DC2626", color: "#fff", borderRadius: 10, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.25)", display: "flex", alignItems: "center", gap: 8 }}>
+    <span>⚠</span><span style={{ flex: 1 }}>{msg}</span>
+    <button onClick={() => setMsg("")} style={{ background: "rgba(255,255,255,.2)", border: "none", color: "#fff", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>OK</button>
+  </div>);
+}
+
 const storage = {
     // Escribe SIEMPRE en localStorage primero (síncrono, instantáneo)
     // Luego intenta Supabase en background sin bloquear
     set: async (key, value) => {
         // 1. localStorage primero — nunca falla, inmediato
         try { localStorage.setItem(key, value); } catch { }
-        // 2. Supabase en background
+        // 2. Supabase en background — ANTES no revisaba si el servidor aceptó el guardado
+        // (solo atrapaba fallas de RED, no un error HTTP como 403/413/500). Un permiso mal
+        // puesto o un archivo demasiado grande podían fallar en silencio: quedaba guardado
+        // acá, pero nunca llegaba a la nube — y por eso "resucitaba" o "no se quedaba" al
+        // rato. Ahora revisa la respuesta de verdad y reintenta una vez antes de avisar.
+        const intentar = () => fetch(SUPA_URL + "/rest/v1/bco_storage", {
+            method: "POST",
+            headers: { ...SH(), "Prefer": "resolution=merge-duplicates" },
+            body: JSON.stringify({ key, value })
+        });
         try {
-            await fetch(SUPA_URL + "/rest/v1/bco_storage", {
-                method: "POST",
-                headers: { ...SH(), "Prefer": "resolution=merge-duplicates" },
-                body: JSON.stringify({ key, value })
-            });
-        } catch { }
-        return { value };
+            let r = await intentar();
+            if (!r.ok) r = await intentar(); // un reintento antes de darlo por perdido
+            if (!r.ok) { avisarErrorSync(key); return { value, ok: false }; }
+        } catch {
+            avisarErrorSync(key);
+            return { value, ok: false };
+        }
+        return { value, ok: true };
     },
     // Lee: intenta Supabase, fallback a localStorage
     get: async (key) => {
@@ -82,6 +119,69 @@ const storage = {
 // La URL pública reemplaza al base64 — reduce el egress drásticamente.
 const SUPA_BUCKET = "bco-media";
 const SUPA_STORAGE_URL = SUPA_URL + "/storage/v1";
+
+// ── CACHÉ LOCAL DE ARCHIVOS (IndexedDB) ─────────────────────────────
+// La primera vez que se abre un archivo en ESTE dispositivo hace falta conexión
+// para traerlo. Pero a partir de ahí queda GUARDADO ACÁ (en esta compu/tablet,
+// no en la nube), y las próximas veces se abre directo desde esa copia local,
+// sin volver a pedirle nada a Supabase. Antes siempre iba a buscarlo al servidor,
+// por eso "quedaba pensando" sin conexión: nunca se quedaba con una copia propia.
+const CACHE_DB = "vv_archivos_cache", CACHE_STORE = "files";
+function abrirCacheDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(CACHE_DB, 1);
+        req.onupgradeneeded = () => { req.result.createObjectStore(CACHE_STORE); };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+async function cacheGet(url) {
+    try {
+        const db = await abrirCacheDB();
+        return await new Promise((res, rej) => {
+            const r = db.transaction(CACHE_STORE, "readonly").objectStore(CACHE_STORE).get(url);
+            r.onsuccess = () => res(r.result || null);
+            r.onerror = () => rej(r.error);
+        });
+    } catch { return null; }
+}
+async function cachePut(url, blob) {
+    try {
+        const db = await abrirCacheDB();
+        await new Promise((res, rej) => {
+            const tx = db.transaction(CACHE_STORE, "readwrite");
+            tx.objectStore(CACHE_STORE).put(blob, url);
+            tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+        });
+    } catch { }
+}
+// Abre un archivo usando la copia local si ya está en este dispositivo (funciona
+// SIN conexión). Si todavía no está, la trae una vez (necesita conexión esa
+// primera vez) y la guarda para que la próxima sea instantánea y offline.
+async function abrirArchivo(url, nombre) {
+    if (!url) return { ok: false, motivo: "sin-url" };
+    if (url.startsWith("data:")) { window.open(url, "_blank"); return { ok: true }; }
+    let blob = await cacheGet(url);
+    let nuevo = false;
+    if (!blob) {
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, motivo: "sin-conexion" };
+        try {
+            const r = await fetch(url);
+            if (!r.ok) throw new Error("no se pudo traer");
+            blob = await r.blob();
+            nuevo = true;
+        } catch { return { ok: false, motivo: "sin-conexion" }; }
+    }
+    const objUrl = URL.createObjectURL(blob);
+    window.open(objUrl, "_blank");
+    if (nuevo) cachePut(url, blob);
+    return { ok: true, nuevo };
+}
+async function descargarArchivo(url, nombre) {
+    const r = await abrirArchivo(url, nombre);
+    if (!r.ok) alert("Este archivo todavía no está guardado en este dispositivo.\n\nAbrilo una vez con conexión y, de ahí en adelante, se va a poder ver sin internet.");
+    return r.ok;
+}
 
 const mediaStorage = {
     // Subir un archivo (recibe dataURL base64) → devuelve URL pública
@@ -184,12 +284,17 @@ function useStoredState(key, defaultValue) {
                         setState(cloudData);
                         try { localStorage.setItem(key, r.value); } catch { }
                     } else {
-                        // Uso normal: la nube gana solo si tiene más datos que el local
-                        setState(local => {
-                            const localSize = JSON.stringify(local).length;
-                            const cloudSize = JSON.stringify(cloudData).length;
-                            return cloudSize > localSize ? cloudData : local;
-                        });
+                        // Gana el MÁS RECIENTE, no el más grande.
+                        // (Antes ganaba el más grande: como borrar SIEMPRE achica los datos,
+                        //  la versión con la obra borrada se descartaba y la obra resucitaba.)
+                        const rTs = await storage.get(key + "__ts");
+                        const cloudTs = Number(rTs?.value || 0);
+                        let localTs = 0;
+                        try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
+                        if (cloudTs >= localTs) {
+                            setState(cloudData);
+                            try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+                        }
                     }
                 }
             } catch { }
@@ -203,9 +308,11 @@ function useStoredState(key, defaultValue) {
             const next = typeof updater === 'function' ? updater(prev) : updater;
             // Guardar inmediatamente en ambos lados
             const json = JSON.stringify(next);
-            lastWrite[key] = Date.now();
-            try { localStorage.setItem(key, json); } catch { }
-            storage.set(key, json).catch(() => {});
+            const ts = Date.now();
+            lastWrite[key] = ts;
+            try { localStorage.setItem(key, json); localStorage.setItem(key + "__ts", String(ts)); } catch { }
+            storage.set(key, json).catch(() => { });
+            storage.set(key + "__ts", String(ts)).catch(() => { });   // sello de fecha: para saber cuál es el más nuevo
             return next;
         });
     }, [key]);
@@ -1105,15 +1212,22 @@ function TabInformes({ detail, upd }) {
     async function handleFile(e) {
         const files = Array.from(e.target.files);
         const nuevos = [];
+        let fallaron = 0;
         for (const f of files) {
-            const url = await toDataUrl(f);
+            // Subo el archivo real al bucket (como fotos y planos) en vez de embeber
+            // el base64 en la ficha de la obra: eso infla la sincronización con Cliente
+            // y puede fallar en silencio con archivos grandes.
+            const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+            const remoteUrl = await mediaStorage.upload(`informes/${uid()}_${f.name.replace(/\W+/g, "_")}`, dataUrl);
+            if (!remoteUrl) fallaron++;
             nuevos.push({
                 id: uid(), ts: Date.now(), titulo: form.titulo || f.name.replace(/\.[^.]+$/, ''),
                 tipo: form.tipo || subTab, fecha: form.fecha || new Date().toLocaleDateString('es-AR'),
                 notas: form.notas, nombre: f.name, ext: f.name.split('.').pop().toUpperCase(),
-                url, size: (f.size / 1024).toFixed(0) + 'KB', cargado: new Date().toLocaleDateString('es-AR'),
+                url: remoteUrl || dataUrl, size: (f.size / 1024).toFixed(0) + 'KB', cargado: new Date().toLocaleDateString('es-AR'),
             });
         }
+        if (fallaron) alert(`⚠ ${fallaron} archivo(s) quedaron guardados en este dispositivo, pero no se pudieron subir a la nube. No van a verse desde Cliente ni desde otro dispositivo hasta que los vuelvas a cargar con conexión.`);
         upd(detail.id, { informes: [...nuevos, ...informes] });
         setForm({ titulo: '', tipo: 'diario', fecha: '', notas: '' });
         setShowNew(false);
@@ -1142,9 +1256,7 @@ function TabInformes({ detail, upd }) {
                     <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{inf.fecha} · {inf.size}</div>
                 </div>
                 <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                    <a href={inf.url} download={inf.nombre} style={{ textDecoration: "none" }}>
-                        <button style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>↓</button>
-                    </a>
+                    <button onClick={() => descargarArchivo(inf.url, inf.nombre)} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>↓</button>
                     <button onClick={() => upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) })} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
                 </div>
             </div>))}
@@ -1517,7 +1629,6 @@ const SAMPLE_OBRAS = [
   { id:"o1", nombre:"Castores 475", ap:"norte", sector:"Vivienda PB+1", estado:"curso", avance:68, inicio:"10/03/26", cierre:"30/08/26", monto:"12.400.000 $", pagado:8100000, obs:[{id:"b1",txt:"Hormigón visto terminado en PB.",fecha:"20/06/26"}], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
   { id:"o2", nombre:"Puentes 132", ap:"norte", sector:"Refacción integral", estado:"curso", avance:41, inicio:"02/04/26", cierre:"15/09/26", monto:"7.900.000 $", pagado:3000000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
   { id:"o3", nombre:"Golf 2–93", ap:"caba", sector:"Obra nueva", estado:"curso", avance:23, inicio:"20/05/26", cierre:"20/12/26", monto:"21.000.000 $", pagado:0, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
-  { id:"o4", nombre:"Canning 815", ap:"sur", sector:"Fachada Alucobond", estado:"pausada", avance:88, inicio:"05/01/26", cierre:"10/07/26", monto:"15.500.000 $", pagado:13600000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
   { id:"o5", nombre:"A 37", ap:"caba", sector:"Fit-out comercial", estado:"terminada", avance:100, inicio:"01/11/25", cierre:"28/02/26", monto:"9.200.000 $", pagado:9200000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
 ];
 const SAMPLE_LICS = [
@@ -1532,7 +1643,6 @@ const SAMPLE_PERSONAL = [
 ];
 const SAMPLE_ALERTS = [
   { id:"a1", msg:"Marcos Giménez: ART vence en 3 días", prioridad:"alta" },
-  { id:"a2", msg:"Canning 815: 88% pagado pero obra pausada", prioridad:"alta" },
   { id:"a3", msg:"Obra Saavedra: presentación de avance pendiente", prioridad:"media" },
 ];
 
@@ -2273,7 +2383,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)})`).join("\n");
     const li = lics.map(l => `· ${l.nombre} (${l.estado}, ${l.monto || "s/monto"}, ${l.sector})`).join("\n");
     const pe = personal.map(p => `· ${p.nombre} — ${p.rol || ""} en ${((p.obra_ids && p.obra_ids.length) ? p.obra_ids : (p.obra_id ? [p.obra_id] : [])).map(id => obraNom(obras, id)).filter(n => n && n !== "—").join(", ") || "sin obra asignada"}${p.empresa ? ` [${p.empresa}]` : ""}${p.telefono ? ` · WhatsApp ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.adjuntos || []).length ? ` · ${p.adjuntos.length} adjunto(s)` : ""}`).join("\n");
-    const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "vv" ? "enviado a" : "recibido de"} ${p.de === "vv" ? cn : cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
+    const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${esDeCasa(p.de) ? (p.de === "sebastian" ? "consulta interna de Tita" : p.de === "nicolas" ? "consulta interna del asist. de Nicolás" : "enviado a " + cn) : "recibido de " + cn}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
     const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional.
 
@@ -2387,6 +2497,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       return { role: m.role, content: typeof m.content === "string" ? m.content : m.content };
     });
     const r = await callAI(apiMsgs, buildSystem(), apiKey, useSearch);
+    if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(r || ""))) { setMsgs(prev => [...prev, { role: "assistant", content: "⚠ Me quedé sin crédito de IA por ahora. Para que vuelva a funcionar, hay que recargar crédito de la API en console.anthropic.com (Plans & Billing)." }]); setLoading(false); return; }
     const { limpio, accion } = parseAccion(r);
     let extra = {};
     if (accion && accion.tipo === "traer_plano") {
@@ -2480,7 +2591,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
             const pedsNext = [np, ...peds]; try { localStorage.setItem("vv_pedidos", JSON.stringify(pedsNext)); } catch { } await storage.set("vv_pedidos", JSON.stringify(pedsNext)).catch(() => { });
             textoResp = `No tengo ese dato en la app de V+V. Lo derivé al personal de V+V como URGENTE (quedó en Pedidos). Te respondemos apenas lo tengan.`;
           }
-          arr2.push({ id: uid() + Date.now(), from: "vv", texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
+          arr2.push({ id: uid() + Date.now(), from: "vv", to: pend.from, qid: pend.id, texto: textoResp, tipo: "a", answered: true, ts: Date.now(), fecha: hoyStr() });
           try { localStorage.setItem("ia_dialogo", JSON.stringify(arr2)); } catch { }
           await storage.set("ia_dialogo", JSON.stringify(arr2)).catch(() => { });
           } catch { }
@@ -2490,7 +2601,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         const rp = await storage.get("vv_pedidos");
         if (rp?.value) {
           const peds = JSON.parse(rp.value);
-          const incoming = peds.filter(p => p.para === "vv" && p.de !== "vv");
+          const incoming = peds.filter(p => p.para === "vv" && !esDeCasa(p.de));
           if (pedSeen.current === null) pedSeen.current = new Set(incoming.map(p => p.id));
           else {
             const nuevos = incoming.filter(p => !pedSeen.current.has(p.id));
@@ -2515,7 +2626,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v15 rojo-sinleer" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v23 limpia-canning" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -3203,8 +3314,21 @@ function AlertasWaView({ db, onBack }) {
 const PEDIDO_ESTADOS = { abierto:{l:"Abierto",c:"#F59E0B",b:"#FFFBEB"}, en_proceso:{l:"En proceso",c:"#3B82F6",b:"#EFF6FF"}, respondido:{l:"Respondido",c:"#8B5CF6",b:"#F5F3FF"}, resuelto:{l:"Resuelto",c:"#16A34A",b:"#ECFDF5"} };
 const PEDIDO_MAX_IA = 4; // tope de intercambios automáticos IA↔IA por pedido
 function parseAccion(texto){ const t=texto||""; let m=t.match(/```accion\s*([\s\S]*?)```/i)||t.match(/```accion\s*([\s\S]*)$/i); if(!m) return {limpio:texto,accion:null}; let raw=m[1].trim(); let a=null; try{a=JSON.parse(raw);}catch{ const i=raw.indexOf("{"),j=raw.lastIndexOf("}"); if(i>=0&&j>i){ try{a=JSON.parse(raw.slice(i,j+1));}catch{} } } return {limpio:(t.replace(m[0],"").trim()||"Listo."),accion:a}; }
+function esDeCasa(de){ return de === "vv" || de === "sebastian" || de === "nicolas"; }
 function nuevoPedido({de,para,asunto,detalle,prioridad,obra_id}){ const f=hoyStr(),ts=Date.now(); return {id:uid()+ts, de, para, asunto:asunto||"(sin asunto)", estado:"abierto", prioridad:prioridad||"media", obra_id:obra_id||"", fecha:f, ts, iaTurns:0, hilo:[{de,texto:detalle||asunto||"",fecha:f,ts,porIA:false}]}; }
-async function aplicarPedidos(setPedidos, fn){ let arr=[]; try{const r=await storage.get("vv_pedidos"); if(r?.value) arr=JSON.parse(r.value);}catch{} const next=fn(arr.slice()); setPedidos(next); return next; }
+// Antes: iba a buscar la lista ENTERA a la nube antes de aplicar cualquier cambio (incluso
+// tocar un simple botón de estado). Eso hacía que cada toque dependiera de la red y tardara;
+// y si dos cambios se cruzaban (dos toques seguidos, o un toque justo cuando el sondeo
+// periódico corría), el que terminaba de bajar de la nube DESPUÉS pisaba al otro — por eso
+// a veces "no dejaba seleccionar" el estado: el toque se aplicaba y al toque siguiente (o al
+// ratito) quedaba pisado por una lectura vieja. Ahora aplica el cambio directo sobre el estado
+// que React YA tiene actualizado (mantenido al día por el sondeo) — instantáneo, sin depender
+// de la red, y sin la carrera entre dos escrituras que se cruzan.
+function aplicarPedidos(setPedidos, fn) {
+  let next;
+  setPedidos(prev => { next = fn((prev || []).slice()); return next; });
+  return next;
+}
 async function ejecutarAccion(accion, miSide, ctx){
   ctx = ctx || {};
   const setPedidos = ctx.setPedidos;
@@ -3264,14 +3388,35 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   const fileRef = useRef(null);
   async function addAdj(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await toDataUrl(f); const url = await uploadFoto(data, "pedidos", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url, img: f.type.startsWith("image/") }); } setAdj(p => [...p, ...nuevos]); e.target.value = ""; }
 
-  useEffect(() => { const pull = async () => { try { if (Date.now() - (lastWrite["vv_pedidos"] || 0) < 8000) return; const r = await storage.get("vv_pedidos"); if (r?.value) { const arr = JSON.parse(r.value); setPedidos(prev => JSON.stringify(arr) !== JSON.stringify(prev) ? arr : prev); } } catch {} }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
+  useEffect(() => {
+    // Antes: comparaba el CONTENIDO ("¿la nube dice algo distinto a lo que tengo?") y si
+    // difería, lo aplicaba y lo volvía a guardar. El problema: si esta lectura llega un
+    // instante antes de que un borrado termine de guardarse en la nube, trae la versión
+    // VIEJA (con el pedido borrado adentro) y, al re-guardarla, LO RESUCITA para todo el mundo.
+    // Ahora compara MARCA DE TIEMPO: solo adopta la nube si es más nueva que lo último que
+    // este dispositivo ya escribió o aceptó — así un dato viejo nunca puede pisar uno nuevo.
+    const pull = async () => {
+      try {
+        const rTs = await storage.get("vv_pedidos__ts");
+        const cloudTs = Number(rTs?.value || 0);
+        if (cloudTs <= (lastWrite["vv_pedidos"] || 0)) return; // no es más nuevo: no lo toco
+        const r = await storage.get("vv_pedidos");
+        if (r?.value) { lastWrite["vv_pedidos"] = cloudTs; setPedidos(JSON.parse(r.value)); }
+      } catch { }
+    };
+    pull(); const iv = setInterval(pull, 4000);
+    const onVis = () => { if (document.visibilityState === "visible") pull(); };
+    document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); };
+  }, []);
 
-  const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : p.de === miSide);
+  const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : esDeCasa(p.de));
   const cur = open ? pedidos.find(p => p.id === open) : null;
   function crear() { if (!nuevo.asunto?.trim()) return; aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: miSide, para: "cliente", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }), ...arr]); setNuevo(null); }
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
   function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
+  function borrarMsgHilo(pedidoId, idx) { if (!confirm("¿Eliminar este mensaje/archivo del hilo?")) return; aplicarPedidos(setPedidos, arr => arr.map(x => x.id === pedidoId ? { ...x, hilo: (x.hilo || []).filter((_, j) => j !== idx) } : x)); }
   async function responderIA(p) {
     setIaLoad(true);
     const hist = p.hilo.map(h => `${h.de === miSide ? "Nosotros (V+V)" : otroNom}: ${h.texto}`).join("\n");
@@ -3279,7 +3424,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
     const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey, false);
     setReply(r); setIaLoad(false);
   }
-  const persp = (h) => h.de === miSide;
+  const persp = (h) => esDeCasa(h.de);
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="pedidos" label="Pedidos · Seguimiento" sub={`Gestión de temas con ${otroNom}`} onBack={onBack} />
@@ -3304,7 +3449,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
               {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "2px 7px" }}>🏗 {obraNom(obras, p.obra_id)}</span>}
               {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "#FEF2F2", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
-              <span style={{ fontSize: 10.5, color: T.muted }}>{p.de === miSide ? "Enviado" : "Recibido"} · {p.fecha}</span>
+              <span style={{ fontSize: 10.5, color: T.muted }}>{esDeCasa(p.de) ? (p.de === "sebastian" || p.de === "nicolas" ? "Interno" : "Enviado") : "Recibido"} · {p.fecha}</span>
             </div>
             <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>{ult?.porIA ? "🤖 " : ""}{ult?.texto}</div>
           </div>
@@ -3320,7 +3465,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
           <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{cur.asunto}</div>
           <Badge color={e.c} bg={e.b}>{e.l}</Badge>
         </div>
-        <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{cur.de === miSide ? `Enviado a ${otroNom}` : `Recibido de ${otroNom}`} · {cur.fecha} · prioridad {cur.prioridad}</div>
+        <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{esDeCasa(cur.de) ? (cur.de === "sebastian" ? "Consulta interna · Tita" : cur.de === "nicolas" ? "Consulta interna · Nicolás" : `Enviado a ${otroNom}`) : `Recibido de ${otroNom}`} · {cur.fecha} · prioridad {cur.prioridad}</div>
         {cur.obra_id && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 6, padding: "4px 10px", marginTop: 8 }}>🏗 Obra: {obraNom(obras, cur.obra_id)}</div>}
         <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
           {Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{v.l}</button>)}
@@ -3334,7 +3479,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
             {h.texto}
             {(h.archivos || []).map((a, j) => a.img ? <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 7 }}><img src={a.url} alt={a.nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} /></a> : <a key={j} href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}>📎 {a.nombre}</a>)}
           </div>
-          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "🤖 IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}</div>
+          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "🤖 IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}{mine && i > 0 && <span onClick={() => borrarMsgHilo(cur.id, i)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
         </div>
       </div>); })}
       <div style={{ marginTop: 12 }}>
@@ -3987,12 +4132,18 @@ function App() {
     const pullAll = async () => {
       for (const [key, setter] of stores) {
         try {
-          if (Date.now() - (lastWrite[key] || 0) < 6000) continue; // recién editado acá: no tocar
+          // Antes: si la nube decía algo distinto a lo último guardado localmente, se
+          // adoptaba sin más. El problema es que "distinto" no quiere decir "más nuevo":
+          // una lectura que llega justo antes de que un borrado termine de propagarse en
+          // la nube trae la versión VIEJA, y al adoptarla (el setter también persiste)
+          // ese borrado queda pisado y el ítem borrado reaparece. Ahora se compara la
+          // MARCA DE TIEMPO: solo se adopta si la nube es más nueva que lo que ya tengo.
+          const rTs = await storage.get(key + "__ts");
+          const cloudTs = Number(rTs?.value || 0);
+          if (cloudTs <= (lastWrite[key] || 0)) continue;
           const r = await storage.get(key);
           if (!r?.value) continue;
-          const localRaw = storage.getLocal(key)?.value;
-          if (r.value === localRaw) continue; // sin cambios
-          if (alive) setter(JSON.parse(r.value)); // adoptar lo último de la nube
+          if (alive) { lastWrite[key] = cloudTs; setter(JSON.parse(r.value)); }
         } catch { }
       }
     };
@@ -4010,6 +4161,7 @@ function App() {
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   const [iaDialogo, setIaDialogo] = useState([]);
+  useEffect(() => { if (localStorage.getItem("purge_canning_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_v1", "1"); } catch { } } catch { } })(); }, []);
   useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
@@ -4049,6 +4201,7 @@ function App() {
         </div>
         <WebFooter cfg={cfg} />
       </div>
+      <SyncBanner />
     </div>
   );
 }
