@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-
+// VERSION: v5 (Cliente: borrar obras + FIX sync - el borrado ya no resucita)
 // ════════════════════════════════════════════════════════════════════
 // PANEL DE CLIENTE — App independiente y descargable
 // Mismo backend Supabase que la app de V+V → los datos se comparten.
@@ -96,8 +96,39 @@ const FORCE_CLOUD = (() => { try { return new URLSearchParams(window.location.se
 const lastWrite = {};
 function useStored(key, def) {
   const [v, setV] = useState(() => { try { const l = localStorage.getItem(key); return l ? JSON.parse(l) : def; } catch { return def; } });
-  useEffect(() => { (async () => { const r = await storage.get(key); if (r?.value) { try { const d = JSON.parse(r.value); if (Date.now() - (lastWrite[key] || 0) < 8000) return; if (FORCE_CLOUD) { setV(d); try { localStorage.setItem(key, r.value); } catch { } } else { setV(cur => JSON.stringify(d) !== JSON.stringify(cur) ? d : cur); } } catch { } } })(); }, [key]);
-  const set = useCallback(u => { setV(prev => { const n = typeof u === 'function' ? u(prev) : u; const j = JSON.stringify(n); lastWrite[key] = Date.now(); try { localStorage.setItem(key, j); } catch { } storage.set(key, j); return n; }); }, [key]);
+  // Gana el MÁS RECIENTE (por sello de fecha), no el más grande: si no, un borrado
+  // hecho en V+V (que achica la lista) se descarta acá y la obra borrada vuelve.
+  useEffect(() => {
+    (async () => {
+      const r = await storage.get(key);
+      if (!r?.value) return;
+      try {
+        const d = JSON.parse(r.value);
+        if (Date.now() - (lastWrite[key] || 0) < 8000) return;
+        if (FORCE_CLOUD) { setV(d); try { localStorage.setItem(key, r.value); } catch { } return; }
+        const rTs = await storage.get(key + "__ts");
+        const cloudTs = Number(rTs?.value || 0);
+        let localTs = 0;
+        try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
+        if (cloudTs >= localTs) {
+          setV(cur => JSON.stringify(d) !== JSON.stringify(cur) ? d : cur);
+          try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+        }
+      } catch { }
+    })();
+  }, [key]);
+  const set = useCallback(u => {
+    setV(prev => {
+      const n = typeof u === 'function' ? u(prev) : u;
+      const j = JSON.stringify(n);
+      const ts = Date.now();
+      lastWrite[key] = ts;
+      try { localStorage.setItem(key, j); localStorage.setItem(key + "__ts", String(ts)); } catch { }
+      storage.set(key, j);
+      storage.set(key + "__ts", String(ts));
+      return n;
+    });
+  }, [key]);
   return [v, set];
 }
 
@@ -272,6 +303,15 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
     setSubP(false); e.target.value = "";
     if (nuevos.some(n => !String(n.url || "").startsWith("http"))) alert("⚠ El plano quedó en este dispositivo pero NO se subió a la nube (bucket 'bco-media' en Supabase). Configuralo para que V+V y la IA lo puedan ver.");
   }
+  function borrarObra(o) {
+    if (!setObras) return;
+    const nom = String(o.nombre || "").trim();
+    const esc = prompt(`BORRAR LA OBRA "${nom}"\n\nSe borra en las dos apps (Cliente y V+V) y no se puede deshacer.\nSe pierden sus tareas, planos e informes.\n\nEscribí el nombre de la obra para confirmar:`);
+    if (esc == null) return;
+    if (esc.trim().toLowerCase() !== nom.toLowerCase()) { alert("El nombre no coincide. No borré nada."); return; }
+    setObras(prev => prev.filter(x => x.id !== o.id));
+    alert(`Obra "${nom}" borrada.`);
+  }
   function borrarPlano(obra, id) { if (confirm("¿Eliminar este plano?") && setObras) setObras(prev => prev.map(o => o.id === obra.id ? { ...o, planos: (o.planos || []).filter(x => x.id !== id) } : o)); }
   const [ecoUnlocked, setEcoUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState("");
@@ -308,7 +348,11 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
         return (<Card T={T} key={o.id} style={{ padding: 15, marginBottom: 11 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{o.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{o.sector} · {o.inicio} → {o.cierre}</div></div>
-            <Badge c={e.c} b={e.b}>{e.l}</Badge>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+              <Badge c={e.c} b={e.b}>{e.l}</Badge>
+              {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra"
+                style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>🗑</button>}
+            </div>
           </div>
           <div style={{ margin: "12px 0 6px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 5 }}><span style={{ color: T.sub, fontWeight: 600 }}>Avance de obra</span><span style={{ color: T.accent, fontWeight: 800 }}>{o.avance}%</span></div>
@@ -847,7 +891,11 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
               </div>
               <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 230 }}>{ult?.porIA ? "🤖 " : ""}{ult?.texto}</div>
             </div>
-            <Badge c={e.c} b={e.b}>{e.l}</Badge>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+              <Badge c={e.c} b={e.b}>{e.l}</Badge>
+              {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra"
+                style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>🗑</button>}
+            </div>
           </div>
         </Card>); })}
       </>}

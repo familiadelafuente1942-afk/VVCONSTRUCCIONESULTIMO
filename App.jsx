@@ -184,12 +184,17 @@ function useStoredState(key, defaultValue) {
                         setState(cloudData);
                         try { localStorage.setItem(key, r.value); } catch { }
                     } else {
-                        // Uso normal: la nube gana solo si tiene más datos que el local
-                        setState(local => {
-                            const localSize = JSON.stringify(local).length;
-                            const cloudSize = JSON.stringify(cloudData).length;
-                            return cloudSize > localSize ? cloudData : local;
-                        });
+                        // Gana el MÁS RECIENTE, no el más grande.
+                        // (Antes ganaba el más grande: como borrar SIEMPRE achica los datos,
+                        //  la versión con la obra borrada se descartaba y la obra resucitaba.)
+                        const rTs = await storage.get(key + "__ts");
+                        const cloudTs = Number(rTs?.value || 0);
+                        let localTs = 0;
+                        try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
+                        if (cloudTs >= localTs) {
+                            setState(cloudData);
+                            try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+                        }
                     }
                 }
             } catch { }
@@ -203,9 +208,11 @@ function useStoredState(key, defaultValue) {
             const next = typeof updater === 'function' ? updater(prev) : updater;
             // Guardar inmediatamente en ambos lados
             const json = JSON.stringify(next);
-            lastWrite[key] = Date.now();
-            try { localStorage.setItem(key, json); } catch { }
-            storage.set(key, json).catch(() => {});
+            const ts = Date.now();
+            lastWrite[key] = ts;
+            try { localStorage.setItem(key, json); localStorage.setItem(key + "__ts", String(ts)); } catch { }
+            storage.set(key, json).catch(() => { });
+            storage.set(key + "__ts", String(ts)).catch(() => { });   // sello de fecha: para saber cuál es el más nuevo
             return next;
         });
     }, [key]);
@@ -2514,7 +2521,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v22 sin-canning" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v23 limpia-canning" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -4011,6 +4018,7 @@ function App() {
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   const [iaDialogo, setIaDialogo] = useState([]);
+  useEffect(() => { if (localStorage.getItem("purge_canning_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_v1", "1"); } catch { } } catch { } })(); }, []);
   useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
