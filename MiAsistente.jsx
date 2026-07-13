@@ -173,6 +173,8 @@ export default function MiAsistente() {
   const [escuchando, setEscuchando] = useState(false);
   const [vozOn, setVozOn] = useState(false);
   const recRef = useRef(null);
+  const inputRef = useRef(null);
+  const dictRef = useRef({ activo: false, base: "" });   // para poder cortar el dictado al enviar
   const lastSpokeRef = useRef(-1);
   const apiKey = "";
   const scrollRef = useRef(null);
@@ -269,10 +271,16 @@ export default function MiAsistente() {
     if (escuchando && recRef.current) { try { recRef.current.stop(); } catch { } return; }
     let rec; try { rec = new SR(); } catch { alert("No pude activar el micrófono."); return; }
     rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = false;
-    let base = input ? input + " " : "";
-    rec.onresult = (e) => { let fin = "", inter = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else inter += t; } setInput((base + fin + inter).replace(/\s+/g, " ").trimStart()); if (fin) base += fin; };
-    rec.onend = () => { setEscuchando(false); recRef.current = null; };
-    rec.onerror = () => { setEscuchando(false); recRef.current = null; };
+    dictRef.current = { activo: true, base: input ? input + " " : "" };
+    rec.onresult = (e) => {
+      if (!dictRef.current.activo) return;                 // ya se envió: no vuelvo a escribir nada
+      let fin = "", inter = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else inter += t; }
+      setInput((dictRef.current.base + fin + inter).replace(/\s+/g, " ").trimStart());
+      if (fin) dictRef.current.base += fin;
+    };
+    rec.onend = () => { setEscuchando(false); recRef.current = null; dictRef.current.activo = false; };
+    rec.onerror = () => { setEscuchando(false); recRef.current = null; dictRef.current.activo = false; };
     recRef.current = rec; setEscuchando(true); try { rec.start(); } catch { setEscuchando(false); }
   }
   function buildSystem() {
@@ -594,11 +602,21 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     return "La IA de V+V no respondió (puede estar sin crédito, o la respuesta automática apagada). Igual, puedo responderte yo con los datos que tengo.";
   }
 
+  function limpiarCampo() {
+    // Corto el dictado ANTES de limpiar: si sigue abierto, el iPhone vuelve a inyectar el texto.
+    dictRef.current.activo = false;
+    dictRef.current.base = "";
+    if (recRef.current) { try { recRef.current.abort ? recRef.current.abort() : recRef.current.stop(); } catch { } recRef.current = null; }
+    setEscuchando(false);
+    setInput("");
+    const el = inputRef.current;
+    if (el) { try { el.blur(); el.value = ""; } catch { } }   // cierro la sesión de dictado del teclado
+  }
   async function enviar() {
     const t = input.trim(); if ((!t && adjPend.length === 0) || busy) return;
     const adj = adjPend; setAdjPend([]);
     const nm = t ? [...msgs, { role: "user", content: t }] : [...msgs];
-    setMsgs(nm); setInput(""); setBusy(true);
+    setMsgs(nm); limpiarCampo(); setBusy(true);
     const hist = nm.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, content: m.content })).slice(-40);
     if (adj.length) {
       const textos = adj.filter(a => a.kind === "texto").map(a => a.texto).join("\n\n");
@@ -807,7 +825,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         </div>
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : adjPend.length ? "Preguntá algo sobre lo que adjuntaste…" : "Escribí o tocá el botón de arriba…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
+        <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : adjPend.length ? "Preguntá algo sobre lo que adjuntaste…" : "Escribí o tocá el botón de arriba…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
         <button onClick={enviar} disabled={busy || (!input.trim() && adjPend.length === 0)} style={{ background: (busy || (!input.trim() && adjPend.length === 0)) ? T.border : T.accent, color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", fontSize: 14, fontWeight: 600, letterSpacing: "0.03em", cursor: (busy || (!input.trim() && adjPend.length === 0)) ? "default" : "pointer" }}>Enviar</button>
       </div>
     </div>
