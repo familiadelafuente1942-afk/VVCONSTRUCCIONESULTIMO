@@ -901,6 +901,140 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar }) {
   </div>);
 }
 
+/* ─── Reparto: cuánto pesa cada rubro ───
+   Torta por etapa + barras por tarea. Si la obra está enganchada a Finanzas,
+   además de los % muestra la plata que le toca a cada uno. */
+function Torta({ partes, total, centroArriba, centroAbajo }) {
+  const R = 54, GROSOR = 22;
+  const C = 2 * Math.PI * R;
+  let acum = 0;
+  return (<svg viewBox="0 0 140 140" style={{ width: 150, height: 150, flexShrink: 0 }}>
+    <circle cx="70" cy="70" r={R} fill="none" stroke={T.dark ? T.al : T.bg} strokeWidth={GROSOR} />
+    {partes.map((p, i) => {
+      const pct = total > 0 ? p.valor / total * 100 : 0;
+      const largo = pct / 100 * C;
+      const off = -(acum / 100 * C);
+      acum += pct;
+      if (pct <= 0) return null;
+      return (<circle key={i} cx="70" cy="70" r={R} fill="none" stroke={p.color} strokeWidth={GROSOR}
+        strokeDasharray={`${largo} ${C - largo}`} strokeDashoffset={off}
+        transform="rotate(-90 70 70)" />);
+    })}
+    <text x="70" y="66" textAnchor="middle" style={{ fontSize: 15, fontWeight: 800, fill: T.text }}>{centroArriba}</text>
+    <text x="70" y="80" textAnchor="middle" style={{ fontSize: 8, fontWeight: 700, fill: T.muted, letterSpacing: ".05em" }}>{centroAbajo}</text>
+  </svg>);
+}
+
+function PanelReparto({ plan, obra }) {
+  const totalPeso = plan.pesoTotal;
+  const ligada = plan.ligada;
+
+  // agrupo por etapa
+  const porEtapa = ETAPAS.map(et => {
+    const ts = plan.tareas.filter(t => t.etapa === et);
+    const peso = ts.reduce((s, t) => s + numSimple(t.peso), 0);
+    const plata = ts.reduce((s, t) => s + t.valor, 0);
+    const costo = ts.reduce((s, t) => s + t.costo, 0);
+    return { etapa: et, color: COLOR_ETAPA[et], peso, plata, costo, tareas: ts.length };
+  }).filter(e => e.peso > 0);
+
+  // tareas ordenadas de mayor a menor
+  const ranking = [...plan.tareas].filter(t => numSimple(t.peso) > 0)
+    .sort((a, b) => numSimple(b.peso) - numSimple(a.peso));
+  const maxPeso = ranking.length ? numSimple(ranking[0].peso) : 1;
+
+  const pctDe = (p) => totalPeso > 0 ? numSimple(p) / totalPeso * 100 : 0;
+
+  if (!plan.tareas.length) return (
+    <div style={{ background: T.card, borderRadius: 12, padding: 18, textAlign: "center", boxShadow: SHDsm }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700 }}>Esta obra no tiene tareas</div>
+    </div>
+  );
+
+  return (<div>
+    <div style={{ fontSize: 11.5, color: T.sub, lineHeight: 1.55, marginBottom: 12 }}>
+      Cuánto pesa cada rubro sobre el total de la obra. Los porcentajes los editás tarea por tarea en “Editar”.
+      {!ligada && " Enganchá la obra con Finanzas en “Plata” y también vas a ver cuánta plata es cada uno."}
+    </div>
+
+    {/* la torta, por etapa */}
+    <div style={{ background: T.card, borderRadius: 14, padding: 16, boxShadow: SHDsm }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Por etapa</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <Torta partes={porEtapa.map(e => ({ valor: e.peso, color: e.color }))} total={totalPeso}
+          centroArriba={ligada ? money(plan.contrato).replace("$", "$ ") : `${totalPeso.toFixed(0)}%`}
+          centroAbajo={ligada ? "CONTRATO" : "TOTAL"} />
+        <div style={{ flex: 1, minWidth: 190 }}>
+          {porEtapa.map(e => (
+            <div key={e.etapa} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+              <span style={{ width: 11, height: 11, borderRadius: 3, background: e.color, flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.etapa}</span>
+              <span style={{ fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{pctDe(e.peso).toFixed(1)}%</span>
+              {ligada && <span style={{ fontSize: 11, color: T.sub, flexShrink: 0, minWidth: 82, textAlign: "right" }}>{money(e.plata)}</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* el ranking, tarea por tarea */}
+    <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".06em", margin: "18px 0 4px" }}>
+      Tarea por tarea, de mayor a menor
+    </div>
+    <div style={{ background: T.card, borderRadius: 14, padding: "14px 16px", boxShadow: SHDsm }}>
+      {ranking.map(t => {
+        const pct = pctDe(t.peso);
+        const col = COLOR_ETAPA[t.etapa] || T.accent;
+        return (<div key={t.id} style={{ marginBottom: 11 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.nombre}</span>
+            {ligada && <span style={{ fontSize: 11, color: T.sub, flexShrink: 0 }}>{money(t.valor)}</span>}
+            <span style={{ fontSize: 12.5, fontWeight: 800, flexShrink: 0, minWidth: 42, textAlign: "right", color: col }}>{pct.toFixed(1)}%</span>
+          </div>
+          <div style={{ height: 9, background: T.dark ? T.al : T.bg, borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ width: `${maxPeso > 0 ? numSimple(t.peso) / maxPeso * 100 : 0}%`, height: "100%", background: col, borderRadius: 3 }} />
+          </div>
+        </div>);
+      })}
+    </div>
+
+    {/* control: que los pesos cierren en 100 */}
+    <div style={{
+      background: Math.abs(totalPeso - 100) > 0.5 ? TONO.ambar().b : TONO.verde().b,
+      border: `1px solid ${Math.abs(totalPeso - 100) > 0.5 ? TONO.ambar().bd : TONO.verde().bd}`,
+      borderRadius: 12, padding: 13, marginTop: 12,
+    }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: Math.abs(totalPeso - 100) > 0.5 ? TONO.ambar().c : TONO.verde().c }}>
+        Los pesos suman {totalPeso.toFixed(1)}%
+      </div>
+      <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>
+        {Math.abs(totalPeso - 100) > 0.5
+          ? "Conviene que sumen 100% para que los porcentajes y la plata cierren. Ajustalos en “Editar”."
+          : "Perfecto: los porcentajes cierran."}
+      </div>
+    </div>
+
+    {ligada && (
+      <div style={{ background: T.card, borderRadius: 14, padding: 16, boxShadow: SHDsm, marginTop: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8 }}>Lo que deja cada etapa</div>
+        {porEtapa.map(e => {
+          const margen = e.plata - e.costo;
+          const pctM = e.plata > 0 ? margen / e.plata * 100 : 0;
+          return (<div key={e.etapa} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
+            <span style={{ width: 11, height: 11, borderRadius: 3, background: e.color, flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.etapa}</span>
+            <span style={{ fontSize: 11, color: T.muted, flexShrink: 0 }}>cuesta {money(e.costo)}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 800, flexShrink: 0, minWidth: 90, textAlign: "right", color: margen >= 0 ? TONO.verde().c : TONO.rojo().c }}>
+              {money(margen)}
+            </span>
+            <span style={{ fontSize: 10.5, color: T.muted, flexShrink: 0, minWidth: 40, textAlign: "right" }}>{pctM.toFixed(0)}%</span>
+          </div>);
+        })}
+      </div>
+    )}
+  </div>);
+}
+
 /* ─── Plata: el cronograma cargado con el contrato ─── */
 function PanelPlata({ obra, plan, finanzas, onLigar, onEditar }) {
   if (!plan.ligada) {
@@ -1103,6 +1237,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
     ["plan", "Cronograma"],
     ["viene", `Qué viene${plan.bloqueadas.length ? ` (${plan.bloqueadas.length})` : ""}`],
     ["defs", `Definiciones${plan.pendientes.length ? ` (${plan.pendientes.length})` : ""}`],
+    ["reparto", "Reparto"],
     ["plata", "Plata"],
     ["editar", "Editar"],
   ];
@@ -1173,6 +1308,8 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
         </div>);
       })}
     </>}
+
+    {vista === "reparto" && <PanelReparto plan={plan} obra={obra} />}
 
     {vista === "plata" && (
       <PanelPlata obra={obra} plan={plan} finanzas={finanzas}
