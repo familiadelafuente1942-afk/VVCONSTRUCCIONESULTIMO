@@ -30,6 +30,20 @@ const money = (n) => "$" + Math.round(n || 0).toLocaleString("es-AR");
 const fmtMiles = (v) => { const s = String(v == null ? "" : v).replace(/\D/g, ""); return s ? Number(s).toLocaleString("es-AR") : ""; };
 const numMoney = (v) => { const s = String(v == null ? "" : v).replace(/\./g, "").replace(/[^\d]/g, ""); return s ? Number(s) : 0; };
 const diasEntre = (a, b) => Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000);
+/* Las obras se muestran siempre en orden cronológico: la que arrancó primero, arriba.
+   Las que todavía no tienen fecha de inicio quedan al final, ordenadas por nombre. */
+function ordenarObras(arr) {
+  return [...(arr || [])].sort((a, b) => {
+    const fa = a?.inicio || "", fb = b?.inicio || "";
+    if (fa && fb) {
+      if (fa !== fb) return fa < fb ? -1 : 1;
+      return String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es");
+    }
+    if (fa && !fb) return -1;          // con fecha, antes que sin fecha
+    if (!fa && fb) return 1;
+    return String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es");
+  });
+}
 const BRASS = "#B0894F";
 const T_LIGHT = { navy: "#0B1622", accent: "#1B3A5B", al: "#EEF2F7", bg: "#F5F5F7", card: "#FFFFFF", border: "#E8EAED", text: "#0B1622", sub: "#5B6673", muted: "#98A2B0", ok: "#16A34A", warn: "#B45309", rsm: 12, inpBg: "#FBFBFD", navBar: "rgba(255,255,255,.86)", dark: false };
 const T_DARK = { navy: "#05070B", accent: "#7FB0EA", al: "#1B222C", bg: "#0C0F14", card: "#161B22", border: "#2A313C", text: "#EEF1F5", sub: "#AEB6C2", muted: "#6C7683", ok: "#3DDC84", warn: "#F5B44C", rsm: 12, inpBg: "#0F141B", navBar: "rgba(18,22,29,.86)", dark: true };
@@ -107,7 +121,7 @@ function presupCliente(o) { return num(o?.m2) * num(o?.precioCliente); }
 function quincenasObra(o) { const pm = num(o?.plazoMeses); return pm > 0 ? Math.round(pm * 26 / 12) : 0; }
 function anticipoDe(o) { return o?.anticipoTipo === "monto" ? num(o?.anticipoMontoFijo) : presupCliente(o) * num(o?.anticipoPct) / 100; }
 function resumenFinanciero(data) {
-  const obras = data.obras || [], certs = data.certs || [], cac = data.cacMensual || {};
+  const obras = ordenarObras(data.obras), certs = data.certs || [], cac = data.cacMensual || {};
   const gastos = data.gastos || [], movs = data.movimientos || [], est = data.estructura || {};
   const cuotaQ = (num(est.nObras) > 0 ? num(est.mensual) / num(est.nObras) : 0) / 2;
   const certsDe = (id) => certs.filter(c => c.obraId === id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
@@ -197,7 +211,7 @@ async function exportarExcel(data) {
   try {
     const XLSX = await cargarXLSX(); const wb = XLSX.utils.book_new();
     const add = (nombre, aoa, cols) => { const ws = XLSX.utils.aoa_to_sheet(aoa); if (cols) ws["!cols"] = cols.map(w => ({ wch: w })); ws["!freeze"] = { xSplit: 0, ySplit: 1 }; XLSX.utils.book_append_sheet(wb, ws, nombre.slice(0, 31)); };
-    const obras = data.obras || []; const nom = (id) => { const o = obras.find(x => x.id === id); return o ? o.nombre : "General"; };
+    const obras = ordenarObras(data.obras); const nom = (id) => { const o = obras.find(x => x.id === id); return o ? o.nombre : "General"; };
     const rSoc = (data.sociedad || []).reduce((a, s) => { const pi = num(s.presupuestoInicial != null ? s.presupuestoInicial : s.presupuesto); const ad = (s.adicionales || []).reduce((x, y) => x + num(y.monto), 0); const cr = (s.gastos || []).reduce((x, y) => x + num(y.monto), 0); return a + (pi + ad - cr); }, 0);
     const rProp = (data.propias || []).reduce((a, p) => a + (num(p.ventaArs) - (p.costos || []).reduce((x, y) => x + num(y.montoArs), 0)), 0);
     const rEdif = (data.edificios || []).reduce((a, e) => { const inv = (e.costos || []).reduce((x, y) => x + num(y.montoArs), 0); const vta = (e.unidades || []).reduce((x, y) => x + num(y.precioArs), 0); return a + (vta - inv); }, 0);
@@ -833,7 +847,7 @@ function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef, m2, cotU,
   </div>;
 }
 function PropiasPanel({ data, save }) {
-  const propias = data.propias || [];
+  const propias = ordenarObras(data.propias);
   const [nombre, setNombre] = useState(""); const [abrir, setAbrir] = useState(false); const [expandir, setExpandir] = useState({}); const [subiendo, setSubiendo] = useState(""); const [pdfHtml, setPdfHtml] = useState(null); const [m2n, setM2n] = useState("");
   const [cotizDef, setCotizDef] = useState(String(data.config?.cotizUSD || ""));
   const addPropia = () => { if (!nombre.trim()) return; save({ ...data, propias: [...propias, { id: uid(), nombre: nombre.trim(), m2: numMoney(m2n), ventaUsd: 0, ventaArs: 0, costos: [], adjuntos: [], ts: Date.now() }] }); setNombre(""); setM2n(""); setAbrir(false); };
@@ -1036,7 +1050,7 @@ export default function App() {
   const [verConfig, setVerConfig] = useState(false);
   const cfg = data.config || {};
   T = cfg.modo === "oscuro" ? T_DARK : T_LIGHT; inp = buildInp(T); inpSm = buildInpSm(T);
-  const obras = data.obras || [], certs = data.certs || [], indices = data.cacMensual || {};
+  const obras = ordenarObras(data.obras), certs = data.certs || [], indices = data.cacMensual || {};
   const certsDe = (id) => certs.filter(c => c.obraId === id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
   return (<div style={{ minHeight: "100vh", background: fondoDe(cfg), fontFamily: fuenteDe(cfg), width: "100%", color: T.text }}>
     <style>{`*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}::selection{background:rgba(176,137,79,.20)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}input,select,textarea{color:${T.text};background:${T.inpBg}}input::placeholder,textarea::placeholder{color:${T.muted}}@media(min-width:1700px){.vv-body{padding-left:calc((100% - 1560px)/2);padding-right:calc((100% - 1560px)/2)}}`}</style>
@@ -1078,7 +1092,10 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
   function imprimirPresupuesto(o) {
     const cfg = data.config || {}; const brandName = (cfg.nombre || "V+V Construcciones").toUpperCase(); const comitente = cfg.comitente || "Belfast Construction Management"; const brandHtml = cfg.logo ? `<div class="brand" style="display:flex;align-items:center;gap:10px"><img src="${cfg.logo}" style="height:40px;width:40px;object-fit:contain;background:#fff;border-radius:7px;padding:2px"/><div>${brandName}<small>CONSTRUCTORA</small></div></div>` : `<div class="brand">${brandName}<small>CONSTRUCTORA</small></div>`;
     const pc = presupCliente(o), m2 = num(o.m2), precio = num(o.precioCliente);
-    const nro = obras.findIndex(x => x.id === o.id) + 1;
+    // El número de presupuesto va por ORDEN DE CARGA, no por el orden en que se muestran.
+    // Si usara la lista ordenada por fecha, al cargar una obra vieja se le correría el
+    // número a un presupuesto ya emitido y firmado.
+    const nro = (data.obras || []).findIndex(x => x.id === o.id) + 1;
     const rows = (o.rubros || []).map(r => { const inc = num(r.pct); return `<tr><td>${r.nombre}</td><td class="ctr">${inc.toFixed(1)}%</td><td class="rgt">${money(inc / 100 * pc)}</td></tr>`; }).join("");
     const fp = o.firmasPresup || {};
     const firmaBox = (f, rol) => `<div style="width:240px;text-align:center">${f?.dataUrl ? `<img src="${f.dataUrl}" style="height:44px;display:block;margin:0 auto"/>` : `<div style="height:44px"></div>`}<div style="border-top:1px solid #0F1B2D;padding-top:5px;font-size:11px;color:#5B6B7F">${rol}${f?.nombre ? `<br><b style="color:#0F1B2D">${f.nombre}</b>` : "<br>&nbsp;"}${f?.codigo ? `<br><span style="font-size:8.5px;color:#94A3B8">Cód. ${f.codigo} · ${f.ts || ""}</span>` : ""}</div></div>`;
@@ -2031,7 +2048,7 @@ function descAccion(a) {
 }
 function contextoDatos(data) {
   const L = []; const m = (n) => "$" + Math.round(num(n) || 0).toLocaleString("es-AR");
-  const obras = data.obras || [], gastos = data.gastos || [], movs = data.movimientos || [], propias = data.propias || [], soc = data.sociedad || [], edif = data.edificios || [], cont = data.contactos || [], pres = data.presupuestosSoc || [];
+  const obras = ordenarObras(data.obras), gastos = data.gastos || [], movs = data.movimientos || [], propias = ordenarObras(data.propias), soc = data.sociedad || [], edif = data.edificios || [], cont = data.contactos || [], pres = data.presupuestosSoc || [];
   const nomObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "General/sin asignar";
   if (obras.length) { L.push("== OBRAS DE CLIENTE =="); obras.forEach(o => L.push(`- ${o.nombre}: ${num(o.m2) || 0} m2, precio cliente ${m(o.precioCliente)}/m2, costo ${m(o.costoM2)}/m2, plazo ${o.plazoMeses || "?"} meses`)); }
   if (movs.length) { L.push("== COBROS Y PAGOS =="); movs.forEach(v => L.push(`- ${v.tipo === "cobro" ? "COBRO" : "PAGO"} ${m(v.monto)} · ${nomObra(v.obraId)} · ${fmtISO(v.fecha)}${v.nota ? ` · ${v.nota}` : ""}`)); }
