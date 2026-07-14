@@ -880,20 +880,20 @@ function PropiasPanel({ data, save }) {
       return (<div style={{ background: T.bg, borderRadius: 13, padding: 14, marginTop: 12, border: `1px solid ${T.border}` }}>
         <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Total · {propias.length} obra{propias.length === 1 ? "" : "s"}</div>
         <div style={{ background: T.card, borderRadius: 11, padding: "13px 14px", border: `1px solid ${T.border}`, borderLeft: `4px solid ${col}` }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em" }}>Utilidad esperada</div>
-          <div style={{ fontSize: 29, fontWeight: 800, color: col, fontVariantNumeric: "tabular-nums", lineHeight: 1.15, marginTop: 3 }}>{usdFmt(utilUsd)}</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: T.text, fontVariantNumeric: "tabular-nums", marginTop: 1 }}>{money(utilArs)}</div>
-          {ventaUsd > 0 && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4 }}>Margen {margen.toFixed(1)}% sobre la venta</div>}
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.07em" }}>Utilidad esperada</div>
+          <div style={{ fontSize: 40, fontWeight: 800, color: col, fontVariantNumeric: "tabular-nums", lineHeight: 1.05, marginTop: 4, letterSpacing: "-0.02em" }}>{usdFmt(utilUsd)}</div>
+          <div style={{ fontSize: 19, fontWeight: 700, color: T.text, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{money(utilArs)}</div>
+          {ventaUsd > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, marginTop: 5 }}>Margen {margen.toFixed(1)}% sobre la venta</div>}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
           <div style={{ flex: 1, background: T.card, borderRadius: 10, padding: "10px 11px", border: `1px solid ${T.border}` }}>
             <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Venta esperada</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: T.text, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{usdFmt(ventaUsd)}</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: T.text, fontVariantNumeric: "tabular-nums", marginTop: 3 }}>{usdFmt(ventaUsd)}</div>
             <div style={{ fontSize: 11, color: T.muted, fontVariantNumeric: "tabular-nums" }}>{money(ventaArs)}</div>
           </div>
           <div style={{ flex: 1, background: T.card, borderRadius: 10, padding: "10px 11px", border: `1px solid ${T.border}` }}>
             <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Inversión total</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{usdFmt(invUsd)}</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums", marginTop: 3 }}>{usdFmt(invUsd)}</div>
             <div style={{ fontSize: 11, color: T.muted, fontVariantNumeric: "tabular-nums" }}>{money(invArs)}</div>
           </div>
         </div>
@@ -917,9 +917,9 @@ function PropiasPanel({ data, save }) {
         {cotU <= 0 && <div style={{ fontSize: 10, color: T.muted, marginBottom: 6 }}>Cada gasto se convierte con su propia cotización. Poné un valor acá solo si querés re-expresar todo a un tipo de cambio único.</div>}
         {/* INVERSIÓN TOTAL — el dato que más se mira, va destacado y en grande */}
         <div style={{ background: T.card, borderRadius: 11, padding: "12px 13px", border: `1px solid ${T.border}`, borderLeft: `4px solid ${T.accent}` }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em" }}>Inversión total</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums", lineHeight: 1.15, marginTop: 3 }}>{usdFmt(totUsd)}</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: T.text, fontVariantNumeric: "tabular-nums", marginTop: 1 }}>{money(totArs)}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.07em" }}>Inversión total</div>
+          <div style={{ fontSize: 34, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums", lineHeight: 1.08, marginTop: 4, letterSpacing: "-0.02em" }}>{usdFmt(totUsd)}</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: T.text, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{money(totArs)}</div>
         </div>
         {sup > 0 && totArs > 0 && <div style={{ fontSize: 11, color: T.muted, textAlign: "right", marginTop: 3 }}>{usdFmt(totUsd / sup)} / {money(totArs / sup)} por m²</div>}
         {cotU > 0 && <div style={{ fontSize: 10, color: T.muted, textAlign: "right", marginTop: 2 }}>Unificado a cotización {fmtMiles(cotU)}</div>}
@@ -2230,11 +2230,45 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const promCobro = nCertsTot > 0 ? totCobro / nCertsTot : 0;
   const promPago = nCertsTot > 0 ? totCosto / nCertsTot : 0;
 
+  // ── UTILIDAD ESPERADA DE TODAS LAS OBRAS DE CLIENTE ──
+  // Lo que le cobrás (m² × precio cliente) menos lo que te cuesta (m² × costo/m²),
+  // sumado en TODAS las obras cargadas. Es la utilidad del contrato completo, no la
+  // de lo ya certificado: por eso no depende de cuánto avanzó la obra.
+  const ventaEsperada = obras.reduce((s, o) => s + presupCliente(o), 0);
+  const costoEsperado = obras.reduce((s, o) => s + presupCosto(o), 0);
+  const utilEsperada = ventaEsperada - costoEsperado;
+  const margenEsperado = ventaEsperada > 0 ? utilEsperada / ventaEsperada * 100 : 0;
+  // obras a las que les falta el precio o el costo: distorsionan el número
+  const obrasIncompletas = obras.filter(o => num(o.m2) <= 0 || num(o.precioCliente) <= 0 || num(o.costoM2) <= 0).length;
+
   return (<div style={{ padding: "14px 16px 40px" }}>
     <div style={{ display: "flex", gap: 3, background: T.card, borderRadius: 12, padding: 4, marginBottom: 14, boxShadow: SHDsm, flexWrap: "wrap" }}>
       {[["general", "General"], ["cliente", "Cliente"], ["particulares", "Particul."], ["sociedad", "Sociedad"], ["edificios", "Edificios"]].map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: "1 1 30%", background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 2px", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em" }}>{l}</button>)}
     </div>
     {subtab === "cliente" && <>
+    {/* ── UTILIDAD ESPERADA — el número que más se mira ── */}
+    {obras.length > 0 && (() => {
+      const col = utilEsperada >= 0 ? "#7DE0A6" : "#FCA5A5";
+      return (<div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 22, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Utilidad esperada</div>
+        <div style={{ fontSize: 44, fontWeight: 800, margin: "8px 0 2px", color: col, fontVariantNumeric: "tabular-nums", lineHeight: 1.05, letterSpacing: "-0.02em" }}>{money(utilEsperada)}</div>
+        {ventaEsperada > 0 && <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,.9)", marginBottom: 2 }}>Margen {margenEsperado.toFixed(1)}%</div>}
+        <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.7)", lineHeight: 1.5, marginTop: 6 }}>Lo que le cobrás al cliente menos lo que te cuesta, sumando las {obras.length} obra{obras.length === 1 ? "" : "s"} cargadas. Es el contrato completo: no depende del avance.</div>
+
+        <div style={{ marginTop: 14, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 18 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Le cobrás</div>
+            <div style={{ fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3 }}>{money(ventaEsperada)}</div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Te cuesta</div>
+            <div style={{ fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3, color: "rgba(255,255,255,.85)" }}>{money(costoEsperado)}</div>
+          </div>
+        </div>
+
+        {obrasIncompletas > 0 && <div style={{ fontSize: 11, color: "#FCD34D", marginTop: 11, lineHeight: 1.45 }}>Ojo: {obrasIncompletas} obra{obrasIncompletas === 1 ? "" : "s"} sin m², precio o costo cargado. El número va a cambiar cuando los completes.</div>}
+      </div>);
+    })()}
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 16, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Resultado operativo</div>
       <div style={{ fontSize: 30, fontWeight: 800, margin: "6px 0 4px", color: totRes >= 0 ? "#7DE0A6" : "#FCA5A5" }}>{money(totRes)}</div>
