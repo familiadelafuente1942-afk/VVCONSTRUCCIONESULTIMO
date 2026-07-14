@@ -2462,6 +2462,10 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const costoEsperado = obras.reduce((s, o) => s + presupCosto(o), 0);
   const utilEsperada = ventaEsperada - costoEsperado;
   const margenEsperado = ventaEsperada > 0 ? utilEsperada / ventaEsperada * 100 : 0;
+  // los metros que vamos a construir, sumando todas las obras
+  const m2Totales = obras.reduce((s, o) => s + num(o.m2), 0);
+  // lo que deja cada metro cuadrado: la utilidad repartida entre los m² a construir
+  const utilPorM2 = m2Totales > 0 ? utilEsperada / m2Totales : 0;
   // obras a las que les falta el precio o el costo: distorsionan el número
   const obrasIncompletas = obras.filter(o => num(o.m2) <= 0 || num(o.precioCliente) <= 0 || num(o.costoM2) <= 0).length;
 
@@ -2487,6 +2491,22 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Te cuesta</div>
             <div style={{ fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3, color: "rgba(255,255,255,.85)" }}>{money(costoEsperado)}</div>
+          </div>
+        </div>
+
+        {/* Los metros a construir, y lo que deja cada uno */}
+        <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 18 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>m² a construir</div>
+            <div style={{ fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3 }}>
+              {m2Totales.toLocaleString("es-AR")} <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>m²</span>
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Utilidad por m²</div>
+            <div style={{ fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3, color: col }}>
+              {money(utilPorM2)}<span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>/m²</span>
+            </div>
           </div>
         </div>
 
