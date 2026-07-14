@@ -856,6 +856,50 @@ function PropiasPanel({ data, save }) {
       <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras particulares (para vender)</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Las que hacés para vos, llave en mano con lote. Cargás en $ o US$ con la cotización del momento.</div></div>
       <button onClick={() => setAbrir(o => !o)} style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{abrir ? "Cerrar" : "+ Nueva"}</button>
     </div>
+
+    {/* ── TOTALES DE TODAS LAS OBRAS PARTICULARES ──────────────────────
+        Utilidad esperada = precio de venta − costos, sumado en todas las obras. */}
+    {propias.length > 0 && (() => {
+      let invUsd = 0, invArs = 0, ventaUsd = 0, ventaArs = 0, sinVenta = 0;
+      for (const p of propias) {
+        const cs = p.costos || [];
+        const cotU = num(p.cotizUnif) || 0;
+        invUsd += cs.reduce((s, c) => s + usdUnif(c, cotU), 0);
+        invArs += cs.reduce((s, c) => s + arsUnif(c, cotU), 0);
+        // el precio de venta puede estar cargado en $ o en US$: completo el que falte
+        // con la cotización de la obra o, si no tiene, con la general
+        const cot = cotU || num(data.config?.cotizUSD) || 0;
+        const vU = num(p.ventaUsd), vA = num(p.ventaArs);
+        if (vU <= 0 && vA <= 0) { sinVenta++; continue; }
+        ventaUsd += vU > 0 ? vU : (cot > 0 ? vA / cot : 0);
+        ventaArs += vA > 0 ? vA : (cot > 0 ? vU * cot : 0);
+      }
+      const utilUsd = ventaUsd - invUsd, utilArs = ventaArs - invArs;
+      const margen = ventaUsd > 0 ? (utilUsd / ventaUsd * 100) : 0;
+      const col = utilUsd >= 0 ? "#16A34A" : "#DC2626";
+      return (<div style={{ background: T.bg, borderRadius: 13, padding: 14, marginTop: 12, border: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Total · {propias.length} obra{propias.length === 1 ? "" : "s"}</div>
+        <div style={{ background: T.card, borderRadius: 11, padding: "13px 14px", border: `1px solid ${T.border}`, borderLeft: `4px solid ${col}` }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em" }}>Utilidad esperada</div>
+          <div style={{ fontSize: 29, fontWeight: 800, color: col, fontVariantNumeric: "tabular-nums", lineHeight: 1.15, marginTop: 3 }}>{usdFmt(utilUsd)}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: T.text, fontVariantNumeric: "tabular-nums", marginTop: 1 }}>{money(utilArs)}</div>
+          {ventaUsd > 0 && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4 }}>Margen {margen.toFixed(1)}% sobre la venta</div>}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
+          <div style={{ flex: 1, background: T.card, borderRadius: 10, padding: "10px 11px", border: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Venta esperada</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{usdFmt(ventaUsd)}</div>
+            <div style={{ fontSize: 11, color: T.muted, fontVariantNumeric: "tabular-nums" }}>{money(ventaArs)}</div>
+          </div>
+          <div style={{ flex: 1, background: T.card, borderRadius: 10, padding: "10px 11px", border: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Inversión total</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{usdFmt(invUsd)}</div>
+            <div style={{ fontSize: 11, color: T.muted, fontVariantNumeric: "tabular-nums" }}>{money(invArs)}</div>
+          </div>
+        </div>
+        {sinVenta > 0 && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8, lineHeight: 1.45 }}>Ojo: {sinVenta} obra{sinVenta === 1 ? "" : "s"} sin precio de venta cargado. Su costo resta de la utilidad, así que el número real va a mejorar cuando lo cargues.</div>}
+      </div>);
+    })()}
     {abrir && <div style={{ background: T.bg, borderRadius: 11, padding: 12, marginTop: 10 }}>
       <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre (ej: Casa Canning Lote 815)" style={{ ...inp, marginTop: 0 }} />
       <input value={m2n} onChange={e => setM2n(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Superficie m² (para precios por m²)" style={inp} />
@@ -871,7 +915,12 @@ function PropiasPanel({ data, save }) {
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><span style={{ fontSize: 12, color: T.sub, flex: 1 }}>Fecha de inicio</span><input type="date" defaultValue={p.inicio || ""} onBlur={e => upd(p.id, x => ({ ...x, inicio: e.target.value }))} style={{ ...inpSm, width: 150, textAlign: "right" }} /></div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><span style={{ fontSize: 12, color: T.sub, flex: 1 }}>Cotización p/ unificar (opcional)</span><input defaultValue={p.cotizUnif ? fmtMiles(p.cotizUnif) : ""} onBlur={e => setVenta(p.id, "cotizUnif", e.target.value)} inputMode="numeric" placeholder="dejar vacío" style={{ ...inpSm, width: 110, textAlign: "right" }} /></div>
         {cotU <= 0 && <div style={{ fontSize: 10, color: T.muted, marginBottom: 6 }}>Cada gasto se convierte con su propia cotización. Poné un valor acá solo si querés re-expresar todo a un tipo de cambio único.</div>}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: T.card, borderRadius: 9, padding: "9px 11px" }}><span style={{ fontSize: 12.5, fontWeight: 700 }}>Inversión total</span><span style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}><b style={{ color: T.accent }}>{usdFmt(totUsd)}</b> <span style={{ color: T.muted }}>/ {money(totArs)}</span></span></div>
+        {/* INVERSIÓN TOTAL — el dato que más se mira, va destacado y en grande */}
+        <div style={{ background: T.card, borderRadius: 11, padding: "12px 13px", border: `1px solid ${T.border}`, borderLeft: `4px solid ${T.accent}` }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em" }}>Inversión total</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums", lineHeight: 1.15, marginTop: 3 }}>{usdFmt(totUsd)}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.text, fontVariantNumeric: "tabular-nums", marginTop: 1 }}>{money(totArs)}</div>
+        </div>
         {sup > 0 && totArs > 0 && <div style={{ fontSize: 11, color: T.muted, textAlign: "right", marginTop: 3 }}>{usdFmt(totUsd / sup)} / {money(totArs / sup)} por m²</div>}
         {cotU > 0 && <div style={{ fontSize: 10, color: T.muted, textAlign: "right", marginTop: 2 }}>Unificado a cotización {fmtMiles(cotU)}</div>}
         {costos.length > 0 && (() => { const sl = !!sinLote[p.id]; const fechaDe = (c) => c.fecha || (c.ts ? new Date(c.ts).toISOString().slice(0, 10) : ""); const corteISO = corte[p.id] || hoyISO(); const enCorte = (c) => { const d = fechaDe(c); return !d || d <= corteISO; }; const esLote = (c) => String(c.cat || "").toLowerCase().includes("lote"); const cf = costos.filter(c => !(sl && esLote(c))).filter(enCorte); const loteArs = costos.filter(c => esLote(c) && enCorte(c)).reduce((s, c) => s + arsUnif(c, cotU), 0); const porMes = {}; cf.forEach(c => { const k = mesKey(c); porMes[k] = (porMes[k] || 0) + arsUnif(c, cotU); }); const meses = Object.keys(porMes).sort(); const items = meses.map(k => ({ label: mesLbl(k), value: porMes[k] })); const totFlujo = meses.reduce((s, k) => s + porMes[k], 0); const inicioISO = p.inicio || (cf.length ? cf.map(fechaDe).filter(Boolean).sort()[0] : ""); const mesesEntre = (a, b) => { const x = new Date(a), y = new Date(b); if (isNaN(x.getTime()) || isNaN(y.getTime())) return 0; return (y.getFullYear() - x.getFullYear()) * 12 + (y.getMonth() - x.getMonth()) + 1; }; const mesesObra = inicioISO ? Math.max(1, mesesEntre(inicioISO, corteISO)) : Math.max(1, meses.length); const promedio = totFlujo / mesesObra; return (<div style={{ marginTop: 10, background: T.card, borderRadius: 11, padding: 12, border: `1px solid ${T.border}` }}>
