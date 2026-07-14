@@ -128,10 +128,16 @@ function rubrosDePlantilla(tplId, rubrosActuales, usarPctDeBase, data) {
 }
 
 /* Qué plantilla se parece más a los rubros que tiene una obra */
+const sinTildes = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+/* Adivina el tipo mirando los rubros. Es solo la PRIMERA suposición: el tipo real
+   lo fijás vos en la tarjeta de la obra y queda guardado (o.tipoRubros).
+   Tolerante a propósito: sirve aunque el rubro se llame "Estructura de hormigón".
+   Si la estructura está en 0%, la obra NO la incluye → sin estructura. */
 function plantillaDe(rubros) {
-  const nombres = (rubros || []).map(r => String(r.nombre || "").trim().toLowerCase());
-  const tieneEst = nombres.includes("estructura");
-  return tieneEst ? "completa" : "sinest";
+  const est = (rubros || []).find(r => sinTildes(r && r.nombre).includes("estructura"));
+  if (!est) return "sinest";
+  return num(est.pct) > 0 ? "completa" : "sinest";
 }
 const CAT_GASTO = ["Viáticos", "Combustible", "Fletes", "Comida en obra", "Herramientas", "Alquiler equipos", "Operación de obra", "Otro"];
 const IMPREV_CATS = ["Seguro personal", "Multa de obra", "Multa de tránsito", "Otro imprevisto"];
@@ -1345,7 +1351,26 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
     {obras.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 20px", lineHeight: 1.6 }}>No hay obras.<br />Tocá "Nueva obra".</div>}
     {obras.map(o => (<div key={o.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, boxShadow: SHDsm, marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-        <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800 }}>{o.nombre}</div><div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{num(o.m2)} m² · {money(o.precioCliente)}/m² · {(o.rubros || []).length} rubros</div></div>
+        <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800 }}>{o.nombre}</div><div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{num(o.m2)} m² · {money(o.precioCliente)}/m² · {(o.rubros || []).length} rubros</div>
+          {(() => {
+            const tipo = o.tipoRubros || plantillaDe(o.rubros);
+            const esBase = baseDe(data, tipo).origen === o.nombre;
+            return (<div style={{ display: "flex", gap: 5, marginTop: 7, flexWrap: "wrap", alignItems: "center" }}>
+              {PLANTILLAS_RUBROS.map(p => {
+                const act = tipo === p.id;
+                return (<button key={p.id}
+                  title={act ? "Así está clasificada esta obra" : `Marcar como "${p.nombre}"`}
+                  onClick={() => save({ ...data, obras: (data.obras || []).map(x => x.id === o.id ? { ...x, tipoRubros: p.id } : x) })}
+                  style={{
+                    background: act ? T.accent : "transparent", color: act ? "#fff" : T.muted,
+                    border: `1px solid ${act ? T.accent : T.border}`, borderRadius: 20,
+                    padding: "3px 10px", fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  }}>{act ? "✓ " : ""}{p.nombre}</button>);
+              })}
+              {esBase && <span style={{ fontSize: 9.5, fontWeight: 800, color: BRASS, letterSpacing: ".04em" }}>★ ES LA BASE</span>}
+            </div>);
+          })()}
+        </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           <button onClick={() => setForm({ id: o.id, nombre: o.nombre, tipoRubros: o.tipoRubros || plantillaDe(o.rubros), inicio: o.inicio, mesBase: o.mesBase || mesDe(o.inicio), anticipoTipo: o.anticipoTipo || "pct", anticipoPct: String(o.anticipoPct || ""), anticipoMontoFijo: o.anticipoMontoFijo ? fmtMiles(o.anticipoMontoFijo) : "", imprevistosPct: String(o.imprevistosPct != null ? o.imprevistosPct : 5), plazoMeses: o.plazoMeses ? String(o.plazoMeses) : "", m2: fmtMiles(o.m2), precioCliente: fmtMiles(o.precioCliente), costoM2: fmtMiles(o.costoM2), rubros: (o.rubros || []).map(r => ({ ...r, pct: String(r.pct) })), costoExtra: (o.costoExtra || []).map(l => ({ ...l, valor: l.tipo === "pct" ? String(l.valor) : fmtMiles(l.valor) })) })} style={{ background: T.al, color: T.accent, border: "none", borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
           {(() => {
