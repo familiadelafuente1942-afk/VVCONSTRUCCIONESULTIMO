@@ -8,4 +8,14 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
-        cliente: resolve(__dirname, 'cli
+        cliente: resolve(__dirname, 'cliente.html'),
+        contratista: resolve(__dirname, 'contratista.html'),
+        miasistente: resolve(__dirname, 'mi-asistente.html'),
+        nicolas: resolve(__dirname, 'nicolas.html'),
+        finanzas: resolve(__dirname, 'finanzas.html'),
+        muebles: resolve(__dirname, 'muebles.html'),
+        cronograma: resolve(__dirname, 'cronograma.html'),
+      },
+    },
+  },
+})
