@@ -626,96 +626,152 @@ function semDe(est) {
 
 /* ─── La firma: dos líneas de tiempo + el camino crítico marcado ─── */
 function Gantt({ obra, plan, soloCriticas }) {
-  const total = Math.max(plan.finDias, TOPE_DIAS, 1);
-  const hoyOff = diasEntre(obra.inicio, hoyISO());
-  const pctHoy = Math.max(0, Math.min(100, hoyOff / total * 100));
+  const hoy = hoyISO();
+  const [zoom, setZoom] = useState("dia");   // "dia" | "semana" | "mes"
   const lista = soloCriticas ? plan.tareas.filter(t => t.critica) : plan.tareas;
 
-  // Gantt de verdad: los nombres en una columna propia a la izquierda, el tiempo a la derecha.
-  // Así la línea de "hoy" vive SOLO en la zona de las barras y nunca pisa el texto.
-  // El ancho de la columna de nombres se define por CSS, para que crezca en pantalla grande.
-  return (<div style={{ marginLeft: -16, marginRight: -16, background: T.card, boxShadow: SHDsm, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: "12px 0 14px", overflow: "hidden" }}>
+  // La grilla de días hábiles: una columna por día que se trabaja.
+  // Los sábados y domingos ni aparecen, porque no se trabaja.
+  const dias = useMemo(() => {
+    const n = Math.max(1, plan.finHabiles || 1);
+    const out = [];
+    let f = primerHabil(obra.inicio);
+    for (let i = 0; i < n && i < 3000; i++) {
+      out.push(f);
+      let sig = isoMas(f, 1);
+      let g = 0;
+      while (!esHabil(sig) && g < 7) { sig = isoMas(sig, 1); g++; }
+      f = sig;
+    }
+    return out;
+  }, [obra.inicio, plan.finHabiles]);
+
+  const ANCHO = zoom === "dia" ? 26 : zoom === "semana" ? 11 : 4;
+  const ancho = dias.length * ANCHO;
+
+  // el día de hoy, en columnas
+  const colHoy = dias.indexOf(hoy);
+
+  // bandas de mes, para la cabecera
+  const bandas = useMemo(() => {
+    const b = [];
+    dias.forEach((d, i) => {
+      const m = d.slice(0, 7);
+      const ult = b[b.length - 1];
+      if (ult && ult.mes === m) ult.n++;
+      else b.push({ mes: m, desde: i, n: 1 });
+    });
+    return b;
+  }, [dias]);
+
+  const nomMes = (m) => {
+    const [a, mm] = m.split("-");
+    return `${MESES[Number(mm) - 1]} ${a.slice(2)}`;
+  };
+
+  return (<div style={{ marginLeft: -16, marginRight: -16, background: T.card, boxShadow: SHDsm, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: "12px 0 14px" }}>
     <style>{`
       .gnt-lbl{width:118px;flex:0 0 118px}
-      .gnt-ov{left:126px}
-      @media(min-width:520px){.gnt-lbl{width:190px;flex:0 0 190px}.gnt-ov{left:198px}}
-      @media(min-width:820px){.gnt-lbl{width:260px;flex:0 0 260px}.gnt-ov{left:268px}}
+      @media(min-width:520px){.gnt-lbl{width:190px;flex:0 0 190px}}
+      @media(min-width:820px){.gnt-lbl{width:250px;flex:0 0 250px}}
+      .gnt-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+      .gnt-scroll::-webkit-scrollbar{height:7px}
+      .gnt-scroll::-webkit-scrollbar-thumb{background:${T.border};border-radius:4px}
     `}</style>
 
-    {/* regla de meses: la columna de nombres queda vacía */}
-    <div style={{ display: "flex", alignItems: "flex-end", padding: "0 12px 0 12px", marginBottom: 7 }}>
-      <div className="gnt-lbl" />
-      <div style={{ flex: 1, position: "relative", height: 13, minWidth: 0 }}>
-        {Array.from({ length: 13 }).map((_, i) => {
-          if ((i * 30.44) > total + 1) return null;
-          const pct = Math.min(100, (i * 30.44) / total * 100);
-          const tr = i === 0 ? "none" : pct >= 99 ? "translateX(-100%)" : "translateX(-50%)";
-          return (<div key={i} style={{ position: "absolute", left: `${pct}%`, top: 0, fontSize: 9, color: T.muted, fontWeight: 700, transform: tr, whiteSpace: "nowrap" }}>
-            {i === 0 ? "inicio" : `m${i}`}
-          </div>);
-        })}
-      </div>
+    {/* zoom */}
+    <div style={{ display: "flex", gap: 4, padding: "0 12px 10px", alignItems: "center" }}>
+      <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 700, marginRight: 3 }}>VER POR</span>
+      {[["dia", "Día"], ["semana", "Semana"], ["mes", "Mes"]].map(([k, l]) => (
+        <button key={k} onClick={() => setZoom(k)} style={{
+          background: zoom === k ? T.accent : T.al, color: zoom === k ? "#fff" : T.sub,
+          border: `1px solid ${T.border}`, borderRadius: 8, padding: "5px 11px",
+          fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+        }}>{l}</button>
+      ))}
+      <span style={{ marginLeft: "auto", fontSize: 10.5, color: T.muted }}>{dias.length} días hábiles</span>
     </div>
 
-    {/* las filas */}
-    <div style={{ position: "relative", padding: "0 12px" }}>
-
-      {/* la capa de las líneas verticales: arranca donde arrancan las barras, no sobre los nombres */}
-      <div className="gnt-ov" style={{ position: "absolute", right: 12, top: -3, bottom: 0, pointerEvents: "none", zIndex: 3 }}>
-        {/* grilla de meses, tenue */}
-        {Array.from({ length: 13 }).map((_, i) => {
-          if (i === 0 || (i * 30.44) > total + 1) return null;
-          const pct = Math.min(100, (i * 30.44) / total * 100);
-          return <div key={i} style={{ position: "absolute", left: `${pct}%`, top: 0, bottom: 0, width: 1, background: T.border, opacity: .5 }} />;
-        })}
-        {hoyOff >= 0 && hoyOff <= total && (
-          <div style={{ position: "absolute", left: `${pctHoy}%`, top: 0, bottom: 0, width: 2, background: T.danger, opacity: .85 }} />
-        )}
-        {plan.finDias > TOPE_DIAS && (
-          <div style={{ position: "absolute", left: `${TOPE_DIAS / total * 100}%`, top: 0, bottom: 0, width: 2, background: BRASS }} />
-        )}
+    <div style={{ display: "flex", padding: "0 12px" }}>
+      {/* columna fija de nombres */}
+      <div className="gnt-lbl" style={{ minWidth: 0 }}>
+        {/* hueco de la cabecera */}
+        <div style={{ height: 34 }} />
+        {lista.map(t => (
+          <div key={t.id} style={{ height: 26, display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+            {t.bloqueada && <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.danger, flexShrink: 0 }} />}
+            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11.5, fontWeight: t.critica ? 800 : 600, color: t.critica ? T.critico : T.text }}>{t.nombre}</span>
+            <span style={{ flexShrink: 0, fontSize: 8.5, fontWeight: 800, color: t.critica ? T.critico : T.muted }}>{t.critica ? "CRÍT" : `+${t.holgura}d`}</span>
+          </div>
+        ))}
       </div>
 
-      {lista.map(t => {
-        const izq = t.offCal / total * 100;
-        const ancho = Math.max(0.8, t.durCal / total * 100);
-        const col = t.critica ? T.critico : (COLOR_ETAPA[t.etapa] || T.accent);
-        let bIzq = null, bAncho = null;
-        if (t.bfInicio && t.bfFin) {
-          const o = diasEntre(obra.inicio, t.bfInicio);
-          const d = Math.max(1, diasEntre(t.bfInicio, t.bfFin));
-          bIzq = o / total * 100; bAncho = Math.max(0.8, d / total * 100);
-        }
-        const avance = Math.max(0, Math.min(100, numSimple(t.avance)));
-        const alto = bIzq !== null ? 22 : 12;
+      {/* la línea de tiempo: se corre a lo largo */}
+      <div className="gnt-scroll" style={{ flex: 1, minWidth: 0, marginLeft: 8 }}>
+        <div style={{ width: ancho, minWidth: "100%", position: "relative" }}>
 
-        return (<div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7, minHeight: 26 }}>
-
-          {/* columna de nombres */}
-          <div className="gnt-lbl" style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 4 }}>
-            {t.bloqueada && <span title="trabada por una definición" style={{ width: 6, height: 6, borderRadius: "50%", background: T.danger, flexShrink: 0 }} />}
-            <span style={{
-              flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              fontSize: 11.5, fontWeight: t.critica ? 800 : 600, color: t.critica ? T.critico : T.text,
-            }}>{t.nombre}</span>
-            <span style={{ flexShrink: 0, fontSize: 8.5, fontWeight: 800, color: t.critica ? T.critico : T.muted }}>
-              {t.critica ? "CRÍT" : `+${t.holgura}d`}
-            </span>
+          {/* cabecera: los meses */}
+          <div style={{ display: "flex", height: 15 }}>
+            {bandas.map((b, i) => (
+              <div key={i} style={{
+                width: b.n * ANCHO, flexShrink: 0, borderLeft: i > 0 ? `1px solid ${T.border}` : "none",
+                fontSize: 9.5, fontWeight: 800, color: T.sub, textTransform: "uppercase",
+                letterSpacing: ".04em", paddingLeft: 3, overflow: "hidden", whiteSpace: "nowrap",
+              }}>{b.n * ANCHO > 34 ? nomMes(b.mes) : ""}</div>
+            ))}
           </div>
 
-          {/* zona de tiempo */}
-          <div style={{ flex: 1, minWidth: 0, position: "relative", height: alto }}>
-            <div style={{ position: "absolute", left: 0, right: 0, top: alto / 2 - 4, height: 3, background: T.dark ? T.al : T.bg, borderRadius: 2 }} />
-            <div style={{ position: "absolute", left: `${izq}%`, width: `${ancho}%`, top: 0, height: 11, background: col, borderRadius: 3, opacity: .32 }} />
-            {avance > 0 && (
-              <div style={{ position: "absolute", left: `${izq}%`, width: `${ancho * avance / 100}%`, top: 0, height: 11, background: col, borderRadius: 3 }} />
-            )}
-            {bIzq !== null && (
-              <div title="Belfast" style={{ position: "absolute", left: `${bIzq}%`, width: `${bAncho}%`, top: 14, height: 7, border: `1.5px solid ${BRASS}`, borderRadius: 3, boxSizing: "border-box" }} />
-            )}
+          {/* cabecera: el número de día */}
+          <div style={{ display: "flex", height: 19, alignItems: "center" }}>
+            {dias.map((d, i) => {
+              const dd = Number(d.slice(8, 10));
+              const esHoyD = d === hoy;
+              const lunes = dowDe(d) === 1;
+              // con zoom chico no entran todos los números: muestro los lunes
+              const mostrar = zoom === "dia" || (zoom === "semana" && lunes);
+              return (<div key={i} style={{
+                width: ANCHO, flexShrink: 0, textAlign: "center",
+                fontSize: zoom === "dia" ? 9.5 : 8.5,
+                fontWeight: esHoyD ? 800 : 600,
+                color: esHoyD ? T.danger : lunes ? T.sub : T.muted,
+                borderLeft: lunes ? `1px solid ${T.border}` : "none",
+              }}>{mostrar ? dd : ""}</div>);
+            })}
           </div>
-        </div>);
-      })}
+
+          {/* las filas */}
+          <div style={{ position: "relative" }}>
+            {/* grilla: una línea cada lunes */}
+            {dias.map((d, i) => dowDe(d) === 1 ? (
+              <div key={i} style={{ position: "absolute", left: i * ANCHO, top: 0, bottom: 0, width: 1, background: T.border, opacity: .55 }} />
+            ) : null)}
+            {/* la línea de hoy */}
+            {colHoy >= 0 && (
+              <div style={{ position: "absolute", left: colHoy * ANCHO, top: 0, bottom: 0, width: 2, background: T.danger, zIndex: 3, opacity: .9 }} />
+            )}
+
+            {lista.map(t => {
+              const col = t.critica ? T.critico : (COLOR_ETAPA[t.etapa] || T.accent);
+              const izq = t.es * ANCHO;
+              const anc = Math.max(3, t.dias * ANCHO);
+              const avance = Math.max(0, Math.min(100, numSimple(t.avance)));
+              // Belfast, si cargaste sus fechas: lo ubico por día hábil
+              let bIzq = null, bAnc = null;
+              if (t.bfInicio && t.bfFin) {
+                const i0 = habilesEntre(primerHabil(obra.inicio), primerHabil(t.bfInicio));
+                const n = Math.max(1, habilesEntre(primerHabil(t.bfInicio), t.bfFin) + 1);
+                bIzq = i0 * ANCHO; bAnc = Math.max(3, n * ANCHO);
+              }
+              return (<div key={t.id} style={{ height: 26, position: "relative" }}>
+                <div style={{ position: "absolute", left: 0, right: 0, top: 11, height: 2, background: T.dark ? T.al : T.bg }} />
+                <div style={{ position: "absolute", left: izq, width: anc, top: 5, height: 13, background: col, borderRadius: 3, opacity: .3 }} />
+                {avance > 0 && <div style={{ position: "absolute", left: izq, width: anc * avance / 100, top: 5, height: 13, background: col, borderRadius: 3 }} />}
+                {bIzq !== null && <div style={{ position: "absolute", left: bIzq, width: bAnc, top: 19, height: 5, border: `1.5px solid ${BRASS}`, borderRadius: 2, boxSizing: "border-box" }} />}
+              </div>);
+            })}
+          </div>
+        </div>
+      </div>
     </div>
 
     <div style={{ display: "flex", gap: 12, margin: "10px 12px 0", flexWrap: "wrap", fontSize: 10, color: T.sub }}>
@@ -723,6 +779,7 @@ function Gantt({ obra, plan, soloCriticas }) {
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 7, background: T.accent, borderRadius: 3 }} /> V+V</span>
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 6, border: `1.5px solid ${BRASS}`, borderRadius: 3, boxSizing: "border-box" }} /> Belfast</span>
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 2, height: 10, background: T.danger }} /> hoy</span>
+      <span style={{ color: T.muted }}>· solo días hábiles, sin fines de semana</span>
     </div>
   </div>);
 }
