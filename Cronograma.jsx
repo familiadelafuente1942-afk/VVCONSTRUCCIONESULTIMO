@@ -584,34 +584,50 @@ function Gantt({ obra, plan, soloCriticas }) {
   const pctHoy = Math.max(0, Math.min(100, hoyOff / total * 100));
   const lista = soloCriticas ? plan.tareas.filter(t => t.critica) : plan.tareas;
 
-  // a todo el ancho: me salgo del margen de la página
-  const ANCHO = { marginLeft: -16, marginRight: -16 };
-  const PAD = 12;   // aire a los costados de las barras
+  // Gantt de verdad: los nombres en una columna propia a la izquierda, el tiempo a la derecha.
+  // Así la línea de "hoy" vive SOLO en la zona de las barras y nunca pisa el texto.
+  // El ancho de la columna de nombres se define por CSS, para que crezca en pantalla grande.
+  return (<div style={{ marginLeft: -16, marginRight: -16, background: T.card, boxShadow: SHDsm, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: "12px 0 14px", overflow: "hidden" }}>
+    <style>{`
+      .gnt-lbl{width:118px;flex:0 0 118px}
+      .gnt-ov{left:126px}
+      @media(min-width:520px){.gnt-lbl{width:190px;flex:0 0 190px}.gnt-ov{left:198px}}
+      @media(min-width:820px){.gnt-lbl{width:260px;flex:0 0 260px}.gnt-ov{left:268px}}
+    `}</style>
 
-  return (<div style={{ ...ANCHO, background: T.card, boxShadow: SHDsm, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: "12px 0 14px" }}>
-
-    {/* regla de meses */}
-    <div style={{ position: "relative", height: 14, margin: `0 ${PAD}px 10px` }}>
-      {Array.from({ length: 13 }).map((_, i) => {
-        const pct = Math.min(100, (i * 30.44) / total * 100);
-        if ((i * 30.44) > total + 1) return null;
-        // el primero pegado a la izquierda, el último pegado a la derecha: así ninguno se corta
-        const tr = i === 0 ? "none" : pct >= 99 ? "translateX(-100%)" : "translateX(-50%)";
-        return (<div key={i} style={{
-          position: "absolute", left: `${pct}%`, top: 0, fontSize: 9, color: T.muted,
-          fontWeight: 700, transform: tr, whiteSpace: "nowrap",
-        }}>{i === 0 ? "inicio" : `m${i}`}</div>);
-      })}
+    {/* regla de meses: la columna de nombres queda vacía */}
+    <div style={{ display: "flex", alignItems: "flex-end", padding: "0 12px 0 12px", marginBottom: 7 }}>
+      <div className="gnt-lbl" />
+      <div style={{ flex: 1, position: "relative", height: 13, minWidth: 0 }}>
+        {Array.from({ length: 13 }).map((_, i) => {
+          if ((i * 30.44) > total + 1) return null;
+          const pct = Math.min(100, (i * 30.44) / total * 100);
+          const tr = i === 0 ? "none" : pct >= 99 ? "translateX(-100%)" : "translateX(-50%)";
+          return (<div key={i} style={{ position: "absolute", left: `${pct}%`, top: 0, fontSize: 9, color: T.muted, fontWeight: 700, transform: tr, whiteSpace: "nowrap" }}>
+            {i === 0 ? "inicio" : `m${i}`}
+          </div>);
+        })}
+      </div>
     </div>
 
-    <div style={{ position: "relative", margin: `0 ${PAD}px` }}>
-      {/* la línea de hoy y el tope de los 12 meses, atraviesan todas las filas */}
-      {hoyOff >= 0 && hoyOff <= total && (
-        <div style={{ position: "absolute", left: `${pctHoy}%`, top: -4, bottom: 0, width: 2, background: T.danger, zIndex: 4, opacity: .8 }} />
-      )}
-      {plan.finDias > TOPE_DIAS && (
-        <div style={{ position: "absolute", left: `${TOPE_DIAS / total * 100}%`, top: -4, bottom: 0, width: 2, background: BRASS, zIndex: 4 }} />
-      )}
+    {/* las filas */}
+    <div style={{ position: "relative", padding: "0 12px" }}>
+
+      {/* la capa de las líneas verticales: arranca donde arrancan las barras, no sobre los nombres */}
+      <div className="gnt-ov" style={{ position: "absolute", right: 12, top: -3, bottom: 0, pointerEvents: "none", zIndex: 3 }}>
+        {/* grilla de meses, tenue */}
+        {Array.from({ length: 13 }).map((_, i) => {
+          if (i === 0 || (i * 30.44) > total + 1) return null;
+          const pct = Math.min(100, (i * 30.44) / total * 100);
+          return <div key={i} style={{ position: "absolute", left: `${pct}%`, top: 0, bottom: 0, width: 1, background: T.border, opacity: .5 }} />;
+        })}
+        {hoyOff >= 0 && hoyOff <= total && (
+          <div style={{ position: "absolute", left: `${pctHoy}%`, top: 0, bottom: 0, width: 2, background: T.danger, opacity: .85 }} />
+        )}
+        {plan.finDias > TOPE_DIAS && (
+          <div style={{ position: "absolute", left: `${TOPE_DIAS / total * 100}%`, top: 0, bottom: 0, width: 2, background: BRASS }} />
+        )}
+      </div>
 
       {lista.map(t => {
         const izq = t.es / total * 100;
@@ -624,38 +640,38 @@ function Gantt({ obra, plan, soloCriticas }) {
           bIzq = o / total * 100; bAncho = Math.max(0.8, d / total * 100);
         }
         const avance = Math.max(0, Math.min(100, numSimple(t.avance)));
+        const alto = bIzq !== null ? 22 : 12;
 
-        return (<div key={t.id} style={{ marginBottom: 11 }}>
+        return (<div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7, minHeight: 26 }}>
 
-          {/* el nombre: se corta con puntos suspensivos, nunca empuja para afuera */}
-          <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3, minWidth: 0 }}>
+          {/* columna de nombres */}
+          <div className="gnt-lbl" style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 4 }}>
             {t.bloqueada && <span title="trabada por una definición" style={{ width: 6, height: 6, borderRadius: "50%", background: T.danger, flexShrink: 0 }} />}
             <span style={{
               flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              fontSize: 11, fontWeight: t.critica ? 800 : 600, color: t.critica ? T.critico : T.sub,
+              fontSize: 11.5, fontWeight: t.critica ? 800 : 600, color: t.critica ? T.critico : T.text,
             }}>{t.nombre}</span>
-            <span style={{
-              flexShrink: 0, fontSize: 8.5, fontWeight: 800, letterSpacing: ".03em",
-              color: t.critica ? T.critico : T.muted,
-            }}>{t.critica ? "CRÍTICA" : `+${t.holgura}d`}</span>
+            <span style={{ flexShrink: 0, fontSize: 8.5, fontWeight: 800, color: t.critica ? T.critico : T.muted }}>
+              {t.critica ? "CRÍT" : `+${t.holgura}d`}
+            </span>
           </div>
 
-          {/* las barras */}
-          <div style={{ position: "relative", height: bIzq !== null ? 19 : 10 }}>
-            <div style={{ position: "absolute", left: 0, right: 0, top: 3, height: 4, background: T.bg, borderRadius: 2 }} />
-            <div style={{ position: "absolute", left: `${izq}%`, width: `${ancho}%`, top: 0, height: 10, background: col, borderRadius: 3, opacity: .35 }} />
+          {/* zona de tiempo */}
+          <div style={{ flex: 1, minWidth: 0, position: "relative", height: alto }}>
+            <div style={{ position: "absolute", left: 0, right: 0, top: alto / 2 - 4, height: 3, background: T.dark ? T.al : T.bg, borderRadius: 2 }} />
+            <div style={{ position: "absolute", left: `${izq}%`, width: `${ancho}%`, top: 0, height: 11, background: col, borderRadius: 3, opacity: .32 }} />
             {avance > 0 && (
-              <div style={{ position: "absolute", left: `${izq}%`, width: `${ancho * avance / 100}%`, top: 0, height: 10, background: col, borderRadius: 3 }} />
+              <div style={{ position: "absolute", left: `${izq}%`, width: `${ancho * avance / 100}%`, top: 0, height: 11, background: col, borderRadius: 3 }} />
             )}
             {bIzq !== null && (
-              <div title="Belfast" style={{ position: "absolute", left: `${bIzq}%`, width: `${bAncho}%`, top: 12, height: 6, border: `1.5px solid ${BRASS}`, borderRadius: 3, boxSizing: "border-box" }} />
+              <div title="Belfast" style={{ position: "absolute", left: `${bIzq}%`, width: `${bAncho}%`, top: 14, height: 7, border: `1.5px solid ${BRASS}`, borderRadius: 3, boxSizing: "border-box" }} />
             )}
           </div>
         </div>);
       })}
     </div>
 
-    <div style={{ display: "flex", gap: 12, margin: `10px ${PAD}px 0`, flexWrap: "wrap", fontSize: 10, color: T.sub }}>
+    <div style={{ display: "flex", gap: 12, margin: "10px 12px 0", flexWrap: "wrap", fontSize: 10, color: T.sub }}>
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 7, background: T.critico, borderRadius: 3 }} /> camino crítico</span>
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 7, background: T.accent, borderRadius: 3 }} /> V+V</span>
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 6, border: `1.5px solid ${BRASS}`, borderRadius: 3, boxSizing: "border-box" }} /> Belfast</span>
@@ -1540,7 +1556,7 @@ export default function Cronograma() {
       <div style={{ height: 2, background: BRASS }} />
     </header>
 
-    <main style={{ maxWidth: 900, margin: "0 auto" }}>
+    <main style={{ maxWidth: 1500, margin: "0 auto" }}>
       {pantalla === "obra" && obra && plan && (
         <PantallaObra obra={obra} plan={plan} finanzas={finanzas} diasAviso={diasAviso}
           guardarObra={(fn) => guardarObra(obra.id, fn)}
