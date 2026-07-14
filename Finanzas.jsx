@@ -2460,12 +2460,29 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   // de lo ya certificado: por eso no depende de cuánto avanzó la obra.
   const ventaEsperada = obras.reduce((s, o) => s + presupCliente(o), 0);
   const costoEsperado = obras.reduce((s, o) => s + presupCosto(o), 0);
-  const utilEsperada = ventaEsperada - costoEsperado;
+  const utilEsperada = ventaEsperada - costoEsperado;   // BRUTA: todavía no pagó la estructura
   const margenEsperado = ventaEsperada > 0 ? utilEsperada / ventaEsperada * 100 : 0;
+
+  // ── DE LA BRUTA A LA NETA ──
+  // La estructura (oficina, sueldos fijos) se le imputa a cada obra por mes de plazo:
+  // cuota = costo mensual de estructura / cantidad de obras simultáneas.
+  // Una obra que dura 10 meses se come 10 cuotas.
+  const estructuraTotal = obras.reduce((s, o) => {
+    const pm = num(o.plazoMeses);
+    return pm > 0 ? s + cuota * pm : s;
+  }, 0);
+  const utilNeta = utilEsperada - estructuraTotal;
+  const margenNeto = ventaEsperada > 0 ? utilNeta / ventaEsperada * 100 : 0;
+
+  // obras sin plazo cargado: no se les puede imputar estructura ni entran en la proyección mensual
+  const sinPlazo = obras.filter(o => num(o.plazoMeses) <= 0);
+  const utilSinPlazo = sinPlazo.reduce((s, o) => s + (presupCliente(o) - presupCosto(o)), 0);
+
   // los metros que vamos a construir, sumando todas las obras
   const m2Totales = obras.reduce((s, o) => s + num(o.m2), 0);
-  // lo que deja cada metro cuadrado: la utilidad repartida entre los m² a construir
+  // lo que deja cada metro cuadrado — bruto y neto
   const utilPorM2 = m2Totales > 0 ? utilEsperada / m2Totales : 0;
+  const netaPorM2 = m2Totales > 0 ? utilNeta / m2Totales : 0;
   // obras a las que les falta el precio o el costo: distorsionan el número
   const obrasIncompletas = obras.filter(o => num(o.m2) <= 0 || num(o.precioCliente) <= 0 || num(o.costoM2) <= 0).length;
 
@@ -2478,10 +2495,10 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
     {obras.length > 0 && (() => {
       const col = utilEsperada >= 0 ? "#7DE0A6" : "#FCA5A5";
       return (<div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 22, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Utilidad esperada</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Utilidad bruta esperada</div>
         <div style={{ fontSize: 44, fontWeight: 800, margin: "8px 0 2px", color: col, fontVariantNumeric: "tabular-nums", lineHeight: 1.05, letterSpacing: "-0.02em" }}>{money(utilEsperada)}</div>
         {ventaEsperada > 0 && <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,.9)", marginBottom: 2 }}>Margen {margenEsperado.toFixed(1)}%</div>}
-        <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.7)", lineHeight: 1.5, marginTop: 6 }}>Lo que le cobrás al cliente menos lo que te cuesta, sumando las {obras.length} obra{obras.length === 1 ? "" : "s"} cargadas. Es el contrato completo: no depende del avance.</div>
+        <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.7)", lineHeight: 1.5, marginTop: 6 }}>Lo que le cobrás al cliente menos lo que te cuesta, sumando las {obras.length} obra{obras.length === 1 ? "" : "s"} cargada{obras.length === 1 ? "" : "s"}. Es el contrato completo (no depende del avance) y todavía <b style={{ color: "#FCD34D" }}>no pagó la estructura</b>.</div>
 
         <div style={{ marginTop: 14, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 18 }}>
           <div style={{ flex: 1 }}>
@@ -2494,7 +2511,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
           </div>
         </div>
 
-        {/* Los metros a construir, y lo que deja cada uno */}
+        {/* Los metros a construir, y lo que deja cada uno (bruto) */}
         <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 18 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>m² a construir</div>
@@ -2503,11 +2520,51 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
             </div>
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Utilidad por m²</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Bruta por m²</div>
             <div style={{ fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3, color: col }}>
               {money(utilPorM2)}<span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>/m²</span>
             </div>
           </div>
+        </div>
+
+        {/* ── DE LA BRUTA A LA NETA: la cuenta completa, para que los números cierren ── */}
+        <div style={{ marginTop: 14, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12.5, padding: "3px 0" }}>
+            <span style={{ color: "rgba(255,255,255,.65)" }}>Utilidad bruta</span>
+            <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{money(utilEsperada)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12.5, padding: "3px 0" }}>
+            <span style={{ color: "rgba(255,255,255,.65)" }}>
+              − Costo de estructura
+              {estructuraTotal > 0 && utilEsperada > 0 && (
+                <span style={{ color: "rgba(255,255,255,.42)" }}> ({(estructuraTotal / utilEsperada * 100).toFixed(1)}% de la bruta)</span>
+              )}
+            </span>
+            <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#FCA5A5" }}>−{money(estructuraTotal)}</span>
+          </div>
+
+          <div style={{ marginTop: 9, paddingTop: 11, borderTop: "1px solid rgba(255,255,255,.22)", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: BRASS, letterSpacing: "0.08em", textTransform: "uppercase" }}>Utilidad neta esperada</div>
+              <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.55)", marginTop: 2 }}>
+                Margen {margenNeto.toFixed(1)}%{m2Totales > 0 ? ` · ${money(netaPorM2)}/m²` : ""}
+              </div>
+            </div>
+            <div style={{ fontSize: 27, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: utilNeta >= 0 ? "#7DE0A6" : "#FCA5A5", letterSpacing: "-0.01em" }}>
+              {money(utilNeta)}
+            </div>
+          </div>
+
+          {estructuraTotal <= 0 && (
+            <div style={{ fontSize: 10.5, color: "#FCD34D", marginTop: 9, lineHeight: 1.45 }}>
+              No cargaste el costo de estructura, así que la neta es igual a la bruta. Cargalo en “Estructura” para ver lo que te queda de verdad.
+            </div>
+          )}
+          {sinPlazo.length > 0 && (
+            <div style={{ fontSize: 10.5, color: "#FCD34D", marginTop: 9, lineHeight: 1.45 }}>
+              {sinPlazo.length} obra{sinPlazo.length === 1 ? "" : "s"} sin plazo cargado ({money(utilSinPlazo)} de utilidad): no se le{sinPlazo.length === 1 ? "" : "s"} puede imputar estructura, y no entra{sinPlazo.length === 1 ? "" : "n"} en la proyección mensual de abajo.
+            </div>
+          )}
         </div>
 
         {obrasIncompletas > 0 && <div style={{ fontSize: 11, color: "#FCD34D", marginTop: 11, lineHeight: 1.45 }}>Ojo: {obrasIncompletas} obra{obrasIncompletas === 1 ? "" : "s"} sin m², precio o costo cargado. El número va a cambiar cuando los completes.</div>}
@@ -2534,9 +2591,9 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
 
     {hayPlazo && <div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Resultado esperado (proyección)</div>
-      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12 }}>Utilidad total y flujo mensual según el plazo de cada obra (ya descontada la estructura).</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12 }}>Cómo se reparte mes a mes la utilidad neta de arriba, según el plazo de cada obra.{sinPlazo.length > 0 ? " Las obras sin plazo no aparecen acá." : ""}</div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <div style={{ flex: 1, background: T.bg, borderRadius: 11, padding: "11px 12px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Utilidad esperada total</div><div style={{ fontSize: 16, fontWeight: 700, color: utilEsperadaNeta >= 0 ? T.ok : "#EF4444", marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{money(utilEsperadaNeta)}</div></div>
+        <div style={{ flex: 1, background: T.bg, borderRadius: 11, padding: "11px 12px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Suma de la proyección{sinPlazo.length > 0 ? " (solo obras con plazo)" : ""}</div><div style={{ fontSize: 16, fontWeight: 700, color: utilEsperadaNeta >= 0 ? T.ok : "#EF4444", marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{money(utilEsperadaNeta)}</div></div>
         <div style={{ flex: 1, background: T.bg, borderRadius: 11, padding: "11px 12px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>Promedio por mes</div><div style={{ fontSize: 16, fontWeight: 700, color: T.accent, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{money(utilMensualProm)}</div></div>
       </div>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Flujo de utilidad por mes</div>
