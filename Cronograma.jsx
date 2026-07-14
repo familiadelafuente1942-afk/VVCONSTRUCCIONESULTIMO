@@ -185,6 +185,46 @@ function diasEntre(a, b) {
   if (isNaN(da.getTime()) || isNaN(db.getTime())) return 0;
   return Math.round((db - da) / DIA);
 }
+/* ═══ DÍAS HÁBILES ═══
+   Se trabaja de lunes a viernes. Las duraciones de las tareas se cuentan en días
+   hábiles; las fechas del calendario salen salteando sábados y domingos.        */
+function esHabil(iso) {
+  if (!iso) return false;
+  const d = new Date(iso + "T12:00:00");
+  if (isNaN(d.getTime())) return false;
+  const dow = d.getDay();          // 0 domingo … 6 sábado
+  return dow >= 1 && dow <= 5;
+}
+/* el primer día hábil desde una fecha (si cae finde, se corre al lunes) */
+function primerHabil(iso) {
+  let f = iso;
+  for (let i = 0; i < 7; i++) { if (esHabil(f)) return f; f = isoMas(f, 1); }
+  return iso;
+}
+/* la fecha del n-ésimo día hábil contando desde 'inicio' (n = 0 → el primero) */
+function habilDesde(inicio, n) {
+  if (!inicio) return "";
+  let f = primerHabil(inicio);
+  let quedan = Math.max(0, Math.round(numSimple(n)));
+  let guarda = 0;
+  while (quedan > 0 && guarda < 20000) {
+    f = isoMas(f, 1);
+    if (esHabil(f)) quedan--;
+    guarda++;
+  }
+  return f;
+}
+/* cuántos días hábiles hay entre dos fechas (contando la primera, sin la última) */
+function habilesEntre(a, b) {
+  if (!a || !b) return 0;
+  if (a > b) return -habilesEntre(b, a);
+  let n = 0, f = a, guarda = 0;
+  while (f < b && guarda < 20000) { if (esHabil(f)) n++; f = isoMas(f, 1); guarda++; }
+  return n;
+}
+const DOW = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const dowDe = (iso) => { const d = new Date(iso + "T12:00:00"); return isNaN(d.getTime()) ? 0 : d.getDay(); };
+
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 function fmtFecha(iso) {
   if (!iso) return "—";
@@ -215,10 +255,10 @@ const money = (n) => "$" + Math.round(numSimple(n)).toLocaleString("es-AR");
    Las definiciones salen del informe técnico de V+V: cuántos días antes hace falta,
    por qué la obra la necesita, y qué pasa si llega tarde.                            */
 const PLANTILLA_BASE = [
-  { cod: "OBR", etapa: "Preliminares", nombre: "Obrador, cerco y replanteo", dias: 10, deps: [], peso: 1.5, defs: [] },
-  { cod: "EXC", etapa: "Preliminares", nombre: "Excavación y movimiento de suelos", dias: 12, deps: [{ cod: "OBR", tipo: "FC", lag: 0 }], peso: 2, defs: [] },
+  { cod: "OBR", etapa: "Preliminares", nombre: "Obrador, cerco y replanteo", dias: 7, deps: [], peso: 1.5, materiales: ["Cerco de obra", "Cartelería"], defs: [] },
+  { cod: "EXC", etapa: "Preliminares", nombre: "Excavación y movimiento de suelos", dias: 9, deps: [{ cod: "OBR", tipo: "FC", lag: 0 }], peso: 2, materiales: ["Máquina y camiones"], defs: [] },
 
-  { cod: "FUN", etapa: "Estructura", nombre: "Fundaciones y platea", dias: 18, deps: [{ cod: "EXC", tipo: "FC", lag: 0 }], peso: 6, defs: [
+  { cod: "FUN", etapa: "Estructura", nombre: "Fundaciones y platea", dias: 13, deps: [{ cod: "EXC", tipo: "FC", lag: 0 }], peso: 6, materiales: ["Hierro y hormigón", "Film de polietileno"], defs: [
     { nombre: "Piso radiante: ¿lleva o no?", diasAntes: 90,
       porQue: "Necesita la cañería embutida dentro de la carpeta. Define el paquete de platea y el espesor del contrapiso.",
       consecuencia: "Imposible de agregar después sin romper toda la carpeta del ambiente.",
@@ -228,9 +268,9 @@ const PLANTILLA_BASE = [
       consecuencia: "Sin obra mayor, no se puede agregar un conducto de humos correcto una vez cerrada la estructura.",
       plazoReal: "Debe ser de las primeras definiciones de todo el proyecto" },
   ] },
-  { cod: "EST", etapa: "Estructura", nombre: "Estructura de hormigón armado", dias: 60, deps: [{ cod: "FUN", tipo: "FC", lag: 0 }], peso: 16, defs: [] },
+  { cod: "EST", etapa: "Estructura", nombre: "Estructura de hormigón armado", dias: 43, deps: [{ cod: "FUN", tipo: "FC", lag: 0 }], peso: 16, materiales: ["Hierro, encofrados y hormigón"], defs: [] },
 
-  { cod: "MAM", etapa: "Albañilería", nombre: "Mampostería", dias: 45, deps: [{ cod: "EST", tipo: "CC", lag: 45 }], peso: 9, defs: [
+  { cod: "MAM", etapa: "Albañilería", nombre: "Mampostería", dias: 32, deps: [{ cod: "EST", tipo: "CC", lag: 32 }], peso: 9, materiales: ["Ladrillos, cemento, cal", "Dinteles"], defs: [
     { nombre: "Carpintería: puertas y ventanas (modelo y medida exacta)", diasAntes: 60,
       porQue: "El vano —la abertura en la pared— se construye a la medida exacta del marco elegido.",
       consecuencia: "Vano mal dimensionado; rotura de mampostería para ajustar.",
@@ -240,25 +280,25 @@ const PLANTILLA_BASE = [
       consecuencia: "Apertura de pases ya cerrados; riesgo de filtraciones por pases mal ubicados.",
       plazoReal: "15 a 30 días, según stock del equipo" },
   ] },
-  { cod: "CUB", etapa: "Albañilería", nombre: "Cubierta y techos", dias: 25, deps: [{ cod: "MAM", tipo: "CC", lag: 35 }], peso: 5, defs: [] },
+  { cod: "CUB", etapa: "Albañilería", nombre: "Cubierta y techos", dias: 18, deps: [{ cod: "MAM", tipo: "CC", lag: 25 }], peso: 5, materiales: ["Material de cubierta", "Aislaciones"], defs: [] },
 
-  { cod: "SAN", etapa: "Instalaciones", nombre: "Instalación sanitaria (bajo losa y muros)", dias: 30, deps: [{ cod: "MAM", tipo: "CC", lag: 45 }], peso: 4, defs: [
+  { cod: "SAN", etapa: "Instalaciones", nombre: "Instalación sanitaria (bajo losa y muros)", dias: 21, deps: [{ cod: "MAM", tipo: "CC", lag: 32 }], peso: 4, materiales: ["Cañería sanitaria", "Artefactos ya definidos"], defs: [
     { nombre: "Griferías y artefactos sanitarios (bidé, inodoro, vanitory, ducha)", diasAntes: 45,
       porQue: "Cada modelo tiene una distancia entre ejes distinta; la cañería se embute con esa medida exacta.",
       consecuencia: "Rotura de revoque o cerámica ya colocada, para reubicar los caños.",
       plazoReal: "20 a 45 días" },
   ] },
-  { cod: "ELE", etapa: "Instalaciones", nombre: "Instalación eléctrica (cañerías)", dias: 30, deps: [{ cod: "MAM", tipo: "CC", lag: 50 }], peso: 4, defs: [
+  { cod: "ELE", etapa: "Instalaciones", nombre: "Instalación eléctrica (cañerías)", dias: 21, deps: [{ cod: "MAM", tipo: "CC", lag: 36 }], peso: 4, materiales: ["Caños corrugados, cajas", "Tablero"], defs: [
     { nombre: "Cantidad y ubicación de bocas eléctricas y circuitos especiales", diasAntes: 30,
       porQue: "Las cañerías eléctricas se embuten en pared o losa antes del revoque grueso. Incluye TV, datos, cortinas y domótica.",
       consecuencia: "Cableado visto, o rotura de pared para agregar una boca.",
       plazoReal: "La decisión es rápida, pero bloquea la tarea si se demora" },
   ] },
-  { cod: "GAS", etapa: "Instalaciones", nombre: "Instalación de gas", dias: 15, deps: [{ cod: "SAN", tipo: "CC", lag: 20 }], peso: 1.5, defs: [] },
-  { cod: "AIR", etapa: "Instalaciones", nombre: "Aire acondicionado (cañerías y pases)", dias: 20, deps: [{ cod: "SAN", tipo: "CC", lag: 20 }], peso: 3, defs: [] },
-  { cod: "RAD", etapa: "Instalaciones", nombre: "Piso radiante (colocación)", dias: 15, deps: [{ cod: "SAN", tipo: "FC", lag: 10 }], peso: 2, defs: [] },
+  { cod: "GAS", etapa: "Instalaciones", nombre: "Instalación de gas", dias: 11, deps: [{ cod: "SAN", tipo: "CC", lag: 14 }], peso: 1.5, materiales: ["Cañería de gas", "Artefactos a gas"], defs: [] },
+  { cod: "AIR", etapa: "Instalaciones", nombre: "Aire acondicionado (cañerías y pases)", dias: 14, deps: [{ cod: "SAN", tipo: "CC", lag: 14 }], peso: 3, materiales: ["Equipos de A/A", "Cañería frigorífica"], defs: [] },
+  { cod: "RAD", etapa: "Instalaciones", nombre: "Piso radiante (colocación)", dias: 11, deps: [{ cod: "SAN", tipo: "FC", lag: 7 }], peso: 2, materiales: ["Caños y colector de piso radiante"], defs: [] },
 
-  { cod: "CPI", etapa: "Albañilería", nombre: "Contrapisos", dias: 20, deps: [{ cod: "RAD", tipo: "FC", lag: 0 }], peso: 4, defs: [
+  { cod: "CPI", etapa: "Albañilería", nombre: "Contrapisos", dias: 14, deps: [{ cod: "RAD", tipo: "FC", lag: 0 }], peso: 4, materiales: ["Hormigón de contrapiso"], defs: [
     { nombre: "Muebles de cocina (bajo mesada, alacenas, isla, electrodomésticos)", diasAntes: 90,
       porQue: "Definen la banquina de apoyo, el nivel de piso bajo el mueble y la ubicación exacta de agua, gas, desagüe y tomas eléctricas.",
       consecuencia: "Rotura de contrapiso y mampostería para reubicar instalaciones; atraso de toda la cocina.",
@@ -268,30 +308,30 @@ const PLANTILLA_BASE = [
       consecuencia: "Base mal dimensionada; hay que romper y rehacer la fundación del equipo.",
       plazoReal: "15 a 30 días" },
   ] },
-  { cod: "CAR", etapa: "Albañilería", nombre: "Carpetas", dias: 15, deps: [{ cod: "CPI", tipo: "FC", lag: 0 }], peso: 2, defs: [
+  { cod: "CAR", etapa: "Albañilería", nombre: "Carpetas", dias: 11, deps: [{ cod: "CPI", tipo: "FC", lag: 0 }], peso: 2, materiales: ["Arena, cemento", "Malla si corresponde"], defs: [
     { nombre: "Tipo y espesor de piso por ambiente (porcelanato, madera, alfombra, piedra)", diasAntes: 60,
       porQue: "El nivel de la carpeta se calcula según el espesor del piso definitivo, para que todos los ambientes queden a nivel entre sí.",
       consecuencia: "Escalón entre ambientes, o rotura de carpeta para volver a nivelar.",
       plazoReal: "30 a 60 días si es importado o de pedido especial" },
   ] },
 
-  { cod: "RGR", etapa: "Terminaciones", nombre: "Revoque grueso", dias: 30, deps: [{ cod: "CPI", tipo: "CC", lag: 15 }], peso: 4.5, defs: [] },
-  { cod: "CPT", etapa: "Terminaciones", nombre: "Colocación de carpinterías", dias: 20, deps: [{ cod: "RGR", tipo: "CC", lag: 25 }], peso: 6, defs: [] },
-  { cod: "RFI", etapa: "Terminaciones", nombre: "Revoque fino y yesería", dias: 25, deps: [{ cod: "RGR", tipo: "FC", lag: 5 }], peso: 3, defs: [
+  { cod: "RGR", etapa: "Terminaciones", nombre: "Revoque grueso", dias: 21, deps: [{ cod: "CPI", tipo: "CC", lag: 11 }], peso: 4.5, materiales: ["Cal, cemento, arena"], defs: [] },
+  { cod: "CPT", etapa: "Terminaciones", nombre: "Colocación de carpinterías", dias: 14, deps: [{ cod: "RGR", tipo: "CC", lag: 18 }], peso: 6, materiales: ["CARPINTERÍAS FABRICADAS", "Herrajes y vidrios"], defs: [] },
+  { cod: "RFI", etapa: "Terminaciones", nombre: "Revoque fino y yesería", dias: 18, deps: [{ cod: "RGR", tipo: "FC", lag: 4 }], peso: 3, materiales: ["Yeso, enduido"], defs: [
     { nombre: "Terminación de revoques (liso, símil piedra, textura)", diasAntes: 20,
       porQue: "Define la técnica y el espesor de aplicación, previo a la pintura.",
       consecuencia: "Atraso de pintura y de toda la terminación final.",
       plazoReal: "La decisión es rápida, pero bloquea toda la etapa si no está" },
   ] },
-  { cod: "PIS", etapa: "Terminaciones", nombre: "Colocación de pisos", dias: 25, deps: [{ cod: "CAR", tipo: "FC", lag: 0 }, { cod: "RFI", tipo: "FC", lag: 0 }], peso: 6.5, defs: [] },
-  { cod: "REV", etapa: "Terminaciones", nombre: "Revestimientos de baños y cocina", dias: 20, deps: [{ cod: "PIS", tipo: "CC", lag: 10 }], peso: 3, defs: [] },
-  { cod: "PAR", etapa: "Terminaciones", nombre: "Parrilla y hogar (terminación)", dias: 12, deps: [{ cod: "PIS", tipo: "CC", lag: 25 }], peso: 1.5, defs: [] },
-  { cod: "MUE", etapa: "Terminaciones", nombre: "Muebles de cocina (colocación)", dias: 15, deps: [{ cod: "PIS", tipo: "FC", lag: 0 }], peso: 5, defs: [] },
-  { cod: "PLA", etapa: "Terminaciones", nombre: "Placards y carpintería interior", dias: 15, deps: [{ cod: "MUE", tipo: "CC", lag: 5 }], peso: 2.5, defs: [] },
-  { cod: "MES", etapa: "Terminaciones", nombre: "Mesadas y banquinas", dias: 12, deps: [{ cod: "MUE", tipo: "FC", lag: 0 }], peso: 2, defs: [] },
-  { cod: "PIN", etapa: "Terminaciones", nombre: "Pintura", dias: 25, deps: [{ cod: "MUE", tipo: "CC", lag: 20 }], peso: 3.5, defs: [] },
-  { cod: "ART", etapa: "Terminaciones", nombre: "Artefactos, griferías y bachas", dias: 12, deps: [{ cod: "PIN", tipo: "CC", lag: 15 }], peso: 1.5, defs: [] },
-  { cod: "FIN", etapa: "Cierre", nombre: "Limpieza final y entrega", dias: 10, deps: [{ cod: "PIN", tipo: "FC", lag: 0 }, { cod: "ART", tipo: "FC", lag: 0 }], peso: 1, defs: [] },
+  { cod: "PIS", etapa: "Terminaciones", nombre: "Colocación de pisos", dias: 18, deps: [{ cod: "CAR", tipo: "FC", lag: 0 }, { cod: "RFI", tipo: "FC", lag: 0 }], peso: 6.5, materiales: ["PIEZAS DE PISO", "Adhesivo y pastina"], defs: [] },
+  { cod: "REV", etapa: "Terminaciones", nombre: "Revestimientos de baños y cocina", dias: 14, deps: [{ cod: "PIS", tipo: "CC", lag: 7 }], peso: 3, materiales: ["REVESTIMIENTOS", "Adhesivo y pastina"], defs: [] },
+  { cod: "PAR", etapa: "Terminaciones", nombre: "Parrilla y hogar (terminación)", dias: 9, deps: [{ cod: "PIS", tipo: "CC", lag: 18 }], peso: 1.5, materiales: ["Parrilla u hogar"], defs: [] },
+  { cod: "MUE", etapa: "Terminaciones", nombre: "Muebles de cocina (colocación)", dias: 11, deps: [{ cod: "PIS", tipo: "FC", lag: 0 }], peso: 5, materiales: ["MUEBLES DE COCINA FABRICADOS", "Electrodomésticos empotrados"], defs: [] },
+  { cod: "PLA", etapa: "Terminaciones", nombre: "Placards y carpintería interior", dias: 11, deps: [{ cod: "MUE", tipo: "CC", lag: 4 }], peso: 2.5, materiales: ["Placards fabricados"], defs: [] },
+  { cod: "MES", etapa: "Terminaciones", nombre: "Mesadas y banquinas", dias: 9, deps: [{ cod: "MUE", tipo: "FC", lag: 0 }], peso: 2, materiales: ["MESADAS", "Bachas"], defs: [] },
+  { cod: "PIN", etapa: "Terminaciones", nombre: "Pintura", dias: 18, deps: [{ cod: "MUE", tipo: "CC", lag: 14 }], peso: 3.5, materiales: ["Pintura, fondos, selladores"], defs: [] },
+  { cod: "ART", etapa: "Terminaciones", nombre: "Artefactos, griferías y bachas", dias: 9, deps: [{ cod: "PIN", tipo: "CC", lag: 11 }], peso: 1.5, materiales: ["GRIFERÍAS Y ARTEFACTOS", "Bachas y accesorios"], defs: [] },
+  { cod: "FIN", etapa: "Cierre", nombre: "Limpieza final y entrega", dias: 7, deps: [{ cod: "PIN", tipo: "FC", lag: 0 }, { cod: "ART", tipo: "FC", lag: 0 }], peso: 1, materiales: ["Material de limpieza"], defs: [] },
 ];
 
 const ETAPAS = ["Preliminares", "Estructura", "Albañilería", "Instalaciones", "Terminaciones", "Cierre"];
@@ -310,6 +350,7 @@ function plantillaAObra(plantilla) {
     dias: Math.max(1, numSimple(t.dias)),
     deps: (t.deps || []).map(d => ({ cod: d.cod, tipo: d.tipo === "CC" ? "CC" : "FC", lag: numSimple(d.lag) })),
     peso: numSimple(t.peso),
+    materiales: [...(t.materiales || [])],
     avance: 0,
     certificado: false, pagado: false,
     bfInicio: "", bfFin: "",
@@ -435,9 +476,13 @@ function calcObra(obra, diasAviso, finanzas) {
   const hoy = hoyISO();
 
   const tareas = base.map(t => {
-    const vvInicio = isoMas(obra.inicio, t.es);
-    const vvFin = isoMas(obra.inicio, t.ef);
+    // el CPM da días HÁBILES; acá los paso a fechas reales, salteando sábados y domingos
+    const vvInicio = habilDesde(obra.inicio, t.es);
+    const vvFin = habilDesde(obra.inicio, t.ef - 1);   // el último día que se trabaja
     const desvio = (t.bfFin && vvFin) ? diasEntre(t.bfFin, vvFin) : null;
+    // posición en el calendario, para dibujar el Gantt (los meses son corridos)
+    const offCal = diasEntre(obra.inicio, vvInicio);
+    const durCal = diasEntre(vvInicio, vvFin) + 1;
 
     const defs = (t.defs || []).map(d => {
       const limite = isoMas(vvInicio, -numSimple(d.diasAntes));
@@ -454,11 +499,13 @@ function calcObra(obra, diasAviso, finanzas) {
     const arrancaEn = diasEntre(hoy, vvInicio);
     const bloqueada = trabas.length > 0 && arrancaEn <= aviso;
 
-    return { ...t, vvInicio, vvFin, desvio, defs, trabas, bloqueada, arrancaEn };
+    return { ...t, vvInicio, vvFin, desvio, defs, trabas, bloqueada, arrancaEn, offCal, durCal };
   });
 
-  const finDias = tareas.reduce((m, t) => Math.max(m, t.ef), 0);
-  const fin = isoMas(obra.inicio, finDias);
+  // el plazo se mide en días de CALENDARIO (los 12 meses son corridos, no hábiles)
+  const fin = tareas.reduce((m, t) => (!m || t.vvFin > m) ? t.vvFin : m, "");
+  const finDias = fin ? diasEntre(obra.inicio, fin) + 1 : 0;
+  const finHabiles = tareas.reduce((m, t) => Math.max(m, t.ef), 0);
   const meses = finDias / 30.44;
   const excede = finDias > TOPE_DIAS;
 
@@ -496,7 +543,7 @@ function calcObra(obra, diasAviso, finanzas) {
   const bloqueadas = conPlata.filter(t => t.bloqueada);
 
   return {
-    tareas: conPlata, finDias, fin, meses, excede,
+    tareas: conPlata, finDias, finHabiles, fin, meses, excede,
     defs, pendientes, vencidas, urgentes,
     pesoTotal, avancePond,
     contrato, costoTotal, ejecutado, certificado, pagado, costoEjec, sinCertificar,
@@ -630,8 +677,8 @@ function Gantt({ obra, plan, soloCriticas }) {
       </div>
 
       {lista.map(t => {
-        const izq = t.es / total * 100;
-        const ancho = Math.max(0.8, t.dias / total * 100);
+        const izq = t.offCal / total * 100;
+        const ancho = Math.max(0.8, t.durCal / total * 100);
         const col = t.critica ? T.critico : (COLOR_ETAPA[t.etapa] || T.accent);
         let bIzq = null, bAncho = null;
         if (t.bfInicio && t.bfFin) {
@@ -898,6 +945,230 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar }) {
         <Btn chico tipo="peligro" onClick={onBorrar}>Eliminar tarea</Btn>
       </div>
     </div>}
+  </div>);
+}
+
+/* ─── AGENDA: el calendario día por día, de lunes a viernes ───
+   Contesta la pregunta concreta: "¿qué pasa el día 24?" — qué arranca, qué material
+   tiene que estar en obra, qué definición vence y qué se está ejecutando.          */
+const MESES_LARGO = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+function Agenda({ obra, plan }) {
+  const hoy = hoyISO();
+  const mesDe = (iso) => (iso || hoy).slice(0, 7);
+  // arranco en el mes de hoy si la obra está en curso; si no, en el mes de inicio
+  const mesIni = mesDe(obra.inicio);
+  const mesFin = mesDe(plan.fin || obra.inicio);
+  const mesHoy = mesDe(hoy);
+  const arranque = (mesHoy >= mesIni && mesHoy <= mesFin) ? mesHoy : mesIni;
+  const [mes, setMes] = useState(arranque);
+  const [diaAbierto, setDiaAbierto] = useState(null);
+
+  /* qué pasa cada día */
+  const eventosDe = (d) => {
+    const arrancan = plan.tareas.filter(t => t.vvInicio === d);
+    const terminan = plan.tareas.filter(t => t.vvFin === d && t.vvInicio !== d);
+    const enCurso = plan.tareas.filter(t => t.vvInicio < d && t.vvFin > d);
+    const defs = plan.defs.filter(x => x.limite === d && !x.ok);
+    const materiales = arrancan.flatMap(t => (t.materiales || []).map(m => ({ mat: m, tarea: t.nombre, critica: t.critica })));
+    return { arrancan, terminan, enCurso, defs, materiales, hayAlgo: arrancan.length || terminan.length || defs.length || materiales.length };
+  };
+
+  /* armo la grilla del mes: filas = semanas, columnas = lunes a viernes */
+  const [anio, mm] = mes.split("-").map(Number);
+  const primero = `${anio}-${String(mm).padStart(2, "0")}-01`;
+  const diasEnMes = new Date(anio, mm, 0).getDate();
+  const semanas = [];
+  let semana = [null, null, null, null, null];
+  for (let dd = 1; dd <= diasEnMes; dd++) {
+    const iso = `${anio}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+    const dw = dowDe(iso);
+    if (dw === 0 || dw === 6) continue;          // sábado y domingo no se trabaja
+    const col = dw - 1;                            // lunes = 0 … viernes = 4
+    if (semana[col] !== null) { semanas.push(semana); semana = [null, null, null, null, null]; }
+    semana[col] = iso;
+    if (col === 4) { semanas.push(semana); semana = [null, null, null, null, null]; }
+  }
+  if (semana.some(x => x !== null)) semanas.push(semana);
+
+  /* navegación entre meses */
+  const mover = (n) => {
+    const d = new Date(anio, mm - 1 + n, 1);
+    const nuevo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (nuevo >= mesIni && nuevo <= mesFin) { setMes(nuevo); setDiaAbierto(null); }
+  };
+  const hayAntes = mes > mesIni, hayDespues = mes < mesFin;
+
+  /* los días del mes que tienen algo, para el listado de abajo */
+  const diasConAlgo = [];
+  for (let dd = 1; dd <= diasEnMes; dd++) {
+    const iso = `${anio}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+    if (!esHabil(iso)) continue;
+    const ev = eventosDe(iso);
+    if (ev.hayAlgo) diasConAlgo.push({ iso, dd, ev });
+  }
+
+  const btnMes = (act, on) => ({
+    background: act ? T.al : "transparent", border: `1px solid ${act ? T.border : "transparent"}`,
+    color: act ? T.accent : T.muted, borderRadius: 9, width: 34, height: 34,
+    fontSize: 16, fontWeight: 700, cursor: act ? "pointer" : "default", fontFamily: "inherit",
+  });
+
+  return (<div>
+    <div style={{ fontSize: 11.5, color: T.sub, lineHeight: 1.55, marginBottom: 12 }}>
+      Se trabaja de lunes a viernes. Tocá un día para ver qué arranca, qué material tiene que estar
+      en obra y qué definición vence.
+    </div>
+
+    {/* el mes */}
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+      <button onClick={() => mover(-1)} disabled={!hayAntes} style={{ ...btnMes(hayAntes) }}>‹</button>
+      <div style={{ flex: 1, textAlign: "center" }}>
+        <div style={{ fontSize: 15.5, fontWeight: 800, textTransform: "capitalize" }}>{MESES_LARGO[mm - 1]} {anio}</div>
+        <div style={{ fontSize: 10.5, color: T.muted }}>{diasConAlgo.length} días con movimiento</div>
+      </div>
+      <button onClick={() => mover(1)} disabled={!hayDespues} style={{ ...btnMes(hayDespues) }}>›</button>
+      {mesHoy >= mesIni && mesHoy <= mesFin && mes !== mesHoy && (
+        <button onClick={() => { setMes(mesHoy); setDiaAbierto(null); }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "8px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Hoy</button>
+      )}
+    </div>
+
+    {/* la grilla, lunes a viernes */}
+    <div style={{ background: T.card, borderRadius: 14, padding: 12, boxShadow: SHDsm }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 5, marginBottom: 5 }}>
+        {["LUN", "MAR", "MIÉ", "JUE", "VIE"].map(d => (
+          <div key={d} style={{ textAlign: "center", fontSize: 9.5, fontWeight: 800, color: T.muted, letterSpacing: ".05em" }}>{d}</div>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 5 }}>
+        {semanas.flat().map((iso, i) => {
+          if (!iso) return <div key={i} />;
+          const dd = Number(iso.slice(8, 10));
+          const ev = eventosDe(iso);
+          const esHoy = iso === hoy;
+          const sel = diaAbierto === iso;
+          const dentro = iso >= obra.inicio && iso <= plan.fin;
+          const hayDef = ev.defs.length > 0;
+          const vencida = ev.defs.some(d => d.estado === "vencida" || d.faltan <= 0);
+
+          // los colores de las etapas que están activas ese día
+          const etapasHoy = [...new Set([...ev.arrancan, ...ev.enCurso, ...ev.terminan].map(t => t.etapa))];
+
+          return (<button key={i} onClick={() => setDiaAbierto(sel ? null : iso)} style={{
+            position: "relative", minHeight: 52, borderRadius: 9, padding: "4px 3px 3px", cursor: "pointer",
+            background: sel ? T.accent : esHoy ? TONO.rojo().b : dentro ? (T.dark ? T.al : T.bg) : "transparent",
+            border: `1px solid ${sel ? T.accent : esHoy ? TONO.rojo().bd : "transparent"}`,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 2, fontFamily: "inherit",
+          }}>
+            <span style={{ fontSize: 12.5, fontWeight: esHoy || sel ? 800 : 600, color: sel ? "#fff" : esHoy ? TONO.rojo().c : dentro ? T.text : T.muted }}>{dd}</span>
+
+            {/* puntitos: una por etapa activa */}
+            <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
+              {etapasHoy.slice(0, 4).map(et => (
+                <span key={et} style={{ width: 5, height: 5, borderRadius: "50%", background: sel ? "#fff" : COLOR_ETAPA[et] }} />
+              ))}
+            </div>
+
+            {/* banderita: arranca una tarea */}
+            {ev.arrancan.length > 0 && (
+              <span style={{ fontSize: 8, fontWeight: 800, color: sel ? "#fff" : T.accent, lineHeight: 1 }}>▶{ev.arrancan.length > 1 ? ev.arrancan.length : ""}</span>
+            )}
+            {/* aviso: vence una definición */}
+            {hayDef && (
+              <span style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: "50%", background: vencida ? TONO.rojo().c : TONO.ambar().c }} />
+            )}
+          </button>);
+        })}
+      </div>
+
+      <div style={{ display: "flex", gap: 11, marginTop: 10, flexWrap: "wrap", fontSize: 9.5, color: T.sub }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 9, color: T.accent, fontWeight: 800 }}>▶</span> arranca una tarea</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: TONO.ambar().c }} /> vence una definición</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 5, height: 5, borderRadius: "50%", background: T.accent }} /> etapa en curso</span>
+      </div>
+    </div>
+
+    {/* el día que tocaste */}
+    {diaAbierto && <DiaDetalle iso={diaAbierto} ev={eventosDe(diaAbierto)} />}
+
+    {/* todo el mes, día por día */}
+    <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".06em", margin: "18px 0 4px" }}>
+      El mes, día por día
+    </div>
+    {diasConAlgo.length === 0 && (
+      <div style={{ background: T.card, borderRadius: 12, padding: 16, textAlign: "center", boxShadow: SHDsm }}>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>Este mes no arranca ni vence nada</div>
+        <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4 }}>Las tareas en curso siguen su ritmo.</div>
+      </div>
+    )}
+    {diasConAlgo.map(({ iso, dd, ev }) => <DiaDetalle key={iso} iso={iso} ev={ev} compacto />)}
+  </div>);
+}
+
+/* el detalle de un día */
+function DiaDetalle({ iso, ev, compacto }) {
+  const dw = dowDe(iso);
+  const dd = Number(iso.slice(8, 10));
+  const esHoy = iso === hoyISO();
+  return (<div style={{
+    background: T.card, borderRadius: 12, padding: 13, marginTop: 9, boxShadow: SHDsm,
+    borderLeft: `4px solid ${ev.defs.length ? TONO.ambar().c : ev.arrancan.length ? T.accent : T.border}`,
+  }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 7, marginBottom: 7 }}>
+      <span style={{ fontSize: 20, fontWeight: 800, color: esHoy ? TONO.rojo().c : T.text }}>{dd}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "capitalize" }}>{DOW[dw]}</span>
+      {esHoy && <Chip color={TONO.rojo().c} fondo={TONO.rojo().b}>HOY</Chip>}
+    </div>
+
+    {/* lo más importante: qué tiene que estar en obra */}
+    {ev.materiales.length > 0 && (
+      <div style={{ background: TONO.ambar().b, border: `1px solid ${TONO.ambar().bd}`, borderRadius: 10, padding: 10, marginBottom: 8 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: TONO.ambar().c, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>
+          Tiene que estar en obra
+        </div>
+        {ev.materiales.map((m, i) => (
+          <div key={i} style={{ fontSize: 12.5, fontWeight: 700, color: T.text, marginTop: 3 }}>
+            · {m.mat}
+            <span style={{ fontSize: 10.5, fontWeight: 500, color: T.muted }}> — para {m.tarea}</span>
+          </div>
+        ))}
+      </div>
+    )}
+
+    {ev.arrancan.map(t => (
+      <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "4px 0" }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0 }}>▶ ARRANCA</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.nombre}</span>
+        {t.critica && <Chip color={TONO.rojo().c} fondo={TONO.rojo().b}>CRÍTICA</Chip>}
+      </div>
+    ))}
+
+    {ev.terminan.map(t => (
+      <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "4px 0" }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: TONO.verde().c, flexShrink: 0 }}>■ TERMINA</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.nombre}</span>
+      </div>
+    ))}
+
+    {ev.defs.map(d => (
+      <div key={d.id} style={{ background: TONO.rojo().b, border: `1px solid ${TONO.rojo().bd}`, borderRadius: 10, padding: 9, marginTop: 6 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: TONO.rojo().c, textTransform: "uppercase", letterSpacing: ".05em" }}>Vence la definición</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 3 }}>{d.nombre}</div>
+        <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>Traba {d.tareaNombre}</div>
+      </div>
+    ))}
+
+    {!compacto && ev.enCurso.length > 0 && (
+      <div style={{ marginTop: 7, paddingTop: 7, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>En curso</div>
+        {ev.enCurso.map(t => (
+          <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+            <span style={{ width: 7, height: 7, borderRadius: 2, background: COLOR_ETAPA[t.etapa] || T.accent, flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: T.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.nombre}</span>
+          </div>
+        ))}
+      </div>
+    )}
   </div>);
 }
 
@@ -1235,6 +1506,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
 
   const VISTAS = [
     ["plan", "Cronograma"],
+    ["agenda", "Agenda"],
     ["viene", `Qué viene${plan.bloqueadas.length ? ` (${plan.bloqueadas.length})` : ""}`],
     ["defs", `Definiciones${plan.pendientes.length ? ` (${plan.pendientes.length})` : ""}`],
     ["reparto", "Reparto"],
@@ -1280,6 +1552,8 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
       </div>
       <Gantt obra={obra} plan={plan} soloCriticas={soloCrit} />
     </>}
+
+    {vista === "agenda" && <Agenda obra={obra} plan={plan} />}
 
     {vista === "viene" && <Lookahead plan={plan} obra={obra} onAvisar={avisar} />}
 
