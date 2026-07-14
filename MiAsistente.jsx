@@ -471,15 +471,25 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       let next;
       if (obraEdit._new) {
         if (!(obraEdit.nombre || "").trim()) { alert("Poné un nombre de obra."); return; }
-        const nueva = { id: uid() + Date.now(), nombre: obraEdit.nombre.trim(), estado: obraEdit.estado || "En curso", avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [] };
+        const nueva = { id: uid() + Date.now(), nombre: obraEdit.nombre.trim(), estado: obraEdit.estado || "En curso", avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion || "", obs: obraEdit.obs || [], fotos: [], videos: [], planos: [], informes: [], tareas: [] };
         next = [nueva, ...arr];
       } else {
-        next = arr.map(o => o.id === obraEdit.id ? { ...o, nombre: obraEdit.nombre, estado: obraEdit.estado, avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion } : o);
+        next = arr.map(o => o.id === obraEdit.id ? { ...o, nombre: obraEdit.nombre, estado: obraEdit.estado, avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion, obs: obraEdit.obs != null ? obraEdit.obs : (o.obs || []) } : o);
       }
       try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
       await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
       setDb(d => ({ ...d, obras: next })); setObraEdit(null);
     })();
+  }
+  // Actualiza las observaciones de una obra puntual (para el tilde rápido desde la tarjeta).
+  async function actualizarObs(obraId, obs) {
+    let arr = [];
+    try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+    if (!arr.length) arr = db.obras || [];
+    const next = arr.map(o => o.id === obraId ? { ...o, obs } : o);
+    try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
+    await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
+    setDb(d => ({ ...d, obras: next }));
   }
   async function subirAObra(obraId, e, tipo) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
@@ -786,7 +796,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "archivos" && <ArchivosBody archivos={archivos} cat={catArch} setCat={setCatArch} archRef={archRef} subir={subirArchivos} subiendo={subiendoArch} borrar={(id) => persistArch((archivos || []).filter(a => a.id !== id))} />}
     {vista === "modelos" && <ModelosBody modelos={modelos} sel={modeloSel} setSel={setModeloSel} subir={() => modeloRef.current && modeloRef.current.click()} borrar={(id) => { const next = (modelos || []).filter(m => m.id !== id); setModelos(next); if (modeloSel === id) setModeloSel(next[0]?.id || ""); storage.set("sebastian_modelos", JSON.stringify(next)).catch(() => { }); }} />}
-    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "" })} subirAObra={subirAObra} subiendo={subiendoArch} />}
+    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "", obs: [] })} subirAObra={subirAObra} subiendo={subiendoArch} actualizarObs={actualizarObs} />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
     <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -975,7 +985,41 @@ function ArchivosBody({ archivos, cat, setCat, archRef, subir, subiendo, borrar 
   </div>);
 }
 
-function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra, subiendo }) {
+/* Editor de "cosas a tener en cuenta" — observaciones numeradas.
+   Recibe la lista y una función para actualizarla. Cada obs: {id, txt, hecho}. */
+function ObsEditor({ lista, onChange, chico }) {
+  const [nuevo, setNuevo] = useState("");
+  const items = lista || [];
+  const agregar = () => {
+    const t = nuevo.trim();
+    if (!t) return;
+    onChange([...items, { id: uid() + Date.now(), txt: t, hecho: false }]);
+    setNuevo("");
+  };
+  const borrar = (id) => onChange(items.filter(x => x.id !== id));
+  const toggle = (id) => onChange(items.map(x => x.id === id ? { ...x, hecho: !x.hecho } : x));
+  const editar = (id, txt) => onChange(items.map(x => x.id === id ? { ...x, txt } : x));
+  const pend = items.filter(x => !x.hecho).length;
+  const pad = chico ? "9px" : "10px";
+  return (<div>
+    <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <span>Cosas a tener en cuenta</span>
+      {items.length > 0 && <span style={{ fontSize: 10, color: T.muted, fontWeight: 700 }}>{pend} pendiente{pend === 1 ? "" : "s"} · {items.length} en total</span>}
+    </div>
+    {items.map((it, i) => (<div key={it.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+      <button onClick={() => toggle(it.id)} title={it.hecho ? "Marcar como pendiente" : "Marcar como resuelto"} style={{ flexShrink: 0, width: 22, height: 22, marginTop: 2, borderRadius: 6, border: `1.5px solid ${it.hecho ? T.accent : T.border}`, background: it.hecho ? T.accent : "transparent", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>{it.hecho ? "✓" : ""}</button>
+      <span style={{ flexShrink: 0, marginTop: 4, fontSize: 12.5, fontWeight: 800, color: T.muted, minWidth: 16 }}>{i + 1}.</span>
+      <input value={it.txt} onChange={e => editar(it.id, e.target.value)} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: pad, fontSize: 15, color: it.hecho ? T.muted : T.text, textDecoration: it.hecho ? "line-through" : "none", boxSizing: "border-box" }} />
+      <button onClick={() => borrar(it.id)} style={{ flexShrink: 0, background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "4px 2px", marginTop: 2 }}>✕</button>
+    </div>))}
+    <div style={{ display: "flex", gap: 7, marginTop: items.length ? 4 : 0 }}>
+      <input value={nuevo} onChange={e => setNuevo(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} placeholder={items.length ? "Sumar otra observación…" : "Ej: Confirmar cota de piso terminado con Ayala"} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: pad, fontSize: 15, color: T.text, boxSizing: "border-box" }} />
+      <button onClick={agregar} style={{ flexShrink: 0, background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 8, padding: "0 15px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>＋</button>
+    </div>
+  </div>);
+}
+
+function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra, subiendo, actualizarObs }) {
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     {obraEdit && obraEdit._new && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Nueva obra</div>
@@ -984,6 +1028,9 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra,
       <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
         <input value={obraEdit.estado || ""} onChange={e => setObraEdit({ ...obraEdit, estado: e.target.value })} placeholder="Estado" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
         <input value={obraEdit.avance != null ? obraEdit.avance : ""} onChange={e => setObraEdit({ ...obraEdit, avance: e.target.value })} placeholder="Avance %" type="number" style={{ width: 100, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
+      </div>
+      <div style={{ paddingTop: 10, marginBottom: 12, borderTop: `1px solid ${T.border}` }}>
+        <ObsEditor lista={obraEdit.obs} onChange={obs => setObraEdit({ ...obraEdit, obs })} />
       </div>
       <div style={{ display: "flex", gap: 7 }}>
         <button onClick={() => setObraEdit(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
@@ -1000,6 +1047,9 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra,
           <input value={obraEdit.estado || ""} onChange={e => setObraEdit({ ...obraEdit, estado: e.target.value })} placeholder="Estado" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />
           <input value={obraEdit.avance != null ? obraEdit.avance : ""} onChange={e => setObraEdit({ ...obraEdit, avance: e.target.value })} placeholder="Avance %" type="number" style={{ width: 90, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />
         </div>
+        <div style={{ paddingTop: 10, marginBottom: 10, borderTop: `1px solid ${T.border}` }}>
+          <ObsEditor lista={obraEdit.obs} onChange={obs => setObraEdit({ ...obraEdit, obs })} chico />
+        </div>
         <div style={{ display: "flex", gap: 7 }}>
           <button onClick={() => setObraEdit(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
           <button onClick={guardar} style={{ flex: 1, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Guardar</button>
@@ -1008,10 +1058,18 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra,
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{o.nombre}</div>
           <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{o.estado || "sin estado"}{o.avance != null ? ` · ${o.avance}% avance` : ""}{o.direccion ? ` · ${o.direccion}` : ""}</div>
-          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3 }}>{(o.fotos || []).length} fotos · {(o.planos || []).length} planos · {(o.informes || []).length} informes</div>
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3 }}>{(o.fotos || []).length} fotos · {(o.planos || []).length} planos · {(o.informes || []).length} informes{(o.obs || []).filter(x => !x.hecho).length > 0 ? ` · ${(o.obs || []).filter(x => !x.hecho).length} pendiente${(o.obs || []).filter(x => !x.hecho).length === 1 ? "" : "s"}` : ""}</div>
         </div>
-        <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "" })} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Editar</button>
+        <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "", obs: o.obs || [] })} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Editar</button>
       </div>)}
+      {!(obraEdit && obraEdit.id === o.id) && (o.obs || []).length > 0 && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>A tener en cuenta</div>
+        {(o.obs || []).map((it, i) => (<div key={it.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 5 }}>
+          <button onClick={() => actualizarObs(o.id, (o.obs || []).map(x => x.id === it.id ? { ...x, hecho: !x.hecho } : x))} style={{ flexShrink: 0, width: 20, height: 20, marginTop: 1, borderRadius: 5, border: `1.5px solid ${it.hecho ? T.accent : T.border}`, background: it.hecho ? T.accent : "transparent", color: "#fff", fontSize: 11, fontWeight: 800, cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>{it.hecho ? "✓" : ""}</button>
+          <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 800, color: T.muted, marginTop: 2 }}>{i + 1}.</span>
+          <span style={{ flex: 1, fontSize: 13, color: it.hecho ? T.muted : T.text, textDecoration: it.hecho ? "line-through" : "none", lineHeight: 1.4 }}>{it.txt}</span>
+        </div>))}
+      </div>}
       {!(obraEdit && obraEdit.id === o.id) && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
         <div style={{ display: "flex", gap: 7 }}>
           <label style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: subiendo ? "default" : "pointer", opacity: subiendo ? .5 : 1 }}>📷 Foto<input type="file" accept="image/*" multiple disabled={subiendo} onChange={e => subirAObra(o.id, e, "foto")} style={{ display: "none" }} /></label>
