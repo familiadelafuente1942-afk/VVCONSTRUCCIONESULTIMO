@@ -1182,7 +1182,7 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
     const rows = (o.rubros || []).map(r => { const inc = num(r.pct); return `<tr><td>${r.nombre}</td><td class="ctr">${inc.toFixed(1)}%</td><td class="rgt">${money(inc / 100 * pc)}</td></tr>`; }).join("");
     const fp = o.firmasPresup || {};
     const firmaBox = (f, rol) => `<div style="width:240px;text-align:center">${f?.dataUrl ? `<img src="${f.dataUrl}" style="height:44px;display:block;margin:0 auto"/>` : `<div style="height:44px"></div>`}<div style="border-top:1px solid #0F1B2D;padding-top:5px;font-size:11px;color:#5B6B7F">${rol}${f?.nombre ? `<br><b style="color:#0F1B2D">${f.nombre}</b>` : "<br>&nbsp;"}${f?.codigo ? `<br><span style="font-size:8.5px;color:#94A3B8">Cód. ${f.codigo} · ${f.ts || ""}</span>` : ""}</div></div>`;
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Presupuesto ${o.nombre}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 34px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 40px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:10px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{text-align:right;font-size:11px;color:#cdd5e0}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 40px}.meta{display:flex;justify-content:space-between;margin:22px 0 6px;font-size:12.5px}.meta span{color:#5B6B7F}h2{font-size:12px;color:#5B6B7F;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px;border-bottom:1px solid #E3E8EF;padding-bottom:5px}p{font-size:12.5px;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#EAF0F7;color:#1B3A5B;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase}td{padding:8px 10px;border-bottom:1px solid #EEF1F5}.ctr{text-align:center}.rgt{text-align:right}.tot{margin-top:6px}.tot td{border:none;padding:4px 10px;font-size:13px}.tot .big td{border-top:2px solid #0F1B2D;font-size:17px;font-weight:800;color:#1B3A5B;padding-top:9px}.cond li{font-size:12px;margin:4px 0}.foot{display:flex;justify-content:space-between;font-size:11px;color:#5B6B7F;margin-top:54px}</style></head><body><div class="head">${brandHtml}<div class="doc"><b>PRESUPUESTO DE OBRA N° ${nro}</b>Fecha: ${fmtISO(hoyISO())}</div></div><div class="wrap"><div class="meta"><div><span>Obra:</span> <b>${o.nombre}</b></div><div><span>Comitente:</span> <b>${comitente}</b></div></div><p>Por medio del presente, <b>V+V Construcciones</b> presenta el presupuesto correspondiente a la ejecución de la obra <b>"${o.nombre}"</b>, con una superficie total de <b>${m2.toLocaleString("es-AR")} m²</b>, según el detalle de rubros e incidencias que se consigna a continuación. El presente documento tiene carácter de oferta formal y, una vez suscripto por las partes, constituye la aceptación del presupuesto de obra.</p><h2>Detalle por rubros</h2><table><thead><tr><th>Rubro</th><th class="ctr">Incidencia</th><th class="rgt">Monto</th></tr></thead><tbody>${rows}</tbody></table><table class="tot"><tr><td class="rgt">Superficie</td><td class="rgt">${m2.toLocaleString("es-AR")} m²</td></tr><tr><td class="rgt">Precio unitario</td><td class="rgt">${money(precio)} /m²</td></tr><tr class="big"><td class="rgt">TOTAL PRESUPUESTO</td><td class="rgt">${money(pc)}</td></tr></table><h2>Condiciones</h2><ul class="cond"><li><b>Anticipo:</b> ${o.anticipoTipo === "monto" ? money(num(o.anticipoMontoFijo)) : num(o.anticipoPct) + "% del total"} a la firma del presente, a descontar proporcionalmente de cada certificación.</li><li><b>Forma de pago:</b> saldo contra certificaciones de avance de obra.</li><li><b>Redeterminación:</b> los valores se ajustarán por el índice de la Cámara Argentina de la Construcción (CAC), tomando como mes base ${mesLabel(o.mesBase)}.</li><li><b>Validez de la oferta:</b> 15 días corridos desde la fecha.</li></ul><div class="foot">${firmaBox(fp.contratista, "Contratista · V+V Construcciones")}${firmaBox(fp.cliente, "Comitente / Propietario — Acepta el presupuesto")}</div></div></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Presupuesto ${o.nombre}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 34px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 40px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:10px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{text-align:right;font-size:11px;color:#cdd5e0}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 40px}.meta{display:flex;justify-content:space-between;margin:22px 0 6px;font-size:12.5px}.meta span{color:#5B6B7F}h2{font-size:12px;color:#5B6B7F;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px;border-bottom:1px solid #E3E8EF;padding-bottom:5px}p{font-size:12.5px;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#EAF0F7;color:#1B3A5B;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase}td{padding:8px 10px;border-bottom:1px solid #EEF1F5}.ctr{text-align:center}.rgt{text-align:right}.tot{margin-top:6px}.tot td{border:none;padding:4px 10px;font-size:13px}.tot .big td{border-top:2px solid #0F1B2D;font-size:17px;font-weight:800;color:#1B3A5B;padding-top:9px}.cond li{font-size:12px;margin:4px 0}.foot{display:flex;justify-content:space-between;font-size:11px;color:#5B6B7F;margin-top:54px}</style></head><body><div class="head">${brandHtml}<div class="doc"><b>PRESUPUESTO DE OBRA N° ${nro}</b>Fecha: ${fmtISO(hoyISO())}</div></div><div class="wrap"><div class="meta"><div><span>Obra:</span> <b>${o.nombre}</b></div><div><span>Comitente:</span> <b>${comitente}</b></div></div><p>Por medio del presente, <b>V+V Construcciones</b> presenta el presupuesto correspondiente a la ejecución de la obra <b>"${o.nombre}"</b>, con una superficie total de <b>${m2.toLocaleString("es-AR")} m²</b> a un valor de <b>${money(precio)} por m²</b>, según el detalle de rubros e incidencias que se consigna a continuación. El presente documento tiene carácter de oferta formal y, una vez suscripto por las partes, constituye la aceptación del presupuesto de obra.</p><h2>Detalle por rubros</h2><table><thead><tr><th>Rubro</th><th class="ctr">Incidencia</th><th class="rgt">Monto</th></tr></thead><tbody>${rows}</tbody></table><table class="tot"><tr><td class="rgt">Superficie</td><td class="rgt">${m2.toLocaleString("es-AR")} m²</td></tr><tr><td class="rgt">Precio por m²</td><td class="rgt"><b>${money(precio)}</b> /m²</td></tr><tr><td class="rgt" style="color:#94A3B8;font-size:11px">${m2.toLocaleString("es-AR")} m² × ${money(precio)}/m²</td><td class="rgt" style="color:#94A3B8;font-size:11px">=</td></tr><tr class="big"><td class="rgt">TOTAL PRESUPUESTO</td><td class="rgt">${money(pc)}</td></tr></table><h2>Condiciones</h2><ul class="cond"><li><b>Anticipo:</b> ${o.anticipoTipo === "monto" ? money(num(o.anticipoMontoFijo)) : num(o.anticipoPct) + "% del total"} a la firma del presente, a descontar proporcionalmente de cada certificación.</li><li><b>Forma de pago:</b> saldo contra certificaciones de avance de obra.</li><li><b>Redeterminación:</b> los valores se ajustarán por el índice de la Cámara Argentina de la Construcción (CAC), tomando como mes base ${mesLabel(o.mesBase)}.</li><li><b>Validez de la oferta:</b> 15 días corridos desde la fecha.</li></ul><div class="foot">${firmaBox(fp.contratista, "Contratista · V+V Construcciones")}${firmaBox(fp.cliente, "Comitente / Propietario — Acepta el presupuesto")}</div></div></body></html>`;
     setPdfHtmlP(html);
   }
   const setRub = (i, k, v) => setForm(f => ({
@@ -2403,6 +2403,150 @@ ${contextoDatos(data)}`;
     </div>
   </div>);
 }
+/* ─── LA PLANILLA DE ESTRUCTURA ───
+   Quién cobra, cuánto y por qué concepto. El total es el costo fijo mensual
+   que después se reparte entre las obras. */
+const CONCEPTOS_EST = [
+  ["sueldo", "Sueldo", "#1B3A5B"],
+  ["honorarios", "Honorarios", "#3B6E9E"],
+  ["oficina", "Oficina", "#B0894F"],
+  ["vehiculo", "Vehículo", "#8B6F47"],
+  ["servicios", "Servicios", "#6B7280"],
+  ["otro", "Otro", "#98A2B0"],
+];
+const conceptoDe = (k) => CONCEPTOS_EST.find(c => c[0] === k) || CONCEPTOS_EST[5];
+
+function PlanillaEstructura({ data, save }) {
+  const est = data.estructura || {};
+  const items = est.items || [];
+  const [abrir, setAbrir] = useState(false);
+  const [f, setF] = useState({ nombre: "", rol: "", monto: "", concepto: "sueldo" });
+
+  const setItems = (next) => save({ ...data, estructura: { ...(data.estructura || {}), items: next } });
+
+  const agregar = () => {
+    if (!f.nombre.trim()) return;
+    setItems([...items, {
+      id: uid(), nombre: f.nombre.trim(), rol: f.rol.trim(),
+      monto: numMoney(f.monto), concepto: f.concepto, activo: true, ts: Date.now(),
+    }]);
+    setF({ nombre: "", rol: "", monto: "", concepto: "sueldo" });
+    setAbrir(false);
+  };
+  const editar = (id, k, v) => setItems(items.map(x => x.id === id ? { ...x, [k]: v } : x));
+  const borrar = (id) => {
+    const it = items.find(x => x.id === id);
+    if (!window.confirm(`¿Sacar "${it?.nombre || "esto"}" de la estructura?`)) return;
+    setItems(items.filter(x => x.id !== id));
+  };
+
+  const activos = items.filter(x => x.activo !== false);
+  const total = activos.reduce((a, x) => a + num(x.monto), 0);
+
+  // cuánto se lleva cada concepto
+  const porConcepto = CONCEPTOS_EST.map(([k, l, c]) => ({
+    k, l, c, monto: activos.filter(x => (x.concepto || "otro") === k).reduce((a, x) => a + num(x.monto), 0),
+  })).filter(x => x.monto > 0);
+
+  return (<div>
+    {items.map(it => {
+      const c = conceptoDe(it.concepto || "otro");
+      const off = it.activo === false;
+      return (<div key={it.id} style={{
+        display: "flex", alignItems: "center", gap: 8, padding: "9px 0",
+        borderBottom: `1px solid ${T.border}`, opacity: off ? 0.45 : 1,
+      }}>
+        <span style={{ width: 4, height: 30, borderRadius: 2, background: c[2], flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {it.nombre}{off && <span style={{ fontSize: 10, color: T.muted, fontWeight: 600 }}> · pausado</span>}
+          </div>
+          <div style={{ fontSize: 10.5, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {it.rol ? `${it.rol} · ` : ""}{c[1]}
+          </div>
+        </div>
+        <input
+          value={num(it.monto) ? fmtMiles(num(it.monto)) : ""}
+          onChange={e => editar(it.id, "monto", numMoney(e.target.value))}
+          inputMode="numeric" placeholder="0"
+          style={{ ...inpSm, width: 105, textAlign: "right", fontWeight: 700, flexShrink: 0 }}
+        />
+        <button
+          onClick={() => editar(it.id, "activo", off)}
+          title={off ? "Volver a contar" : "Pausar (no lo cuento este tiempo)"}
+          style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 7, padding: "6px 8px", fontSize: 11, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}>
+          {off ? "▸" : "❚❚"}
+        </button>
+        <button onClick={() => borrar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0, padding: "0 2px" }}>✕</button>
+      </div>);
+    })}
+
+    {items.length > 0 && (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 11, marginTop: 2, borderTop: `2px solid ${T.text}` }}>
+        <span style={{ fontSize: 13.5, fontWeight: 800 }}>
+          Total por mes
+          <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}> · {activos.length} ítem{activos.length === 1 ? "" : "s"}</span>
+        </span>
+        <span style={{ fontSize: 17, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{money(total)}</span>
+      </div>
+    )}
+
+    {porConcepto.length > 1 && (
+      <div style={{ display: "flex", gap: 3, marginTop: 10, borderRadius: 5, overflow: "hidden", height: 7 }}>
+        {porConcepto.map(x => (
+          <div key={x.k} title={`${x.l}: ${money(x.monto)}`} style={{ flex: x.monto, background: x.c }} />
+        ))}
+      </div>
+    )}
+    {porConcepto.length > 1 && (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 9, marginTop: 7 }}>
+        {porConcepto.map(x => (
+          <span key={x.k} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, color: T.sub }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: x.c }} />
+            {x.l} {total > 0 ? `${(x.monto / total * 100).toFixed(0)}%` : ""}
+          </span>
+        ))}
+      </div>
+    )}
+
+    {!abrir && (
+      <button onClick={() => setAbrir(true)} style={{
+        width: "100%", background: T.al, color: T.accent, border: `1px dashed ${T.border}`,
+        borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+        marginTop: items.length ? 12 : 0, fontFamily: "inherit",
+      }}>＋ Agregar sueldo o gasto fijo</button>
+    )}
+
+    {abrir && (<div style={{ background: T.bg, borderRadius: 11, padding: 12, marginTop: 10 }}>
+      <input value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} placeholder="Quién / qué (ej: Nicolás Arcusci, Alquiler oficina)" style={{ ...inp, marginTop: 0 }} />
+      <input value={f.rol} onChange={e => setF({ ...f, rol: e.target.value })} placeholder="Puesto o detalle (opcional)" style={inp} />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 9 }}>
+        {CONCEPTOS_EST.map(([k, l, c]) => (
+          <button key={k} onClick={() => setF({ ...f, concepto: k })} style={{
+            background: f.concepto === k ? c : T.card, color: f.concepto === k ? "#fff" : T.sub,
+            border: `1px solid ${f.concepto === k ? c : T.border}`, borderRadius: 8,
+            padding: "7px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+          }}>{l}</button>
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+        <span style={{ fontSize: 12.5, color: T.sub, fontWeight: 600 }}>Por mes $</span>
+        <input value={f.monto} onChange={e => setF({ ...f, monto: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, flex: 1, textAlign: "right", fontWeight: 700 }} />
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button onClick={() => { setAbrir(false); setF({ nombre: "", rol: "", monto: "", concepto: "sueldo" }); }} style={{ flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+        <button onClick={agregar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Agregar</button>
+      </div>
+    </div>)}
+
+    {items.length === 0 && !abrir && (
+      <div style={{ fontSize: 11, color: T.muted, marginTop: 8, lineHeight: 1.45 }}>
+        Todavía no cargaste la estructura en detalle. Podés poner el total a mano acá abajo, o cargar uno por uno para saber en qué se te va.
+      </div>
+    )}
+  </div>);
+}
+
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false); const [subtab, setSubtab] = useState("cliente");
   const [estimPct, setEstimPct] = useState("");
@@ -2416,7 +2560,14 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   </div>);
 
   const est = data.estructura || {};
-  const mensual = num(est.mensual), nObras = num(est.nObras);
+  // La estructura ahora se carga en detalle: quién cobra, cuánto y por qué concepto.
+  // Si hay planilla cargada, el mensual sale de la SUMA. Si no, se sigue usando el
+  // número suelto de siempre (para no romper lo que ya tenías cargado).
+  const itemsEst = (est.items || []).filter(x => x && x.activo !== false);
+  const totalItems = itemsEst.reduce((a, x) => a + num(x.monto), 0);
+  const hayPlanilla = (est.items || []).length > 0;
+  const mensual = hayPlanilla ? totalItems : num(est.mensual);
+  const nObras = num(est.nObras);
   const cuota = nObras > 0 ? mensual / nObras : 0; // costo fijo por obra por MES
   const cuotaQ = cuota / 2; // por quincena (cada certificado)
   const setEst = (k, v) => save({ ...data, estructura: { ...(data.estructura || {}), [k]: v } });
@@ -2733,10 +2884,34 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
 
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, boxShadow: SHDsm, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Costo fijo de estructura</div>
-      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10 }}>Capataz, administrativo, sobrestante, etc. (mensual). Se reparte entre las obras que indiques (incluí las que están fuera de esta app).</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}><span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Costo fijo mensual ($)</span><input value={mensual ? fmtMiles(mensual) : ""} onChange={e => setEst("mensual", numMoney(e.target.value))} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 130, textAlign: "right" }} /></div>
-      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}><span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Dividir entre (obras)</span><input value={nObras || ""} onChange={e => setEst("nObras", num(e.target.value))} inputMode="numeric" placeholder="Ej: 8" style={{ ...inp, marginTop: 0, width: 130, textAlign: "right" }} /></div>
-      {cuota > 0 && <div style={{ background: T.bg, borderRadius: 9, padding: 10, marginTop: 4 }}><Line t={`Por obra / mes (÷ ${nObras})`} v={money(cuota)} c={T.warn} /><Line t="Por certificado (quincena)" v={money(cuotaQ)} c={T.warn} /></div>}
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12 }}>Lo que pagás todos los meses aunque no haya obra: sueldos, oficina, camioneta. Cargá quién cobra y cuánto — el total se reparte entre las obras.</div>
+
+      <PlanillaEstructura data={data} save={save} />
+
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 12, marginBottom: 8 }}>
+        <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Dividir entre (obras simultáneas)</span>
+        <input value={nObras || ""} onChange={e => setEst("nObras", num(e.target.value))} inputMode="numeric" placeholder="Ej: 8" style={{ ...inp, marginTop: 0, width: 110, textAlign: "right" }} />
+      </div>
+
+      {!hayPlanilla && (
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>…o el total mensual, a mano ($)</span>
+          <input value={num(est.mensual) ? fmtMiles(num(est.mensual)) : ""} onChange={e => setEst("mensual", numMoney(e.target.value))} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 130, textAlign: "right" }} />
+        </div>
+      )}
+
+      {cuota > 0 && (
+        <div style={{ background: T.bg, borderRadius: 9, padding: 10, marginTop: 4 }}>
+          <Line t={`Total de estructura por mes`} v={money(mensual)} c={T.text} />
+          <Line t={`Por obra / mes (÷ ${nObras})`} v={money(cuota)} c={T.warn} />
+          <Line t="Por certificado (quincena)" v={money(cuotaQ)} c={T.warn} />
+        </div>
+      )}
+      {mensual > 0 && nObras <= 0 && (
+        <div style={{ background: "rgba(180,83,9,.10)", border: "1px solid rgba(180,83,9,.35)", borderRadius: 9, padding: 10, marginTop: 6, fontSize: 11.5, color: T.warn, fontWeight: 700 }}>
+          Falta poner entre cuántas obras se reparte. Sin eso, la estructura no se le imputa a ninguna obra.
+        </div>
+      )}
     </div>
 
     {Object.values(porObra).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px" }}>Todavía no hay certificados.</div>}
