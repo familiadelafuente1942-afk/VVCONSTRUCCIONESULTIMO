@@ -73,15 +73,101 @@ function SyncBanner() {
   </div>);
 }
 
-/* ═══════════════════ IDENTIDAD VISUAL (la de la suite) ═══════════════════ */
-const T = {
-  navy: "#0F1B2D", accent: "#1B3A5B", bg: "#F5F7FA", card: "#FFFFFF",
-  border: "#D8DEE6", text: "#0F1B2D", sub: "#5B6B7F", muted: "#94A3B8",
-  ok: "#16A34A", warn: "#F59E0B", danger: "#DC2626", critico: "#B91C1C",
-};
+/* ═══════════════════ IDENTIDAD VISUAL (el patrón de la suite) ═══════════════════ */
 const BRASS = "#B0894F";
+const T_LIGHT = {
+  navy: "#0B1622", accent: "#1B3A5B", al: "#EEF2F7", bg: "#F5F5F7", card: "#FFFFFF",
+  border: "#E8EAED", text: "#0B1622", sub: "#5B6673", muted: "#98A2B0",
+  ok: "#16A34A", warn: "#B45309", danger: "#DC2626", critico: "#B91C1C",
+  inpBg: "#FBFBFD", dark: false,
+};
+const T_DARK = {
+  navy: "#05070B", accent: "#7FB0EA", al: "#1B222C", bg: "#0C0F14", card: "#161B22",
+  border: "#2A313C", text: "#EEF1F5", sub: "#AEB6C2", muted: "#6C7683",
+  ok: "#3DDC84", warn: "#F5B44C", danger: "#F87171", critico: "#F87171",
+  inpBg: "#0F141B", dark: true,
+};
+let T = T_LIGHT;
 const SHD = "0 6px 22px rgba(15,27,45,.10)";
 const SHDsm = "0 2px 10px rgba(15,27,45,.06)";
+
+const buildInp = (t) => ({
+  width: "100%", padding: "10px 12px", fontSize: 14, border: `1px solid ${t.border}`,
+  borderRadius: 10, outline: "none", marginTop: 8, background: t.inpBg, color: t.text,
+  fontFamily: "inherit", boxSizing: "border-box",
+});
+const buildInpSm = (t) => ({ ...buildInp(t), padding: "7px 9px", fontSize: 13, marginTop: 0 });
+let inp = buildInp(T), inpSm = buildInpSm(T);
+
+const FUENTES = [
+  ["", "Inter", "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif"],
+  ["sistema", "Sistema", "-apple-system,system-ui,'Segoe UI',Roboto,sans-serif"],
+  ["serif", "Serif clásica", "'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif"],
+  ["redonda", "Redondeada", "'SF Pro Rounded','Varela Round',ui-rounded,system-ui,sans-serif"],
+  ["elegante", "Elegante", "'Optima','Avenir Next',Avenir,system-ui,sans-serif"],
+  ["mono", "Mono", "'SF Mono','JetBrains Mono',ui-monospace,Menlo,monospace"],
+];
+const fuenteDe = (cfg) => (FUENTES.find(x => x[0] === (cfg?.fuente || "")) || FUENTES[0])[2];
+
+const FONDOS = [
+  ["", "Claro", "#F5F5F7"],
+  ["perla", "Perla", "linear-gradient(160deg,#FFFFFF,#E7E9EE)"],
+  ["calido", "Cálido", "linear-gradient(160deg,#F6E8D2,#E7CFA6)"],
+  ["arena", "Arena", "linear-gradient(160deg,#EDE1CB,#D6C29E)"],
+  ["durazno", "Durazno", "linear-gradient(160deg,#F9E2D0,#F0C3A5)"],
+  ["rosa", "Rosa", "linear-gradient(160deg,#F6E0E8,#E9BFCE)"],
+  ["lavanda", "Lavanda", "linear-gradient(160deg,#E8E2F4,#CDC0E6)"],
+  ["azul", "Azul", "linear-gradient(160deg,#DCE8F6,#B4CEEC)"],
+  ["cielo", "Cielo", "linear-gradient(160deg,#D6EAF3,#AED4E6)"],
+  ["menta", "Menta", "linear-gradient(160deg,#D8EFE4,#AEDCC7)"],
+  ["salvia", "Salvia", "linear-gradient(160deg,#DFEAE0,#C0D6C6)"],
+  ["grafito", "Grafito", "linear-gradient(160deg,#E1E4EA,#C2C8D2)"],
+  ["navy", "Navy suave", "linear-gradient(160deg,#DDE3EE,#AAB6CC)"],
+  ["dorado", "Dorado", "linear-gradient(160deg,#F3EAD3,#DEC58A)"],
+];
+const FONDOS_DARK = [
+  ["", "Negro", "#0C0F14"],
+  ["carbon", "Carbón", "linear-gradient(160deg,#141A22,#05070B)"],
+  ["navy", "Navy", "linear-gradient(160deg,#0E1728,#06090F)"],
+  ["vino", "Vino", "linear-gradient(160deg,#1C1016,#0A0608)"],
+  ["bosque", "Bosque", "linear-gradient(160deg,#0E1613,#050807)"],
+  ["violeta", "Violeta", "linear-gradient(160deg,#16121F,#08060C)"],
+];
+function fondoDe(cfg) {
+  const dark = cfg?.modo === "oscuro";
+  if (cfg?.fondoUrl) {
+    const ov = dark ? "rgba(12,15,20,.82)" : "rgba(245,245,247,.82)";
+    return `linear-gradient(${ov},${ov}), url("${cfg.fondoUrl}") center/cover fixed no-repeat`;
+  }
+  if (dark) { const f = FONDOS_DARK.find(x => x[0] === (cfg?.fondoDark || "")); return f ? f[2] : "#0C0F14"; }
+  const f = FONDOS.find(x => x[0] === (cfg?.fondo || "")); return f ? f[2] : "#F5F5F7";
+}
+
+/* subir el logo o el fondo a la nube */
+async function subirArchivo(file) {
+  try {
+    const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+    const path = `cronograma/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+    const r = await fetch(`${SUPA_URL}/storage/v1/object/bco-media/${path}`, {
+      method: "POST",
+      headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": file.type || "application/octet-stream", "x-upsert": "true" },
+      body: file,
+    });
+    if (r.ok) return `${SUPA_URL}/storage/v1/object/public/bco-media/${path}`;
+  } catch { }
+  return "";
+}
+
+function descargarArchivo(nombre, contenido, tipo) {
+  try {
+    const blob = new Blob([contenido], { type: tipo || "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = nombre;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 300);
+  } catch { alert("No se pudo descargar."); }
+}
 
 /* ═══════════════════ FECHAS Y NÚMEROS ═══════════════════ */
 const DIA = 86400000;
@@ -443,18 +529,19 @@ async function crearPedido({ para, asunto, detalle, prioridad }) {
 }
 
 /* ═══════════════════ PIEZAS ═══════════════════ */
-const inp = {
-  width: "100%", padding: "10px 12px", fontSize: 14, border: `1px solid ${T.border}`,
-  borderRadius: 10, outline: "none", marginTop: 8, background: "#fff", color: T.text,
-  fontFamily: "inherit", boxSizing: "border-box",
-};
-const inpSm = { ...inp, padding: "7px 9px", fontSize: 13, marginTop: 0 };
+function Field({ label, children, hint }) {
+  return (<div style={{ marginBottom: 13 }}>
+    <label style={{ fontSize: 11, fontWeight: 600, color: T.sub, letterSpacing: ".02em" }}>{label}</label>
+    {children}
+    {hint && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>{hint}</div>}
+  </div>);
+}
 
 function Btn({ children, onClick, tipo = "primario", chico, full, disabled }) {
   const e = {
     primario: { background: T.accent, color: "#fff", border: "none" },
     suave: { background: T.bg, color: T.accent, border: `1px solid ${T.border}` },
-    peligro: { background: "#FEF2F2", color: T.danger, border: "1px solid #FECACA" },
+    peligro: { background: TONO.rojo().b, color: TONO.rojo().c, border: `1px solid ${TONO.rojo().bd}` },
     brass: { background: BRASS, color: "#fff", border: "none" },
   }[tipo];
   return (<button onClick={onClick} disabled={disabled} style={{
@@ -466,12 +553,29 @@ function Btn({ children, onClick, tipo = "primario", chico, full, disabled }) {
 function Chip({ children, color, fondo }) {
   return (<span style={{ background: fondo, color, borderRadius: 6, padding: "2px 7px", fontSize: 10.5, fontWeight: 800, whiteSpace: "nowrap" }}>{children}</span>);
 }
-const SEM = {
-  vencida: { c: T.danger, b: "#FEF2F2", l: "Vencida" },
-  urgente: { c: "#B45309", b: "#FFFBEB", l: "Urgente" },
-  futura: { c: T.sub, b: T.bg, l: "En plazo" },
-  ok: { c: T.ok, b: "#ECFDF5", l: "Definida" },
+/* Los tonos de aviso se adaptan al tema: en oscuro no pueden ser pasteles claros,
+   quedarían como parches encandilantes. Se usan velados sobre el fondo. */
+const TONO = {
+  rojo: () => T.dark
+    ? { c: "#F87171", b: "rgba(248,113,113,.13)", bd: "rgba(248,113,113,.32)" }
+    : { c: "#DC2626", b: "#FEF2F2", bd: "#FECACA" },
+  ambar: () => T.dark
+    ? { c: "#F5B44C", b: "rgba(245,180,76,.13)", bd: "rgba(245,180,76,.32)" }
+    : { c: "#B45309", b: "#FFFBEB", bd: "#FDE68A" },
+  verde: () => T.dark
+    ? { c: "#3DDC84", b: "rgba(61,220,132,.13)", bd: "rgba(61,220,132,.32)" }
+    : { c: "#16A34A", b: "#ECFDF5", bd: "#A7F3D0" },
+  gris: () => ({ c: T.sub, b: T.dark ? T.al : T.bg, bd: T.border }),
 };
+
+function semDe(est) {
+  const [tono, label] = {
+    vencida: ["rojo", "Vencida"], urgente: ["ambar", "Urgente"],
+    futura: ["gris", "En plazo"], ok: ["verde", "Definida"],
+  }[est] || ["gris", "En plazo"];
+  const t = TONO[tono]();
+  return { c: t.c, b: t.b, bd: t.bd, l: label };
+}
 
 /* ─── La firma: dos líneas de tiempo + el camino crítico marcado ─── */
 function Gantt({ obra, plan, soloCriticas }) {
@@ -480,56 +584,81 @@ function Gantt({ obra, plan, soloCriticas }) {
   const pctHoy = Math.max(0, Math.min(100, hoyOff / total * 100));
   const lista = soloCriticas ? plan.tareas.filter(t => t.critica) : plan.tareas;
 
-  return (<div style={{ background: T.card, borderRadius: 14, padding: "14px 16px 14px 14px", boxShadow: SHDsm, overflow: "hidden" }}>
-    <div style={{ position: "relative", height: 16, marginBottom: 8 }}>
+  // a todo el ancho: me salgo del margen de la página
+  const ANCHO = { marginLeft: -16, marginRight: -16 };
+  const PAD = 12;   // aire a los costados de las barras
+
+  return (<div style={{ ...ANCHO, background: T.card, boxShadow: SHDsm, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: "12px 0 14px" }}>
+
+    {/* regla de meses */}
+    <div style={{ position: "relative", height: 14, margin: `0 ${PAD}px 10px` }}>
       {Array.from({ length: 13 }).map((_, i) => {
-        const pct = (i * 30.44) / total * 100;
-        if (pct > 100) return null;
-        return (<div key={i} style={{ position: "absolute", left: `${pct}%`, top: 0, fontSize: 9, color: T.muted, fontWeight: 700, transform: "translateX(-50%)" }}>{i === 0 ? "0" : `m${i}`}</div>);
+        const pct = Math.min(100, (i * 30.44) / total * 100);
+        if ((i * 30.44) > total + 1) return null;
+        // el primero pegado a la izquierda, el último pegado a la derecha: así ninguno se corta
+        const tr = i === 0 ? "none" : pct >= 99 ? "translateX(-100%)" : "translateX(-50%)";
+        return (<div key={i} style={{
+          position: "absolute", left: `${pct}%`, top: 0, fontSize: 9, color: T.muted,
+          fontWeight: 700, transform: tr, whiteSpace: "nowrap",
+        }}>{i === 0 ? "inicio" : `m${i}`}</div>);
       })}
     </div>
 
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative", margin: `0 ${PAD}px` }}>
+      {/* la línea de hoy y el tope de los 12 meses, atraviesan todas las filas */}
       {hoyOff >= 0 && hoyOff <= total && (
-        <div style={{ position: "absolute", left: `${pctHoy}%`, top: -6, bottom: 0, width: 2, background: T.danger, zIndex: 4, opacity: .8 }} />
+        <div style={{ position: "absolute", left: `${pctHoy}%`, top: -4, bottom: 0, width: 2, background: T.danger, zIndex: 4, opacity: .8 }} />
       )}
       {plan.finDias > TOPE_DIAS && (
-        <div style={{ position: "absolute", left: `${TOPE_DIAS / total * 100}%`, top: -6, bottom: 0, width: 2, background: BRASS, zIndex: 4 }} />
+        <div style={{ position: "absolute", left: `${TOPE_DIAS / total * 100}%`, top: -4, bottom: 0, width: 2, background: BRASS, zIndex: 4 }} />
       )}
 
       {lista.map(t => {
         const izq = t.es / total * 100;
-        const ancho = Math.max(0.7, t.dias / total * 100);
+        const ancho = Math.max(0.8, t.dias / total * 100);
         const col = t.critica ? T.critico : (COLOR_ETAPA[t.etapa] || T.accent);
         let bIzq = null, bAncho = null;
         if (t.bfInicio && t.bfFin) {
           const o = diasEntre(obra.inicio, t.bfInicio);
           const d = Math.max(1, diasEntre(t.bfInicio, t.bfFin));
-          bIzq = o / total * 100; bAncho = Math.max(0.7, d / total * 100);
+          bIzq = o / total * 100; bAncho = Math.max(0.8, d / total * 100);
         }
-        return (<div key={t.id} style={{ marginBottom: 9 }}>
-          <div style={{ fontSize: 10.5, color: t.critica ? T.critico : T.sub, fontWeight: t.critica ? 800 : 600, marginBottom: 2, display: "flex", alignItems: "center", gap: 5 }}>
-            {t.bloqueada && <span title="bloqueada por una definición" style={{ width: 6, height: 6, borderRadius: "50%", background: T.danger, flexShrink: 0 }} />}
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.nombre}</span>
-            {t.critica && <span style={{ fontSize: 8.5, fontWeight: 800, color: T.critico, letterSpacing: ".04em", flexShrink: 0 }}>CRÍTICA</span>}
-            {!t.critica && t.holgura > 0 && <span style={{ fontSize: 9, color: T.muted, flexShrink: 0 }}>+{t.holgura}d</span>}
+        const avance = Math.max(0, Math.min(100, numSimple(t.avance)));
+
+        return (<div key={t.id} style={{ marginBottom: 11 }}>
+
+          {/* el nombre: se corta con puntos suspensivos, nunca empuja para afuera */}
+          <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3, minWidth: 0 }}>
+            {t.bloqueada && <span title="trabada por una definición" style={{ width: 6, height: 6, borderRadius: "50%", background: T.danger, flexShrink: 0 }} />}
+            <span style={{
+              flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              fontSize: 11, fontWeight: t.critica ? 800 : 600, color: t.critica ? T.critico : T.sub,
+            }}>{t.nombre}</span>
+            <span style={{
+              flexShrink: 0, fontSize: 8.5, fontWeight: 800, letterSpacing: ".03em",
+              color: t.critica ? T.critico : T.muted,
+            }}>{t.critica ? "CRÍTICA" : `+${t.holgura}d`}</span>
           </div>
-          <div style={{ position: "relative", height: bIzq !== null ? 17 : 8 }}>
-            {/* barra de avance dentro de la barra de plan */}
-            <div style={{ position: "absolute", left: `${izq}%`, width: `${ancho}%`, top: 0, height: 7, background: col, borderRadius: 4, opacity: .28 }} />
-            <div style={{ position: "absolute", left: `${izq}%`, width: `${ancho * numSimple(t.avance) / 100}%`, top: 0, height: 7, background: col, borderRadius: 4 }} />
+
+          {/* las barras */}
+          <div style={{ position: "relative", height: bIzq !== null ? 19 : 10 }}>
+            <div style={{ position: "absolute", left: 0, right: 0, top: 3, height: 4, background: T.bg, borderRadius: 2 }} />
+            <div style={{ position: "absolute", left: `${izq}%`, width: `${ancho}%`, top: 0, height: 10, background: col, borderRadius: 3, opacity: .35 }} />
+            {avance > 0 && (
+              <div style={{ position: "absolute", left: `${izq}%`, width: `${ancho * avance / 100}%`, top: 0, height: 10, background: col, borderRadius: 3 }} />
+            )}
             {bIzq !== null && (
-              <div style={{ position: "absolute", left: `${bIzq}%`, width: `${bAncho}%`, top: 10, height: 5, background: "transparent", border: `1.5px solid ${BRASS}`, borderRadius: 4 }} />
+              <div title="Belfast" style={{ position: "absolute", left: `${bIzq}%`, width: `${bAncho}%`, top: 12, height: 6, border: `1.5px solid ${BRASS}`, borderRadius: 3, boxSizing: "border-box" }} />
             )}
           </div>
         </div>);
       })}
     </div>
 
-    <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap", fontSize: 10, color: T.sub }}>
-      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 6, background: T.critico, borderRadius: 3 }} /> camino crítico</span>
-      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 6, background: T.accent, borderRadius: 3 }} /> V+V</span>
-      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 6, border: `1.5px solid ${BRASS}`, borderRadius: 3 }} /> Belfast</span>
+    <div style={{ display: "flex", gap: 12, margin: `10px ${PAD}px 0`, flexWrap: "wrap", fontSize: 10, color: T.sub }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 7, background: T.critico, borderRadius: 3 }} /> camino crítico</span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 7, background: T.accent, borderRadius: 3 }} /> V+V</span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 6, border: `1.5px solid ${BRASS}`, borderRadius: 3, boxSizing: "border-box" }} /> Belfast</span>
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 2, height: 10, background: T.danger }} /> hoy</span>
     </div>
   </div>);
@@ -583,14 +712,14 @@ function Hero({ obra, plan }) {
 
 /* ─── Una definición ─── */
 function FilaDef({ d, onToggle, onAvisar, onBorrar, onEditar, compacto }) {
-  const s = SEM[d.estado] || SEM.futura;
+  const s = semDe(d.estado);
   const [abierto, setAbierto] = useState(false);
   const [porQue, setPorQue] = useState(false);
-  return (<div style={{ background: s.b, borderRadius: 11, padding: "11px 12px", marginTop: 8, border: `1px solid ${d.estado === "vencida" ? "#FECACA" : T.border}` }}>
+  return (<div style={{ background: s.b, borderRadius: 11, padding: "11px 12px", marginTop: 8, border: `1px solid ${d.estado === "vencida" ? s.bd : T.border}` }}>
     <div style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
       <button onClick={onToggle} style={{
         width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1, cursor: "pointer",
-        border: `1.5px solid ${d.ok ? T.ok : T.border}`, background: d.ok ? T.ok : "#fff",
+        border: `1.5px solid ${d.ok ? T.ok : T.border}`, background: d.ok ? T.ok : T.card,
         color: "#fff", fontSize: 12, fontWeight: 800, lineHeight: 1, padding: 0,
       }}>{d.ok ? "✓" : ""}</button>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -607,7 +736,7 @@ function FilaDef({ d, onToggle, onAvisar, onBorrar, onEditar, compacto }) {
         )}
         {d.plazoReal && !d.ok && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Proceso real: {d.plazoReal}</div>}
       </div>
-      <Chip color={s.c} fondo="#fff">{s.l}</Chip>
+      <Chip color={s.c} fondo={T.card}>{s.l}</Chip>
     </div>
 
     {(d.porQue || d.consecuencia) && !d.ok && (
@@ -615,7 +744,7 @@ function FilaDef({ d, onToggle, onAvisar, onBorrar, onEditar, compacto }) {
         <button onClick={() => setPorQue(!porQue)} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0 }}>
           {porQue ? "▲ Ocultar" : "▼ Por qué no puede esperar"}
         </button>
-        {porQue && <div style={{ background: "#fff", borderRadius: 9, padding: 10, marginTop: 6 }}>
+        {porQue && <div style={{ background: T.card, borderRadius: 9, padding: 10, marginTop: 6 }}>
           {d.porQue && <div style={{ fontSize: 11.5, color: T.text, lineHeight: 1.55 }}><b>La obra la necesita para:</b> {d.porQue}</div>}
           {d.consecuencia && <div style={{ fontSize: 11.5, color: T.danger, lineHeight: 1.55, marginTop: 6 }}><b>Si llega tarde:</b> {d.consecuencia}</div>}
         </div>}
@@ -630,7 +759,7 @@ function FilaDef({ d, onToggle, onAvisar, onBorrar, onEditar, compacto }) {
       </div>
     )}
 
-    {abierto && <div style={{ marginTop: 9, background: "#fff", borderRadius: 9, padding: 10 }}>
+    {abierto && <div style={{ marginTop: 9, background: T.card, borderRadius: 9, padding: 10 }}>
       <input defaultValue={d.nombre} onBlur={e => onEditar({ nombre: e.target.value })} placeholder="Qué hay que definir" style={{ ...inpSm, marginBottom: 7 }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
         <span style={{ fontSize: 12, color: T.sub, flex: 1 }}>Días de anticipación</span>
@@ -674,9 +803,9 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar }) {
           )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-end" }}>
-          {rojas > 0 && <Chip color={T.danger} fondo="#FEF2F2">{rojas} vencida{rojas > 1 ? "s" : ""}</Chip>}
-          {ambar > 0 && <Chip color="#B45309" fondo="#FFFBEB">{ambar} urgente{ambar > 1 ? "s" : ""}</Chip>}
-          {t.avance > 0 && <Chip color={T.ok} fondo="#ECFDF5">{t.avance}%</Chip>}
+          {rojas > 0 && <Chip color={TONO.rojo().c} fondo={TONO.rojo().b}>{rojas} vencida{rojas > 1 ? "s" : ""}</Chip>}
+          {ambar > 0 && <Chip color={TONO.ambar().c} fondo={TONO.ambar().b}>{ambar} urgente{ambar > 1 ? "s" : ""}</Chip>}
+          {t.avance > 0 && <Chip color={TONO.verde().c} fondo={TONO.verde().b}>{t.avance}%</Chip>}
           <span style={{ fontSize: 11, color: T.muted }}>{ab ? "▲" : "▼"}</span>
         </div>
       </div>
@@ -837,22 +966,22 @@ function PanelPlata({ obra, plan, finanzas, onLigar, onEditar }) {
               {t.avance}% hecho · vale {money(t.valor)} · ejecutado {money(t.ejecutado)}
             </div>
           </div>
-          {t.avance >= 100 && <Chip color={T.ok} fondo="#ECFDF5">terminada</Chip>}
+          {t.avance >= 100 && <Chip color={TONO.verde().c} fondo={TONO.verde().b}>terminada</Chip>}
         </div>
         <div style={{ display: "flex", gap: 7, marginTop: 9 }}>
           <button onClick={() => onEditar(t.id, { certificado: !t.certificado })} style={{
             flex: 1, padding: "8px 6px", borderRadius: 9, fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
             border: `1px solid ${t.certificado ? T.ok : T.border}`,
-            background: t.certificado ? "#ECFDF5" : "#fff", color: t.certificado ? T.ok : T.sub,
+            background: t.certificado ? TONO.verde().b : T.card, color: t.certificado ? TONO.verde().c : T.sub,
           }}>{t.certificado ? "✓ Certificada" : "Certificar"}</button>
           <button onClick={() => onEditar(t.id, { pagado: !t.pagado })} style={{
             flex: 1, padding: "8px 6px", borderRadius: 9, fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
             border: `1px solid ${t.pagado ? T.ok : T.border}`,
-            background: t.pagado ? "#ECFDF5" : "#fff", color: t.pagado ? T.ok : T.sub,
+            background: t.pagado ? TONO.verde().b : T.card, color: t.pagado ? TONO.verde().c : T.sub,
           }}>{t.pagado ? "✓ Pagada" : "Marcar pagada"}</button>
         </div>
         {t.avance >= 100 && !t.certificado && (
-          <div style={{ fontSize: 11, color: "#B45309", marginTop: 7, fontWeight: 700 }}>
+          <div style={{ fontSize: 11, color: TONO.ambar().c, marginTop: 7, fontWeight: 700 }}>
             Terminada y sin certificar: {money(t.valor)} que podrías estar facturando.
           </div>
         )}
@@ -896,7 +1025,7 @@ function Lookahead({ plan, onAvisar, obra }) {
             </div>
             {t.critica && <div style={{ fontSize: 10.5, color: T.critico, fontWeight: 800, marginTop: 2 }}>CAMINO CRÍTICO — si se atrasa, se atrasa toda la obra</div>}
           </div>
-          <Chip color={lista ? T.ok : T.danger} fondo={lista ? "#ECFDF5" : "#FEF2F2"}>
+          <Chip color={lista ? TONO.verde().c : TONO.rojo().c} fondo={lista ? TONO.verde().b : TONO.rojo().b}>
             {lista ? "Lista" : `Traba: ${t.trabas.length}`}
           </Chip>
         </div>
@@ -986,7 +1115,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
         <span style={{ fontSize: 12, color: T.sub, flex: 1 }}>Inicio de obra</span>
         <input type="date" defaultValue={obra.inicio} onBlur={e => guardarObra(o => ({ ...o, inicio: e.target.value }))} style={{ ...inpSm, width: 150 }} />
       </div>
-      <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 11, padding: 12, marginBottom: 10 }}>
+      <div style={{ background: TONO.rojo().b, border: `1px solid ${TONO.rojo().bd}`, borderRadius: 11, padding: 12, marginBottom: 10 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.critico, textTransform: "uppercase", letterSpacing: ".05em" }}>El camino crítico</div>
         <div style={{ fontSize: 11.5, color: T.text, marginTop: 4, lineHeight: 1.55 }}>
           {plan.criticas.length} tareas sin holgura. Si cualquiera se atrasa un día, la obra entera termina un día más tarde.
@@ -1013,7 +1142,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
       {["vencida", "urgente", "futura", "ok"].map(est => {
         const g = plan.defs.filter(d => d.estado === est);
         if (!g.length) return null;
-        const s = SEM[est];
+        const s = semDe(est);
         return (<div key={est} style={{ marginTop: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: s.c, textTransform: "uppercase", letterSpacing: ".06em" }}>
             {est === "vencida" ? "Vencidas — frenan la obra" : est === "urgente" ? `Urgentes — dentro de ${diasAviso} días` : est === "futura" ? "Más adelante" : "Ya definidas"} ({g.length})
@@ -1067,11 +1196,157 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
   </div>);
 }
 
+
+/* ═══════════════════ PERSONALIZACIÓN (el mismo panel de toda la suite) ═══════════════════ */
+function ConfigModal({ data, save, onClose }) {
+  const cfg = data.config || {};
+  const [subiendo, setSubiendo] = useState(false);
+  const [subiendoFondo, setSubiendoFondo] = useState(false);
+  const setCfg = (k, v) => save({ ...data, config: { ...(data.config || {}), [k]: v } });
+
+  async function subirLogo(e) {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    setSubiendo(true);
+    const url = await subirArchivo(f);
+    if (url) setCfg("logo", url); else alert("No se pudo subir. Revisá la conexión.");
+    setSubiendo(false); e.target.value = "";
+  }
+  async function subirFondo(e) {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    setSubiendoFondo(true);
+    const url = await subirArchivo(f);
+    if (url) save({ ...data, config: { ...(data.config || {}), fondoUrl: url, fondo: "" } });
+    else alert("No se pudo subir. Revisá la conexión.");
+    setSubiendoFondo(false); e.target.value = "";
+  }
+
+  return (<div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(11,22,34,.55)", zIndex: 450, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+    <div onClick={e => e.stopPropagation()} style={{ background: T.card, color: T.text, borderRadius: "18px 18px 0 0", padding: 20, width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto" }}>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 3, letterSpacing: "-.01em" }}>Personalización</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 18 }}>Cambiá el aspecto de la app y los datos que aparecen arriba.</div>
+
+      <Field label="Logo de la empresa">
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6 }}>
+          <div style={{ width: 60, height: 60, borderRadius: 13, background: cfg.logo ? "#fff" : `linear-gradient(145deg, ${BRASS}, #c9a869)`, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+            {cfg.logo ? <img src={cfg.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <span style={{ fontSize: 15, fontWeight: 800, color: "#0B1622" }}>V+V</span>}
+          </div>
+          <label style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+            {subiendo ? "Subiendo…" : cfg.logo ? "Cambiar logo" : "Subir logo"}
+            <input type="file" accept="image/*" onChange={subirLogo} style={{ display: "none" }} />
+          </label>
+          {cfg.logo && <button onClick={() => setCfg("logo", "")} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 9, padding: "10px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Quitar</button>}
+        </div>
+      </Field>
+
+      <Field label="Nombre de la empresa">
+        <input defaultValue={cfg.nombre ?? ""} onBlur={e => setCfg("nombre", e.target.value)} placeholder="V+V Construcciones" style={inp} />
+      </Field>
+      <Field label="Subtítulo">
+        <input defaultValue={cfg.subtitulo ?? ""} onBlur={e => setCfg("subtitulo", e.target.value)} placeholder="Cronogramas de obra" style={inp} />
+      </Field>
+
+      <Field label="Modo de color">
+        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+          {[["claro", "☀︎ Claro"], ["oscuro", "🌙 Oscuro"]].map(([k, l]) => (
+            <button key={k} onClick={() => setCfg("modo", k)} style={{
+              flex: 1, background: (cfg.modo || "claro") === k ? T.accent : T.al,
+              color: (cfg.modo || "claro") === k ? "#fff" : T.sub,
+              border: `1px solid ${T.border}`, borderRadius: 10, padding: "11px",
+              fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+            }}>{l}</button>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Tipografía">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 6 }}>
+          {FUENTES.map(([k, l, fam]) => (
+            <button key={k} onClick={() => setCfg("fuente", k)} style={{
+              background: (cfg.fuente || "") === k ? T.accent : T.al,
+              color: (cfg.fuente || "") === k ? "#fff" : T.text,
+              border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px 13px",
+              fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: fam,
+            }}>{l}</button>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Fondo de pantalla">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+          {(cfg.modo === "oscuro" ? FONDOS_DARK : FONDOS).map(([k, l, bg]) => {
+            const sel = cfg.modo === "oscuro" ? (cfg.fondoDark || "") === k : (cfg.fondo || "") === k;
+            return (<button key={k} onClick={() => save({ ...data, config: { ...(data.config || {}), [cfg.modo === "oscuro" ? "fondoDark" : "fondo"]: k, fondoUrl: "" } })}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+              <div style={{ width: 50, height: 50, borderRadius: 11, background: bg, border: `2px solid ${sel && !cfg.fondoUrl ? BRASS : T.border}` }} />
+              <span style={{ fontSize: 10.5, color: T.sub, fontWeight: 600 }}>{l}</span>
+            </button>);
+          })}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+          {cfg.fondoUrl && <div style={{ width: 52, height: 52, borderRadius: 11, background: `url("${cfg.fondoUrl}") center/cover`, border: `2px solid ${BRASS}`, flexShrink: 0 }} />}
+          <label style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+            {subiendoFondo ? "Subiendo…" : cfg.fondoUrl ? "Cambiar foto" : "Subir foto de fondo"}
+            <input type="file" accept="image/*" onChange={subirFondo} style={{ display: "none" }} />
+          </label>
+          {cfg.fondoUrl && <button onClick={() => setCfg("fondoUrl", "")} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 9, padding: "10px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Quitar</button>}
+        </div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6 }}>La foto se ve suave de fondo para no molestar la lectura.</div>
+      </Field>
+
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>Respaldo de datos</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Tus cronogramas se guardan solos en la nube. Igual podés bajar una copia.</div>
+        <button onClick={() => descargarArchivo(`VV-Cronogramas-RESPALDO-${hoyISO()}.json`, JSON.stringify(data, null, 2), "application/json")}
+          style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+          Respaldo completo (.json)
+        </button>
+        <label style={{ display: "block", textAlign: "center", background: T.al, color: T.accent, border: `1px dashed ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
+          Restaurar desde respaldo (.json)
+          <input type="file" accept=".json,application/json" style={{ display: "none" }} onChange={async e => {
+            const f = e.target.files && e.target.files[0]; if (!f) return;
+            try {
+              const obj = JSON.parse(await f.text());
+              if (!obj || typeof obj !== "object") throw new Error("Archivo inválido");
+              if (confirm("Esto REEMPLAZA todos los cronogramas actuales por los del respaldo. ¿Continuar?")) { save(obj); alert("Respaldo restaurado ✓"); }
+            } catch (err) { alert("No se pudo restaurar: " + (err && err.message)); }
+            e.target.value = "";
+          }} />
+        </label>
+      </div>
+
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Otras apps de V+V</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {[["index.html", "🏗 V+V"], ["finanzas.html", "💰 Finanzas"], ["cliente.html", "👤 Cliente"], ["contratista.html", "🧰 Contratista"], ["nicolas.html", "📋 Nicolás"], ["mi-asistente.html", "🤖 Mi Asistente"], ["muebles.html", "🪚 Muebles"]].map(([href, l]) => (
+            <a key={href} href={href} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>{l}</a>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 3 }}>Actualizar la app</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Si subiste una versión nueva y seguís viendo la vieja, tocá acá: borra el caché y trae la última.</div>
+        <button onClick={async () => {
+          try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch { }
+          window.location.replace(window.location.pathname + "?v=" + Date.now());
+        }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+          🔄 Actualizar a la última versión
+        </button>
+      </div>
+
+      <button onClick={onClose} style={{ width: "100%", marginTop: 16, background: T.al, color: T.sub, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cerrar</button>
+    </div>
+  </div>);
+}
+
 /* ═══════════════════ LA APP ═══════════════════ */
 export default function Cronograma() {
-  const [data, setData] = useState({ plantilla: [], obras: [], cfg: { aviso: 15 } });
+  const [data, setData] = useState({ plantilla: [], obras: [], cfg: { aviso: 15 }, config: {} });
   const [finanzas, setFinanzas] = useState({ obras: [] });
   const [cargando, setCargando] = useState(true);
+  const [verConfig, setVerConfig] = useState(false);
+  const [refrescando, setRefrescando] = useState(false);
+  const [okMsg, setOkMsg] = useState("");
   const [pantalla, setPantalla] = useState("obras");
   const [obraId, setObraId] = useState(null);
   const [nueva, setNueva] = useState(false);
@@ -1090,9 +1365,10 @@ export default function Cronograma() {
           plantilla: d?.plantilla?.length ? d.plantilla : JSON.parse(JSON.stringify(PLANTILLA_BASE)),
           obras: d?.obras || [],
           cfg: { aviso: numSimple(d?.cfg?.aviso) || 15 },
+          config: d?.config || {},
         });
       } catch {
-        setData({ plantilla: JSON.parse(JSON.stringify(PLANTILLA_BASE)), obras: [], cfg: { aviso: 15 } });
+        setData({ plantilla: JSON.parse(JSON.stringify(PLANTILLA_BASE)), obras: [], cfg: { aviso: 15 }, config: {} });
       }
       // traigo las obras de Finanzas, para poder enganchar el contrato
       try {
@@ -1110,6 +1386,29 @@ export default function Cronograma() {
     storage.set("vv_cronograma__ts", String(escrito.current));
   };
 
+  /* Traer lo último de la nube, ahora mismo, sin esperar al poller */
+  async function actualizar() {
+    setRefrescando(true);
+    let ok = false;
+    try {
+      const r = await storage.get("vv_cronograma");
+      if (r?.value) {
+        const d = JSON.parse(r.value);
+        escrito.current = 0;   // lo de la nube manda
+        setData({
+          plantilla: d.plantilla || [], obras: d.obras || [],
+          cfg: { aviso: numSimple(d.cfg?.aviso) || 15 }, config: d.config || {},
+        });
+        ok = true;
+      }
+      const rf = await storage.get("vv_finanzas");
+      if (rf?.value) { const f = JSON.parse(rf.value); setFinanzas({ obras: f?.obras || [] }); }
+    } catch { }
+    setRefrescando(false);
+    setOkMsg(ok ? "Actualizado ✓" : "Sin cambios");
+    setTimeout(() => setOkMsg(""), 2000);
+  }
+
   useEffect(() => {
     const iv = setInterval(async () => {
       try {
@@ -1120,7 +1419,7 @@ export default function Cronograma() {
           if (r?.value) {
             const d = JSON.parse(r.value);
             escrito.current = ct;
-            setData({ plantilla: d.plantilla || [], obras: d.obras || [], cfg: { aviso: numSimple(d.cfg?.aviso) || 15 } });
+            setData({ plantilla: d.plantilla || [], obras: d.obras || [], cfg: { aviso: numSimple(d.cfg?.aviso) || 15 }, config: d.config || {} });
           }
         }
         const rf = await storage.get("vv_finanzas");
@@ -1186,6 +1485,11 @@ export default function Cronograma() {
   const obra = obras.find(o => o.id === obraId);
   const plan = obra ? planes[obra.id] : null;
 
+  /* el tema, según lo que hayas elegido en Personalización */
+  const cfgUI = data.config || {};
+  T = cfgUI.modo === "oscuro" ? T_DARK : T_LIGHT;
+  inp = buildInp(T); inpSm = buildInpSm(T);
+
   if (cargando) return (<div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, system-ui, sans-serif", color: T.sub, fontSize: 13 }}>Cargando cronogramas…</div>);
 
   const NAV = [["obras", "Obras"], ["alertas", "Alertas"], ["modelo", "Modelo"], ["ajustes", "Ajustes"]];
@@ -1195,11 +1499,29 @@ export default function Cronograma() {
   obras.forEach(o => { (planes[o.id]?.pendientes || []).forEach(d => todasAlertas.push({ ...d, obra: o })); });
   todasAlertas.sort((a, b) => (a.faltan ?? 9999) - (b.faltan ?? 9999));
 
-  return (<div style={{ minHeight: "100vh", background: T.bg, fontFamily: "Inter, system-ui, -apple-system, sans-serif", color: T.text }}>
-    <header style={{ position: "sticky", top: 0, zIndex: 200, background: T.card, borderBottom: `1px solid ${T.border}` }}>
-      <div style={{ background: T.navy, padding: "6px 16px", textAlign: "center" }}>
-        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".18em", textTransform: "uppercase", color: BRASS }}>V+V Construcciones · Cronogramas</span>
+  return (<div style={{ minHeight: "100vh", background: fondoDe(cfgUI), fontFamily: fuenteDe(cfgUI), color: T.text }}>
+    <style>{`*{-webkit-font-smoothing:antialiased}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}input,select,textarea{color:${T.text};background:${T.inpBg}}input::placeholder,textarea::placeholder{color:${T.muted}}`}</style>
+
+    {/* cabecera: logo, nombre, actualizar y personalización — igual que el resto de la suite */}
+    <div style={{ background: `linear-gradient(180deg, #0E1B2B 0%, ${T.dark ? "#05070B" : "#0B1622"} 100%)`, color: "#fff", padding: "20px 24px 18px", textAlign: "center", position: "relative" }}>
+      <button onClick={actualizar} title="Actualizar" style={{ position: "absolute", top: 16, left: 16, background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, height: 34, padding: "0 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: "inherit" }}>
+        ↻ {okMsg || (refrescando ? "..." : "Actualizar")}
+      </button>
+      <button onClick={() => setVerConfig(true)} title="Personalización" style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 9, width: 34, height: 34, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>⚙︎</button>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 11 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: cfgUI.logo ? "#fff" : `linear-gradient(145deg, ${BRASS}, #c9a869)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#0B1622", letterSpacing: "-.02em", boxShadow: "0 2px 8px rgba(176,137,79,.35)", overflow: "hidden" }}>
+          {cfgUI.logo ? <img src={cfgUI.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : "V+V"}
+        </div>
+        <div style={{ textAlign: "left" }}>
+          <div style={{ fontSize: 15.5, fontWeight: 700, letterSpacing: "-.01em", lineHeight: 1.15 }}>{cfgUI.nombre || "V+V Construcciones"}</div>
+          <div style={{ fontSize: 9.5, fontWeight: 600, color: BRASS, letterSpacing: ".18em", textTransform: "uppercase", marginTop: 1 }}>{cfgUI.subtitulo || "Cronogramas de obra"}</div>
+        </div>
       </div>
+    </div>
+
+    {verConfig && <ConfigModal data={data} save={guardar} onClose={() => setVerConfig(false)} />}
+
+    <header style={{ position: "sticky", top: 0, zIndex: 200, background: T.card, borderBottom: `1px solid ${T.border}` }}>
       <nav style={{ display: "flex", gap: 2, padding: "0 10px", overflowX: "auto" }}>
         {NAV.map(([k, l]) => {
           const act = pantalla === k || (k === "obras" && pantalla === "obra");
@@ -1275,9 +1597,9 @@ export default function Cronograma() {
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-end" }}>
-                {p.vencidas.length > 0 && <Chip color={T.danger} fondo="#FEF2F2">{p.vencidas.length} vencida{p.vencidas.length > 1 ? "s" : ""}</Chip>}
-                {p.urgentes.length > 0 && <Chip color="#B45309" fondo="#FFFBEB">{p.urgentes.length} urgente{p.urgentes.length > 1 ? "s" : ""}</Chip>}
-                {p.excede && <Chip color={T.danger} fondo="#FEF2F2">+12 meses</Chip>}
+                {p.vencidas.length > 0 && <Chip color={TONO.rojo().c} fondo={TONO.rojo().b}>{p.vencidas.length} vencida{p.vencidas.length > 1 ? "s" : ""}</Chip>}
+                {p.urgentes.length > 0 && <Chip color={TONO.ambar().c} fondo={TONO.ambar().b}>{p.urgentes.length} urgente{p.urgentes.length > 1 ? "s" : ""}</Chip>}
+                {p.excede && <Chip color={TONO.rojo().c} fondo={TONO.rojo().b}>+12 meses</Chip>}
               </div>
             </div>
             <div style={{ marginTop: 9, height: 5, background: T.bg, borderRadius: 3, overflow: "hidden" }}>
@@ -1295,13 +1617,13 @@ export default function Cronograma() {
         <h2 style={{ fontSize: 21, fontWeight: 800, margin: "0 0 3px", letterSpacing: "-.01em" }}>Alertas</h2>
         <div style={{ fontSize: 12, color: T.sub, marginBottom: 14 }}>Definiciones de todas las obras, por urgencia. Avisa {diasAviso} días antes del límite.</div>
         {todasAlertas.length === 0 && (
-          <div style={{ background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 14, padding: 22, textAlign: "center" }}>
+          <div style={{ background: TONO.verde().b, border: `1px solid ${TONO.verde().bd}`, borderRadius: 14, padding: 22, textAlign: "center" }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: T.ok }}>Todo al día</div>
             <div style={{ fontSize: 12.5, color: T.sub, marginTop: 4 }}>No hay definiciones pendientes.</div>
           </div>
         )}
-        {[["Vencidas — están frenando la obra", todasAlertas.filter(d => d.estado === "vencida"), T.danger],
-          [`Urgentes — dentro de ${diasAviso} días`, todasAlertas.filter(d => d.estado === "urgente"), "#B45309"],
+        {[["Vencidas — están frenando la obra", todasAlertas.filter(d => d.estado === "vencida"), TONO.rojo().c],
+          [`Urgentes — dentro de ${diasAviso} días`, todasAlertas.filter(d => d.estado === "urgente"), TONO.ambar().c],
           ["Más adelante", todasAlertas.filter(d => d.estado === "futura"), T.sub]].map(([tit, g, col]) => {
           if (!g.length) return null;
           return (<div key={tit} style={{ marginBottom: 18 }}>
@@ -1371,7 +1693,7 @@ function PantallaModelo({ plantilla, guardar }) {
       El cronograma tipo. Cada obra nueva arranca con una copia y después se edita sola, sin tocar esto.
     </div>
 
-    <div style={{ background: excede ? "#FEF2F2" : T.card, border: `1px solid ${excede ? "#FECACA" : T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
+    <div style={{ background: excede ? TONO.rojo().b : T.card, border: `1px solid ${excede ? TONO.rojo().bd : T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em" }}>Plazo del modelo</div>
       <div style={{ fontSize: 26, fontWeight: 800, color: excede ? T.danger : T.accent, marginTop: 3 }}>{(fin / 30.44).toFixed(1)} meses</div>
       <div style={{ fontSize: 11.5, color: excede ? T.danger : T.sub, marginTop: 2 }}>
