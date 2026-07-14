@@ -56,7 +56,35 @@ const fuenteDe = (cfg) => (FUENTES.find(x => x[0] === (cfg?.fuente || "")) || FU
 const FONDOS_DARK = [["", "Negro", "#0C0F14"], ["carbon", "Carbón", "linear-gradient(160deg,#141A22,#05070B)"], ["navy", "Navy", "linear-gradient(160deg,#0E1728,#06090F)"], ["vino", "Vino", "linear-gradient(160deg,#1C1016,#0A0608)"], ["bosque", "Bosque", "linear-gradient(160deg,#0E1613,#050807)"], ["violeta", "Violeta", "linear-gradient(160deg,#16121F,#08060C)"]];
 const SHD = "0 1px 2px rgba(11,22,34,.04), 0 8px 24px -8px rgba(11,22,34,.10)";
 const SHDsm = "0 1px 2px rgba(11,22,34,.05), 0 2px 8px -4px rgba(11,22,34,.08)";
-const RUBROS_DEF = ["Trabajos preliminares", "Movimiento de suelo", "Estructura", "Albañilería", "Revoques", "Contrapiso", "Carpeta", "Colocación"];
+/* Las dos formas en que V+V toma una obra:
+   · Obra completa  → incluye la estructura de hormigón.
+   · Sin estructura → la estructura la hace otro; nosotros arrancamos en albañilería. */
+const RUBROS_COMPLETA = ["Trabajos preliminares", "Movimiento de suelo", "Estructura", "Albañilería", "Revoques", "Contrapiso", "Carpeta", "Colocación"];
+const RUBROS_SIN_EST = RUBROS_COMPLETA.filter(r => r !== "Estructura");
+const PLANTILLAS_RUBROS = [
+  { id: "completa", nombre: "Obra completa", desc: "Con estructura de hormigón", rubros: RUBROS_COMPLETA },
+  { id: "sinest", nombre: "Sin estructura", desc: "La estructura la hace otro", rubros: RUBROS_SIN_EST },
+];
+const RUBROS_DEF = RUBROS_COMPLETA;   // el de siempre, para no romper nada
+
+/* Arma los rubros de una plantilla CONSERVANDO el id y el % de los que ya existían.
+   Es importante: los certificados apuntan al ID del rubro. Si generara ids nuevos,
+   los certificados ya emitidos perderían el vínculo y se romperían las cantidades. */
+function rubrosDePlantilla(tplId, rubrosActuales) {
+  const tpl = PLANTILLAS_RUBROS.find(p => p.id === tplId) || PLANTILLAS_RUBROS[0];
+  const previos = rubrosActuales || [];
+  return tpl.rubros.map(nom => {
+    const ya = previos.find(r => String(r.nombre || "").trim().toLowerCase() === nom.toLowerCase());
+    return ya ? { ...ya, nombre: nom } : { id: uid(), nombre: nom, pct: "" };
+  });
+}
+
+/* Qué plantilla se parece más a los rubros que tiene una obra */
+function plantillaDe(rubros) {
+  const nombres = (rubros || []).map(r => String(r.nombre || "").trim().toLowerCase());
+  const tieneEst = nombres.includes("estructura");
+  return tieneEst ? "completa" : "sinest";
+}
 const CAT_GASTO = ["Viáticos", "Combustible", "Fletes", "Comida en obra", "Herramientas", "Alquiler equipos", "Operación de obra", "Otro"];
 const IMPREV_CATS = ["Seguro personal", "Multa de obra", "Multa de tránsito", "Otro imprevisto"];
 const FONDOS = [
@@ -1103,7 +1131,46 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
     setPdfHtmlP(html);
   }
   const setRub = (i, k, v) => setForm(f => ({ ...f, rubros: f.rubros.map((r, j) => j === i ? { ...r, [k]: v } : r) }));
-  const nuevo = () => ({ nombre: "", inicio: hoyISO(), mesBase: mesDe(hoyISO()), plazoMeses: "", anticipoTipo: "pct", anticipoPct: "", anticipoMontoFijo: "", imprevistosPct: "5", m2: "", precioCliente: "", costoM2: "", rubros: RUBROS_DEF.map(n => ({ id: uid(), nombre: n, pct: "" })), costoExtra: [{ id: uid(), nombre: "Impuestos / IIBB", tipo: "pct", valor: "" }] });
+
+  /* Cambia de plantilla y deja los rubros montados.
+     Si la obra ya tiene certificados que usan un rubro que va a desaparecer
+     (típico: Estructura), avisa antes: esos certificados perderían ese rubro. */
+  function aplicarPlantilla(tplId) {
+    const nuevos = rubrosDePlantilla(tplId, form.rubros);
+    const idsNuevos = new Set(nuevos.map(r => r.id));
+    const seVan = (form.rubros || []).filter(r => !idsNuevos.has(r.id));
+
+    if (form.id && seVan.length) {
+      const certsObra = (data.certs || []).filter(c => c.obraId === form.id);
+      const enUso = seVan.filter(r => certsObra.some(c => num((c.cantidades || {})[r.id]) > 0));
+      if (enUso.length) {
+        const nom = enUso.map(r => r.nombre).join(", ");
+        if (!window.confirm(`Ojo: ya hay certificados de esta obra con avance cargado en "${nom}".\n\nSi sacás ${enUso.length > 1 ? "esos rubros" : "ese rubro"}, esos certificados pierden ese avance.\n\n¿Seguís igual?`)) return;
+      }
+    }
+    setForm(f => ({ ...f, tipoRubros: tplId, rubros: nuevos }));
+  }
+
+  /* Reparte los % proporcionalmente para que cierren en 100.
+     Sirve cuando sacás Estructura y te queda la suma corta. */
+  function reescalar100() {
+    setForm(f => {
+      const rs = f.rubros || [];
+      const total = rs.reduce((a, r) => a + num(r.pct), 0);
+      if (total <= 0) return f;
+      const escalados = rs.map(r => ({ ...r, pct: String(Math.round(num(r.pct) / total * 1000) / 10) }));
+      // el redondeo puede dejar 99.9 o 100.1: la diferencia va al rubro más grande
+      const suma = escalados.reduce((a, r) => a + num(r.pct), 0);
+      const dif = Math.round((100 - suma) * 10) / 10;
+      if (Math.abs(dif) >= 0.1) {
+        let iMax = 0;
+        escalados.forEach((r, i) => { if (num(r.pct) > num(escalados[iMax].pct)) iMax = i; });
+        escalados[iMax] = { ...escalados[iMax], pct: String(Math.round((num(escalados[iMax].pct) + dif) * 10) / 10) };
+      }
+      return { ...f, rubros: escalados };
+    });
+  }
+  const nuevo = () => ({ nombre: "", inicio: hoyISO(), mesBase: mesDe(hoyISO()), plazoMeses: "", anticipoTipo: "pct", anticipoPct: "", anticipoMontoFijo: "", imprevistosPct: "5", m2: "", precioCliente: "", costoM2: "", tipoRubros: "completa", rubros: rubrosDePlantilla("completa", []), costoExtra: [{ id: uid(), nombre: "Impuestos / IIBB", tipo: "pct", valor: "" }] });
   function guardar() {
     if (!form.nombre?.trim()) { alert("Poné el nombre de la obra."); return; }
     if (numMoney(form.m2) <= 0 || numMoney(form.precioCliente) <= 0) { alert("Cargá los m² y el precio/m² del cliente."); return; }
@@ -1112,7 +1179,7 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
     const sInc = rubros.reduce((a, r) => a + r.pct, 0);
     if (Math.abs(sInc - 100) > 0.5) { if (!confirm(`Las incidencias suman ${sInc}% (no 100%). ¿Guardar igual?`)) return; }
     const extra = (form.costoExtra || []).filter(l => l.nombre?.trim() && String(l.valor).trim() !== "").map(l => ({ id: l.id || uid(), nombre: l.nombre.trim(), tipo: l.tipo === "pct" ? "pct" : "monto", valor: l.tipo === "pct" ? num(l.valor) : numMoney(l.valor) }));
-    const ob = { id: form.id || uid() + Date.now(), nombre: form.nombre.trim(), inicio: form.inicio || hoyISO(), mesBase: form.mesBase || mesDe(form.inicio || hoyISO()), anticipoTipo: form.anticipoTipo || "pct", anticipoPct: num(form.anticipoPct), anticipoMontoFijo: numMoney(form.anticipoMontoFijo), imprevistosPct: num(form.imprevistosPct), plazoMeses: num(form.plazoMeses), m2: numMoney(form.m2), precioCliente: numMoney(form.precioCliente), costoM2: numMoney(form.costoM2), rubros, costoExtra: extra };
+    const ob = { id: form.id || uid() + Date.now(), nombre: form.nombre.trim(), tipoRubros: form.tipoRubros || plantillaDe(form.rubros), inicio: form.inicio || hoyISO(), mesBase: form.mesBase || mesDe(form.inicio || hoyISO()), anticipoTipo: form.anticipoTipo || "pct", anticipoPct: num(form.anticipoPct), anticipoMontoFijo: numMoney(form.anticipoMontoFijo), imprevistosPct: num(form.imprevistosPct), plazoMeses: num(form.plazoMeses), m2: numMoney(form.m2), precioCliente: numMoney(form.precioCliente), costoM2: numMoney(form.costoM2), rubros, costoExtra: extra };
     save(logH({ ...data, obras: form.id ? obras.map(o => o.id === ob.id ? ob : o) : [...obras, ob] }, `${form.id ? "Editó" : "Creó"} obra ${ob.nombre}`)); setForm(null);
   }
   function borrar(id) { if (!confirm("¿Eliminar esta obra y sus certificados?")) return; save({ ...data, obras: obras.filter(o => o.id !== id), certs: (data.certs || []).filter(c => c.obraId !== id) }); }
@@ -1148,6 +1215,23 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
       <Field label="Mes base redeterminación (CAC)" hint="Mes del índice de la oferta."><input type="month" value={form.mesBase || ""} onChange={e => setForm({ ...form, mesBase: e.target.value })} style={inp} /></Field>
 
       <div style={{ borderTop: `1px solid ${T.border}`, margin: "4px 0 10px", paddingTop: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Tipo de obra</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Elegí una y los rubros quedan armados solos. Podés retocarlos igual.</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {PLANTILLAS_RUBROS.map(p => {
+            const sel = (form.tipoRubros || plantillaDe(form.rubros)) === p.id;
+            return (<button key={p.id} onClick={() => aplicarPlantilla(p.id)} style={{
+              flex: 1, textAlign: "left", background: sel ? T.accent : T.al,
+              color: sel ? "#fff" : T.text, border: `1px solid ${sel ? T.accent : T.border}`,
+              borderRadius: 11, padding: "11px 12px", cursor: "pointer", fontFamily: "inherit",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 800 }}>{sel ? "✓ " : ""}{p.nombre}</div>
+              <div style={{ fontSize: 10.5, marginTop: 2, color: sel ? "rgba(255,255,255,.75)" : T.muted }}>{p.desc}</div>
+              <div style={{ fontSize: 10, marginTop: 3, color: sel ? "rgba(255,255,255,.6)" : T.muted }}>{p.rubros.length} rubros</div>
+            </button>);
+          })}
+        </div>
+
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Rubros e incidencia (%)</div>
         <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 9 }}>Solo el % que incide cada rubro en el total (sin monto). El monto lo calcula el certificado. Deben sumar 100%.</div>
         {(form.rubros || []).map((r, i) => (
@@ -1158,7 +1242,16 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
             <button onClick={() => setForm(f => ({ ...f, rubros: f.rubros.filter((_, j) => j !== i) }))} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "9px 7px", fontSize: 11, cursor: "pointer" }}>✕</button>
           </div>))}
         <button onClick={() => setForm(f => ({ ...f, rubros: [...(f.rubros || []), { id: uid(), nombre: "", pct: "" }] }))} style={{ background: T.al, color: T.accent, border: "none", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 2 }}>＋ Agregar rubro</button>
-        <div style={{ fontSize: 12.5, fontWeight: 800, marginTop: 9, color: Math.abs(sInc - 100) < 0.5 ? T.ok : T.warn }}>Suma incidencias: {sInc}% {Math.abs(sInc - 100) < 0.5 ? "✓" : sInc > 100 ? "· te pasaste" : `· falta ${(100 - sInc).toFixed(1)}%`}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 9, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: Math.abs(sInc - 100) < 0.5 ? T.ok : T.warn, flex: 1 }}>
+            Suma incidencias: {sInc}% {Math.abs(sInc - 100) < 0.5 ? "✓" : sInc > 100 ? "· te pasaste" : `· falta ${(100 - sInc).toFixed(1)}%`}
+          </div>
+          {sInc > 0 && Math.abs(sInc - 100) >= 0.5 && (
+            <button onClick={reescalar100} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              Repartir a 100%
+            </button>
+          )}
+        </div>
       </div>
 
       {pCli > 0 && pCos > 0 && <div style={{ background: T.bg, borderRadius: 9, padding: 11, marginBottom: 12 }}>
@@ -1188,7 +1281,7 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800 }}>{o.nombre}</div><div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{num(o.m2)} m² · {money(o.precioCliente)}/m² · {(o.rubros || []).length} rubros</div></div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          <button onClick={() => setForm({ id: o.id, nombre: o.nombre, inicio: o.inicio, mesBase: o.mesBase || mesDe(o.inicio), anticipoTipo: o.anticipoTipo || "pct", anticipoPct: String(o.anticipoPct || ""), anticipoMontoFijo: o.anticipoMontoFijo ? fmtMiles(o.anticipoMontoFijo) : "", imprevistosPct: String(o.imprevistosPct != null ? o.imprevistosPct : 5), plazoMeses: o.plazoMeses ? String(o.plazoMeses) : "", m2: fmtMiles(o.m2), precioCliente: fmtMiles(o.precioCliente), costoM2: fmtMiles(o.costoM2), rubros: (o.rubros || []).map(r => ({ ...r, pct: String(r.pct) })), costoExtra: (o.costoExtra || []).map(l => ({ ...l, valor: l.tipo === "pct" ? String(l.valor) : fmtMiles(l.valor) })) })} style={{ background: T.al, color: T.accent, border: "none", borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+          <button onClick={() => setForm({ id: o.id, nombre: o.nombre, tipoRubros: o.tipoRubros || plantillaDe(o.rubros), inicio: o.inicio, mesBase: o.mesBase || mesDe(o.inicio), anticipoTipo: o.anticipoTipo || "pct", anticipoPct: String(o.anticipoPct || ""), anticipoMontoFijo: o.anticipoMontoFijo ? fmtMiles(o.anticipoMontoFijo) : "", imprevistosPct: String(o.imprevistosPct != null ? o.imprevistosPct : 5), plazoMeses: o.plazoMeses ? String(o.plazoMeses) : "", m2: fmtMiles(o.m2), precioCliente: fmtMiles(o.precioCliente), costoM2: fmtMiles(o.costoM2), rubros: (o.rubros || []).map(r => ({ ...r, pct: String(r.pct) })), costoExtra: (o.costoExtra || []).map(l => ({ ...l, valor: l.tipo === "pct" ? String(l.valor) : fmtMiles(l.valor) })) })} style={{ background: T.al, color: T.accent, border: "none", borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
           <button onClick={() => borrar(o.id)} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA", borderRadius: 7, padding: "6px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✕</button>
         </div>
       </div>
