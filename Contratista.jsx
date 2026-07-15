@@ -62,6 +62,17 @@ try { aplicarTema(localStorage.getItem("contratista_tema") || "institucional"); 
 
 function origenLabel(p) { return p.de === "vv" ? "V+V" : p.de === "cliente" ? "Belfast" : (p.empresa || "Contratista"); }
 
+// Íconos estilo SF Symbols (trazo fino), uno por tipo de pedido.
+function TipoIcon({ tipo, size = 22, color = "currentColor" }) {
+  const s = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round", style: { display: "block" } };
+  if (tipo === "definicion") // regla/escuadra — definiciones
+    return (<svg {...s}><path d="M4.5 16.5 16.5 4.5a2.12 2.12 0 0 1 3 3L7.5 19.5l-4 1 1-4Z" /><path d="M13.5 7.5 16.5 10.5" /><path d="M9.5 11.5 11.5 13.5" /></svg>);
+  if (tipo === "plano") // plano/documento con esquina doblada y líneas
+    return (<svg {...s}><path d="M6 3h8l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" /><path d="M14 3v4h4" /><path d="M8.5 12.5h7" /><path d="M8.5 15.5h7" /><path d="M8.5 9.5h3" /></svg>);
+  // material — caja/paquete
+  return (<svg {...s}><path d="M12 3 20.5 7.5v9L12 21 3.5 16.5v-9L12 3Z" /><path d="M3.5 7.5 12 12l8.5-4.5" /><path d="M12 12v9" /><path d="M7.75 5.25 16.25 9.75" /></svg>);
+}
+
 const TIPOS_PEDIDO = [
   { id: "material", label: "Materiales", sing: "material", icon: "📦", color: "#1B3A5B" },
   { id: "definicion", label: "Definiciones", sing: "definición", icon: "📐", color: "#B0894F" },
@@ -70,6 +81,158 @@ const TIPOS_PEDIDO = [
 const tipoDe = (id) => TIPOS_PEDIDO.find(t => t.id === id) || TIPOS_PEDIDO[0];
 const itemsTexto = (p) => (p.items || []).map(it => (p.tipo && p.tipo !== "material") ? `${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}` : `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
 const DOCS_BASE = ["Niveles", "Eje de replanteo en platea", "Planos de platea", "Planos de estructura", "Plano de replanteo de mampostería", "Plano de mampostería", "Plano de hogar", "Plano de parrilla", "Plano de vainas"];
+
+// Carga SheetJS desde CDN una sola vez (para leer el Excel en el navegador)
+function cargarXLSX() {
+  return new Promise((resolve, reject) => {
+    if (window.XLSX) return resolve(window.XLSX);
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.onload = () => resolve(window.XLSX);
+    s.onerror = () => reject(new Error("No se pudo cargar el lector de Excel."));
+    document.head.appendChild(s);
+  });
+}
+// Parsea el Excel de definiciones (formato V+V u hoja simple) → [{rubro, item}]
+function parseDefinicionesXLSX(XLSX, ab) {
+  const wb = XLSX.read(ab, { type: "array" });
+  const shName = wb.SheetNames.find(n => /definici/i.test(n)) || wb.SheetNames[0];
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[shName], { header: 1, defval: "" });
+  const out = []; let lastRubro = "";
+  const esRuido = (t) => /rubro|definici[oó]n|fecha|estado|observ|checklist|construcciones|obra:|comitente|¿la tenemos|resumen|faltante/i.test(t);
+  for (const row of rows) {
+    let itemTxt = "", colG = "";
+    row.forEach((cell, idx) => {
+      if (typeof cell === "string") { if (cell.includes("•")) itemTxt = cell.replace(/^[\s•*·-]+/, "").trim(); if (idx === 6 && cell.trim()) colG = cell.trim(); }
+    });
+    if (itemTxt) { out.push({ rubro: colG || lastRubro || "General", item: itemTxt }); continue; }
+    // fila de rubro: una celda de texto sola, sin bullet, que no sea ruido
+    const textos = row.filter(c => typeof c === "string" && c.trim());
+    if (textos.length && !esRuido(textos[0])) { lastRubro = textos[0].trim(); }
+    // formato simple: rubro en una col, definición en otra (sin bullets)
+    if (out.length === 0 && textos.length >= 2 && !esRuido(textos[0]) && !esRuido(textos[1])) {
+      // heurística: primera col rubro, segunda definición
+    }
+  }
+  return out;
+}
+
+function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [cargando, setCargando] = useState(false);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const [nuevoRubro, setNuevoRubro] = useState("");
+  const [nuevaDef, setNuevaDef] = useState("");
+  const obraNom = id => obras.find(o => o.id === id)?.nombre || "—";
+  const reg = (definiciones || []).find(r => r.obra_id === obraId);
+  const items = reg ? reg.items : [];
+
+  const guardar = (nextItems) => {
+    const otros = (definiciones || []).filter(r => r.obra_id !== obraId);
+    persistDef([...otros, { obra_id: obraId, items: nextItems, upd: Date.now() }]);
+  };
+
+  async function subirExcel(e) {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    setCargando(true);
+    try {
+      const XLSX = await cargarXLSX();
+      const ab = await file.arrayBuffer();
+      const pares = parseDefinicionesXLSX(XLSX, ab);
+      if (!pares.length) { alert("No pude leer definiciones en ese archivo. Fijate que tenga los rubros y las definiciones (como el Excel de V+V)."); setCargando(false); return; }
+      const nuevos = pares.map(p => ({ id: uid() + Math.random().toString(36).slice(2, 5), rubro: p.rubro, nombre: p.item, tiene: false }));
+      // no pisar lo ya marcado: si ya había ítems, agrego los que no estén
+      const existentesKey = new Set(items.map(i => (i.rubro + "|" + i.nombre).toLowerCase()));
+      const merge = [...items, ...nuevos.filter(n => !existentesKey.has((n.rubro + "|" + n.nombre).toLowerCase()))];
+      guardar(merge);
+      alert(`✓ Cargué ${nuevos.length} definiciones de "${file.name}". Marcá las que ya tenés.`);
+    } catch (err) { alert(err.message || "No se pudo leer el archivo."); }
+    setCargando(false);
+  }
+
+  const toggle = (id) => guardar(items.map(it => it.id === id ? { ...it, tiene: !it.tiene } : it));
+  const quitar = (id) => guardar(items.filter(it => it.id !== id));
+  const agregarManual = () => {
+    const nom = nuevaDef.trim(); if (!nom) return;
+    guardar([...items, { id: uid() + Math.random().toString(36).slice(2, 5), rubro: (nuevoRubro.trim() || "General"), nombre: nom, tiene: false }]);
+    setNuevaDef("");
+  };
+  const limpiar = () => { if (window.confirm("¿Borrar todas las definiciones de esta obra?")) guardar([]); };
+
+  const tienen = items.filter(i => i.tiene).length;
+  const faltan = items.length - tienen;
+  // agrupar por rubro para mostrar y para el PDF
+  const grupos = [];
+  items.forEach(it => { let g = grupos.find(x => x.rubro === it.rubro); if (!g) { g = { rubro: it.rubro, items: [] }; grupos.push(g); } g.items.push(it); });
+
+  function pdfFaltantes() {
+    const faltantes = grupos.map(g => ({ rubro: g.rubro, items: g.items.filter(i => !i.tiene) })).filter(g => g.items.length);
+    const rowsHtml = faltantes.map(g => `<tr class="rub"><td colspan="2">${g.rubro}</td></tr>` + g.items.map(i => `<tr><td class="dot">•</td><td>${i.nombre}</td></tr>`).join("")).join("");
+    const pct = items.length ? Math.round(tienen / items.length * 100) : 0;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Definiciones faltantes ${obraNom(obraId)}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 40px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 34px;border-bottom:4px solid #B0894F}.brand{font-size:20px;font-weight:800}.brand small{display:block;font-size:9px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{font-size:12px;font-weight:800;color:#B0894F;text-transform:uppercase;letter-spacing:1px;margin-top:6px}.wrap{padding:0 34px}.meta{display:flex;justify-content:space-between;margin:18px 0;font-size:12px;color:#5B6B7F}.kpi{display:flex;gap:0;margin:14px 0;border:1px solid #E3E8EF;border-radius:8px;overflow:hidden}.kpi div{flex:1;text-align:center;padding:10px;border-right:1px solid #E3E8EF}.kpi div:last-child{border-right:none}.kpi b{display:block;font-size:20px}.kpi span{font-size:8px;color:#5B6B7F;text-transform:uppercase}table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}td{padding:7px 8px;border-bottom:1px solid #EEF1F5;vertical-align:top}.rub td{background:#EAF0F7;color:#1B3A5B;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.dot{width:20px;color:#B0894F;text-align:center}.obs{font-size:10px;color:#5B6B7F;margin-top:20px;border-top:1px solid #D6DCE4;padding-top:8px}.firmas{display:flex;justify-content:space-between;margin-top:44px}.firma{width:44%;text-align:center;font-size:10px;color:#5B6B7F}.firma .ln{border-top:1px solid #0F1B2D;padding-top:5px;margin-top:34px}@media print{.noprint{display:none}}</style></head><body><div class="head"><div class="brand">V+V CONSTRUCCIONES<small>CONSTRUCTORA</small></div><div class="doc">Definiciones faltantes de obra</div></div><div class="wrap"><div class="meta"><div>Obra: <b>${obraNom(obraId)}</b></div><div>Fecha: ${hoyStr()}</div></div><div class="kpi"><div><b style="color:#B91C1C">${faltan}</b><span>Faltantes</span></div><div><b style="color:#16A34A">${tienen}</b><span>Definidas</span></div><div><b>${items.length}</b><span>Total</span></div><div><b>${pct}%</b><span>Definido</span></div></div>${faltantes.length ? `<table><tbody>${rowsHtml}</tbody></table>` : '<p style="padding:20px 0;text-align:center;color:#16A34A;font-weight:700">No hay definiciones faltantes. Todas resueltas.</p>'}<div class="obs">Las definiciones pendientes atrasan el normal desarrollo de las tareas de albañilería, revoques y colocaciones. Es importante resolverlas para poder dar curso a las tareas, contrataciones y pedidos de materiales.</div><div class="firmas"><div class="firma"><div class="ln">${empresa || "V+V Construcciones"}</div></div><div class="firma"><div class="ln">Belfast CM — Recibido</div></div></div></div><div class="noprint" style="text-align:center;padding:22px"><button onclick="window.print()" style="background:#0F1B2D;color:#fff;border:none;border-radius:10px;padding:13px 26px;font-size:14px;font-weight:700">Guardar / Imprimir PDF</button></div></body></html>`;
+    setPdfHtml(html);
+  }
+  function waFaltantes() {
+    const faltantes = grupos.map(g => ({ rubro: g.rubro, items: g.items.filter(i => !i.tiene) })).filter(g => g.items.length);
+    const txt = `*DEFINICIONES FALTANTES*\nObra: ${obraNom(obraId)}\nFecha: ${hoyStr()}\n\n` + faltantes.map(g => `*${g.rubro}*\n` + g.items.map(i => `• ${i.nombre}`).join("\n")).join("\n\n") + `\n\nFaltan ${faltan} de ${items.length} definiciones.\n(V+V Construcciones)`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
+  }
+
+  if (obras.length === 0) return <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>Todavía no hay obras cargadas.</div>;
+
+  return (<div>
+    <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Subí el Excel de definiciones, marcá las que ya tenés, y generá el PDF de faltantes para Belfast.</div>
+    <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
+    <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px", fontSize: 14, color: T.text, margin: "6px 0 14px", boxSizing: "border-box" }}>
+      {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+    </select>
+
+    <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: cargando ? "default" : "pointer", opacity: cargando ? 0.6 : 1, marginBottom: 14 }}>
+      {cargando ? "Leyendo el Excel…" : "⬆︎ Subir Excel de definiciones"}
+      <input type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={cargando} onChange={subirExcel} style={{ display: "none" }} />
+    </label>
+
+    {items.length > 0 && <>
+      {/* resumen */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        {[["Faltan", faltan, "#B91C1C"], ["Tenemos", tienen, "#16A34A"], ["Total", items.length, T.text]].map(([l, v, c]) => (
+          <div key={l} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 4px", textAlign: "center" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: c }}>{v}</div>
+            <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {grupos.map(g => (<div key={g.rubro} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 13, marginBottom: 10 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{g.rubro}</div>
+        {g.items.map(it => (<div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${T.border}` }}>
+          <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.tiene ? "#16A34A" : T.border}`, background: it.tiene ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.tiene ? "✓" : ""}</button>
+          <div style={{ flex: 1, fontSize: 13, color: it.tiene ? T.text : T.sub, textDecoration: it.tiene ? "none" : "none" }}>{it.nombre}<span style={{ fontSize: 9.5, fontWeight: 800, color: it.tiene ? "#16A34A" : "#B45309", marginLeft: 6 }}>{it.tiene ? "TENEMOS" : "FALTA"}</span></div>
+          <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>
+        </div>))}
+      </div>))}
+
+      {/* agregar manual */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        <input value={nuevoRubro} onChange={e => setNuevoRubro(e.target.value)} placeholder="Rubro" style={{ width: 110, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, color: T.text }} />
+        <input value={nuevaDef} onChange={e => setNuevaDef(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregarManual(); } }} placeholder="Agregar definición…" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, color: T.text }} />
+        <button onClick={agregarManual} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "0 15px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>＋</button>
+      </div>
+
+      <button onClick={pdfFaltantes} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📄 PDF de definiciones faltantes</button>
+      <button onClick={waFaltantes} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📲 Enviar faltantes por WhatsApp</button>
+      <button onClick={limpiar} style={{ width: "100%", background: "none", color: T.muted, border: "none", padding: "8px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>Borrar todo y empezar de nuevo</button>
+    </>}
+
+    {items.length === 0 && !cargando && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "10px", lineHeight: 1.6 }}>Subí el Excel de definiciones para armar el checklist.<br />También podés cargarlas a mano una vez que subas al menos una.</div>}
+
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", zIndex: 400, display: "flex", flexDirection: "column" }} onClick={() => setPdfHtml(null)}>
+      <div style={{ padding: "10px 16px", display: "flex", justifyContent: "flex-end" }}><button onClick={() => setPdfHtml(null)} style={{ background: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cerrar ✕</button></div>
+      <iframe title="PDF" srcDoc={pdfHtml} onClick={e => e.stopPropagation()} style={{ flex: 1, border: "none", background: "#fff", margin: "0 8px 8px", borderRadius: 10 }} />
+    </div>}
+  </div>);
+}
 
 function RecepcionDocs({ obras, empresa, docrecepcion, persistDoc }) {
   const [obraId, setObraId] = useState(obras[0]?.id || "");
@@ -131,8 +294,9 @@ export default function ContratistaApp() {
   const [tmpEmpresa, setTmpEmpresa] = useState("");
   const [obras, setObras] = useState([]);
   const [matpedidos, setMatpedidos] = useState([]);
-  const [vista, setVista] = useState("pedidos"); // "pedidos" | "recepcion"
+  const [vista, setVista] = useState("pedidos"); // "pedidos" | "recepcion" | "definiciones"
   const [docrecepcion, setDocrecepcion] = useState([]);
+  const [definiciones, setDefiniciones] = useState([]);
   const [personal, setPersonal] = useState([]);
   const [waFor, setWaFor] = useState(null);
   const [form, setForm] = useState(null);
@@ -147,6 +311,13 @@ export default function ContratistaApp() {
     try { localStorage.setItem("vv_docrecepcion", JSON.stringify(next)); } catch { }
     await storage.set("vv_docrecepcion", JSON.stringify(next)).catch(() => { });
   }
+  const lastWriteDef = useRef(0);
+  async function persistDef(next) {
+    lastWriteDef.current = Date.now();
+    setDefiniciones(next);
+    try { localStorage.setItem("vv_definiciones", JSON.stringify(next)); } catch { }
+    await storage.set("vv_definiciones", JSON.stringify(next)).catch(() => { });
+  }
 
   useEffect(() => { initPush("contratista"); }, []);
 
@@ -160,6 +331,7 @@ export default function ContratistaApp() {
         if (rp?.value) { try { setPersonal(JSON.parse(rp.value)); } catch { } }
         if (rm?.value && Date.now() - lastWrite.current > 8000) { try { const mp = JSON.parse(rm.value); setMatpedidos(prev => JSON.stringify(mp) !== JSON.stringify(prev) ? mp : prev); } catch { } }
         try { const rd = await storage.get("vv_docrecepcion"); if (alive && rd?.value && Date.now() - lastWriteDoc.current > 8000) { const dd = JSON.parse(rd.value); setDocrecepcion(prev => JSON.stringify(dd) !== JSON.stringify(prev) ? dd : prev); } } catch { }
+        try { const rf = await storage.get("vv_definiciones"); if (alive && rf?.value && Date.now() - lastWriteDef.current > 8000) { const df = JSON.parse(rf.value); setDefiniciones(prev => JSON.stringify(df) !== JSON.stringify(prev) ? df : prev); } } catch { }
       } catch { }
     }
     pull();
@@ -286,17 +458,17 @@ export default function ContratistaApp() {
     <div style={{ padding: "16px 20px 90px" }}>
       {/* solapas */}
       <div style={{ display: "flex", gap: 7, marginBottom: 16 }}>
-        {[["pedidos", "Pedidos"], ["recepcion", "Recepción de docs"]].map(([k, l]) => (
+        {[["pedidos", "Pedidos"], ["recepcion", "Recepción de docs"], ["definiciones", "Definiciones"]].map(([k, l]) => (
           <button key={k} onClick={() => setVista(k)} style={{ flex: 1, background: vista === k ? T.navy : "transparent", color: vista === k ? "#fff" : T.sub, border: `1px solid ${vista === k ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
         ))}
       </div>
 
-      {vista === "recepcion" ? <RecepcionDocs obras={obras} empresa={empresa} docrecepcion={docrecepcion} persistDoc={persistDoc} /> : <>
+      {vista === "recepcion" ? <RecepcionDocs obras={obras} empresa={empresa} docrecepcion={docrecepcion} persistDoc={persistDoc} /> : vista === "definiciones" ? <DefinicionesView obras={obras} empresa={empresa} definiciones={definiciones} persistDef={persistDef} /> : <>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Qué querés pedir</div>
       <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
         {TIPOS_PEDIDO.map(t => (
           <button key={t.id} onClick={() => nuevo(t.id)} style={{ flex: 1, background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", textAlign: "center", borderTop: `3px solid ${t.color}` }}>
-            <div style={{ fontSize: 20, marginBottom: 3 }}>{t.icon}</div>{t.label}
+            <div style={{ marginBottom: 5, display: "flex", justifyContent: "center" }}><TipoIcon tipo={t.id} size={26} color={t.color} /></div>{t.label}
           </button>
         ))}
       </div>
@@ -305,7 +477,7 @@ export default function ContratistaApp() {
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Todavía no hay pedidos. Elegí arriba qué querés pedir.</div>}
       {lista.map(p => { const mio = p.de === "contratista" && p.empresa === empresa; return (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${p.leido ? "#16A34A" : mio ? BRASS : T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 9, boxShadow: T.shadow }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoDe(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 7 }}>{tipoDe(p.tipo).icon} {tipoDe(p.tipo).label}</span>{obraNom(p.obra_id)} · {p.fecha}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoDe(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 7, verticalAlign: "middle" }}><TipoIcon tipo={p.tipo} size={12} color="#fff" /> {tipoDe(p.tipo).label}</span>{obraNom(p.obra_id)} · {p.fecha}</div>
           <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : p.de === "cliente" ? "#7C3AED" : BRASS, borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap" }}>{origenLabel(p)}</span>
         </div>
         <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{itemsTexto(p).map(l => `• ${l}`).join("\n")}</div>
