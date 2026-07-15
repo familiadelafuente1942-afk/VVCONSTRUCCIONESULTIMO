@@ -1130,6 +1130,7 @@ export default function App() {
   async function actualizar() { setRefrescando(true); const ok = await refrescar(); setRefrescando(false); setOkMsg(ok ? "Actualizado ✓" : "Sin cambios"); setTimeout(() => setOkMsg(""), 2000); }
   useEffect(() => { const t = setTimeout(() => { try { storage.set("vv_finanzas_resumen", resumenFinanciero(data)); } catch { } }, 1500); return () => clearTimeout(t); }, [data]);
   const [tab, setTab] = useState("ia");
+  const [certcliModo, setCertcliModo] = useState("obra"); // "obra" | "general"
   const [verConfig, setVerConfig] = useState(false);
   const cfg = data.config || {};
   T = cfg.modo === "oscuro" ? T_DARK : T_LIGHT; inp = buildInp(T); inpSm = buildInpSm(T);
@@ -1157,7 +1158,16 @@ export default function App() {
       {tab === "redet" && <RedeterminacionTab obras={obras} data={data} save={save} />}
       {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
       {tab === "costo" && <CertTab modo="costo" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
-      {tab === "cliente" && <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
+      {tab === "cliente" && <div>
+        <div style={{ display: "flex", gap: 7, padding: "14px 16px 0" }}>
+          {[["obra", "Por obra"], ["general", "Certificación general"]].map(([k, l]) => (
+            <button key={k} onClick={() => setCertcliModo(k)} style={{ flex: 1, background: certcliModo === k ? T.navy : "transparent", color: certcliModo === k ? "#fff" : T.sub, border: `1px solid ${certcliModo === k ? T.navy : T.border}`, borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
+          ))}
+        </div>
+        {certcliModo === "obra"
+          ? <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />
+          : <CertGeneral obras={obras} data={data} certsDe={certsDe} indices={indices} />}
+      </div>}
       {tab === "caja" && <CajaTab obras={obras} data={data} save={save} certs={certs} certsDe={certsDe} indices={indices} />}
       {tab === "resultado" && <ResultadoTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
       {tab === "agenda" && <AgendaTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
@@ -1411,6 +1421,80 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
 }
 
 // ═══════════ 2 y 3 · CERTIFICADOS
+/* ── CERTIFICACIÓN GENERAL ──
+   Un solo cuadro con TODAS las obras juntas para un período (mes).
+   Lista cada certificado emitido a Belfast (obra, N°, fecha, monto) y suma el total.
+   Sirve para mandarle a Belfast un PDF con todo junto, además del certificado por obra. */
+function CertGeneral({ obras, data, certsDe, indices }) {
+  const certs = data.certs || [];
+  const [pdfHtml, setPdfHtml] = useState(null);
+
+  // meses que tienen al menos un certificado, del más nuevo al más viejo
+  const meses = [...new Set(certs.map(c => mesDe(c.fecha)).filter(Boolean))].sort().reverse();
+  const [mes, setMes] = useState(meses[0] || "");
+  const mesSel = meses.includes(mes) ? mes : (meses[0] || "");
+
+  // cada renglón = un certificado del mes elegido (con su neto = lo que Belfast paga)
+  const filas = [];
+  obras.forEach(o => {
+    const cs = certsDe(o.id);
+    cs.forEach((c, i) => {
+      if (mesDe(c.fecha) !== mesSel) return;
+      const r = calcCert(c, o, cs, indices);
+      filas.push({ obra: o.nombre, certN: i + 1, totQ: quincenasObra(o), fecha: c.fecha, neto: r.neto, cert: c });
+    });
+  });
+  filas.sort((a, b) => a.obra < b.obra ? -1 : a.obra > b.obra ? 1 : (a.fecha < b.fecha ? -1 : 1));
+  const total = filas.reduce((s, f) => s + f.neto, 0);
+
+  function imprimir() {
+    const cfg = data.config || {};
+    const brandName = (cfg.nombre || "V+V Construcciones").toUpperCase();
+    const comitente = cfg.comitente || "Belfast Construction Management";
+    const brandHtml = cfg.logo
+      ? `<div class="brand" style="display:flex;align-items:center;gap:10px"><img src="${cfg.logo}" style="height:40px;width:40px;object-fit:contain;background:#fff;border-radius:7px;padding:2px"/><div>${brandName}<small>CONSTRUCTORA</small></div></div>`
+      : `<div class="brand">${brandName}<small>CONSTRUCTORA</small></div>`;
+    const rows = filas.map(f => `<tr><td>${f.obra}</td><td class="ctr">N° ${f.certN}${f.totQ ? ` de ${f.totQ}` : ""}</td><td class="ctr">${fmtISO(f.fecha)}</td><td class="rgt"><b>${money(f.neto)}</b></td></tr>`).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Certificación general ${mesLabel(mesSel)}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 34px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 40px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:10px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{text-align:right;font-size:11px;color:#cdd5e0}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 40px}.meta{display:flex;justify-content:space-between;margin:22px 0 6px;font-size:12.5px}.meta span{color:#5B6B7F}h2{font-size:12px;color:#5B6B7F;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px;border-bottom:1px solid #E3E8EF;padding-bottom:5px}p{font-size:12.5px;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#EAF0F7;color:#1B3A5B;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase}td{padding:9px 10px;border-bottom:1px solid #EEF1F5}.ctr{text-align:center}.rgt{text-align:right}.big td{border-top:2px solid #0F1B2D;font-size:17px;font-weight:800;color:#1B3A5B;padding-top:11px;background:#F4F6F9}.foot{display:flex;justify-content:space-between;font-size:11px;color:#5B6B7F;margin-top:54px}.sign{width:240px;text-align:center}.sign .ln{border-top:1px solid #0F1B2D;padding-top:5px}</style></head><body><div class="head">${brandHtml}<div class="doc"><b>CERTIFICACIÓN GENERAL</b>Período: ${mesLabel(mesSel)}<br>Fecha: ${fmtISO(hoyISO())}</div></div><div class="wrap"><div class="meta"><div><span>Comitente:</span> <b>${comitente}</b></div><div><span>Certificados:</span> <b>${filas.length}</b></div></div><p>Detalle consolidado de los certificados de obra emitidos en el período <b>${mesLabel(mesSel)}</b>, correspondientes a las obras ejecutadas por <b>${cfg.nombre || "V+V Construcciones"}</b> para <b>${comitente}</b>. El importe total resulta de la suma de los certificados individuales que se detallan a continuación.</p><h2>Certificados del período</h2><table><thead><tr><th>Obra</th><th class="ctr">Certificado</th><th class="ctr">Fecha</th><th class="rgt">Monto a pagar</th></tr></thead><tbody>${rows}<tr class="big"><td colspan="3" class="rgt">TOTAL GENERAL A PAGAR</td><td class="rgt">${money(total)}</td></tr></tbody></table><div class="foot"><div class="sign"><div style="height:44px"></div><div class="ln">${cfg.nombre || "V+V Construcciones"}</div></div><div class="sign"><div style="height:44px"></div><div class="ln">${comitente} — Conforme</div></div></div></div></body></html>`;
+    setPdfHtml(html);
+  }
+
+  if (obras.length === 0) return <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 20px" }}>Primero cargá obras y certificados.</div>;
+  if (meses.length === 0) return <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 20px", lineHeight: 1.6 }}>Todavía no emitiste certificados al cliente.<br />Cargá certificados por obra y acá vas a poder juntarlos en una certificación general para Belfast.</div>;
+
+  return (<div style={{ padding: "14px 16px 40px" }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, boxShadow: SHDsm }}>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 3 }}>Certificación general · {data.config?.comitente || "Belfast"}</div>
+      <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>Todas las obras juntas en un período. El total es la suma de los certificados de cada obra.</div>
+
+      <Field label="Período">
+        <select value={mesSel} onChange={e => setMes(e.target.value)} style={inp}>
+          {meses.map(m => <option key={m} value={m}>{mesLabel(m)}</option>)}
+        </select>
+      </Field>
+
+      <div style={{ marginTop: 6 }}>
+        {filas.length === 0 && <div style={{ fontSize: 12.5, color: T.muted, padding: "16px 0", textAlign: "center" }}>No hay certificados en {mesLabel(mesSel)}.</div>}
+        {filas.map((f, i) => (<div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "11px 0", borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.obra}</div>
+            <div style={{ fontSize: 10.5, color: T.muted }}>Cert. N° {f.certN}{f.totQ ? ` de ${f.totQ}` : ""} · {fmtISO(f.fecha)}</div>
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{money(f.neto)}</div>
+        </div>))}
+      </div>
+
+      {filas.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 13, marginTop: 4, borderTop: `2px solid ${T.text}` }}>
+        <span style={{ fontSize: 14, fontWeight: 800 }}>TOTAL GENERAL<span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}> · {filas.length} certificado{filas.length === 1 ? "" : "s"}</span></span>
+        <span style={{ fontSize: 20, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{money(total)}</span>
+      </div>}
+
+      {filas.length > 0 && <button onClick={imprimir} style={{ width: "100%", marginTop: 16, background: T.navy, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>📄 PDF de la certificación general</button>}
+    </div>
+    {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
+  </div>);
+}
+
 function CertTab({ modo, obras, data, save, certsDe, indices }) {
   const esCosto = modo === "costo";
   const [obraId, setObraId] = useState(obras[0]?.id || "");
