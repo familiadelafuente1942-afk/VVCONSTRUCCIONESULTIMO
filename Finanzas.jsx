@@ -1259,7 +1259,7 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
     const sInc = rubros.reduce((a, r) => a + r.pct, 0);
     if (Math.abs(sInc - 100) > 0.5) { if (!confirm(`Las incidencias suman ${sInc}% (no 100%). ¿Guardar igual?`)) return; }
     const extra = (form.costoExtra || []).filter(l => l.nombre?.trim() && String(l.valor).trim() !== "").map(l => ({ id: l.id || uid(), nombre: l.nombre.trim(), tipo: l.tipo === "pct" ? "pct" : "monto", valor: l.tipo === "pct" ? num(l.valor) : numMoney(l.valor) }));
-    const ob = { id: form.id || uid() + Date.now(), nombre: form.nombre.trim(), tipoRubros: form.tipoRubros || plantillaDe(form.rubros), inicio: form.inicio || hoyISO(), mesBase: form.mesBase || mesDe(form.inicio || hoyISO()), anticipoTipo: form.anticipoTipo || "pct", anticipoPct: num(form.anticipoPct), anticipoMontoFijo: numMoney(form.anticipoMontoFijo), imprevistosPct: num(form.imprevistosPct), plazoMeses: num(form.plazoMeses), m2: numMoney(form.m2), precioCliente: numMoney(form.precioCliente), costoM2: numMoney(form.costoM2), rubros, costoExtra: extra };
+    const ob = { id: form.id || uid() + Date.now(), nombre: form.nombre.trim(), tipoRubros: form.tipoRubros || plantillaDe(form.rubros), inicio: form.inicio || hoyISO(), mesBase: form.mesBase || mesDe(form.inicio || hoyISO()), anticipoTipo: form.anticipoTipo || "pct", anticipoPct: num(form.anticipoPct), anticipoMontoFijo: numMoney(form.anticipoMontoFijo), imprevistosPct: num(form.imprevistosPct), plazoMeses: num(form.plazoMeses), m2: numMoney(form.m2), precioCliente: numMoney(form.precioCliente), costoM2: numMoney(form.costoM2), rubros, costoExtra: extra, histCobrado: numMoney(form.histCobrado), histAjuste: numMoney(form.histAjuste), histPagado: numMoney(form.histPagado) };
     save(logH({ ...data, obras: form.id ? obras.map(o => o.id === ob.id ? ob : o) : [...obras, ob] }, `${form.id ? "Editó" : "Creó"} obra ${ob.nombre}`)); setForm(null);
   }
   function borrar(id) { if (!confirm("¿Eliminar esta obra y sus certificados?")) return; save({ ...data, obras: obras.filter(o => o.id !== id), certs: (data.certs || []).filter(c => c.obraId !== id) }); }
@@ -1282,6 +1282,38 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
         <div style={{ flex: 1 }}><Field label="Inicio"><input type="date" value={form.inicio} onChange={e => setForm({ ...form, inicio: e.target.value })} style={inp} /></Field></div>
         <div style={{ flex: 1 }}><Field label="Plazo (meses)"><input value={form.plazoMeses} onChange={e => setForm({ ...form, plazoMeses: e.target.value })} inputMode="numeric" placeholder="8" style={inp} /></Field></div>
       </div>
+
+      {/* Histórico: para obras ya cobradas sin certificados en la app */}
+      {(() => {
+        const abierto = form._histAbierto || num(form.histCobrado) > 0 || num(form.histPagado) > 0 || num(form.histAjuste) > 0;
+        const hc = numMoney(form.histCobrado), ha = numMoney(form.histAjuste), hp = numMoney(form.histPagado);
+        const fact = hc + ha, util = fact - hp;
+        return (<div style={{ background: T.bg, borderRadius: 11, padding: abierto ? 13 : 0, marginBottom: 12, border: abierto ? `1px solid ${T.border}` : "none" }}>
+          {!abierto
+            ? <button onClick={() => setForm({ ...form, _histAbierto: true })} style={{ width: "100%", background: "none", color: T.accent, border: `1px dashed ${T.border}`, borderRadius: 10, padding: "11px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>＋ Ya se cobró sin certificado (cargar a mano)</button>
+            : <>
+              <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Ya cobrado sin certificado</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12, lineHeight: 1.45 }}>Para obras viejas que ya cobraste sin cargar certificados acá. Se suma a los resultados como ya realizado. El ajuste por inflación lo calculás afuera y lo ponés a mano.</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>Cobrado (sin ajuste)</span>
+                <input value={form.histCobrado || ""} onChange={e => setForm({ ...form, histCobrado: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 140, textAlign: "right" }} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>＋ Ajuste inflación <span style={{ color: T.muted, fontWeight: 400 }}>(a mano)</span></span>
+                <input value={form.histAjuste || ""} onChange={e => setForm({ ...form, histAjuste: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 140, textAlign: "right" }} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>Pagado (costo)</span>
+                <input value={form.histPagado || ""} onChange={e => setForm({ ...form, histPagado: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 140, textAlign: "right" }} />
+              </div>
+              {(fact > 0 || hp > 0) && <div style={{ background: T.card, borderRadius: 9, padding: 10, marginTop: 4, fontSize: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: T.sub }}>Facturado (cobrado + ajuste)</span><b>{money(fact)}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: T.sub }}>Utilidad histórica</span><b style={{ color: util >= 0 ? T.ok : "#EF4444" }}>{money(util)}</b></div>
+              </div>}
+              <button onClick={() => setForm({ ...form, _histAbierto: false, histCobrado: "", histAjuste: "", histPagado: "" })} style={{ marginTop: 10, background: "none", border: "none", color: T.muted, fontSize: 11, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>Quitar histórico</button>
+            </>}
+        </div>);
+      })()}
       <Field label="Anticipo">
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 5 }}>
           <div style={{ display: "flex", background: T.bg, borderRadius: 9, padding: 3, border: `1px solid ${T.border}` }}>
@@ -1392,7 +1424,7 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
           })()}
         </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          <button onClick={() => setForm({ id: o.id, nombre: o.nombre, tipoRubros: o.tipoRubros || plantillaDe(o.rubros), inicio: o.inicio, mesBase: o.mesBase || mesDe(o.inicio), anticipoTipo: o.anticipoTipo || "pct", anticipoPct: String(o.anticipoPct || ""), anticipoMontoFijo: o.anticipoMontoFijo ? fmtMiles(o.anticipoMontoFijo) : "", imprevistosPct: String(o.imprevistosPct != null ? o.imprevistosPct : 5), plazoMeses: o.plazoMeses ? String(o.plazoMeses) : "", m2: fmtMiles(o.m2), precioCliente: fmtMiles(o.precioCliente), costoM2: fmtMiles(o.costoM2), rubros: (o.rubros || []).map(r => ({ ...r, pct: String(r.pct) })), costoExtra: (o.costoExtra || []).map(l => ({ ...l, valor: l.tipo === "pct" ? String(l.valor) : fmtMiles(l.valor) })) })} style={{ background: T.al, color: T.accent, border: "none", borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+          <button onClick={() => setForm({ id: o.id, nombre: o.nombre, tipoRubros: o.tipoRubros || plantillaDe(o.rubros), inicio: o.inicio, mesBase: o.mesBase || mesDe(o.inicio), anticipoTipo: o.anticipoTipo || "pct", anticipoPct: String(o.anticipoPct || ""), anticipoMontoFijo: o.anticipoMontoFijo ? fmtMiles(o.anticipoMontoFijo) : "", imprevistosPct: String(o.imprevistosPct != null ? o.imprevistosPct : 5), plazoMeses: o.plazoMeses ? String(o.plazoMeses) : "", m2: fmtMiles(o.m2), precioCliente: fmtMiles(o.precioCliente), costoM2: fmtMiles(o.costoM2), rubros: (o.rubros || []).map(r => ({ ...r, pct: String(r.pct) })), costoExtra: (o.costoExtra || []).map(l => ({ ...l, valor: l.tipo === "pct" ? String(l.valor) : fmtMiles(l.valor) })), histCobrado: o.histCobrado ? fmtMiles(o.histCobrado) : "", histAjuste: o.histAjuste ? fmtMiles(o.histAjuste) : "", histPagado: o.histPagado ? fmtMiles(o.histPagado) : "" })} style={{ background: T.al, color: T.accent, border: "none", borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
           {(() => {
             const tipo = o.tipoRubros || plantillaDe(o.rubros);
             const esBase = baseDe(data, tipo).origen === o.nombre;
@@ -2683,6 +2715,18 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const saldoImprev = totImprev - usadoImprev;
   const gastosPorCat = {}; gastosArr.forEach(g => { if (esImprev(g.cat)) return; gastosPorCat[g.cat || "Otro"] = (gastosPorCat[g.cat || "Otro"] || 0) + num(g.monto); });
   Object.values(porObra).forEach(p => { p.fijo = cuotaQ * p.nCert; totFijo += p.fijo; p.costo = p.costoDir; p.res = p.util - p.impuestos - p.imprev - p.fijo - p.gastos; p.restoCobrar = Math.max(0, p.presupCli - p.cobro); p.restoPagar = Math.max(0, p.presupCos - p.costoDir); });
+
+  // Obras ya cobradas sin certificado: histórico cargado a mano. Se suma como ya realizado.
+  let totHistAjuste = 0;
+  obras.forEach(o => {
+    const hc = num(o.histCobrado), ha = num(o.histAjuste), hp = num(o.histPagado);
+    if (hc <= 0 && ha <= 0 && hp <= 0) return;
+    const fact = hc + ha;             // facturado real = cobrado + ajuste
+    totFact += fact; totCobro += fact; totCostoDir += hp; totUtil += (fact - hp); totHistAjuste += ha;
+    if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, fact: 0, cobro: 0, costoDir: 0, impuestos: 0, imprev: 0, util: 0, nCert: 0, gastos: 0, imprevAcum: 0, imprevUsado: 0, anticipo: anticipoDe(o), amort: 0, presupCli: presupCliente(o), presupCos: presupCosto(o), fijo: 0, costo: 0, res: 0, restoCobrar: 0, restoPagar: 0 };
+    const p = porObra[o.id];
+    p.fact += fact; p.cobro += fact; p.costoDir += hp; p.costo += hp; p.util += (fact - hp); p.res += (fact - hp); p.histAjuste = ha; p.esHist = true;
+  });
   const totCosto = totCostoDir;
   const totRes = totUtil - totImpuestos - totImprev - totFijo - totGastos;
   const movs = data.movimientos || [];
