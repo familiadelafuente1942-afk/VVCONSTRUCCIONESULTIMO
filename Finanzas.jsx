@@ -2877,6 +2877,57 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
         {obrasIncompletas > 0 && <div style={{ fontSize: 11, color: "#FCD34D", marginTop: 11, lineHeight: 1.45 }}>Ojo: {obrasIncompletas} obra{obrasIncompletas === 1 ? "" : "s"} sin m², precio o costo cargado. El número va a cambiar cuando los completes.</div>}
       </div>);
     })()}
+
+    {/* ── PLANILLA POR OBRA: cuánto deja cada una (sin estructura) ── */}
+    {obras.length > 0 && (() => {
+      const filas = obras.map(o => {
+        const p = porObra[o.id] || {};
+        const cobrado = p.fact || 0;        // facturado real: certificados (con ajuste) + histórico
+        const pagado = p.costoDir || 0;     // costo de obra
+        return { nombre: o.nombre, presup: presupCliente(o), cobrado, pagado, util: cobrado - pagado };
+      });
+      const tCob = filas.reduce((s, f) => s + f.cobrado, 0);
+      const tPag = filas.reduce((s, f) => s + f.pagado, 0);
+      const tUtil = tCob - tPag;
+      const conMov = filas.filter(f => f.cobrado > 0 || f.pagado > 0);
+      return (<div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, marginBottom: 14, boxShadow: SHDsm }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 2 }}>Cuánto deja cada obra</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12 }}>Lo cobrado menos lo pagado, por obra. Sin gastos de estructura.</div>
+
+        {/* encabezado */}
+        <div style={{ display: "flex", fontSize: 9.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em", paddingBottom: 7, borderBottom: `1px solid ${T.border}` }}>
+          <span style={{ flex: 1.4 }}>Obra</span>
+          <span style={{ flex: 1, textAlign: "right" }}>Cobré</span>
+          <span style={{ flex: 1, textAlign: "right" }}>Pagué</span>
+          <span style={{ flex: 1, textAlign: "right" }}>Utilidad</span>
+        </div>
+
+        {filas.map((f, i) => {
+          const mg = f.cobrado > 0 ? f.util / f.cobrado * 100 : 0;
+          const sinMov = f.cobrado === 0 && f.pagado === 0;
+          return (<div key={i} style={{ display: "flex", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.border}`, opacity: sinMov ? 0.5 : 1 }}>
+            <div style={{ flex: 1.4, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</div>
+              <div style={{ fontSize: 9.5, color: T.muted }}>Presup. {money(f.presup)}</div>
+            </div>
+            <span style={{ flex: 1, textAlign: "right", fontSize: 12, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: T.sub }}>{sinMov ? "—" : money(f.cobrado)}</span>
+            <span style={{ flex: 1, textAlign: "right", fontSize: 12, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: T.sub }}>{sinMov ? "—" : money(f.pagado)}</span>
+            <span style={{ flex: 1, textAlign: "right", fontSize: 12.5, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: sinMov ? T.muted : (f.util >= 0 ? T.ok : "#EF4444") }}>{sinMov ? "—" : money(f.util)}</span>
+          </div>);
+        })}
+
+        {/* total */}
+        <div style={{ display: "flex", alignItems: "center", paddingTop: 11, marginTop: 2, borderTop: `2px solid ${T.text}` }}>
+          <span style={{ flex: 1.4, fontSize: 13, fontWeight: 800 }}>TOTAL</span>
+          <span style={{ flex: 1, textAlign: "right", fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{money(tCob)}</span>
+          <span style={{ flex: 1, textAlign: "right", fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{money(tPag)}</span>
+          <span style={{ flex: 1, textAlign: "right", fontSize: 14, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: tUtil >= 0 ? T.ok : "#EF4444" }}>{money(tUtil)}</span>
+        </div>
+
+        {conMov.length === 0 && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 10, lineHeight: 1.45 }}>Todavía ninguna obra tiene certificados ni histórico cargado. Cuando cargues, acá vas a ver cuánto deja cada una.</div>}
+        <div style={{ fontSize: 10, color: T.muted, marginTop: 10, lineHeight: 1.45 }}>“Cobré” es lo facturado con ajuste (certificados + histórico). “Pagué” es el costo de obra. La utilidad es la diferencia, antes de estructura, impuestos e imprevistos.</div>
+      </div>);
+    })()}
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 16, boxShadow: SHD, border: `1px solid rgba(176,137,79,.28)` }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Resultado operativo</div>
       <div style={{ fontSize: 30, fontWeight: 800, margin: "6px 0 4px", color: totRes >= 0 ? "#7DE0A6" : "#FCA5A5" }}>{money(totRes)}</div>
