@@ -472,8 +472,71 @@ function calcCPM(tareas) {
 /* Todo el plan de una obra: fechas, definiciones, alertas, plata */
 function calcObra(obra, diasAviso, finanzas) {
   const aviso = numSimple(diasAviso) || 15;
-  const base = calcCPM(obra?.tareas || []);
   const hoy = hoyISO();
+
+  // ── MODO MANUAL: las fechas las carga el usuario a mano, sin dependencias ni camino crítico ──
+  if (obra?.modoManual) {
+    const raw = obra?.tareas || [];
+    // el calendario arranca en la fecha más temprana cargada (o el inicio de obra)
+    const fechas = raw.map(t => t.desde).filter(Boolean);
+    const base = fechas.length ? fechas.reduce((m, f) => f < m ? f : m, fechas[0]) : (obra.inicio || hoy);
+    const tareas = raw.map(t => {
+      const vvInicio = t.desde || obra.inicio || hoy;
+      const vvFin = t.hasta && t.hasta >= vvInicio ? t.hasta : vvInicio;
+      const offCal = diasEntre(base, vvInicio);
+      const durCal = diasEntre(vvInicio, vvFin) + 1;
+      const dias = durCal;
+      const desvio = (t.bfFin && vvFin) ? diasEntre(t.bfFin, vvFin) : null;
+      const defs = (t.defs || []).map(d => {
+        const limite = isoMas(vvInicio, -numSimple(d.diasAntes));
+        const faltan = limite ? diasEntre(hoy, limite) : null;
+        let estado = "futura";
+        if (d.ok) estado = "ok";
+        else if (faltan !== null && faltan < 0) estado = "vencida";
+        else if (faltan !== null && faltan <= aviso) estado = "urgente";
+        return { ...d, limite, faltan, estado, tareaNombre: t.nombre, tareaInicio: vvInicio, tareaId: t.id, critica: false };
+      });
+      const trabas = defs.filter(d => !d.ok);
+      const arrancaEn = diasEntre(hoy, vvInicio);
+      const bloqueada = trabas.length > 0 && arrancaEn <= aviso;
+      return { ...t, es: offCal, ef: offCal + durCal, critica: false, holgura: null, vvInicio, vvFin, dias, desvio, defs, trabas, bloqueada, arrancaEn, offCal, durCal };
+    });
+    const fin = tareas.reduce((m, t) => (!m || t.vvFin > m) ? t.vvFin : m, "");
+    const ini = tareas.reduce((m, t) => (!m || t.vvInicio < m) ? t.vvInicio : m, "");
+    const finDias = (fin && ini) ? diasEntre(ini, fin) + 1 : 0;
+    const meses = finDias / 30.44;
+    const excede = finDias > TOPE_DIAS;
+    const pesoTotal = tareas.reduce((s, t) => s + numSimple(t.peso), 0);
+    const avancePond = pesoTotal > 0 ? tareas.reduce((s, t) => s + numSimple(t.peso) * numSimple(t.avance), 0) / pesoTotal : 0;
+    const defs = tareas.flatMap(t => t.defs);
+    const pendientes = defs.filter(d => !d.ok);
+    const vencidas = pendientes.filter(d => d.estado === "vencida");
+    const urgentes = pendientes.filter(d => d.estado === "urgente");
+    const fo = finanzas?.obras?.find(o => o.id === obra.finanzasObraId);
+    const contrato = fo ? numSimple(fo.m2) * numSimple(fo.precioCliente) : 0;
+    const costoTotal = fo ? numSimple(fo.m2) * numSimple(fo.costoM2) : 0;
+    const conPlata = tareas.map(t => {
+      const frac = pesoTotal > 0 ? numSimple(t.peso) / pesoTotal : 0;
+      const valor = contrato * frac, costo = costoTotal * frac;
+      return { ...t, valor, costo, ejecutado: valor * numSimple(t.avance) / 100 };
+    });
+    const ejecutado = conPlata.reduce((s, t) => s + t.ejecutado, 0);
+    const certificado = conPlata.filter(t => t.certificado).reduce((s, t) => s + t.valor, 0);
+    const pagado = conPlata.filter(t => t.pagado).reduce((s, t) => s + t.costo, 0);
+    const costoEjec = conPlata.reduce((s, t) => s + t.costo * numSimple(t.avance) / 100, 0);
+    const sinCertificar = ejecutado - certificado;
+    const enCurso = conPlata.filter(t => t.vvInicio <= hoy && t.vvFin >= hoy);
+    const bloqueadas = conPlata.filter(t => t.bloqueada);
+    return {
+      tareas: conPlata, finDias, finHabiles: 0, fin, meses, excede,
+      defs, pendientes, vencidas, urgentes, pesoTotal, avancePond,
+      contrato, costoTotal, ejecutado, certificado, pagado, costoEjec, sinCertificar,
+      ligada: !!fo, finanzasNombre: fo?.nombre || "",
+      criticas: [], enCurso, bloqueadas, base, modoManual: true,
+    };
+  }
+
+  const base = calcCPM(obra?.tareas || []);
 
   const tareas = base.map(t => {
     // el CPM da días HÁBILES; acá los paso a fechas reales, salteando sábados y domingos
@@ -892,7 +955,7 @@ function FilaDef({ d, onToggle, onAvisar, onBorrar, onEditar, compacto }) {
 }
 
 /* ─── Una tarea, en modo edición ─── */
-function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar }) {
+function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar, manual }) {
   const [ab, setAb] = useState(false);
   const col = t.critica ? T.critico : (COLOR_ETAPA[t.etapa] || T.accent);
   const rojas = t.trabas.filter(d => d.estado === "vencida").length;
@@ -905,7 +968,7 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 9.5, color: col, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", display: "flex", gap: 6, alignItems: "center" }}>
             <span>{t.cod}</span>
-            {t.critica ? <span style={{ color: T.critico }}>· CRÍTICA</span> : <span style={{ color: T.muted }}>· holgura {t.holgura}d</span>}
+            {manual ? <span style={{ color: T.muted }}>· {t.etapa}</span> : (t.critica ? <span style={{ color: T.critico }}>· CRÍTICA</span> : <span style={{ color: T.muted }}>· holgura {t.holgura}d</span>)}
           </div>
           <div style={{ fontSize: 14, fontWeight: 700, marginTop: 1 }}>{t.nombre}</div>
           <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3 }}>
@@ -933,7 +996,16 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar }) {
 
     {ab && <div style={{ padding: "0 13px 13px", borderTop: `1px solid ${T.border}` }}>
       <input defaultValue={t.nombre} onBlur={e => onEditar({ nombre: e.target.value })} style={inp} />
-      <div style={{ display: "flex", gap: 7, marginTop: 8 }}>
+      {manual ? (<div style={{ display: "flex", gap: 7, marginTop: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Desde</div>
+          <input type="date" defaultValue={t.desde || ""} onBlur={e => onEditar({ desde: e.target.value })} style={inpSm} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Hasta</div>
+          <input type="date" defaultValue={t.hasta || ""} onBlur={e => onEditar({ hasta: e.target.value })} style={inpSm} />
+        </div>
+      </div>) : (<div style={{ display: "flex", gap: 7, marginTop: 8 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Dura (días)</div>
           <input defaultValue={t.dias} onBlur={e => onEditar({ dias: Math.max(1, numSimple(e.target.value)) })} inputMode="numeric" style={inpSm} />
@@ -946,7 +1018,17 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar }) {
           <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Avance %</div>
           <input defaultValue={t.avance} onBlur={e => onEditar({ avance: Math.max(0, Math.min(100, numSimple(e.target.value))) })} inputMode="numeric" style={inpSm} />
         </div>
-      </div>
+      </div>)}
+      {manual && <div style={{ display: "flex", gap: 7, marginTop: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Peso (% contrato)</div>
+          <input defaultValue={t.peso} onBlur={e => onEditar({ peso: numSimple(e.target.value) })} inputMode="decimal" style={inpSm} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Avance %</div>
+          <input defaultValue={t.avance} onBlur={e => onEditar({ avance: Math.max(0, Math.min(100, numSimple(e.target.value))) })} inputMode="numeric" style={inpSm} />
+        </div>
+      </div>}
       <div style={{ marginTop: 8 }}>
         <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Etapa</div>
         <select defaultValue={t.etapa} onChange={e => onEditar({ etapa: e.target.value })} style={inpSm}>
@@ -954,7 +1036,8 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar }) {
         </select>
       </div>
 
-      {/* dependencias: de acá sale el camino crítico */}
+      {/* dependencias: de acá sale el camino crítico (solo en modo automático) */}
+      {!manual && <>
       <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginTop: 14, letterSpacing: ".05em" }}>Depende de</div>
       <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2, lineHeight: 1.45 }}>De acá sale el camino crítico. FC = arranca cuando la otra termina. CC = arranca junto con la otra.</div>
       {(t.deps || []).map((d, i) => (
@@ -973,6 +1056,7 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar }) {
       <div style={{ marginTop: 7 }}>
         <Btn chico tipo="suave" onClick={() => otras[0] && onEditar({ deps: [...(t.deps || []), { cod: otras[0].cod, tipo: "FC", lag: 0 }] })}>+ Dependencia</Btn>
       </div>
+      </>}
 
       <div style={{ fontSize: 10.5, fontWeight: 800, color: BRASS, textTransform: "uppercase", marginTop: 14, letterSpacing: ".05em" }}>Fechas de Belfast</div>
       <div style={{ display: "flex", gap: 7, marginTop: 6 }}>
@@ -1547,8 +1631,20 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
       id: uid(), cod: "T" + String((o.tareas || []).length + 1).padStart(2, "0"),
       etapa: "Terminaciones", nombre: "Nueva tarea", dias: 10, deps: [], peso: 1,
       avance: 0, certificado: false, pagado: false, bfInicio: "", bfFin: "", defs: [],
+      desde: o.modoManual ? (o.inicio || hoyISO()) : "", hasta: "",
     }],
   }));
+  const cambiarModo = (manual) => {
+    if (manual && !obra.modoManual) {
+      // al pasar a manual, sembramos fechas desde/hasta usando lo que el CPM ya calculó, para no perder nada
+      guardarObra(o => ({ ...o, modoManual: true, tareas: (o.tareas || []).map(t => {
+        const p = (plan.tareas || []).find(x => x.id === t.id);
+        return { ...t, desde: t.desde || p?.vvInicio || o.inicio || hoyISO(), hasta: t.hasta || p?.vvFin || "" };
+      }) }));
+    } else if (!manual && obra.modoManual) {
+      guardarObra(o => ({ ...o, modoManual: false }));
+    }
+  };
   const normalizar = () => {
     const total = plan.pesoTotal;
     if (total <= 0) return;
@@ -1591,11 +1687,23 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
     </div>
 
     {vista === "plan" && <>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, background: T.bg, borderRadius: 10, padding: 4, border: `1px solid ${T.border}` }}>
+        {[[false, "Automático", "encadena por dependencias"], [true, "Manual", "cargás fecha a mano"]].map(([m, l, sub]) => (
+          <button key={l} onClick={() => cambiarModo(m)} style={{ flex: 1, background: !!obra.modoManual === m ? T.navy : "transparent", color: !!obra.modoManual === m ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 6px", cursor: "pointer", textAlign: "center" }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700 }}>{l}</div>
+            <div style={{ fontSize: 9, opacity: .8, marginTop: 1 }}>{sub}</div>
+          </button>
+        ))}
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
         <span style={{ fontSize: 12, color: T.sub, flex: 1 }}>Inicio de obra</span>
         <input type="date" defaultValue={obra.inicio} onBlur={e => guardarObra(o => ({ ...o, inicio: e.target.value }))} style={{ ...inpSm, width: 150 }} />
       </div>
-      <div style={{ background: TONO.rojo().b, border: `1px solid ${TONO.rojo().bd}`, borderRadius: 11, padding: 12, marginBottom: 10 }}>
+      {obra.modoManual
+        ? <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 11, padding: 12, marginBottom: 10 }}>
+            <div style={{ fontSize: 11.5, color: T.sub, lineHeight: 1.55 }}>Modo manual: en cada tarea cargás la fecha <b>Desde</b> y <b>Hasta</b>. No hay dependencias ni camino crítico — el Gantt se dibuja con las fechas que pongas.</div>
+          </div>
+        : <div style={{ background: TONO.rojo().b, border: `1px solid ${TONO.rojo().bd}`, borderRadius: 11, padding: 12, marginBottom: 10 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.critico, textTransform: "uppercase", letterSpacing: ".05em" }}>El camino crítico</div>
         <div style={{ fontSize: 11.5, color: T.text, marginTop: 4, lineHeight: 1.55 }}>
           {plan.criticas.length} tareas sin holgura. Si cualquiera se atrasa un día, la obra entera termina un día más tarde.
@@ -1606,8 +1714,8 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
             {soloCrit ? "Ver todas las tareas" : "Ver solo las críticas"}
           </Btn>
         </div>
-      </div>
-      <Gantt obra={obra} plan={plan} soloCriticas={soloCrit} />
+      </div>}
+      <Gantt obra={obra} plan={plan} soloCriticas={obra.modoManual ? false : soloCrit} />
     </>}
 
     {vista === "agenda" && <Agenda obra={obra} plan={plan} />}
@@ -1666,7 +1774,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
         return (<div key={et} style={{ marginTop: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: COLOR_ETAPA[et], textTransform: "uppercase", letterSpacing: ".06em" }}>{et}</div>
           {ts.map(t => (
-            <FilaTarea key={t.id} t={t} plan={plan}
+            <FilaTarea key={t.id} t={t} plan={plan} manual={!!obra.modoManual}
               onEditar={(c) => editarTarea(t.id, c)}
               onBorrar={() => borrarTarea(t.id)}
               onAddDef={() => addDef(t.id)}
@@ -1836,6 +1944,7 @@ export default function Cronograma() {
   const [nueva, setNueva] = useState(false);
   const [nom, setNom] = useState("");
   const [ini, setIni] = useState(hoyISO());
+  const [modoNuevo, setModoNuevo] = useState("auto"); // "auto" | "manual"
   const [toast, setToast] = useState("");
   const escrito = useRef(0);
   const avisarToast = (t) => { setToast(t); setTimeout(() => setToast(""), 3800); };
@@ -1934,9 +2043,12 @@ export default function Cronograma() {
 
   const crearObra = () => {
     if (!nom.trim()) return;
-    const o = { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", tareas: plantillaAObra(data.plantilla) };
+    const manual = modoNuevo === "manual";
+    const o = manual
+      ? { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", modoManual: true, tareas: [] }
+      : { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", tareas: plantillaAObra(data.plantilla) };
     guardar({ ...data, obras: [...obras, o] });
-    setNom(""); setIni(hoyISO()); setNueva(false);
+    setNom(""); setIni(hoyISO()); setNueva(false); setModoNuevo("auto");
     setObraId(o.id); setPantalla("obra");
   };
 
@@ -2050,9 +2162,18 @@ export default function Cronograma() {
             <span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Fecha de inicio</span>
             <input type="date" value={ini} onChange={e => setIni(e.target.value)} style={{ ...inpSm, width: 155 }} />
           </div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "12px 0 6px" }}>Cómo la vas a cargar</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {[["auto", "Automático", "usa el modelo y encadena solo"], ["manual", "Manual", "vacía, cargás fechas a mano"]].map(([m, l, sub]) => (
+              <button key={m} onClick={() => setModoNuevo(m)} style={{ flex: 1, background: modoNuevo === m ? T.navy : T.bg, color: modoNuevo === m ? "#fff" : T.text, border: `1px solid ${modoNuevo === m ? T.navy : T.border}`, borderRadius: 9, padding: "9px 6px", cursor: "pointer", textAlign: "left" }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700 }}>{l}</div>
+                <div style={{ fontSize: 9.5, opacity: .8, marginTop: 1, lineHeight: 1.3 }}>{sub}</div>
+              </button>
+            ))}
+          </div>
           <div style={{ marginTop: 11 }}><Btn full onClick={crearObra} disabled={!nom.trim()}>Crear cronograma</Btn></div>
           <div style={{ fontSize: 11, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>
-            Copia las {data.plantilla?.length || 0} tareas del modelo, con sus dependencias y definiciones.
+            {modoNuevo === "manual" ? "Arranca vacía. Vas agregando tareas y en cada una ponés la fecha desde y hasta." : `Copia las ${data.plantilla?.length || 0} tareas del modelo, con sus dependencias y definiciones.`}
           </div>
         </div>}
 
