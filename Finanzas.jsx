@@ -2612,6 +2612,19 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const ventaEsperada = obras.reduce((s, o) => s + presupCliente(o), 0);
   const costoEsperado = obras.reduce((s, o) => s + presupCosto(o), 0);
   const utilEsperada = ventaEsperada - costoEsperado;   // BRUTA: todavía no pagó la estructura
+
+  // Lo que YA ganamos: la utilidad contenida en lo certificado hasta hoy.
+  // De cada obra tomo su último certificado (que trae el avance acumulado) y calculo
+  // lo certificado al cliente menos su costo. Eso ya está ganado; el resto falta ganarlo.
+  const utilGanada = obras.reduce((s, o) => {
+    const cs = certsDe(o.id);
+    const ult = cs[cs.length - 1];
+    if (!ult) return s;
+    return s + (clienteAcumDe(ult.cantidades, o) - costoAcumDe(ult.cantidades, o));
+  }, 0);
+  const utilRestante = utilEsperada - utilGanada;   // lo que falta ganar
+  const pctGanado = utilEsperada > 0 ? utilGanada / utilEsperada * 100 : 0;
+  const hayCerts = obras.some(o => certsDe(o.id).length > 0);
   const margenEsperado = ventaEsperada > 0 ? utilEsperada / ventaEsperada * 100 : 0;
 
   // ── DE LA BRUTA A LA NETA ──
@@ -2661,6 +2674,26 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
             <div style={{ fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3, color: "rgba(255,255,255,.85)" }}>{money(costoEsperado)}</div>
           </div>
         </div>
+
+        {/* Lo que ya ganamos vs lo que falta ganar */}
+        {hayCerts && <div style={{ marginTop: 14, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)" }}>
+          <div style={{ display: "flex", gap: 18 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Ya ganado <span style={{ color: "rgba(255,255,255,.42)" }}>· certificado</span></div>
+              <div style={{ fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3, color: "rgba(255,255,255,.7)" }}>{money(utilGanada)}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, color: BRASS, textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.06em" }}>Falta ganar</div>
+              <div style={{ fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3, color: "#7DE0A6" }}>{money(utilRestante)}</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 10, height: 7, borderRadius: 5, overflow: "hidden", background: "rgba(255,255,255,.12)", display: "flex" }}>
+            <div style={{ width: `${Math.max(0, Math.min(100, pctGanado))}%`, background: "rgba(255,255,255,.5)" }} />
+          </div>
+          <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.55)", marginTop: 6, lineHeight: 1.45 }}>
+            Ya ganaste el {pctGanado.toFixed(0)}% de la utilidad esperada con lo certificado. Lo cobrado ya es tuyo; lo verde es lo que queda por delante.
+          </div>
+        </div>}
 
         {/* Los metros a construir, y lo que deja cada uno (bruto) */}
         <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 18 }}>
