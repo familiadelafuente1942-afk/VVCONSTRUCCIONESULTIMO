@@ -156,7 +156,7 @@ export default function ContratistaApp() {
       try {
         const [ro, rm, rp] = await Promise.all([storage.get("vv_obras"), storage.get("vv_matpedidos"), storage.get("vv_personal")]);
         if (!alive) return;
-        if (ro?.value) { try { setObras(JSON.parse(ro.value)); } catch { } }
+        if (ro?.value) { try { setObras(JSON.parse(ro.value).filter(o => { const n = (o.nombre || "").toLowerCase(); return !(n.includes("canning") && n.includes("815")); })); } catch { } }
         if (rp?.value) { try { setPersonal(JSON.parse(rp.value)); } catch { } }
         if (rm?.value && Date.now() - lastWrite.current > 8000) { try { const mp = JSON.parse(rm.value); setMatpedidos(prev => JSON.stringify(mp) !== JSON.stringify(prev) ? mp : prev); } catch { } }
         try { const rd = await storage.get("vv_docrecepcion"); if (alive && rd?.value && Date.now() - lastWriteDoc.current > 8000) { const dd = JSON.parse(rd.value); setDocrecepcion(prev => JSON.stringify(dd) !== JSON.stringify(prev) ? dd : prev); } } catch { }
