@@ -2689,24 +2689,42 @@ function PlanillaEstructura({ data, save }) {
 function IvaPanel({ data, save }) {
   const facturas = data.ivaFacturas || [];
   const [abrir, setAbrir] = useState(false);
-  const [f, setF] = useState({ desc: "", fecha: hoyISO(), total: "" });
+  const [f, setF] = useState({ obra: "", cliente: "", nroFactura: "", fecha: hoyISO(), montoTotal: "", montoIva: "" });
   const [cobrandoId, setCobrandoId] = useState(null);
   const [cob, setCob] = useState({ monto: "", fecha: hoyISO() });
+  const [subiendoId, setSubiendoId] = useState("");
 
   const setFacturas = (next) => save(logH({ ...data, ivaFacturas: next }, "Estado de IVA"));
 
+  // subir el archivo de la factura (PDF o foto) y guardarlo en la factura
+  async function subirArchivoFactura(id, e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setSubiendoId(id);
+    try {
+      const url = await subirArchivo(file);
+      if (url) setFacturas(facturas.map(x => x.id === id ? { ...x, archivoUrl: url, archivoNombre: file.name, archivoTipo: file.type || "" } : x));
+      else alert("No se pudo subir el archivo. Revisá la conexión.");
+    } catch { alert("No se pudo subir el archivo."); }
+    setSubiendoId("");
+  }
+  const quitarArchivo = (id) => { if (!window.confirm("¿Quitar el archivo adjunto?")) return; setFacturas(facturas.map(x => x.id === id ? { ...x, archivoUrl: "", archivoNombre: "", archivoTipo: "" } : x)); };
+
+  // compat: facturas viejas guardaban el IVA en "total" y la descripción en "desc"
+  const ivaDe = (fx) => num(fx.montoIva != null ? fx.montoIva : fx.total);
   const cobradoDe = (fx) => (fx.cobros || []).reduce((s, c) => s + num(c.monto), 0);
-  const totalIva = facturas.reduce((s, fx) => s + num(fx.total), 0);
+  const totalIva = facturas.reduce((s, fx) => s + ivaDe(fx), 0);
   const totalCobrado = facturas.reduce((s, fx) => s + cobradoDe(fx), 0);
   const saldo = totalIva - totalCobrado;
 
   const agregar = () => {
-    if (numMoney(f.total) <= 0) { alert("Poné el total de IVA de la factura."); return; }
-    setFacturas([...facturas, { id: uid() + Date.now(), desc: f.desc.trim(), fecha: f.fecha || hoyISO(), total: numMoney(f.total), cobros: [], ts: Date.now() }]);
-    setF({ desc: "", fecha: hoyISO(), total: "" });
+    if (numMoney(f.montoIva) <= 0) { alert("Poné el monto del IVA de la factura."); return; }
+    setFacturas([...facturas, { id: uid() + Date.now(), obra: f.obra.trim(), cliente: f.cliente.trim(), nroFactura: f.nroFactura.trim(), fecha: f.fecha || hoyISO(), montoTotal: numMoney(f.montoTotal), montoIva: numMoney(f.montoIva), cobros: [], ts: Date.now() }]);
+    setF({ obra: "", cliente: "", nroFactura: "", fecha: hoyISO(), montoTotal: "", montoIva: "" });
     setAbrir(false);
   };
-  const borrarFactura = (id) => { const fx = facturas.find(x => x.id === id); if (!window.confirm(`¿Borrar la factura ${fx?.desc || ""}?`)) return; setFacturas(facturas.filter(x => x.id !== id)); };
+  const borrarFactura = (id) => { const fx = facturas.find(x => x.id === id); if (!window.confirm(`¿Borrar la factura ${fx?.nroFactura || fx?.obra || ""}?`)) return; setFacturas(facturas.filter(x => x.id !== id)); };
   const agregarCobro = (id) => {
     if (numMoney(cob.monto) <= 0) return;
     setFacturas(facturas.map(x => x.id === id ? { ...x, cobros: [...(x.cobros || []), { id: uid(), monto: numMoney(cob.monto), fecha: cob.fecha || hoyISO() }] } : x));
@@ -2741,13 +2759,20 @@ function IvaPanel({ data, save }) {
       ? <button onClick={() => setAbrir(true)} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 12, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Nueva factura de IVA</button>
       : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, marginBottom: 14, boxShadow: SHDsm }}>
         <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>Nueva factura</div>
-        <Field label="Descripción (obra, cliente, N° factura)"><input value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} placeholder="Ej: Factura A 0001 · Castores" style={inp} /></Field>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1 }}><Field label="Obra"><input value={f.obra} onChange={e => setF({ ...f, obra: e.target.value })} placeholder="Castores 475" style={inp} /></Field></div>
+          <div style={{ flex: 1 }}><Field label="Cliente"><input value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} placeholder="Belfast CM" style={inp} /></Field></div>
+        </div>
         <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <div style={{ flex: 1 }}><Field label="N° de factura"><input value={f.nroFactura} onChange={e => setF({ ...f, nroFactura: e.target.value })} placeholder="A 0001-00001234" style={inp} /></Field></div>
           <div style={{ flex: 1 }}><Field label="Fecha"><input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={inp} /></Field></div>
-          <div style={{ flex: 1 }}><Field label="Total IVA $"><input value={f.total} onChange={e => setF({ ...f, total: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={inp} /></Field></div>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <div style={{ flex: 1 }}><Field label="Monto total factura $"><input value={f.montoTotal} onChange={e => setF({ ...f, montoTotal: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={inp} /></Field></div>
+          <div style={{ flex: 1 }}><Field label="Monto IVA $"><input value={f.montoIva} onChange={e => setF({ ...f, montoIva: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={inp} /></Field></div>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={() => { setAbrir(false); setF({ desc: "", fecha: hoyISO(), total: "" }); }} style={{ flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={() => { setAbrir(false); setF({ obra: "", cliente: "", nroFactura: "", fecha: hoyISO(), montoTotal: "", montoIva: "" }); }} style={{ flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
           <button onClick={agregar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Agregar factura</button>
         </div>
       </div>}
@@ -2756,27 +2781,48 @@ function IvaPanel({ data, save }) {
 
     {/* Lista de facturas */}
     {facturas.map(fx => {
+      const iva = ivaDe(fx);
       const cobrado = cobradoDe(fx);
-      const saldoFx = num(fx.total) - cobrado;
-      const pagada = saldoFx <= 0 && num(fx.total) > 0;
+      const saldoFx = iva - cobrado;
+      const pagada = saldoFx <= 0 && iva > 0;
+      const titulo = [fx.nroFactura, fx.obra].filter(Boolean).join(" · ") || fx.desc || "Factura";
       return (<div key={fx.id} style={{ background: T.card, border: `1px solid ${pagada ? T.ok : T.border}`, borderRadius: 14, padding: 15, marginBottom: 10, boxShadow: SHDsm }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 800 }}>{fx.desc || "Factura"}</div>
-            <div style={{ fontSize: 10.5, color: T.muted }}>{fmtISO(fx.fecha)}{pagada ? " · cobrada 100%" : ""}</div>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>{titulo}</div>
+            <div style={{ fontSize: 10.5, color: T.muted }}>{[fx.cliente, fmtISO(fx.fecha)].filter(Boolean).join(" · ")}{pagada ? " · cobrada 100%" : ""}</div>
           </div>
           <button onClick={() => borrarFactura(fx.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
 
+        {num(fx.montoTotal) > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginTop: 9, paddingBottom: 8, borderBottom: `1px solid ${T.border}` }}>
+          <span style={{ color: T.muted }}>Monto total factura</span>
+          <b style={{ fontVariantNumeric: "tabular-nums" }}>{money(num(fx.montoTotal))}</b>
+        </div>}
+
         <div style={{ display: "flex", gap: 10, marginTop: 11 }}>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Total IVA</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{money(num(fx.total))}</div></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>IVA factura</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{money(iva)}</div></div>
           <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Cobrado</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: T.ok }}>{money(cobrado)}</div></div>
           <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Saldo</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: saldoFx > 0 ? T.warn : T.ok }}>{money(saldoFx)}</div></div>
         </div>
 
-        {num(fx.total) > 0 && <div style={{ marginTop: 10, height: 6, borderRadius: 4, overflow: "hidden", background: T.bg }}>
-          <div style={{ width: `${Math.max(0, Math.min(100, cobrado / num(fx.total) * 100))}%`, height: "100%", background: pagada ? T.ok : T.accent }} />
+        {iva > 0 && <div style={{ marginTop: 10, height: 6, borderRadius: 4, overflow: "hidden", background: T.bg }}>
+          <div style={{ width: `${Math.max(0, Math.min(100, cobrado / iva * 100))}%`, height: "100%", background: pagada ? T.ok : T.accent }} />
         </div>}
+
+        {/* archivo de la factura (PDF o foto) */}
+        <div style={{ marginTop: 11 }}>
+          {fx.archivoUrl
+            ? <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, borderRadius: 9, padding: "9px 11px" }}>
+                <span style={{ fontSize: 16, flexShrink: 0 }}>{(fx.archivoTipo || "").includes("pdf") ? "📄" : (fx.archivoTipo || "").startsWith("image") ? "🖼️" : "📎"}</span>
+                <a href={fx.archivoUrl} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, color: T.accent, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fx.archivoNombre || "Ver factura"}</a>
+                <button onClick={() => quitarArchivo(fx.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+              </div>
+            : <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: T.al, color: T.accent, border: `1px dashed ${T.border}`, borderRadius: 9, padding: "9px", fontSize: 12, fontWeight: 700, cursor: subiendoId === fx.id ? "default" : "pointer", opacity: subiendoId === fx.id ? 0.5 : 1 }}>
+                {subiendoId === fx.id ? "Subiendo…" : "📎 Subir la factura (PDF o foto)"}
+                <input type="file" accept="application/pdf,image/*" disabled={subiendoId === fx.id} onChange={e => subirArchivoFactura(fx.id, e)} style={{ display: "none" }} />
+              </label>}
+        </div>
 
         {/* cobros registrados */}
         {(fx.cobros || []).length > 0 && <div style={{ marginTop: 11 }}>
