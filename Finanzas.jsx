@@ -2683,6 +2683,122 @@ function PlanillaEstructura({ data, save }) {
   </div>);
 }
 
+/* ── ESTADO DE IVA ──
+   Registro del IVA de las facturas que vendemos: cuánto nos deben y cuánto fuimos cobrando.
+   Cada factura tiene un total de IVA y una lista de cobros. Saldo = total − cobrado. */
+function IvaPanel({ data, save }) {
+  const facturas = data.ivaFacturas || [];
+  const [abrir, setAbrir] = useState(false);
+  const [f, setF] = useState({ desc: "", fecha: hoyISO(), total: "" });
+  const [cobrandoId, setCobrandoId] = useState(null);
+  const [cob, setCob] = useState({ monto: "", fecha: hoyISO() });
+
+  const setFacturas = (next) => save(logH({ ...data, ivaFacturas: next }, "Estado de IVA"));
+
+  const cobradoDe = (fx) => (fx.cobros || []).reduce((s, c) => s + num(c.monto), 0);
+  const totalIva = facturas.reduce((s, fx) => s + num(fx.total), 0);
+  const totalCobrado = facturas.reduce((s, fx) => s + cobradoDe(fx), 0);
+  const saldo = totalIva - totalCobrado;
+
+  const agregar = () => {
+    if (numMoney(f.total) <= 0) { alert("Poné el total de IVA de la factura."); return; }
+    setFacturas([...facturas, { id: uid() + Date.now(), desc: f.desc.trim(), fecha: f.fecha || hoyISO(), total: numMoney(f.total), cobros: [], ts: Date.now() }]);
+    setF({ desc: "", fecha: hoyISO(), total: "" });
+    setAbrir(false);
+  };
+  const borrarFactura = (id) => { const fx = facturas.find(x => x.id === id); if (!window.confirm(`¿Borrar la factura ${fx?.desc || ""}?`)) return; setFacturas(facturas.filter(x => x.id !== id)); };
+  const agregarCobro = (id) => {
+    if (numMoney(cob.monto) <= 0) return;
+    setFacturas(facturas.map(x => x.id === id ? { ...x, cobros: [...(x.cobros || []), { id: uid(), monto: numMoney(cob.monto), fecha: cob.fecha || hoyISO() }] } : x));
+    setCob({ monto: "", fecha: hoyISO() });
+    setCobrandoId(null);
+  };
+  const borrarCobro = (fxId, cId) => setFacturas(facturas.map(x => x.id === fxId ? { ...x, cobros: (x.cobros || []).filter(c => c.id !== cId) } : x));
+
+  return (<div style={{ padding: "14px 16px 40px" }}>
+    {/* Resumen */}
+    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>IVA que nos deben</div>
+      <div style={{ fontSize: 38, fontWeight: 800, margin: "6px 0 2px", color: saldo > 0 ? "#F2C879" : "#7DE0A6", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{money(saldo)}</div>
+      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", marginBottom: 4 }}>Saldo pendiente de cobro por las facturas vendidas.</div>
+      <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 18 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Total facturado</div>
+          <div style={{ fontSize: 19, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3 }}>{money(totalIva)}</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Cobrado</div>
+          <div style={{ fontSize: 19, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3, color: "#7DE0A6" }}>{money(totalCobrado)}</div>
+        </div>
+      </div>
+      {totalIva > 0 && <div style={{ marginTop: 12, height: 7, borderRadius: 5, overflow: "hidden", background: "rgba(255,255,255,.14)" }}>
+        <div style={{ width: `${Math.max(0, Math.min(100, totalCobrado / totalIva * 100))}%`, height: "100%", background: "#7DE0A6" }} />
+      </div>}
+    </div>
+
+    {/* Alta de factura */}
+    {!abrir
+      ? <button onClick={() => setAbrir(true)} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 12, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Nueva factura de IVA</button>
+      : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, marginBottom: 14, boxShadow: SHDsm }}>
+        <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>Nueva factura</div>
+        <Field label="Descripción (obra, cliente, N° factura)"><input value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} placeholder="Ej: Factura A 0001 · Castores" style={inp} /></Field>
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <div style={{ flex: 1 }}><Field label="Fecha"><input type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} style={inp} /></Field></div>
+          <div style={{ flex: 1 }}><Field label="Total IVA $"><input value={f.total} onChange={e => setF({ ...f, total: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={inp} /></Field></div>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button onClick={() => { setAbrir(false); setF({ desc: "", fecha: hoyISO(), total: "" }); }} style={{ flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={agregar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Agregar factura</button>
+        </div>
+      </div>}
+
+    {facturas.length === 0 && !abrir && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "20px 10px", lineHeight: 1.6 }}>Todavía no cargaste facturas de IVA.<br />Cargá cada factura vendida con su total de IVA, y después registrá lo que vas cobrando.</div>}
+
+    {/* Lista de facturas */}
+    {facturas.map(fx => {
+      const cobrado = cobradoDe(fx);
+      const saldoFx = num(fx.total) - cobrado;
+      const pagada = saldoFx <= 0 && num(fx.total) > 0;
+      return (<div key={fx.id} style={{ background: T.card, border: `1px solid ${pagada ? T.ok : T.border}`, borderRadius: 14, padding: 15, marginBottom: 10, boxShadow: SHDsm }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>{fx.desc || "Factura"}</div>
+            <div style={{ fontSize: 10.5, color: T.muted }}>{fmtISO(fx.fecha)}{pagada ? " · cobrada 100%" : ""}</div>
+          </div>
+          <button onClick={() => borrarFactura(fx.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer", flexShrink: 0 }}>✕</button>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 11 }}>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Total IVA</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{money(num(fx.total))}</div></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Cobrado</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: T.ok }}>{money(cobrado)}</div></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Saldo</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: saldoFx > 0 ? T.warn : T.ok }}>{money(saldoFx)}</div></div>
+        </div>
+
+        {num(fx.total) > 0 && <div style={{ marginTop: 10, height: 6, borderRadius: 4, overflow: "hidden", background: T.bg }}>
+          <div style={{ width: `${Math.max(0, Math.min(100, cobrado / num(fx.total) * 100))}%`, height: "100%", background: pagada ? T.ok : T.accent }} />
+        </div>}
+
+        {/* cobros registrados */}
+        {(fx.cobros || []).length > 0 && <div style={{ marginTop: 11 }}>
+          {(fx.cobros || []).map(c => (<div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11.5, padding: "4px 0", borderTop: `1px solid ${T.border}` }}>
+            <span style={{ color: T.sub }}>Cobro · {fmtISO(c.fecha)}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}><b style={{ color: T.ok }}>{money(num(c.monto))}</b><button onClick={() => borrarCobro(fx.id, c.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer" }}>✕</button></span>
+          </div>))}
+        </div>}
+
+        {/* agregar cobro */}
+        {cobrandoId === fx.id
+          ? <div style={{ display: "flex", gap: 7, marginTop: 11, alignItems: "center" }}>
+            <input value={cob.monto} onChange={e => setCob({ ...cob, monto: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="Monto cobrado $" style={{ ...inpSm, flex: 1 }} />
+            <input type="date" value={cob.fecha} onChange={e => setCob({ ...cob, fecha: e.target.value })} style={{ ...inpSm, width: 130 }} />
+            <button onClick={() => agregarCobro(fx.id)} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>OK</button>
+          </div>
+          : !pagada && <button onClick={() => { setCobrandoId(fx.id); setCob({ monto: "", fecha: hoyISO() }); }} style={{ marginTop: 11, background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>＋ Registrar cobro</button>}
+      </div>);
+    })}
+  </div>);
+}
+
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false); const [subtab, setSubtab] = useState("cliente");
   const [estimPct, setEstimPct] = useState("");
@@ -2808,7 +2924,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
 
   return (<div style={{ padding: "14px 16px 40px" }}>
     <div style={{ display: "flex", gap: 3, background: T.card, borderRadius: 12, padding: 4, marginBottom: 14, boxShadow: SHDsm, flexWrap: "wrap" }}>
-      {[["general", "General"], ["cliente", "Cliente"], ["particulares", "Particul."], ["sociedad", "Sociedad"], ["edificios", "Edificios"]].map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: "1 1 30%", background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 2px", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em" }}>{l}</button>)}
+      {[["general", "General"], ["cliente", "Cliente"], ["particulares", "Particul."], ["iva", "IVA"], ["sociedad", "Sociedad"], ["edificios", "Edificios"]].map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: "1 1 30%", background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 2px", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em" }}>{l}</button>)}
     </div>
     {subtab === "cliente" && <>
     {/* ── UTILIDAD ESPERADA — el número que más se mira ── */}
@@ -3141,6 +3257,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
     </>; })()}
     </>}
     {subtab === "particulares" && <PropiasPanel data={data} save={save} />}
+    {subtab === "iva" && <IvaPanel data={data} save={save} />}
     {subtab === "sociedad" && <SociedadWrap data={data} save={save} />}
     {subtab === "edificios" && <EdificiosPanel data={data} save={save} />}
     {subtab === "general" && <GeneralPanel data={data} obras={obras} certs={certs} certsDe={certsDe} indices={indices} />}
