@@ -2713,13 +2713,11 @@ function IvaPanel({ data, save }) {
 
   // compat: facturas viejas guardaban el IVA en "total" y la descripción en "desc"
   const ivaDe = (fx) => num(fx.montoIva != null ? fx.montoIva : fx.total);
-  // lo que se cobra de cada factura es su MONTO TOTAL (si no está cargado, cae al IVA por compat)
-  const baseDe = (fx) => { const mt = num(fx.montoTotal); return mt > 0 ? mt : ivaDe(fx); };
   const cobradoDe = (fx) => (fx.cobros || []).reduce((s, c) => s + num(c.monto), 0);
-  const totalFacturas = facturas.reduce((s, fx) => s + baseDe(fx), 0);
+  const totalFacturas = facturas.reduce((s, fx) => s + num(fx.montoTotal), 0);   // informativo: suma de montos totales
   const totalIva = facturas.reduce((s, fx) => s + ivaDe(fx), 0);
   const totalCobrado = facturas.reduce((s, fx) => s + cobradoDe(fx), 0);
-  const saldo = totalFacturas - totalCobrado;
+  const saldo = totalIva - totalCobrado;   // IVA es lo único que se cobra; el total de factura no
 
   const agregar = () => {
     if (numMoney(f.montoIva) <= 0) { alert("Poné el monto del IVA de la factura."); return; }
@@ -2739,23 +2737,24 @@ function IvaPanel({ data, save }) {
   return (<div style={{ padding: "14px 16px 40px" }}>
     {/* Resumen */}
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Total a cobrar</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>IVA a cobrar</div>
       <div style={{ fontSize: 38, fontWeight: 800, margin: "6px 0 2px", color: saldo > 0 ? "#F2C879" : "#7DE0A6", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{money(saldo)}</div>
-      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", marginBottom: 4 }}>Total de las facturas cargadas menos lo que fuiste cobrando.</div>
+      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", marginBottom: 4 }}>IVA de las facturas menos lo que fuiste cobrando de ese IVA.</div>
       <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 18 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Total facturas</div>
-          <div style={{ fontSize: 19, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3 }}>{money(totalFacturas)}</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>IVA total</div>
+          <div style={{ fontSize: 19, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3 }}>{money(totalIva)}</div>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em" }}>Cobrado</div>
           <div style={{ fontSize: 19, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 3, color: "#7DE0A6" }}>{money(totalCobrado)}</div>
         </div>
       </div>
-      {totalFacturas > 0 && <div style={{ marginTop: 12, height: 7, borderRadius: 5, overflow: "hidden", background: "rgba(255,255,255,.14)" }}>
-        <div style={{ width: `${Math.max(0, Math.min(100, totalCobrado / totalFacturas * 100))}%`, height: "100%", background: "#7DE0A6" }} />
+      {totalIva > 0 && <div style={{ marginTop: 12, height: 7, borderRadius: 5, overflow: "hidden", background: "rgba(255,255,255,.14)" }}>
+        <div style={{ width: `${Math.max(0, Math.min(100, totalCobrado / totalIva * 100))}%`, height: "100%", background: "#7DE0A6" }} />
       </div>}
-      {totalIva > 0 && <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 9 }}>IVA incluido en las facturas: <b style={{ color: "rgba(255,255,255,.75)" }}>{money(totalIva)}</b></div>}
+      {totalFacturas > 0 && <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 9 }}>Total facturado (no lo cobrás vos): <b style={{ color: "rgba(255,255,255,.75)" }}>{money(totalFacturas)}</b></div>}
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,.45)", marginTop: 8, lineHeight: 1.45, fontStyle: "italic" }}>Solo informativo. No se suma a ningún resultado — es capital extra de obras particulares (IVA de facturas).</div>
     </div>
 
     {/* Alta de factura */}
@@ -2786,10 +2785,10 @@ function IvaPanel({ data, save }) {
     {/* Lista de facturas */}
     {facturas.map(fx => {
       const iva = ivaDe(fx);
-      const base = baseDe(fx);           // total de la factura (o IVA si no hay total)
+      const total = num(fx.montoTotal);   // total de la factura — informativo, no lo cobra él
       const cobrado = cobradoDe(fx);
-      const saldoFx = base - cobrado;    // lo que falta cobrar de ESTA factura
-      const pagada = saldoFx <= 0 && base > 0;
+      const saldoFx = iva - cobrado;      // lo que falta cobrar del IVA de ESTA factura
+      const pagada = saldoFx <= 0 && iva > 0;
       const titulo = [fx.nroFactura, fx.obra].filter(Boolean).join(" · ") || fx.desc || "Factura";
       return (<div key={fx.id} style={{ background: T.card, border: `1px solid ${pagada ? T.ok : T.border}`, borderRadius: 14, padding: 15, marginBottom: 10, boxShadow: SHDsm }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
@@ -2800,19 +2799,19 @@ function IvaPanel({ data, save }) {
           <button onClick={() => borrarFactura(fx.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
 
-        {iva > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginTop: 9, paddingBottom: 8, borderBottom: `1px solid ${T.border}` }}>
-          <span style={{ color: T.muted }}>IVA incluido</span>
-          <b style={{ fontVariantNumeric: "tabular-nums" }}>{money(iva)}</b>
+        {total > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginTop: 9, paddingBottom: 8, borderBottom: `1px solid ${T.border}` }}>
+          <span style={{ color: T.muted }}>Total factura <span style={{ fontSize: 9.5 }}>(no lo cobrás vos)</span></span>
+          <b style={{ fontVariantNumeric: "tabular-nums", color: T.sub }}>{money(total)}</b>
         </div>}
 
         <div style={{ display: "flex", gap: 10, marginTop: 11 }}>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Total factura</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{money(base)}</div></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>IVA factura</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{money(iva)}</div></div>
           <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Cobrado</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: T.ok }}>{money(cobrado)}</div></div>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Saldo</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: saldoFx > 0 ? T.warn : T.ok }}>{money(saldoFx)}</div></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>Saldo IVA</div><div style={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: saldoFx > 0 ? T.warn : T.ok }}>{money(saldoFx)}</div></div>
         </div>
 
-        {base > 0 && <div style={{ marginTop: 10, height: 6, borderRadius: 4, overflow: "hidden", background: T.bg }}>
-          <div style={{ width: `${Math.max(0, Math.min(100, cobrado / base * 100))}%`, height: "100%", background: pagada ? T.ok : T.accent }} />
+        {iva > 0 && <div style={{ marginTop: 10, height: 6, borderRadius: 4, overflow: "hidden", background: T.bg }}>
+          <div style={{ width: `${Math.max(0, Math.min(100, cobrado / iva * 100))}%`, height: "100%", background: pagada ? T.ok : T.accent }} />
         </div>}
 
         {/* archivo de la factura (PDF o foto) */}
