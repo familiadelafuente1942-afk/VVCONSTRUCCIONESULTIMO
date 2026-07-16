@@ -2892,19 +2892,19 @@ function DiferenciaCertPanel({ obras, certsDe, indices, cuota }) {
   );
 
   return (<div>
-    {/* headline: total a guardar */}
+    {/* headline: total a guardar = tu utilidad neta (lo que te queda para vos) */}
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Total a guardar</div>
-      <div style={{ fontSize: 34, fontWeight: 800, margin: "6px 0 2px", color: "#F2C879", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{money(totGuardar)}</div>
-      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)" }}>Imprevistos + sueldos (estructura) de todos los certificados. Es lo que tenés que reservar.</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Total a guardar para vos</div>
+      <div style={{ fontSize: 34, fontWeight: 800, margin: "6px 0 2px", color: totNeta >= 0 ? "#7DE0A6" : "#FCA5A5", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{money(totNeta)}</div>
+      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)" }}>Tu utilidad neta de todos los certificados: lo que te queda para vos, después de sacar costo, estructura e imprevistos.</div>
       <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 14 }}>
-        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Imprevistos</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{money(TImp)}</div></div>
-        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Sueldos</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{money(TSue)}</div></div>
-        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Neta final</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2, color: "#7DE0A6" }}>{money(totNeta)}</div></div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Sueldos (estructura)</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2, color: "#F2C879" }}>{money(TSue)}</div></div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Imprevistos</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2, color: "#F2C879" }}>{money(TImp)}</div></div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>A reservar (los dos)</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{money(totGuardar)}</div></div>
       </div>
     </div>
 
-    <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Por cada certificado ves qué <b>cobraste</b>, qué te salió de <b>costo de obra</b>, cuánto se va en <b style={{ color: T.warn }}>estructura (sueldos)</b> e <b style={{ color: T.warn }}>imprevistos</b>, y abajo la <b style={{ color: "#16A34A" }}>neta</b>: lo que podés guardar sin poner en riesgo nada. Usa los % de imprevistos y la estructura que ya tenés cargados en cada obra.</div>
+    <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Por cada certificado ves qué <b>cobraste</b>, qué te salió de <b>costo de obra</b>, cuánto se va en <b style={{ color: T.warn }}>estructura (sueldos)</b> e <b style={{ color: T.warn }}>imprevistos</b>, y abajo la <b style={{ color: "#16A34A" }}>neta</b>: lo que guardás para vos sin poner en riesgo nada. Usa los % de imprevistos y la estructura que ya tenés cargados en cada obra.</div>
 
     {grupos.map(g => (<div key={g.o.id} style={{ background: T.card, borderRadius: 14, padding: "13px 15px", marginBottom: 11, boxShadow: SHDsm }}>
       <div style={{ fontSize: 13.5, fontWeight: 800, color: T.navy, marginBottom: 6 }}>{g.o.nombre}</div>
