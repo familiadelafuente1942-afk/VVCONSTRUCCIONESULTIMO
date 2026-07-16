@@ -2985,20 +2985,34 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
         {(() => {
           const filas = [
             { n: 1, lbl: "Utilidad bruta esperada", val: utilEsperada, sub: ventaEsperada > 0 ? `Margen ${margenEsperado.toFixed(1)}%` : "", desc: "Lo que le cobrás menos lo que te cuesta. Todavía no pagó la estructura.", col: utilEsperada >= 0 ? "#7DE0A6" : "#FCA5A5", big: true },
-            { n: 2, lbl: "Utilidad neta esperada", val: utilNeta, sub: ventaEsperada > 0 ? `Margen ${margenNeto.toFixed(1)}%` : "", desc: "La bruta menos el costo fijo de estructura. Es lo que esperás quedarte.", col: utilNeta >= 0 ? "#7DE0A6" : "#FCA5A5" },
-            { n: 3, lbl: "Utilidad a cobrar", val: utilidadACobrar, sub: "", desc: "Lo que todavía falta ganar de la neta. Lo cobrado ya es tuyo; esto es lo que queda por delante.", col: "#F2C879" },
-            { n: 4, lbl: "Resultado operativo", val: resultadoOperativo, sub: hayCerts ? "" : "Sin certificados todavía", desc: "Lo que ya realizaste con los certificados emitidos, descontado todo (costos, impuestos, imprevistos y estructura).", col: resultadoOperativo >= 0 ? "rgba(255,255,255,.92)" : "#FCA5A5" },
+            { n: 2, lbl: "Utilidad neta esperada", val: utilNeta, sub: ventaEsperada > 0 ? `Margen ${margenNeto.toFixed(1)}%` : "", desc: "La bruta menos el costo fijo de estructura. Es lo que esperás quedarte.", col: utilNeta >= 0 ? "#7DE0A6" : "#FCA5A5", resta: "Costo fijo de estructura" },
+            { n: 3, lbl: "Utilidad a cobrar", val: utilidadACobrar, sub: "", desc: "Lo que todavía falta ganar de la neta. Lo cobrado ya es tuyo; esto es lo que queda por delante.", col: "#F2C879", resta: "Resultado operativo · lo que ya realizaste (ver 4)" },
+            { n: 4, lbl: "Resultado operativo", val: resultadoOperativo, sub: hayCerts ? "" : "Sin certificados todavía", desc: "Lo que ya realizaste con los certificados emitidos, descontado todo (costos, impuestos, imprevistos y estructura).", col: resultadoOperativo >= 0 ? "rgba(255,255,255,.92)" : "#FCA5A5", noBorder: true },
           ];
-          return filas.map((f, i) => (<div key={f.n} style={{ paddingTop: i === 0 ? 0 : 13, marginTop: i === 0 ? 0 : 13, borderTop: i === 0 ? "none" : "1px solid rgba(255,255,255,.14)" }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-              <div style={{ fontSize: f.big ? 11 : 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                <span style={{ color: "rgba(255,255,255,.4)", marginRight: 6 }}>{f.n}</span>{f.lbl}
+          return filas.map((f, i) => {
+            const prev = filas[i - 1];
+            const restaMonto = f.resta && prev ? prev.val - f.val : null;
+            return (<div key={f.n}>
+              {/* conector: cuánto se le restó a la línea de arriba para llegar a esta */}
+              {f.resta && restaMonto !== null && (
+                <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "11px 0 3px", paddingLeft: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "#FCA5A5", flexShrink: 0 }}>−</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 800, color: "#FCA5A5", fontVariantNumeric: "tabular-nums" }}>{money(restaMonto)}</span>
+                  <span style={{ fontSize: 10.5, color: "rgba(255,255,255,.55)", lineHeight: 1.3 }}>{f.resta}</span>
+                </div>
+              )}
+              <div style={{ paddingTop: i === 0 ? 0 : 10, marginTop: i === 0 ? 0 : (f.resta ? 4 : 13), borderTop: i === 0 || f.resta ? "none" : "1px solid rgba(255,255,255,.14)" }}>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+                  <div style={{ fontSize: f.big ? 11 : 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                    <span style={{ color: "rgba(255,255,255,.4)", marginRight: 6 }}>{f.n}</span>{f.lbl}
+                  </div>
+                  {f.sub && <div style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,.7)", flexShrink: 0 }}>{f.sub}</div>}
+                </div>
+                <div style={{ fontSize: f.big ? 40 : 27, fontWeight: 800, margin: "5px 0 2px", color: f.col, fontVariantNumeric: "tabular-nums", lineHeight: 1.05, letterSpacing: "-0.02em" }}>{money(f.val)}</div>
+                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.55)", lineHeight: 1.45 }}>{f.desc}</div>
               </div>
-              {f.sub && <div style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,.7)", flexShrink: 0 }}>{f.sub}</div>}
-            </div>
-            <div style={{ fontSize: f.big ? 40 : 27, fontWeight: 800, margin: "5px 0 2px", color: f.col, fontVariantNumeric: "tabular-nums", lineHeight: 1.05, letterSpacing: "-0.02em" }}>{money(f.val)}</div>
-            <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.55)", lineHeight: 1.45 }}>{f.desc}</div>
-          </div>));
+            </div>);
+          });
         })()}
 
         <div style={{ marginTop: 16, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 18 }}>
