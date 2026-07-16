@@ -2983,14 +2983,15 @@ function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
 }
 
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
-  const [pin, setPin] = useState(""); const [ok, setOk] = useState(false); const [subtab, setSubtab] = useState("cliente");
+  const [pin, setPin] = useState(""); const [ok, setOk] = useState(() => { try { return sessionStorage.getItem("finanzas_unlocked") === "1"; } catch { return false; } }); const [subtab, setSubtab] = useState("cliente");
+  const desbloquear = () => { setOk(true); try { sessionStorage.setItem("finanzas_unlocked", "1"); } catch { } };
   const [estimPct, setEstimPct] = useState("");
   const PIN = (() => { try { return localStorage.getItem("finanzas_pin") || "1234"; } catch { return "1234"; } })();
   if (!ok) return (<div style={{ padding: "40px 24px", textAlign: "center" }}>
     <div style={{ fontSize: 40, marginBottom: 10 }}>🔒</div><div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Resultado — privado</div>
     <div style={{ fontSize: 12.5, color: T.sub, marginBottom: 18 }}>Solo para vos. Ingresá tu clave.</div>
-    <input value={pin} onChange={e => setPin(e.target.value)} type="password" inputMode="numeric" placeholder="Clave" style={{ ...inp, maxWidth: 200, margin: "0 auto", textAlign: "center", letterSpacing: 4 }} onKeyDown={e => { if (e.key === "Enter") { if (pin === PIN) setOk(true); else alert("Clave incorrecta."); } }} />
-    <button onClick={() => { if (pin === PIN) setOk(true); else alert("Clave incorrecta."); }} style={{ display: "block", margin: "12px auto 0", background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px 26px", fontWeight: 700, cursor: "pointer" }}>Entrar</button>
+    <input value={pin} onChange={e => setPin(e.target.value)} type="password" inputMode="numeric" placeholder="Clave" style={{ ...inp, maxWidth: 200, margin: "0 auto", textAlign: "center", letterSpacing: 4 }} onKeyDown={e => { if (e.key === "Enter") { if (pin === PIN) desbloquear(); else alert("Clave incorrecta."); } }} />
+    <button onClick={() => { if (pin === PIN) desbloquear(); else alert("Clave incorrecta."); }} style={{ display: "block", margin: "12px auto 0", background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px 26px", fontWeight: 700, cursor: "pointer" }}>Entrar</button>
     <div style={{ fontSize: 10.5, color: T.muted, marginTop: 14 }}>Clave por defecto: 1234</div>
   </div>);
 
