@@ -3040,8 +3040,12 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const obrasIncompletas = obras.filter(o => num(o.m2) <= 0 || num(o.precioCliente) <= 0 || num(o.costoM2) <= 0).length;
 
   return (<div style={{ padding: "14px 16px 40px" }}>
-    <div style={{ display: "flex", gap: 3, background: T.card, borderRadius: 12, padding: 4, marginBottom: 14, boxShadow: SHDsm, flexWrap: "wrap" }}>
-      {[["general", "General"], ["cliente", "Cliente"], ["particulares", "Particul."], ["diferencia", "Dif. cert."], ["iva", "IVA"], ["sociedad", "Sociedad"], ["edificios", "Edificios"]].map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: "1 1 30%", background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 2px", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em" }}>{l}</button>)}
+    <div style={{ background: T.card, borderRadius: 12, padding: 4, marginBottom: 14, boxShadow: SHDsm }}>
+      {[[["general", "General"], ["cliente", "Cliente"], ["particulares", "Particul."], ["diferencia", "Dif. cert."]], [["iva", "IVA"], ["sociedad", "Sociedad"], ["edificios", "Edificios"]]].map((fila, fi) => (
+        <div key={fi} style={{ display: "flex", gap: 3, marginTop: fi === 0 ? 0 : 3 }}>
+          {fila.map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: 1, background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 2px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em" }}>{l}</button>)}
+        </div>
+      ))}
     </div>
     {subtab === "cliente" && <>
     {/* ── UTILIDAD ESPERADA — el número que más se mira ── */}
