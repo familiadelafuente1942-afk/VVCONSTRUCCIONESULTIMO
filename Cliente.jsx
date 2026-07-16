@@ -967,7 +967,7 @@ PLANOS POR OBRA:\n${obras.map(o => (o.planos || []).length ? `· ${o.nombre}: ${
 
 TAREAS / CRONOGRAMA:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find(o => o.id === t.obra_id)?.nombre || "—"} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}
 
-PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")} — ${p.leido ? "levantado" : "no leído"}`).join("\n") || "(sin pedidos de materiales)"}
+PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(sin pedidos de materiales)"}
 
 Tenés acceso COMPLETO a todos estos datos (obras, avances, montos, fotos, informes, formularios, archivos, documentación, tareas, materiales, personal, contactos, pedidos). Cuando te pidan un DATO PUNTUAL, buscalo y dá el valor EXACTO; no digas "no lo tengo" si está arriba. Las fotos y videos no los "ves", pero sabés cuántos hay y de qué obra.
 
@@ -1480,7 +1480,6 @@ const itemsTexto = (p) => (p.items || []).map(it => (p.tipo && p.tipo !== "mater
 function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matpedidos = [], setMatpedidos }) {
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const [waFor, setWaFor] = useState(null);
-  function levantar(id) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, leido: true, leidoFecha: hoyStr() } : x)); }
   function marcarEnviado(id) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
   function waText(p) {
     const tp = tipoPedCli(p.tipo);
@@ -1497,18 +1496,16 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
     <div style={{ padding: "16px 20px" }}>
       <Eyebrow T={T}>Pedidos de V+V · materiales, definiciones y planos</Eyebrow>
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px", lineHeight: 1.55 }}>Todavía no recibiste pedidos de materiales.<br />Cuando V+V cargue uno, aparece acá.</div>}
-      {lista.map(p => { const jefes = [...(contactos || []).filter(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()), ...(personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim())]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${p.leido ? T.border : "#EF4444"}`, background: p.leido ? T.card : "#FFFBEB" }}>
+      {lista.map(p => { const jefes = [...(contactos || []).filter(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()), ...(personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim())]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${tipoPedCli(p.tipo).color}` }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoPedCli(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 8 }}>{tipoPedCli(p.tipo).icon} {tipoPedCli(p.tipo).label}</span>{nomObra(p.obra_id)} · {p.fecha}<span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.de === "vv" ? "V+V" : (p.empresa || "Contratista")}</span>{!p.leido && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, color: "#fff", background: "#EF4444", borderRadius: 5, padding: "2px 7px" }}>NUEVO</span>}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoPedCli(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 8 }}>{tipoPedCli(p.tipo).icon} {tipoPedCli(p.tipo).label}</span>{nomObra(p.obra_id)} · {p.fecha}<span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.de === "vv" ? "V+V" : (p.empresa || "Contratista")}</span></div>
           <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{itemsTexto(p).map(l => `• ${l}`).join("\n")}</div>
           {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 5, fontStyle: "italic" }}>{p.nota}</div>}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 11 }}>
-          {!p.leido && <button onClick={() => levantar(p.id)} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>Levantar</button>}
           <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar por WhatsApp</button>
-          <button onClick={() => { if (confirm("¿Eliminar este pedido de materiales? Se borra para las dos empresas.")) aplicarMats(setMatpedidos, prev => (prev || []).filter(x => x.id !== p.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: T.rsm, padding: "10px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕</button>
+          <button onClick={() => { if (confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) aplicarMats(setMatpedidos, prev => (prev || []).filter(x => x.id !== p.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: T.rsm, padding: "10px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
-        {p.leido && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#16A34A", marginTop: 8 }}>✓ Levantado{p.leidoFecha ? " · " + p.leidoFecha : ""}</div>}
         {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 5 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
         {waFor === p.id && <div style={{ marginTop: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
@@ -1663,7 +1660,7 @@ function ClienteApp() {
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
-  const unreadMat = (matpedidos || []).filter(p => p.de !== "cliente" && !p.leido).length;
+  const unreadMat = 0; // materiales es solo un registro: no genera aviso de "sin levantar"
   const pendPed = (pedidos || []).filter(p => p.para === "cliente" && p.estado !== "resuelto").length;
   const lastPed = useRef(null);
   const lastForms = useRef(null);
