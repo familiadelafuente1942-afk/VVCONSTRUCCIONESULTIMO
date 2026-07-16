@@ -721,12 +721,30 @@ function semDe(est) {
 }
 
 /* ─── La firma: dos líneas de tiempo + el camino crítico marcado ─── */
-function Gantt({ obra, plan, soloCriticas }) {
+function Gantt({ obra, plan, soloCriticas, guardarObra }) {
   const hoy = hoyISO();
   const [zoom, setZoom] = useState("dia");   // "dia" | "semana" | "mes"
+  const [hitoFecha, setHitoFecha] = useState(null); // fecha ISO que estoy editando
+  const [hitoTxt, setHitoTxt] = useState("");
+  const [hitoCol, setHitoCol] = useState("#B91C1C");
   const manual = !!plan.modoManual;
   const lista = soloCriticas ? plan.tareas.filter(t => t.critica) : plan.tareas;
   const baseCal = plan.base || obra.inicio;
+
+  // marcas de días clave (hormigonadas, hitos, etc.)
+  const hitos = obra.hitos || [];
+  const hitoDe = (f) => hitos.find(h => h.fecha === f);
+  const COLORES_HITO = ["#B91C1C", "#B0894F", "#1B3A5B", "#16A34A", "#7C3AED"];
+  const abrirHito = (f) => { const h = hitoDe(f); setHitoTxt(h?.texto || ""); setHitoCol(h?.color || "#B91C1C"); setHitoFecha(f); };
+  const guardarHito = () => {
+    const f = hitoFecha, txt = hitoTxt.trim();
+    guardarObra(o => {
+      const otros = (o.hitos || []).filter(h => h.fecha !== f);
+      return { ...o, hitos: txt ? [...otros, { id: uid(), fecha: f, texto: txt, color: hitoCol }] : otros };
+    });
+    setHitoFecha(null);
+  };
+  const borrarHito = () => { const f = hitoFecha; guardarObra(o => ({ ...o, hitos: (o.hitos || []).filter(h => h.fecha !== f) })); setHitoFecha(null); };
 
   // La grilla: en automático son días hábiles (sin fines de semana);
   // en manual es el calendario real, desde la primera fecha cargada.
@@ -825,21 +843,22 @@ function Gantt({ obra, plan, soloCriticas }) {
             ))}
           </div>
 
-          {/* cabecera: el número de día */}
-          <div style={{ display: "flex", height: 19, alignItems: "center" }}>
+          {/* cabecera: el número de día (tocá un día para marcarlo) */}
+          <div style={{ display: "flex", height: 22, alignItems: "center" }}>
             {dias.map((d, i) => {
               const dd = Number(d.slice(8, 10));
               const esHoyD = d === hoy;
               const lunes = dowDe(d) === 1;
-              // con zoom chico no entran todos los números: muestro los lunes
+              const h = hitoDe(d);
               const mostrar = zoom === "dia" || (zoom === "semana" && lunes);
-              return (<div key={i} style={{
-                width: ANCHO, flexShrink: 0, textAlign: "center",
+              return (<div key={i} onClick={() => abrirHito(d)} title="Tocá para poner una referencia en este día" style={{
+                width: ANCHO, flexShrink: 0, textAlign: "center", cursor: "pointer",
                 fontSize: zoom === "dia" ? 9.5 : 8.5,
-                fontWeight: esHoyD ? 800 : 600,
-                color: esHoyD ? T.danger : lunes ? T.sub : T.muted,
-                borderLeft: lunes ? `1px solid ${T.border}` : "none",
-              }}>{mostrar ? dd : ""}</div>);
+                fontWeight: h || esHoyD ? 800 : 600,
+                color: h ? "#fff" : esHoyD ? T.danger : lunes ? T.sub : T.muted,
+                background: h ? h.color : "transparent", borderRadius: h ? 4 : 0,
+                borderLeft: lunes && !h ? `1px solid ${T.border}` : "none", lineHeight: "16px",
+              }}>{mostrar || h ? dd : ""}</div>);
             })}
           </div>
 
@@ -853,6 +872,10 @@ function Gantt({ obra, plan, soloCriticas }) {
             {colHoy >= 0 && (
               <div style={{ position: "absolute", left: colHoy * ANCHO, top: 0, bottom: 0, width: 2, background: T.danger, zIndex: 3, opacity: .9 }} />
             )}
+            {/* marcas de días clave */}
+            {hitos.map(h => { const i = dias.indexOf(h.fecha); if (i < 0) return null; return (
+              <div key={h.id} onClick={() => abrirHito(h.fecha)} title={h.texto} style={{ position: "absolute", left: i * ANCHO + ANCHO / 2 - 1, top: 0, bottom: 0, width: 2, background: h.color, zIndex: 4, opacity: .9, cursor: "pointer" }} />
+            ); })}
 
             {lista.map(t => {
               const col = t.critica ? T.critico : (COLOR_ETAPA[t.etapa] || T.accent);
@@ -888,6 +911,38 @@ function Gantt({ obra, plan, soloCriticas }) {
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 2, height: 10, background: T.danger }} /> hoy</span>
       <span style={{ color: T.muted }}>· {manual ? "calendario real, con las fechas que cargaste" : "solo días hábiles, sin fines de semana"}</span>
     </div>
+
+    {/* referencias de días clave */}
+    <div style={{ margin: "10px 12px 0" }}>
+      {hitos.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 8 }}>
+        {hitos.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).map(h => (
+          <div key={h.id} onClick={() => abrirHito(h.fecha)} style={{ display: "flex", alignItems: "center", gap: 8, background: T.al, borderRadius: 8, padding: "7px 10px", cursor: "pointer", borderLeft: `3px solid ${h.color}` }}>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: h.color, flexShrink: 0, minWidth: 52 }}>{fmtCorta(h.fecha)}</span>
+            <span style={{ fontSize: 12, color: T.text, flex: 1, minWidth: 0 }}>{h.texto}</span>
+          </div>
+        ))}
+      </div>}
+      <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center" }}>Tocá un día de arriba para marcar una hormigonada, un hito o una referencia.</div>
+    </div>
+
+    {/* editor de referencia del día */}
+    {hitoFecha && <div onClick={() => setHitoFecha(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,27,45,.5)", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", padding: "18px 20px 26px", width: "100%", maxWidth: 620, boxShadow: "0 -6px 24px rgba(0,0,0,.15)" }}>
+        <div style={{ width: 40, height: 4, background: T.border, borderRadius: 4, margin: "0 auto 16px" }} />
+        <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>Referencia del {fmtFecha(hitoFecha)}</div>
+        <div style={{ fontSize: 12, color: T.sub, marginTop: 3, marginBottom: 13 }}>Marcá algo importante de ese día: una hormigonada, un hito, la entrega de un sector.</div>
+        <input value={hitoTxt} onChange={e => setHitoTxt(e.target.value)} onKeyDown={e => { if (e.key === "Enter") guardarHito(); }} autoFocus placeholder="Ej: Hormigonada de losa 1er piso" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 13px", fontSize: 14, color: T.text, boxSizing: "border-box" }} />
+        <div style={{ display: "flex", gap: 8, margin: "13px 0" }}>
+          {COLORES_HITO.map(c => (
+            <button key={c} onClick={() => setHitoCol(c)} style={{ width: 30, height: 30, borderRadius: "50%", background: c, border: hitoCol === c ? `3px solid ${T.text}` : `2px solid ${T.border}`, cursor: "pointer" }} />
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {hitoDe(hitoFecha) && <button onClick={borrarHito} style={{ background: T.al, color: T.danger, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 16px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Borrar</button>}
+          <button onClick={guardarHito} style={{ flex: 1, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Guardar referencia</button>
+        </div>
+      </div>
+    </div>}
   </div>);
 }
 
@@ -1845,7 +1900,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
           </Btn>
         </div>
       </div>}
-      <Gantt obra={obra} plan={plan} soloCriticas={obra.modoManual ? false : soloCrit} />
+      <Gantt obra={obra} plan={plan} soloCriticas={obra.modoManual ? false : soloCrit} guardarObra={guardarObra} />
     </>}
 
     {vista === "agenda" && <Agenda obra={obra} plan={plan} />}
