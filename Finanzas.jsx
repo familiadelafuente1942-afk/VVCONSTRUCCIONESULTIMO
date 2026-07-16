@@ -2874,13 +2874,19 @@ function DiferenciaCertPanel({ obras, certsDe, indices, cuota }) {
 
   if (grupos.length === 0) return <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>Todavía no hay certificados emitidos.</div>;
 
-  const Row = ({ f, head }) => (
-    <div style={{ display: "flex", fontSize: head ? 9.5 : 11.5, fontWeight: head ? 800 : 600, color: head ? T.muted : T.text, padding: "6px 0", borderBottom: `1px solid ${T.border}`, alignItems: "center", textTransform: head ? "uppercase" : "none", letterSpacing: head ? "0.03em" : "0" }}>
-      <div style={{ flex: 1.1, minWidth: 0 }}>{head ? "Certificado" : fmtISO(f.fecha)}</div>
-      <div style={{ width: 68, textAlign: "right" }}>{head ? "Cliente" : money(f.cliente)}</div>
-      <div style={{ width: 62, textAlign: "right" }}>{head ? "Costo" : money(f.costoDir)}</div>
-      <div style={{ width: 62, textAlign: "right", color: head ? T.muted : T.warn }}>{head ? "Guardar" : money(f.aGuardar)}</div>
-      <div style={{ width: 68, textAlign: "right", color: head ? T.muted : (f.neta >= 0 ? "#16A34A" : "#EF4444"), fontWeight: 800 }}>{head ? "Neta" : money(f.neta)}</div>
+  const Row = ({ f }) => (
+    <div style={{ padding: "9px 0", borderBottom: `1px solid ${T.border}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: T.sub }}>{fmtISO(f.fecha)}</span>
+        <span style={{ fontSize: 12, color: T.muted }}>Neta <b style={{ fontSize: 14, color: f.neta >= 0 ? "#16A34A" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>{money(f.neta)}</b></span>
+      </div>
+      <div style={{ fontSize: 11, color: T.muted, marginTop: 4, lineHeight: 1.5 }}>
+        Cliente <b style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{money(f.cliente)}</b>
+        <span style={{ margin: "0 5px", opacity: .5 }}>·</span>
+        Costo <b style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{money(f.costoDir)}</b>
+        <span style={{ margin: "0 5px", opacity: .5 }}>·</span>
+        <span style={{ color: T.warn }}>Guardar <b style={{ fontVariantNumeric: "tabular-nums" }}>{money(f.aGuardar)}</b></span>
+      </div>
     </div>
   );
 
@@ -2900,18 +2906,23 @@ function DiferenciaCertPanel({ obras, certsDe, indices, cuota }) {
     <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Por cada certificado: <b>Cliente − Costo − Imprevistos − Sueldos = Neta</b>. La columna <b style={{ color: T.warn }}>Guardar</b> es imprevistos + sueldos (lo que reservás de ese certificado). Usa los % de imprevistos y la estructura que ya tenés cargados en cada obra.</div>
 
     {grupos.map(g => (<div key={g.o.id} style={{ background: T.card, borderRadius: 14, padding: "13px 15px", marginBottom: 11, boxShadow: SHDsm }}>
-      <div style={{ fontSize: 13.5, fontWeight: 800, color: T.navy, marginBottom: 4 }}>{g.o.nombre}</div>
-      <Row head />
+      <div style={{ fontSize: 13.5, fontWeight: 800, color: T.navy, marginBottom: 6 }}>{g.o.nombre}</div>
       {g.filas.map(f => <Row key={f.id} f={f} />)}
       {/* subtotal obra */}
-      <div style={{ display: "flex", fontSize: 12, fontWeight: 800, color: T.text, padding: "8px 0 0", alignItems: "center" }}>
-        <div style={{ flex: 1.1 }}>Subtotal ({g.filas.length})</div>
-        <div style={{ width: 68, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(g.sub.cliente)}</div>
-        <div style={{ width: 62, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(g.sub.costoDir)}</div>
-        <div style={{ width: 62, textAlign: "right", color: T.warn, fontVariantNumeric: "tabular-nums" }}>{money(g.sub.aGuardar)}</div>
-        <div style={{ width: 68, textAlign: "right", color: g.sub.neta >= 0 ? "#16A34A" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>{money(g.sub.neta)}</div>
+      <div style={{ marginTop: 9, paddingTop: 9, borderTop: `2px solid ${T.navy}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Subtotal · {g.filas.length} cert.</span>
+          <span style={{ fontSize: 12, color: T.muted }}>Neta <b style={{ fontSize: 15, color: g.sub.neta >= 0 ? "#16A34A" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>{money(g.sub.neta)}</b></span>
+        </div>
+        <div style={{ fontSize: 11, color: T.muted, marginTop: 4, lineHeight: 1.5 }}>
+          Cliente <b style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{money(g.sub.cliente)}</b>
+          <span style={{ margin: "0 5px", opacity: .5 }}>·</span>
+          Costo <b style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{money(g.sub.costoDir)}</b>
+          <span style={{ margin: "0 5px", opacity: .5 }}>·</span>
+          <span style={{ color: T.warn }}>Guardar <b style={{ fontVariantNumeric: "tabular-nums" }}>{money(g.sub.aGuardar)}</b></span>
+        </div>
+        <div style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>A guardar: imprevistos {money(g.sub.imprev)} · sueldos {money(g.sub.sueldos)}</div>
       </div>
-      <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>De guardar: imprevistos {money(g.sub.imprev)} · sueldos {money(g.sub.sueldos)}</div>
     </div>))}
   </div>);
 }
