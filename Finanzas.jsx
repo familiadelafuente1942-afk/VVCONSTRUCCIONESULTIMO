@@ -2884,7 +2884,7 @@ function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
   const gNeta = AC - ACd - AImp - ASue;
   const totalCertsTodos = obras.reduce((s, o) => s + certsDe(o.id).length, 0);
   const obrasConCert = obras.filter(o => certsDe(o.id).length > 0).length;
-  const hayHistorial = totalCertsTodos > grupos.reduce((s, g) => s + g.filas.length, 0);
+  const hayHistorial = totalCertsTodos > 1;
 
   if (grupos.length === 0) return <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>Todavía no hay certificados emitidos.</div>;
 
@@ -2950,16 +2950,16 @@ function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
       </div>}
     </div>))}
 
-    {/* ── RESUMEN GENERAL (SIEMPRE todos los certificados, acumulado) ── */}
+    {/* ── RESUMEN GENERAL: sigue el modo — en "Último" suma los últimos, en "Historial" suma todos ── */}
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginTop: 4, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Resumen general · acumulado de todo</div>
-      <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", marginBottom: 10 }}>Sumando los {totalCertsTodos} certificados de {obrasConCert} obra{obrasConCert !== 1 ? "s" : ""} (todos, no solo el último).</div>
+      <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>{verHist ? "Resumen general · acumulado de todo" : "Resumen general · última quincena"}</div>
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", marginBottom: 10 }}>{verHist ? `Sumando los ${totalCertsTodos} certificados de ${obrasConCert} obra${obrasConCert !== 1 ? "s" : ""} (todo el historial).` : `Solo los certificados de la última fecha (${maxFecha ? fmtISO(maxFecha) : "—"}), sumando ${grupos.reduce((s, g) => s + g.filas.length, 0)} obra${grupos.reduce((s, g) => s + g.filas.length, 0) !== 1 ? "s" : ""}.`}</div>
       {[
-        ["Me entró (cobré a cliente)", AC, "rgba(255,255,255,.95)", false],
-        ["Tengo que pagar de costo de obra", ACd, "rgba(255,255,255,.95)", false],
-        ["Guardar para estructura (sueldos)", ASue, "#F2C879", false],
-        ["Guardar para imprevistos", AImp, "#F2C879", false],
-        ["Utilidad neta a guardar (libre)", gNeta, gNeta >= 0 ? "#7DE0A6" : "#FCA5A5", true],
+        ["Me entró (cobré a cliente)", verHist ? AC : TC, "rgba(255,255,255,.95)", false],
+        ["Tengo que pagar de costo de obra", verHist ? ACd : TCd, "rgba(255,255,255,.95)", false],
+        ["Guardar para estructura (sueldos)", verHist ? ASue : TSue, "#F2C879", false],
+        ["Guardar para imprevistos", verHist ? AImp : TImp, "#F2C879", false],
+        ["Utilidad neta a guardar (libre)", verHist ? gNeta : totNeta, (verHist ? gNeta : totNeta) >= 0 ? "#7DE0A6" : "#FCA5A5", true],
       ].map(([lbl, val, col, strong], i) => (
         <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: strong ? "9px 0 0" : "5px 0", marginTop: strong ? 6 : 0, borderTop: strong ? "1px solid rgba(255,255,255,.18)" : "none" }}>
           <span style={{ fontSize: strong ? 13 : 12, fontWeight: strong ? 800 : 600, color: strong ? "#fff" : "rgba(255,255,255,.75)" }}>{lbl}</span>
@@ -2969,12 +2969,12 @@ function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
       <div style={{ marginTop: 12, paddingTop: 11, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 12 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Total a guardar</div>
-          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums", color: "#F2C879" }}>{money(gGuardar)}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums", color: "#F2C879" }}>{money(verHist ? gGuardar : totGuardar)}</div>
           <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.45)", marginTop: 1 }}>estructura + imprevistos</div>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Margen neto</div>
-          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{AC > 0 ? (gNeta / AC * 100).toFixed(1) : "0"}%</div>
+          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{(verHist ? AC : TC) > 0 ? ((verHist ? gNeta : totNeta) / (verHist ? AC : TC) * 100).toFixed(1) : "0"}%</div>
           <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.45)", marginTop: 1 }}>neta sobre lo cobrado</div>
         </div>
       </div>
