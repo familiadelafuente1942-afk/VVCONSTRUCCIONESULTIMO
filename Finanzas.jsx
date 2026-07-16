@@ -2849,18 +2849,20 @@ function IvaPanel({ data, save }) {
   </div>);
 }
 
-function DiferenciaCertPanel({ obras, certsDe, indices, cuota }) {
+function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
   // Por cada certificado: Cliente − Costo directo − Imprevistos − Sueldos(estructura) = Neta.
-  // "A guardar" = imprevistos + sueldos (lo que hay que reservar de ese certificado).
+  // La ESTRUCTURA es un costo fijo por quincena: mensual ÷ 2 = cuota quincenal,
+  // repartida en partes iguales entre las obras activas (las que tienen certificados).
+  // No depende del avance: cada certificado quincenal carga la misma cuota.
+  const nObrasAct = obras.filter(o => certsDe(o.id).length > 0).length || 1;
+  const sueldosPorCert = (num(mensual) / 2) / nObrasAct;
   const grupos = [];
   let TC = 0, TCd = 0, TImp = 0, TSue = 0;
   obras.forEach(o => {
     const cs = certsDe(o.id); if (!cs.length) return;
-    const estructuraObra = cuota * num(o.plazoMeses);   // sueldos totales de la obra por su plazo
     const filas = cs.map(c => {
       const r = calcCert(c, o, cs, indices);
-      const share = r.pc > 0 ? r.bruto / r.pc : 0;
-      const sueldos = estructuraObra * share;            // parte de la estructura que le toca a este certif.
+      const sueldos = sueldosPorCert;                    // cuota de estructura fija por certificado
       const cliente = r.ajustado, costoDir = r.costoDirPeriodo, imprev = r.imprevPeriodo;
       const aGuardar = imprev + sueldos;
       const neta = cliente - costoDir - imprev - sueldos;
@@ -2904,7 +2906,10 @@ function DiferenciaCertPanel({ obras, certsDe, indices, cuota }) {
       </div>
     </div>
 
-    <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Por cada certificado ves qué <b>cobraste</b>, qué te salió de <b>costo de obra</b>, cuánto se va en <b style={{ color: T.warn }}>estructura (sueldos)</b> e <b style={{ color: T.warn }}>imprevistos</b>, y abajo la <b style={{ color: "#16A34A" }}>neta</b>: lo que guardás para vos sin poner en riesgo nada. Usa los % de imprevistos y la estructura que ya tenés cargados en cada obra.</div>
+    <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 8 }}>Por cada certificado ves qué <b>cobraste</b>, qué te salió de <b>costo de obra</b>, cuánto se va en <b style={{ color: T.warn }}>estructura (sueldos)</b> e <b style={{ color: T.warn }}>imprevistos</b>, y abajo la <b style={{ color: "#16A34A" }}>neta</b>: lo que guardás para vos sin poner en riesgo nada.</div>
+    <div style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px", marginBottom: 12, fontSize: 11.5, color: T.text, lineHeight: 1.5 }}>
+      <b>Estructura por certificado:</b> {money(num(mensual))} por mes ÷ 2 (quincena) ÷ {nObrasAct} obra{nObrasAct !== 1 ? "s" : ""} activa{nObrasAct !== 1 ? "s" : ""} = <b style={{ color: T.warn }}>{money(sueldosPorCert)}</b> fijo por cada certificado. No depende del avance.
+    </div>
 
     {grupos.map(g => (<div key={g.o.id} style={{ background: T.card, borderRadius: 14, padding: "13px 15px", marginBottom: 11, boxShadow: SHDsm }}>
       <div style={{ fontSize: 13.5, fontWeight: 800, color: T.navy, marginBottom: 6 }}>{g.o.nombre}</div>
@@ -3428,7 +3433,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
     </>; })()}
     </>}
     {subtab === "particulares" && <PropiasPanel data={data} save={save} />}
-    {subtab === "diferencia" && <DiferenciaCertPanel obras={obras} certsDe={certsDe} indices={indices} cuota={cuota} />}
+    {subtab === "diferencia" && <DiferenciaCertPanel obras={obras} certsDe={certsDe} indices={indices} mensual={mensual} />}
     {subtab === "iva" && <IvaPanel data={data} save={save} />}
     {subtab === "sociedad" && <SociedadWrap data={data} save={save} />}
     {subtab === "edificios" && <EdificiosPanel data={data} save={save} />}
