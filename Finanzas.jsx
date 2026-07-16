@@ -2851,33 +2851,40 @@ function IvaPanel({ data, save }) {
 
 function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
   // Por cada certificado: Cliente − Costo directo − Imprevistos − Sueldos(estructura) = Neta.
-  // La ESTRUCTURA es un costo fijo por quincena: mensual ÷ 2 = cuota quincenal,
-  // repartida en partes iguales entre las obras activas (las que tienen certificados).
-  // Por defecto se ve solo el ÚLTIMO certificado de cada obra; el historial se abre aparte.
+  // La ESTRUCTURA es un costo fijo por quincena: mensual ÷ 2 = cuota quincenal.
+  // Modo "Último": muestra solo los certificados de la FECHA MÁS NUEVA (la última quincena cargada).
+  // El Resumen general de abajo suma SIEMPRE todos los certificados.
   const [verHist, setVerHist] = useState(false);
   const nObrasAct = obras.filter(o => certsDe(o.id).length > 0).length || 1;
   const sueldosPorCert = (num(mensual) / 2) / nObrasAct;
+  // fecha del certificado más nuevo entre todas las obras
+  const maxFecha = obras.flatMap(o => certsDe(o.id).map(c => c.fecha)).filter(Boolean).reduce((m, f) => (f > m ? f : m), "");
+  const calcFila = (c, o, cs) => {
+    const r = calcCert(c, o, cs, indices);
+    const cliente = r.ajustado, costoDir = r.costoDirPeriodo, imprev = r.imprevPeriodo, sueldos = sueldosPorCert;
+    return { id: c.id, n: cs.findIndex(x => x.id === c.id) + 1, fecha: c.fecha, cliente, costoDir, imprev, sueldos, aGuardar: imprev + sueldos, neta: cliente - costoDir - imprev - sueldos };
+  };
   const grupos = [];
-  let TC = 0, TCd = 0, TImp = 0, TSue = 0;
+  let TC = 0, TCd = 0, TImp = 0, TSue = 0;   // visible (cartel de arriba + tarjetas)
+  let AC = 0, ACd = 0, AImp = 0, ASue = 0;   // TODOS los certificados (resumen general de abajo)
   obras.forEach(o => {
     const cs = certsDe(o.id); if (!cs.length) return;
     const total = cs.length;
-    const visibles = verHist ? cs : cs.slice(-1);   // último, o todos si estás en historial
-    const filas = visibles.map(c => {
-      const idx = cs.findIndex(x => x.id === c.id);   // número real del certificado (1..N)
-      const r = calcCert(c, o, cs, indices);
-      const sueldos = sueldosPorCert;                    // cuota de estructura fija por certificado
-      const cliente = r.ajustado, costoDir = r.costoDirPeriodo, imprev = r.imprevPeriodo;
-      const aGuardar = imprev + sueldos;
-      const neta = cliente - costoDir - imprev - sueldos;
-      TC += cliente; TCd += costoDir; TImp += imprev; TSue += sueldos;
-      return { id: c.id, n: idx + 1, fecha: c.fecha, cliente, costoDir, imprev, sueldos, aGuardar, neta };
-    });
+    // acumulo TODOS para el resumen general (siempre, sin importar el modo)
+    cs.forEach(c => { const f = calcFila(c, o, cs); AC += f.cliente; ACd += f.costoDir; AImp += f.imprev; ASue += f.sueldos; });
+    // visibles: en "último" solo los de la fecha más nueva; en historial, todos
+    const visibles = verHist ? cs : cs.filter(c => c.fecha === maxFecha);
+    if (!visibles.length) return;   // en "último": esta obra no certificó en la última fecha → va al historial
+    const filas = visibles.map(c => { const f = calcFila(c, o, cs); TC += f.cliente; TCd += f.costoDir; TImp += f.imprev; TSue += f.sueldos; return f; });
     grupos.push({ o, total, filas, sub: filas.reduce((a, f) => ({ cliente: a.cliente + f.cliente, costoDir: a.costoDir + f.costoDir, imprev: a.imprev + f.imprev, sueldos: a.sueldos + f.sueldos, aGuardar: a.aGuardar + f.aGuardar, neta: a.neta + f.neta }), { cliente: 0, costoDir: 0, imprev: 0, sueldos: 0, aGuardar: 0, neta: 0 }) });
   });
-  const totGuardar = TImp + TSue;
+  const totGuardar = TImp + TSue;   // visible
   const totNeta = TC - TCd - TImp - TSue;
-  const hayHistorial = grupos.some(g => g.total > 1);
+  const gGuardar = AImp + ASue;      // todos (resumen general)
+  const gNeta = AC - ACd - AImp - ASue;
+  const totalCertsTodos = obras.reduce((s, o) => s + certsDe(o.id).length, 0);
+  const obrasConCert = obras.filter(o => certsDe(o.id).length > 0).length;
+  const hayHistorial = totalCertsTodos > grupos.reduce((s, g) => s + g.filas.length, 0);
 
   if (grupos.length === 0) return <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>Todavía no hay certificados emitidos.</div>;
 
@@ -2906,7 +2913,7 @@ function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Total a guardar para vos</div>
       <div style={{ fontSize: 34, fontWeight: 800, margin: "6px 0 2px", color: totNeta >= 0 ? "#7DE0A6" : "#FCA5A5", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{money(totNeta)}</div>
-      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)" }}>Tu utilidad neta de todos los certificados: lo que te queda para vos, después de sacar costo, estructura e imprevistos.</div>
+      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)" }}>{verHist ? "Tu utilidad neta de todos los certificados: lo que te queda para vos, después de sacar costo, estructura e imprevistos." : `Utilidad neta de la última quincena (certificados del ${maxFecha ? fmtISO(maxFecha) : "—"}). Abajo, en el resumen general, está el acumulado de todo.`}</div>
       <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 14 }}>
         <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Sueldos (estructura)</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2, color: "#F2C879" }}>{money(TSue)}</div></div>
         <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Imprevistos</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2, color: "#F2C879" }}>{money(TImp)}</div></div>
@@ -2929,7 +2936,7 @@ function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
     {grupos.map(g => (<div key={g.o.id} style={{ background: T.card, borderRadius: 14, padding: "13px 15px", marginBottom: 11, boxShadow: SHDsm }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
         <span style={{ fontSize: 13.5, fontWeight: 800, color: T.navy }}>{g.o.nombre}</span>
-        <span style={{ fontSize: 10.5, fontWeight: 700, color: T.muted }}>{verHist ? `${g.total} certificado${g.total !== 1 ? "s" : ""}` : (g.total > 1 ? `Último · N° ${g.total} de ${g.total}` : `N° ${g.total}`)}</span>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: T.muted }}>{verHist ? `${g.total} certificado${g.total !== 1 ? "s" : ""}` : `Último · N° ${g.filas[g.filas.length - 1].n} de ${g.total}`}</span>
       </div>
       {g.filas.map(f => <Row key={f.id} f={f} />)}
       {/* subtotal obra: solo tiene sentido en historial (varios certificados) */}
@@ -2943,16 +2950,16 @@ function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
       </div>}
     </div>))}
 
-    {/* ── RESUMEN GENERAL (todas las obras) ── */}
+    {/* ── RESUMEN GENERAL (SIEMPRE todos los certificados, acumulado) ── */}
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginTop: 4, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Resumen general · todas las obras</div>
-      <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", marginBottom: 10 }}>{verHist ? `Acumulado: sumando los ${grupos.reduce((s, g) => s + g.filas.length, 0)} certificados de ${grupos.length} obra${grupos.length !== 1 ? "s" : ""}.` : `Último certificado de cada una de las ${grupos.length} obra${grupos.length !== 1 ? "s" : ""} activa${grupos.length !== 1 ? "s" : ""}.`}</div>
+      <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Resumen general · acumulado de todo</div>
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", marginBottom: 10 }}>Sumando los {totalCertsTodos} certificados de {obrasConCert} obra{obrasConCert !== 1 ? "s" : ""} (todos, no solo el último).</div>
       {[
-        ["Me entró (cobré a cliente)", TC, "rgba(255,255,255,.95)", false],
-        ["Tengo que pagar de costo de obra", TCd, "rgba(255,255,255,.95)", false],
-        ["Guardar para estructura (sueldos)", TSue, "#F2C879", false],
-        ["Guardar para imprevistos", TImp, "#F2C879", false],
-        ["Utilidad neta a guardar (libre)", totNeta, totNeta >= 0 ? "#7DE0A6" : "#FCA5A5", true],
+        ["Me entró (cobré a cliente)", AC, "rgba(255,255,255,.95)", false],
+        ["Tengo que pagar de costo de obra", ACd, "rgba(255,255,255,.95)", false],
+        ["Guardar para estructura (sueldos)", ASue, "#F2C879", false],
+        ["Guardar para imprevistos", AImp, "#F2C879", false],
+        ["Utilidad neta a guardar (libre)", gNeta, gNeta >= 0 ? "#7DE0A6" : "#FCA5A5", true],
       ].map(([lbl, val, col, strong], i) => (
         <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: strong ? "9px 0 0" : "5px 0", marginTop: strong ? 6 : 0, borderTop: strong ? "1px solid rgba(255,255,255,.18)" : "none" }}>
           <span style={{ fontSize: strong ? 13 : 12, fontWeight: strong ? 800 : 600, color: strong ? "#fff" : "rgba(255,255,255,.75)" }}>{lbl}</span>
@@ -2962,12 +2969,12 @@ function DiferenciaCertPanel({ obras, certsDe, indices, mensual }) {
       <div style={{ marginTop: 12, paddingTop: 11, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 12 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Total a guardar</div>
-          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums", color: "#F2C879" }}>{money(totGuardar)}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums", color: "#F2C879" }}>{money(gGuardar)}</div>
           <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.45)", marginTop: 1 }}>estructura + imprevistos</div>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Margen neto</div>
-          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{TC > 0 ? (totNeta / TC * 100).toFixed(1) : "0"}%</div>
+          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{AC > 0 ? (gNeta / AC * 100).toFixed(1) : "0"}%</div>
           <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.45)", marginTop: 1 }}>neta sobre lo cobrado</div>
         </div>
       </div>
