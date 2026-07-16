@@ -301,6 +301,9 @@ export default function ContratistaApp() {
   const [obras, setObras] = useState([]);
   const [matpedidos, setMatpedidos] = useState([]);
   const [vista, setVista] = useState("pedidos"); // "pedidos" | "recepcion" | "definiciones"
+  const [fObra, setFObra] = useState("");   // filtro obra ("" = todas)
+  const [fTipo, setFTipo] = useState("");   // filtro tipo ("" = todos)
+  const [fEstado, setFEstado] = useState(""); // "" | "pendiente" | "levantado"
   const [docrecepcion, setDocrecepcion] = useState([]);
   const [definiciones, setDefiniciones] = useState([]);
   const [personal, setPersonal] = useState([]);
@@ -422,7 +425,16 @@ export default function ContratistaApp() {
     const r = await storage.get("vv_matpedidos"); let arr = []; if (r?.value) { try { arr = JSON.parse(r.value); } catch { } }
     await persistMat(arr.map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: quien || (empresa) } : x));
   }
-  const lista = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const listaTodos = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const lista = listaTodos.filter(p =>
+    (!fObra || p.obra_id === fObra) &&
+    (!fTipo || (p.tipo || "material") === fTipo)
+  );
+  const obrasConPedidos = obras.filter(o => listaTodos.some(p => p.obra_id === o.id));
+  // agrupar los pedidos por obra, para el registro general
+  const grupos = [];
+  lista.forEach(p => { let g = grupos.find(x => x.obra_id === p.obra_id); if (!g) { g = { obra_id: p.obra_id, nombre: obraNom(p.obra_id) || "Sin obra", pedidos: [] }; grupos.push(g); } g.pedidos.push(p); });
+  grupos.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
   if (!empresa || editEmpresa) {
     return (<div style={{ minHeight: "100vh", background: T.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "Inter, system-ui, sans-serif" }}>
@@ -479,11 +491,38 @@ export default function ContratistaApp() {
         ))}
       </div>
 
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Todos los pedidos ({lista.length})</div>
-      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Todavía no hay pedidos. Elegí arriba qué querés pedir.</div>}
-      {lista.map(p => { const mio = p.de === "contratista" && p.empresa === empresa; return (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${p.leido ? "#16A34A" : mio ? BRASS : T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 9, boxShadow: T.shadow }}>
+      {listaTodos.length > 0 && <div style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Registro de pedidos</div>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub }}>{lista.length} pedido{lista.length !== 1 ? "s" : ""} · {grupos.length} obra{grupos.length !== 1 ? "s" : ""}</div>
+        </div>
+        {/* tipo */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 7 }}>
+          <button onClick={() => setFTipo("")} style={{ background: fTipo === "" ? T.accent : T.card, color: fTipo === "" ? "#fff" : T.sub, border: `1px solid ${fTipo === "" ? T.accent : T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Todo</button>
+          {TIPOS_PEDIDO.map(t => (
+            <button key={t.id} onClick={() => setFTipo(fTipo === t.id ? "" : t.id)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, background: fTipo === t.id ? t.color : T.card, color: fTipo === t.id ? "#fff" : T.sub, border: `1px solid ${fTipo === t.id ? t.color : T.border}`, borderRadius: 8, padding: "6px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+              <TipoIcon tipo={t.id} size={13} color={fTipo === t.id ? "#fff" : t.color} />{t.label}
+            </button>
+          ))}
+        </div>
+        {/* obra */}
+        {obrasConPedidos.length > 1 && <select value={fObra} onChange={e => setFObra(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 600, color: T.text }}>
+          <option value="">Todas las obras</option>
+          {obrasConPedidos.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        </select>}
+      </div>}
+      {listaTodos.length === 0 && <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Registro de pedidos (0)</div>}
+      {listaTodos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Todavía no hay pedidos. Elegí arriba qué querés pedir.</div>}
+      {listaTodos.length > 0 && lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 18px" }}>Ningún pedido con esos filtros.<br /><button onClick={() => { setFObra(""); setFTipo(""); }} style={{ marginTop: 8, background: "none", border: "none", color: T.accent, fontWeight: 700, fontSize: 12.5, cursor: "pointer", textDecoration: "underline" }}>Ver todos</button></div>}
+      {grupos.map(g => (<div key={g.obra_id} style={{ marginBottom: 18 }}>
+        {/* encabezado de la obra */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, paddingBottom: 6, borderBottom: `2px solid ${T.navy}` }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: T.navy, flex: 1, minWidth: 0 }}>{g.nombre}</div>
+          <div style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: T.navy, borderRadius: 20, padding: "3px 10px" }}>{g.pedidos.length} pedido{g.pedidos.length !== 1 ? "s" : ""}</div>
+        </div>
+        {g.pedidos.map(p => { const mio = p.de === "contratista" && p.empresa === empresa; return (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${mio ? BRASS : tipoDe(p.tipo).color}`, borderRadius: T.rsm, padding: 13, marginBottom: 9, boxShadow: T.shadow }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoDe(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 7, verticalAlign: "middle" }}><TipoIcon tipo={p.tipo} size={12} color="#fff" /> {tipoDe(p.tipo).label}</span>{obraNom(p.obra_id)} · {p.fecha}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoDe(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 7, verticalAlign: "middle" }}><TipoIcon tipo={p.tipo} size={12} color="#fff" /> {tipoDe(p.tipo).label}</span>{p.fecha}</div>
           <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : p.de === "cliente" ? "#7C3AED" : BRASS, borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap" }}>{origenLabel(p)}</span>
         </div>
         <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{itemsTexto(p).map(l => `• ${l}`).join("\n")}</div>
@@ -492,8 +531,7 @@ export default function ContratistaApp() {
           <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700 }}>📅 Necesito en obra: {fmtISO(p.fecha_necesita)}</div>
           <a href={icsEntrega(p)} download={`Entrega-${obraNom(p.obra_id).replace(/[^\w]/g, "_")}.ics`} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.navy, color: "#fff", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}>🔔 Agendar + alerta</a>
         </div>}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 7, gap: 8 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado${p.leidoFecha ? " · " + p.leidoFecha : ""}` : "● Pendiente"}</div>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginTop: 7, gap: 8 }}>
           {mio && <div style={{ display: "flex", gap: 6, flexShrink: 0 }}><button onClick={() => editar(p)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button><button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Eliminar</button></div>}
         </div>
         {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 6 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
@@ -505,6 +543,7 @@ export default function ContratistaApp() {
           {encargados(p.obra_id).length === 0 && <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>No hay encargado con teléfono cargado para esta obra. Usá "Elegir contacto" o pedile a V+V que cargue el teléfono del encargado.</div>}
         </div>}
       </div>); })}
+      </div>))}
     </>}
     </div>
 
