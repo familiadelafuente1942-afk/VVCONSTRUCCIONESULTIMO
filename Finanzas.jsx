@@ -2849,6 +2849,73 @@ function IvaPanel({ data, save }) {
   </div>);
 }
 
+function DiferenciaCertPanel({ obras, certsDe, indices, cuota }) {
+  // Por cada certificado: Cliente − Costo directo − Imprevistos − Sueldos(estructura) = Neta.
+  // "A guardar" = imprevistos + sueldos (lo que hay que reservar de ese certificado).
+  const grupos = [];
+  let TC = 0, TCd = 0, TImp = 0, TSue = 0;
+  obras.forEach(o => {
+    const cs = certsDe(o.id); if (!cs.length) return;
+    const estructuraObra = cuota * num(o.plazoMeses);   // sueldos totales de la obra por su plazo
+    const filas = cs.map(c => {
+      const r = calcCert(c, o, cs, indices);
+      const share = r.pc > 0 ? r.bruto / r.pc : 0;
+      const sueldos = estructuraObra * share;            // parte de la estructura que le toca a este certif.
+      const cliente = r.ajustado, costoDir = r.costoDirPeriodo, imprev = r.imprevPeriodo;
+      const aGuardar = imprev + sueldos;
+      const neta = cliente - costoDir - imprev - sueldos;
+      TC += cliente; TCd += costoDir; TImp += imprev; TSue += sueldos;
+      return { id: c.id, fecha: c.fecha, cliente, costoDir, imprev, sueldos, aGuardar, neta };
+    });
+    grupos.push({ o, filas, sub: filas.reduce((a, f) => ({ cliente: a.cliente + f.cliente, costoDir: a.costoDir + f.costoDir, imprev: a.imprev + f.imprev, sueldos: a.sueldos + f.sueldos, aGuardar: a.aGuardar + f.aGuardar, neta: a.neta + f.neta }), { cliente: 0, costoDir: 0, imprev: 0, sueldos: 0, aGuardar: 0, neta: 0 }) });
+  });
+  const totGuardar = TImp + TSue;
+  const totNeta = TC - TCd - TImp - TSue;
+
+  if (grupos.length === 0) return <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>Todavía no hay certificados emitidos.</div>;
+
+  const Row = ({ f, head }) => (
+    <div style={{ display: "flex", fontSize: head ? 9.5 : 11.5, fontWeight: head ? 800 : 600, color: head ? T.muted : T.text, padding: "6px 0", borderBottom: `1px solid ${T.border}`, alignItems: "center", textTransform: head ? "uppercase" : "none", letterSpacing: head ? "0.03em" : "0" }}>
+      <div style={{ flex: 1.1, minWidth: 0 }}>{head ? "Certificado" : fmtISO(f.fecha)}</div>
+      <div style={{ width: 68, textAlign: "right" }}>{head ? "Cliente" : money(f.cliente)}</div>
+      <div style={{ width: 62, textAlign: "right" }}>{head ? "Costo" : money(f.costoDir)}</div>
+      <div style={{ width: 62, textAlign: "right", color: head ? T.muted : T.warn }}>{head ? "Guardar" : money(f.aGuardar)}</div>
+      <div style={{ width: 68, textAlign: "right", color: head ? T.muted : (f.neta >= 0 ? "#16A34A" : "#EF4444"), fontWeight: 800 }}>{head ? "Neta" : money(f.neta)}</div>
+    </div>
+  );
+
+  return (<div>
+    {/* headline: total a guardar */}
+    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Total a guardar</div>
+      <div style={{ fontSize: 34, fontWeight: 800, margin: "6px 0 2px", color: "#F2C879", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{money(totGuardar)}</div>
+      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)" }}>Imprevistos + sueldos (estructura) de todos los certificados. Es lo que tenés que reservar.</div>
+      <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 14 }}>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Imprevistos</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{money(TImp)}</div></div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Sueldos</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{money(TSue)}</div></div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Neta final</div><div style={{ fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums", marginTop: 2, color: "#7DE0A6" }}>{money(totNeta)}</div></div>
+      </div>
+    </div>
+
+    <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Por cada certificado: <b>Cliente − Costo − Imprevistos − Sueldos = Neta</b>. La columna <b style={{ color: T.warn }}>Guardar</b> es imprevistos + sueldos (lo que reservás de ese certificado). Usa los % de imprevistos y la estructura que ya tenés cargados en cada obra.</div>
+
+    {grupos.map(g => (<div key={g.o.id} style={{ background: T.card, borderRadius: 14, padding: "13px 15px", marginBottom: 11, boxShadow: SHDsm }}>
+      <div style={{ fontSize: 13.5, fontWeight: 800, color: T.navy, marginBottom: 4 }}>{g.o.nombre}</div>
+      <Row head />
+      {g.filas.map(f => <Row key={f.id} f={f} />)}
+      {/* subtotal obra */}
+      <div style={{ display: "flex", fontSize: 12, fontWeight: 800, color: T.text, padding: "8px 0 0", alignItems: "center" }}>
+        <div style={{ flex: 1.1 }}>Subtotal ({g.filas.length})</div>
+        <div style={{ width: 68, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(g.sub.cliente)}</div>
+        <div style={{ width: 62, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(g.sub.costoDir)}</div>
+        <div style={{ width: 62, textAlign: "right", color: T.warn, fontVariantNumeric: "tabular-nums" }}>{money(g.sub.aGuardar)}</div>
+        <div style={{ width: 68, textAlign: "right", color: g.sub.neta >= 0 ? "#16A34A" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>{money(g.sub.neta)}</div>
+      </div>
+      <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>De guardar: imprevistos {money(g.sub.imprev)} · sueldos {money(g.sub.sueldos)}</div>
+    </div>))}
+  </div>);
+}
+
 function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(false); const [subtab, setSubtab] = useState("cliente");
   const [estimPct, setEstimPct] = useState("");
@@ -2974,7 +3041,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
 
   return (<div style={{ padding: "14px 16px 40px" }}>
     <div style={{ display: "flex", gap: 3, background: T.card, borderRadius: 12, padding: 4, marginBottom: 14, boxShadow: SHDsm, flexWrap: "wrap" }}>
-      {[["general", "General"], ["cliente", "Cliente"], ["particulares", "Particul."], ["iva", "IVA"], ["sociedad", "Sociedad"], ["edificios", "Edificios"]].map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: "1 1 30%", background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 2px", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em" }}>{l}</button>)}
+      {[["general", "General"], ["cliente", "Cliente"], ["particulares", "Particul."], ["diferencia", "Dif. cert."], ["iva", "IVA"], ["sociedad", "Sociedad"], ["edificios", "Edificios"]].map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: "1 1 30%", background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 2px", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em" }}>{l}</button>)}
     </div>
     {subtab === "cliente" && <>
     {/* ── UTILIDAD ESPERADA — el número que más se mira ── */}
@@ -3321,6 +3388,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
     </>; })()}
     </>}
     {subtab === "particulares" && <PropiasPanel data={data} save={save} />}
+    {subtab === "diferencia" && <DiferenciaCertPanel obras={obras} certsDe={certsDe} indices={indices} cuota={cuota} />}
     {subtab === "iva" && <IvaPanel data={data} save={save} />}
     {subtab === "sociedad" && <SociedadWrap data={data} save={save} />}
     {subtab === "edificios" && <EdificiosPanel data={data} save={save} />}
