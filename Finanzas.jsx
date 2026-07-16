@@ -2874,19 +2874,20 @@ function DiferenciaCertPanel({ obras, certsDe, indices, cuota }) {
 
   if (grupos.length === 0) return <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>Todavía no hay certificados emitidos.</div>;
 
+  const Line = ({ label, value, color, strong, top }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "3px 0", borderTop: top ? `1px solid ${T.border}` : "none", marginTop: top ? 4 : 0, paddingTop: top ? 6 : 3 }}>
+      <span style={{ fontSize: strong ? 12.5 : 12, fontWeight: strong ? 800 : 500, color: strong ? T.text : T.muted }}>{label}</span>
+      <b style={{ fontSize: strong ? 15 : 12.5, fontWeight: strong ? 800 : 700, color: color || T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{money(value)}</b>
+    </div>
+  );
   const Row = ({ f }) => (
-    <div style={{ padding: "9px 0", borderBottom: `1px solid ${T.border}` }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: T.sub }}>{fmtISO(f.fecha)}</span>
-        <span style={{ fontSize: 12, color: T.muted }}>Neta <b style={{ fontSize: 14, color: f.neta >= 0 ? "#16A34A" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>{money(f.neta)}</b></span>
-      </div>
-      <div style={{ fontSize: 11, color: T.muted, marginTop: 4, lineHeight: 1.5 }}>
-        Cliente <b style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{money(f.cliente)}</b>
-        <span style={{ margin: "0 5px", opacity: .5 }}>·</span>
-        Costo <b style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{money(f.costoDir)}</b>
-        <span style={{ margin: "0 5px", opacity: .5 }}>·</span>
-        <span style={{ color: T.warn }}>Guardar <b style={{ fontVariantNumeric: "tabular-nums" }}>{money(f.aGuardar)}</b></span>
-      </div>
+    <div style={{ padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
+      <div style={{ fontSize: 11.5, fontWeight: 800, color: T.navy, marginBottom: 4 }}>{fmtISO(f.fecha)}</div>
+      <Line label="Cobré (cliente)" value={f.cliente} />
+      <Line label="Costo de obra" value={f.costoDir} />
+      <Line label="Gasté de estructura (sueldos)" value={f.sueldos} color={T.warn} />
+      <Line label="Guardo de imprevistos" value={f.imprev} color={T.warn} />
+      <Line label="Puedo guardar (neta)" value={f.neta} color={f.neta >= 0 ? "#16A34A" : "#EF4444"} strong top />
     </div>
   );
 
@@ -2903,27 +2904,51 @@ function DiferenciaCertPanel({ obras, certsDe, indices, cuota }) {
       </div>
     </div>
 
-    <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Por cada certificado: <b>Cliente − Costo − Imprevistos − Sueldos = Neta</b>. La columna <b style={{ color: T.warn }}>Guardar</b> es imprevistos + sueldos (lo que reservás de ese certificado). Usa los % de imprevistos y la estructura que ya tenés cargados en cada obra.</div>
+    <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Por cada certificado ves qué <b>cobraste</b>, qué te salió de <b>costo de obra</b>, cuánto se va en <b style={{ color: T.warn }}>estructura (sueldos)</b> e <b style={{ color: T.warn }}>imprevistos</b>, y abajo la <b style={{ color: "#16A34A" }}>neta</b>: lo que podés guardar sin poner en riesgo nada. Usa los % de imprevistos y la estructura que ya tenés cargados en cada obra.</div>
 
     {grupos.map(g => (<div key={g.o.id} style={{ background: T.card, borderRadius: 14, padding: "13px 15px", marginBottom: 11, boxShadow: SHDsm }}>
       <div style={{ fontSize: 13.5, fontWeight: 800, color: T.navy, marginBottom: 6 }}>{g.o.nombre}</div>
       {g.filas.map(f => <Row key={f.id} f={f} />)}
       {/* subtotal obra */}
       <div style={{ marginTop: 9, paddingTop: 9, borderTop: `2px solid ${T.navy}` }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Subtotal · {g.filas.length} cert.</span>
-          <span style={{ fontSize: 12, color: T.muted }}>Neta <b style={{ fontSize: 15, color: g.sub.neta >= 0 ? "#16A34A" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>{money(g.sub.neta)}</b></span>
-        </div>
-        <div style={{ fontSize: 11, color: T.muted, marginTop: 4, lineHeight: 1.5 }}>
-          Cliente <b style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{money(g.sub.cliente)}</b>
-          <span style={{ margin: "0 5px", opacity: .5 }}>·</span>
-          Costo <b style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{money(g.sub.costoDir)}</b>
-          <span style={{ margin: "0 5px", opacity: .5 }}>·</span>
-          <span style={{ color: T.warn }}>Guardar <b style={{ fontVariantNumeric: "tabular-nums" }}>{money(g.sub.aGuardar)}</b></span>
-        </div>
-        <div style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>A guardar: imprevistos {money(g.sub.imprev)} · sueldos {money(g.sub.sueldos)}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 3 }}>Subtotal · {g.filas.length} cert.</div>
+        <Line label="Cobré (cliente)" value={g.sub.cliente} />
+        <Line label="Costo de obra" value={g.sub.costoDir} />
+        <Line label="Gasté de estructura (sueldos)" value={g.sub.sueldos} color={T.warn} />
+        <Line label="Guardo de imprevistos" value={g.sub.imprev} color={T.warn} />
+        <Line label="Puedo guardar (neta)" value={g.sub.neta} color={g.sub.neta >= 0 ? "#16A34A" : "#EF4444"} strong top />
       </div>
     </div>))}
+
+    {/* ── RESUMEN GENERAL (todas las obras) ── */}
+    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginTop: 4, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>Resumen general · todas las obras</div>
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", marginBottom: 10 }}>Sumando los {grupos.reduce((s, g) => s + g.filas.length, 0)} certificados de {grupos.length} obra{grupos.length !== 1 ? "s" : ""}.</div>
+      {[
+        ["Me entró (cobré a cliente)", TC, "rgba(255,255,255,.95)", false],
+        ["Tengo que pagar de costo de obra", TCd, "rgba(255,255,255,.95)", false],
+        ["Guardar para estructura (sueldos)", TSue, "#F2C879", false],
+        ["Guardar para imprevistos", TImp, "#F2C879", false],
+        ["Utilidad neta a guardar (libre)", totNeta, totNeta >= 0 ? "#7DE0A6" : "#FCA5A5", true],
+      ].map(([lbl, val, col, strong], i) => (
+        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: strong ? "9px 0 0" : "5px 0", marginTop: strong ? 6 : 0, borderTop: strong ? "1px solid rgba(255,255,255,.18)" : "none" }}>
+          <span style={{ fontSize: strong ? 13 : 12, fontWeight: strong ? 800 : 600, color: strong ? "#fff" : "rgba(255,255,255,.75)" }}>{lbl}</span>
+          <b style={{ fontSize: strong ? 22 : 14.5, fontWeight: 800, color: col, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", letterSpacing: strong ? "-0.02em" : "0" }}>{money(val)}</b>
+        </div>
+      ))}
+      <div style={{ marginTop: 12, paddingTop: 11, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Total a guardar</div>
+          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums", color: "#F2C879" }}>{money(totGuardar)}</div>
+          <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.45)", marginTop: 1 }}>estructura + imprevistos</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Margen neto</div>
+          <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{TC > 0 ? (totNeta / TC * 100).toFixed(1) : "0"}%</div>
+          <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.45)", marginTop: 1 }}>neta sobre lo cobrado</div>
+        </div>
+      </div>
+    </div>
   </div>);
 }
 
