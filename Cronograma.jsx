@@ -335,6 +335,37 @@ const PLANTILLA_BASE = [
 ];
 
 const ETAPAS = ["Preliminares", "Estructura", "Albañilería", "Instalaciones", "Terminaciones", "Cierre"];
+
+/* ─── CONTRATOS DE PROVEEDORES ───
+   Cuándo hay que CERRAR el contrato de cada proveedor para llegar a tiempo.
+   diasAntes = plazo del proveedor (fabricación + entrega + margen), contado hacia atrás
+   desde que ese rubro se necesita en obra (el inicio de la tarea ligada).
+   Los plazos son un criterio de arranque; se editan por obra.                        */
+const CONTRATOS_BASE = [
+  { nombre: "Muebles de cocina y placares", cod: "MUE", diasAntes: 90, nota: "Fabricación a medida (60–75 d) + colocación. Depende de definir bajo mesada, alacenas, isla y electrodomésticos." },
+  { nombre: "Mesadas y banquinas", cod: "MES", diasAntes: 45, nota: "Mármol/granito/silestone. Se toman medidas sobre los muebles ya colocados; cerrar antes para reservar material y plazo." },
+  { nombre: "Carpinterías: puertas y ventanas", cod: "CPT", diasAntes: 75, nota: "Aberturas de fábrica a medida (aluminio/madera). Definir modelo y medida exacta." },
+  { nombre: "Barandas y herrería", cod: "PIS", diasAntes: 45, nota: "Herrería de escaleras, balcones y barandas. Fabricación a medida + amure." },
+  { nombre: "Aire acondicionado", cod: "AIR", diasAntes: 45, nota: "Equipos (según potencia y stock) + cañerías y pases antes de cerrar tabiques." },
+  { nombre: "Calefacción / piso radiante", cod: "RAD", diasAntes: 45, nota: "Caldera, colectores y caños. Cerrar antes de contrapisos si es piso radiante." },
+  { nombre: "Parrilla y hogar", cod: "PAR", diasAntes: 40, nota: "Kit/insertable a amurar. Definir tipo y medidas antes de la albañilería del sector." },
+  { nombre: "Griferías y artefactos", cod: "ART", diasAntes: 30, nota: "Reservar modelos y colores; suelen tener demora de importación." },
+];
+
+// Calcula, para cada contrato de la obra, la fecha límite para cerrarlo y su urgencia.
+function calcContratos(obra, tareas, aviso, hoy) {
+  return (obra?.contratos || []).map(c => {
+    const t = c.taskId ? tareas.find(x => x.id === c.taskId) : (c.cod ? tareas.find(x => x.cod === c.cod) : null);
+    const necesita = t ? t.vvInicio : (c.fechaObra || "");     // cuándo se necesita en obra
+    const limite = necesita ? isoMas(necesita, -numSimple(c.diasAntes)) : "";
+    const faltan = limite ? diasEntre(hoy, limite) : null;
+    let estado = "futura";
+    if (c.cerrado) estado = "ok";
+    else if (faltan !== null && faltan < 0) estado = "vencida";
+    else if (faltan !== null && faltan <= aviso) estado = "urgente";
+    return { ...c, tareaNombre: t ? t.nombre : "", necesita, limite, faltan, estado };
+  }).sort((a, b) => (a.faltan ?? 99999) - (b.faltan ?? 99999));
+}
 const COLOR_ETAPA = {
   "Preliminares": "#64748B", "Estructura": "#1B3A5B", "Albañilería": "#0E7490",
   "Instalaciones": "#7C3AED", "Terminaciones": "#B0894F", "Cierre": "#16A34A",
@@ -527,12 +558,13 @@ function calcObra(obra, diasAviso, finanzas) {
     const sinCertificar = ejecutado - certificado;
     const enCurso = conPlata.filter(t => t.vvInicio <= hoy && t.vvFin >= hoy);
     const bloqueadas = conPlata.filter(t => t.bloqueada);
+    const contratos = calcContratos(obra, conPlata, aviso, hoy);
     return {
       tareas: conPlata, finDias, finHabiles: 0, fin, meses, excede,
       defs, pendientes, vencidas, urgentes, pesoTotal, avancePond,
       contrato, costoTotal, ejecutado, certificado, pagado, costoEjec, sinCertificar,
       ligada: !!fo, finanzasNombre: fo?.nombre || "",
-      criticas: [], enCurso, bloqueadas, base, modoManual: true,
+      criticas: [], enCurso, bloqueadas, base, modoManual: true, contratos,
     };
   }
 
@@ -604,6 +636,7 @@ function calcObra(obra, diasAviso, finanzas) {
   const criticas = conPlata.filter(t => t.critica);
   const enCurso = conPlata.filter(t => t.vvInicio <= hoy && t.vvFin >= hoy);
   const bloqueadas = conPlata.filter(t => t.bloqueada);
+  const contratos = calcContratos(obra, conPlata, aviso, hoy);
 
   return {
     tareas: conPlata, finDias, finHabiles, fin, meses, excede,
@@ -611,7 +644,7 @@ function calcObra(obra, diasAviso, finanzas) {
     pesoTotal, avancePond,
     contrato, costoTotal, ejecutado, certificado, pagado, costoEjec, sinCertificar,
     ligada: !!fo, finanzasNombre: fo?.nombre || "",
-    criticas, enCurso, bloqueadas,
+    criticas, enCurso, bloqueadas, contratos,
   };
 }
 
@@ -691,13 +724,21 @@ function semDe(est) {
 function Gantt({ obra, plan, soloCriticas }) {
   const hoy = hoyISO();
   const [zoom, setZoom] = useState("dia");   // "dia" | "semana" | "mes"
+  const manual = !!plan.modoManual;
   const lista = soloCriticas ? plan.tareas.filter(t => t.critica) : plan.tareas;
+  const baseCal = plan.base || obra.inicio;
 
-  // La grilla de días hábiles: una columna por día que se trabaja.
-  // Los sábados y domingos ni aparecen, porque no se trabaja.
+  // La grilla: en automático son días hábiles (sin fines de semana);
+  // en manual es el calendario real, desde la primera fecha cargada.
   const dias = useMemo(() => {
-    const n = Math.max(1, plan.finHabiles || 1);
     const out = [];
+    if (manual) {
+      const n = Math.max(1, plan.finDias || 1);
+      let f = baseCal;
+      for (let i = 0; i < n && i < 3000; i++) { out.push(f); f = isoMas(f, 1); }
+      return out;
+    }
+    const n = Math.max(1, plan.finHabiles || 1);
     let f = primerHabil(obra.inicio);
     for (let i = 0; i < n && i < 3000; i++) {
       out.push(f);
@@ -707,7 +748,7 @@ function Gantt({ obra, plan, soloCriticas }) {
       f = sig;
     }
     return out;
-  }, [obra.inicio, plan.finHabiles]);
+  }, [obra.inicio, plan.finHabiles, plan.finDias, manual, baseCal]);
 
   const ANCHO = zoom === "dia" ? 26 : zoom === "semana" ? 11 : 4;
   const ancho = dias.length * ANCHO;
@@ -752,7 +793,7 @@ function Gantt({ obra, plan, soloCriticas }) {
           fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
         }}>{l}</button>
       ))}
-      <span style={{ marginLeft: "auto", fontSize: 10.5, color: T.muted }}>{dias.length} días hábiles</span>
+      <span style={{ marginLeft: "auto", fontSize: 10.5, color: T.muted }}>{dias.length} días{manual ? "" : " hábiles"}</span>
     </div>
 
     <div style={{ display: "flex", padding: "0 12px" }}>
@@ -764,7 +805,7 @@ function Gantt({ obra, plan, soloCriticas }) {
           <div key={t.id} style={{ height: 26, display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
             {t.bloqueada && <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.danger, flexShrink: 0 }} />}
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11.5, fontWeight: t.critica ? 800 : 600, color: t.critica ? T.critico : T.text }}>{t.nombre}</span>
-            <span style={{ flexShrink: 0, fontSize: 8.5, fontWeight: 800, color: t.critica ? T.critico : T.muted }}>{t.critica ? "CRÍT" : `+${t.holgura}d`}</span>
+            {!manual && <span style={{ flexShrink: 0, fontSize: 8.5, fontWeight: 800, color: t.critica ? T.critico : T.muted }}>{t.critica ? "CRÍT" : `+${t.holgura}d`}</span>}
           </div>
         ))}
       </div>
@@ -815,19 +856,22 @@ function Gantt({ obra, plan, soloCriticas }) {
 
             {lista.map(t => {
               const col = t.critica ? T.critico : (COLOR_ETAPA[t.etapa] || T.accent);
-              const izq = t.es * ANCHO;
-              const anc = Math.max(3, t.dias * ANCHO);
+              const off = manual ? (t.offCal || 0) : t.es;
+              const dur = manual ? (t.durCal || 1) : t.dias;
+              const izq = off * ANCHO;
+              const anc = Math.max(3, dur * ANCHO);
               const avance = Math.max(0, Math.min(100, numSimple(t.avance)));
-              // Belfast, si cargaste sus fechas: lo ubico por día hábil
+              // Belfast, si cargaste sus fechas: en manual por calendario, en auto por día hábil
               let bIzq = null, bAnc = null;
               if (t.bfInicio && t.bfFin) {
-                const i0 = habilesEntre(primerHabil(obra.inicio), primerHabil(t.bfInicio));
-                const n = Math.max(1, habilesEntre(primerHabil(t.bfInicio), t.bfFin) + 1);
+                let i0, n;
+                if (manual) { i0 = diasEntre(baseCal, t.bfInicio); n = Math.max(1, diasEntre(t.bfInicio, t.bfFin) + 1); }
+                else { i0 = habilesEntre(primerHabil(obra.inicio), primerHabil(t.bfInicio)); n = Math.max(1, habilesEntre(primerHabil(t.bfInicio), t.bfFin) + 1); }
                 bIzq = i0 * ANCHO; bAnc = Math.max(3, n * ANCHO);
               }
               return (<div key={t.id} style={{ height: 26, position: "relative" }}>
                 <div style={{ position: "absolute", left: 0, right: 0, top: 11, height: 2, background: T.dark ? T.al : T.bg }} />
-                <div style={{ position: "absolute", left: izq, width: anc, top: 5, height: 13, background: col, borderRadius: 3, opacity: .3 }} />
+                <div style={{ position: "absolute", left: izq, width: anc, top: 5, height: 13, background: col, borderRadius: 3, opacity: .28, border: `1px solid ${col}` }} />
                 {avance > 0 && <div style={{ position: "absolute", left: izq, width: anc * avance / 100, top: 5, height: 13, background: col, borderRadius: 3 }} />}
                 {bIzq !== null && <div style={{ position: "absolute", left: bIzq, width: bAnc, top: 19, height: 5, border: `1.5px solid ${BRASS}`, borderRadius: 2, boxSizing: "border-box" }} />}
               </div>);
@@ -838,11 +882,11 @@ function Gantt({ obra, plan, soloCriticas }) {
     </div>
 
     <div style={{ display: "flex", gap: 12, margin: "10px 12px 0", flexWrap: "wrap", fontSize: 10, color: T.sub }}>
-      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 7, background: T.critico, borderRadius: 3 }} /> camino crítico</span>
+      {!manual && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 7, background: T.critico, borderRadius: 3 }} /> camino crítico</span>}
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 7, background: T.accent, borderRadius: 3 }} /> V+V</span>
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 6, border: `1.5px solid ${BRASS}`, borderRadius: 3, boxSizing: "border-box" }} /> Belfast</span>
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 2, height: 10, background: T.danger }} /> hoy</span>
-      <span style={{ color: T.muted }}>· solo días hábiles, sin fines de semana</span>
+      <span style={{ color: T.muted }}>· {manual ? "calendario real, con las fechas que cargaste" : "solo días hábiles, sin fines de semana"}</span>
     </div>
   </div>);
 }
@@ -1337,6 +1381,91 @@ function Torta({ partes, total, centroArriba, centroAbajo }) {
   </svg>);
 }
 
+/* ─── CONTRATOS DE PROVEEDORES: cuándo cerrar cada uno ─── */
+function PanelContratos({ plan, obra, guardarObra }) {
+  const contratos = plan.contratos || [];
+  const cargarSugeridos = () => guardarObra(o => {
+    const existentes = new Set((o.contratos || []).map(c => (c.nombre || "").toLowerCase()));
+    const nuevos = CONTRATOS_BASE
+      .filter(b => !existentes.has(b.nombre.toLowerCase()))
+      .map(b => ({ id: uid(), nombre: b.nombre, cod: b.cod, taskId: (o.tareas || []).find(t => t.cod === b.cod)?.id || "", diasAntes: b.diasAntes, nota: b.nota, cerrado: false, fechaCerrado: "" }));
+    return { ...o, contratos: [...(o.contratos || []), ...nuevos] };
+  });
+  const editar = (id, campos) => guardarObra(o => ({ ...o, contratos: (o.contratos || []).map(c => c.id === id ? { ...c, ...campos } : c) }));
+  const borrar = (id) => { if (confirm("¿Sacar este contrato?")) guardarObra(o => ({ ...o, contratos: (o.contratos || []).filter(c => c.id !== id) })); };
+  const agregar = () => guardarObra(o => ({ ...o, contratos: [...(o.contratos || []), { id: uid(), nombre: "Nuevo proveedor", cod: "", taskId: (o.tareas || [])[0]?.id || "", diasAntes: 45, nota: "", cerrado: false, fechaCerrado: "" }] }));
+  const tono = (est) => est === "vencida" ? TONO.rojo() : est === "urgente" ? TONO.ambar() : est === "ok" ? TONO.verde() : { c: T.muted, b: T.bg, bd: T.border };
+  const pend = contratos.filter(c => !c.cerrado);
+  const criticos = pend.filter(c => c.estado === "vencida" || c.estado === "urgente");
+
+  return (<div>
+    <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55, marginBottom: 12 }}>
+      Cuándo hay que <b>cerrar el contrato</b> de cada proveedor para llegar a tiempo. Se calcula hacia atrás desde que ese rubro se necesita en obra, contando la fabricación y la entrega.
+    </div>
+
+    {contratos.length === 0 && (
+      <div style={{ background: T.card, borderRadius: 12, padding: 18, textAlign: "center", boxShadow: SHDsm }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700 }}>Todavía no cargaste contratos</div>
+        <div style={{ fontSize: 12, color: T.sub, marginTop: 4, lineHeight: 1.5 }}>Cargá los sugeridos (muebles, mesadas, carpinterías, barandas, aire, calefacción, parrilla, griferías) y ajustá los plazos.</div>
+        <div style={{ marginTop: 12 }}><Btn onClick={cargarSugeridos}>Cargar contratos sugeridos</Btn></div>
+      </div>
+    )}
+
+    {criticos.length > 0 && (
+      <div style={{ background: TONO.rojo().b, border: `1px solid ${TONO.rojo().bd}`, borderRadius: 11, padding: 12, marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.critico, textTransform: "uppercase", letterSpacing: ".05em" }}>Cerrar YA</div>
+        <div style={{ fontSize: 12, color: T.text, marginTop: 4, lineHeight: 1.5 }}>{criticos.map(c => c.nombre).join(" · ")} {criticos.length === 1 ? "necesita" : "necesitan"} que cierres el contrato ahora para no atrasar la obra.</div>
+      </div>
+    )}
+
+    {contratos.map(c => {
+      const to = tono(c.estado);
+      const otras = plan.tareas;
+      return (<div key={c.id} style={{ background: T.card, borderRadius: 12, marginBottom: 9, boxShadow: SHDsm, borderLeft: `4px solid ${to.c}`, overflow: "hidden" }}>
+        <div style={{ padding: "12px 13px" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{c.nombre}</div>
+              {c.cerrado
+                ? <div style={{ fontSize: 11.5, color: T.ok, fontWeight: 700, marginTop: 2 }}>✓ Contrato cerrado{c.fechaCerrado ? ` · ${fmtCorta(c.fechaCerrado)}` : ""}</div>
+                : c.limite
+                  ? <div style={{ fontSize: 11.5, marginTop: 2, color: to.c, fontWeight: 700 }}>
+                      Cerrar antes del {fmtFecha(c.limite)}
+                      {c.faltan !== null && <span> · {c.faltan < 0 ? `${Math.abs(c.faltan)} días tarde` : c.faltan === 0 ? "es hoy" : `faltan ${c.faltan} días`}</span>}
+                    </div>
+                  : <div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>Ligá una tarea para calcular la fecha</div>}
+              {c.tareaNombre && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Se necesita en obra: {fmtCorta(c.necesita)} · {c.tareaNombre}</div>}
+            </div>
+            <button onClick={() => editar(c.id, { cerrado: !c.cerrado, fechaCerrado: !c.cerrado ? hoyISO() : "" })} style={{ flexShrink: 0, background: c.cerrado ? T.ok : "transparent", color: c.cerrado ? "#fff" : T.sub, border: `1.5px solid ${c.cerrado ? T.ok : T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{c.cerrado ? "✓ Cerrado" : "Cerrar"}</button>
+          </div>
+
+          {c.nota && <div style={{ fontSize: 11, color: T.muted, marginTop: 7, lineHeight: 1.45, fontStyle: "italic" }}>{c.nota}</div>}
+
+          <div style={{ display: "flex", gap: 7, marginTop: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 46%" }}>
+              <div style={{ fontSize: 10, color: T.sub, marginBottom: 3 }}>Se necesita para</div>
+              <select value={c.taskId || ""} onChange={e => editar(c.id, { taskId: e.target.value })} style={{ ...inpSm, width: "100%" }}>
+                <option value="">(elegir tarea)</option>
+                {otras.map(t => <option key={t.id} value={t.id}>{t.cod} · {t.nombre.slice(0, 24)}</option>)}
+              </select>
+            </div>
+            <div style={{ width: 92 }}>
+              <div style={{ fontSize: 10, color: T.sub, marginBottom: 3 }}>Días antes</div>
+              <input defaultValue={c.diasAntes} onBlur={e => editar(c.id, { diasAntes: Math.max(0, numSimple(e.target.value)) })} inputMode="numeric" style={{ ...inpSm, width: "100%", textAlign: "right" }} />
+            </div>
+            <button onClick={() => borrar(c.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "8px 4px" }}>×</button>
+          </div>
+        </div>
+      </div>);
+    })}
+
+    {contratos.length > 0 && <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+      <Btn chico tipo="suave" onClick={agregar}>+ Otro contrato</Btn>
+      <Btn chico tipo="suave" onClick={cargarSugeridos}>Cargar sugeridos que falten</Btn>
+    </div>}
+  </div>);
+}
+
 function PanelReparto({ plan, obra }) {
   const totalPeso = plan.pesoTotal;
   const ligada = plan.ligada;
@@ -1662,6 +1791,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
     ["agenda", "Agenda"],
     ["viene", `Qué viene${plan.bloqueadas.length ? ` (${plan.bloqueadas.length})` : ""}`],
     ["defs", `Definiciones${plan.pendientes.length ? ` (${plan.pendientes.length})` : ""}`],
+    ["contratos", (() => { const p = (plan.contratos || []).filter(c => !c.cerrado && (c.estado === "vencida" || c.estado === "urgente")).length; return `Contratos${p ? ` (${p})` : ""}`; })()],
     ["reparto", "Reparto"],
     ["plata", "Plata"],
     ["editar", "Editar"],
@@ -1747,6 +1877,8 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
         </div>);
       })}
     </>}
+
+    {vista === "contratos" && <PanelContratos plan={plan} obra={obra} guardarObra={guardarObra} />}
 
     {vista === "reparto" && <PanelReparto plan={plan} obra={obra} />}
 
