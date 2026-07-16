@@ -863,7 +863,7 @@ function Gantt({ obra, plan, soloCriticas, guardarObra }) {
           </div>
 
           {/* las filas */}
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative", paddingTop: 6 }}>
             {/* grilla: una línea cada lunes */}
             {dias.map((d, i) => dowDe(d) === 1 ? (
               <div key={i} style={{ position: "absolute", left: i * ANCHO, top: 0, bottom: 0, width: 1, background: T.border, opacity: .55 }} />
@@ -872,9 +872,12 @@ function Gantt({ obra, plan, soloCriticas, guardarObra }) {
             {colHoy >= 0 && (
               <div style={{ position: "absolute", left: colHoy * ANCHO, top: 0, bottom: 0, width: 2, background: T.danger, zIndex: 3, opacity: .9 }} />
             )}
-            {/* marcas de días clave */}
-            {hitos.map(h => { const i = dias.indexOf(h.fecha); if (i < 0) return null; return (
-              <div key={h.id} onClick={() => abrirHito(h.fecha)} title={h.texto} style={{ position: "absolute", left: i * ANCHO + ANCHO / 2 - 1, top: 0, bottom: 0, width: 2, background: h.color, zIndex: 4, opacity: .9, cursor: "pointer" }} />
+            {/* marcas de días clave: línea + punto (chincheta) bien visible */}
+            {hitos.map(h => { const i = dias.indexOf(h.fecha); if (i < 0) return null; const cx = i * ANCHO + ANCHO / 2; return (
+              <React.Fragment key={h.id}>
+                <div onClick={() => abrirHito(h.fecha)} title={h.texto} style={{ position: "absolute", left: cx - 1, top: 4, bottom: 0, width: 2, background: h.color, zIndex: 4, opacity: .9, cursor: "pointer" }} />
+                <div onClick={() => abrirHito(h.fecha)} title={h.texto} style={{ position: "absolute", left: cx - 6, top: -3, width: 12, height: 12, borderRadius: "50%", background: h.color, border: `2px solid ${T.card}`, boxShadow: "0 1px 3px rgba(0,0,0,.35)", zIndex: 6, cursor: "pointer" }} />
+              </React.Fragment>
             ); })}
 
             {lista.map(t => {
