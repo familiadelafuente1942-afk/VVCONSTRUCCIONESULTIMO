@@ -184,7 +184,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
 
   // Genera un Word (.doc) EDITABLE con TODAS las definiciones (faltantes y las que ya tenés) + observaciones.
   // Documento Word-compatible por HTML: se abre y edita en Word / Pages / Google Docs, sin depender de CDN.
-  function wordDefiniciones() {
+  async function wordDefiniciones() {
     const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const filas = grupos.map(g => {
       const cab = `<tr><td colspan="3" style="background:#EAF0F7;color:#1B3A5B;font-weight:bold;font-size:11pt;padding:6px 8px;border:1px solid #B8C4D4">${esc(g.rubro)}</td></tr>`;
@@ -218,11 +218,21 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
   </table>
   <div class="nota">Documento editable generado por V+V Construcciones. Las definiciones pendientes atrasan el desarrollo de las tareas de albañilería, revoques y colocaciones; es importante resolverlas para dar curso a las tareas, contrataciones y pedidos de materiales.</div>
 </body></html>`;
+    const nombre = `Definiciones_${(obraNom(obraId) || "obra").replace(/[^\w\s-]/g, "").replace(/\s+/g, "_")}.doc`;
     const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+    // iOS/Safari bloquea la descarga directa de blobs → usamos el menú de compartir de Apple.
+    try {
+      const file = new File([blob], nombre, { type: "application/msword" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: nombre });
+        return;
+      }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    // Fallback (escritorio y navegadores sin share): descarga por enlace.
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Definiciones_${(obraNom(obraId) || "obra").replace(/[^\w\s-]/g, "").replace(/\s+/g, "_")}.doc`;
+    a.download = nombre;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
