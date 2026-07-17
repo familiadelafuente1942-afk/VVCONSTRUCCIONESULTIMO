@@ -789,7 +789,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
-    {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} />}
+    {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "camaras" && <CamarasBody camaras={camaras} onSave={persistCamaras} />}
@@ -860,9 +860,23 @@ function Icono({ n, size = 20 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>{p[n] || null}</svg>;
 }
 
-function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }) {
+function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, onAdd }) {
   const lista = (pagos || []).filter(p => !filtroObra || p.obra === filtroObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const obrasUnicas = [...new Set((pagos || []).map(p => p.obra).filter(Boolean))];
+  const [abrir, setAbrir] = useState(false);
+  const [fPersona, setFPersona] = useState(""); const [fMonto, setFMonto] = useState(""); const [fObra, setFObra] = useState("");
+  const [fEstado, setFEstado] = useState("pendiente"); const [fMetodo, setFMetodo] = useState(""); const [fNota, setFNota] = useState("");
+  const [fFecha, setFFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const fmtMiles = (v) => { const s = String(v == null ? "" : v).replace(/\D/g, ""); return s ? Number(s).toLocaleString("es-AR") : ""; };
+  const isoADmy = (iso) => { if (!iso) return ""; const [a, m, d] = iso.split("-"); return `${d}/${m}/${a.slice(2)}`; };
+  const limpiar = () => { setFPersona(""); setFMonto(""); setFObra(""); setFEstado("pendiente"); setFMetodo(""); setFNota(""); setFFecha(new Date().toISOString().slice(0, 10)); setAbrir(false); };
+  const guardarPago = () => {
+    const monto = Number(String(fMonto).replace(/\D/g, "")) || 0;
+    if (!fPersona.trim() && !monto) { alert("Poné al menos la persona y el monto."); return; }
+    onAdd({ persona: fPersona.trim(), monto, obra: fObra, estado: fEstado, metodo: fMetodo.trim(), nota: fNota.trim(), fecha: isoADmy(fFecha) });
+    limpiar();
+  };
+  const inpF = { width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px 12px", fontSize: 15, color: T.text, boxSizing: "border-box" };
   const totalPend = lista.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
   const totalPag = lista.filter(p => p.estado === "pagado").reduce((a, p) => a + (p.monto || 0), 0);
   const mesAA = hoyStr().slice(3);
@@ -877,6 +891,34 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }
       </select>
       <button onClick={exportar} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "0 16px", fontSize: 12.5, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer", whiteSpace: "nowrap" }}>Exportar Excel</button>
     </div>
+
+    {/* cargar pago a mano */}
+    {!abrir && <button onClick={() => setAbrir(true)} style={{ width: "100%", background: T.card, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 12, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>+ Cargar pago a mano</button>}
+    {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 10 }}>Nuevo pago</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        <input value={fPersona} onChange={e => setFPersona(e.target.value)} placeholder="Persona (ej: Humberto)" style={inpF} />
+        <div style={{ display: "flex", gap: 9 }}>
+          <input value={fMonto} onChange={e => setFMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="$ Monto" style={{ ...inpF, flex: 1 }} />
+          <input type="date" value={fFecha} onChange={e => setFFecha(e.target.value)} style={{ ...inpF, flex: 1 }} />
+        </div>
+        <select value={fObra} onChange={e => setFObra(e.target.value)} style={inpF}>
+          <option value="">— Obra (opcional) —</option>
+          {(obras || []).map(o => <option key={o.id} value={o.nombre}>{o.nombre}</option>)}
+        </select>
+        <div style={{ display: "flex", gap: 9 }}>
+          {[["pendiente", "Pendiente"], ["pagado", "Pagado"]].map(([k, l]) => (
+            <button key={k} onClick={() => setFEstado(k)} style={{ flex: 1, background: fEstado === k ? (k === "pagado" ? T.accent : "#B98A2E") : "transparent", color: fEstado === k ? "#fff" : T.sub, border: `1px solid ${fEstado === k ? "transparent" : T.border}`, borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{l}</button>
+          ))}
+        </div>
+        <input value={fMetodo} onChange={e => setFMetodo(e.target.value)} placeholder="Método (efectivo, transferencia, cheque…)" style={inpF} />
+        <input value={fNota} onChange={e => setFNota(e.target.value)} placeholder="Nota (opcional)" style={inpF} />
+        <div style={{ display: "flex", gap: 9, marginTop: 2 }}>
+          <button onClick={limpiar} style={{ flex: 1, background: "transparent", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 9, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={guardarPago} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Guardar pago</button>
+        </div>
+      </div>
+    </div>}
     <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pendiente</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: "#9A6B1E", marginTop: 3 }}>${totalPend.toLocaleString("es-AR")}</div></div>
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pagado</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totalPag.toLocaleString("es-AR")}</div></div>
