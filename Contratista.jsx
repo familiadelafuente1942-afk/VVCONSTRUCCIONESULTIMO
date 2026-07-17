@@ -131,8 +131,16 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
 
   const guardar = (nextItems) => {
     const otros = (definiciones || []).filter(r => r.obra_id !== obraId);
-    persistDef([...otros, { obra_id: obraId, items: nextItems, upd: Date.now() }]);
+    persistDef([...otros, { ...(reg || {}), obra_id: obraId, items: nextItems, upd: Date.now() }]);
   };
+  const patchReg = (patch) => {
+    const otros = (definiciones || []).filter(r => r.obra_id !== obraId);
+    persistDef([...otros, { obra_id: obraId, items, upd: Date.now(), ...(reg || {}), ...patch }]);
+  };
+  const [gformUrl, setGformUrl] = useState(() => { try { return localStorage.getItem("contratista_gform_url") || ""; } catch { return ""; } });
+  const [gformCfg, setGformCfg] = useState(false);
+  const [gformBusy, setGformBusy] = useState("");
+  const guardarGformUrl = (v) => { setGformUrl(v); try { localStorage.setItem("contratista_gform_url", v.trim()); } catch { } };
 
   async function subirExcel(e) {
     const file = e.target.files && e.target.files[0]; e.target.value = "";
@@ -237,7 +245,53 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 
-  if (obras.length === 0) return <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>Todavía no hay obras cargadas.</div>;
+  // ── GOOGLE FORM (vía Apps Script) ──
+  async function postGform(payload) {
+    if (!gformUrl.trim()) throw new Error("Primero configurá la URL de Apps Script (tocá el engranaje).");
+    const r = await fetch(gformUrl.trim(), { method: "POST", body: JSON.stringify(payload), redirect: "follow" });
+    const txt = await r.text();
+    let data; try { data = JSON.parse(txt); } catch { throw new Error("Respuesta inesperada de Google. Revisá que la URL termine en /exec y esté publicada como 'Cualquier usuario'."); }
+    if (!data.ok) throw new Error(data.error || "Error al hablar con Google.");
+    return data;
+  }
+
+  async function generarGform() {
+    if (!items.length) { alert("No hay definiciones cargadas en esta obra."); return; }
+    setGformBusy("crear");
+    try {
+      const data = await postGform({ action: "crear", obra: obraNom(obraId), items: items.map(i => ({ rubro: i.rubro, nombre: i.nombre })) });
+      patchReg({ formId: data.formId, formUrl: data.viewUrl, formEdit: data.editUrl });
+      setGformBusy("");
+      // compartir el link (share sheet en iOS)
+      const link = data.viewUrl;
+      try {
+        if (navigator.share) { await navigator.share({ title: `Definiciones ${obraNom(obraId)}`, text: `Formulario de definiciones – ${obraNom(obraId)}`, url: link }); return; }
+      } catch (e) { if (e && e.name === "AbortError") return; }
+      window.prompt("Formulario creado. Copiá el link y mandáselo al jefe de obra:", link);
+    } catch (err) { setGformBusy(""); alert(err.message || "No se pudo crear el formulario."); }
+  }
+
+  async function traerRespuestas(silencioso) {
+    if (!reg?.formId) { if (!silencioso) alert("Todavía no generaste el formulario de esta obra."); return; }
+    setGformBusy("leer");
+    try {
+      const data = await postGform({ action: "leer", formId: reg.formId });
+      if (!data.respondido) { setGformBusy(""); if (!silencioso) alert("El formulario todavía no tiene respuestas."); return; }
+      const estados = data.estados || {};
+      const nextItems = items.map(it => estados[it.nombre] ? { ...it, tiene: estados[it.nombre] === "tenemos" } : it);
+      const otros = (definiciones || []).filter(r => r.obra_id !== obraId);
+      persistDef([...otros, { ...(reg || {}), obra_id: obraId, items: nextItems, upd: Date.now(), gformObs: data.obs || {}, gformFecha: data.fecha }]);
+      setGformBusy("");
+      if (!silencioso) alert("✓ Actualicé las definiciones con las respuestas del jefe de obra.");
+    } catch (err) { setGformBusy(""); if (!silencioso) alert(err.message || "No se pudieron traer las respuestas."); }
+  }
+
+  // Auto-traer respuestas al abrir una obra que ya tiene formulario
+  const ultObra = useRef("");
+  useEffect(() => {
+    if (obraId && obraId !== ultObra.current && reg?.formId && gformUrl.trim()) { ultObra.current = obraId; traerRespuestas(true); }
+    else if (obraId !== ultObra.current) ultObra.current = obraId;
+  }, [obraId, reg?.formId]);
 
   return (<div>
     <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Subí el Excel de definiciones, marcá las que ya tenés, y generá el PDF de faltantes para Belfast.</div>
@@ -284,6 +338,38 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
       <button onClick={pdfFaltantes} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📄 PDF de definiciones faltantes</button>
       <button onClick={wordDefiniciones} style={{ width: "100%", background: "#2B579A", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📝 Word editable (todas + observaciones)</button>
       <button onClick={waFaltantes} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📲 Enviar faltantes por WhatsApp</button>
+
+      {/* ── Google Form ── */}
+      <div style={{ border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.card }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gformCfg ? 10 : (reg?.formId ? 10 : 0) }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>📋 Formulario para el jefe de obra</div>
+          <button onClick={() => setGformCfg(v => !v)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, color: T.sub, cursor: "pointer" }}>⚙︎ {gformUrl ? "Configurado" : "Configurar"}</button>
+        </div>
+
+        {gformCfg && <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 6 }}>Pegá la URL de tu Apps Script (la que termina en <b>/exec</b>). La creás una sola vez con el instructivo que te pasé.</div>
+          <input value={gformUrl} onChange={e => guardarGformUrl(e.target.value)} placeholder="https://script.google.com/…/exec" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 11px", fontSize: 12, color: T.text, boxSizing: "border-box" }} />
+        </div>}
+
+        {!reg?.formId
+          ? <button onClick={generarGform} disabled={gformBusy === "crear" || !gformUrl} style={{ width: "100%", background: gformUrl ? "#4285F4" : T.border, color: "#fff", border: "none", borderRadius: 9, padding: "12px", fontSize: 13, fontWeight: 700, cursor: gformUrl ? "pointer" : "default" }}>{gformBusy === "crear" ? "Creando el formulario…" : "Generar Google Form"}</button>
+          : <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              <div style={{ display: "flex", gap: 7 }}>
+                <button onClick={generarGform} style={{ flex: 1, background: "#4285F4", color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Compartir link</button>
+                <button onClick={() => traerRespuestas(false)} disabled={gformBusy === "leer"} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{gformBusy === "leer" ? "Trayendo…" : "↻ Traer respuestas"}</button>
+              </div>
+              {reg.gformFecha && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center" }}>Última respuesta cargada: {new Date(reg.gformFecha).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>}
+              <button onClick={() => { if (confirm("¿Desvincular este formulario? Vas a poder generar uno nuevo.")) patchReg({ formId: null, formUrl: null, formEdit: null }); }} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, cursor: "pointer", textDecoration: "underline" }}>Desvincular formulario</button>
+            </div>}
+      </div>
+
+      {/* observaciones del jefe (de las respuestas del form) */}
+      {reg?.gformObs && Object.keys(reg.gformObs).some(k => reg.gformObs[k]) && <div style={{ border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.al }}>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.navy, marginBottom: 6 }}>Observaciones del jefe de obra</div>
+        {Object.keys(reg.gformObs).filter(k => reg.gformObs[k]).map(k => (
+          <div key={k} style={{ fontSize: 12, color: T.text, marginBottom: 4, lineHeight: 1.4 }}><b>{k}:</b> {reg.gformObs[k]}</div>
+        ))}
+      </div>}
       <button onClick={limpiar} style={{ width: "100%", background: "none", color: T.muted, border: "none", padding: "8px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>Borrar todo y empezar de nuevo</button>
     </>}
 
