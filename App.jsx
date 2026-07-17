@@ -1930,17 +1930,21 @@ function BitacoraView({ db, cfg, onBack }) {
         ${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}
       </div>`;
     }).join("");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-      @page { margin: 16mm; }
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 14mm; }
       * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; margin: 0; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
       .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 14px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; letter-spacing: -.01em; }
       .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
       .meta { font-size: 11px; color: #5B6B7F; margin-top: 8px; }
       h1 { font-size: 15px; color: #0F1B2D; margin: 4px 0 2px; }
       .hecho { border: 1px solid #E3E8EF; border-left: 3px solid #1B3A5B; border-radius: 8px; padding: 11px 13px; margin-bottom: 11px; page-break-inside: avoid; }
-      .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; }
+      .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; flex-wrap: wrap; }
       .num { background: #0F1B2D; color: #fff; font-size: 10px; font-weight: 800; border-radius: 20px; padding: 1px 8px; }
       .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
       .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
@@ -1949,7 +1953,7 @@ function BitacoraView({ db, cfg, onBack }) {
       .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
       .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
       .vacio { font-size: 12px; color: #98A2B3; text-align: center; padding: 30px; }
-    </style></head><body>
+    </style></head><body><div class="sheet">
       <div class="hdr">
         <div class="marca">${marca}</div>
         <div class="tipo">Historial de obra · Bitácora</div>
@@ -1958,7 +1962,7 @@ function BitacoraView({ db, cfg, onBack }) {
       </div>
       ${items || '<div class="vacio">Todavía no hay hechos cargados en esta obra.</div>'}
       <div class="foot">Documento generado por ${marca} para respaldo y justificación de adicionales de obra.</div>
-    </body></html>`;
+    </div></body></html>`;
     setPdfHtml(html);
   };
 
