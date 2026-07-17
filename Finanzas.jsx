@@ -929,6 +929,97 @@ function RubroRow({ rubro, items, onAdd, onDel, cotizDef, setCotizDef, m2, cotU,
     </div>}
   </div>;
 }
+function CajaParticular({ data, save }) {
+  // Caja de obras particulares: dinero disponible − asignaciones = saldo.
+  const caja = data.cajaParticular || { fondos: [], asignaciones: [] };
+  const fondos = caja.fondos || [], asignaciones = caja.asignaciones || [];
+  const [fConcepto, setFConcepto] = useState(""); const [fMonto, setFMonto] = useState("");
+  const [aConcepto, setAConcepto] = useState(""); const [aMonto, setAMonto] = useState("");
+  const guardar = (next) => save({ ...data, cajaParticular: next });
+  const addFondo = () => { if (!numMoney(fMonto)) return; guardar({ ...caja, fondos: [...fondos, { id: uid(), fecha: hoyISO(), concepto: fConcepto.trim() || "Ingreso", monto: numMoney(fMonto) }] }); setFConcepto(""); setFMonto(""); };
+  const addAsig = () => { if (!numMoney(aMonto)) return; guardar({ ...caja, asignaciones: [...asignaciones, { id: uid(), fecha: hoyISO(), concepto: aConcepto.trim() || "Gasto", monto: numMoney(aMonto) }] }); setAConcepto(""); setAMonto(""); };
+  const delFondo = (id) => guardar({ ...caja, fondos: fondos.filter(f => f.id !== id) });
+  const delAsig = (id) => guardar({ ...caja, asignaciones: asignaciones.filter(a => a.id !== id) });
+
+  const totalFondos = fondos.reduce((s, f) => s + num(f.monto), 0);
+  const totalAsig = asignaciones.reduce((s, a) => s + num(a.monto), 0);
+  const disponible = totalFondos - totalAsig;
+
+  // planificación: voy descontando cada gasto en orden hasta que se corta la plata.
+  // una vez cortada, todo lo de abajo queda como faltante.
+  let saldo = totalFondos, nCubiertos = 0, seCorto = false, faltaTotal = 0;
+  const planF = asignaciones.map(a => {
+    const m = num(a.monto);
+    let estado;
+    if (!seCorto && saldo >= m) { saldo -= m; nCubiertos++; estado = "cubierto"; }
+    else { seCorto = true; faltaTotal += m; estado = "falta"; }
+    return { ...a, estado, saldoDespues: saldo };
+  });
+
+  const inp2 = { flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 11px", fontSize: 13, color: T.text, boxSizing: "border-box", minWidth: 0 };
+
+  return (<div>
+    {/* saldo disponible + hasta dónde alcanza */}
+    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, marginBottom: 14, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Me queda disponible</div>
+      <div style={{ fontSize: 38, fontWeight: 800, margin: "6px 0 2px", color: disponible >= 0 ? "#7DE0A6" : "#FCA5A5", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{money(disponible)}</div>
+      {asignaciones.length > 0 && (
+        disponible >= 0
+          ? <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)" }}>Tu plata cubre los {nCubiertos} gasto{nCubiertos !== 1 ? "s" : ""} que cargaste. Todavía te sobra.</div>
+          : <div style={{ fontSize: 11.5, color: "#FCA5A5", fontWeight: 700 }}>Tu plata cubre {nCubiertos} de {asignaciones.length} gastos. Te faltan {money(faltaTotal)} para el resto.</div>
+      )}
+      <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 14 }}>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Tengo</div><div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{money(totalFondos)}</div></div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700 }}>Gastos cargados</div><div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, fontVariantNumeric: "tabular-nums", color: "#F2C879" }}>{money(totalAsig)}</div></div>
+      </div>
+    </div>
+
+    {/* dinero que tengo */}
+    <div style={{ background: T.card, borderRadius: 14, padding: "14px 15px", marginBottom: 11, boxShadow: SHDsm }}>
+      <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>Dinero que tengo</div>
+      {fondos.map(f => (
+        <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, color: T.text }}>{f.concepto}</div><div style={{ fontSize: 10, color: T.muted }}>{fmtISO(f.fecha)}</div></div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#16A34A", fontVariantNumeric: "tabular-nums" }}>{money(f.monto)}</div>
+          <button onClick={() => delFondo(f.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 16, cursor: "pointer", padding: "0 2px" }}>×</button>
+        </div>
+      ))}
+      {fondos.length === 0 && <div style={{ fontSize: 11.5, color: T.muted, padding: "4px 0 10px" }}>Cargá cuánta plata tenés disponible para la obra.</div>}
+      <div style={{ display: "flex", gap: 7, marginTop: 10 }}>
+        <input value={fConcepto} onChange={e => setFConcepto(e.target.value)} placeholder="Concepto (ej: Aporte socio)" style={inp2} />
+        <input value={fMonto} onChange={e => setFMonto(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addFondo(); }} inputMode="numeric" placeholder="$ Monto" style={{ ...inp2, maxWidth: 120 }} />
+        <button onClick={addFondo} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "0 15px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>+</button>
+      </div>
+    </div>
+
+    {/* gastos que se vienen */}
+    <div style={{ background: T.card, borderRadius: 14, padding: "14px 15px", boxShadow: SHDsm }}>
+      <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 3 }}>Gastos que se vienen</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 9 }}>Se van descontando en orden. Los que entran quedan en verde; desde donde no alcanza, en rojo.</div>
+      {planF.map(a => {
+        const falta = a.estado === "falta";
+        return (
+          <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: `1px solid ${T.border}`, background: falta ? "#FEF2F2" : "transparent", borderRadius: falta ? 8 : 0, paddingLeft: falta ? 8 : 0, paddingRight: falta ? 8 : 0 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: falta ? "#EF4444" : "#16A34A", flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, color: T.text, fontWeight: falta ? 700 : 500 }}>{a.concepto}</div>
+              <div style={{ fontSize: 10, color: falta ? "#EF4444" : T.muted }}>{falta ? "No te alcanza para este" : `Te queda ${money(a.saldoDespues)}`}</div>
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: falta ? "#EF4444" : T.text, fontVariantNumeric: "tabular-nums" }}>−{money(a.monto)}</div>
+            <button onClick={() => delAsig(a.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 16, cursor: "pointer", padding: "0 2px" }}>×</button>
+          </div>
+        );
+      })}
+      {asignaciones.length === 0 && <div style={{ fontSize: 11.5, color: T.muted, padding: "4px 0 10px" }}>Cargá los gastos que se vienen y fijate hasta dónde te alcanza.</div>}
+      <div style={{ display: "flex", gap: 7, marginTop: 10 }}>
+        <input value={aConcepto} onChange={e => setAConcepto(e.target.value)} placeholder="Gasto (ej: Materiales)" style={inp2} />
+        <input value={aMonto} onChange={e => setAMonto(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addAsig(); }} inputMode="numeric" placeholder="$ Monto" style={{ ...inp2, maxWidth: 120 }} />
+        <button onClick={addAsig} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "0 15px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>+</button>
+      </div>
+    </div>
+  </div>);
+}
+
 function PropiasPanel({ data, save }) {
   const propias = ordenarObras(data.propias);
   const [nombre, setNombre] = useState(""); const [abrir, setAbrir] = useState(false); const [expandir, setExpandir] = useState({}); const [subiendo, setSubiendo] = useState(""); const [pdfHtml, setPdfHtml] = useState(null); const [m2n, setM2n] = useState("");
@@ -948,7 +1039,17 @@ function PropiasPanel({ data, save }) {
   const delPropia = (id) => save({ ...data, propias: propias.filter(p => p.id !== id) });
   const delAdj = (pid, url) => save({ ...data, propias: propias.map(p => p.id === pid ? { ...p, adjuntos: (p.adjuntos || []).filter(a => a.url !== url) } : p) });
   async function subirAdj(pid, files) { const arr = Array.from(files || []); if (!arr.length) return; setSubiendo(pid); const nuevos = []; for (const f of arr) { const url = await subirArchivo(f); if (url) nuevos.push({ url, tipo: (f.type || "").startsWith("video") ? "video" : "foto" }); } if (nuevos.length) save({ ...data, propias: propias.map(p => p.id === pid ? { ...p, adjuntos: [...(p.adjuntos || []), ...nuevos] } : p) }); else alert("No se pudo subir."); setSubiendo(""); }
+  const [vista, setVista] = useState("obras"); // "obras" | "caja"
   return (<div style={{ background: T.card, borderRadius: 16, padding: 16, marginBottom: 12, boxShadow: SHDsm, borderTop: `3px solid ${BRASS}` }}>
+    <div style={{ display: "flex", gap: 6, background: T.bg, borderRadius: 10, padding: 4, marginBottom: 14 }}>
+      {[["obras", "Obras"], ["caja", "Caja disponible"]].map(([k, l]) => (
+        <button key={k} onClick={() => setVista(k)} style={{ flex: 1, background: vista === k ? T.navy : "transparent", color: vista === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 4px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
+      ))}
+    </div>
+
+    {vista === "caja" && <CajaParticular data={data} save={save} />}
+
+    {vista === "obras" && <>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div><div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obras particulares (para vender)</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Las que hacés para vos, llave en mano con lote. Cargás en $ o US$ con la cotización del momento.</div></div>
       <button onClick={() => setAbrir(o => !o)} style={{ background: T.al, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{abrir ? "Cerrar" : "+ Nueva"}</button>
@@ -1060,6 +1161,7 @@ function PropiasPanel({ data, save }) {
     })}
     {propias.length === 0 && !abrir && <div style={{ fontSize: 12, color: T.muted, marginTop: 10, textAlign: "center" }}>Tocá "+ Nueva" para cargar una obra propia con sus rubros.</div>}
     {pdfHtml && <PdfOverlay html={pdfHtml} onClose={() => setPdfHtml(null)} />}
+    </>}
   </div>);
 }
 
