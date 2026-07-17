@@ -1826,6 +1826,7 @@ const MAS_TILES = [
   { id:"personal", label:"Personal" },
   { id:"matpedidos", label:"Pedido de materiales" },
   { id:"documentacion", label:"Documentación" },
+  { id:"bitacora", label:"Bitácora de obra" },
   { id:"cliente", label:"Panel cliente" },
   { id:"pedidos", label:"Pedidos" },
   { id:"gestion", label:"Plan de gestión" },
@@ -1870,6 +1871,176 @@ function Adjuntos({ items = [], onChange }) {
     {arch.map(a => (<div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>📎 {a.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{a.fecha}</div></div><a href={a.url} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a><button onClick={() => del(a.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button></div>))}
   </div>);
 }
+function BitacoraView({ db, cfg, onBack }) {
+  const obras = db.obras || [];
+  const bitacora = db.bitacora || [];
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [abrir, setAbrir] = useState(false);
+  const [edit, setEdit] = useState(null); // hecho en edición
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [titulo, setTitulo] = useState("");
+  const [desc, setDesc] = useState("");
+  const [fotos, setFotos] = useState([]);
+  const [subiendo, setSubiendo] = useState(false);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const fileRef = useRef(null);
+
+  const obra = obras.find(o => o.id === obraId);
+  const hechos = bitacora.filter(h => h.obra_id === obraId).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
+
+  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setEdit(null); setAbrir(false); };
+  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAbrir(true); };
+
+  const agregarFotos = async (e) => {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setSubiendo(true);
+    const nuevas = [];
+    for (const f of files) {
+      try {
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const comp = await compressImage(dataUrl, 1600, 0.7);
+        const url = await uploadFoto(comp, `bitacora/${obraId}`, `${uid()}.jpg`);
+        if (url) nuevas.push({ id: uid(), url });
+      } catch { }
+    }
+    setFotos(prev => [...prev, ...nuevas]);
+    setSubiendo(false);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const guardar = () => {
+    if (!titulo.trim() && !desc.trim()) { alert("Poné al menos un título o una descripción."); return; }
+    if (!obraId) { alert("Elegí una obra."); return; }
+    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, ts: edit?.ts || Date.now() };
+    db.setBitacora(prev => { const otros = (prev || []).filter(h => h.id !== hecho.id); return [...otros, hecho]; });
+    limpiar();
+  };
+  const borrar = (id) => { if (confirm("¿Borrar este hecho de la bitácora?")) db.setBitacora(prev => (prev || []).filter(h => h.id !== id)); };
+
+  const exportarPDF = () => {
+    if (!obra) return;
+    const marca = (cfg?.nombre || "V+V Construcciones").toUpperCase();
+    const hoy = hoyStr();
+    const items = hechos.map((h, i) => {
+      const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
+      const fotosH = (h.fotos || []).map(ft => `<img src="${ft.url}" />`).join("");
+      return `<div class="hecho">
+        <div class="hh"><span class="num">${hechos.length - i}</span><span class="fecha">${fFmt}</span><span class="tit">${(h.titulo || "").replace(/</g, "&lt;")}</span></div>
+        ${h.desc ? `<div class="desc">${(h.desc || "").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</div>` : ""}
+        ${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}
+      </div>`;
+    }).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+      @page { margin: 16mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; margin: 0; }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 14px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; letter-spacing: -.01em; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      .meta { font-size: 11px; color: #5B6B7F; margin-top: 8px; }
+      h1 { font-size: 15px; color: #0F1B2D; margin: 4px 0 2px; }
+      .hecho { border: 1px solid #E3E8EF; border-left: 3px solid #1B3A5B; border-radius: 8px; padding: 11px 13px; margin-bottom: 11px; page-break-inside: avoid; }
+      .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; }
+      .num { background: #0F1B2D; color: #fff; font-size: 10px; font-weight: 800; border-radius: 20px; padding: 1px 8px; }
+      .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
+      .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
+      .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+      .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
+      .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+      .vacio { font-size: 12px; color: #98A2B3; text-align: center; padding: 30px; }
+    </style></head><body>
+      <div class="hdr">
+        <div class="marca">${marca}</div>
+        <div class="tipo">Historial de obra · Bitácora</div>
+        <h1>${(obra.nombre || "").replace(/</g, "&lt;")}</h1>
+        <div class="meta">Comitente: ${(cfg?.comitente || "Belfast Construction Management")} · Emitido: ${hoy} · ${hechos.length} hecho${hechos.length !== 1 ? "s" : ""} registrado${hechos.length !== 1 ? "s" : ""}</div>
+      </div>
+      ${items || '<div class="vacio">Todavía no hay hechos cargados en esta obra.</div>'}
+      <div class="foot">Documento generado por ${marca} para respaldo y justificación de adicionales de obra.</div>
+    </body></html>`;
+    setPdfHtml(html);
+  };
+
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
+
+  return (<div>
+    <SubHead id="documentacion" label="Bitácora de obra" sub="Cargá lo que va pasando para justificar adicionales" onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      {/* selector de obra */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+        <select value={obraId} onChange={e => { setObraId(e.target.value); limpiar(); }} style={{ ...inp, flex: 1 }}>
+          <option value="">— Elegí una obra —</option>
+          {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        </select>
+        {obraId && hechos.length > 0 && <button onClick={exportarPDF} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>PDF</button>}
+      </div>
+
+      {obraId && <>
+        {/* botón nuevo / formulario */}
+        {!abrir && <button onClick={() => setAbrir(true)} style={{ width: "100%", background: T.al, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 10, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>+ Cargar un hecho</button>}
+
+        {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, color: T.sub, width: 46 }}>Fecha</span>
+              <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inp, flex: 1 }} />
+            </div>
+            <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título (ej: Cambio de nivel de platea)" style={inp} />
+            <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción: qué pasó, por qué, quién lo pidió, qué implica…" rows={4} style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
+            {/* fotos */}
+            {fotos.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {fotos.map(ft => (
+                <div key={ft.id} style={{ position: "relative" }}>
+                  <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />
+                  <button onClick={() => setFotos(prev => prev.filter(x => x.id !== ft.id))} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                </div>
+              ))}
+            </div>}
+            <input ref={fileRef} type="file" accept="image/*" multiple onChange={agregarFotos} style={{ display: "none" }} />
+            <button onClick={() => fileRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo fotos…" : "📷 Agregar fotos"}</button>
+            <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
+              <button onClick={limpiar} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+              <button onClick={guardar} disabled={subiendo} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{edit ? "Guardar cambios" : "Guardar hecho"}</button>
+            </div>
+          </div>
+        </div>}
+
+        {/* lista de hechos */}
+        {hechos.length === 0 && !abrir && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px" }}>Todavía no cargaste hechos en esta obra. Tocá "+ Cargar un hecho" para empezar.</div>}
+        {hechos.map((h, i) => (
+          <div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.accent}`, borderRadius: 12, padding: 13, marginBottom: 10, boxShadow: T.shadow }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: T.navy, borderRadius: 20, padding: "1px 8px", flexShrink: 0 }}>{hechos.length - i}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 800, color: BRASS, flexShrink: 0 }}>{h.fecha ? h.fecha.split("-").reverse().join("/") : ""}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{h.titulo}</span>
+            </div>
+            {h.desc && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap", marginBottom: (h.fotos || []).length ? 9 : 0 }}>{h.desc}</div>}
+            {(h.fotos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {h.fotos.map(ft => <img key={ft.id} src={ft.url} style={{ width: 76, height: 76, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />)}
+            </div>}
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button onClick={() => editarHecho(h)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+              <button onClick={() => borrar(h.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Borrar</button>
+            </div>
+          </div>
+        ))}
+      </>}
+      {!obraId && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Elegí una obra para empezar la bitácora.</div>}
+    </div>
+
+    {/* overlay PDF */}
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 500, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: T.navy }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>‹ Volver</button>
+        <button onClick={() => { const f = document.getElementById("bita-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="bita-pdf" srcDoc={pdfHtml} title="Bitácora PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+  </div>);
+}
+
 function DocumentacionView({ db, cfg, onBack }) {
   const documentacion = db.documentacion || [];
   const setDocumentacion = db.setDocumentacion;
@@ -2132,6 +2303,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "cliente": return <ClientePanel {...P} />;
       case "personal": return <PersonalView personal={db.personal} setPersonal={db.setPersonal} obras={db.obras} cfg={cfg} />;
       case "documentacion": return <DocumentacionView db={db} cfg={cfg} onBack={back} />;
+      case "bitacora": return <BitacoraView db={db} cfg={cfg} onBack={back} />;
       case "matpedidos": return <MatPedidosView db={db} cfg={cfg} onBack={back} />;
       case "pedidos": return <PedidosView {...P} />;
       case "gestion": return <GestionView {...P} />;
@@ -4396,6 +4568,7 @@ function App() {
   const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
   const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
   const [docrecepcion, setDocrecepcion] = useStoredState("vv_docrecepcion", []);
+  const [bitacora, setBitacora] = useStoredState("vv_bitacora", []);
   const [mensajes, setMensajes] = useStoredState("vv_mensajes", []);
   const [pedidos, setPedidos] = useStoredState("vv_pedidos", []);
   const [clienteArchivos] = useStoredState("cliente_archivos", []);
@@ -4523,7 +4696,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, docrecepcion, setDocrecepcion };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, docrecepcion, setDocrecepcion, bitacora, setBitacora };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
