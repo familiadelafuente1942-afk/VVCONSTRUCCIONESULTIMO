@@ -987,7 +987,7 @@ function CajaParticular({ data, save }) {
       {fondos.length === 0 && <div style={{ fontSize: 11.5, color: T.muted, padding: "4px 0 10px" }}>Cargá cuánta plata tenés disponible para la obra.</div>}
       <div style={{ display: "flex", gap: 7, marginTop: 10 }}>
         <input value={fConcepto} onChange={e => setFConcepto(e.target.value)} placeholder="Concepto (ej: Aporte socio)" style={inp2} />
-        <input value={fMonto} onChange={e => setFMonto(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addFondo(); }} inputMode="numeric" placeholder="$ Monto" style={{ ...inp2, maxWidth: 120 }} />
+        <input value={fMonto} onChange={e => setFMonto(fmtMiles(e.target.value))} onKeyDown={e => { if (e.key === "Enter") addFondo(); }} inputMode="numeric" placeholder="$ Monto" style={{ ...inp2, maxWidth: 120 }} />
         <button onClick={addFondo} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "0 15px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>+</button>
       </div>
     </div>
@@ -1002,8 +1002,10 @@ function CajaParticular({ data, save }) {
           <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: `1px solid ${T.border}`, background: falta ? "#FEF2F2" : "transparent", borderRadius: falta ? 8 : 0, paddingLeft: falta ? 8 : 0, paddingRight: falta ? 8 : 0 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: falta ? "#EF4444" : "#16A34A", flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12.5, color: T.text, fontWeight: falta ? 700 : 500 }}>{a.concepto}</div>
-              <div style={{ fontSize: 10, color: falta ? "#EF4444" : T.muted }}>{falta ? "No te alcanza para este" : `Te queda ${money(a.saldoDespues)}`}</div>
+              <div style={{ fontSize: 13, color: T.text, fontWeight: falta ? 800 : 600 }}>{a.concepto}</div>
+              {falta
+                ? <div style={{ display: "inline-block", marginTop: 3, fontSize: 11.5, fontWeight: 800, color: "#B91C1C", background: "#FEE2E2", borderRadius: 6, padding: "2px 8px" }}>No te alcanza</div>
+                : <div style={{ display: "inline-flex", alignItems: "baseline", gap: 4, marginTop: 3, fontSize: 13.5, fontWeight: 800, color: "#166534", background: "#DCFCE7", borderRadius: 6, padding: "3px 9px" }}><span style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", textTransform: "uppercase" }}>Te queda</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{money(a.saldoDespues)}</span></div>}
             </div>
             <div style={{ fontSize: 13, fontWeight: 700, color: falta ? "#EF4444" : T.text, fontVariantNumeric: "tabular-nums" }}>−{money(a.monto)}</div>
             <button onClick={() => delAsig(a.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 16, cursor: "pointer", padding: "0 2px" }}>×</button>
@@ -1013,7 +1015,7 @@ function CajaParticular({ data, save }) {
       {asignaciones.length === 0 && <div style={{ fontSize: 11.5, color: T.muted, padding: "4px 0 10px" }}>Cargá los gastos que se vienen y fijate hasta dónde te alcanza.</div>}
       <div style={{ display: "flex", gap: 7, marginTop: 10 }}>
         <input value={aConcepto} onChange={e => setAConcepto(e.target.value)} placeholder="Gasto (ej: Materiales)" style={inp2} />
-        <input value={aMonto} onChange={e => setAMonto(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addAsig(); }} inputMode="numeric" placeholder="$ Monto" style={{ ...inp2, maxWidth: 120 }} />
+        <input value={aMonto} onChange={e => setAMonto(fmtMiles(e.target.value))} onKeyDown={e => { if (e.key === "Enter") addAsig(); }} inputMode="numeric" placeholder="$ Monto" style={{ ...inp2, maxWidth: 120 }} />
         <button onClick={addAsig} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "0 15px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>+</button>
       </div>
     </div>
