@@ -1254,9 +1254,16 @@ export default function App() {
         </div>
       </div>
     </div>
-    <div style={{ display: "flex", background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
-      {[["ia", "✨ IA"], ["redet", "Redeterm."], ["presupuesto", "Presupuestos"], ["costo", "Cert.", "costo"], ["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]].map(([k, l1, l2]) => (
-        <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "10px 1px 9px", fontSize: 10.5, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative", letterSpacing: "-0.01em", lineHeight: 1.2 }}>{l1}{l2 ? <><br />{l2}</> : ""}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
+    <div style={{ background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
+      {[
+        [["ia", "✨ IA"], ["redet", "Redeterm."], ["presupuesto", "Presup."], ["costo", "Cert.", "costo"]],
+        [["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]],
+      ].map((fila, fi) => (
+        <div key={fi} style={{ display: "flex", borderTop: fi === 1 ? `1px solid ${T.border}` : "none" }}>
+          {fila.map(([k, l1, l2]) => (
+            <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "9px 1px 8px", fontSize: 11, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative", letterSpacing: "-0.01em", lineHeight: 1.2 }}>{l1}{l2 ? <><br />{l2}</> : ""}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
+          ))}
+        </div>
       ))}
     </div>
     <div className="vv-body">
