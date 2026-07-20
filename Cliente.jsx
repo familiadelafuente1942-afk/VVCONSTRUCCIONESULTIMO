@@ -632,7 +632,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey }) {
   const [pdfHtml, setPdfHtml] = React.useState(null);
   const _escPdf = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
   function buildPdfAvance(entries) {
-    const marca = (cfg?.nombre || "V+V Construcciones").toUpperCase();
+    const marca = "V+V CONSTRUCCIONES";
     const nom = obra?.nombre || "Obra";
     const secc = entries.map(h => {
       const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
