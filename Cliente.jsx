@@ -625,6 +625,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey }) {
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
   const fileRef = React.useRef(null);
+  const [fechaFoto, setFechaFoto] = React.useState(() => new Date().toISOString().slice(0, 10));
   const obra = obras.find(o => o.id === obraId);
   const historial = ((avance || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   async function onFoto(e) {
@@ -638,7 +639,10 @@ function AvanceView({ T, obras, avance, setAvance, apiKey }) {
       const mediaType = (String(comp).match(/data:(.*?);/) || [])[1] || "image/jpeg";
       const url = await uploadArchivo(comp, "avance", uid() + ".jpg");
       const prev = historial[0];
-      const fechaHoy = hoyStr();
+      const _fiso = fechaFoto || new Date().toISOString().slice(0, 10);
+      const [_aa, _mm, _dd] = _fiso.split("-");
+      const fechaHoy = `${_dd}/${_mm}/${_aa.slice(2)}`;
+      const tsFoto = new Date(_fiso + "T12:00:00").getTime();
       const sys = "Sos un inspector de obra civil en Argentina. Analizás fotos de avance de obra con criterio técnico. Sos honesto: el porcentaje es una ESTIMACIÓN visual, no una medición exacta. Escribí claro y breve, en español rioplatense (vos).";
       const instruc = prev
         ? `Foto de la obra "${obra?.nombre || ""}" de hoy (${fechaHoy}).\n\nESTADO ANTERIOR (${prev.fecha}):\n${prev.descripcion}\n\nHacé DOS cosas:\n1) ESTADO ACTUAL: describí en 3-5 renglones qué se ve hoy (estructura, mampostería, revoques, contrapisos, instalaciones, aberturas, terminaciones — lo que aplique).\n2) AVANCE: compará con el estado anterior. Qué se avanzó, qué falta, un % ESTIMADO de avance de la obra, y ALERTAS si no ves progreso esperable o algo raro.\nFormato EXACTO:\nESTADO ACTUAL: ...\nAVANCE: ...`
@@ -650,7 +654,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey }) {
       const mE = resp.match(/ESTADO ACTUAL:\s*([\s\S]*?)(?:AVANCE:|$)/i);
       if (mE) descripcion = mE[1].trim();
       if (mA) avanceTxt = mA[1].trim();
-      const item = { id: uid() + Date.now(), fecha: fechaHoy, ts: Date.now(), descripcion, avance: avanceTxt, fotoUrl: url || comp };
+      const item = { id: uid() + Date.now(), fecha: fechaHoy, ts: tsFoto, descripcion, avance: avanceTxt, fotoUrl: url || comp };
       setAvance(prevAv => ({ ...(prevAv || {}), [obraId]: [item, ...((prevAv || {})[obraId] || [])] }));
       setStatus("");
     } catch (err) { setStatus("Hubo un error al analizar la foto. Fijate que tengas crédito de API y probá de nuevo."); }
@@ -665,7 +669,9 @@ function AvanceView({ T, obras, avance, setAvance, apiKey }) {
         {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
       </select>
       <input ref={fileRef} type="file" accept="image/*" onChange={onFoto} style={{ display: "none" }} />
-      <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Analizando…" : "📷 Tomar / subir foto de hoy"}</button>
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Fecha de la foto</label>
+      <input type="date" value={fechaFoto} onChange={e => setFechaFoto(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, margin: "6px 0 14px", boxSizing: "border-box" }} />
+      <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Analizando…" : "📷 Subir foto"}</button>
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: sacá la foto siempre desde el mismo lugar y ángulo para que la comparación sea más precisa. El % es una estimación visual, no una medición exacta.</div>
       {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
