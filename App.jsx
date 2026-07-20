@@ -4533,7 +4533,17 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
     if (!entries.length) return;
     setStatus("Generando PDF…");
     try {
-      const { jsPDF } = await import("jspdf");
+      const jsPDF = await (async () => {
+        if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+        const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+        for (const src of urls) {
+          try {
+            await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); });
+            if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+          } catch (e) { }
+        }
+        throw new Error("No se pudo cargar la librería PDF");
+      })();
       const doc = new jsPDF({ unit: "pt", format: "a4" });
       const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
       const M = 40; let y = M;
