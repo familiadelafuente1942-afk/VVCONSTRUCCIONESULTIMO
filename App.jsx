@@ -4485,6 +4485,46 @@ function AvanceView({ obras, avance, setAvance, apiKey }) {
   const [pendientes, setPendientes] = React.useState([]);
   const obra = obras.find(o => o.id === obraId);
   const historial = ((avance || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const [pdfHtml, setPdfHtml] = React.useState(null);
+  const _escPdf = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+  function buildPdfAvance(entries) {
+    const marca = (cfg?.nombre || "V+V Construcciones").toUpperCase();
+    const nom = obra?.nombre || "Obra";
+    const secc = entries.map(h => {
+      const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
+      const fotosH = fs.map(u => `<img src="${u}" />`).join("");
+      return `<div class="ent"><div class="fecha">${_escPdf(h.fecha)}</div>${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}${h.avance ? `<div class="bloque"><div class="lbl">Avance</div><div class="txt">${_escPdf(h.avance)}</div></div>` : ""}<div class="bloque"><div class="lbl">Estado</div><div class="txt">${_escPdf(h.descripcion)}</div></div></div>`;
+    }).join("");
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 14mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 16px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      h1 { font-size: 15px; color: #0F1B2D; margin: 6px 0 2px; }
+      .meta { font-size: 11px; color: #5B6B7F; }
+      .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; page-break-inside: avoid; }
+      .fecha { font-size: 13px; font-weight: 800; color: #B0894F; margin-bottom: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+      .fotos img { width: calc(50% - 3px); max-height: 260px; object-fit: contain; background: #0b0f14; border-radius: 6px; }
+      .fotos img:only-child { width: 100%; max-height: 340px; }
+      .bloque { margin-bottom: 8px; }
+      .lbl { font-size: 9.5px; font-weight: 800; color: #1B3A5B; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+      .txt { font-size: 12px; color: #1a2433; line-height: 1.5; }
+      .foot { margin-top: 14px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr"><div class="marca">${marca}</div><div class="tipo">Informe de avance de obra</div><h1>${_escPdf(nom)}</h1><div class="meta">${entries.length === 1 ? ("Fecha: " + _escPdf(entries[0].fecha)) : (entries.length + " registros")} · Emitido: ${hoyStr()}</div></div>
+      ${secc}
+      <div class="foot">Generado por ${marca} · Seguimiento visual de avance de obra.</div>
+    </div></body></html>`;
+  }
+  const pdfUno = (h) => setPdfHtml(buildPdfAvance([h]));
+  const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setPdfHtml(buildPdfAvance(ord)); };
   async function onFoto(e) {
     const files = Array.from(e.target.files || []); if (!files.length) return; e.target.value = "";
     if (!obraId) { alert("Elegí una obra primero."); return; }
@@ -4568,6 +4608,7 @@ function AvanceView({ obras, avance, setAvance, apiKey }) {
           </div>}
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
+      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>📄 PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
       {historial.map((h, idx) => (<div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
         {(() => {
@@ -4583,6 +4624,7 @@ function AvanceView({ obras, avance, setAvance, apiKey }) {
             <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{h.fecha}{idx === 0 ? "  ·  última" : ""}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
+              <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📄 PDF</button>
               <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) setAvance(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== h.id) })); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>🗑 Borrar</button>
             </div>
           </div>
@@ -4592,6 +4634,14 @@ function AvanceView({ obras, avance, setAvance, apiKey }) {
         </div>
       </div>))}
     </div>
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 300, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "#0F1B2D", flexShrink: 0 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>Informe de avance</span>
+        <button onClick={() => { const f = document.getElementById("avance-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="avance-pdf" srcDoc={pdfHtml} title="Avance PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
   </div>);
 }
 const WEB_NAV = [
