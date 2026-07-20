@@ -186,11 +186,12 @@ export default function MiAsistente() {
     if (!pinOk) return;
     let alive = true;
     async function pull() {
-      const keys = ["vv_obras", "vv_personal", "vv_pedidos", "vv_matpedidos", "vv_mensajes", "vv_formularios", "vv_documentacion"];
+      const keys = ["vv_obras", "vv_personal", "vv_pedidos", "vv_matpedidos", "vv_mensajes", "vv_formularios", "vv_documentacion", "vv_obras_part"];
       const res = await Promise.all(keys.map(k => storage.get(k)));
       if (!alive) return;
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
-      setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
+      const particulares = parse(res[7]).map(o => ({ ...o, particular: true }));
+      setDb({ obras: [...parse(res[0]), ...particulares], personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
       const [ra, rag, rg, rcon, rcam, rfin, rfinraw] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("vv_finanzas_resumen"), storage.get("vv_finanzas")]);
       if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); const fin = rfin?.value || ""; setFinResumen(prev => fin !== prev ? fin : prev); try { const fr = rfinraw?.value ? JSON.parse(rfinraw.value) : null; setFinRaw(prev => JSON.stringify(fr) !== JSON.stringify(prev) ? fr : prev); } catch { } }
@@ -464,36 +465,43 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     persistAgenda([...(agenda || []), ev].sort((x, y) => fechaMs(x.fecha, x.hora) - fechaMs(y.fecha, y.hora)));
     return ev;
   }
+  // Reparte las obras: las compartidas van a vv_obras (Belfast/V+V), las particulares
+  // a vv_obras_part (privado de Mi Asistente, no lo leen las otras apps).
+  async function persistObras(nextAll) {
+    const strip = (o) => { const { particular, ...rest } = o; return rest; };
+    const compartidas = nextAll.filter(o => !o.particular).map(strip);
+    const particulares = nextAll.filter(o => o.particular).map(strip);
+    try { localStorage.setItem("vv_obras", JSON.stringify(compartidas)); localStorage.setItem("vv_obras_part", JSON.stringify(particulares)); } catch { }
+    await storage.set("vv_obras", JSON.stringify(compartidas)).catch(() => { });
+    await storage.set("vv_obras_part", JSON.stringify(particulares)).catch(() => { });
+    setDb(d => ({ ...d, obras: nextAll }));
+  }
   function guardarObra() {
     if (!obraEdit) return;
     (async () => {
-      let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+      const arr = db.obras || [];
       let next;
       if (obraEdit._new) {
         if (!(obraEdit.nombre || "").trim()) { alert("Poné un nombre de obra."); return; }
-        const nueva = { id: uid() + Date.now(), nombre: obraEdit.nombre.trim(), estado: obraEdit.estado || "En curso", avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion || "", obs: obraEdit.obs || [], fotos: [], videos: [], planos: [], informes: [], tareas: [] };
+        // Obra nueva cargada desde Mi Asistente = PARTICULAR (privada, no va a Belfast).
+        const nueva = { id: uid() + Date.now(), nombre: obraEdit.nombre.trim(), estado: obraEdit.estado || "En curso", avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion || "", obs: obraEdit.obs || [], fotos: [], videos: [], planos: [], informes: [], tareas: [], particular: true };
         next = [nueva, ...arr];
       } else {
         next = arr.map(o => o.id === obraEdit.id ? { ...o, nombre: obraEdit.nombre, estado: obraEdit.estado, avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion, obs: obraEdit.obs != null ? obraEdit.obs : (o.obs || []) } : o);
       }
-      try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
-      await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
-      setDb(d => ({ ...d, obras: next })); setObraEdit(null);
+      await persistObras(next);
+      setObraEdit(null);
     })();
   }
   // Actualiza las observaciones de una obra puntual (para el tilde rápido desde la tarjeta).
   async function actualizarObs(obraId, obs) {
-    let arr = [];
-    try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
-    if (!arr.length) arr = db.obras || [];
+    const arr = db.obras || [];
     const next = arr.map(o => o.id === obraId ? { ...o, obs } : o);
-    try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
-    await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
-    setDb(d => ({ ...d, obras: next }));
+    await persistObras(next);
   }
   async function subirAObra(obraId, e, tipo) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
-    let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+    const arr = db.obras || [];
     const fotosNew = [], archNew = [];
     for (const f of files) {
       const data = await fileToDataUrl(f);
@@ -503,18 +511,14 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       else archNew.push({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), nombre: f.name, url, fecha: hoyStr(), from: "sebastian" });
     }
     const next = arr.map(o => o.id === obraId ? { ...o, fotos: [...fotosNew, ...(o.fotos || [])], archivos: [...archNew, ...(o.archivos || [])] } : o);
-    try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
-    await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
-    setDb(d => ({ ...d, obras: next })); setSubiendoArch(false);
+    await persistObras(next);
+    setSubiendoArch(false);
   }
   function crearObra(a) {
-    const nueva = { id: uid() + Date.now(), nombre: a.nombre || a.obra || "Obra nueva", estado: a.estado || "En curso", avance: Number(a.avance) || 0, direccion: a.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [] };
+    // Obra creada por IA en Mi Asistente = PARTICULAR (privada).
+    const nueva = { id: uid() + Date.now(), nombre: a.nombre || a.obra || "Obra nueva", estado: a.estado || "En curso", avance: Number(a.avance) || 0, direccion: a.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [], particular: true };
     (async () => {
-      let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
-      const next = [nueva, ...arr];
-      try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
-      await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
-      setDb(d => ({ ...d, obras: next }));
+      await persistObras([nueva, ...(db.obras || [])]);
     })();
     return nueva;
   }
@@ -671,11 +675,10 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       const fotos = (ultimasFotos || []).slice(0, accion.cantidad || 12);
       if (!target) { setMsgs(prev => [...prev, { role: "assistant", content: "No encontré esa obra. Decime el nombre exacto." }]); setBusy(false); return; }
       if (!fotos.length) { setMsgs(prev => [...prev, { role: "assistant", content: "No tengo fotos recién subidas para mandar. Subí la foto con 📎 y después decime a qué obra va." }]); setBusy(false); return; }
-      let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+      const arr = db.obras || [];
       const nuevas = fotos.map(f => ({ id: uid() + Date.now() + Math.random(), url: f.url, fecha: hoyStr(), from: "sebastian", nota: "" }));
       const next = arr.map(o => o.id === target.id ? { ...o, fotos: [...nuevas, ...(o.fotos || [])] } : o);
-      try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { } await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
-      setDb(d => ({ ...d, obras: next })); setUltimasFotos([]);
+      await persistObras(next); setUltimasFotos([]);
       setMsgs(prev => [...prev, { role: "assistant", content: `📸 Subí ${nuevas.length === 1 ? "la foto" : nuevas.length + " fotos"} a la obra ${target.nombre}. Ya las ve V+V en las fotos de esa obra.${limpio ? "\n\n" + limpio : ""}` }]);
       setBusy(false); return;
     }
