@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-// VERSION: v9 (Cliente: FIX estado de pedidos - ya no viaja a la nube antes de cada toque)
+// VERSION: v15 (FIX: pedidos creados a la vez ya no se pisan - fusion por pedido + tumbas)
 // ════════════════════════════════════════════════════════════════════
 // PANEL DE CLIENTE — App independiente y descargable
 // Mismo backend Supabase que la app de V+V → los datos se comparten.
@@ -33,11 +33,46 @@ async function pushNotify(title, message, app, url) {
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
 
+// Aviso simple, no intrusivo, de que un guardado en la nube falló: guarda la clave y
+// dispara un evento que un pequeño cartel (montado una sola vez en la raíz) escucha.
+let ultimoAviso = 0;
+function avisarErrorSync(key) {
+  const ahora = Date.now();
+  if (ahora - ultimoAviso < 8000) return;
+  ultimoAviso = ahora;
+  try { window.dispatchEvent(new CustomEvent("vv-sync-error", { detail: { key } })); } catch { }
+}
+
+function SyncBanner() {
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    const onErr = () => {
+      setMsg("No se pudo guardar en la nube. Se guardó en este aparato — revisá la conexión y volvé a intentar.");
+      setTimeout(() => setMsg(""), 7000);
+    };
+    window.addEventListener("vv-sync-error", onErr);
+    return () => window.removeEventListener("vv-sync-error", onErr);
+  }, []);
+  if (!msg) return null;
+  return (<div style={{ position: "fixed", left: 12, right: 12, bottom: 12, zIndex: 9999, background: "#DC2626", color: "#fff", borderRadius: 10, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,.25)", display: "flex", alignItems: "center", gap: 8 }}>
+    <span>⚠</span><span style={{ flex: 1 }}>{msg}</span>
+    <button onClick={() => setMsg("")} style={{ background: "rgba(255,255,255,.2)", border: "none", color: "#fff", borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>OK</button>
+  </div>);
+}
+
 const storage = {
   set: async (key, value) => {
+    // ANTES no revisaba si el servidor aceptó el guardado (solo atrapaba fallas de RED,
+    // no un error HTTP como 403/413/500). Eso podía fallar en silencio: quedaba guardado
+    // acá, pero nunca llegaba a la nube. Ahora revisa la respuesta y reintenta una vez.
     try { localStorage.setItem(key, value); } catch { }
-    try { await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); } catch { }
-    return { value };
+    const intentar = () => fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) });
+    try {
+      let r = await intentar();
+      if (!r.ok) r = await intentar();
+      if (!r.ok) { avisarErrorSync(key); return { value, ok: false }; }
+    } catch { avisarErrorSync(key); return { value, ok: false }; }
+    return { value, ok: true };
   },
   get: async (key) => {
     try {
@@ -72,7 +107,17 @@ async function uploadArchivo(dataUrl, carpeta, nombre) {
 const uid = () => Math.random().toString(36).slice(2, 9);
 const hoyStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
 const money = (n) => (Number(n) || 0).toLocaleString("es-AR") + " $";
-const parseMontoNum = (m) => { if (!m) return 0; return parseFloat(String(m).replace(/[^0-9.]/g, '')) || 0; };
+const parseMontoNum = (m) => {
+  // En Argentina el punto es separador de MILES y la coma es el decimal.
+  // Antes: parseFloat("120.000.000") -> 120. Un presupuesto de 120 millones se leía como 120 pesos.
+  if (m == null || m === "") return 0;
+  if (typeof m === "number") return isFinite(m) ? m : 0;
+  let s = String(m).replace(/[^0-9.,-]/g, "");
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  else s = s.replace(/\./g, "");
+  const n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+};
 function fileToDataUrl(f, maxW = 1400) {
   return new Promise((res, rej) => {
     const reader = new FileReader();
@@ -242,9 +287,187 @@ function nuevoPedido({ de, para, asunto, detalle, prioridad, obra_id }) { const 
 // por una lectura vieja. Ahora aplica el cambio directo sobre el estado que React YA tiene
 // actualizado (mantenido al día por el sondeo) — instantáneo, sin depender de la red, y sin
 // la carrera entre dos escrituras que se cruzan.
+// ── GUARDADO DE PEDIDOS SIN PISAR LO DEL OTRO ──────────────────────────
+// PROBLEMA que esto resuelve: antes cada app escribía la LISTA ENTERA en la nube.
+// Si V+V creaba un pedido y el Cliente creaba otro antes de sondear (el sondeo tarda
+// 4s), el Cliente escribía su lista —que todavía no tenía el pedido de V+V— y lo
+// borraba para todos. Con 6 personas usando la app a la vez, esto pasa seguido.
+//
+// SOLUCIÓN: antes de guardar, traigo lo último de la nube y FUSIONO pedido por pedido.
+// Gana la versión más nueva de cada uno (campo "upd"). Los borrados quedan anotados
+// como "tumbas" para que la fusión no los resucite.
+const TUMBAS_PED = "vv_pedidos_del";
+function leerTumbas() { try { return JSON.parse(localStorage.getItem(TUMBAS_PED) || "{}"); } catch { return {}; } }
+
+async function persistirPedidos(lista, tumbasNuevas) {
+  let enNube = [], tumbasNube = {};
+  try { const r = await storage.get("vv_pedidos"); if (r?.value) enNube = JSON.parse(r.value); } catch { }
+  try { const r = await storage.get(TUMBAS_PED); if (r?.value) tumbasNube = JSON.parse(r.value); } catch { }
+  if (!Array.isArray(enNube)) enNube = [];
+
+  // uno todas las tumbas conocidas (nube + este aparato + las que acabo de hacer)
+  const tumbas = { ...tumbasNube, ...leerTumbas(), ...(tumbasNuevas || {}) };
+
+  // fusiono por id: de cada pedido me quedo con la versión más nueva
+  const porId = {};
+  for (const p of enNube) if (p && p.id) porId[p.id] = p;
+  for (const p of (lista || [])) {
+    if (!p || !p.id) continue;
+    const otro = porId[p.id];
+    if (!otro || (p.upd || 0) >= (otro.upd || 0)) porId[p.id] = p;
+  }
+
+  // saco los borrados (solo si la tumba es más nueva que el pedido)
+  const fusionada = Object.values(porId).filter(p => !(tumbas[p.id] && tumbas[p.id] >= (p.upd || 0)));
+
+  // limpio tumbas viejas para que no crezcan sin fin (30 días)
+  const corte = Date.now() - 30 * 24 * 3600 * 1000;
+  for (const k of Object.keys(tumbas)) if (tumbas[k] < corte) delete tumbas[k];
+
+  const ts = Date.now();
+  lastWrite["vv_pedidos"] = ts;
+  try {
+    localStorage.setItem(TUMBAS_PED, JSON.stringify(tumbas));
+    localStorage.setItem("vv_pedidos", JSON.stringify(fusionada));
+    localStorage.setItem("vv_pedidos__ts", String(ts));
+  } catch { }
+  await storage.set("vv_pedidos", JSON.stringify(fusionada));
+  await storage.set("vv_pedidos__ts", String(ts));
+  await storage.set(TUMBAS_PED, JSON.stringify(tumbas));
+  return fusionada;
+}
+
+/* ═══ MATERIALES: la misma fusión que los pedidos ═══
+   Antes las dos apps escribían la lista ENTERA y sin sello de fecha. Resultado:
+   marcabas "Levantar" acá, V+V reescribía la lista vieja, y como el sello no cambiaba,
+   al recargar volvías a adoptar los datos viejos. El "Levantado" se perdía.
+   Ahora se fusiona por id (gana la versión más nueva de cada pedido) y siempre se
+   escribe el sello. Los borrados quedan en tumbas para que no resuciten.          */
+const TUMBAS_MAT = "vv_matpedidos_del";
+function leerTumbasMat() { try { return JSON.parse(localStorage.getItem(TUMBAS_MAT) || "{}"); } catch { return {}; } }
+
+async function persistirMats(lista, tumbasNuevas) {
+  let enNube = [], tumbasNube = {};
+  try { const r = await storage.get("vv_matpedidos"); if (r?.value) enNube = JSON.parse(r.value); } catch { }
+  try { const r = await storage.get(TUMBAS_MAT); if (r?.value) tumbasNube = JSON.parse(r.value); } catch { }
+  if (!Array.isArray(enNube)) enNube = [];
+
+  const tumbas = { ...tumbasNube, ...leerTumbasMat(), ...(tumbasNuevas || {}) };
+
+  const porId = {};
+  for (const p of enNube) if (p && p.id) porId[p.id] = p;
+  for (const p of (lista || [])) {
+    if (!p || !p.id) continue;
+    const otro = porId[p.id];
+    if (!otro || (p.upd || 0) >= (otro.upd || 0)) porId[p.id] = p;
+  }
+
+  const fusionada = Object.values(porId).filter(p => !(tumbas[p.id] && tumbas[p.id] >= (p.upd || 0)));
+
+  const corte = Date.now() - 30 * 24 * 3600 * 1000;
+  for (const k of Object.keys(tumbas)) if (tumbas[k] < corte) delete tumbas[k];
+
+  let salida = fusionada;
+  const escribir = async (lista) => {
+    const ts = Date.now();
+    lastWrite["vv_matpedidos"] = ts;
+    try {
+      localStorage.setItem(TUMBAS_MAT, JSON.stringify(tumbas));
+      localStorage.setItem("vv_matpedidos", JSON.stringify(lista));
+      localStorage.setItem("vv_matpedidos__ts", String(ts));
+    } catch { }
+    await storage.set("vv_matpedidos", JSON.stringify(lista));
+    await storage.set("vv_matpedidos__ts", String(ts));
+    await storage.set(TUMBAS_MAT, JSON.stringify(tumbas));
+  };
+  await escribir(salida);
+
+  // SEGUNDA PASADA. Si la otra app escribió en el mismo instante, leyó la nube ANTES
+  // que yo escribiera y me pisó. Vuelvo a leer y fusiono otra vez: como gana el 'upd'
+  // más nuevo de cada pedido, esta pasada recupera lo mío sin borrar lo de ella.
+  for (let intento = 0; intento < 2; intento++) {
+    let ahoraNube = [];
+    try { const r = await storage.get("vv_matpedidos"); if (r?.value) ahoraNube = JSON.parse(r.value); } catch { }
+    if (!Array.isArray(ahoraNube)) ahoraNube = [];
+
+    const m = {};
+    for (const p of ahoraNube) if (p && p.id) m[p.id] = p;
+    for (const p of salida) {
+      if (!p || !p.id) continue;
+      const otro = m[p.id];
+      if (!otro || (p.upd || 0) >= (otro.upd || 0)) m[p.id] = p;
+    }
+    const rehecha = Object.values(m).filter(p => !(tumbas[p.id] && tumbas[p.id] >= (p.upd || 0)));
+
+    if (JSON.stringify(rehecha) === JSON.stringify(ahoraNube)) { salida = rehecha; break; }
+    salida = rehecha;
+    await escribir(salida);
+  }
+  return salida;
+}
+
+/* Aplica un cambio local y lo persiste fusionando. Solo los que cambiaron reciben
+   sello nuevo; así no piso versiones más nuevas de los que no toqué. */
+function aplicarMats(setMats, fn) {
+  setMats(prev => {
+    const antes = prev || [];
+    const mapaAntes = {};
+    for (const p of antes) if (p && p.id) mapaAntes[p.id] = p;
+
+    const crudo = typeof fn === "function" ? fn(antes) : fn;
+    const lista = Array.isArray(crudo) ? crudo : [];
+    const ahora = Date.now();
+
+    // sello nuevo solo a los que cambiaron
+    const conSello = lista.map(p => {
+      if (!p || !p.id) return p;
+      const viejo = mapaAntes[p.id];
+      const cambio = !viejo || JSON.stringify(viejo) !== JSON.stringify(p);
+      return cambio ? { ...p, upd: ahora } : p;
+    });
+
+    // los que desaparecieron: a la tumba
+    const idsAhora = new Set(conSello.map(p => p && p.id).filter(Boolean));
+    const tumbasNuevas = {};
+    for (const p of antes) if (p && p.id && !idsAhora.has(p.id)) tumbasNuevas[p.id] = ahora;
+
+    persistirMats(conSello, tumbasNuevas);
+    return conSello;
+  });
+}
+
 function aplicarPedidos(setPedidos, fn) {
   let next;
-  setPedidos(prev => { next = fn((prev || []).slice()); return next; });
+  setPedidos(prev => {
+    const antes = prev || [];
+    const mapaAntes = {};
+    for (const p of antes) if (p && p.id) mapaAntes[p.id] = p;
+
+    const bruto = fn(antes.slice());
+    const ahora = Date.now();
+
+    // marco con la hora SOLO los pedidos que realmente cambiaron: si marcara todos,
+    // pisaría los cambios que el otro hizo en pedidos que yo no toqué.
+    next = (bruto || []).map(p => {
+      if (!p || !p.id) return p;
+      const a = mapaAntes[p.id];
+      const cambio = !a || JSON.stringify({ ...a, upd: 0 }) !== JSON.stringify({ ...p, upd: 0 });
+      return cambio ? { ...p, upd: ahora } : p;
+    });
+
+    // lo que estaba antes y ya no está = borrado -> le pongo la tumba
+    const tumbas = {};
+    for (const p of antes) if (p && p.id && !next.some(x => x && x.id === p.id)) tumbas[p.id] = ahora;
+
+    // guardo en segundo plano: la pantalla ya se actualizó, esto no la traba
+    persistirPedidos(next, tumbas).then(fusionada => {
+      if (fusionada && JSON.stringify(fusionada) !== JSON.stringify(next)) {
+        setPedidos(fusionada);   // apareció algo del otro lado: lo muestro
+      }
+    }).catch(() => { });
+
+    return next;
+  });
   return next;
 }
 async function ejecutarAccion(accion, miSide, ctx) {
@@ -267,7 +490,7 @@ async function ejecutarAccion(accion, miSide, ctx) {
   if (accion.tipo === "enviar_mensaje") {
     const msg = { id: uid() + Date.now(), from: miSide, texto: accion.texto || "", fecha: hoyStr(), ts: Date.now(), archivos: [] };
     let arr = []; try { const r = await storage.get("vv_mensajes"); if (r?.value) arr = JSON.parse(r.value); } catch { }
-    const next = [...arr, msg]; try { localStorage.setItem("vv_mensajes", JSON.stringify(next)); } catch { } await storage.set("vv_mensajes", JSON.stringify(next)).catch(() => { });
+    const next = [...arr, msg]; try { localStorage.setItem("vv_mensajes", JSON.stringify(next)); } catch { } { const __ts = Date.now(); lastWrite["vv_mensajes"] = __ts; try { localStorage.setItem("vv_mensajes__ts", String(__ts)); } catch { } await storage.set("vv_mensajes", JSON.stringify(next)); await storage.set("vv_mensajes__ts", String(__ts)); }
     if (ctx.setMensajes) ctx.setMensajes(next);
     try{ pushNotify("Nuevo mensaje", `Belfast: ${(accion.texto||"").slice(0,80)}`, "vv"); }catch(e){}
     return "Mensaje enviado a V+V (aparece en Mensajes).";
@@ -349,7 +572,7 @@ function FormViewer({ T, tpl, f, obraNombre, onClose }) {
       {(tpl.textos || []).filter(tx => tpl.modo !== "iav").map(tx => (f.textos?.[tx.k]) && <div key={tx.k} style={{ marginBottom: 12 }}><div style={{ fontSize: 11, fontWeight: 700, color: T.accent, textTransform: "uppercase", marginBottom: 4 }}>{tx.l}</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{f.textos[tx.k]}</div></div>)}
       {(tpl.secciones || []).map((sec, si) => <div key={si} style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12.5, fontWeight: 800, color: T.accent, marginBottom: 6 }}>{sec.t}</div>
-        {sec.items.map((it, ii) => { const v = av(`${si}:${ii}`); const ok = v === "Sí" || v === "Conf." || v === "Conforme"; const no = v === "No"; return (<div key={ii} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "5px 0", borderBottom: `1px solid ${T.bg}` }}><span style={{ fontSize: 12, color: T.text, flex: 1 }}>{it}</span><span style={{ fontSize: 11, fontWeight: 800, color: ok ? "#16A34A" : no ? "#EF4444" : T.muted, flexShrink: 0 }}>{v}</span></div>); })}
+        {(sec.items || []).map((it, ii) => { const v = av(`${si}:${ii}`); const ok = v === "Sí" || v === "Conf." || v === "Conforme"; const no = v === "No"; return (<div key={ii} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "5px 0", borderBottom: `1px solid ${T.bg}` }}><span style={{ fontSize: 12, color: T.text, flex: 1 }}>{it}</span><span style={{ fontSize: 11, fontWeight: 800, color: ok ? "#16A34A" : no ? "#EF4444" : T.muted, flexShrink: 0 }}>{v}</span></div>); })}
         {f.obs?.[si] && <div style={{ fontSize: 11.5, color: T.sub, marginTop: 6, fontStyle: "italic" }}>Obs: {f.obs[si]}</div>}
       </div>)}
       {tpl.rubros && (f.rubros || []).length > 0 && <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12.5, fontWeight: 800, color: T.accent, marginBottom: 6 }}>Rubros</div>{f.rubros.map((r, i) => <div key={i} style={{ fontSize: 12, color: T.text, padding: "4px 0", borderBottom: `1px solid ${T.bg}` }}><b>{r.rubro}</b> — {r.estado}{r.obs ? ` · ${r.obs}` : ""}</div>)}</div>}
@@ -359,6 +582,38 @@ function FormViewer({ T, tpl, f, obraNombre, onClose }) {
       <button onClick={onClose} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, marginTop: 6 }}>Cerrar</button>
     </div>
   </div>);
+}
+
+// ── AVISOS EN LOS ÍCONOS ────────────────────────────────────────────────
+// Pone el punto rojo en un ícono cuando llegó algo que todavía no abriste.
+// Guarda los IDs ya vistos (no una fecha) porque no todos los registros traen
+// fecha: una obra nueva, por ejemplo, no la trae — y así igual la detectamos.
+// Queda guardado en el dispositivo, así el aviso sobrevive aunque cierres la app.
+function useAvisos(clave, mapaIds) {
+  const [vistos, setVistos] = useState(() => {
+    try { const r = localStorage.getItem(clave); return r ? JSON.parse(r) : null; } catch { return null; }
+  });
+  const guardar = (v) => { try { localStorage.setItem(clave, JSON.stringify(v)); } catch { } };
+  // La primera vez doy todo por visto: si no, al instalar la app quedaría todo en rojo.
+  useEffect(() => {
+    if (vistos === null) {
+      const init = {};
+      for (const k in mapaIds) init[k] = mapaIds[k];
+      setVistos(init); guardar(init);
+    }
+  });
+  const aviso = (cat) => {
+    if (!vistos) return 0;
+    const yaVi = new Set(vistos[cat] || []);
+    return (mapaIds[cat] || []).filter(x => !yaVi.has(x)).length;
+  };
+  const marcarVisto = (cat) => {
+    setVistos(prev => {
+      const n = { ...(prev || {}), [cat]: mapaIds[cat] || [] };
+      guardar(n); return n;
+    });
+  };
+  return { aviso, marcarVisto };
 }
 
 function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
@@ -437,10 +692,10 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
             <div style={{ flex: 1, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Certificado</div><div style={{ fontSize: 12.5, fontWeight: 800, color: "#16A34A", marginTop: 2 }}>{pct}%</div></div>
             <div style={{ flex: 2, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Saldo pendiente</div><div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginTop: 2 }}>{ecoUnlocked ? money(contr - cert) : "🔒 •••••"}</div></div>
           </div>
-          <button onClick={() => setOpen(isOpen ? null : o.id)} style={{ width: "100%", marginTop: 12, background: "none", border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, color: T.accent }}>{isOpen ? "Ocultar detalle ▲" : `Ver detalle${forms.length ? ` · ${forms.length} formulario${forms.length > 1 ? "s" : ""}` : ""}${(o.planos || []).length ? ` · ${o.planos.length} plano${o.planos.length > 1 ? "s" : ""}` : ""} ▼`}</button>
+          <button onClick={() => setOpen(isOpen ? null : o.id)} style={{ width: "100%", marginTop: 12, background: "none", border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, color: T.accent }}>{isOpen ? "Ocultar detalle ▲" : `Ver detalle${forms.length ? ` · ${forms.length} formulario${forms.length > 1 ? "s" : ""}` : ""}${(o.planos || []).length ? ` · ${(o.planos || []).length} plano${(o.planos || []).length > 1 ? "s" : ""}` : ""} ▼`}</button>
           {isOpen && <div style={{ marginTop: 12 }}>
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Planos (PDF / CAD){(o.planos || []).length ? ` (${o.planos.length})` : ""}</div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Planos (PDF / CAD){(o.planos || []).length ? ` (${(o.planos || []).length})` : ""}</div>
               {(o.planos || []).map(p => <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}>
                 <div style={{ width: 30, height: 30, borderRadius: 7, background: "#EAEEF3", color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>📐</div>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{p.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}</div></div>
@@ -449,7 +704,7 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
               </div>)}
               <label style={{ display: "block", textAlign: "center", background: T.navy, color: "#fff", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>{subP ? "Subiendo…" : "＋ Subir plano (PDF/CAD)"}<input type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={e => subirPlanos(e, o)} style={{ display: "none" }} /></label>
             </div>
-            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({o.fotos.length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{o.fotos.map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
+            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({(o.fotos || []).length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{(o.fotos || []).map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
             {(o.videos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Videos ({o.videos.length})</div>{o.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", borderRadius: 6, marginBottom: 8, background: "#000", display: "block" }} />)}</div>}
             {ts.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Cronograma</div>{ts.map(t => <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}><span style={{ flex: 1, fontSize: 12, color: T.text }}>{t.nombre}</span><div style={{ width: 70, height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${t.avance || 0}%`, background: BRASS }} /></div><span style={{ fontSize: 11, fontWeight: 700, color: T.muted, width: 32, textAlign: "right" }}>{t.avance || 0}%</span></div>)}</div>}
             {ult && <div><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Último informe · {ult.fecha}</div><div style={{ background: T.bg, borderRadius: T.rsm, padding: "11px 13px", fontSize: 12, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{ult.texto}</div></div>}
@@ -607,7 +862,7 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "Asistente IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "obras", label: "Obra", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
 function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos }) {
@@ -687,7 +942,7 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, loading]);
   function sys() {
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)})`).join("\n");
-    const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "cliente" ? "enviado a V+V" : "recibido de V+V"}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
+    const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "cliente" ? "enviado a V+V" : "recibido de V+V"}, estado ${p.estado}) — último: ${(p.hilo || [])[(p.hilo || []).length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
     const per = (personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${p.telefono ? ` · tel ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.sitios || []).length ? ` [cargado en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n");
     const msj = (mensajes || []).slice(-8).map(m => `· ${m.from === "cliente" ? "Nosotros" : "V+V"}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de ${cfg.nombre} (comitente), en contacto con V+V Construcciones (la empresa que ejecuta la obra). Español rioplatense, claro y cordial. Estás CONECTADO a los mismos datos y al asistente de V+V: comparten la base de datos en tiempo real (obras, personal, pedidos, mensajes); ves lo que carga la otra empresa y ellos ven lo que cargás vos. NUNCA digas que no podés comunicarte con V+V ni con su asistente: SÍ podés, mandándoles un mensaje directo (les aparece en su pantalla de Mensajes) y ellos te responden. REGLA CLAVE: si te piden COMUNICARTE, HABLAR, AVISAR, DECIRLE o PREGUNTARLE algo a V+V, usá SIEMPRE la acción "enviar_mensaje" (se envía directo). "crear_pedido" es solo para pedidos formales de definiciones/documentación. También podés: informar sobre el avance de las obras, GESTIONAR PEDIDOS, cargar PERSONAL a los sitios/barrios (vos tramitás el acceso a los barrios privados), MANDAR WHATSAPP a los jefes de obra/contactos (usás la agenda de Personal → Contactos), y BUSCAR EN INTERNET información actual (normativa, código de edificación, proveedores, precios, datos de empresas). Priorizá fuentes argentinas y citá la fuente.
@@ -712,7 +967,7 @@ PLANOS POR OBRA:\n${obras.map(o => (o.planos || []).length ? `· ${o.nombre}: ${
 
 TAREAS / CRONOGRAMA:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find(o => o.id === t.obra_id)?.nombre || "—"} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}
 
-PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")} — ${p.leido ? "levantado" : "no leído"}`).join("\n") || "(sin pedidos de materiales)"}
+PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(sin pedidos de materiales)"}
 
 Tenés acceso COMPLETO a todos estos datos (obras, avances, montos, fotos, informes, formularios, archivos, documentación, tareas, materiales, personal, contactos, pedidos). Cuando te pidan un DATO PUNTUAL, buscalo y dá el valor EXACTO; no digas "no lo tengo" si está arriba. Las fotos y videos no los "ves", pero sabés cuántos hay y de qué obra.
 
@@ -846,7 +1101,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
             for (const p of nuevosMat) {
               const obraN = obras.find(o => o.id === p.obra_id)?.nombre || "obra";
               const jefe = (contactos || []).find(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()) || (personal || []).find(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim());
-              const lines = p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n");
+              const lines = (p.items || []).map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n");
               const txt = `*Pedido de materiales* — ${obraN}\nFecha: ${p.fecha}\n\n${lines}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
               const t = encodeURIComponent(txt);
               const clean = jefe ? String(jefe.telefono).replace(/\D/g, "") : "";
@@ -961,7 +1216,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
   function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
-  async function responderIA(p) { setIaLoad(true); const hist = p.hilo.map(h => `${h.de === miSide ? cfg.nombre : "V+V"}: ${h.texto}`).join("\n"); const sys = `Sos el agente de ${cfg.nombre} respondiendo a V+V Construcciones. Redactá una respuesta breve y concreta (español rioplatense) al último mensaje. Solo el texto.`; const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey); setReply(r); setIaLoad(false); }
+  async function responderIA(p) { setIaLoad(true); const hist = (p.hilo || []).map(h => `${h.de === miSide ? cfg.nombre : "V+V"}: ${h.texto}`).join("\n"); const sys = `Sos el agente de ${cfg.nombre} respondiendo a V+V Construcciones. Redactá una respuesta breve y concreta (español rioplatense) al último mensaje. Solo el texto.`; const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey); setReply(r); setIaLoad(false); }
   const Pill = (k, l) => <button key={k} onClick={() => setFiltro(k)} style={{ flex: 1, padding: "8px", borderRadius: T.rsm, border: `1px solid ${filtro === k ? T.accent : T.border}`, background: filtro === k ? "#EAEEF3" : T.card, color: filtro === k ? T.accent : T.sub, fontSize: 12, fontWeight: 700 }}>{l}</button>;
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
@@ -973,7 +1228,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
         </div>); })()}
         <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>{Pill("todos", "Todos")}{Pill("recibidos", "Recibidos")}{Pill("enviados", "Enviados")}</div>
         <button onClick={() => setNuevo({ asunto: "", detalle: "", prioridad: "media", obra_id: obras[0]?.id || "" })} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, marginBottom: 16 }}>＋ Nuevo pedido a V+V</button>
-        {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 18px" }}>Sin pedidos. Creá uno o pedíselo al Asistente IA.</div>}
+        {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 18px" }}>Sin pedidos. Creá uno o pedíselo a la IA.</div>}
         {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado] || PEDIDO_ESTADOS.abierto; const ult = (p.hilo || [])[p.hilo?.length - 1]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9 }}>
           <div onClick={() => { setOpen(p.id); setReply(""); }} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ minWidth: 0 }}>
@@ -1001,7 +1256,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
           <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
         </Card>
         <Eyebrow T={T}>Hilo</Eyebrow>
-        {cur.hilo.map((h, i) => { const mine = h.de === miSide; return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
+        {(cur.hilo || []).map((h, i) => { const mine = h.de === miSide; return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
           <div style={{ maxWidth: "85%" }}>
             <div style={{ background: mine ? T.accent : T.card, color: mine ? "#fff" : T.text, border: mine ? "none" : `1px solid ${T.border}`, borderRadius: mine ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "10px 13px", fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
               {h.texto}
@@ -1023,11 +1278,11 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
     {nuevo && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={() => setNuevo(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 1180, margin: "0 auto", padding: "20px", animation: "up .25s ease" }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 14 }}>Nuevo pedido a V+V</div>
-        <input value={nuevo.asunto} onChange={e => setNuevo({ ...nuevo, asunto: e.target.value })} placeholder="Asunto" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 9 }} />
-        <textarea value={nuevo.detalle} onChange={e => setNuevo({ ...nuevo, detalle: e.target.value })} placeholder="Detalle de la solicitud" rows={4} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 9 }} />
+        <input value={nuevo.asunto || ""} onChange={e => setNuevo({ ...nuevo, asunto: e.target.value })} placeholder="Asunto" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 9 }} />
+        <textarea value={nuevo.detalle || ""} onChange={e => setNuevo({ ...nuevo, detalle: e.target.value })} placeholder="Detalle de la solicitud" rows={4} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 9 }} />
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>¿De qué obra?</label>
-        <select value={nuevo.obra_id} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 9px" }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}<option value="">Sin obra específica</option></select>
-        <select value={nuevo.prioridad} onChange={e => setNuevo({ ...nuevo, prioridad: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 12 }}><option value="alta">Prioridad alta</option><option value="media">Prioridad media</option><option value="baja">Prioridad baja</option></select>
+        <select value={nuevo.obra_id || ""} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 9px" }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}<option value="">Sin obra específica</option></select>
+        <select value={nuevo.prioridad || ""} onChange={e => setNuevo({ ...nuevo, prioridad: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 12 }}><option value="alta">Prioridad alta</option><option value="media">Prioridad media</option><option value="baja">Prioridad baja</option></select>
         <PBtn T={T} full onClick={crear}>Crear y enviar</PBtn>
       </div>
     </div>}
@@ -1045,11 +1300,11 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
   const [cForm, setCForm] = useState(null);
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   function nuevoC() { setCForm({ nombre: "", rol: "Jefe de obra", obra_id: obras[0]?.id || "", telefono: "" }); }
-  function guardarC() { if (!cForm.nombre.trim() || !cForm.telefono.trim()) { alert("Poné al menos nombre y teléfono."); return; } if (cForm.id) setContactos(p => (p || []).map(x => x.id === cForm.id ? cForm : x)); else setContactos(p => [...(p || []), { ...cForm, id: uid() + Date.now() }]); setCForm(null); }
+  function guardarC() { if (!String(cForm.nombre || "").trim() || !String(cForm.telefono || "").trim()) { alert("Poné al menos nombre y teléfono."); return; } if (cForm.id) setContactos(p => (p || []).map(x => x.id === cForm.id ? cForm : x)); else setContactos(p => [...(p || []), { ...cForm, id: uid() + Date.now() }]); setCForm(null); }
   function borrarC(id) { if (confirm("¿Eliminar este contacto?")) setContactos(p => (p || []).filter(x => x.id !== id)); }
   const diasHasta = (s) => { if (!s) return null; const [d, m, y] = s.split("/"); return Math.ceil((new Date(`20${y}`, m - 1, d) - new Date()) / 86400000); };
   const lista = personal.filter(p => !filtroObra || p.obra_id === filtroObra);
-  const sitios = [...new Set(obras.map(o => o.nombre))];
+  const sitios = [...new Set((obras || []).map(o => o.nombre).filter(Boolean))];   // saco las obras sin nombre: generaban claves vacías
   function toggle(id) { setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]); }
   async function ejecutarCarga() {
     if (!sitio.trim() || sel.length === 0) return; const f = hoyStr();
@@ -1070,7 +1325,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#25D366", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>📲</div>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{c.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{c.rol || "—"} · {nomObra(c.obra_id)} · {c.telefono}</div></div>
-          <button onClick={() => setCForm(c)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+          <button onClick={() => setCForm({ id: c.id, nombre: c.nombre || "", rol: c.rol || "", obra_id: c.obra_id || "", telefono: c.telefono || "" })} style={{ background: "none", border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
           <button onClick={() => borrarC(c.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, width: 30, height: 30, fontSize: 13, cursor: "pointer" }}>✕</button>
         </div>
       </Card>))}
@@ -1141,13 +1396,13 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 1180, margin: "0 auto", padding: "20px", maxHeight: "88vh", overflowY: "auto", animation: "up .25s ease" }}>
         <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 14 }}>{cForm.id ? "Editar contacto" : "Nuevo contacto de WhatsApp"}</div>
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Nombre</label>
-        <input value={cForm.nombre} onChange={e => setCForm({ ...cForm, nombre: e.target.value })} placeholder="Ej: Juan Pérez" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }} />
+        <input value={cForm.nombre || ""} onChange={e => setCForm({ ...cForm, nombre: e.target.value })} placeholder="Ej: Juan Pérez" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }} />
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Rol</label>
-        <input value={cForm.rol} onChange={e => setCForm({ ...cForm, rol: e.target.value })} placeholder="Jefe de obra" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }} />
+        <input value={cForm.rol || ""} onChange={e => setCForm({ ...cForm, rol: e.target.value })} placeholder="Jefe de obra" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }} />
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Obra</label>
-        <select value={cForm.obra_id} onChange={e => setCForm({ ...cForm, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }}><option value="">Sin obra</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+        <select value={cForm.obra_id || ""} onChange={e => setCForm({ ...cForm, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }}><option value="">Sin obra</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Teléfono (WhatsApp)</label>
-        <input value={cForm.telefono} onChange={e => setCForm({ ...cForm, telefono: e.target.value })} placeholder="Ej: 11 5555 4444" type="tel" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 4px" }} />
+        <input value={cForm.telefono || ""} onChange={e => setCForm({ ...cForm, telefono: e.target.value })} placeholder="Ej: 11 5555 4444" type="tel" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 4px" }} />
         <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 14 }}>Con característica (ej. 11 para CABA/GBA). La app le antepone el código de país.</div>
         <PBtn T={T} full onClick={guardarC}>{cForm.id ? "Guardar cambios" : "Agregar contacto"}</PBtn>
       </div>
@@ -1178,7 +1433,7 @@ function InformesScreen({ T, obras, formularios = [] }) {
       {todos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px" }}>Todavía no hay informes técnicos publicados.</div>}
       {todos.map(inf => (<Card T={T} key={inf.id} style={{ padding: 13, marginBottom: 9 }}>
         <div onClick={() => setOpen(inf)} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{inf.titulo || "Informe"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{inf.obra} · {inf.fecha}{(inf.archivos || []).length ? ` · ${inf.archivos.length} adj.` : ""}</div></div>
+          <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{inf.titulo || "Informe"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{inf.obra} · {inf.fecha}{(inf.archivos || []).length ? ` · ${(inf.archivos || []).length} adj.` : ""}</div></div>
           <Badge c={inf.tipo === "ia" ? "#8B5CF6" : "#3B82F6"} b={inf.tipo === "ia" ? "#F5F3FF" : "#EFF6FF"}>{inf.tipo === "ia" ? "IA" : "Técnico"}</Badge>
         </div>
       </Card>))}
@@ -1218,14 +1473,18 @@ function FormulariosScreen({ T, obras, formularios = [] }) {
   </div>);
 }
 
+const TIPOS_PEDIDO_CLI = { material: { label: "Materiales", icon: "📦", color: "#1B3A5B" }, definicion: { label: "Definiciones", icon: "📐", color: "#B0894F" }, plano: { label: "Planos", icon: "🗂️", color: "#3B6E9E" } };
+const tipoPedCli = (id) => TIPOS_PEDIDO_CLI[id] || TIPOS_PEDIDO_CLI.material;
+const itemsTexto = (p) => (p.items || []).map(it => (p.tipo && p.tipo !== "material") ? `${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}` : `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
+
 function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matpedidos = [], setMatpedidos }) {
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const [waFor, setWaFor] = useState(null);
-  function levantar(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, leido: true, leidoFecha: hoyStr() } : x)); }
-  function marcarEnviado(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
+  function marcarEnviado(id) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
   function waText(p) {
-    const lines = p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
-    return `*Pedido de materiales* — ${nomObra(p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
+    const tp = tipoPedCli(p.tipo);
+    const lines = itemsTexto(p).map(l => `• ${l}`);
+    return `*Pedido de ${tp.label.toLowerCase()}* — ${nomObra(p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
   }
   function waLink(text, phone) {
     const t = encodeURIComponent(text);
@@ -1235,20 +1494,18 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
   const lista = (matpedidos || []).filter(p => p.de !== "cliente").sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "16px 20px" }}>
-      <Eyebrow T={T}>Pedidos de materiales de V+V</Eyebrow>
+      <Eyebrow T={T}>Pedidos de V+V · materiales, definiciones y planos</Eyebrow>
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px", lineHeight: 1.55 }}>Todavía no recibiste pedidos de materiales.<br />Cuando V+V cargue uno, aparece acá.</div>}
-      {lista.map(p => { const jefes = [...(contactos || []).filter(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()), ...(personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim())]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${p.leido ? T.border : "#EF4444"}`, background: p.leido ? T.card : "#FFFBEB" }}>
+      {lista.map(p => { const jefes = [...(contactos || []).filter(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()), ...(personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim())]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${tipoPedCli(p.tipo).color}` }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{nomObra(p.obra_id)} · {p.fecha}<span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.de === "vv" ? "V+V" : (p.empresa || "Contratista")}</span>{!p.leido && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, color: "#fff", background: "#EF4444", borderRadius: 5, padding: "2px 7px" }}>NUEVO</span>}</div>
-          <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n")}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoPedCli(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 8 }}>{tipoPedCli(p.tipo).icon} {tipoPedCli(p.tipo).label}</span>{nomObra(p.obra_id)} · {p.fecha}<span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.de === "vv" ? "V+V" : (p.empresa || "Contratista")}</span></div>
+          <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{itemsTexto(p).map(l => `• ${l}`).join("\n")}</div>
           {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 5, fontStyle: "italic" }}>{p.nota}</div>}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 11 }}>
-          {!p.leido && <button onClick={() => levantar(p.id)} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>Levantar</button>}
           <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar por WhatsApp</button>
-          <button onClick={() => { if (confirm("¿Eliminar este pedido de materiales? Se borra para las dos empresas.")) setMatpedidos(prev => (prev || []).filter(x => x.id !== p.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: T.rsm, padding: "10px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕</button>
+          <button onClick={() => { if (confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) aplicarMats(setMatpedidos, prev => (prev || []).filter(x => x.id !== p.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: T.rsm, padding: "10px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
-        {p.leido && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#16A34A", marginTop: 8 }}>✓ Levantado{p.leidoFecha ? " · " + p.leidoFecha : ""}</div>}
         {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 5 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
         {waFor === p.id && <div style={{ marginTop: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
@@ -1289,7 +1546,7 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion }) {
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
       <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Desempeño medido sobre los pedidos (plazo {g.plazo} días háb.). Vista de seguimiento.</div>
       {items.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin ítems.</div>}
-      {items.map(it => { const e = GEST_ESTADOS[it.estado]; const pj = perItem(it); return (<Card T={T} key={it.id} style={{ padding: 13, marginBottom: 9 }}>
+      {items.map(it => { const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); return (<Card T={T} key={it.id} style={{ padding: 13, marginBottom: 9 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
             <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
@@ -1325,8 +1582,8 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion }) {
 }
 
 // ── SHELL WEB INSTITUCIONAL (Cliente) ────────────────────────────────
-function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unreadForms, unreadMat, unreadInf, unreadIA }) {
-  const badge = (id) => (id === "mensajes" ? unread : id === "formularios" ? (unreadForms || 0) : id === "pedidos" ? pendientes : id === "materiales" ? (unreadMat || 0) : id === "informes" ? (unreadInf || 0) : id === "asistente" ? (unreadIA || 0) : 0);
+function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
+  const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);   // sirve para TODOS los íconos
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
       <div style={{ background: T.navy, color: "#fff" }}>
@@ -1403,7 +1660,7 @@ function ClienteApp() {
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
-  const unreadMat = (matpedidos || []).filter(p => p.de !== "cliente" && !p.leido).length;
+  const unreadMat = 0; // materiales es solo un registro: no genera aviso de "sin levantar"
   const pendPed = (pedidos || []).filter(p => p.para === "cliente" && p.estado !== "resuelto").length;
   const lastPed = useRef(null);
   const lastForms = useRef(null);
@@ -1419,6 +1676,25 @@ function ClienteApp() {
   const [iaDialogo, setIaDialogo] = useState([]);
   useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   const unreadIA = (iaDialogo || []).filter(m => m.from && m.from !== "cliente" && m.tipo === "q" && (m.ts || 0) > (seen.ia || 0)).length;
+
+  // ── QUÉ CUENTA COMO "NUEVO" EN CADA ÍCONO ──
+  const idsAviso = {
+    asistente:   (iaDialogo || []).filter(m => m.from && m.from !== "cliente").map(m => "ia:" + (m.id || m.ts)),
+    mensajes:    (mensajes || []).filter(m => m.from && m.from !== "cliente").map(m => "ms:" + m.id),
+    // un pedido cuenta como nuevo si es para mí, o si le agregaron un mensaje al hilo, o le cambiaron el estado
+    pedidos:     (pedidos || []).filter(p => p.para === "cliente").map(p => `pd:${p.id}:${(p.hilo || []).length}:${p.estado || ""}`),
+    materiales:  (matpedidos || []).filter(p => p.de !== "cliente").map(p => `mp:${p.id}:${p.estado || ""}`),
+    informes:    (obras || []).flatMap(o => (o.informes || []).map(i => "inf:" + (i.id || i.url || i.nombre))),
+    formularios: (formularios || []).filter(f => f.compartido).map(f => "fm:" + f.id),
+    archivos:    (archivosVV || []).map(a => "ar:" + (a.id || a.url || a.nombre)),
+    obras:       (obras || []).map(o => "ob:" + o.id),              // ← OBRA NUEVA
+    personal:    (personal || []).map(p => "pe:" + p.id),
+    gestion:     [],
+    ajustes:     [],
+  };
+  const { aviso, marcarVisto } = useAvisos("cliente_avisos", idsAviso);
+  // al abrir una pantalla, se apaga su punto rojo
+  const irA = (id) => { setScreen(id); marcarVisto(id); };
   useEffect(() => { try { if (!localStorage.getItem("cliente_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, formularios: now, materiales: now, ia: now }; localStorage.setItem("cliente_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("cliente_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("cliente_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
   useEffect(() => { initPush("belfast"); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
@@ -1427,38 +1703,70 @@ function ClienteApp() {
     try { if ("setAppBadge" in navigator) { if (total > 0) navigator.setAppBadge(total); else navigator.clearAppBadge && navigator.clearAppBadge(); } } catch { }
   }, [unreadMsg, unreadForm, unreadInf, unreadMat, pendPed]);
   const lastCount = useRef(null);
+  // espejo de los mensajes actuales, para detectar cuáles son nuevos por id
+  const mensajesRef = useRef([]);
+  useEffect(() => { mensajesRef.current = mensajes; }, [mensajes]);
 
   // Polling de mensajes y datos cada 8s → avisos en pantalla
   useEffect(() => {
     let alive = true;
     async function tick() {
-      const [rm, ro, rp, rf, rmp] = await Promise.all([storage.get("vv_mensajes"), storage.get("vv_obras"), storage.get("vv_pedidos"), storage.get("vv_formularios"), storage.get("vv_matpedidos")]);
+      const [rm, ro, rp, rf, rmp, rmTs, roTs, rpTs, rmpTs] = await Promise.all([
+        storage.get("vv_mensajes"), storage.get("vv_obras"), storage.get("vv_pedidos"), storage.get("vv_formularios"), storage.get("vv_matpedidos"),
+        storage.get("vv_mensajes__ts"), storage.get("vv_obras__ts"), storage.get("vv_pedidos__ts"), storage.get("vv_matpedidos__ts"),
+      ]);
       if (!alive) return;
-      if (rmp?.value && Date.now() - (lastWrite["vv_matpedidos"] || 0) > 8000) { try { const mp = JSON.parse(rmp.value); setMatpedidos(prev => JSON.stringify(mp) !== JSON.stringify(prev) ? mp : prev); } catch { } }
-      if (rm?.value) {
+      // Materiales: adopto la nube solo si es más nueva que mi última escritura, y
+      // NO piso los cambios que hice recién (fusiono por id, gana el 'upd' más nuevo).
+      if (rmp?.value && Number(rmpTs?.value || 0) > (lastWrite["vv_matpedidos"] || 0)) {
         try {
-          const arr = JSON.parse(rm.value);
-          if (lastCount.current === null) { lastCount.current = arr.length; }
-          else if (arr.length > lastCount.current) {
-            const nuevos = arr.slice(lastCount.current);
-            const deVV = nuevos.filter(m => m.from === "vv");
-            lastCount.current = arr.length;
-            setMensajes(arr);
-            if (deVV.length > 0) {
-              setToast(`Nuevo mensaje de V+V Construcciones`);
-              setTimeout(() => setToast(null), 4500);
-              if (screenRef.current !== "mensajes") setUnread(u => u + deVV.length);
-              try { beep(); } catch { }
-            }
-          } else { lastCount.current = arr.length; }
+          const arrN = JSON.parse(rmp.value);
+          if (Array.isArray(arrN)) {
+            lastWrite["vv_matpedidos"] = Number(rmpTs.value);
+            const tumbas = leerTumbasMat();
+            setMatpedidos(prev => {
+              const porId = {};
+              for (const p of (prev || [])) if (p && p.id) porId[p.id] = p;
+              for (const p of arrN) {
+                if (!p || !p.id) continue;
+                const mio = porId[p.id];
+                // si lo mío es más nuevo (ej: recién toqué "Levantar"), me quedo con lo mío
+                if (!mio || (p.upd || 0) > (mio.upd || 0)) porId[p.id] = p;
+              }
+              const out = Object.values(porId).filter(p => !(tumbas[p.id] && tumbas[p.id] >= (p.upd || 0)));
+              return JSON.stringify(out) !== JSON.stringify(prev) ? out : prev;
+            });
+          }
         } catch { }
       }
-      if (ro?.value && Date.now() - (lastWrite["vv_obras"] || 0) > 8000) { try { setObras(JSON.parse(ro.value)); } catch { } }
+      if (rm?.value) {
+        try {
+          // Antes solo adoptaba la lista si CRECÍA: un mensaje borrado en V+V nunca
+          // desaparecía de acá. Ahora adopta siempre que la nube sea más nueva, y
+          // detecta los nuevos por id (no por cantidad, que falla si borran y agregan).
+          const arr = JSON.parse(rm.value);
+          const cloudTs = Number(rmTs?.value || 0);
+          if (cloudTs > (lastWrite["vv_mensajes"] || 0)) {
+            const idsAntes = new Set((mensajesRef.current || []).map(m => m.id));
+            const nuevosDeVV = arr.filter(m => !idsAntes.has(m.id) && m.from === "vv");
+            lastWrite["vv_mensajes"] = cloudTs;
+            lastCount.current = arr.length;
+            setMensajes(arr);
+            if (nuevosDeVV.length > 0 && idsAntes.size > 0) {
+              setToast(`Nuevo mensaje de V+V Construcciones`);
+              setTimeout(() => setToast(null), 4500);
+              if (screenRef.current !== "mensajes") setUnread(u => u + nuevosDeVV.length);
+              try { beep(); } catch { }
+            }
+          }
+        } catch { }
+      }
+      if (ro?.value && Number(roTs?.value || 0) > (lastWrite["vv_obras"] || 0)) { try { lastWrite["vv_obras"] = Number(roTs.value); setObras(JSON.parse(ro.value)); } catch { } }
       if (rp?.value) {
         try {
-          const arr = JSON.parse(rp.value); if (Date.now() - (lastWrite["vv_pedidos"] || 0) > 8000) setPedidos(arr);
+          const arr = JSON.parse(rp.value); if (Number(rpTs?.value || 0) > (lastWrite["vv_pedidos"] || 0)) { lastWrite["vv_pedidos"] = Number(rpTs.value); setPedidos(arr); }
           // huella de pedidos recibidos cuyo último mensaje es de V+V
-          const huella = arr.filter(p => p.para === "cliente" && p.estado !== "resuelto" && p.hilo[p.hilo.length - 1]?.de === "vv").map(p => p.id + ":" + p.hilo.length).join("|");
+          const huella = arr.filter(p => p.para === "cliente" && p.estado !== "resuelto" && (p.hilo || [])[(p.hilo || []).length - 1]?.de === "vv").map(p => p.id + ":" + (p.hilo || []).length).join("|");
           if (lastPed.current === null) { lastPed.current = huella; }
           else if (huella !== lastPed.current) {
             lastPed.current = huella;
@@ -1468,8 +1776,8 @@ function ClienteApp() {
             // Auto-respuesta IA (opcional) — responde a pedidos de V+V con tope de turnos
             if (cfgRef.current?.autoIA && vvCfgRef.current?.apiKey) {
               for (const p of arr) {
-                if (p.para === "cliente" && p.estado !== "resuelto" && (p.iaTurns || 0) < PEDIDO_MAX_IA && p.hilo[p.hilo.length - 1]?.de === "vv") {
-                  const hist = p.hilo.map(h => `${h.de === "cliente" ? cfgRef.current.nombre : "V+V"}: ${h.texto}`).join("\n");
+                if (p.para === "cliente" && p.estado !== "resuelto" && (p.iaTurns || 0) < PEDIDO_MAX_IA && (p.hilo || [])[(p.hilo || []).length - 1]?.de === "vv") {
+                  const hist = (p.hilo || []).map(h => `${h.de === "cliente" ? cfgRef.current.nombre : "V+V"}: ${h.texto}`).join("\n");
                   const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta (breve y concreta).` }], `Sos el agente de ${cfgRef.current.nombre} respondiendo a V+V Construcciones. Español rioplatense. Solo el texto de la respuesta.`, vvCfgRef.current.apiKey);
                   const f = hoyStr(), ts = Date.now();
                   await aplicarPedidos(setPedidos, list => list.map(x => x.id === p.id ? { ...x, estado: "respondido", iaTurns: (x.iaTurns || 0) + 1, hilo: [...x.hilo, { de: "cliente", texto: r, fecha: f, ts, porIA: true }] } : x));
@@ -1550,7 +1858,7 @@ function ClienteApp() {
     <style>{css}</style>
     <Toast T={T} toast={toast} />
     <div style={{ width: "100%", height: "100dvh", background: "transparent", display: "flex", flexDirection: "column", position: "relative", color: T.text, overflow: "hidden" }}>
-      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={setScreen} unread={unreadMsg} pendientes={pedidos.filter(p => p.para === "cliente" && p.estado !== "resuelto").length} unreadForms={unreadForm} unreadMat={unreadMat} unreadInf={unreadInf} unreadIA={unreadIA} />
+      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={irA} aviso={aviso} />
       {screen === "obras" && <WebClientHero T={T} cfg={cfg} obras={obras} />}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
@@ -1569,6 +1877,7 @@ function ClienteApp() {
       </div>
       <WebClientFooter T={T} cfg={cfg} />
     </div>
+    <SyncBanner />
   </div>);
 }
 
