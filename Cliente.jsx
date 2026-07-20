@@ -648,8 +648,8 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 16px; }
-      .logo { max-height: 46px; max-width: 210px; object-fit: contain; display: block; margin-bottom: 8px; }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 16px; text-align: center; }
+      .logo { max-height: 96px; max-width: 320px; object-fit: contain; display: block; margin: 0 auto 10px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
       .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
       h1 { font-size: 15px; color: #0F1B2D; margin: 6px 0 2px; }
