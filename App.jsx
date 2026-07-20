@@ -4476,7 +4476,7 @@ function ClientePanel({ db, cfg, onBack }) {
 // ── SHELL WEB INSTITUCIONAL (V+V) ────────────────────────────────────
 const LUXE_BG = "radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px) 0 0/22px 22px, radial-gradient(1100px 520px at 50% -8%, rgba(176,137,79,0.13), transparent 62%), linear-gradient(180deg,#0b141f 0%,#0a1019 100%)";
 const LUXE_HERO = "radial-gradient(620px 220px at 86% 0%, rgba(176,137,79,0.20), transparent 60%), linear-gradient(135deg,#101C2C 0%,#17283c 100%)";
-function AvanceView({ obras, avance, setAvance, apiKey }) {
+function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
@@ -4488,7 +4488,8 @@ function AvanceView({ obras, avance, setAvance, apiKey }) {
   const [pdfHtml, setPdfHtml] = React.useState(null);
   const _escPdf = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
   function buildPdfAvance(entries) {
-    const marca = "V+V CONSTRUCCIONES";
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
     const nom = obra?.nombre || "Obra";
     const secc = entries.map(h => {
       const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
@@ -4504,6 +4505,7 @@ function AvanceView({ obras, avance, setAvance, apiKey }) {
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
       .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 16px; }
+      .logo { max-height: 46px; max-width: 210px; object-fit: contain; display: block; margin-bottom: 8px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
       .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
       h1 { font-size: 15px; color: #0F1B2D; margin: 6px 0 2px; }
@@ -4518,7 +4520,7 @@ function AvanceView({ obras, avance, setAvance, apiKey }) {
       .txt { font-size: 12px; color: #1a2433; line-height: 1.5; }
       .foot { margin-top: 14px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
     </style></head><body><div class="sheet">
-      <div class="hdr"><div class="marca">${marca}</div><div class="tipo">Informe de avance de obra</div><h1>${_escPdf(nom)}</h1><div class="meta">${entries.length === 1 ? ("Fecha: " + _escPdf(entries[0].fecha)) : (entries.length + " registros")} · Emitido: ${hoyStr()}</div></div>
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Informe de avance de obra</div><h1>${_escPdf(nom)}</h1><div class="meta">${entries.length === 1 ? ("Fecha: " + _escPdf(entries[0].fecha)) : (entries.length + " registros")} · Emitido: ${hoyStr()}</div></div>
       ${secc}
       <div class="foot">Generado por ${marca} · Seguimiento visual de avance de obra.</div>
     </div></body></html>`;
@@ -4879,7 +4881,7 @@ function App() {
             {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
-            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} />}
+            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
             {view==="chat" && <ChatIA db={db} cfg={cfg} apiKey={cfg.apiKey} msgs={chatMsgs} setMsgs={setChatMsgs} />}

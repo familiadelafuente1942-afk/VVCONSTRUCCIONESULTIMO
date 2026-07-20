@@ -620,7 +620,7 @@ function useAvisos(clave, mapaIds) {
 // ═══ OBRAS (compartido: idéntico a V+V) — inline, sin archivo aparte ═══
 // ══════════════════════════════════════════════════════════════════
 // ─── Avance de obra (espejo de V+V) ───
-function AvanceView({ T, obras, avance, setAvance, apiKey }) {
+function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
@@ -632,7 +632,8 @@ function AvanceView({ T, obras, avance, setAvance, apiKey }) {
   const [pdfHtml, setPdfHtml] = React.useState(null);
   const _escPdf = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
   function buildPdfAvance(entries) {
-    const marca = "V+V CONSTRUCCIONES";
+    const marca = (cfg?.nombre || "Belfast Construction Management").toUpperCase();
+    const logo = cfg?.logo || "";
     const nom = obra?.nombre || "Obra";
     const secc = entries.map(h => {
       const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
@@ -648,6 +649,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey }) {
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
       .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 16px; }
+      .logo { max-height: 46px; max-width: 210px; object-fit: contain; display: block; margin-bottom: 8px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
       .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
       h1 { font-size: 15px; color: #0F1B2D; margin: 6px 0 2px; }
@@ -662,7 +664,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey }) {
       .txt { font-size: 12px; color: #1a2433; line-height: 1.5; }
       .foot { margin-top: 14px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
     </style></head><body><div class="sheet">
-      <div class="hdr"><div class="marca">${marca}</div><div class="tipo">Informe de avance de obra</div><h1>${_escPdf(nom)}</h1><div class="meta">${entries.length === 1 ? ("Fecha: " + _escPdf(entries[0].fecha)) : (entries.length + " registros")} · Emitido: ${hoyStr()}</div></div>
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Informe de avance de obra</div><h1>${_escPdf(nom)}</h1><div class="meta">${entries.length === 1 ? ("Fecha: " + _escPdf(entries[0].fecha)) : (entries.length + " registros")} · Emitido: ${hoyStr()}</div></div>
       ${secc}
       <div class="foot">Generado por ${marca} · Seguimiento visual de avance de obra.</div>
     </div></body></html>`;
@@ -2832,7 +2834,7 @@ function ClienteApp() {
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
-          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} />}
+          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} />}
