@@ -705,6 +705,13 @@ function Dashboard({ lics, obras, personal, alerts, setView, setDetailObraId, re
                     <div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{pendObras ? `Obras: ${pendObras}` : "Tocá para ver"} →</div>
                 </div>
             </div>}
+            <div onClick={() => setView("internos")} style={{ display: "flex", alignItems: "center", gap: 11, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
+                <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#B0894F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>🔒</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#92400E" }}>Mensajes internos V+V</div>
+                    <div style={{ fontSize: 11.5, color: "#B45309", marginTop: 1 }}>Consultas del equipo — Belfast no los ve →</div>
+                </div>
+            </div>
             <div style={{ marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t(cfg, 'dash_obras_curso')}</div>
@@ -1827,6 +1834,7 @@ const MAS_TILES = [
   { id:"matpedidos", label:"Pedido de materiales" },
   { id:"documentacion", label:"Documentación" },
   { id:"bitacora", label:"Bitácora de obra" },
+  { id:"internos", label:"Mensajes internos V+V" },
   { id:"cliente", label:"Panel cliente" },
   { id:"pedidos", label:"Pedidos" },
   { id:"gestion", label:"Plan de gestión" },
@@ -1871,6 +1879,63 @@ function Adjuntos({ items = [], onChange }) {
     {arch.map(a => (<div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>📎 {a.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{a.fecha}</div></div><a href={a.url} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a><button onClick={() => del(a.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button></div>))}
   </div>);
 }
+function InternosView({ db, cfg, onBack }) {
+  const internos = db.internos || [];
+  const obras = db.obras || [];
+  const [de, setDe] = useState(() => { try { return localStorage.getItem("vv_internos_yo") || ""; } catch { return ""; } });
+  const [texto, setTexto] = useState("");
+  const [obraId, setObraId] = useState("");
+  const guardarYo = (v) => { setDe(v); try { localStorage.setItem("vv_internos_yo", v); } catch { } };
+  const lista = [...internos].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+  const enviar = () => {
+    if (!texto.trim()) return;
+    const msg = { id: uid() + Date.now(), de: de.trim() || "V+V", texto: texto.trim(), obra_id: obraId || "", fecha: hoyStr(), ts: Date.now() };
+    db.setInternos(prev => [...(prev || []), msg]);
+    setTexto("");
+  };
+  const borrar = (id) => { if (confirm("¿Borrar este mensaje interno?")) db.setInternos(prev => (prev || []).filter(m => m.id !== id)); };
+  const obraNom = (id) => (obras.find(o => o.id === id) || {}).nombre || "";
+
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
+
+  return (<div>
+    <SubHead id="mensajes" label="Mensajes internos V+V" sub="Consultas del equipo — Belfast no los ve" onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "9px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
+        🔒 Este canal es <b>privado de V+V</b>. Lo ven solo ustedes en esta app; no llega a Belfast ni al panel del cliente.
+      </div>
+
+      {/* nuevo mensaje */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 16, boxShadow: T.shadow }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <input value={de} onChange={e => guardarYo(e.target.value)} placeholder="Tu nombre" style={{ ...inp, flex: 1 }} />
+          <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...inp, flex: 1 }}>
+            <option value="">— Obra (opcional) —</option>
+            {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+          </select>
+        </div>
+        <textarea value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribí tu consulta o nota para el equipo…" rows={3} style={{ ...inp, resize: "vertical", lineHeight: 1.5, marginBottom: 8 }} />
+        <button onClick={enviar} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Enviar al equipo</button>
+      </div>
+
+      {/* lista */}
+      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "28px 18px" }}>Todavía no hay mensajes internos. Escribí el primero arriba.</div>}
+      {lista.map(m => (
+        <div key={m.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>{m.de}</span>
+            {m.obra_id && obraNom(m.obra_id) && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "1px 7px" }}>{obraNom(m.obra_id)}</span>}
+            <span style={{ fontSize: 10.5, color: T.muted, marginLeft: "auto" }}>{m.fecha}</span>
+          </div>
+          <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.texto}</div>
+          <button onClick={() => borrar(m.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginTop: 6, padding: 0, textDecoration: "underline" }}>Borrar</button>
+        </div>
+      ))}
+    </div>
+  </div>);
+}
+
 function BitacoraView({ db, cfg, onBack }) {
   const obras = db.obras || [];
   const bitacora = db.bitacora || [];
@@ -2308,6 +2373,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "personal": return <PersonalView personal={db.personal} setPersonal={db.setPersonal} obras={db.obras} cfg={cfg} />;
       case "documentacion": return <DocumentacionView db={db} cfg={cfg} onBack={back} />;
       case "bitacora": return <BitacoraView db={db} cfg={cfg} onBack={back} />;
+      case "internos": return <InternosView db={db} cfg={cfg} onBack={back} />;
       case "matpedidos": return <MatPedidosView db={db} cfg={cfg} onBack={back} />;
       case "pedidos": return <PedidosView {...P} />;
       case "gestion": return <GestionView {...P} />;
@@ -4573,6 +4639,7 @@ function App() {
   const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
   const [docrecepcion, setDocrecepcion] = useStoredState("vv_docrecepcion", []);
   const [bitacora, setBitacora] = useStoredState("vv_bitacora", []);
+  const [internos, setInternos] = useStoredState("vv_internos", []);
   const [mensajes, setMensajes] = useStoredState("vv_mensajes", []);
   const [pedidos, setPedidos] = useStoredState("vv_pedidos", []);
   const [clienteArchivos] = useStoredState("cliente_archivos", []);
@@ -4700,7 +4767,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, docrecepcion, setDocrecepcion, bitacora, setBitacora };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
