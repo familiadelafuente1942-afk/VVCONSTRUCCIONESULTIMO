@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-// VERSION: v10 (Cliente: los guardados fallidos a la nube ahora se detectan y avisan)
+// VERSION: v15 (FIX: pedidos creados a la vez ya no se pisan - fusion por pedido + tumbas)
 // ════════════════════════════════════════════════════════════════════
 // PANEL DE CLIENTE — App independiente y descargable
 // Mismo backend Supabase que la app de V+V → los datos se comparten.
@@ -107,7 +107,17 @@ async function uploadArchivo(dataUrl, carpeta, nombre) {
 const uid = () => Math.random().toString(36).slice(2, 9);
 const hoyStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
 const money = (n) => (Number(n) || 0).toLocaleString("es-AR") + " $";
-const parseMontoNum = (m) => { if (!m) return 0; return parseFloat(String(m).replace(/[^0-9.]/g, '')) || 0; };
+const parseMontoNum = (m) => {
+  // En Argentina el punto es separador de MILES y la coma es el decimal.
+  // Antes: parseFloat("120.000.000") -> 120. Un presupuesto de 120 millones se leía como 120 pesos.
+  if (m == null || m === "") return 0;
+  if (typeof m === "number") return isFinite(m) ? m : 0;
+  let s = String(m).replace(/[^0-9.,-]/g, "");
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  else s = s.replace(/\./g, "");
+  const n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+};
 function fileToDataUrl(f, maxW = 1400) {
   return new Promise((res, rej) => {
     const reader = new FileReader();
@@ -277,9 +287,187 @@ function nuevoPedido({ de, para, asunto, detalle, prioridad, obra_id }) { const 
 // por una lectura vieja. Ahora aplica el cambio directo sobre el estado que React YA tiene
 // actualizado (mantenido al día por el sondeo) — instantáneo, sin depender de la red, y sin
 // la carrera entre dos escrituras que se cruzan.
+// ── GUARDADO DE PEDIDOS SIN PISAR LO DEL OTRO ──────────────────────────
+// PROBLEMA que esto resuelve: antes cada app escribía la LISTA ENTERA en la nube.
+// Si V+V creaba un pedido y el Cliente creaba otro antes de sondear (el sondeo tarda
+// 4s), el Cliente escribía su lista —que todavía no tenía el pedido de V+V— y lo
+// borraba para todos. Con 6 personas usando la app a la vez, esto pasa seguido.
+//
+// SOLUCIÓN: antes de guardar, traigo lo último de la nube y FUSIONO pedido por pedido.
+// Gana la versión más nueva de cada uno (campo "upd"). Los borrados quedan anotados
+// como "tumbas" para que la fusión no los resucite.
+const TUMBAS_PED = "vv_pedidos_del";
+function leerTumbas() { try { return JSON.parse(localStorage.getItem(TUMBAS_PED) || "{}"); } catch { return {}; } }
+
+async function persistirPedidos(lista, tumbasNuevas) {
+  let enNube = [], tumbasNube = {};
+  try { const r = await storage.get("vv_pedidos"); if (r?.value) enNube = JSON.parse(r.value); } catch { }
+  try { const r = await storage.get(TUMBAS_PED); if (r?.value) tumbasNube = JSON.parse(r.value); } catch { }
+  if (!Array.isArray(enNube)) enNube = [];
+
+  // uno todas las tumbas conocidas (nube + este aparato + las que acabo de hacer)
+  const tumbas = { ...tumbasNube, ...leerTumbas(), ...(tumbasNuevas || {}) };
+
+  // fusiono por id: de cada pedido me quedo con la versión más nueva
+  const porId = {};
+  for (const p of enNube) if (p && p.id) porId[p.id] = p;
+  for (const p of (lista || [])) {
+    if (!p || !p.id) continue;
+    const otro = porId[p.id];
+    if (!otro || (p.upd || 0) >= (otro.upd || 0)) porId[p.id] = p;
+  }
+
+  // saco los borrados (solo si la tumba es más nueva que el pedido)
+  const fusionada = Object.values(porId).filter(p => !(tumbas[p.id] && tumbas[p.id] >= (p.upd || 0)));
+
+  // limpio tumbas viejas para que no crezcan sin fin (30 días)
+  const corte = Date.now() - 30 * 24 * 3600 * 1000;
+  for (const k of Object.keys(tumbas)) if (tumbas[k] < corte) delete tumbas[k];
+
+  const ts = Date.now();
+  lastWrite["vv_pedidos"] = ts;
+  try {
+    localStorage.setItem(TUMBAS_PED, JSON.stringify(tumbas));
+    localStorage.setItem("vv_pedidos", JSON.stringify(fusionada));
+    localStorage.setItem("vv_pedidos__ts", String(ts));
+  } catch { }
+  await storage.set("vv_pedidos", JSON.stringify(fusionada));
+  await storage.set("vv_pedidos__ts", String(ts));
+  await storage.set(TUMBAS_PED, JSON.stringify(tumbas));
+  return fusionada;
+}
+
+/* ═══ MATERIALES: la misma fusión que los pedidos ═══
+   Antes las dos apps escribían la lista ENTERA y sin sello de fecha. Resultado:
+   marcabas "Levantar" acá, V+V reescribía la lista vieja, y como el sello no cambiaba,
+   al recargar volvías a adoptar los datos viejos. El "Levantado" se perdía.
+   Ahora se fusiona por id (gana la versión más nueva de cada pedido) y siempre se
+   escribe el sello. Los borrados quedan en tumbas para que no resuciten.          */
+const TUMBAS_MAT = "vv_matpedidos_del";
+function leerTumbasMat() { try { return JSON.parse(localStorage.getItem(TUMBAS_MAT) || "{}"); } catch { return {}; } }
+
+async function persistirMats(lista, tumbasNuevas) {
+  let enNube = [], tumbasNube = {};
+  try { const r = await storage.get("vv_matpedidos"); if (r?.value) enNube = JSON.parse(r.value); } catch { }
+  try { const r = await storage.get(TUMBAS_MAT); if (r?.value) tumbasNube = JSON.parse(r.value); } catch { }
+  if (!Array.isArray(enNube)) enNube = [];
+
+  const tumbas = { ...tumbasNube, ...leerTumbasMat(), ...(tumbasNuevas || {}) };
+
+  const porId = {};
+  for (const p of enNube) if (p && p.id) porId[p.id] = p;
+  for (const p of (lista || [])) {
+    if (!p || !p.id) continue;
+    const otro = porId[p.id];
+    if (!otro || (p.upd || 0) >= (otro.upd || 0)) porId[p.id] = p;
+  }
+
+  const fusionada = Object.values(porId).filter(p => !(tumbas[p.id] && tumbas[p.id] >= (p.upd || 0)));
+
+  const corte = Date.now() - 30 * 24 * 3600 * 1000;
+  for (const k of Object.keys(tumbas)) if (tumbas[k] < corte) delete tumbas[k];
+
+  let salida = fusionada;
+  const escribir = async (lista) => {
+    const ts = Date.now();
+    lastWrite["vv_matpedidos"] = ts;
+    try {
+      localStorage.setItem(TUMBAS_MAT, JSON.stringify(tumbas));
+      localStorage.setItem("vv_matpedidos", JSON.stringify(lista));
+      localStorage.setItem("vv_matpedidos__ts", String(ts));
+    } catch { }
+    await storage.set("vv_matpedidos", JSON.stringify(lista));
+    await storage.set("vv_matpedidos__ts", String(ts));
+    await storage.set(TUMBAS_MAT, JSON.stringify(tumbas));
+  };
+  await escribir(salida);
+
+  // SEGUNDA PASADA. Si la otra app escribió en el mismo instante, leyó la nube ANTES
+  // que yo escribiera y me pisó. Vuelvo a leer y fusiono otra vez: como gana el 'upd'
+  // más nuevo de cada pedido, esta pasada recupera lo mío sin borrar lo de ella.
+  for (let intento = 0; intento < 2; intento++) {
+    let ahoraNube = [];
+    try { const r = await storage.get("vv_matpedidos"); if (r?.value) ahoraNube = JSON.parse(r.value); } catch { }
+    if (!Array.isArray(ahoraNube)) ahoraNube = [];
+
+    const m = {};
+    for (const p of ahoraNube) if (p && p.id) m[p.id] = p;
+    for (const p of salida) {
+      if (!p || !p.id) continue;
+      const otro = m[p.id];
+      if (!otro || (p.upd || 0) >= (otro.upd || 0)) m[p.id] = p;
+    }
+    const rehecha = Object.values(m).filter(p => !(tumbas[p.id] && tumbas[p.id] >= (p.upd || 0)));
+
+    if (JSON.stringify(rehecha) === JSON.stringify(ahoraNube)) { salida = rehecha; break; }
+    salida = rehecha;
+    await escribir(salida);
+  }
+  return salida;
+}
+
+/* Aplica un cambio local y lo persiste fusionando. Solo los que cambiaron reciben
+   sello nuevo; así no piso versiones más nuevas de los que no toqué. */
+function aplicarMats(setMats, fn) {
+  setMats(prev => {
+    const antes = prev || [];
+    const mapaAntes = {};
+    for (const p of antes) if (p && p.id) mapaAntes[p.id] = p;
+
+    const crudo = typeof fn === "function" ? fn(antes) : fn;
+    const lista = Array.isArray(crudo) ? crudo : [];
+    const ahora = Date.now();
+
+    // sello nuevo solo a los que cambiaron
+    const conSello = lista.map(p => {
+      if (!p || !p.id) return p;
+      const viejo = mapaAntes[p.id];
+      const cambio = !viejo || JSON.stringify(viejo) !== JSON.stringify(p);
+      return cambio ? { ...p, upd: ahora } : p;
+    });
+
+    // los que desaparecieron: a la tumba
+    const idsAhora = new Set(conSello.map(p => p && p.id).filter(Boolean));
+    const tumbasNuevas = {};
+    for (const p of antes) if (p && p.id && !idsAhora.has(p.id)) tumbasNuevas[p.id] = ahora;
+
+    persistirMats(conSello, tumbasNuevas);
+    return conSello;
+  });
+}
+
 function aplicarPedidos(setPedidos, fn) {
   let next;
-  setPedidos(prev => { next = fn((prev || []).slice()); return next; });
+  setPedidos(prev => {
+    const antes = prev || [];
+    const mapaAntes = {};
+    for (const p of antes) if (p && p.id) mapaAntes[p.id] = p;
+
+    const bruto = fn(antes.slice());
+    const ahora = Date.now();
+
+    // marco con la hora SOLO los pedidos que realmente cambiaron: si marcara todos,
+    // pisaría los cambios que el otro hizo en pedidos que yo no toqué.
+    next = (bruto || []).map(p => {
+      if (!p || !p.id) return p;
+      const a = mapaAntes[p.id];
+      const cambio = !a || JSON.stringify({ ...a, upd: 0 }) !== JSON.stringify({ ...p, upd: 0 });
+      return cambio ? { ...p, upd: ahora } : p;
+    });
+
+    // lo que estaba antes y ya no está = borrado -> le pongo la tumba
+    const tumbas = {};
+    for (const p of antes) if (p && p.id && !next.some(x => x && x.id === p.id)) tumbas[p.id] = ahora;
+
+    // guardo en segundo plano: la pantalla ya se actualizó, esto no la traba
+    persistirPedidos(next, tumbas).then(fusionada => {
+      if (fusionada && JSON.stringify(fusionada) !== JSON.stringify(next)) {
+        setPedidos(fusionada);   // apareció algo del otro lado: lo muestro
+      }
+    }).catch(() => { });
+
+    return next;
+  });
   return next;
 }
 async function ejecutarAccion(accion, miSide, ctx) {
@@ -302,7 +490,7 @@ async function ejecutarAccion(accion, miSide, ctx) {
   if (accion.tipo === "enviar_mensaje") {
     const msg = { id: uid() + Date.now(), from: miSide, texto: accion.texto || "", fecha: hoyStr(), ts: Date.now(), archivos: [] };
     let arr = []; try { const r = await storage.get("vv_mensajes"); if (r?.value) arr = JSON.parse(r.value); } catch { }
-    const next = [...arr, msg]; try { localStorage.setItem("vv_mensajes", JSON.stringify(next)); } catch { } await storage.set("vv_mensajes", JSON.stringify(next)).catch(() => { });
+    const next = [...arr, msg]; try { localStorage.setItem("vv_mensajes", JSON.stringify(next)); } catch { } { const __ts = Date.now(); lastWrite["vv_mensajes"] = __ts; try { localStorage.setItem("vv_mensajes__ts", String(__ts)); } catch { } await storage.set("vv_mensajes", JSON.stringify(next)); await storage.set("vv_mensajes__ts", String(__ts)); }
     if (ctx.setMensajes) ctx.setMensajes(next);
     try{ pushNotify("Nuevo mensaje", `Belfast: ${(accion.texto||"").slice(0,80)}`, "vv"); }catch(e){}
     return "Mensaje enviado a V+V (aparece en Mensajes).";
@@ -384,7 +572,7 @@ function FormViewer({ T, tpl, f, obraNombre, onClose }) {
       {(tpl.textos || []).filter(tx => tpl.modo !== "iav").map(tx => (f.textos?.[tx.k]) && <div key={tx.k} style={{ marginBottom: 12 }}><div style={{ fontSize: 11, fontWeight: 700, color: T.accent, textTransform: "uppercase", marginBottom: 4 }}>{tx.l}</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{f.textos[tx.k]}</div></div>)}
       {(tpl.secciones || []).map((sec, si) => <div key={si} style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12.5, fontWeight: 800, color: T.accent, marginBottom: 6 }}>{sec.t}</div>
-        {sec.items.map((it, ii) => { const v = av(`${si}:${ii}`); const ok = v === "Sí" || v === "Conf." || v === "Conforme"; const no = v === "No"; return (<div key={ii} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "5px 0", borderBottom: `1px solid ${T.bg}` }}><span style={{ fontSize: 12, color: T.text, flex: 1 }}>{it}</span><span style={{ fontSize: 11, fontWeight: 800, color: ok ? "#16A34A" : no ? "#EF4444" : T.muted, flexShrink: 0 }}>{v}</span></div>); })}
+        {(sec.items || []).map((it, ii) => { const v = av(`${si}:${ii}`); const ok = v === "Sí" || v === "Conf." || v === "Conforme"; const no = v === "No"; return (<div key={ii} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "5px 0", borderBottom: `1px solid ${T.bg}` }}><span style={{ fontSize: 12, color: T.text, flex: 1 }}>{it}</span><span style={{ fontSize: 11, fontWeight: 800, color: ok ? "#16A34A" : no ? "#EF4444" : T.muted, flexShrink: 0 }}>{v}</span></div>); })}
         {f.obs?.[si] && <div style={{ fontSize: 11.5, color: T.sub, marginTop: 6, fontStyle: "italic" }}>Obs: {f.obs[si]}</div>}
       </div>)}
       {tpl.rubros && (f.rubros || []).length > 0 && <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12.5, fontWeight: 800, color: T.accent, marginBottom: 6 }}>Rubros</div>{f.rubros.map((r, i) => <div key={i} style={{ fontSize: 12, color: T.text, padding: "4px 0", borderBottom: `1px solid ${T.bg}` }}><b>{r.rubro}</b> — {r.estado}{r.obs ? ` · ${r.obs}` : ""}</div>)}</div>}
@@ -395,6 +583,845 @@ function FormViewer({ T, tpl, f, obraNombre, onClose }) {
     </div>
   </div>);
 }
+
+// ── AVISOS EN LOS ÍCONOS ────────────────────────────────────────────────
+// Pone el punto rojo en un ícono cuando llegó algo que todavía no abriste.
+// Guarda los IDs ya vistos (no una fecha) porque no todos los registros traen
+// fecha: una obra nueva, por ejemplo, no la trae — y así igual la detectamos.
+// Queda guardado en el dispositivo, así el aviso sobrevive aunque cierres la app.
+function useAvisos(clave, mapaIds) {
+  const [vistos, setVistos] = useState(() => {
+    try { const r = localStorage.getItem(clave); return r ? JSON.parse(r) : null; } catch { return null; }
+  });
+  const guardar = (v) => { try { localStorage.setItem(clave, JSON.stringify(v)); } catch { } };
+  // La primera vez doy todo por visto: si no, al instalar la app quedaría todo en rojo.
+  useEffect(() => {
+    if (vistos === null) {
+      const init = {};
+      for (const k in mapaIds) init[k] = mapaIds[k];
+      setVistos(init); guardar(init);
+    }
+  });
+  const aviso = (cat) => {
+    if (!vistos) return 0;
+    const yaVi = new Set(vistos[cat] || []);
+    return (mapaIds[cat] || []).filter(x => !yaVi.has(x)).length;
+  };
+  const marcarVisto = (cat) => {
+    setVistos(prev => {
+      const n = { ...(prev || {}), [cat]: mapaIds[cat] || [] };
+      guardar(n); return n;
+    });
+  };
+  return { aviso, marcarVisto };
+}
+
+
+// ═══ OBRAS (compartido: idéntico a V+V) — inline, sin archivo aparte ═══
+// ══════════════════════════════════════════════════════════════════
+// ObrasGestion.jsx — COMPONENTE COMPARTIDO de gestión de Obras.
+// Lo usan App.jsx (V+V) y Cliente.jsx (Belfast) para que la pantalla
+// de Obras sea IDÉNTICA en las dos apps. No editar por separado.
+// ══════════════════════════════════════════════════════════════════
+
+const SUPA_URL_OG = "https://bxhjgxzvayszfqwlwinq.supabase.co";
+const SUPA_KEY_OG = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
+const SUPA_BUCKET_OG = "bco-media";
+const SUPA_STORAGE_URL_OG = SUPA_URL_OG + "/storage/v1";
+
+
+const mediaStorage_OG = {
+    // Subir un archivo (recibe dataURL base64) → devuelve URL pública
+    upload: async (path, dataUrl) => {
+        try {
+            // Convertir dataURL a Blob
+            const res = await fetch(dataUrl);
+            const blob = await res.blob();
+            const ext = blob.type.split('/')[1] || 'jpg';
+            const filePath = `${path}.${ext}`;
+
+            // Subir al bucket
+            const r = await fetch(`${SUPA_STORAGE_URL_OG}/object/${SUPA_BUCKET_OG}/${filePath}`, {
+                method: "POST",
+                headers: {
+                    "apikey": SUPA_KEY_OG,
+                    "Authorization": "Bearer " + SUPA_KEY_OG,
+                    "Content-Type": blob.type,
+                    "x-upsert": "true"
+                },
+                body: blob
+            });
+            if (!r.ok) return null;
+            // Devolver URL pública
+            return `${SUPA_STORAGE_URL_OG}/object/public/${SUPA_BUCKET_OG}/${filePath}`;
+        } catch { return null; }
+    },
+    // Eliminar archivo del bucket
+    remove: async (path) => {
+        try {
+            await fetch(`${SUPA_STORAGE_URL_OG}/object/${SUPA_BUCKET_OG}/${path}`, {
+                method: "DELETE",
+                headers: { "apikey": SUPA_KEY_OG, "Authorization": "Bearer " + SUPA_KEY_OG }
+            });
+        } catch { }
+    },
+    // Detectar si una URL es del bucket (ya subida) o base64 local
+    isRemoteUrl: (url) => url && (url.startsWith('http://') || url.startsWith('https://')),
+};
+
+async function uploadFoto(dataUrl, carpeta, nombre) {
+    if (!dataUrl) return null;
+    // Si ya es URL remota, no re-subir
+    if (mediaStorage_OG.isRemoteUrl(dataUrl)) return dataUrl;
+    const path = `${carpeta}/${nombre || uid_OG()}`;
+    const remoteUrl = await mediaStorage_OG.upload(path, dataUrl);
+    return remoteUrl || dataUrl; // fallback a base64 si falla
+}
+
+function compressImage(dataUrl, maxDim = 1600, quality = 0.7) {
+    return new Promise((resolve) => {
+        try {
+            if (!dataUrl || !dataUrl.startsWith("data:image")) { resolve(dataUrl); return; }
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    let { width, height } = img;
+                    if (width > maxDim || height > maxDim) {
+                        if (width >= height) { height = Math.round(height * maxDim / width); width = maxDim; }
+                        else { width = Math.round(width * maxDim / height); height = maxDim; }
+                    }
+                    const canvas = document.createElement("canvas");
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL("image/jpeg", quality));
+                } catch { resolve(dataUrl); }
+            };
+            img.onerror = () => resolve(dataUrl);
+            img.src = dataUrl;
+        } catch { resolve(dataUrl); }
+    });
+}
+
+const DEFAULT_UBICACIONES = [{ id: "norte", code: "NORTE", name: "Zona Norte" }, { id: "sur", code: "SUR", name: "Zona Sur" }, { id: "oeste", code: "OESTE", name: "Zona Oeste" }, { id: "caba", code: "CABA", name: "Ciudad de Buenos Aires" }];
+
+const DEFAULT_TEXTOS = {
+    nav_ia: "IA", nav_inicio: "Inicio", nav_obras: "Obras", nav_personal: "Personal", nav_cargar: "Cargar", nav_mas: "Más", nav_privado: "Privado",
+    dash_titulo: "Panel operativo", dash_subtitulo: "V+V Construcciones",
+    dash_proyectoes: "Proyectos", dash_obras_activas: "Obras activas", dash_alertas: "Alertas", dash_personal: "Personal",
+    dash_obras_curso: "Obras en curso", dash_ver_todas: "Ver todas →", dash_acciones: "Acciones rápidas",
+    dash_nueva_lic: "Nueva proyecto", dash_nueva_obra: "Nueva obra", dash_presup_mat: "Presupuesto materiales", dash_subcontratos: "Subcontratos",
+    obras_titulo: "Obras", obras_nueva: "Nueva obra", obras_avance: "Avance", obras_inicio: "Inicio", obras_cierre: "Cierre est.",
+    obras_sector: "Sector", obras_estado: "Estado", obras_info: "Info", obras_notas: "Notas", obras_fotos: "Fotos", obras_archivos: "Archivos",
+    obras_obs_placeholder: "Registrar observación...", obras_sin_notas: "Sin notas", obras_sin_fotos: "Sin fotos", obras_sin_archivos: "Sin archivos",
+    obras_agregar_fotos: "Agregar fotos", obras_agregar_arch: "Agregar archivo", obras_eliminar: "Eliminar obra",
+    lic_titulo: "Proyectos", lic_nueva: "Nueva proyecto", lic_nombre: "Nombre", lic_monto: "Monto", lic_fecha: "Fecha", lic_sector: "Sector",
+    lic_crear: "Crear proyecto", lic_eliminar: "Eliminar",
+    pers_titulo: "Personal de Obra", pers_nuevo: "Nuevo trabajador", pers_nombre: "Nombre", pers_rol: "Rol", pers_empresa: "Empresa",
+    pers_obra: "Obra", pers_whatsapp: "WhatsApp", pers_documentacion: "Documentación", pers_sin_personal: "Sin personal registrado",
+    pers_eliminar: "Eliminar trabajador", pers_agregar: "Agregar",
+    carg_titulo: "Registro de Avance", carg_sub: "Fotos + Informe IA", carg_sel_obra: "Seleccioná la obra",
+    carg_fotos: "Cargá fotos nuevas", carg_tomar: "Tomar foto", carg_galeria: "Galería / PC",
+    carg_generar: "Comparar y generar informe", carg_analizando: "Analizando...",
+    carg_informe: "Informe generado", carg_nuevo: "+ Nuevo", carg_descargar: "⬇ Descargar",
+    chat_titulo: "IA", chat_placeholder: "Escribí o usá el micrófono…",
+    chat_hablar: "Hablar", chat_escuchando: "Escuchando…", chat_pausar: "Pausar", chat_voz_auto: "Voz auto",
+    mas_titulo: "Más opciones", mas_config: "Configuración", mas_config_sub: "Estética · Logos · Empresa · Admin",
+    mas_cerrar_sesion: "Cerrar sesión",
+    cfg_cuenta: "Cuenta y empresa", cfg_tema: "Tema visual", cfg_tipografia: "Tipografía",
+    cfg_forma: "Forma de los elementos", cfg_logos: "Logos y textos", cfg_textos: "Textos de la app",
+    cfg_guardar: "✓ Guardar y cerrar", cfg_restaurar: "↺ Restaurar tema por defecto",
+};
+
+const OBRA_ESTADOS = [{ id: "pendiente", label: "Pendiente", color: "#94A3B8", bg: "#F8FAFC" }, { id: "curso", label: "En Curso", color: "#10B981", bg: "#ECFDF5" }, { id: "pausada", label: "Pausada", color: "#F59E0B", bg: "#FFFBEB" }, { id: "terminada", label: "Terminada", color: "#6366F1", bg: "#EEF2FF" }];
+
+function t(cfg, key) { return cfg?.textos?.[key] || DEFAULT_TEXTOS[key] || key; }
+function getLabelUbic(cfg) { return cfg?.labelUbicacion || "Zona/Barrio"; }
+
+// ── helpers extra para la ficha/form ──
+async function callAI_OG(msgs, sys, apiKey, useSearch = false) {
+    msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
+    const body = {
+        model: "claude-sonnet-5",
+        thinking: { type: "disabled" },
+        max_tokens: useSearch ? 4096 : 4096,
+        messages: msgs,
+    };
+    if (sys) body.system = sys;
+    if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 5, user_location: { type: "approximate", city: "Buenos Aires", region: "Buenos Aires", country: "AR", timezone: "America/Argentina/Buenos_Aires" } }];
+
+    // Intenta primero el proxy serverless (/api/claude, clave del lado del servidor).
+    // Si no existe (hosting estático) cae a la API directa con la key de Configuración.
+    async function doFetch(b) {
+        try {
+            const rp = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+            if (rp.ok) return { ok: true, data: await rp.json() };
+            if (rp.status !== 404) {
+                try { const e = await rp.json(); return { ok: false, err: e.error?.message || `Error ${rp.status}` }; } catch { return { ok: false, err: `Error ${rp.status}` }; }
+            }
+        } catch { /* sin proxy: seguimos al modo directo */ }
+        if (!apiKey) return { ok: false, err: "⚠ Falta configurar la IA: agregá la API Key en Más → Configuración, o configurá el proxy (variable ANTHROPIC_API_KEY en Vercel)." };
+        const headers = { "Content-Type": "application/json", "anthropic-dangerous-direct-browser-access": "true", "anthropic-version": "2023-06-01", "x-api-key": apiKey };
+        const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(b) });
+        if (!r.ok) { try { const e = await r.json(); return { ok: false, err: e.error?.message || `Error ${r.status}` }; } catch { return { ok: false, err: `Error ${r.status}` }; } }
+        return { ok: true, data: await r.json() };
+    }
+
+    try {
+        const res = await doFetch(body);
+        if (!res.ok) return res.err;
+        let d = res.data;
+        if (d.error) return `Error: ${d.error.message || 'Sin respuesta.'}`;
+        // La búsqueda web es del lado del servidor (Anthropic la ejecuta sola).
+        // Si la respuesta queda en pausa, se continúa reenviando lo acumulado.
+        let guard = 0;
+        while (d.stop_reason === 'pause_turn' && guard < 4) {
+            guard++;
+            const cont = await doFetch({ ...body, messages: [...msgs, { role: 'assistant', content: d.content }] });
+            if (!cont.ok || cont.data?.error) break;
+            d = cont.data;
+        }
+        const txt = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+        return txt || 'Sin respuesta.';
+    } catch (e) {
+        return `Error de conexión: ${e.message || 'Revisá la configuración de la IA.'}`;
+    }
+}
+async function descargarArchivo_OG(url, nombre) {
+    const r = await abrirArchivo(url, nombre);
+    if (!r.ok) alert("Este archivo todavía no está guardado en este dispositivo.\n\nAbrilo una vez con conexión y, de ahí en adelante, se va a poder ver sin internet.");
+    return r.ok;
+}
+function formatMonto(val) {
+    const nums = String(val).replace(/[^\d]/g, '');
+    if (!nums) return '';
+    return nums.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' $';
+}
+function parseMonto(val) { return String(val).replace(/[^\d]/g, ''); }
+function parseMontoNum_OG(m) {
+  // OJO: en Argentina el punto es separador de MILES y la coma es el decimal.
+  // Antes hacía parseFloat("120.000.000") -> 120 (tomaba el punto como decimal):
+  // un presupuesto de 120 millones se leía como 120 pesos.
+  if (m == null || m === "") return 0;
+  if (typeof m === "number") return isFinite(m) ? m : 0;
+  let s = String(m).replace(/[^0-9.,-]/g, "");   // saco $, espacios, letras
+  if (s.includes(",")) {
+    s = s.replace(/\./g, "").replace(",", ".");  // 1.234.567,89 -> 1234567.89
+  } else {
+    s = s.replace(/\./g, "");                    // 1.234.567 -> 1234567
+  }
+  const n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+}
+function getBase64(d) { return d.split(',')[1]; }
+function getMediaType(d) { const m = d.match(/data:([^;]+);/); return m ? m[1] : 'image/jpeg'; }
+function toDataUrl(f, maxW = 1400) {
+    return new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            if (!f.type.startsWith('image/')) { res(e.target.result); return; }
+            const img = new Image();
+            img.onload = () => {
+                if (img.width <= maxW) { res(e.target.result); return; }
+                const c = document.createElement('canvas');
+                const ratio = maxW / img.width;
+                c.width = maxW; c.height = Math.round(img.height * ratio);
+                c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+                res(c.toDataURL('image/jpeg', 0.85));
+            };
+            img.onerror = () => res(e.target.result);
+            img.src = e.target.result;
+        };
+        reader.onerror = rej;
+        reader.readAsDataURL(f);
+    });
+}
+
+function getUbics(cfg) { return (cfg?.ubicaciones?.length ? cfg.ubicaciones : DEFAULT_UBICACIONES); }
+
+function uid_OG() { return Math.random().toString(36).slice(2, 9); }
+
+const money_OG = (n) => (Number(n) || 0).toLocaleString("es-AR") + " $";
+
+const hoyStr_OG = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
+
+const T = { bg: "var(--bg,#F1F5F9)", card: "var(--card,#fff)", border: "var(--border,#E2E8F0)", text: "var(--text,#0F172A)", sub: "var(--sub,#475569)", muted: "var(--muted,#94A3B8)", accent: "var(--accent,#1D4ED8)", accentLight: "var(--al,#EFF6FF)", navy: "var(--navy,#0F172A)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
+
+function Card_OG({ children, style = {}, onClick }) { return <div onClick={onClick} style={{ background: T.card, borderRadius: T.r, border: `1px solid ${T.border}`, boxShadow: T.shadow, ...style }}>{children}</div>; }
+function Badge_OG({ color, bg, children, style = {} }) { return <span style={{ display: "inline-flex", alignItems: "center", fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 20, padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em", ...style }}>{children}</span>; }
+function PBtn_OG({ children, onClick, disabled, full, style = {}, variant = "primary" }) {
+    const v = { primary: { background: disabled ? "#E2E8F0" : "var(--accent,#1D4ED8)", color: disabled ? "#94A3B8" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "#FEF2F2", border: "1.5px solid #FECACA", color: "#EF4444", boxShadow: "none" } };
+    return <button onClick={onClick} disabled={disabled} style={{ ...v[variant], borderRadius: T.rsm, padding: "11px 20px", fontSize: 14, fontWeight: 600, width: full ? "100%" : "auto", transition: "all .15s", ...style }}>{children}</button>;
+}
+function Sheet({ title, onClose, children }) { return (<div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 200, display: "flex", alignItems: "flex-end", backdropFilter: "blur(2px)" }}><div style={{ background: T.card, borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "90vh", overflow: "auto", animation: "up .25s ease", paddingBottom: 32 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 0" }}><span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{title}</span><button onClick={onClose} style={{ background: T.bg, border: "none", borderRadius: 20, width: 32, height: 32, fontSize: 18, color: T.muted, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button></div><div style={{ padding: "14px 20px 0" }}>{children}</div></div></div>); }
+function Lbl({ children }) { return <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>{children}</div>; }
+function TInput({ value, onChange, placeholder, type = "text", extraStyle = {} }) { return <input type={type} value={value} onChange={onChange} placeholder={placeholder} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text, ...extraStyle }} />; }
+function Sel({ value, onChange, children }) { return <select value={value} onChange={onChange} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }}>{children}</select>; }
+function FieldRow({ children }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>{children}</div>; }
+function Field({ label, children }) { return <div style={{ marginBottom: 12 }}><Lbl>{label}</Lbl>{children}</div>; }
+function PlusBtn({ onClick }) { return <button onClick={onClick} style={{ background: "var(--accent,#1D4ED8)", color: "#fff", border: "none", borderRadius: 20, width: 34, height: 34, fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,.2)" }}>+</button>; }
+function AppHeader({ title, sub, right, back, onBack }) { return (<div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "12px 18px", flexShrink: 0, position: "sticky", top: 0, zIndex: 10 }}><div style={{ display: "flex", alignItems: "center", gap: 10 }}>{back && <button onClick={onBack} style={{ background: T.bg, border: "none", borderRadius: 10, width: 32, height: 32, fontSize: 16, color: T.sub, display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>}<div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 700, color: T.text, lineHeight: 1.2 }}>{title}</div>{sub && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{sub}</div>}</div>{right}</div></div>); }
+
+function MontoInput({ value, onChange, placeholder }) {
+    const [display, setDisplay] = useState(value ? formatMonto(parseMonto(value)) : value || '');
+    useEffect(() => { setDisplay(value ? formatMonto(parseMonto(value)) : value || ''); }, [value]);
+    function handleChange(e) {
+        const raw = parseMonto(e.target.value);
+        const fmt = raw ? formatMonto(raw) : '';
+        setDisplay(fmt);
+        onChange(fmt);
+    }
+    return <input value={display} onChange={handleChange} placeholder={placeholder || '0 $'} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} />;
+}
+
+function TabFotos({ detail, upd, fileRef, handleFoto, videoRef, handleVideo, apiKey, cfg }) {
+    const [loadingIA, setLoadingIA] = useState(false);
+    const [informe, setInforme] = useState('');
+    const [selFotos, setSelFotos] = useState([]);
+    const [modoSel, setModoSel] = useState(false);
+    const fotos = detail.fotos || [];
+    const videos = detail.videos || [];
+
+    function toggleSel(id) { setSelFotos(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]); }
+
+    async function analizarFotos() {
+        if (!apiKey) { setInforme('⚠ Configurá tu API Key en Más → Configuración para usar esta función.'); return; }
+        const fotosAAnalizar = selFotos.length > 0 ? fotos.filter(f => selFotos.includes(f.id)) : fotos.slice(-8);
+        if (!fotosAAnalizar.length) { setInforme('Agregá al menos una foto para analizar.'); return; }
+        setLoadingIA(true); setInforme('');
+        try {
+            const content = [];
+            fotosAAnalizar.forEach(f => {
+                try { content.push({ type: 'image', source: { type: 'base64', media_type: getMediaType(f.url), data: getBase64(f.url) } }); } catch { }
+            });
+            content.push({
+                type: 'text', text: `Analizá estas ${fotosAAnalizar.length} fotos de la obra "${detail.nombre}" (${detail.sector || '—'}, avance declarado: ${detail.avance}%).
+
+Generá un informe profesional V+V Construcciones con:
+1. **Estado general de la obra**
+2. **Avance estimado** — ¿coincide con el ${detail.avance}% declarado?
+3. **Trabajos en ejecución**
+4. **Correcciones y recomendaciones**
+5. **Alertas de seguridad**
+6. **Conclusión**
+
+Usá un tono técnico y profesional. Respondé en español rioplatense.`});
+
+            const r = await callAI_OG([{ role: 'user', content }],
+                `Sos un inspector de obras de obras para V+V Construcciones. Analizás fotos y generás informes técnicos precisos y profesionales en español rioplatense. Si identificás materiales o trabajos, podés buscar precios actualizados en internet para incluir estimaciones de costo.`,
+                apiKey, true);
+            setInforme(r);
+            const nuevoInf = { id: uid_OG(), ts: Date.now(), titulo: `Análisis IA — ${new Date().toLocaleDateString('es-AR')}`, tipo: 'diario', fecha: new Date().toLocaleDateString('es-AR'), notas: 'Generado automáticamente por IA a partir de fotos', nombre: 'informe_ia.txt', ext: 'IA', url: 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(r))), size: '—', cargado: new Date().toLocaleDateString('es-AR') };
+            upd(detail.id, { informes: [nuevoInf, ...(detail.informes || [])] });
+        } catch (e) { setInforme('Error al analizar: ' + e.message); }
+        setLoadingIA(false); setModoSel(false); setSelFotos([]);
+    }
+
+    return (<div>
+        <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleFoto} style={{ display: "none" }} />
+        <input ref={videoRef} type="file" accept="video/*" multiple onChange={handleVideo} style={{ display: "none" }} />
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            <PBtn_OG onClick={() => fileRef.current?.click()} style={{ flex: 1, padding: "11px 0", fontSize: 13 }}>{t(cfg, 'obras_agregar_fotos')}</PBtn_OG>
+            <button onClick={() => videoRef.current?.click()} style={{ background: T.accentLight, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>🎥 Video</button>
+            {fotos.length > 0 && <button onClick={() => { setModoSel(v => !v); setSelFotos([]); }} style={{ background: modoSel ? T.accent : T.accentLight, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12, fontWeight: 700, color: modoSel ? "#fff" : T.accent, cursor: "pointer", flexShrink: 0 }}>
+                {modoSel ? "Cancelar" : "Seleccionar"}
+            </button>}
+        </div>
+        {fotos.length > 0 && (<button onClick={analizarFotos} disabled={loadingIA} style={{ width: "100%", background: loadingIA ? "#94A3B8" : T.navy, border: "none", borderRadius: T.rsm, padding: "13px", marginBottom: 14, cursor: loadingIA ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#fff", fontSize: 13, fontWeight: 700 }}>
+            {loadingIA
+                ? <><div style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin .8s linear infinite" }} />Analizando fotos con IA…</>
+                : <>{modoSel && selFotos.length > 0 ? `Analizar ${selFotos.length} foto${selFotos.length > 1 ? 's' : ''} seleccionada${selFotos.length > 1 ? 's' : ''}` : "Analizar fotos con IA"}</>}
+        </button>)}
+        {modoSel && <div style={{ fontSize: 11, color: T.muted, textAlign: "center", marginBottom: 10 }}>{selFotos.length === 0 ? "Tocá las fotos que querés analizar" : `${selFotos.length} seleccionada${selFotos.length > 1 ? "s" : ""}`}</div>}
+        {fotos.length === 0
+            ? <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_fotos')}</div>
+            : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: informe ? 14 : 0 }}>
+                {fotos.map(f => {
+                    const sel = selFotos.includes(f.id);
+                    return (<div key={f.id} onClick={() => modoSel && toggleSel(f.id)} style={{ borderRadius: T.rsm, overflow: "hidden", border: `2px solid ${sel ? "#10B981" : T.border}`, cursor: modoSel ? "pointer" : "default", position: "relative" }}>
+                        {sel && <div style={{ position: "absolute", top: 5, right: 5, width: 20, height: 20, borderRadius: "50%", background: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</div>}
+                        <img src={f.url} alt="" style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", opacity: modoSel && !sel ? .6 : 1, transition: "opacity .2s" }} />
+                        <div style={{ padding: "5px 8px", fontSize: 9, color: T.muted, background: T.card }}>{f.fecha}</div>
+                        <button onClick={e => { e.stopPropagation(); upd(detail.id, { fotos: fotos.filter(x => x.id !== f.id) }); }} style={{ position: "absolute", top: 5, left: 5, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,.5)", border: "none", color: "#fff", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>✕</button>
+                    </div>);
+                })}
+            </div>}
+        {videos.length > 0 && <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Videos ({videos.length})</div>
+            {videos.map(v => <div key={v.id} style={{ marginBottom: 10, borderRadius: T.rsm, overflow: "hidden", border: `1px solid ${T.border}` }}>
+                <video src={v.url} controls playsInline style={{ width: "100%", display: "block", background: "#000" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", background: T.card }}><span style={{ fontSize: 10.5, color: T.muted }}>{v.nombre || "video"} · {v.fecha}</span><button onClick={() => upd(detail.id, { videos: videos.filter(x => x.id !== v.id) })} style={{ background: "none", border: "none", color: "#EF4444", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar</button></div>
+            </div>)}
+        </div>}
+        {informe && (<Card_OG style={{ padding: "14px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} /><span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Informe IA generado</span></div>
+                <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => { try { navigator.clipboard.writeText(informe); } catch { } }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 10px", fontSize: 11, color: T.sub, cursor: "pointer" }}>📋 Copiar</button>
+                    <button onClick={() => setInforme('')} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, padding: "4px 8px", fontSize: 11, color: "#EF4444", cursor: "pointer" }}>✕</button>
+                </div>
+            </div>
+            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "12px 14px", fontSize: 12, color: T.text, lineHeight: 1.7, whiteSpace: "pre-wrap", maxHeight: 320, overflowY: "auto" }}>{informe}</div>
+        </Card_OG>)}
+    </div>);
+}
+
+function TabInformes({ detail, upd }) {
+    const [subTab, setSubTab] = useState("diario");
+    const [showNew, setShowNew] = useState(false);
+    const [form, setForm] = useState({ titulo: '', tipo: 'diario', fecha: '', notas: '' });
+    const fileRef = useRef(null);
+    const informes = detail.informes || [];
+    const TIPOS_INF = [
+        { id: 'diario', label: 'Diario', color: '#3B82F6', bg: '#EFF6FF' },
+        { id: 'semanal', label: 'Semanal', color: '#7C3AED', bg: '#F5F3FF' },
+        { id: 'ingeniero', label: 'Ingeniero', color: '#10B981', bg: '#ECFDF5' },
+    ];
+    async function handleFile(e) {
+        const files = Array.from(e.target.files);
+        const nuevos = [];
+        let fallaron = 0;
+        for (const f of files) {
+            // Subo el archivo real al bucket (como fotos y planos) en vez de embeber
+            // el base64 en la ficha de la obra: eso infla la sincronización con Cliente
+            // y puede fallar en silencio con archivos grandes.
+            const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+            const remoteUrl = await mediaStorage_OG.upload(`informes/${uid_OG()}_${f.name.replace(/\W+/g, "_")}`, dataUrl);
+            if (!remoteUrl) fallaron++;
+            nuevos.push({
+                id: uid_OG(), ts: Date.now(), titulo: form.titulo || f.name.replace(/\.[^.]+$/, ''),
+                tipo: form.tipo || subTab, fecha: form.fecha || new Date().toLocaleDateString('es-AR'),
+                notas: form.notas, nombre: f.name, ext: f.name.split('.').pop().toUpperCase(),
+                url: remoteUrl || dataUrl, size: (f.size / 1024).toFixed(0) + 'KB', cargado: new Date().toLocaleDateString('es-AR'),
+            });
+        }
+        if (fallaron) alert(`⚠ ${fallaron} archivo(s) quedaron guardados en este dispositivo, pero no se pudieron subir a la nube. No van a verse desde Cliente ni desde otro dispositivo hasta que los vuelvas a cargar con conexión.`);
+        upd(detail.id, { informes: [...nuevos, ...informes] });
+        setForm({ titulo: '', tipo: 'diario', fecha: '', notas: '' });
+        setShowNew(false);
+        e.target.value = '';
+    }
+    const filtered = informes.filter(i => i.tipo === subTab);
+    const tp = TIPOS_INF.find(x => x.id === subTab);
+
+    return (<div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+            {TIPOS_INF.map(tipo => (<button key={tipo.id} onClick={() => setSubTab(tipo.id)} style={{ flex: 1, padding: "8px 4px", borderRadius: 20, border: `1.5px solid ${subTab === tipo.id ? tipo.color : T.border}`, background: subTab === tipo.id ? tipo.bg : T.card, color: tipo.color, fontSize: 11, fontWeight: subTab === tipo.id ? 700 : 500, cursor: "pointer" }}>{tipo.label} ({informes.filter(i => i.tipo === tipo.id).length})</button>))}
+        </div>
+        <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.xlsx,.xls,.txt,.jpg,.png" multiple onChange={handleFile} style={{ display: "none" }} />
+        <button onClick={() => setShowNew(true)} style={{ width: "100%", background: tp?.bg, border: `1.5px dashed ${tp?.color}`, borderRadius: T.rsm, padding: "12px", marginBottom: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <span style={{ fontSize: 18, color: tp?.color }}>+</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: tp?.color }}>Subir informe {tp?.label}</span>
+        </button>
+        {filtered.length === 0
+            ? <div style={{ textAlign: "center", padding: "28px 0", color: T.muted, fontSize: 12 }}>Sin informes {tp?.label?.toLowerCase()}s cargados</div>
+            : filtered.map(inf => (<div key={inf.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 9, background: tp?.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: tp?.color }}>{inf.ext}</span>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inf.titulo}</div>
+                    <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{inf.fecha} · {inf.size}</div>
+                </div>
+                <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                    <button onClick={() => descargarArchivo_OG(inf.url, inf.nombre)} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>↓</button>
+                    <button onClick={() => upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) })} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
+                </div>
+            </div>))}
+        {showNew && (<Sheet title={`Subir informe ${tp?.label}`} onClose={() => setShowNew(false)}>
+            <Field label="Título (opcional)"><TInput value={form.titulo || ""} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} placeholder="Título del informe" /></Field>
+            <FieldRow>
+                <Field label="Tipo"><Sel value={form.tipo || ""} onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))}>{TIPOS_INF.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</Sel></Field>
+                <Field label="Fecha"><TInput value={form.fecha || ""} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aa" /></Field>
+            </FieldRow>
+            <Field label="Notas"><textarea value={form.notas || ""} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} placeholder="Observaciones..." rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} /></Field>
+            <PBtn_OG full onClick={() => fileRef.current?.click()}>📎 Seleccionar archivo</PBtn_OG>
+        </Sheet>)}
+    </div>);
+}
+
+// ── OBRAS ────────────────────────────────────────────────────────────
+// ── TAB GASTOS (dentro de cada Obra) ─────────────────────────────────
+const TIPOS_GASTO = [
+    { id: 'viatico', label: 'Viático', color: '#F59E0B', bg: '#FFFBEB' },
+    { id: 'compra', label: 'Compra material', color: '#3B82F6', bg: '#EFF6FF' },
+    { id: 'herramienta', label: 'Herramienta', color: '#8B5CF6', bg: '#F5F3FF' },
+    { id: 'subcontrato', label: 'Subcontrato', color: '#10B981', bg: '#ECFDF5' },
+    { id: 'combustible', label: 'Combustible', color: '#F97316', bg: '#FFF7ED' },
+    { id: 'otro', label: 'Otro', color: '#6B7280', bg: '#F9FAFB' },
+];
+
+function TabGastos({ detail, upd }) {
+    const [showNew, setShowNew] = useState(false);
+    const [form, setForm] = useState({ desc: '', tipo: 'viatico', monto: '', fecha: new Date().toLocaleDateString('es-AR'), quien: '', comprobante: null });
+    const compRef = useRef(null);
+    const gastos = detail.gastos || [];
+
+    const total = gastos.reduce((s, g) => s + parseMontoNum_OG(g.monto), 0);
+    const porTipo = TIPOS_GASTO.map(t => ({ ...t, total: gastos.filter(g => g.tipo === t.id).reduce((s, g) => s + parseMontoNum_OG(g.monto), 0) })).filter(t => t.total > 0);
+
+    async function handleComp(e) {
+        const f = e.target.files?.[0]; if (!f) return;
+        const url = await toDataUrl(f);
+        setForm(p => ({ ...p, comprobante: { url, nombre: f.name, ext: f.name.split('.').pop().toUpperCase() } }));
+        e.target.value = '';
+    }
+
+    function agregar() {
+        if (!String(form.desc || "").trim() || !form.monto) return;
+        const nuevo = { id: uid_OG(), ...form };
+        upd(detail.id, { gastos: [...gastos, nuevo] });
+        setForm({ desc: '', tipo: 'viatico', monto: '', fecha: new Date().toLocaleDateString('es-AR'), quien: '', comprobante: null });
+        setShowNew(false);
+    }
+
+    function eliminar(id) { upd(detail.id, { gastos: gastos.filter(g => g.id !== id) }); }
+
+    return (<div>
+        {/* Resumen */}
+        <div style={{ background: T.navy, borderRadius: T.rsm, padding: "14px 16px", marginBottom: 14, color: "#fff" }}>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Total gastos — {detail.nombre}</div>
+            <div style={{ fontSize: 26, fontWeight: 800 }}>${total.toLocaleString('es-AR')}</div>
+            {porTipo.length > 0 && <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                {porTipo.map(t => (
+                    <div key={t.id} style={{ background: "rgba(255,255,255,.1)", borderRadius: 8, padding: "4px 10px" }}>
+                        <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)" }}>{t.label}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>${t.total.toLocaleString('es-AR')}</div>
+                    </div>
+                ))}
+            </div>}
+        </div>
+
+        <button onClick={() => setShowNew(true)} style={{ width: "100%", background: T.accent, border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z" /></svg>
+            Cargar gasto
+        </button>
+
+        {gastos.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: T.muted, fontSize: 13 }}>Sin gastos registrados</div>
+        ) : (
+            [...gastos].reverse().map(g => {
+                const tipo = TIPOS_GASTO.find(t => t.id === g.tipo) || TIPOS_GASTO[5];
+                return (<div key={g.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3 }}>
+                                <span style={{ background: tipo.bg, color: tipo.color, borderRadius: 20, padding: "2px 9px", fontSize: 10, fontWeight: 700, border: `1px solid ${tipo.color}22` }}>{tipo.label}</span>
+                                <span style={{ fontSize: 11, color: T.muted }}>{g.fecha}</span>
+                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{g.desc}</div>
+                            {g.quien && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>👤 {g.quien}</div>}
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: T.accent }}>${parseMontoNum_OG(g.monto).toLocaleString('es-AR')}</div>
+                        </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {g.comprobante && (
+                            <a href={g.comprobante.url} download={g.comprobante.nombre} style={{ textDecoration: "none", flex: 1 }}>
+                                <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 10px", display: "flex", alignItems: "center", gap: 6 }}>
+                                    <div style={{ width: 24, height: 24, borderRadius: 5, background: T.accentLight, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 800 }}>{g.comprobante.ext}</div>
+                                    <span style={{ fontSize: 11, color: T.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.comprobante.nombre}</span>
+                                    <span style={{ fontSize: 10, color: T.accent, fontWeight: 600, marginLeft: "auto" }}>↓</span>
+                                </div>
+                            </a>
+                        )}
+                        <button onClick={() => eliminar(g.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "6px 10px", fontSize: 11, color: "#EF4444", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>✕</button>
+                    </div>
+                </div>);
+            })
+        )}
+
+        {showNew && (<Sheet title="Cargar gasto" onClose={() => setShowNew(false)}>
+            <Field label="Descripción">
+                <TInput value={form.desc || ""} onChange={e => setForm(p => ({ ...p, desc: e.target.value }))} placeholder="Ej: Cemento Portland 25kg" />
+            </Field>
+            <Lbl>Tipo de gasto</Lbl>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 12 }}>
+                {TIPOS_GASTO.map(t => (
+                    <button key={t.id} onClick={() => setForm(p => ({ ...p, tipo: t.id }))} style={{ padding: "8px 4px", borderRadius: T.rsm, border: `1.5px solid ${form.tipo === t.id ? t.color : T.border}`, background: form.tipo === t.id ? t.bg : T.card, color: t.color, fontSize: 10, fontWeight: 700, cursor: "pointer" }}>{t.label}</button>
+                ))}
+            </div>
+            <FieldRow>
+                <Field label="Monto ($)">
+                    <MontoInput value={form.monto || ""} onChange={v => setForm(p => ({ ...p, monto: v }))} placeholder="0 $" />
+                </Field>
+                <Field label="Fecha">
+                    <TInput value={form.fecha || ""} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aa" />
+                </Field>
+            </FieldRow>
+            <Field label="Quién realizó el gasto (opcional)">
+                <TInput value={form.quien || ""} onChange={e => setForm(p => ({ ...p, quien: e.target.value }))} placeholder="Nombre del trabajador" />
+            </Field>
+            <Field label="Comprobante (foto o PDF)">
+                <input ref={compRef} type="file" accept="image/*,.pdf" onChange={handleComp} style={{ display: "none" }} />
+                {form.comprobante ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#ECFDF5", border: "1px solid #86EFAC", borderRadius: T.rsm, padding: "10px 12px" }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", flex: 1 }}>✓ {form.comprobante.nombre}</div>
+                        <button onClick={() => setForm(p => ({ ...p, comprobante: null }))} style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 14 }}>✕</button>
+                    </div>
+                ) : (
+                    <button onClick={() => compRef.current?.click()} style={{ width: "100%", background: T.bg, border: `1.5px dashed ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 12, fontWeight: 600, color: T.sub, cursor: "pointer" }}>
+                        📎 Adjuntar comprobante
+                    </button>
+                )}
+            </Field>
+            <PBtn_OG full onClick={agregar} disabled={!String(form.desc || "").trim() || !form.monto}>Guardar gasto</PBtn_OG>
+        </Sheet>)}
+    </div>);
+}
+
+function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId: setDetailIdProp, requireAuth = (fn) => fn(), cfg, apiKey }) {
+    const [detailIdLocal, setDetailIdLocal] = useState(null);
+    const detailId = detailIdProp !== undefined ? detailIdProp : detailIdLocal;
+    const setDetailId = setDetailIdProp || setDetailIdLocal;
+    const UBICS = getUbics(cfg);
+    const defaultAp = UBICS[0]?.id || 'aep';
+    const [showNew, setShowNew] = useState(false);
+    const [tab, setTab] = useState("info");
+    const [form, setForm] = useState({ nombre: "", ap: defaultAp, sector: "", estado: "pendiente", avance: 0, inicio: "", cierre: "" });
+    const [newObs, setNewObs] = useState("");
+    const fileRef = useRef(null); const archRef = useRef(null); const videoRef = useRef(null); const planoRef = useRef(null);
+    const detail = detailId ? obras.find(o => o.id === detailId) : null;
+
+    // Actualizar form.ap si cambian las UBICS
+    useEffect(() => {
+        setForm(f => ({ ...f, ap: UBICS[0]?.id || f.ap }));
+    }, [UBICS.length]);
+
+    function add() {
+        if (!String(form.nombre || "").trim()) return;
+        const apFinal = form.ap || UBICS[0]?.id || defaultAp;
+        setObras(p => [...p, { ...form, ap: apFinal, id: uid_OG(), avance: parseInt(form.avance) || 0, pagado: 0, obs: [], fotos: [], archivos: [], informes: [], docs: {} }]);
+        setForm({ nombre: "", ap: UBICS[0]?.id || defaultAp, sector: "", estado: "pendiente", avance: 0, inicio: "", cierre: "" });
+        setShowNew(false);
+    }
+    function upd(id, patch) {
+        setObras(p => p.map(o => o.id === id ? { ...o, ...patch } : o));
+    }
+    async function handleFoto(e) {
+        if (!detail) return;
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        const nuevas = await Promise.all(files.map(async f => {
+            const dataUrl = await toDataUrl(f);
+            const comprimida = await compressImage(dataUrl);
+            const fotoId = uid_OG();
+            // Subir al bucket — devuelve URL pública o base64 como fallback
+            const url = await uploadFoto(comprimida, `obras/${detail.id}`, fotoId);
+            return { id: fotoId, url, nombre: f.name, fecha: new Date().toLocaleDateString("es-AR") };
+        }));
+        const fallaron = nuevas.some(n => !mediaStorage_OG.isRemoteUrl(n.url));
+        upd(detail.id, { fotos: [...(detail.fotos || []), ...nuevas] });
+        e.target.value = "";
+        if (fallaron) alert("⚠ Las fotos quedaron guardadas en este dispositivo, pero NO se pudieron subir a la nube. Para que se sincronicen entre dispositivos y se vean en la app de Belfast, falta configurar el bucket de fotos 'bco-media' en Supabase (crearlo, hacerlo público y darle permisos). Mirá las instrucciones que te pasó la app.");
+    }
+    async function handlePlano(e) {
+        if (!detail) return;
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        const nuevos = [];
+        for (const f of files) {
+            const dataUrl = await toDataUrl(f);
+            const url = await uploadFoto(dataUrl, `planos/${detail.id}`, `${Date.now()}_${(f.name || "plano").replace(/\W+/g, "_")}`);
+            if (!mediaStorage_OG.isRemoteUrl(url)) { alert(`El plano "${f.name}" NO se pudo subir a la nube (bucket 'bco-media' en Supabase). No lo guardo local para no romper la sincronización.`); continue; }
+            const ext = (f.name.split(".").pop() || "").toLowerCase();
+            nuevos.push({ id: uid_OG(), nombre: f.name, url, fecha: new Date().toLocaleDateString("es-AR"), from: "vv", tipo: ext });
+        }
+        e.target.value = "";
+        if (!nuevos.length) return;
+        upd(detail.id, { planos: [...(detail.planos || []), ...nuevos] });
+    }
+    async function handleVideo(e) {
+        if (!detail) return;
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        const nuevos = [];
+        for (const f of files) {
+            if (f.size > 60 * 1024 * 1024) { alert(`El video "${f.name}" pesa ${(f.size / 1048576).toFixed(0)} MB. Subí videos de hasta ~60 MB (grabá más corto o en menor calidad).`); continue; }
+            const dataUrl = await toDataUrl(f);
+            const vidId = uid_OG();
+            const url = await uploadFoto(dataUrl, `obras/${detail.id}/videos`, vidId);
+            if (!mediaStorage_OG.isRemoteUrl(url)) { alert(`El video "${f.name}" NO se pudo subir a la nube, así que no lo guardo (guardarlo local rompería la sincronización de la app). Revisá que el bucket 'bco-media' de Supabase exista, sea público y tenga permisos, y volvé a intentar.`); continue; }
+            nuevos.push({ id: vidId, url, nombre: f.name, fecha: new Date().toLocaleDateString("es-AR") });
+        }
+        e.target.value = "";
+        if (!nuevos.length) return;
+        upd(detail.id, { videos: [...(detail.videos || []), ...nuevos] });
+    }
+    async function handleArch(e) {
+        if (!detail) return;
+        for (const f of Array.from(e.target.files)) {
+            const dataUrl = await toDataUrl(f);
+            const archId = uid_OG();
+            const url = await uploadFoto(dataUrl, `obras/${detail.id}/archivos`, archId);
+            upd(detail.id, { archivos: [...detail.archivos, { id: archId, url, nombre: f.name, ext: f.name.split(".").pop().toUpperCase(), fecha: new Date().toLocaleDateString("es-AR") }] });
+        }
+        e.target.value = "";
+    }
+    const ec = id => OBRA_ESTADOS.find(e => e.id === id) || OBRA_ESTADOS[0];
+
+    if (detail) {
+        const e = ec(detail.estado);
+        return (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap} · ${detail.sector || t(cfg, 'obras_sector')}`} back onBack={() => setDetailId(null)} right={<Badge_OG color={e.color} bg={e.bg}>{e.label}</Badge_OG>} />
+                <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "12px 18px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 600 }}>{t(cfg, 'obras_avance')}</span><span style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{detail.avance}%</span></div>
+                    <div style={{ height: 8, background: T.bg, borderRadius: 4 }}><div style={{ height: 8, background: T.accent, borderRadius: 4, width: `${detail.avance}%`, transition: "width .5s" }} /></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_inicio')}: {detail.inicio || "—"}</span><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_cierre')}: {detail.cierre || "—"}</span></div>
+                    <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#1D4ED8)", marginTop: 10 }} />
+                </div>
+                <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, display: "flex", overflowX: "auto" }}>
+                    {[[`info`, t(cfg, 'obras_info')], [`obs`, t(cfg, 'obras_notas')], [`fotos`, t(cfg, 'obras_fotos')], [`planos`, 'Planos'], [`archivos`, t(cfg, 'obras_archivos')], [`informes`, 'Informes'], [`gastos`, 'Gastos']].map(([id, label]) => (
+                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#1D4ED8)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
+                    ))}
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
+                    {tab === "info" && (<div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{getLabelUbic(cfg)}</div>
+                                <select value={detail.ap} onChange={e => upd(detail.id, { ap: e.target.value })} style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0, cursor: "pointer" }}>
+                                    {UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}
+                                </select>
+                            </div>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_sector')}</div>
+                                <input value={detail.sector || ''} onChange={e => upd(detail.id, { sector: e.target.value })} placeholder="Sin sector" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
+                            </div>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_inicio')}</div>
+                                <input value={detail.inicio || ''} onChange={e => upd(detail.id, { inicio: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
+                            </div>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_cierre')}</div>
+                                <input value={detail.cierre || ''} onChange={e => upd(detail.id, { cierre: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
+                            </div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Presupuesto</div>
+                                <input value={detail.monto || ''} onChange={e => upd(detail.id, { monto: e.target.value })} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
+                            </div>
+                            <div style={{ background: detail.pagado > 0 ? "#ECFDF5" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>💰 Pagado</div>
+                                <input value={detail.pagado || ''} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); upd(detail.id, { pagado: v ? parseFloat(v) : 0 }); }} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: "#10B981", padding: 0 }} />
+                            </div>
+                        </div>
+                        <Lbl>{t(cfg, 'obras_estado')}</Lbl>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
+                            {OBRA_ESTADOS.map(e => (<button key={e.id} onClick={() => upd(detail.id, { estado: e.id })} style={{ padding: "9px", borderRadius: T.rsm, border: `1.5px solid ${detail.estado === e.id ? e.color : T.border}`, background: detail.estado === e.id ? e.bg : T.card, color: e.color, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{e.label}</button>))}
+                        </div>
+                        <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "#FEF2F2", border: "1.5px solid #FECACA", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
+                    </div>)}
+                    {tab === "obs" && (<div>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                            <TInput value={newObs} onChange={e => setNewObs(e.target.value)} placeholder={t(cfg, 'obras_obs_placeholder')} />
+                            <PBtn_OG onClick={() => { if (!newObs.trim()) return; const tx = newObs; setNewObs(""); upd(detail.id, { obs: [...detail.obs, { id: uid_OG(), txt: tx, fecha: new Date().toLocaleDateString("es-AR") }] }); }} disabled={!newObs.trim()} style={{ padding: "11px 16px", flexShrink: 0 }}>+</PBtn_OG>
+                        </div>
+                        {[...detail.obs].reverse().map(o => (<Card_OG key={o.id} style={{ padding: "12px 14px", marginBottom: 8 }}><div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{o.txt}</div><div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>{o.fecha}</div></Card_OG>))}
+                        {(detail.obs || []).length === 0 && <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_notas')}</div>}
+                    </div>)}
+                    {tab === "fotos" && (<TabFotos detail={detail} upd={upd} fileRef={fileRef} handleFoto={handleFoto} videoRef={videoRef} handleVideo={handleVideo} apiKey={apiKey} cfg={cfg} />)}
+                    {tab === "planos" && (<div>
+                        <input ref={planoRef} type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={handlePlano} style={{ display: "none" }} />
+                        <button onClick={() => planoRef.current && planoRef.current.click()} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS_OG}`, marginBottom: 14 }}>＋ Subir plano (PDF / CAD)</button>
+                        {(detail.planos || []).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "22px 16px", lineHeight: 1.5 }}>Sin planos cargados.<br />Subí acá los planos de la obra (PDF, DWG, DXF…). Belfast también los ve y los puede subir.</div>}
+                        {(detail.planos || []).map(p => <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 7 }}>
+                            <div style={{ width: 34, height: 34, borderRadius: 8, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>📐</div>
+                            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{p.nombre}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}</div></div>
+                            <a href={p.url} target="_blank" rel="noreferrer" download={p.nombre} style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a>
+                            <button onClick={() => upd(detail.id, { planos: (detail.planos || []).filter(x => x.id !== p.id) })} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+                        </div>)}
+                    </div>)}
+                    {tab === "archivos" && (<div>
+                        <input ref={archRef} type="file" accept=".pdf,.xlsx,.xls,.docx,.doc" multiple onChange={handleArch} style={{ display: "none" }} />
+                        <PBtn_OG full onClick={() => archRef.current?.click()} style={{ marginBottom: 14 }}>{t(cfg, 'obras_agregar_arch')}</PBtn_OG>
+                        {(detail.archivos || []).map(f => (<div key={f.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 7 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 8, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><span style={{ fontSize: 9, fontWeight: 700, color: T.accent }}>{f.ext}</span></div>
+                            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{f.fecha}</div></div>
+                            <a href={f.url} download={f.nombre} style={{ textDecoration: "none" }}><button style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, width: 30, height: 30, fontSize: 13, color: T.sub, cursor: "pointer" }}>↓</button></a>
+                        </div>))}
+                        {(detail.archivos || []).length === 0 && <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_archivos')}</div>}
+                    </div>)}
+                    {tab === "informes" && <TabInformes detail={detail} upd={upd} />}
+                    {tab === "gastos" && <TabGastos detail={detail} upd={upd} />}
+                </div>
+            </div>
+        );
+    }
+
+    return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
+        <AppHeader title={t(cfg, 'obras_titulo')} sub={`${obras.length} registros`} right={<PlusBtn onClick={() => requireAuth(() => setShowNew(true), t(cfg, 'obras_nueva'))} />} />
+        <div style={{ padding: "14px 18px" }}>
+            {OBRA_ESTADOS.map(est => {
+                const items = obras.filter(o => o.estado === est.id);
+                if (!items.length) return null;
+                return (<div key={est.id} style={{ marginBottom: 16 }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}><div style={{ width: 7, height: 7, borderRadius: "50%", background: est.color }} /><span style={{ fontSize: 11, fontWeight: 700, color: est.color, textTransform: "uppercase", letterSpacing: "0.06em" }}>{est.label}</span><span style={{ fontSize: 11, color: T.muted }}>({items.length})</span></div>
+                    {items.map(o => (<Card_OG key={o.id} onClick={() => setDetailId(o.id)} style={{ padding: "13px 14px", marginBottom: 7, cursor: "pointer" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{o.nombre}</div><span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{o.avance}%</span></div>
+                        <div style={{ height: 4, background: T.bg, borderRadius: 4, marginBottom: 6 }}><div style={{ height: 4, background: T.accent, borderRadius: 4, width: `${o.avance}%` }} /></div>
+                        <div style={{ fontSize: 11, color: T.muted }}>{UBICS.find(a => a.id === o.ap)?.code || o.ap} · {o.sector || "Sin sector"} · {o.cierre || "—"}</div>
+                    </Card_OG>))}
+                </div>);
+            })}
+        </div>
+        {showNew && (<Sheet title={t(cfg, 'obras_nueva')} onClose={() => setShowNew(false)}>
+            <Field label={t(cfg, 'obras_titulo')}><TInput value={form.nombre || ""} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Refacción Terminal B" /></Field>
+            <FieldRow>
+                <Field label={getLabelUbic(cfg)}><Sel value={form.ap || ""} onChange={e => setForm(p => ({ ...p, ap: e.target.value }))}>{UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}</Sel></Field>
+                <Field label={t(cfg, 'obras_estado')}><Sel value={form.estado || ""} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))}>{OBRA_ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</Sel></Field>
+            </FieldRow>
+            <FieldRow>
+                <Field label={t(cfg, 'obras_sector')}><TInput value={form.sector || ""} onChange={e => setForm(p => ({ ...p, sector: e.target.value }))} placeholder="Sector A" /></Field>
+                <Field label={`${t(cfg, 'obras_avance')} %`}><TInput type="number" value={form.avance || ""} onChange={e => setForm(p => ({ ...p, avance: e.target.value }))} placeholder="0" /></Field>
+            </FieldRow>
+            <FieldRow>
+                <Field label={t(cfg, 'obras_inicio')}><TInput value={form.inicio || ""} onChange={e => setForm(p => ({ ...p, inicio: e.target.value }))} placeholder="dd/mm/aa" /></Field>
+                <Field label={t(cfg, 'obras_cierre')}><TInput value={form.cierre || ""} onChange={e => setForm(p => ({ ...p, cierre: e.target.value }))} placeholder="dd/mm/aa" /></Field>
+            </FieldRow>
+            <PBtn_OG full onClick={add} disabled={!String(form.nombre || "").trim()}>{t(cfg, 'obras_nueva')}</PBtn_OG>
+        </Sheet>)}
+    </div>);
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// PREVIEW HARNESS — V+V Construcciones · dirección institucional premium
+// Señal: hilo de bronce (regla membrete, anillo FAB, viñetas de sección).
+// ════════════════════════════════════════════════════════════════════
+
+const BRASS_OG = "#B0894F";
+const INST_COLORS = { accent:"#1E3A5F", al:"#EAEEF3", bg:"#F5F6F8", card:"#FFFFFF", border:"#E6E9EE", text:"#131C2B", sub:"#4A5565", muted:"#97A0AE", navy:"#101C2C" };
+
+const SAMPLE_OBRAS = [
+  { id:"o1", nombre:"Castores 475", ap:"norte", sector:"Vivienda PB+1", estado:"curso", avance:68, inicio:"10/03/26", cierre:"30/08/26", monto:"12.400.000 $", pagado:8100000, obs:[{id:"b1",txt:"Hormigón visto terminado en PB.",fecha:"20/06/26"}], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
+  { id:"o2", nombre:"Puentes 132", ap:"norte", sector:"Refacción integral", estado:"curso", avance:41, inicio:"02/04/26", cierre:"15/09/26", monto:"7.900.000 $", pagado:3000000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
+  { id:"o3", nombre:"Golf 2–93", ap:"caba", sector:"Obra nueva", estado:"curso", avance:23, inicio:"20/05/26", cierre:"20/12/26", monto:"21.000.000 $", pagado:0, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
+  { id:"o5", nombre:"A 37", ap:"caba", sector:"Fit-out comercial", estado:"terminada", avance:100, inicio:"01/11/25", cierre:"28/02/26", monto:"9.200.000 $", pagado:9200000, obs:[], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
+];
+const SAMPLE_LICS = [
+  { id:"l1", nombre:"Refacción Terminal B", ap:"norte", estado:"presupuesto", monto:"18.000.000 $", fecha:"12/06/26", sector:"Terminal B", docs:{}, visitas:[] },
+  { id:"l2", nombre:"Oficinas Copeland Suipacha", ap:"caba", estado:"presentada", monto:"6.400.000 $", fecha:"02/06/26", sector:"Piso 25", docs:{}, visitas:[] },
+  { id:"l3", nombre:"Obra Saavedra", ap:"caba", estado:"visitar", monto:"", fecha:"28/06/26", sector:"Lote", docs:{}, visitas:[] },
+  { id:"l4", nombre:"Castores 475", ap:"norte", estado:"adjudicada", monto:"12.400.000 $", fecha:"01/03/26", sector:"Vivienda", docs:{}, visitas:[], lic_id:"l4" },
+];
+const SAMPLE_PERSONAL = [
+  { id:"p1", nombre:"Héctor Ayala", rol:"Director Técnico", empresa:"V+V Construcciones", obra_id:"o1", telefono:"", foto:"", tareas:[], docs:{art:{nombre:"art.pdf",vence:""},dni:{nombre:"dni.pdf"}} },
+  { id:"p2", nombre:"Marcos Giménez", rol:"Capataz", empresa:"V+V Construcciones", obra_id:"o2", telefono:"", foto:"", tareas:[], docs:{} },
+];
+const SAMPLE_ALERTS = [
+  { id:"a1", msg:"Marcos Giménez: ART vence en 3 días", prioridad:"alta" },
+  { id:"a3", msg:"Obra Saavedra: presentación de avance pendiente", prioridad:"media" },
+];
+
+// Viñeta de sección (hilo de bronce) — la firma que se repite.
+
+
+
+// ═══ fin OBRAS compartido ═══
 
 function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
   const [verForm, setVerForm] = useState(null);
@@ -472,10 +1499,10 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
             <div style={{ flex: 1, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Certificado</div><div style={{ fontSize: 12.5, fontWeight: 800, color: "#16A34A", marginTop: 2 }}>{pct}%</div></div>
             <div style={{ flex: 2, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Saldo pendiente</div><div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginTop: 2 }}>{ecoUnlocked ? money(contr - cert) : "🔒 •••••"}</div></div>
           </div>
-          <button onClick={() => setOpen(isOpen ? null : o.id)} style={{ width: "100%", marginTop: 12, background: "none", border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, color: T.accent }}>{isOpen ? "Ocultar detalle ▲" : `Ver detalle${forms.length ? ` · ${forms.length} formulario${forms.length > 1 ? "s" : ""}` : ""}${(o.planos || []).length ? ` · ${o.planos.length} plano${o.planos.length > 1 ? "s" : ""}` : ""} ▼`}</button>
+          <button onClick={() => setOpen(isOpen ? null : o.id)} style={{ width: "100%", marginTop: 12, background: "none", border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, color: T.accent }}>{isOpen ? "Ocultar detalle ▲" : `Ver detalle${forms.length ? ` · ${forms.length} formulario${forms.length > 1 ? "s" : ""}` : ""}${(o.planos || []).length ? ` · ${(o.planos || []).length} plano${(o.planos || []).length > 1 ? "s" : ""}` : ""} ▼`}</button>
           {isOpen && <div style={{ marginTop: 12 }}>
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Planos (PDF / CAD){(o.planos || []).length ? ` (${o.planos.length})` : ""}</div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Planos (PDF / CAD){(o.planos || []).length ? ` (${(o.planos || []).length})` : ""}</div>
               {(o.planos || []).map(p => <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}>
                 <div style={{ width: 30, height: 30, borderRadius: 7, background: "#EAEEF3", color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>📐</div>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{p.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}</div></div>
@@ -484,7 +1511,7 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
               </div>)}
               <label style={{ display: "block", textAlign: "center", background: T.navy, color: "#fff", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>{subP ? "Subiendo…" : "＋ Subir plano (PDF/CAD)"}<input type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={e => subirPlanos(e, o)} style={{ display: "none" }} /></label>
             </div>
-            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({o.fotos.length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{o.fotos.map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
+            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({(o.fotos || []).length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{(o.fotos || []).map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
             {(o.videos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Videos ({o.videos.length})</div>{o.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", borderRadius: 6, marginBottom: 8, background: "#000", display: "block" }} />)}</div>}
             {ts.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Cronograma</div>{ts.map(t => <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}><span style={{ flex: 1, fontSize: 12, color: T.text }}>{t.nombre}</span><div style={{ width: 70, height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${t.avance || 0}%`, background: BRASS }} /></div><span style={{ fontSize: 11, fontWeight: 700, color: T.muted, width: 32, textAlign: "right" }}>{t.avance || 0}%</span></div>)}</div>}
             {ult && <div><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Último informe · {ult.fecha}</div><div style={{ background: T.bg, borderRadius: T.rsm, padding: "11px 13px", fontSize: 12, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{ult.texto}</div></div>}
@@ -642,7 +1669,7 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "Asistente IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "obras", label: "Obra", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
 function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos }) {
@@ -722,7 +1749,7 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, loading]);
   function sys() {
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)})`).join("\n");
-    const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "cliente" ? "enviado a V+V" : "recibido de V+V"}, estado ${p.estado}) — último: ${p.hilo[p.hilo.length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
+    const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "cliente" ? "enviado a V+V" : "recibido de V+V"}, estado ${p.estado}) — último: ${(p.hilo || [])[(p.hilo || []).length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
     const per = (personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${p.telefono ? ` · tel ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.sitios || []).length ? ` [cargado en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n");
     const msj = (mensajes || []).slice(-8).map(m => `· ${m.from === "cliente" ? "Nosotros" : "V+V"}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de ${cfg.nombre} (comitente), en contacto con V+V Construcciones (la empresa que ejecuta la obra). Español rioplatense, claro y cordial. Estás CONECTADO a los mismos datos y al asistente de V+V: comparten la base de datos en tiempo real (obras, personal, pedidos, mensajes); ves lo que carga la otra empresa y ellos ven lo que cargás vos. NUNCA digas que no podés comunicarte con V+V ni con su asistente: SÍ podés, mandándoles un mensaje directo (les aparece en su pantalla de Mensajes) y ellos te responden. REGLA CLAVE: si te piden COMUNICARTE, HABLAR, AVISAR, DECIRLE o PREGUNTARLE algo a V+V, usá SIEMPRE la acción "enviar_mensaje" (se envía directo). "crear_pedido" es solo para pedidos formales de definiciones/documentación. También podés: informar sobre el avance de las obras, GESTIONAR PEDIDOS, cargar PERSONAL a los sitios/barrios (vos tramitás el acceso a los barrios privados), MANDAR WHATSAPP a los jefes de obra/contactos (usás la agenda de Personal → Contactos), y BUSCAR EN INTERNET información actual (normativa, código de edificación, proveedores, precios, datos de empresas). Priorizá fuentes argentinas y citá la fuente.
@@ -747,7 +1774,7 @@ PLANOS POR OBRA:\n${obras.map(o => (o.planos || []).length ? `· ${o.nombre}: ${
 
 TAREAS / CRONOGRAMA:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find(o => o.id === t.obra_id)?.nombre || "—"} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}
 
-PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")} — ${p.leido ? "levantado" : "no leído"}`).join("\n") || "(sin pedidos de materiales)"}
+PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(sin pedidos de materiales)"}
 
 Tenés acceso COMPLETO a todos estos datos (obras, avances, montos, fotos, informes, formularios, archivos, documentación, tareas, materiales, personal, contactos, pedidos). Cuando te pidan un DATO PUNTUAL, buscalo y dá el valor EXACTO; no digas "no lo tengo" si está arriba. Las fotos y videos no los "ves", pero sabés cuántos hay y de qué obra.
 
@@ -881,7 +1908,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
             for (const p of nuevosMat) {
               const obraN = obras.find(o => o.id === p.obra_id)?.nombre || "obra";
               const jefe = (contactos || []).find(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()) || (personal || []).find(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim());
-              const lines = p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n");
+              const lines = (p.items || []).map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n");
               const txt = `*Pedido de materiales* — ${obraN}\nFecha: ${p.fecha}\n\n${lines}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
               const t = encodeURIComponent(txt);
               const clean = jefe ? String(jefe.telefono).replace(/\D/g, "") : "";
@@ -996,7 +2023,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
   function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
-  async function responderIA(p) { setIaLoad(true); const hist = p.hilo.map(h => `${h.de === miSide ? cfg.nombre : "V+V"}: ${h.texto}`).join("\n"); const sys = `Sos el agente de ${cfg.nombre} respondiendo a V+V Construcciones. Redactá una respuesta breve y concreta (español rioplatense) al último mensaje. Solo el texto.`; const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey); setReply(r); setIaLoad(false); }
+  async function responderIA(p) { setIaLoad(true); const hist = (p.hilo || []).map(h => `${h.de === miSide ? cfg.nombre : "V+V"}: ${h.texto}`).join("\n"); const sys = `Sos el agente de ${cfg.nombre} respondiendo a V+V Construcciones. Redactá una respuesta breve y concreta (español rioplatense) al último mensaje. Solo el texto.`; const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey); setReply(r); setIaLoad(false); }
   const Pill = (k, l) => <button key={k} onClick={() => setFiltro(k)} style={{ flex: 1, padding: "8px", borderRadius: T.rsm, border: `1px solid ${filtro === k ? T.accent : T.border}`, background: filtro === k ? "#EAEEF3" : T.card, color: filtro === k ? T.accent : T.sub, fontSize: 12, fontWeight: 700 }}>{l}</button>;
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
@@ -1008,7 +2035,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
         </div>); })()}
         <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>{Pill("todos", "Todos")}{Pill("recibidos", "Recibidos")}{Pill("enviados", "Enviados")}</div>
         <button onClick={() => setNuevo({ asunto: "", detalle: "", prioridad: "media", obra_id: obras[0]?.id || "" })} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, marginBottom: 16 }}>＋ Nuevo pedido a V+V</button>
-        {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 18px" }}>Sin pedidos. Creá uno o pedíselo al Asistente IA.</div>}
+        {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 18px" }}>Sin pedidos. Creá uno o pedíselo a la IA.</div>}
         {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado] || PEDIDO_ESTADOS.abierto; const ult = (p.hilo || [])[p.hilo?.length - 1]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9 }}>
           <div onClick={() => { setOpen(p.id); setReply(""); }} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ minWidth: 0 }}>
@@ -1036,7 +2063,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
           <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
         </Card>
         <Eyebrow T={T}>Hilo</Eyebrow>
-        {cur.hilo.map((h, i) => { const mine = h.de === miSide; return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
+        {(cur.hilo || []).map((h, i) => { const mine = h.de === miSide; return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
           <div style={{ maxWidth: "85%" }}>
             <div style={{ background: mine ? T.accent : T.card, color: mine ? "#fff" : T.text, border: mine ? "none" : `1px solid ${T.border}`, borderRadius: mine ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "10px 13px", fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
               {h.texto}
@@ -1058,11 +2085,11 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
     {nuevo && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={() => setNuevo(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 1180, margin: "0 auto", padding: "20px", animation: "up .25s ease" }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 14 }}>Nuevo pedido a V+V</div>
-        <input value={nuevo.asunto} onChange={e => setNuevo({ ...nuevo, asunto: e.target.value })} placeholder="Asunto" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 9 }} />
-        <textarea value={nuevo.detalle} onChange={e => setNuevo({ ...nuevo, detalle: e.target.value })} placeholder="Detalle de la solicitud" rows={4} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 9 }} />
+        <input value={nuevo.asunto || ""} onChange={e => setNuevo({ ...nuevo, asunto: e.target.value })} placeholder="Asunto" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 9 }} />
+        <textarea value={nuevo.detalle || ""} onChange={e => setNuevo({ ...nuevo, detalle: e.target.value })} placeholder="Detalle de la solicitud" rows={4} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 9 }} />
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>¿De qué obra?</label>
-        <select value={nuevo.obra_id} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 9px" }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}<option value="">Sin obra específica</option></select>
-        <select value={nuevo.prioridad} onChange={e => setNuevo({ ...nuevo, prioridad: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 12 }}><option value="alta">Prioridad alta</option><option value="media">Prioridad media</option><option value="baja">Prioridad baja</option></select>
+        <select value={nuevo.obra_id || ""} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 9px" }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}<option value="">Sin obra específica</option></select>
+        <select value={nuevo.prioridad || ""} onChange={e => setNuevo({ ...nuevo, prioridad: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, marginBottom: 12 }}><option value="alta">Prioridad alta</option><option value="media">Prioridad media</option><option value="baja">Prioridad baja</option></select>
         <PBtn T={T} full onClick={crear}>Crear y enviar</PBtn>
       </div>
     </div>}
@@ -1080,11 +2107,11 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
   const [cForm, setCForm] = useState(null);
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   function nuevoC() { setCForm({ nombre: "", rol: "Jefe de obra", obra_id: obras[0]?.id || "", telefono: "" }); }
-  function guardarC() { if (!cForm.nombre.trim() || !cForm.telefono.trim()) { alert("Poné al menos nombre y teléfono."); return; } if (cForm.id) setContactos(p => (p || []).map(x => x.id === cForm.id ? cForm : x)); else setContactos(p => [...(p || []), { ...cForm, id: uid() + Date.now() }]); setCForm(null); }
+  function guardarC() { if (!String(cForm.nombre || "").trim() || !String(cForm.telefono || "").trim()) { alert("Poné al menos nombre y teléfono."); return; } if (cForm.id) setContactos(p => (p || []).map(x => x.id === cForm.id ? cForm : x)); else setContactos(p => [...(p || []), { ...cForm, id: uid() + Date.now() }]); setCForm(null); }
   function borrarC(id) { if (confirm("¿Eliminar este contacto?")) setContactos(p => (p || []).filter(x => x.id !== id)); }
   const diasHasta = (s) => { if (!s) return null; const [d, m, y] = s.split("/"); return Math.ceil((new Date(`20${y}`, m - 1, d) - new Date()) / 86400000); };
   const lista = personal.filter(p => !filtroObra || p.obra_id === filtroObra);
-  const sitios = [...new Set(obras.map(o => o.nombre))];
+  const sitios = [...new Set((obras || []).map(o => o.nombre).filter(Boolean))];   // saco las obras sin nombre: generaban claves vacías
   function toggle(id) { setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]); }
   async function ejecutarCarga() {
     if (!sitio.trim() || sel.length === 0) return; const f = hoyStr();
@@ -1105,7 +2132,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#25D366", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>📲</div>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{c.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{c.rol || "—"} · {nomObra(c.obra_id)} · {c.telefono}</div></div>
-          <button onClick={() => setCForm(c)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+          <button onClick={() => setCForm({ id: c.id, nombre: c.nombre || "", rol: c.rol || "", obra_id: c.obra_id || "", telefono: c.telefono || "" })} style={{ background: "none", border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
           <button onClick={() => borrarC(c.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, width: 30, height: 30, fontSize: 13, cursor: "pointer" }}>✕</button>
         </div>
       </Card>))}
@@ -1176,13 +2203,13 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 1180, margin: "0 auto", padding: "20px", maxHeight: "88vh", overflowY: "auto", animation: "up .25s ease" }}>
         <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 14 }}>{cForm.id ? "Editar contacto" : "Nuevo contacto de WhatsApp"}</div>
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Nombre</label>
-        <input value={cForm.nombre} onChange={e => setCForm({ ...cForm, nombre: e.target.value })} placeholder="Ej: Juan Pérez" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }} />
+        <input value={cForm.nombre || ""} onChange={e => setCForm({ ...cForm, nombre: e.target.value })} placeholder="Ej: Juan Pérez" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }} />
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Rol</label>
-        <input value={cForm.rol} onChange={e => setCForm({ ...cForm, rol: e.target.value })} placeholder="Jefe de obra" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }} />
+        <input value={cForm.rol || ""} onChange={e => setCForm({ ...cForm, rol: e.target.value })} placeholder="Jefe de obra" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }} />
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Obra</label>
-        <select value={cForm.obra_id} onChange={e => setCForm({ ...cForm, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }}><option value="">Sin obra</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+        <select value={cForm.obra_id || ""} onChange={e => setCForm({ ...cForm, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }}><option value="">Sin obra</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Teléfono (WhatsApp)</label>
-        <input value={cForm.telefono} onChange={e => setCForm({ ...cForm, telefono: e.target.value })} placeholder="Ej: 11 5555 4444" type="tel" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 4px" }} />
+        <input value={cForm.telefono || ""} onChange={e => setCForm({ ...cForm, telefono: e.target.value })} placeholder="Ej: 11 5555 4444" type="tel" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 4px" }} />
         <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 14 }}>Con característica (ej. 11 para CABA/GBA). La app le antepone el código de país.</div>
         <PBtn T={T} full onClick={guardarC}>{cForm.id ? "Guardar cambios" : "Agregar contacto"}</PBtn>
       </div>
@@ -1213,7 +2240,7 @@ function InformesScreen({ T, obras, formularios = [] }) {
       {todos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px" }}>Todavía no hay informes técnicos publicados.</div>}
       {todos.map(inf => (<Card T={T} key={inf.id} style={{ padding: 13, marginBottom: 9 }}>
         <div onClick={() => setOpen(inf)} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{inf.titulo || "Informe"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{inf.obra} · {inf.fecha}{(inf.archivos || []).length ? ` · ${inf.archivos.length} adj.` : ""}</div></div>
+          <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{inf.titulo || "Informe"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{inf.obra} · {inf.fecha}{(inf.archivos || []).length ? ` · ${(inf.archivos || []).length} adj.` : ""}</div></div>
           <Badge c={inf.tipo === "ia" ? "#8B5CF6" : "#3B82F6"} b={inf.tipo === "ia" ? "#F5F3FF" : "#EFF6FF"}>{inf.tipo === "ia" ? "IA" : "Técnico"}</Badge>
         </div>
       </Card>))}
@@ -1253,14 +2280,18 @@ function FormulariosScreen({ T, obras, formularios = [] }) {
   </div>);
 }
 
+const TIPOS_PEDIDO_CLI = { material: { label: "Materiales", icon: "📦", color: "#1B3A5B" }, definicion: { label: "Definiciones", icon: "📐", color: "#B0894F" }, plano: { label: "Planos", icon: "🗂️", color: "#3B6E9E" } };
+const tipoPedCli = (id) => TIPOS_PEDIDO_CLI[id] || TIPOS_PEDIDO_CLI.material;
+const itemsTexto = (p) => (p.items || []).map(it => (p.tipo && p.tipo !== "material") ? `${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}` : `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
+
 function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matpedidos = [], setMatpedidos }) {
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const [waFor, setWaFor] = useState(null);
-  function levantar(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, leido: true, leidoFecha: hoyStr() } : x)); }
-  function marcarEnviado(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
+  function marcarEnviado(id) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
   function waText(p) {
-    const lines = p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
-    return `*Pedido de materiales* — ${nomObra(p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
+    const tp = tipoPedCli(p.tipo);
+    const lines = itemsTexto(p).map(l => `• ${l}`);
+    return `*Pedido de ${tp.label.toLowerCase()}* — ${nomObra(p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
   }
   function waLink(text, phone) {
     const t = encodeURIComponent(text);
@@ -1270,20 +2301,18 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
   const lista = (matpedidos || []).filter(p => p.de !== "cliente").sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "16px 20px" }}>
-      <Eyebrow T={T}>Pedidos de materiales de V+V</Eyebrow>
+      <Eyebrow T={T}>Pedidos de V+V · materiales, definiciones y planos</Eyebrow>
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px", lineHeight: 1.55 }}>Todavía no recibiste pedidos de materiales.<br />Cuando V+V cargue uno, aparece acá.</div>}
-      {lista.map(p => { const jefes = [...(contactos || []).filter(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()), ...(personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim())]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${p.leido ? T.border : "#EF4444"}`, background: p.leido ? T.card : "#FFFBEB" }}>
+      {lista.map(p => { const jefes = [...(contactos || []).filter(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()), ...(personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim())]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${tipoPedCli(p.tipo).color}` }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{nomObra(p.obra_id)} · {p.fecha}<span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.de === "vv" ? "V+V" : (p.empresa || "Contratista")}</span>{!p.leido && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 800, color: "#fff", background: "#EF4444", borderRadius: 5, padding: "2px 7px" }}>NUEVO</span>}</div>
-          <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{p.items.map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join("\n")}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoPedCli(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 8 }}>{tipoPedCli(p.tipo).icon} {tipoPedCli(p.tipo).label}</span>{nomObra(p.obra_id)} · {p.fecha}<span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.de === "vv" ? "V+V" : (p.empresa || "Contratista")}</span></div>
+          <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{itemsTexto(p).map(l => `• ${l}`).join("\n")}</div>
           {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 5, fontStyle: "italic" }}>{p.nota}</div>}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 11 }}>
-          {!p.leido && <button onClick={() => levantar(p.id)} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>Levantar</button>}
           <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar por WhatsApp</button>
-          <button onClick={() => { if (confirm("¿Eliminar este pedido de materiales? Se borra para las dos empresas.")) setMatpedidos(prev => (prev || []).filter(x => x.id !== p.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: T.rsm, padding: "10px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕</button>
+          <button onClick={() => { if (confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) aplicarMats(setMatpedidos, prev => (prev || []).filter(x => x.id !== p.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: T.rsm, padding: "10px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
-        {p.leido && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#16A34A", marginTop: 8 }}>✓ Levantado{p.leidoFecha ? " · " + p.leidoFecha : ""}</div>}
         {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 5 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
         {waFor === p.id && <div style={{ marginTop: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
@@ -1324,7 +2353,7 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion }) {
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
       <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Desempeño medido sobre los pedidos (plazo {g.plazo} días háb.). Vista de seguimiento.</div>
       {items.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin ítems.</div>}
-      {items.map(it => { const e = GEST_ESTADOS[it.estado]; const pj = perItem(it); return (<Card T={T} key={it.id} style={{ padding: 13, marginBottom: 9 }}>
+      {items.map(it => { const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); return (<Card T={T} key={it.id} style={{ padding: 13, marginBottom: 9 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
             <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
@@ -1360,8 +2389,8 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion }) {
 }
 
 // ── SHELL WEB INSTITUCIONAL (Cliente) ────────────────────────────────
-function WebClientHeader({ T, cfg, screen, setScreen, unread, pendientes, unreadForms, unreadMat, unreadInf, unreadIA }) {
-  const badge = (id) => (id === "mensajes" ? unread : id === "formularios" ? (unreadForms || 0) : id === "pedidos" ? pendientes : id === "materiales" ? (unreadMat || 0) : id === "informes" ? (unreadInf || 0) : id === "asistente" ? (unreadIA || 0) : 0);
+function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
+  const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);   // sirve para TODOS los íconos
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
       <div style={{ background: T.navy, color: "#fff" }}>
@@ -1438,7 +2467,7 @@ function ClienteApp() {
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
-  const unreadMat = (matpedidos || []).filter(p => p.de !== "cliente" && !p.leido).length;
+  const unreadMat = 0; // materiales es solo un registro: no genera aviso de "sin levantar"
   const pendPed = (pedidos || []).filter(p => p.para === "cliente" && p.estado !== "resuelto").length;
   const lastPed = useRef(null);
   const lastForms = useRef(null);
@@ -1454,6 +2483,25 @@ function ClienteApp() {
   const [iaDialogo, setIaDialogo] = useState([]);
   useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   const unreadIA = (iaDialogo || []).filter(m => m.from && m.from !== "cliente" && m.tipo === "q" && (m.ts || 0) > (seen.ia || 0)).length;
+
+  // ── QUÉ CUENTA COMO "NUEVO" EN CADA ÍCONO ──
+  const idsAviso = {
+    asistente:   (iaDialogo || []).filter(m => m.from && m.from !== "cliente").map(m => "ia:" + (m.id || m.ts)),
+    mensajes:    (mensajes || []).filter(m => m.from && m.from !== "cliente").map(m => "ms:" + m.id),
+    // un pedido cuenta como nuevo si es para mí, o si le agregaron un mensaje al hilo, o le cambiaron el estado
+    pedidos:     (pedidos || []).filter(p => p.para === "cliente").map(p => `pd:${p.id}:${(p.hilo || []).length}:${p.estado || ""}`),
+    materiales:  (matpedidos || []).filter(p => p.de !== "cliente").map(p => `mp:${p.id}:${p.estado || ""}`),
+    informes:    (obras || []).flatMap(o => (o.informes || []).map(i => "inf:" + (i.id || i.url || i.nombre))),
+    formularios: (formularios || []).filter(f => f.compartido).map(f => "fm:" + f.id),
+    archivos:    (archivosVV || []).map(a => "ar:" + (a.id || a.url || a.nombre)),
+    obras:       (obras || []).map(o => "ob:" + o.id),              // ← OBRA NUEVA
+    personal:    (personal || []).map(p => "pe:" + p.id),
+    gestion:     [],
+    ajustes:     [],
+  };
+  const { aviso, marcarVisto } = useAvisos("cliente_avisos", idsAviso);
+  // al abrir una pantalla, se apaga su punto rojo
+  const irA = (id) => { setScreen(id); marcarVisto(id); };
   useEffect(() => { try { if (!localStorage.getItem("cliente_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, formularios: now, materiales: now, ia: now }; localStorage.setItem("cliente_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("cliente_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("cliente_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
   useEffect(() => { initPush("belfast"); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
@@ -1462,38 +2510,70 @@ function ClienteApp() {
     try { if ("setAppBadge" in navigator) { if (total > 0) navigator.setAppBadge(total); else navigator.clearAppBadge && navigator.clearAppBadge(); } } catch { }
   }, [unreadMsg, unreadForm, unreadInf, unreadMat, pendPed]);
   const lastCount = useRef(null);
+  // espejo de los mensajes actuales, para detectar cuáles son nuevos por id
+  const mensajesRef = useRef([]);
+  useEffect(() => { mensajesRef.current = mensajes; }, [mensajes]);
 
   // Polling de mensajes y datos cada 8s → avisos en pantalla
   useEffect(() => {
     let alive = true;
     async function tick() {
-      const [rm, ro, rp, rf, rmp] = await Promise.all([storage.get("vv_mensajes"), storage.get("vv_obras"), storage.get("vv_pedidos"), storage.get("vv_formularios"), storage.get("vv_matpedidos")]);
+      const [rm, ro, rp, rf, rmp, rmTs, roTs, rpTs, rmpTs] = await Promise.all([
+        storage.get("vv_mensajes"), storage.get("vv_obras"), storage.get("vv_pedidos"), storage.get("vv_formularios"), storage.get("vv_matpedidos"),
+        storage.get("vv_mensajes__ts"), storage.get("vv_obras__ts"), storage.get("vv_pedidos__ts"), storage.get("vv_matpedidos__ts"),
+      ]);
       if (!alive) return;
-      if (rmp?.value && Date.now() - (lastWrite["vv_matpedidos"] || 0) > 8000) { try { const mp = JSON.parse(rmp.value); setMatpedidos(prev => JSON.stringify(mp) !== JSON.stringify(prev) ? mp : prev); } catch { } }
-      if (rm?.value) {
+      // Materiales: adopto la nube solo si es más nueva que mi última escritura, y
+      // NO piso los cambios que hice recién (fusiono por id, gana el 'upd' más nuevo).
+      if (rmp?.value && Number(rmpTs?.value || 0) > (lastWrite["vv_matpedidos"] || 0)) {
         try {
-          const arr = JSON.parse(rm.value);
-          if (lastCount.current === null) { lastCount.current = arr.length; }
-          else if (arr.length > lastCount.current) {
-            const nuevos = arr.slice(lastCount.current);
-            const deVV = nuevos.filter(m => m.from === "vv");
-            lastCount.current = arr.length;
-            setMensajes(arr);
-            if (deVV.length > 0) {
-              setToast(`Nuevo mensaje de V+V Construcciones`);
-              setTimeout(() => setToast(null), 4500);
-              if (screenRef.current !== "mensajes") setUnread(u => u + deVV.length);
-              try { beep(); } catch { }
-            }
-          } else { lastCount.current = arr.length; }
+          const arrN = JSON.parse(rmp.value);
+          if (Array.isArray(arrN)) {
+            lastWrite["vv_matpedidos"] = Number(rmpTs.value);
+            const tumbas = leerTumbasMat();
+            setMatpedidos(prev => {
+              const porId = {};
+              for (const p of (prev || [])) if (p && p.id) porId[p.id] = p;
+              for (const p of arrN) {
+                if (!p || !p.id) continue;
+                const mio = porId[p.id];
+                // si lo mío es más nuevo (ej: recién toqué "Levantar"), me quedo con lo mío
+                if (!mio || (p.upd || 0) > (mio.upd || 0)) porId[p.id] = p;
+              }
+              const out = Object.values(porId).filter(p => !(tumbas[p.id] && tumbas[p.id] >= (p.upd || 0)));
+              return JSON.stringify(out) !== JSON.stringify(prev) ? out : prev;
+            });
+          }
         } catch { }
       }
-      if (ro?.value && Date.now() - (lastWrite["vv_obras"] || 0) > 8000) { try { setObras(JSON.parse(ro.value)); } catch { } }
+      if (rm?.value) {
+        try {
+          // Antes solo adoptaba la lista si CRECÍA: un mensaje borrado en V+V nunca
+          // desaparecía de acá. Ahora adopta siempre que la nube sea más nueva, y
+          // detecta los nuevos por id (no por cantidad, que falla si borran y agregan).
+          const arr = JSON.parse(rm.value);
+          const cloudTs = Number(rmTs?.value || 0);
+          if (cloudTs > (lastWrite["vv_mensajes"] || 0)) {
+            const idsAntes = new Set((mensajesRef.current || []).map(m => m.id));
+            const nuevosDeVV = arr.filter(m => !idsAntes.has(m.id) && m.from === "vv");
+            lastWrite["vv_mensajes"] = cloudTs;
+            lastCount.current = arr.length;
+            setMensajes(arr);
+            if (nuevosDeVV.length > 0 && idsAntes.size > 0) {
+              setToast(`Nuevo mensaje de V+V Construcciones`);
+              setTimeout(() => setToast(null), 4500);
+              if (screenRef.current !== "mensajes") setUnread(u => u + nuevosDeVV.length);
+              try { beep(); } catch { }
+            }
+          }
+        } catch { }
+      }
+      if (ro?.value && Number(roTs?.value || 0) > (lastWrite["vv_obras"] || 0)) { try { lastWrite["vv_obras"] = Number(roTs.value); setObras(JSON.parse(ro.value)); } catch { } }
       if (rp?.value) {
         try {
-          const arr = JSON.parse(rp.value); if (Date.now() - (lastWrite["vv_pedidos"] || 0) > 8000) setPedidos(arr);
+          const arr = JSON.parse(rp.value); if (Number(rpTs?.value || 0) > (lastWrite["vv_pedidos"] || 0)) { lastWrite["vv_pedidos"] = Number(rpTs.value); setPedidos(arr); }
           // huella de pedidos recibidos cuyo último mensaje es de V+V
-          const huella = arr.filter(p => p.para === "cliente" && p.estado !== "resuelto" && p.hilo[p.hilo.length - 1]?.de === "vv").map(p => p.id + ":" + p.hilo.length).join("|");
+          const huella = arr.filter(p => p.para === "cliente" && p.estado !== "resuelto" && (p.hilo || [])[(p.hilo || []).length - 1]?.de === "vv").map(p => p.id + ":" + (p.hilo || []).length).join("|");
           if (lastPed.current === null) { lastPed.current = huella; }
           else if (huella !== lastPed.current) {
             lastPed.current = huella;
@@ -1503,8 +2583,8 @@ function ClienteApp() {
             // Auto-respuesta IA (opcional) — responde a pedidos de V+V con tope de turnos
             if (cfgRef.current?.autoIA && vvCfgRef.current?.apiKey) {
               for (const p of arr) {
-                if (p.para === "cliente" && p.estado !== "resuelto" && (p.iaTurns || 0) < PEDIDO_MAX_IA && p.hilo[p.hilo.length - 1]?.de === "vv") {
-                  const hist = p.hilo.map(h => `${h.de === "cliente" ? cfgRef.current.nombre : "V+V"}: ${h.texto}`).join("\n");
+                if (p.para === "cliente" && p.estado !== "resuelto" && (p.iaTurns || 0) < PEDIDO_MAX_IA && (p.hilo || [])[(p.hilo || []).length - 1]?.de === "vv") {
+                  const hist = (p.hilo || []).map(h => `${h.de === "cliente" ? cfgRef.current.nombre : "V+V"}: ${h.texto}`).join("\n");
                   const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta (breve y concreta).` }], `Sos el agente de ${cfgRef.current.nombre} respondiendo a V+V Construcciones. Español rioplatense. Solo el texto de la respuesta.`, vvCfgRef.current.apiKey);
                   const f = hoyStr(), ts = Date.now();
                   await aplicarPedidos(setPedidos, list => list.map(x => x.id === p.id ? { ...x, estado: "respondido", iaTurns: (x.iaTurns || 0) + 1, hilo: [...x.hilo, { de: "cliente", texto: r, fecha: f, ts, porIA: true }] } : x));
@@ -1585,12 +2665,12 @@ function ClienteApp() {
     <style>{css}</style>
     <Toast T={T} toast={toast} />
     <div style={{ width: "100%", height: "100dvh", background: "transparent", display: "flex", flexDirection: "column", position: "relative", color: T.text, overflow: "hidden" }}>
-      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={setScreen} unread={unreadMsg} pendientes={pedidos.filter(p => p.para === "cliente" && p.estado !== "resuelto").length} unreadForms={unreadForm} unreadMat={unreadMat} unreadInf={unreadInf} unreadIA={unreadIA} />
-      {screen === "obras" && <WebClientHero T={T} cfg={cfg} obras={obras} />}
+      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={irA} aviso={aviso} />
+
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} />}
-          {screen === "obras" && <ObrasScreen T={T} obras={obras} setObras={setObras} tareas={tareas} cfg={cfg} formularios={formularios} />}
+          {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} />}
