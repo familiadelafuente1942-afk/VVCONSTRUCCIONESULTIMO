@@ -672,6 +672,11 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
   const pdfUno = (h) => { setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
   const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
   const [pdfEntries, setPdfEntries] = React.useState([]);
+  async function mergeSaveAvance(oid, transform) {
+    let cloud = {};
+    try { const r = await storage.get("vv_avance"); if (r && r.value) cloud = JSON.parse(r.value) || {}; } catch (e) { }
+    setAvance(prev => { const base = { ...cloud, ...(prev || {}) }; base[oid] = transform(base[oid] || []); return base; });
+  }
   async function guardarPdf() {
     const entries = pdfEntries;
     if (!entries.length) return;
@@ -765,7 +770,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
       if (mE) descripcion = mE[1].trim();
       if (mA) avanceTxt = mA[1].trim();
       const item = { id: uid() + Date.now(), fecha: fechaHoy, ts: tsFoto, descripcion, avance: avanceTxt, fotos: urls, fotoUrl: urls[0] };
-      setAvance(prevAv => ({ ...(prevAv || {}), [obraId]: [item, ...((prevAv || {})[obraId] || [])] }));
+      await mergeSaveAvance(obraId, list => [item, ...list]);
       setPendientes([]); setStatus("");
     } catch (err) { setStatus("Hubo un error al analizar la(s) foto(s). Fijate que tengas crédito de API y probá de nuevo."); }
     setBusy(false);

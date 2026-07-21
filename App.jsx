@@ -4528,6 +4528,50 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
   const pdfUno = (h) => { setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
   const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
   const [pdfEntries, setPdfEntries] = React.useState([]);
+  // Guarda el avance mezclando con lo último de la nube por obra, para NO pisar
+  // las otras obras (evita que al subir a una obra desaparezcan las demás).
+  async function mergeSaveAvance(oid, transform) {
+    let cloud = null;
+    for (let i = 0; i < 3 && cloud === null; i++) { try { const r = await storage.get("vv_avance"); cloud = (r && r.value) ? (JSON.parse(r.value) || {}) : {}; } catch (e) { await new Promise(res => setTimeout(res, 400)); } }
+    if (cloud === null) cloud = {};
+    setAvance(prev => { const base = { ...cloud, ...(prev || {}) }; base[oid] = transform(base[oid] || []); return base; });
+  }
+  // ── RECUPERACIÓN: lista las fotos de avance que quedaron en la nube ──
+  const [recu, setRecu] = React.useState(null); // null=cerrado | array de urls "huérfanas"
+  const [recuSel, setRecuSel] = React.useState([]);
+  const [recuFecha, setRecuFecha] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [recuMsg, setRecuMsg] = React.useState("");
+  async function abrirRecuperar() {
+    setRecu([]); setRecuSel([]); setRecuMsg("Buscando fotos en la nube…");
+    try {
+      const r = await fetch(`${SUPA_STORAGE_URL}/object/list/${SUPA_BUCKET}`, { method: "POST", headers: { "Content-Type": "application/json", apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY }, body: JSON.stringify({ prefix: "avance/", limit: 1000, sortBy: { column: "created_at", order: "desc" } }) });
+      const files = await r.json();
+      const urls = (Array.isArray(files) ? files : []).filter(f => f && f.name && !f.name.endsWith("/")).map(f => `${SUPA_URL}/storage/v1/object/public/${SUPA_BUCKET}/avance/${f.name}`);
+      const usados = new Set();
+      Object.values(avance || {}).forEach(arr => (arr || []).forEach(h => { (h.fotos || []).forEach(u => usados.add(u)); if (h.fotoUrl) usados.add(h.fotoUrl); }));
+      const huerfanas = urls.filter(u => !usados.has(u));
+      setRecu(huerfanas);
+      setRecuMsg(huerfanas.length === 0 ? "No encontré fotos sueltas en la nube (o ya están todas asignadas)." : `${huerfanas.length} foto(s) encontradas sin asignar. Elegí cuáles y a qué obra van.`);
+    } catch (e) { setRecuMsg("No pude leer la nube. Revisá la conexión y probá de nuevo."); }
+  }
+  async function recuperarAObra() {
+    if (!obraId) { alert("Elegí una obra arriba."); return; }
+    if (!recuSel.length) { alert("Marcá al menos una foto."); return; }
+    const _fiso = recuFecha || new Date().toISOString().slice(0, 10);
+    const [_aa, _mm, _dd] = _fiso.split("-");
+    const item = { id: uid() + Date.now(), fecha: `${_dd}/${_mm}/${_aa.slice(2)}`, ts: new Date(_fiso + "T12:00:00").getTime(), descripcion: "Foto recuperada (sin análisis).", avance: "", fotos: [...recuSel], fotoUrl: recuSel[0] };
+    await mergeSaveAvance(obraId, list => [item, ...list]);
+    setRecu(prev => (prev || []).filter(u => !recuSel.includes(u)));
+    setRecuSel([]);
+    setRecuMsg("Listo, se asignaron a la obra. Podés seguir con el resto.");
+  }
+  function exportarBackup() {
+    try {
+      const data = { _tipo: "backup_vv_avance", fecha: new Date().toISOString(), avance: avance || {} };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `backup-avance-${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) { alert("No pude generar el backup."); }
+  }
   async function guardarPdf() {
     const entries = pdfEntries;
     if (!entries.length) return;
@@ -4621,7 +4665,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
       if (mE) descripcion = mE[1].trim();
       if (mA) avanceTxt = mA[1].trim();
       const item = { id: uid() + Date.now(), fecha: fechaHoy, ts: tsFoto, descripcion, avance: avanceTxt, fotos: urls, fotoUrl: urls[0] };
-      setAvance(prevAv => ({ ...(prevAv || {}), [obraId]: [item, ...((prevAv || {})[obraId] || [])] }));
+      await mergeSaveAvance(obraId, list => [item, ...list]);
       setPendientes([]); setStatus("");
     } catch (err) { setStatus("Hubo un error al analizar la(s) foto(s). Fijate que tengas crédito de API y probá de nuevo."); }
     setBusy(false);
@@ -4655,13 +4699,17 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
           </div>}
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
-      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>📄 PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
+      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📄 PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <button onClick={abrirRecuperar} style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>🛟 Recuperar fotos</button>
+        <button onClick={exportarBackup} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>💾 Backup</button>
+      </div>
       {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
       {historial.map((h, idx) => (<div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
         {(() => {
           const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
           if (!fs.length) return null;
-          const borrarFoto = (i) => { if (!confirm("¿Borrar esta foto del informe? El informe y las demás fotos quedan.")) return; const rest = fs.filter((_, j) => j !== i); setAvance(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(x => x.id === h.id ? { ...x, fotos: rest, fotoUrl: rest[0] || "" } : x) })); };
+          const borrarFoto = (i) => { if (!confirm("¿Borrar esta foto del informe? El informe y las demás fotos quedan.")) return; const rest = fs.filter((_, j) => j !== i); mergeSaveAvance(obraId, list => list.map(x => x.id === h.id ? { ...x, fotos: rest, fotoUrl: rest[0] || "" } : x)); };
           const delBtn = (i) => <button onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); borrarFoto(i); }} title="Borrar esta foto" style={{ position: "absolute", top: 6, right: 6, background: "rgba(239,68,68,.92)", color: "#fff", border: "none", borderRadius: "50%", width: 26, height: 26, fontSize: 14, cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,.4)" }}>✕</button>;
           if (fs.length === 1) return <div style={{ position: "relative" }}><img src={fs[0]} alt="" style={{ width: "100%", maxHeight: 340, objectFit: "contain", background: "#0b0f14", display: "block" }} />{delBtn(0)}</div>;
           return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, alignItems: "start", padding: 4, background: "#0b0f14" }}>{fs.map((u, i) => <div key={i} style={{ position: "relative" }}><a href={u} target="_blank" rel="noreferrer" style={{ display: "block" }}><img src={u} alt="" style={{ width: "100%", height: "auto", display: "block", borderRadius: 4 }} /></a>{delBtn(i)}</div>)}</div>;
@@ -4672,7 +4720,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📄 PDF</button>
-              <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) setAvance(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== h.id) })); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>🗑 Borrar</button>
+              <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>🗑 Borrar</button>
             </div>
           </div>
           {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>📈 Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
@@ -4691,6 +4739,33 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
         </div>
       </div>
       <iframe id="avance-pdf" srcDoc={pdfHtml} title="Avance PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+    {recu !== null && <div style={{ position: "fixed", inset: 0, background: "#0b0f14", zIndex: 300, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "#0F1B2D", flexShrink: 0 }}>
+        <button onClick={() => setRecu(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>‹ Cerrar</button>
+        <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>Recuperar fotos de avance</span>
+        <span style={{ width: 60 }} />
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+        <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "#92400E", lineHeight: 1.5 }}>
+          Estas son las fotos de avance que quedaron guardadas en la nube y no están asignadas a ninguna obra. Marcá las que quieras, elegí <b>la obra</b> (arriba, en la pantalla de avance) y <b>la fecha</b>, y tocá recuperar.
+        </div>
+        <div style={{ color: "#fff", fontSize: 12.5, marginBottom: 10 }}>{recuMsg}</div>
+        {recu.length > 0 && <>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+            <span style={{ color: "#cbd5e1", fontSize: 12 }}>Obra: <b style={{ color: "#fff" }}>{obra?.nombre || "— elegí arriba —"}</b></span>
+            <input type="date" value={recuFecha} onChange={e => setRecuFecha(e.target.value)} style={{ background: "#1a2433", border: "1px solid #334155", color: "#fff", borderRadius: 8, padding: "8px 10px", fontSize: 13 }} />
+            <button onClick={() => setRecuSel(recuSel.length === recu.length ? [] : [...recu])} style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{recuSel.length === recu.length ? "Ninguna" : "Todas"}</button>
+            <button onClick={recuperarAObra} disabled={!recuSel.length || !obraId} style={{ background: (!recuSel.length || !obraId) ? "#334155" : BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginLeft: "auto" }}>Recuperar {recuSel.length || ""} a esta obra</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+            {recu.map((u, i) => { const sel = recuSel.includes(u); return <div key={i} onClick={() => setRecuSel(prev => sel ? prev.filter(x => x !== u) : [...prev, u])} style={{ position: "relative", cursor: "pointer", borderRadius: 8, overflow: "hidden", border: sel ? `3px solid ${BRASS}` : "3px solid transparent" }}>
+              <img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
+              {sel && <div style={{ position: "absolute", top: 4, right: 4, background: BRASS, color: "#fff", borderRadius: "50%", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800 }}>✓</div>}
+            </div>; })}
+          </div>
+        </>}
+      </div>
     </div>}
   </div>);
 }
