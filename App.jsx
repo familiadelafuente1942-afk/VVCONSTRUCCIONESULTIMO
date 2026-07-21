@@ -1828,6 +1828,7 @@ const MAS_TILES = [
   { id:"matpedidos", label:"Pedido de materiales" },
   { id:"documentacion", label:"Documentación" },
   { id:"bitacora", label:"Bitácora de obra" },
+  { id:"infsemanal", label:"Informe semanal de obra" },
   { id:"cliente", label:"Panel cliente" },
   { id:"pedidos", label:"Pedidos" },
   { id:"gestion", label:"Plan de gestión" },
@@ -1926,6 +1927,211 @@ function InternosView({ db, cfg, onBack }) {
         </div>
       ))}
     </div>
+  </div>);
+}
+
+function InformeSemanalView({ db, cfg, onBack }) {
+  const obras = db.obras || [];
+  const informes = db.informesSem || {};
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const obra = obras.find(o => o.id === obraId);
+  // semana actual (lunes a domingo)
+  const lunes = (() => { const d = new Date(); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return d.toISOString().slice(0, 10); })();
+  const domingo = (() => { const d = new Date(lunes + "T12:00:00"); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10); })();
+  const [desde, setDesde] = useState(lunes);
+  const [hasta, setHasta] = useState(domingo);
+  const [hechos, setHechos] = useState([]);
+  const [proxima, setProxima] = useState([]);
+  const [obs, setObs] = useState("");
+  const [nuevoH, setNuevoH] = useState("");
+  const [nuevoP, setNuevoP] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const [pdfRep, setPdfRep] = useState(null);
+  const lista = ((informes || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+  const fmtFecha = (iso) => { if (!iso) return ""; const [a, m, d] = iso.split("-"); return `${d}/${m}/${a.slice(2)}`; };
+  const guardarLista = (obraKey, arr) => db.setInformesSem(prev => ({ ...(prev || {}), [obraKey]: arr }));
+
+  const addH = () => { if (!nuevoH.trim()) return; setHechos(p => [...p, nuevoH.trim()]); setNuevoH(""); };
+  const addP = () => { if (!nuevoP.trim()) return; setProxima(p => [...p, nuevoP.trim()]); setNuevoP(""); };
+
+  // Trae los avances (vv_avance) de esta obra dentro del rango como base de "lo hecho"
+  async function traerDeAvances() {
+    try {
+      let av = {};
+      try { const r = await mediaStorage.storageGet ? await mediaStorage.storageGet("vv_avance") : null; } catch { }
+      const raw = await storage.get("vv_avance");
+      if (raw && raw.value) av = JSON.parse(raw.value) || {};
+      const entradas = (av[obraId] || []).filter(h => { const [d, m, a] = (h.fecha || "").split("/"); if (!a) return false; const iso = `20${a}-${m}-${d}`; return iso >= desde && iso <= hasta; });
+      if (!entradas.length) { alert("No hay avances cargados en esta obra dentro de la semana elegida."); return; }
+      const items = entradas.map(h => `${h.fecha}: ${(h.avance || h.descripcion || "").replace(/\s+/g, " ").slice(0, 160)}`);
+      setHechos(p => [...p, ...items]);
+    } catch (e) { alert("No pude traer los avances."); }
+  }
+
+  // Redacta profesional con IA a partir de los ítems cargados
+  async function redactarIA() {
+    if (!hechos.length && !proxima.length) { alert("Cargá al menos un ítem primero."); return; }
+    setBusy(true);
+    try {
+      const sys = "Sos un jefe de obra civil en Argentina que redacta partes semanales para la dirección de obra. Escribís profesional, claro y conciso, en español rioplatense neutro-formal. No inventás datos: reordenás y mejorás la redacción de lo que te pasan.";
+      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtFecha(desde)} al ${fmtFecha(hasta)}.\n\nTRABAJOS REALIZADOS (borrador):\n${hechos.map(h => "- " + h).join("\n") || "(sin datos)"}\n\nPRÓXIMA SEMANA (borrador):\n${proxima.map(h => "- " + h).join("\n") || "(sin datos)"}\n\nDevolvé SOLO dos listas mejoradas, en viñetas cortas y profesionales, con este formato EXACTO:\nREALIZADO:\n- ...\nPROXIMA:\n- ...`;
+      const resp = await callAI([{ role: "user", content: instruc }], sys, cfg.apiKey, false);
+      const mR = resp.match(/REALIZADO:\s*([\s\S]*?)(?:PROXIMA:|$)/i);
+      const mP = resp.match(/PROXIMA:\s*([\s\S]*)$/i);
+      const parse = (t) => (t || "").split("\n").map(l => l.replace(/^[-•\s]+/, "").trim()).filter(Boolean);
+      if (mR && parse(mR[1]).length) setHechos(parse(mR[1]));
+      if (mP && parse(mP[1]).length) setProxima(parse(mP[1]));
+    } catch (e) { alert("No pude redactar con IA. Probá de nuevo."); }
+    setBusy(false);
+  }
+
+  const guardar = () => {
+    if (!obraId) { alert("Elegí una obra."); return; }
+    if (!hechos.length && !proxima.length) { alert("Cargá al menos un trabajo realizado o previsto."); return; }
+    const item = { id: uid() + Date.now(), desde, hasta, hechos: [...hechos], proxima: [...proxima], obs: obs.trim(), ts: Date.now(), emitido: hoyStr() };
+    guardarLista(obraId, [item, ...lista]);
+    setHechos([]); setProxima([]); setObs(""); setNuevoH(""); setNuevoP("");
+    alert("Informe semanal guardado.");
+  };
+  const borrar = (id) => { if (confirm("¿Borrar este informe semanal?")) guardarLista(obraId, lista.filter(x => x.id !== id)); };
+
+  const _esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+  function buildPdf(rep) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const li = (arr) => (arr && arr.length) ? `<ul>${arr.map(x => `<li>${_esc(x)}</li>`).join("")}</ul>` : `<div class="vacio">— sin registros —</div>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
+      .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      ul { margin: 0 0 4px; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.6; margin-bottom: 3px; }
+      .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
+      .obs { font-size: 12px; line-height: 1.55; color: #1a2433; background: #F8FAFC; border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
+      .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Informe semanal de obra</div></div>
+      <div class="barra"><div>Obra: <b>${_esc(obra?.nombre || "")}</b></div><div>Semana: <b>${fmtFecha(rep.desde)} al ${fmtFecha(rep.hasta)}</b></div><div>Emitido: <b>${_esc(rep.emitido || hoyStr())}</b></div></div>
+      <h2>Trabajos realizados esta semana</h2>${li(rep.hechos)}
+      <h2>Trabajos previstos para la próxima semana</h2>${li(rep.proxima)}
+      ${rep.obs ? `<h2>Observaciones</h2><div class="obs">${_esc(rep.obs)}</div>` : ""}
+      <div class="foot">Generado por ${marca} · Informe semanal de obra.</div>
+    </div></body></html>`;
+  }
+  const verPdf = (rep) => { setPdfRep(rep); setPdfHtml(buildPdf(rep)); };
+  const verPdfActual = () => { if (!hechos.length && !proxima.length) { alert("Cargá algo antes de generar el PDF."); return; } const rep = { desde, hasta, hechos, proxima, obs, emitido: hoyStr() }; setPdfRep(rep); setPdfHtml(buildPdf(rep)); };
+
+  async function guardarPdf(rep) {
+    setBusy(true);
+    try {
+      const jsPDF = await (async () => { if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"]; for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; } catch (e) { } } throw new Error("PDF"); })();
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(); const M = 42; let y = M;
+      const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+      const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+      const ensure = (n) => { if (y + n > H - M) { doc.addPage(); y = M; } };
+      const loadImg = async (url) => { const r = await fetch(url); const b = await r.blob(); const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); }); const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 300, h: im.naturalHeight || 100 }); im.onerror = () => res({ w: 300, h: 100 }); im.src = data; }); let fmt = "JPEG"; try { fmt = data.substring(5, data.indexOf(";")).split("/")[1].toUpperCase(); if (fmt === "JPG") fmt = "JPEG"; } catch { } return { data, ...dim, fmt }; };
+      if (logo) { try { const im = await loadImg(logo); let lw = Math.min(140, im.w); let lh = lw * im.h / im.w; if (lh > 66) { lh = 66; lw = lh * im.w / im.h; } doc.addImage(im.data, im.fmt, (W - lw) / 2, y, lw, lh); y += lh + 10; } catch { } }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text(marca, W / 2, y, { align: "center" }); y += 15;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("INFORME SEMANAL DE OBRA", W / 2, y, { align: "center" }); y += 16;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 16;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(60, 72, 88);
+      doc.text(`Obra: ${obra?.nombre || ""}`, M, y); doc.text(`Semana: ${fmtFecha(rep.desde)} al ${fmtFecha(rep.hasta)}`, W - M, y, { align: "right" }); y += 13; doc.text(`Emitido: ${rep.emitido || hoyStr()}`, M, y); y += 16;
+      const seccion = (titulo, arr) => { ensure(30); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(27, 58, 91); doc.text(titulo, M, y); y += 6; doc.setDrawColor(176, 137, 79); doc.setLineWidth(2); doc.line(M, y, M + 26, y); y += 13; doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); if (!arr || !arr.length) { doc.setTextColor(150, 160, 175); doc.text("— sin registros —", M + 6, y); y += 15; return; } for (const it of arr) { const lines = doc.splitTextToSize("•  " + it, W - 2 * M - 6); for (let k = 0; k < lines.length; k++) { ensure(14); doc.text(lines[k], M + (k === 0 ? 6 : 16), y); y += 14; } } y += 6; };
+      seccion("Trabajos realizados esta semana", rep.hechos);
+      seccion("Trabajos previstos para la próxima semana", rep.proxima);
+      if (rep.obs) { seccion("Observaciones", [rep.obs]); }
+      const blob = doc.output("blob"); const file = new File([blob], `Informe semanal ${obra?.nombre || "obra"}.pdf`, { type: "application/pdf" });
+      setBusy(false);
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: file.name }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) { setBusy(false); alert("No pude generar el PDF."); }
+  }
+
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 11px", fontSize: 14, color: T.text, boxSizing: "border-box" };
+
+  const ListaEditable = ({ items, setItems, nuevo, setNuevo, add, ph, color }) => (
+    <div style={{ marginBottom: 14 }}>
+      {items.map((it, i) => <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+        <span style={{ color, fontWeight: 800, fontSize: 14, lineHeight: "20px" }}>•</span>
+        <span style={{ flex: 1, fontSize: 13.5, color: T.text, lineHeight: 1.4 }}>{it}</span>
+        <button onClick={() => setItems(p => p.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 15, lineHeight: 1 }}>✕</button>
+      </div>)}
+      <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+        <input value={nuevo} onChange={e => setNuevo(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(); }} placeholder={ph} style={{ ...inp, flex: 1 }} />
+        <button onClick={add} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "0 16px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
+      </div>
+    </div>
+  );
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
+    <SubHead id="mas" label="Informe semanal de obra" sub="Lo hecho esta semana y lo previsto para la próxima" onBack={onBack} />
+    <div style={{ padding: "14px 18px" }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
+      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...inp, margin: "6px 0 12px" }}>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+        <div style={{ flex: 1 }}><label style={{ fontSize: 10.5, fontWeight: 700, color: T.sub }}>SEMANA DESDE</label><input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ ...inp, marginTop: 4 }} /></div>
+        <div style={{ flex: 1 }}><label style={{ fontSize: 10.5, fontWeight: 700, color: T.sub }}>HASTA</label><input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ ...inp, marginTop: 4 }} /></div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: T.navy }}>✅ Trabajos realizados</span>
+        <button onClick={traerDeAvances} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>↧ Traer de avances</button>
+      </div>
+      <ListaEditable items={hechos} setItems={setHechos} nuevo={nuevoH} setNuevo={setNuevoH} add={addH} ph="Ej: Se terminó la mampostería de PB…" color="#10B981" />
+
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 6 }}>📌 A realizar la próxima semana</div>
+      <ListaEditable items={proxima} setItems={setProxima} nuevo={nuevoP} setNuevo={setNuevoP} add={addP} ph="Ej: Iniciar contrapisos del 1º piso…" color="#B0894F" />
+
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Observaciones (opcional)</label>
+      <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} placeholder="Clima, faltantes, pedidos a la dirección de obra, etc." style={{ ...inp, resize: "vertical", lineHeight: 1.5, margin: "6px 0 14px" }} />
+
+      <button onClick={redactarIA} disabled={busy} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>{busy ? "Redactando…" : "✨ Mejorar redacción con IA"}</button>
+      <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+        <button onClick={guardar} style={{ flex: 1, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+        <button onClick={verPdfActual} style={{ flex: 1, background: T.al, color: T.navy, border: `1px solid ${T.border}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>📄 Ver PDF</button>
+      </div>
+
+      {lista.length > 0 && <div style={{ marginTop: 22 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Informes guardados de esta obra</div>
+        {lista.map(rep => <div key={rep.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div><div style={{ fontSize: 13, fontWeight: 800, color: T.navy }}>Semana {fmtFecha(rep.desde)} al {fmtFecha(rep.hasta)}</div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{(rep.hechos || []).length} realizados · {(rep.proxima || []).length} previstos</div></div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => verPdf(rep)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>📄 PDF</button>
+              <button onClick={() => borrar(rep.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>🗑</button>
+            </div>
+          </div>
+        </div>)}
+      </div>}
+    </div>
+
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 300, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "#0F1B2D", flexShrink: 0 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>Informe semanal</span>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => { const f = document.getElementById("sem-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Imprimir</button>
+          <button onClick={() => guardarPdf(pdfRep || { desde, hasta, hechos, proxima, obs, emitido: hoyStr() })} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>📥 Guardar PDF</button>
+        </div>
+      </div>
+      <iframe id="sem-pdf" srcDoc={pdfHtml} title="Informe semanal PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
   </div>);
 }
 
@@ -2366,6 +2572,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "personal": return <PersonalView personal={db.personal} setPersonal={db.setPersonal} obras={db.obras} cfg={cfg} />;
       case "documentacion": return <DocumentacionView db={db} cfg={cfg} onBack={back} />;
       case "bitacora": return <BitacoraView db={db} cfg={cfg} onBack={back} />;
+      case "infsemanal": return <InformeSemanalView db={db} cfg={cfg} onBack={back} />;
       case "internos": return <InternosView db={db} cfg={cfg} onBack={back} />;
       case "matpedidos": return <MatPedidosView db={db} cfg={cfg} onBack={back} />;
       case "pedidos": return <PedidosView {...P} />;
@@ -4898,6 +5105,7 @@ function App() {
   const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
   const [docrecepcion, setDocrecepcion] = useStoredState("vv_docrecepcion", []);
   const [bitacora, setBitacora] = useStoredState("vv_bitacora", []);
+  const [informesSem, setInformesSem] = useStoredState("vv_informes_sem", {});
   const [internos, setInternos] = useStoredState("vv_internos", []);
   const [mensajes, setMensajes] = useStoredState("vv_mensajes", []);
   const [pedidos, setPedidos] = useStoredState("vv_pedidos", []);
@@ -5026,7 +5234,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
