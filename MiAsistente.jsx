@@ -499,6 +499,18 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     const next = arr.map(o => o.id === obraId ? { ...o, obs } : o);
     await persistObras(next);
   }
+  // Borra una obra. Si es compartida, persistObras la saca de vv_obras → también desaparece en V+V y Belfast.
+  async function borrarObra(obraId) {
+    const arr = db.obras || [];
+    const obra = arr.find(o => o.id === obraId);
+    const compartida = obra && !obra.particular;
+    const msg = compartida
+      ? `¿Borrar la obra "${obra?.nombre || ""}"?\n\nEs una obra compartida: también se va a borrar en V+V y en Belfast. No se puede deshacer.`
+      : `¿Borrar la obra "${obra?.nombre || ""}"? No se puede deshacer.`;
+    if (!confirm(msg)) return;
+    const next = arr.filter(o => o.id !== obraId);
+    await persistObras(next);
+  }
   async function subirAObra(obraId, e, tipo) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
     const arr = db.obras || [];
@@ -799,7 +811,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "archivos" && <ArchivosBody archivos={archivos} cat={catArch} setCat={setCatArch} archRef={archRef} subir={subirArchivos} subiendo={subiendoArch} borrar={(id) => persistArch((archivos || []).filter(a => a.id !== id))} />}
     {vista === "modelos" && <ModelosBody modelos={modelos} sel={modeloSel} setSel={setModeloSel} subir={() => modeloRef.current && modeloRef.current.click()} borrar={(id) => { const next = (modelos || []).filter(m => m.id !== id); setModelos(next); if (modeloSel === id) setModeloSel(next[0]?.id || ""); storage.set("sebastian_modelos", JSON.stringify(next)).catch(() => { }); }} />}
-    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "", obs: [] })} subirAObra={subirAObra} subiendo={subiendoArch} actualizarObs={actualizarObs} />}
+    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "", obs: [] })} subirAObra={subirAObra} subiendo={subiendoArch} actualizarObs={actualizarObs} borrar={borrarObra} />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
     <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -1064,7 +1076,7 @@ function ObsEditor({ lista, onChange, chico }) {
   </div>);
 }
 
-function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra, subiendo, actualizarObs }) {
+function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra, subiendo, actualizarObs, borrar }) {
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     {obraEdit && obraEdit._new && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Nueva obra</div>
@@ -1105,7 +1117,10 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra,
           <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{o.estado || "sin estado"}{o.avance != null ? ` · ${o.avance}% avance` : ""}{o.direccion ? ` · ${o.direccion}` : ""}</div>
           <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3 }}>{(o.fotos || []).length} fotos · {(o.planos || []).length} planos · {(o.informes || []).length} informes{(o.obs || []).filter(x => !x.hecho).length > 0 ? ` · ${(o.obs || []).filter(x => !x.hecho).length} pendiente${(o.obs || []).filter(x => !x.hecho).length === 1 ? "" : "s"}` : ""}</div>
         </div>
-        <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "", obs: o.obs || [] })} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Editar</button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+          <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "", obs: o.obs || [] })} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+          <button onClick={() => borrar && borrar(o.id)} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Borrar</button>
+        </div>
       </div>)}
       {!(obraEdit && obraEdit.id === o.id) && (o.obs || []).length > 0 && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
         <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>A tener en cuenta</div>
