@@ -2794,11 +2794,11 @@ function MatPedidosView({ db, cfg, onBack }) {
   const vencidos = pendDefPl.filter(p => ((Date.now() - (p.ts || 0)) / 86400000) >= 5);
   const cumplidosN = todos.filter(p => p.cumplido).length;
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
-    <SubHead id="materiales" label="Pedidos y documentación" sub={`Enviado a ${cn}`} onBack={onBack} />
+    <SubHead id="materiales" label="Pedidos enviados" sub={`Enviados a ${cn}`} onBack={onBack} />
 
     {/* solapas */}
     <div style={{ display: "flex", gap: 7, padding: "14px 20px 0" }}>
-      {[["pedidos", "Pedidos"], ["definiciones", "Definiciones"], ["recepcion", "Recepción de docs"]].map(([k, l]) => (
+      {[["pedidos", "Pedidos enviados"], ["definiciones", "Definiciones"], ["recepcion", "Recepción de docs"]].map(([k, l]) => (
         <button key={k} onClick={() => setVista(k)} style={{ flex: 1, background: vista === k ? T.navy : "transparent", color: vista === k ? "#fff" : T.sub, border: `1px solid ${vista === k ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
       ))}
     </div>
@@ -5632,7 +5632,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
 const WEB_NAV = [
   { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" },
   { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" }, { id:"mensajes", label:"Mensajes" },
-  { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos" },
+  { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos enviados" },
   { id:"internos", label:"🔒 Privado" },
   { id:"mas", label:"Más" },
 ];

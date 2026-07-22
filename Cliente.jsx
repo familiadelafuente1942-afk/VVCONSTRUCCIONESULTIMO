@@ -2105,7 +2105,7 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
 function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos }) {
@@ -3028,7 +3028,7 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
   const [vistaMat, setVistaMat] = useState("pedidos");
   if (vistaMat === "definiciones") return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ display: "flex", gap: 7, padding: "14px 16px 0" }}>
-      {[["pedidos", "Pedidos"], ["definiciones", "Definiciones"]].map(([k, l]) => (
+      {[["pedidos", "Pedidos recibidos"], ["definiciones", "Definiciones"]].map(([k, l]) => (
         <button key={k} onClick={() => setVistaMat(k)} style={{ flex: 1, background: vistaMat === k ? T.navy : "transparent", color: vistaMat === k ? "#fff" : T.sub, border: `1px solid ${vistaMat === k ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
       ))}
     </div>
@@ -3036,7 +3036,7 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
   </div>);
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ display: "flex", gap: 7, padding: "14px 16px 0" }}>
-      {[["pedidos", "Pedidos"], ["definiciones", "Definiciones"]].map(([k, l]) => (
+      {[["pedidos", "Pedidos recibidos"], ["definiciones", "Definiciones"]].map(([k, l]) => (
         <button key={k} onClick={() => setVistaMat(k)} style={{ flex: 1, background: vistaMat === k ? T.navy : "transparent", color: vistaMat === k ? "#fff" : T.sub, border: `1px solid ${vistaMat === k ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
       ))}
     </div>
