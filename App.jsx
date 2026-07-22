@@ -5025,6 +5025,8 @@ const FORM_TPLS = [
 ];
 
 function FormulariosView({ db, cfg, onBack }) {
+  const adjRefForm = useRef(null);
+  const [subiendoAdj, setSubiendoAdj] = useState(false);
   const { obras, formularios, setFormularios, setPedidos } = db;
   const cli = cfg?.clienteNombre || "Belfast Construction Management";
   const [pick, setPick] = useState(false);
@@ -5036,6 +5038,25 @@ function FormulariosView({ db, cfg, onBack }) {
 
   function nuevo(tpl) { setEd({ id: uid(), tplId: tpl.id, obra_id: obraPick, fecha: hoyStr(), nro: "", resp: {}, obs: {}, textos: {}, interferencias: [], rubros: [], lineas: [{ info: "", resp: "" }], resultado: "" }); setPick(false); }
   function guardar(compartir) { const item = compartir ? { ...ed, compartido: true, compartidoFecha: hoyStr(), ts: Date.now() } : { ...ed, ts: ed.ts || Date.now() }; const exists = list.some(x => x.id === item.id); setFormularios(exists ? list.map(x => x.id === item.id ? item : x) : [item, ...list]); setEd(null); if (compartir) { const o = obras.find(x => x.id === item.obra_id); alert(`✓ Formulario compartido con ${cfg?.clienteSigla || "Belfast"}.\n\nLo va a ver en la pestaña "Informes" y dentro de la obra ${o?.nombre ? `"${o.nombre}"` : "seleccionada"}.`); } }
+  // Adjuntar archivos al formulario (planos, PDF, Word, fotos, lo que sea).
+  async function subirAdjuntos(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setSubiendoAdj(true);
+    try {
+      const nuevos = [];
+      for (const f of files) {
+        if (f.size > 12 * 1024 * 1024) { alert(`"${f.name}" pesa más de 12 MB. Subí uno más liviano.`); continue; }
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const ext = (f.name.match(/\.([a-zA-Z0-9]+)$/) || [])[1] || "dat";
+        const url = await uploadFoto(dataUrl, `formularios/${ed?.obra_id || "gral"}`, `${uid()}.${ext}`);
+        nuevos.push({ id: uid(), nombre: f.name, url: url || dataUrl, tipo: f.type || "", peso: f.size });
+      }
+      setEd(x => ({ ...x, adjuntos: [...((x || {}).adjuntos || []), ...nuevos] }));
+    } catch (err) { alert("No pude subir el archivo. Probá de nuevo."); }
+    setSubiendoAdj(false);
+    if (adjRefForm.current) adjRefForm.current.value = "";
+  }
+  const icoArch = (nom = "") => { const e = (nom.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return "word"; if (e === "pdf") return "doc"; if (["xls", "xlsx", "csv"].includes(e)) return "excel"; if (["png", "jpg", "jpeg", "webp", "heic"].includes(e)) return "image"; if (["dwg", "dxf"].includes(e)) return "plans"; return "clip"; };
   function crearPedidoDesdeNota() { const o = obras.find(x => x.id === ed.obra_id); const det = (ed.lineas || []).filter(l => l.info?.trim()).map((l, i) => `${i + 1}. ${l.info}`).join("\n"); aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: "vv", para: "cliente", asunto: `Nota de pedido — ${o?.nombre || "obra"}`, detalle: (ed.textos.intro || "") + (det ? "\n\n" + det : ""), prioridad: "media", obra_id: ed.obra_id }), ...arr]); }
 
   if (ed) {
@@ -5051,6 +5072,19 @@ function FormulariosView({ db, cfg, onBack }) {
           <FieldRow><Field label="Obra"><Sel value={ed.obra_id} onChange={e => set({ obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field><Field label="Fecha"><TInput value={ed.fecha} onChange={e => set({ fecha: e.target.value })} /></Field></FieldRow>
           <Field label="N° de documento"><TInput value={ed.nro} onChange={e => set({ nro: e.target.value })} placeholder="0001" /></Field>
           <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>Comitente: {cli} · Contratista: V+V Construcciones{tpl.id === "iav" ? " · Auditor: Arq. Héctor Ayala" : ""}</div>
+        </Card>
+        <Card style={{ padding: 13, marginBottom: 14 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 3 }}>Archivos adjuntos</div>
+          <div style={{ fontSize: 11, color: T.muted, marginBottom: 9, lineHeight: 1.45 }}>Sumá planos, PDF, Word, Excel o fotos que respalden este formulario.</div>
+          {(ed.adjuntos || []).map(a => (
+            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px", marginBottom: 5 }}>
+              <Ico n={icoArch(a.nombre)} s={15} c={T.accent} />
+              <span onClick={() => descargarArchivo(a.url, a.nombre)} style={{ flex: 1, fontSize: 12, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }}>{a.nombre}</span>
+              <button onClick={() => set({ adjuntos: (ed.adjuntos || []).filter(x => x.id !== a.id) })} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer" }}>✕</button>
+            </div>
+          ))}
+          <input ref={adjRefForm} type="file" multiple onChange={subirAdjuntos} style={{ display: "none" }} />
+          <button onClick={() => adjRefForm.current?.click()} disabled={subiendoAdj} style={{ width: "100%", background: T.bg, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendoAdj ? "Subiendo…" : <><Ico n="clip" s={14} /> Adjuntar archivo</>}</button>
         </Card>
         {tpl.textos?.filter(tx => tpl.modo !== "iav").map(tx => <Field key={tx.k} label={tx.l}><textarea value={ed.textos[tx.k] || ""} onChange={e => set({ textos: { ...ed.textos, [tx.k]: e.target.value } })} rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 13.5, color: T.text }} /></Field>)}
         {tpl.secciones?.map((sec, si) => <Card key={si} style={{ padding: 13, marginBottom: 11 }}>
@@ -5095,7 +5129,10 @@ function FormulariosView({ db, cfg, onBack }) {
       {list.length === 0 && <EmptyMsg>Sin formularios cargados. Tocá ＋ para empezar uno.</EmptyMsg>}
       {list.map(f => { const tpl = tplOf(f.tplId); return (<Card key={f.id} style={{ padding: 13, marginBottom: 9 }}>
         <div onClick={() => setEd({ ...f, obs: f.obs || {}, textos: f.textos || {}, resp: f.resp || {}, interferencias: f.interferencias || [], rubros: f.rubros || [], lineas: f.lineas || [{ info: "", resp: "" }] })} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-          <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{tpl?.nombre || "Formulario"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{obraNom(obras, f.obra_id)} · {f.fecha}{f.nro ? ` · N° ${f.nro}` : ""}</div><div style={{ fontSize: 10.5, fontWeight: 700, color: f.compartido ? "#16A34A" : T.muted, marginTop: 3 }}>{f.compartido ? `✓ Compartido con ${cfg?.clienteSigla || "Belfast"}` : "Borrador (no compartido)"}</div></div>
+          <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{tpl?.nombre || "Formulario"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{obraNom(obras, f.obra_id)} · {f.fecha}{f.nro ? ` · N° ${f.nro}` : ""}</div><div style={{ fontSize: 10.5, fontWeight: 700, color: f.compartido ? "#16A34A" : T.muted, marginTop: 3 }}>{f.compartido ? `✓ Compartido con ${cfg?.clienteSigla || "Belfast"}` : "Borrador (no compartido)"}</div>
+            {(f.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 7 }}>
+              {(f.adjuntos || []).map(a => <button key={a.id} onClick={() => descargarArchivo(a.url, a.nombre)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", maxWidth: "100%" }}><Ico n={icoArch(a.nombre)} s={12} /><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span></button>)}
+            </div>}</div>
           {f.resultado ? <Badge color={f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#F59E0B" : "#16A34A"} bg={f.resultado.includes("NO APTO") ? "#FEF2F2" : f.resultado.includes("OBSERV") ? "#FFFBEB" : "#ECFDF5"}>{f.resultado.replace(" PARA INICIO", "")}</Badge> : <span style={{ color: T.muted, fontSize: 16 }}>›</span>}
         </div>
         <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Eliminar este formulario (${tpl?.nombre || "Formulario"} · ${obraNom(obras, f.obra_id)})?${f.compartido ? "\n\nOJO: está compartido — también se borra en Belfast." : ""}`)) setFormularios(list.filter(x => x.id !== f.id)); }} style={{ marginTop: 10, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar formulario</button>
