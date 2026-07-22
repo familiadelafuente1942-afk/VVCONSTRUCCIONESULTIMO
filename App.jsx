@@ -2499,7 +2499,14 @@ function MatPedidosView({ db, cfg, onBack }) {
   }
   const [verCumplidos, setVerCumplidos] = useState(true);
   const todos = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  const lista = (verCumplidos ? todos : todos.filter(p => !p.cumplido)).slice().sort((a, b) => (a.cumplido === b.cumplido ? 0 : a.cumplido ? 1 : -1));
+  // Orden: primero los pendientes y después los cumplidos; dentro de cada grupo,
+  // del pedido más NUEVO al más viejo (por fecha real del pedido).
+  const fechaOrden = (p) => { if (p.ts) return p.ts; const m = String(p.fecha || "").match(/^(\d{2})\/(\d{2})\/(\d{2})$/); return m ? new Date(`20${m[3]}-${m[2]}-${m[1]}T12:00:00`).getTime() : 0; };
+  const lista = (verCumplidos ? todos : todos.filter(p => !p.cumplido)).slice().sort((a, b) => {
+    const ca = !!a.cumplido, cb = !!b.cumplido;
+    if (ca !== cb) return ca ? 1 : -1;
+    return fechaOrden(b) - fechaOrden(a);
+  });
   // Alertas de gestión: definiciones y planos pendientes (los cumplidos NO cuentan).
   const pendDefPl = todos.filter(p => p.tipo !== "material" && !p.cumplido);
   const vencidos = pendDefPl.filter(p => ((Date.now() - (p.ts || 0)) / 86400000) >= 5);
