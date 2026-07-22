@@ -2447,7 +2447,7 @@ function MatPedidosView({ db, cfg, onBack }) {
     const lines = (p.items || []).map(it => p.tipo === "material" ? `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim() : `• ${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}`);
     return `*Pedido de ${tp.label.toLowerCase()}* — ${obraNom(obras, p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde V+V Construcciones)`;
   }
-  function marcarEnviado(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: "V+V" } : x)); }
+  function marcarEnviado(id) { guardarMats(prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: "V+V", upd: Date.now() } : x)); }
   function waLink(text, phone) {
     const t = encodeURIComponent(text);
     if (phone) { const clean = String(phone).replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : ("549" + clean); return `https://wa.me/${num}?text=${t}`; }
@@ -2457,7 +2457,26 @@ function MatPedidosView({ db, cfg, onBack }) {
   const diasDe = (p) => { const t0 = p.ts || 0; if (!t0) return 0; return Math.max(0, Math.floor((Date.now() - t0) / 86400000)); };
   // SLA: 5 días. Amarillo desde 3, rojo al pasarse.
   const alertaDe = (p) => { const d = diasDe(p); if (p.cumplido) return null; if (d >= 5) return { d, txt: `⚠ Vencido — ${d} días sin respuesta`, color: "#B91C1C", bg: "#FEF2F2", bd: "#FECACA" }; if (d >= 3) return { d, txt: `⏳ ${d} días esperando`, color: "#B45309", bg: "#FFFBEB", bd: "#FDE68A" }; return { d, txt: `${d === 0 ? "Pedido hoy" : d === 1 ? "1 día esperando" : d + " días esperando"}`, color: "#1B3A5B", bg: "#EFF6FF", bd: "#DBEAFE" }; };
-  const marcarCumplido = (id, val) => db.setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, cumplido: val, cumplidoFecha: val ? hoyStr() : "" } : x));
+  // Guarda fusionando por pedido: la versión más nueva de CADA pedido gana.
+  // Así lo que marcás acá no se pierde cuando la otra app escribe su copia.
+  async function guardarMats(fn) {
+    let nube = [], tumbas = {};
+    try { const r = await storage.get("vv_matpedidos"); if (r && r.value) nube = JSON.parse(r.value) || []; } catch (e) { }
+    try { const r = await storage.get("vv_matpedidos_del"); if (r && r.value) tumbas = JSON.parse(r.value) || {}; } catch (e) { }
+    db.setMatpedidos(prev => {
+      const antes = prev || [];
+      const local = fn(antes);
+      const idsLocal = new Set(local.map(x => x && x.id));
+      const mapa = new Map();
+      nube.forEach(x => { if (x && x.id) mapa.set(x.id, x); });
+      local.forEach(x => { if (x && x.id) { const c = mapa.get(x.id); mapa.set(x.id, (!c || (x.upd || 0) >= (c.upd || 0)) ? x : c); } });
+      // lo que borré acá recién, se borra (no vuelve desde la nube)
+      antes.forEach(x => { if (x && x.id && !idsLocal.has(x.id)) mapa.delete(x.id); });
+      Object.keys(tumbas || {}).forEach(id => mapa.delete(id));
+      return Array.from(mapa.values()).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    });
+  }
+  const marcarCumplido = (id, val) => guardarMats(prev => (prev || []).map(x => x.id === id ? { ...x, cumplido: val, cumplidoFecha: val ? hoyStr() : "", upd: Date.now() } : x));
   function nuevo(tipo = "material") { setForm({ tipo, obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u", detalle: "" }], nota: "" }); }
   function addItem() { setForm(f => ({ ...f, items: [...f.items, { nombre: "", cantidad: "", unidad: "u", detalle: "" }] })); }
   function setItem(i, k, v) { setForm(f => ({ ...f, items: (f.items || []).map((it, j) => j === i ? { ...it, [k]: v } : it) })); }
@@ -2472,10 +2491,15 @@ function MatPedidosView({ db, cfg, onBack }) {
     pushNotify(`Nuevo pedido de ${tp.label.toLowerCase()}`, `V+V · ${obraNom(obras, form.obra_id)}: ${items.map(it => it.nombre).join(", ").slice(0, 80)}`, "belfast");
     alert(`✓ Pedido de ${tp.label.toLowerCase()} enviado a ${cn}. Le queda como NO LEÍDO hasta que lo levante.`);
   }
-  function borrar(id) { if (confirm("¿Eliminar este pedido?")) setMatpedidos(prev => (prev || []).filter(x => x.id !== id)); }
-  const [verCumplidos, setVerCumplidos] = useState(false);
+  async function borrar(id) {
+    if (!confirm("¿Eliminar este pedido?")) return;
+    // Lápida: así no revive cuando la otra app sincroniza.
+    try { const r = await storage.get("vv_matpedidos_del"); const t = (r && r.value) ? (JSON.parse(r.value) || {}) : {}; t[id] = Date.now(); await storage.set("vv_matpedidos_del", JSON.stringify(t)); try { localStorage.setItem("vv_matpedidos_del", JSON.stringify(t)); } catch (e) { } } catch (e) { }
+    guardarMats(prev => (prev || []).filter(x => x.id !== id));
+  }
+  const [verCumplidos, setVerCumplidos] = useState(true);
   const todos = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  const lista = verCumplidos ? todos : todos.filter(p => !p.cumplido);
+  const lista = (verCumplidos ? todos : todos.filter(p => !p.cumplido)).slice().sort((a, b) => (a.cumplido === b.cumplido ? 0 : a.cumplido ? 1 : -1));
   // Alertas de gestión: definiciones y planos pendientes (los cumplidos NO cuentan).
   const pendDefPl = todos.filter(p => p.tipo !== "material" && !p.cumplido);
   const vencidos = pendDefPl.filter(p => ((Date.now() - (p.ts || 0)) / 86400000) >= 5);
@@ -2498,7 +2522,7 @@ function MatPedidosView({ db, cfg, onBack }) {
         <div style={{ fontSize: 11, color: T.muted, marginTop: 3, lineHeight: 1.45 }}>
           {pendDefPl.length ? `${pendDefPl.length} esperando respuesta · ` : ""}{cumplidosN} cumplido(s). Se considera vencido a los 5 días sin respuesta.
         </div>
-        {cumplidosN > 0 && <button onClick={() => setVerCumplidos(v => !v)} style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{verCumplidos ? "Ocultar cumplidos" : `Ver también los ${cumplidosN} cumplido(s)`}</button>}
+        {cumplidosN > 0 && <button onClick={() => setVerCumplidos(v => !v)} style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{verCumplidos ? `Ocultar los ${cumplidosN} cumplido(s)` : `Mostrar los ${cumplidosN} cumplido(s)`}</button>}
       </div>}
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Qué querés pedir</div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -2510,7 +2534,7 @@ function MatPedidosView({ db, cfg, onBack }) {
       </div>
 
       {lista.length === 0 && <EmptyMsg>Sin pedidos todavía. Elegí arriba qué querés pedir.</EmptyMsg>}
-      {lista.map(p => { const tp = tipoDe(p.tipo); const jefes = (personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim()); return (<Card key={p.id} style={{ padding: 13, marginBottom: 9 }}>
+      {lista.map(p => { const tp = tipoDe(p.tipo); const jefes = (personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim()); return (<Card key={p.id} style={{ padding: 13, marginBottom: 9, opacity: p.cumplido ? 0.62 : 1, background: p.cumplido ? T.bg : undefined }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
