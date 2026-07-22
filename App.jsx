@@ -1,5 +1,55 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
+// ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
+function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
+  const P = {
+    doc: "M7 3h7l5 5v13H7z M14 3v5h5",
+    mic: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3",
+    building: "M3 21h18 M5 21V8l7-5 7 5v13 M9 21v-5h6v5 M9 11h1 M14 11h1",
+    robot: "M12 3v3 M6 6h12v12H6z M9.5 11v1.5 M14.5 11v1.5 M4 10v4 M20 10v4",
+    video: "M3 6h12v12H3z M15 10l6-3v10l-6-3",
+    list: "M8 6h13 M8 12h13 M8 18h13 M3.5 6h.01 M3.5 12h.01 M3.5 18h.01",
+    download: "M12 3v12 M7 11l5 5 5-5 M4 20h16",
+    upload: "M12 21V9 M7 13l5-5 5 5 M4 4h16",
+    card: "M3 6h18v12H3z M3 10h18 M7 15h4",
+    user: "M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 3.6-6 8-6s8 2 8 6",
+    link: "M10 13a5 5 0 007.5.5l2-2a5 5 0 00-7-7l-1 1 M14 11a5 5 0 00-7.5-.5l-2 2a5 5 0 007 7l1-1",
+    globe: "M12 21a9 9 0 100-18 9 9 0 000 18z M3 12h18 M12 3a14 14 0 000 18 M12 3a14 14 0 010 18",
+    cal2: "M4 6h16v15H4z M4 10h16 M8 3v4 M16 3v4",
+    money: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 7v10 M9.5 9.5h4a1.8 1.8 0 010 3.6h-3a1.8 1.8 0 000 3.6h4",
+    bell: "M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z M10.5 20a2 2 0 003 0",
+    sound: "M4 9h4l5-4v14l-5-4H4z M16.5 9.5a4 4 0 010 5",
+    contact: "M4 5h16v14H4z M9 11a2 2 0 100-4 2 2 0 000 4z M6.5 16c.6-1.6 1.9-2.4 2.5-2.4s1.9.8 2.5 2.4 M14 9h4 M14 13h4",
+    chart: "M4 20V10 M10 20V4 M16 20v-7 M3 20h18",
+    pin: "M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z M12 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
+    car: "M5 16h14 M6.5 16l1.2-5h8.6l1.2 5 M4 16h16v3H4z M7.5 19v1.5 M16.5 19v1.5",
+    wave: "M12 3v6 M8 6l8 0 M5 13a7 7 0 0014 0 M12 20v1",
+    tools: "M14.5 6.5a3.5 3.5 0 004.8 4.8l-9 9a2.1 2.1 0 01-3-3l9-9z M4 6l3-3 4 4-3 3z",
+    moon: "M20 14A8.5 8.5 0 019.9 4 8.5 8.5 0 1020 14z",
+    thumb: "M7 21V10l5-7 1.2.8a2 2 0 01.8 2.2L13 10h5.5a2 2 0 012 2.4l-1.3 6a2 2 0 01-2 1.6H7z M3 10h4v11H3z",
+
+    word: "M7 3h7l5 5v13H7z M14 3v5h5 M10 12l1.5 5 1.5-4 1.5 4L16 12",
+    excel: "M7 3h7l5 5v13H7z M14 3v5h5 M10 12l5 6 M15 12l-5 6",
+    box: "M3 7l9-4 9 4v10l-9 4-9-4z M3 7l9 4 9-4 M12 11v10",
+    ruler: "M3 15L15 3l6 6L9 21z M8 10l2 2 M11 7l2 2 M14 4l2 2",
+    plans: "M3 5h8l2 2h8v12H3z M8 12h8 M8 16h5",
+    camera: "M3 8h4l2-2h6l2 2h4v11H3z M12 16a3.2 3.2 0 100-6.4 3.2 3.2 0 000 6.4z",
+    clip: "M20 11l-8.5 8.5a4.5 4.5 0 01-6.4-6.4L14 4.3a3 3 0 014.2 4.2L9.7 17a1.5 1.5 0 01-2.1-2.1l8-8",
+    trash: "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6",
+    chat: "M4 5h16v11H9l-5 4z",
+    lock: "M6 10V7a6 6 0 1112 0v3 M4 10h16v11H4z M12 15v2",
+    save: "M5 3h11l3 3v15H5z M8 3v6h7V3 M8 14h8v7H8z",
+    calendar: "M4 6h16v15H4z M4 10h16 M8 3v4 M16 3v4",
+    search: "M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.3-4.3",
+    sparkle: "M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z",
+    check: "M4 12.5l5 5L20 6.5",
+    image: "M3 5h18v14H3z M8.5 11a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 16l-5-5-9 8",
+    life: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M5.6 5.6l3.9 3.9 M18.4 5.6l-3.9 3.9 M5.6 18.4l3.9-3.9 M18.4 18.4l-3.9-3.9",
+    send: "M21 3L10.5 13.5 M21 3l-6.8 18-3.7-7.5L3 9.8z",
+  }[n] || "M12 21a9 9 0 100-18 9 9 0 000 18z";
+  return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={st} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, verticalAlign: "-2px", display: "inline-block" }}>{P.split(" M").map((d, i) => <path key={i} d={(i ? "M" : "") + d} />)}</svg>;
+}
+
 // Margen superior seguro: en modo app instalada (pantalla de inicio) iOS puede no
 // informar env(safe-area-inset-top); garantizamos un mínimo para no quedar bajo el notch.
 const SAFE_TOP_PX = (() => { try { return (window.navigator.standalone || window.matchMedia("(display-mode: standalone)").matches) ? 50 : 0; } catch (e) { return 0; } })();
@@ -881,7 +931,7 @@ function Proyectos({ lics, setLics, requireAuth, cfg, obras, setObras }) {
                         return (<Card key={lic.id} onClick={() => setShowDetail(lic.id)} style={{ padding: "13px 14px", marginBottom: 7, cursor: "pointer" }}>
                             <div style={{ display: "flex", justifyContent: "space-between" }}>
                                 <div style={{ flex: 1, paddingRight: 8 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>{lic.nombre}{obraVinc && <span style={{ fontSize: 9, fontWeight: 700, background: "#ECFDF5", color: "#10B981", border: "1px solid #86EFAC", borderRadius: 20, padding: "1px 6px" }}>🏗 EN OBRA</span>}</div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>{lic.nombre}{obraVinc && <span style={{ fontSize: 9, fontWeight: 700, background: "#ECFDF5", color: "#10B981", border: "1px solid #86EFAC", borderRadius: 20, padding: "1px 6px" }}><Ico n="building" /> EN OBRA</span>}</div>
                                     <div style={{ fontSize: 11, color: T.muted }}>{ubicLabel}{lic.sector ? ` · ${lic.sector}` : ""}</div>
                                 </div>
                                 <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -937,7 +987,7 @@ function Proyectos({ lics, setLics, requireAuth, cfg, obras, setObras }) {
                 return obraVinc ? (
                     <div style={{ background: "#ECFDF5", border: "1px solid #86EFAC", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="#10B981"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
-                        <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 700, color: "#15803D" }}>✅ Obra creada automáticamente</div><div style={{ fontSize: 11, color: "#166534", marginTop: 1 }}>{obraVinc.nombre} — En Curso ({obraVinc.avance}%)</div></div>
+                        <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 700, color: "#15803D" }}><Ico n="check" /> Obra creada automáticamente</div><div style={{ fontSize: 11, color: "#166534", marginTop: 1 }}>{obraVinc.nombre} — En Curso ({obraVinc.avance}%)</div></div>
                     </div>
                 ) : (
                     <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -1205,7 +1255,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
         <input ref={videoRef} type="file" accept="video/*" multiple onChange={handleVideo} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
             <PBtn onClick={() => fileRef.current?.click()} style={{ flex: 1, padding: "11px 0", fontSize: 13 }}>{t(cfg, 'obras_agregar_fotos')}</PBtn>
-            <button onClick={() => videoRef.current?.click()} style={{ background: T.accentLight, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>🎥 Video</button>
+            <button onClick={() => videoRef.current?.click()} style={{ background: T.accentLight, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}><Ico n="video" /> Video</button>
             {fotos.length > 0 && <button onClick={() => { setModoSel(v => !v); setSelFotos([]); }} style={{ background: modoSel ? T.accent : T.accentLight, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12, fontWeight: 700, color: modoSel ? "#fff" : T.accent, cursor: "pointer", flexShrink: 0 }}>
                 {modoSel ? "Cancelar" : "Seleccionar"}
             </button>}
@@ -1240,7 +1290,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} /><span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Informe IA generado</span></div>
                 <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => { try { navigator.clipboard.writeText(informe); } catch { } }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 10px", fontSize: 11, color: T.sub, cursor: "pointer" }}>📋 Copiar</button>
+                    <button onClick={() => { try { navigator.clipboard.writeText(informe); } catch { } }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 10px", fontSize: 11, color: T.sub, cursor: "pointer" }}><Ico n="list" /> Copiar</button>
                     <button onClick={() => setInforme('')} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, padding: "4px 8px", fontSize: 11, color: "#EF4444", cursor: "pointer" }}>✕</button>
                 </div>
             </div>
@@ -1318,7 +1368,7 @@ function TabInformes({ detail, upd }) {
                 <Field label="Fecha"><TInput value={form.fecha || ""} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aa" /></Field>
             </FieldRow>
             <Field label="Notas"><textarea value={form.notas || ""} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} placeholder="Observaciones..." rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} /></Field>
-            <PBtn full onClick={() => fileRef.current?.click()}>📎 Seleccionar archivo</PBtn>
+            <PBtn full onClick={() => fileRef.current?.click()}><Ico n="clip" /> Seleccionar archivo</PBtn>
         </Sheet>)}
     </div>);
 }
@@ -1393,7 +1443,7 @@ function TabGastos({ detail, upd }) {
                                 <span style={{ fontSize: 11, color: T.muted }}>{g.fecha}</span>
                             </div>
                             <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{g.desc}</div>
-                            {g.quien && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>👤 {g.quien}</div>}
+                            {g.quien && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}><Ico n="user" /> {g.quien}</div>}
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
                             <div style={{ fontSize: 15, fontWeight: 800, color: T.accent }}>${parseMontoNum(g.monto).toLocaleString('es-AR')}</div>
@@ -1445,7 +1495,7 @@ function TabGastos({ detail, upd }) {
                     </div>
                 ) : (
                     <button onClick={() => compRef.current?.click()} style={{ width: "100%", background: T.bg, border: `1.5px dashed ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 12, fontWeight: 600, color: T.sub, cursor: "pointer" }}>
-                        📎 Adjuntar comprobante
+                        Adjuntar comprobante
                     </button>
                 )}
             </Field>
@@ -1589,7 +1639,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <input value={detail.monto || ''} onChange={e => upd(detail.id, { monto: e.target.value })} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
                             <div style={{ background: detail.pagado > 0 ? "#ECFDF5" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>💰 Pagado</div>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}><Ico n="money" /> Pagado</div>
                                 <input value={detail.pagado || ''} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); upd(detail.id, { pagado: v ? parseFloat(v) : 0 }); }} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: "#10B981", padding: 0 }} />
                             </div>
                         </div>
@@ -1613,7 +1663,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                         <button onClick={() => planoRef.current && planoRef.current.click()} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}`, marginBottom: 14 }}>＋ Subir plano (PDF / CAD)</button>
                         {(detail.planos || []).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "22px 16px", lineHeight: 1.5 }}>Sin planos cargados.<br />Subí acá los planos de la obra (PDF, DWG, DXF…). Belfast también los ve y los puede subir.</div>}
                         {(detail.planos || []).map(p => <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 7 }}>
-                            <div style={{ width: 34, height: 34, borderRadius: 8, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>📐</div>
+                            <div style={{ width: 34, height: 34, borderRadius: 8, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}><Ico n="ruler" /> </div>
                             <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{p.nombre}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}</div></div>
                             <a href={p.url} target="_blank" rel="noreferrer" download={p.nombre} style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a>
                             <button onClick={() => upd(detail.id, { planos: (detail.planos || []).filter(x => x.id !== p.id) })} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
@@ -1836,6 +1886,8 @@ const MAS_TILES = [
   { id:"formularios", label:"Formularios" },
   { id:"documentacion", label:"Documentación" },
   { id:"informes", label:"Informes" },
+  { id:"auditoria", label:"Auditoría de obra" },
+  { id:"internos", label:"Chat privado" },
   { id:"infsemanal", label:"Informe semanal de obra" },
   { id:"cliente", label:"Panel cliente" },
   { id:"gestion", label:"Plan de gestión" },
@@ -1872,12 +1924,12 @@ function Adjuntos({ items = [], onChange }) {
     <input ref={aRef} type="file" multiple onChange={e => up(e, "archivo")} style={{ display: "none" }} />
     <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Fotos y archivos{(items || []).length ? ` (${(items || []).length})` : ""}</div>
     <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-      <button onClick={() => fRef.current && fRef.current.click()} disabled={sub} style={{ flex: 1, background: T.al, color: T.accent, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📷 Foto</button>
-      <button onClick={() => aRef.current && aRef.current.click()} disabled={sub} style={{ flex: 1, background: T.al, color: T.accent, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📎 Archivo</button>
+      <button onClick={() => fRef.current && fRef.current.click()} disabled={sub} style={{ flex: 1, background: T.al, color: T.accent, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="camera" /> Foto</button>
+      <button onClick={() => aRef.current && aRef.current.click()} disabled={sub} style={{ flex: 1, background: T.al, color: T.accent, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="clip" /> Archivo</button>
     </div>
     {sub && <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 8 }}>Subiendo…</div>}
     {fotos.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 8 }}>{fotos.map(a => (<div key={a.id} style={{ position: "relative" }}><a href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a><button onClick={() => del(a.id)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(0,0,0,.6)", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 11, cursor: "pointer" }}>✕</button></div>))}</div>}
-    {arch.map(a => (<div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>📎 {a.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{a.fecha}</div></div><a href={a.url} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a><button onClick={() => del(a.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button></div>))}
+    {arch.map(a => (<div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}><Ico n="clip" /> {a.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{a.fecha}</div></div><a href={a.url} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a><button onClick={() => del(a.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button></div>))}
   </div>);
 }
 function InternosView({ db, cfg, onBack }) {
@@ -1904,7 +1956,7 @@ function InternosView({ db, cfg, onBack }) {
     <SubHead id="mensajes" label="Chat privado" sub="Consultas del equipo — Belfast no los ve" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
       <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "9px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
-        🔒 Este canal es <b>privado de V+V</b>. Lo ven solo ustedes en esta app; no llega a Belfast ni al panel del cliente.
+        Este canal es <b>privado de V+V</b>. Lo ven solo ustedes en esta app; no llega a Belfast ni al panel del cliente.
       </div>
 
       {/* nuevo mensaje */}
@@ -2096,21 +2148,21 @@ function InformeSemanalView({ db, cfg, onBack }) {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 800, color: T.navy }}>✅ Trabajos realizados</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: T.navy }}><Ico n="check" /> Trabajos realizados</span>
         <button onClick={traerDeAvances} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>↧ Traer de avances</button>
       </div>
       <ListaEditable items={hechos} setItems={setHechos} nuevo={nuevoH} setNuevo={setNuevoH} add={addH} ph="Ej: Se terminó la mampostería de PB…" color="#10B981" />
 
-      <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 6 }}>📌 A realizar la próxima semana</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 6 }}><Ico n="pin" /> A realizar la próxima semana</div>
       <ListaEditable items={proxima} setItems={setProxima} nuevo={nuevoP} setNuevo={setNuevoP} add={addP} ph="Ej: Iniciar contrapisos del 1º piso…" color="#B0894F" />
 
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Observaciones (opcional)</label>
       <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} placeholder="Clima, faltantes, pedidos a la dirección de obra, etc." style={{ ...inp, resize: "vertical", lineHeight: 1.5, margin: "6px 0 14px" }} />
 
-      <button onClick={redactarIA} disabled={busy} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>{busy ? "Redactando…" : "✨ Mejorar redacción con IA"}</button>
+      <button onClick={redactarIA} disabled={busy} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>{busy ? "Redactando…" : "Mejorar redacción con IA"}</button>
       <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
         <button onClick={guardar} style={{ flex: 1, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
-        <button onClick={verPdfActual} style={{ flex: 1, background: T.al, color: T.navy, border: `1px solid ${T.border}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>📄 Ver PDF</button>
+        <button onClick={verPdfActual} style={{ flex: 1, background: T.al, color: T.navy, border: `1px solid ${T.border}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" /> Ver PDF</button>
       </div>
 
       {lista.length > 0 && <div style={{ marginTop: 22 }}>
@@ -2120,8 +2172,8 @@ function InformeSemanalView({ db, cfg, onBack }) {
             <div><div style={{ fontSize: 13, fontWeight: 800, color: T.navy }}>Semana {fmtFecha(rep.desde)} al {fmtFecha(rep.hasta)}</div>
               <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{(rep.hechos || []).length} realizados · {(rep.proxima || []).length} previstos</div></div>
             <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => verPdf(rep)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>📄 PDF</button>
-              <button onClick={() => borrar(rep.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>🗑</button>
+              <button onClick={() => verPdf(rep)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" /> PDF</button>
+              <button onClick={() => borrar(rep.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> </button>
             </div>
           </div>
         </div>)}
@@ -2134,10 +2186,276 @@ function InformeSemanalView({ db, cfg, onBack }) {
         <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe semanal</span>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => { const f = document.getElementById("sem-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Imprimir</button>
-          <button onClick={() => guardarPdf(pdfRep || { desde, hasta, hechos, proxima, obs, emitido: hoyStr() })} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>📥 Guardar PDF</button>
+          <button onClick={() => guardarPdf(pdfRep || { desde, hasta, hechos, proxima, obs, emitido: hoyStr() })} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}><Ico n="download" /> Guardar PDF</button>
         </div>
       </div>
       <iframe id="sem-pdf" srcDoc={pdfHtml} title="Informe semanal PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+  </div>);
+}
+
+
+// ═══ AUDITORÍA DE OBRA — supervisiones, revisión de documentación y certificación de etapas ═══
+const AUD_TIPOS = [
+  { id: "supervision", label: "Supervisiones", titulo: "Acta de supervisión de obra", sigla: "SUP", icon: "search" },
+  { id: "revision", label: "Revisión de doc.", titulo: "Informe de revisión de documentación", sigla: "RDO", icon: "doc" },
+  { id: "certificacion", label: "Certificación", titulo: "Certificado de etapa ejecutada", sigla: "CER", icon: "check" },
+];
+const AUD_RESULT = ["Conforme", "Conforme con observaciones", "No conforme"];
+
+function AuditoriaView({ db, cfg, onBack }) {
+  const obras = db.obras || [];
+  const items = db.auditoria || [];
+  const [tipo, setTipo] = useState("supervision");
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [form, setForm] = useState(null);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const obra = obras.find(o => o.id === obraId);
+  const tp = AUD_TIPOS.find(t => t.id === tipo) || AUD_TIPOS[0];
+  const lista = items.filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+  const guardarLista = (arr) => db.setAuditoria(arr);
+  const nroDe = (t) => { const n = items.filter(x => x.tipo === t).length + 1; const s = (AUD_TIPOS.find(x => x.id === t) || {}).sigla || "AUD"; return `${s}-${new Date().getFullYear()}-${String(n).padStart(3, "0")}`; };
+  const hoyISO = () => new Date().toISOString().slice(0, 10);
+  const fmtDMY = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
+
+  function nuevo() {
+    if (!obraId) { alert("Elegí una obra."); return; }
+    const base = { id: uid() + Date.now(), tipo, obra_id: obraId, nro: nroDe(tipo), fecha: hoyISO(), ts: Date.now(), responsable: cfg?.responsableTecnico || "", obs: [], resultado: AUD_RESULT[0], conclusion: "" };
+    if (tipo === "supervision") setForm({ ...base, periodo: "", presentes: "", interferencias: [] });
+    if (tipo === "revision") setForm({ ...base, etapa: "", docs: [{ nombre: "", version: "", fechaDoc: "" }] });
+    if (tipo === "certificacion") setForm({ ...base, etapa: "", planoRef: "", versionPlano: "", directiva: "", ejecutadoPor: "" });
+  }
+  const editar = (it) => setForm({ ...it, obs: it.obs || [], interferencias: it.interferencias || [], docs: it.docs || [] });
+  const borrar = (id) => { if (confirm("¿Borrar este registro de auditoría?")) guardarLista(items.filter(x => x.id !== id)); };
+  const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const addLinea = (k, val) => setForm(f => ({ ...f, [k]: [...(f[k] || []), val] }));
+  const setLinea = (k, i, v) => setForm(f => ({ ...f, [k]: (f[k] || []).map((x, j) => j === i ? v : x) }));
+  const delLinea = (k, i) => setForm(f => ({ ...f, [k]: (f[k] || []).filter((_, j) => j !== i) }));
+
+  function guardar() {
+    if (!form) return;
+    const limpio = { ...form, obs: (form.obs || []).filter(x => (x.txt || "").trim()), interferencias: (form.interferencias || []).filter(x => (x || "").trim()), docs: (form.docs || []).filter(d => (d.nombre || "").trim()) };
+    const otros = items.filter(x => x.id !== form.id);
+    guardarLista([limpio, ...otros]);
+    setForm(null);
+  }
+
+  const _e = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+  function buildPdf(it) {
+    const t = AUD_TIPOS.find(x => x.id === it.tipo) || AUD_TIPOS[0];
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const nomObra = (obras.find(o => o.id === it.obra_id) || {}).nombre || "";
+    const colorRes = it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D";
+    const obsRows = (it.obs || []).length
+      ? `<table><tr><th style="width:38px">N°</th><th>Observación</th><th style="width:110px">Sector / ítem</th><th style="width:88px">Criticidad</th></tr>
+         ${(it.obs || []).map((o, i) => `<tr><td>${i + 1}</td><td>${_e(o.txt)}</td><td>${_e(o.sector || "—")}</td><td>${_e(o.crit || "Media")}</td></tr>`).join("")}</table>`
+      : `<div class="vacio">Sin observaciones registradas.</div>`;
+    let cuerpo = "";
+    if (it.tipo === "supervision") {
+      cuerpo = `
+        <div class="grid"><div><span>Período</span><b>${_e(it.periodo || "—")}</b></div><div><span>Presentes</span><b>${_e(it.presentes || "—")}</b></div></div>
+        <h2>Observaciones de la supervisión</h2>${obsRows}
+        <h2>Interferencias detectadas</h2>${(it.interferencias || []).length ? `<ul>${(it.interferencias || []).map(x => `<li>${_e(x)}</li>`).join("")}</ul>` : `<div class="vacio">No se detectaron interferencias.</div>`}`;
+    }
+    if (it.tipo === "revision") {
+      cuerpo = `
+        <div class="grid"><div><span>Etapa</span><b>${_e(it.etapa || "—")}</b></div><div><span>Documentos revisados</span><b>${(it.docs || []).length}</b></div></div>
+        <h2>Documentación revisada</h2>
+        ${(it.docs || []).length ? `<table><tr><th>Documento</th><th style="width:90px">Versión</th><th style="width:100px">Fecha doc.</th></tr>
+          ${(it.docs || []).map(d => `<tr><td>${_e(d.nombre)}</td><td>${_e(d.version || "—")}</td><td>${_e(d.fechaDoc || "—")}</td></tr>`).join("")}</table>` : `<div class="vacio">Sin documentos cargados.</div>`}
+        <h2>Observaciones sobre la documentación</h2>${obsRows}`;
+    }
+    if (it.tipo === "certificacion") {
+      cuerpo = `
+        <div class="grid"><div><span>Etapa certificada</span><b>${_e(it.etapa || "—")}</b></div><div><span>Ejecutado por</span><b>${_e(it.ejecutadoPor || marca)}</b></div>
+        <div><span>Plano de referencia</span><b>${_e(it.planoRef || "—")}</b></div><div><span>Versión / revisión</span><b>${_e(it.versionPlano || "—")}</b></div></div>
+        <div class="decl">Se deja constancia de que la etapa <b>${_e(it.etapa || "")}</b> de la obra <b>${_e(nomObra)}</b> fue ejecutada <b>conforme al plano de referencia indicado</b> y a la directiva impartida por la Jefatura de Obra que se transcribe a continuación.</div>
+        <h2>Directiva de la Jefatura de Obra</h2><div class="parr">${_e(it.directiva || "—")}</div>
+        <h2>Observaciones</h2>${obsRows}`;
+    }
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
+      .logo { max-height: 84px; max-width: 290px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 16px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      .grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
+      .grid > div { flex: 1 1 45%; background: #F8FAFC; border: 1px solid #E3E8EF; border-radius: 8px; padding: 8px 11px; }
+      .grid span { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #94A3B8; margin-bottom: 2px; }
+      .grid b { font-size: 12.5px; color: #0F1B2D; }
+      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: #F1F5F9; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
+      ul { margin: 0; padding-left: 20px; } li { font-size: 12px; line-height: 1.55; margin-bottom: 3px; }
+      .vacio { font-size: 11.5px; color: #98A2B3; font-style: italic; }
+      .parr { font-size: 12px; line-height: 1.6; text-align: justify; }
+      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: #F8FAFC; border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
+      .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 14px; color: ${colorRes}; border: 1.5px solid ${colorRes}; }
+      .firmas { display: flex; gap: 40px; margin-top: 34px; page-break-inside: avoid; }
+      .firma { flex: 1; text-align: center; }
+      .linea { border-top: 1px solid #0F1B2D; margin-bottom: 5px; }
+      .rol { font-size: 10px; color: #5B6B7F; }
+      .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">${_e(t.titulo)}</div></div>
+      <div class="barra"><div>Obra: <b>${_e(nomObra)}</b></div><div>N°: <b>${_e(it.nro || "—")}</b></div><div>Fecha: <b>${fmtDMY(it.fecha)}</b></div></div>
+      ${cuerpo}
+      <div class="res">Resultado: ${_e(it.resultado || "—")}</div>
+      ${it.conclusion ? `<h2>Conclusión</h2><div class="parr">${_e(it.conclusion)}</div>` : ""}
+      <div class="firmas">
+        <div class="firma"><div class="linea"></div><div class="rol">${_e(it.responsable || "Responsable técnico")}<br/>${marca}</div></div>
+        <div class="firma"><div class="linea"></div><div class="rol">Jefatura de Obra / Dirección de Obra</div></div>
+      </div>
+      <div class="foot">Documento emitido por ${marca} · ${_e(t.titulo)} · ${_e(it.nro || "")}</div>
+    </div></body></html>`;
+  }
+  const verPdf = (it) => setPdfHtml(buildPdf(it));
+
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 11px", fontSize: 13.5, color: T.text, boxSizing: "border-box" };
+  const lbl = { fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em" };
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
+    <SubHead id="informes" label="Auditoría de obra" sub="Supervisiones, revisión de documentación y certificación de etapas" onBack={onBack} />
+    <div style={{ padding: "14px 18px" }}>
+      <div style={{ display: "flex", gap: 7, marginBottom: 12 }}>
+        {AUD_TIPOS.map(t => (
+          <button key={t.id} onClick={() => { setTipo(t.id); setForm(null); }} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: tipo === t.id ? T.navy : T.card, color: tipo === t.id ? "#fff" : T.sub, border: `1px solid ${tipo === t.id ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+            <Ico n={t.icon} s={17} c={tipo === t.id ? "#fff" : T.sub} />{t.label}
+          </button>
+        ))}
+      </div>
+      <label style={lbl}>Obra</label>
+      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...inp, margin: "5px 0 12px" }}>
+        <option value="">— Elegí una obra —</option>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>
+      {tipo === "supervision" && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Supervisión quincenal: dejá asentado lo observado en obra, las interferencias y el resultado.</div>}
+      {tipo === "revision" && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Revisión de la documentación según la etapa a ejecutar, con observaciones sobre planos y especificaciones.</div>}
+      {tipo === "certificacion" && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Certificado de que la etapa se ejecutó según el plano otorgado y la directiva de la Jefatura de Obra.</div>}
+
+      <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>+ Nuevo {tp.label.toLowerCase()}</button>
+
+      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>Todavía no hay registros de este tipo para la obra elegida.</div>}
+      {lista.map(it => (
+        <div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.nro}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.navy, flex: 1, minWidth: 0 }}>{it.etapa || it.periodo || fmtDMY(it.fecha)}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D" }}>{it.resultado}</span>
+          </div>
+          <div style={{ fontSize: 11, color: T.muted }}>{fmtDMY(it.fecha)} · {(it.obs || []).length} observación(es){it.docs ? ` · ${(it.docs || []).length} doc.` : ""}</div>
+          <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
+            <button onClick={() => verPdf(it)} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "7px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" s={13} /> PDF</button>
+            <button onClick={() => editar(it)} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 7, padding: "7px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+            <button onClick={() => borrar(it.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} /></button>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {form && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={() => setForm(null)}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, width: "100%", maxHeight: "92vh", overflowY: "auto", borderRadius: "16px 16px 0 0", padding: "16px 18px calc(24px + env(safe-area-inset-bottom))" }}>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: T.navy, marginBottom: 3 }}>{tp.titulo}</div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>{form.nro} · {obra?.nombre || ""}</div>
+
+        <label style={lbl}>Fecha</label>
+        <input type="date" value={form.fecha} onChange={e => setF("fecha", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }} />
+
+        {form.tipo === "supervision" && <>
+          <label style={lbl}>Período (quincena)</label>
+          <input value={form.periodo} onChange={e => setF("periodo", e.target.value)} placeholder="Ej: 1ª quincena de julio 2026" style={{ ...inp, margin: "5px 0 10px" }} />
+          <label style={lbl}>Presentes en la visita</label>
+          <input value={form.presentes} onChange={e => setF("presentes", e.target.value)} placeholder="Ej: H. Ayala (V+V), N. Arcusci (Belfast)" style={{ ...inp, margin: "5px 0 10px" }} />
+        </>}
+
+        {form.tipo === "revision" && <>
+          <label style={lbl}>Etapa a ejecutar</label>
+          <input value={form.etapa} onChange={e => setF("etapa", e.target.value)} placeholder="Ej: Estructura 1er piso" style={{ ...inp, margin: "5px 0 10px" }} />
+          <label style={lbl}>Documentos revisados</label>
+          {(form.docs || []).map((d, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, margin: "5px 0" }}>
+              <input value={d.nombre} onChange={e => setLinea("docs", i, { ...d, nombre: e.target.value })} placeholder="Plano / documento" style={{ ...inp, flex: 2 }} />
+              <input value={d.version} onChange={e => setLinea("docs", i, { ...d, version: e.target.value })} placeholder="Rev." style={{ ...inp, flex: 1 }} />
+              <button onClick={() => delLinea("docs", i)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer" }}>✕</button>
+            </div>
+          ))}
+          <button onClick={() => addLinea("docs", { nombre: "", version: "", fechaDoc: "" })} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", margin: "3px 0 12px" }}>+ Agregar documento</button>
+        </>}
+
+        {form.tipo === "certificacion" && <>
+          <label style={lbl}>Etapa certificada</label>
+          <input value={form.etapa} onChange={e => setF("etapa", e.target.value)} placeholder="Ej: Hormigonado de losa 1er piso" style={{ ...inp, margin: "5px 0 10px" }} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 2 }}><label style={lbl}>Plano de referencia</label><input value={form.planoRef} onChange={e => setF("planoRef", e.target.value)} placeholder="Ej: EST-04" style={{ ...inp, margin: "5px 0 10px" }} /></div>
+            <div style={{ flex: 1 }}><label style={lbl}>Revisión</label><input value={form.versionPlano} onChange={e => setF("versionPlano", e.target.value)} placeholder="Rev. B" style={{ ...inp, margin: "5px 0 10px" }} /></div>
+          </div>
+          <label style={lbl}>Directiva de la Jefatura de Obra</label>
+          <textarea value={form.directiva} onChange={e => setF("directiva", e.target.value)} rows={3} placeholder="Transcribí la directiva recibida…" style={{ ...inp, resize: "vertical", lineHeight: 1.5, margin: "5px 0 10px" }} />
+          <label style={lbl}>Ejecutado por</label>
+          <input value={form.ejecutadoPor} onChange={e => setF("ejecutadoPor", e.target.value)} placeholder="V+V Construcciones" style={{ ...inp, margin: "5px 0 10px" }} />
+        </>}
+
+        <label style={lbl}>Observaciones</label>
+        {(form.obs || []).map((o, i) => (
+          <div key={i} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 8, margin: "5px 0", background: T.bg }}>
+            <textarea value={o.txt} onChange={e => setLinea("obs", i, { ...o, txt: e.target.value })} rows={2} placeholder="Qué se observó…" style={{ ...inp, resize: "vertical", marginBottom: 6 }} />
+            <div style={{ display: "flex", gap: 6 }}>
+              <input value={o.sector || ""} onChange={e => setLinea("obs", i, { ...o, sector: e.target.value })} placeholder="Sector / ítem" style={{ ...inp, flex: 1 }} />
+              <select value={o.crit || "Media"} onChange={e => setLinea("obs", i, { ...o, crit: e.target.value })} style={{ ...inp, flex: 1 }}>
+                {["Baja", "Media", "Alta"].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <button onClick={() => delLinea("obs", i)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer" }}>✕</button>
+            </div>
+          </div>
+        ))}
+        <button onClick={() => addLinea("obs", { txt: "", sector: "", crit: "Media" })} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", margin: "3px 0 12px" }}>+ Agregar observación</button>
+
+        {form.tipo === "supervision" && <>
+          <label style={lbl}>Interferencias detectadas</label>
+          {(form.interferencias || []).map((x, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, margin: "5px 0" }}>
+              <input value={x} onChange={e => setLinea("interferencias", i, e.target.value)} placeholder="Ej: Cañería sanitaria interfiere con viga" style={{ ...inp, flex: 1 }} />
+              <button onClick={() => delLinea("interferencias", i)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer" }}>✕</button>
+            </div>
+          ))}
+          <button onClick={() => addLinea("interferencias", "")} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", margin: "3px 0 12px" }}>+ Agregar interferencia</button>
+        </>}
+
+        <label style={lbl}>Resultado</label>
+        <select value={form.resultado} onChange={e => setF("resultado", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}>
+          {AUD_RESULT.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <label style={lbl}>Conclusión (opcional)</label>
+        <textarea value={form.conclusion} onChange={e => setF("conclusion", e.target.value)} rows={2} style={{ ...inp, resize: "vertical", margin: "5px 0 10px" }} />
+        <label style={lbl}>Responsable técnico</label>
+        <input value={form.responsable} onChange={e => setF("responsable", e.target.value)} placeholder="Nombre y cargo" style={{ ...inp, margin: "5px 0 14px" }} />
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setForm(null)} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 9, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={guardar} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+        </div>
+      </div>
+    </div>}
+
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 320, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Certificado</span>
+        <button onClick={() => { const f = document.getElementById("aud-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="aud-pdf" srcDoc={pdfHtml} title="Certificado auditoría" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
   </div>);
 }
@@ -2199,7 +2517,7 @@ function BitacoraView({ db, cfg, onBack }) {
     setSubiendo(false);
     if (adjRef.current) adjRef.current.value = "";
   }
-  const iconoArch = (nom = "", tipo = "") => { const e = (nom.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return "📝"; if (e === "pdf") return "📕"; if (["xls", "xlsx", "csv"].includes(e)) return "📊"; if (["png", "jpg", "jpeg", "webp", "heic"].includes(e)) return "🖼"; return "📎"; };
+  const iconoArch = (nom = "", tipo = "") => { const e = (nom.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return ""; if (e === "pdf") return ""; if (["xls", "xlsx", "csv"].includes(e)) return ""; if (["png", "jpg", "jpeg", "webp", "heic"].includes(e)) return ""; return ""; };
   const guardar = () => {
     if (!titulo.trim() && !desc.trim()) { alert("Poné al menos un título o una descripción."); return; }
     if (!obraId) { alert("Elegí una obra."); return; }
@@ -2297,7 +2615,7 @@ function BitacoraView({ db, cfg, onBack }) {
               ))}
             </div>}
             <input ref={fileRef} type="file" accept="image/*" multiple onChange={agregarFotos} style={{ display: "none" }} />
-            <button onClick={() => fileRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "📷 Agregar fotos"}</button>
+            <button onClick={() => fileRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "Agregar fotos"}</button>
             {adjuntos.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {adjuntos.map(a => (
                 <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px" }}>
@@ -2308,7 +2626,7 @@ function BitacoraView({ db, cfg, onBack }) {
               ))}
             </div>}
             <input ref={adjRef} type="file" multiple onChange={agregarAdjuntos} style={{ display: "none" }} />
-            <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "📎 Adjuntar archivo (Word, PDF, Excel…)"}</button>
+            <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "Adjuntar archivo (Word, PDF, Excel…)"}</button>
             <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
               <button onClick={limpiar} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
               <button onClick={guardar} disabled={subiendo} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{edit ? "Guardar cambios" : "Guardar hecho"}</button>
@@ -2417,9 +2735,9 @@ function DocumentacionView({ db, cfg, onBack }) {
 }
 // Los pedidos ahora pueden ser de 3 tipos, todos con el mismo mecanismo.
 const TIPOS_PEDIDO = [
-  { id: "material", label: "Materiales", sing: "material", icon: "📦", color: "#1B3A5B" },
-  { id: "definicion", label: "Definiciones", sing: "definición", icon: "📐", color: "#B0894F" },
-  { id: "plano", label: "Planos", sing: "plano", icon: "🗂️", color: "#3B6E9E" },
+  { id: "material", label: "Materiales", sing: "material", icon: "box", color: "#1B3A5B" },
+  { id: "definicion", label: "Definiciones", sing: "definición", icon: "ruler", color: "#B0894F" },
+  { id: "plano", label: "Planos", sing: "plano", icon: "plans", color: "#3B6E9E" },
 ];
 const tipoDe = (id) => TIPOS_PEDIDO.find(t => t.id === id) || TIPOS_PEDIDO[0];
 
@@ -2666,14 +2984,14 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
         <button onClick={agregarManual} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "0 15px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>＋</button>
       </div>
 
-      <button onClick={pdfFaltantes} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📄 PDF de definiciones faltantes</button>
-      <button onClick={wordDefiniciones} style={{ width: "100%", background: "#2B579A", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📝 Word editable (todas + observaciones)</button>
-      <button onClick={waFaltantes} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📲 Enviar faltantes por WhatsApp</button>
+      <button onClick={pdfFaltantes} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}><Ico n="doc" /> PDF de definiciones faltantes</button>
+      <button onClick={wordDefiniciones} style={{ width: "100%", background: "#2B579A", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}><Ico n="word" /> Word editable (todas + observaciones)</button>
+      <button onClick={waFaltantes} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}><Ico n="send" /> Enviar faltantes por WhatsApp</button>
 
       {/* ── Google Form ── */}
       <div style={{ border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.card }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gformCfg ? 10 : (reg?.formId ? 10 : 0) }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>📋 Formulario para el jefe de obra</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}><Ico n="list" /> Formulario para el jefe de obra</div>
           <button onClick={() => setGformCfg(v => !v)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, color: T.sub, cursor: "pointer" }}>⚙︎ {gformUrl ? "Configurado" : "Configurar"}</button>
         </div>
 
@@ -2727,7 +3045,7 @@ function MatPedidosView({ db, cfg, onBack }) {
   function waText(p) {
     const tp = tipoDe(p.tipo);
     const lines = (p.items || []).map(it => p.tipo === "material" ? `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim() : `• ${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}`);
-    return `*Pedido de ${tp.label.toLowerCase()}* — ${obraNom(obras, p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde V+V Construcciones)`;
+    return `*Pedido de ${tp.label.toLowerCase()}* — ${obraNom(obras, p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\nPor favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde V+V Construcciones)`;
   }
   function marcarEnviado(id) { guardarMats(prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: "V+V", upd: Date.now() } : x)); }
   function waLink(text, phone) {
@@ -2823,7 +3141,7 @@ function MatPedidosView({ db, cfg, onBack }) {
           <button onClick={() => setFTipo("")} style={{ background: fTipo === "" ? T.accent : T.card, color: fTipo === "" ? "#fff" : T.sub, border: `1px solid ${fTipo === "" ? T.accent : T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Todo</button>
           {TIPOS_PEDIDO.map(t => (
             <button key={t.id} onClick={() => setFTipo(fTipo === t.id ? "" : t.id)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, background: fTipo === t.id ? t.color : T.card, color: fTipo === t.id ? "#fff" : T.sub, border: `1px solid ${fTipo === t.id ? t.color : T.border}`, borderRadius: 8, padding: "6px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-              <span>{t.icon}</span>{t.label}
+              <span><Ico n={t.icon} s={18} /></span>{t.label}
             </button>
           ))}
         </div>
@@ -2835,7 +3153,7 @@ function MatPedidosView({ db, cfg, onBack }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         {TIPOS_PEDIDO.map(t => (
           <button key={t.id} onClick={() => nuevo(t.id)} style={{ flex: 1, background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", textAlign: "center", borderTop: `3px solid ${t.color}` }}>
-            <div style={{ fontSize: 20, marginBottom: 3 }}>{t.icon}</div>{t.label}
+            <div style={{ fontSize: 20, marginBottom: 3 }}><Ico n={t.icon} s={18} /></div>{t.label}
           </button>
         ))}
       </div>
@@ -2845,14 +3163,14 @@ function MatPedidosView({ db, cfg, onBack }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: tp.color, borderRadius: 5, padding: "2px 7px" }}>{tp.icon} {tp.label}</span>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: tp.color, borderRadius: 5, padding: "2px 7px" }}><Ico n={tp.icon} s={14} /> {tp.label}</span>
               <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{obraNom(obras, p.obra_id) || "Sin obra"} · {p.fecha}</span>
               {p.de === "contratista" && <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.empresa || "Contratista"}</span>}
             </div>
             <div style={{ fontSize: 12, color: T.sub, marginTop: 6 }}>{(p.items || []).map(it => p.tipo === "material" ? `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim() : `${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}`).join(" · ")}</div>
             {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, fontStyle: "italic" }}>{p.nota}</div>}
             <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 6, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado por ${cn}${p.leidoFecha ? " · " + p.leidoFecha : ""}` : `● No leído por ${cn}`}</div>
-            {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 3 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
+            {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 3 }}><Ico n="send" /> Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
             {p.tipo !== "material" && (p.cumplido
               ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Cumplido{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
               : (() => { const a = alertaDe(p); return a ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: a.color, background: a.bg, border: `1px solid ${a.bd}`, borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>{a.txt}</div> : null; })())}
@@ -2860,10 +3178,10 @@ function MatPedidosView({ db, cfg, onBack }) {
           <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
         {p.tipo !== "material" && <button onClick={() => marcarCumplido(p.id, !p.cumplido)} style={{ width: "100%", marginTop: 10, background: p.cumplido ? T.bg : "#ECFDF5", color: p.cumplido ? T.sub : "#15803D", border: `1px solid ${p.cumplido ? T.border : "#A7F3D0"}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{p.cumplido ? "↩ Reabrir (volver a pendiente)" : "✓ Marcar como cumplido"}</button>}
-        <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 10, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar por WhatsApp a los jefes de obra</button>
+        <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 10, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> Enviar por WhatsApp a los jefes de obra</button>
         {waFor === p.id && <div style={{ marginTop: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
-          {jefes.map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}>📲 {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
+          {jefes.map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}><Ico n="send" /> {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
           <a href={waLink(waText(p))} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Elegir contacto de WhatsApp…</a>
           <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>Los jefes de obra con teléfono cargado (en Personal) aparecen arriba para enviar directo.</div>
         </div>}
@@ -2911,7 +3229,7 @@ function RecepcionDocs({ db, cfg }) {
 
   function remitoWA() {
     const o = obras.find(x => x.id === obraId);
-    const lineas = items.map(it => `${it.recibido ? "✅" : "⬜"} ${it.nombre}${it.recibido && it.fecha ? ` (${it.fecha})` : ""}`);
+    const lineas = items.map(it => `${it.recibido ? "" : "⬜"} ${it.nombre}${it.recibido && it.fecha ? ` (${it.fecha})` : ""}`);
     const txt = `*REMITO DE RECEPCIÓN DE DOCUMENTACIÓN*\nObra: ${o?.nombre || "—"}\nFecha: ${hoyStr()}\nDe: ${cfg?.nombre || "V+V Construcciones"}\nComitente: ${cn}\n\nDocumentación inicial básica:\n${lineas.join("\n")}\n\nRecibidos: ${recibidos} de ${items.length}\n\n(Registro emitido desde V+V Construcciones)`;
     window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
   }
@@ -2942,7 +3260,7 @@ function RecepcionDocs({ db, cfg }) {
       </div>
     </Card>
 
-    <button onClick={remitoWA} style={{ width: "100%", marginTop: 14, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar remito de recepción por WhatsApp</button>
+    <button onClick={remitoWA} style={{ width: "100%", marginTop: 14, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> Enviar remito de recepción por WhatsApp</button>
   </div>);
 }
 
@@ -2972,6 +3290,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "personal": return <PersonalView personal={db.personal} setPersonal={db.setPersonal} obras={db.obras} cfg={cfg} />;
       case "documentacion": return <DocumentacionView db={db} cfg={cfg} onBack={back} />;
       case "bitacora": return <BitacoraView db={db} cfg={cfg} onBack={back} />;
+      case "auditoria": return <AuditoriaView db={db} cfg={cfg} onBack={back} />;
       case "infsemanal": return <InformeSemanalView db={db} cfg={cfg} onBack={back} />;
       case "internos": return <InternosView db={db} cfg={cfg} onBack={back} />;
       case "matpedidos": return <MatPedidosView db={db} cfg={cfg} onBack={back} />;
@@ -3218,7 +3537,7 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nombre}</div>
-              <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {obrasNombres(p)}{p.telefono ? ` · 📲 ${p.telefono}` : ""}</div>
+              <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {obrasNombres(p)}{p.telefono ? ` · ${p.telefono}` : ""}</div>
               {(p.sitios || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{p.sitios.map((s, i) => <span key={i} style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", background: "#ECFDF5", borderRadius: 5, padding: "2px 6px" }}>✓ {s.sitio}</span>)}</div>}
             </div>
             {vc > 0
@@ -3324,7 +3643,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
       if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(resp || ""))) {
         const rE = await storage.get("ia_debate"); const debE = rE?.value ? JSON.parse(rE.value) : deb;
         debE.active = false; await saveDebate(debE); setDebateActive(false);
-        setMsgs(prev => [...prev, { role: "assistant", content: "🎙 Debate frenado: no hay crédito de API disponible. Recargá créditos en console.anthropic.com y volvé a intentar.", debate: true }]);
+        setMsgs(prev => [...prev, { role: "assistant", content: "Debate frenado: no hay crédito de API disponible. Recargá créditos en console.anthropic.com y volvé a intentar.", debate: true }]);
         debateBusy.current = false; return;
       }
       const r2 = await storage.get("ia_debate"); const deb2 = r2?.value ? JSON.parse(r2.value) : deb;
@@ -3339,13 +3658,13 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const tema = debateTema.trim(); if (!tema) return;
     const deb = { active: true, tema, turnos: [], maxTurnos: DEBATE_MAX, startedBy: "vv", ts: Date.now() };
     await saveDebate(deb); debateSeen.current = 0; setDebateActive(true); setDebateOpen(false); setDebateTema("");
-    setMsgs(prev => [...prev, { role: "assistant", content: `🎙 Debate técnico iniciado con la IA de ${cnDeb}: "${tema}". Dejá las dos apps abiertas y mirá cómo se van respondiendo en vivo.`, debate: true }]);
+    setMsgs(prev => [...prev, { role: "assistant", content: `Debate técnico iniciado con la IA de ${cnDeb}: "${tema}". Dejá las dos apps abiertas y mirá cómo se van respondiendo en vivo.`, debate: true }]);
     runDebateTurn();
   }
   async function stopDebate() {
     const r = await storage.get("ia_debate"); const deb = r?.value ? JSON.parse(r.value) : null;
     if (deb) { deb.active = false; await saveDebate(deb); }
-    setDebateActive(false); setMsgs(prev => [...prev, { role: "assistant", content: "🎙 Debate frenado.", debate: true }]);
+    setDebateActive(false); setMsgs(prev => [...prev, { role: "assistant", content: "Debate frenado.", debate: true }]);
   }
   useEffect(() => {
     const iv = setInterval(async () => {
@@ -3354,9 +3673,9 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
         if (!deb) return;
         if ((deb.turnos || []).length > debateSeen.current) {
           const nuevos = deb.turnos.slice(debateSeen.current); debateSeen.current = deb.turnos.length;
-          setMsgs(prev => [...prev, ...nuevos.map(t => ({ role: "assistant", content: `🎙 IA ${t.from === "vv" ? "V+V" : cnDeb}: ${t.texto}`, debate: true }))]);
+          setMsgs(prev => [...prev, ...nuevos.map(t => ({ role: "assistant", content: `IA ${t.from === "vv" ? "V+V" : cnDeb}: ${t.texto}`, debate: true }))]);
           if (deb.active) setDebateActive(true);
-          if (!deb.active && (deb.turnos || []).length >= deb.maxTurnos) setMsgs(prev => [...prev, { role: "assistant", content: "🎙 Debate finalizado.", debate: true }]);
+          if (!deb.active && (deb.turnos || []).length >= deb.maxTurnos) setMsgs(prev => [...prev, { role: "assistant", content: "Debate finalizado.", debate: true }]);
         }
         if (deb.active && (deb.turnos || []).length < deb.maxTurnos) {
           const last = deb.turnos[deb.turnos.length - 1];
@@ -3408,7 +3727,7 @@ Si Tita o la asistente de Nicolás te escriben o consultan algo, son GENTE DE LA
 
 Tus capacidades:
 1) BUSCAR EN INTERNET (tenés la herramienta de búsqueda web activa): conseguir proveedores y contactos (corralones, ferreterías, alquiler de equipos, hormigón, áridos), precios de materiales, normativa y código de edificación de CABA/Buenos Aires, teléfonos, direcciones, datos de empresas, o cualquier información actual. Cuando te pidan algo que no está en la app o que cambia seguido, BUSCÁ en internet (no digas que no podés). Priorizá fuentes argentinas; al dar proveedores listá nombre, zona, contacto/teléfono y link, y citá la fuente.
-1b) ANALIZAR ARCHIVOS ADJUNTOS: el usuario puede adjuntarte FOTOS y PDF (con el 📎) para que los leas y analices. Si te mandan una PÓLIZA o NÓMINA de seguro, leela y extraé los datos de CADA PERSONA de forma ordenada: nombre y apellido, DNI/CUIL, y lo que figure (categoría, ART/aseguradora, N° de póliza, vigencia, suma asegurada). Devolvé una lista clara persona por persona. Si te piden, compará con el Personal cargado en la app y marcá quién está y quién falta. También podés analizar remitos, facturas, planos o cualquier foto de obra.
+1b) ANALIZAR ARCHIVOS ADJUNTOS: el usuario puede adjuntarte FOTOS y PDF (con el ) para que los leas y analices. Si te mandan una PÓLIZA o NÓMINA de seguro, leela y extraé los datos de CADA PERSONA de forma ordenada: nombre y apellido, DNI/CUIL, y lo que figure (categoría, ART/aseguradora, N° de póliza, vigencia, suma asegurada). Devolvé una lista clara persona por persona. Si te piden, compará con el Personal cargado en la app y marcá quién está y quién falta. También podés analizar remitos, facturas, planos o cualquier foto de obra.
 2) Conocés los datos de la app y respondés sobre obras, personal, proyectos y pedidos.
 3) Redactás notas, mails y mensajes.
 4) Sos el agente de mensajería con ${cn} y GESTIONÁS PEDIDOS (temas a resolver con la otra empresa): podés crear pedidos, responderlos y marcarlos resueltos.
@@ -3568,7 +3887,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       try { localStorage.setItem("vv_personal", JSON.stringify(arr)); } catch { }
       await storage.set("vv_personal", JSON.stringify(arr)).catch(() => { });
       if (db.setPersonal) db.setPersonal(arr);
-      extra = { accionDone: true, accionResultado: add ? `✅ Cargué ${add} persona(s) al listado de Personal${dup ? ` (${dup} ya estaban)` : ""}. Andá a la pestaña Personal para verlas.` : `No agregué a nadie: ${dup ? "ya estaban todos cargados" : "no pude leer nombres en el archivo. Probá con una foto/PDF más nítido"}.` };
+      extra = { accionDone: true, accionResultado: add ? `Cargué ${add} persona(s) al listado de Personal${dup ? ` (${dup} ya estaban)` : ""}. Andá a la pestaña Personal para verlas.` : `No agregué a nadie: ${dup ? "ya estaban todos cargados" : "no pude leer nombres en el archivo. Probá con una foto/PDF más nítido"}.` };
     } else if (accion) { const res = await ejecutarAccion(accion, "vv", { setPedidos: db.setPedidos, personal: db.personal, setPersonal: db.setPersonal, obras: db.obras, setMensajes: db.setMensajes, setMatpedidos: db.setMatpedidos }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
     setMsgs([...next, { role: "assistant", content: limpio, ...extra }]); setLoading(false);
   }
@@ -3588,7 +3907,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         if (iaSeen.current < 0) iaSeen.current = arr.length;
         else if (arr.length > iaSeen.current) {
           const nuevos = arr.slice(iaSeen.current); iaSeen.current = arr.length;
-          setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 ${m.from === "vv" ? "IA V+V" : m.from === "sebastian" ? "Tita (asistente de Sebastián)" : m.from === "nicolas" ? "Asistente de Nicolás" : "IA " + cnIA} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
+          setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `${m.from === "vv" ? "IA V+V" : m.from === "sebastian" ? "Tita (asistente de Sebastián)" : m.from === "nicolas" ? "Asistente de Nicolás" : "IA " + cnIA} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
         }
         const pend = arr.find(m => m.from !== "vv" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
         if (pend && !iaBusy.current && cfg?.iaAuto !== false) {
@@ -3623,7 +3942,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           else {
             const nuevos = incoming.filter(p => !pedSeen.current.has(p.id));
             nuevos.forEach(p => pedSeen.current.add(p.id));
-            if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(p => ({ role: "assistant", content: `📥 Te llegó un pedido de ${cnIA}: "${p.asunto}"${p.detalle ? " — " + p.detalle : ""}${p.prioridad === "alta" ? " ⚠ URGENTE" : ""}. Está en Pedidos. Decime si querés que lo responda.` }))]);
+            if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(p => ({ role: "assistant", content: `Te llegó un pedido de ${cnIA}: "${p.asunto}"${p.detalle ? " — " + p.detalle : ""}${p.prioridad === "alta" ? " ⚠ URGENTE" : ""}. Está en Pedidos. Decime si querés que lo responda.` }))]);
           }
         }
       } catch { }
@@ -3658,7 +3977,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           const ids = [...String(m.content || "").matchAll(/\[\[ARCHIVO:\s*(\d+)\]\]/g)].map(x => parseInt(x[1], 10));
           const arch = [...new Set(ids)].map(i => ix[i]).filter(Boolean);
           if (!arch.length) return null;
-          const icono = (nom = "") => { const e = (nom.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return "📝"; if (e === "pdf") return "📕"; if (["xls", "xlsx", "csv"].includes(e)) return "📊"; if (["png", "jpg", "jpeg", "webp", "heic"].includes(e)) return "🖼"; if (["dwg", "dxf"].includes(e)) return "📐"; return "📎"; };
+          const icono = (nom = "") => { const e = (nom.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return ""; if (e === "pdf") return ""; if (["xls", "xlsx", "csv"].includes(e)) return ""; if (["png", "jpg", "jpeg", "webp", "heic"].includes(e)) return ""; if (["dwg", "dxf"].includes(e)) return ""; return ""; };
           return <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 7, maxWidth: "84%" }}>
             {arch.map((f, k) => <button key={k} onClick={() => descargarArchivo(f.url, f.nombre)} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", textAlign: "left", width: "100%" }}>
               <span style={{ fontSize: 17, flexShrink: 0 }}>{icono(f.nombre)}</span>
@@ -3670,9 +3989,9 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
             </button>)}
           </div>;
         })()}
-        {m.adjIA && m.adjIA.length > 0 && <div style={{ marginTop: 6, maxWidth: "84%", display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>{m.adjIA.map((a, j) => a.kind === "image" ? <img key={j} src={a.dataUrl} alt="" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}` }} /> : <span key={j} style={{ background: T.al, color: T.accent, borderRadius: 8, padding: "8px 11px", fontSize: 11.5, fontWeight: 700 }}>📄 {a.nombre.slice(0, 24)}</span>)}</div>}
-        {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
-        {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
+        {m.adjIA && m.adjIA.length > 0 && <div style={{ marginTop: 6, maxWidth: "84%", display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>{m.adjIA.map((a, j) => a.kind === "image" ? <img key={j} src={a.dataUrl} alt="" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}` }} /> : <span key={j} style={{ background: T.al, color: T.accent, borderRadius: 8, padding: "8px 11px", fontSize: 11.5, fontWeight: 700 }}><Ico n="doc" /> {a.nombre.slice(0, 24)}</span>)}</div>}
+        {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}><Ico n="send" /> {m.waLabel || "Enviar por WhatsApp"}</a>}
+        {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}><Ico n="ruler" /> </span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
         {m.media && m.media.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.mediaTipo === "videos"          ? m.media.map((u, i) => <video key={i} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000", display: "block" }} />)
           : <div style={{ display: "grid", gridTemplateColumns: m.media.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>{m.media.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" download style={{ display: "block" }}><img src={u} alt="" style={{ width: "100%", borderRadius: 10, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div>}
           <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Tocá {m.mediaTipo === "videos" ? "el video" : "la foto"} para abrir en grande o descargar/compartir.</div>
@@ -3692,9 +4011,9 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     </div>
     <div style={{ flexShrink: 0, borderTop: `1px solid ${T.border}`, background: T.card, padding: "10px 14px 14px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <button onClick={() => setUseSearch(s => !s)} style={{ background: useSearch ? T.al : T.bg, color: useSearch ? T.accent : T.muted, border: `1px solid ${useSearch ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🌐 Buscar en internet {useSearch ? "ON" : "OFF"}</button>
+        <button onClick={() => setUseSearch(s => !s)} style={{ background: useSearch ? T.al : T.bg, color: useSearch ? T.accent : T.muted, border: `1px solid ${useSearch ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="globe" /> Buscar en internet {useSearch ? "ON" : "OFF"}</button>
         {debateActive ? <button onClick={stopDebate} style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Frenar debate</button>
-          : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.navy : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.navy : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🎙 Debate IA</button>}
+          : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.navy : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.navy : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="mic" /> Debate IA</button>}
         {msgs.length > 0 && <button onClick={() => setMsgs([])} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginLeft: "auto" }}>Limpiar</button>}
       </div>
       {debateOpen && !debateActive && <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 8 }}>
@@ -3704,13 +4023,13 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           <button onClick={startDebate} disabled={!debateTema.trim()} style={{ background: debateTema.trim() ? T.navy : T.border, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "10px 16px", fontSize: 12.5, fontWeight: 700, cursor: debateTema.trim() ? "pointer" : "default" }}>Iniciar</button>
         </div>
       </div>}
-      {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}>🎙 Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
-      {chatAdj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{chatAdj.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "🖼" : "📄"} {a.nombre.slice(0, 22)} <span onClick={() => setChatAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
+      {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}><Ico n="mic" /> Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
+      {chatAdj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{chatAdj.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "" : ""} {a.nombre.slice(0, 22)} <span onClick={() => setChatAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
         <input ref={chatFileRef} type="file" accept="image/*,.pdf" multiple onChange={addChatAdj} style={{ display: "none" }} />
-        <button onClick={() => chatFileRef.current?.click()} title="Adjuntar foto o PDF para analizar" style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.accent, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>📎</button>
-        {sttOk && <button onClick={toggleVoz} style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#EF4444" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#EF4444" : T.border}`, fontSize: 16, cursor: "pointer", flexShrink: 0, animation: escuchando ? "pulse 1s infinite" : "none" }}>🎤</button>}
-        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={escuchando ? "Escuchando…" : "Escribí, adjuntá 📎 o usá el micrófono…"} rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        <button onClick={() => chatFileRef.current?.click()} title="Adjuntar foto o PDF para analizar" style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.accent, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}><Ico n="clip" /> </button>
+        {sttOk && <button onClick={toggleVoz} style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#EF4444" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#EF4444" : T.border}`, fontSize: 16, cursor: "pointer", flexShrink: 0, animation: escuchando ? "pulse 1s infinite" : "none" }}><Ico n="mic" /> </button>}
+        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={escuchando ? "Escuchando…" : "Escribí, adjuntá o usá el micrófono…"} rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
         <button onClick={() => send()} disabled={loading || (!input.trim() && chatAdj.length === 0)} style={{ width: 42, height: 42, borderRadius: T.rsm, background: (input.trim() || chatAdj.length) && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, cursor: (input.trim() || chatAdj.length) ? "pointer" : "default", flexShrink: 0 }}>↑</button>
       </div>
       {!apiKey && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center", marginTop: 7 }}>Cargá tu API Key en Más → Configuración para activar la IA.</div>}
@@ -3769,7 +4088,7 @@ function MaterialesView({ db, onBack }) {
       {items.length === 0 && <EmptyMsg>Sin materiales cargados para esta obra.</EmptyMsg>}
       {items.map(m => (<RowItem key={m.id} onClick={() => setForm(m)} onDelete={() => setMateriales(p => p.filter(x => x.id !== m.id))}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <div><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{m.nombre}{(m.adjuntos || []).length ? <span style={{ marginLeft: 6, fontSize: 10.5, color: T.muted }}>📎{(m.adjuntos || []).length}</span> : ""}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{m.cantidad} {m.unidad} × {money(m.precio)}</div></div>
+          <div><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{m.nombre}{(m.adjuntos || []).length ? <span style={{ marginLeft: 6, fontSize: 10.5, color: T.muted }}><Ico n="clip" /> {(m.adjuntos || []).length}</span> : ""}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{m.cantidad} {m.unidad} × {money(m.precio)}</div></div>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{money((Number(m.cantidad) || 0) * (Number(m.precio) || 0))}</div>
         </div>
       </RowItem>))}
@@ -3839,7 +4158,7 @@ function InformesView({ db, apiKey, onBack }) {
   async function enviarABelfast(inf) {
     if (!inf) return;
     const resumen = (inf.texto || "").slice(0, 500);
-    const msg = { id: uid() + Date.now(), from: "vv", texto: `📄 Informe de obra — ${inf.obra}\n${inf.titulo || ""}${resumen ? "\n\n" + resumen : ""}`, fecha: hoyStr(), ts: Date.now(), archivos: inf.archivos || [] };
+    const msg = { id: uid() + Date.now(), from: "vv", texto: `Informe de obra — ${inf.obra}\n${inf.titulo || ""}${resumen ? "\n\n" + resumen : ""}`, fecha: hoyStr(), ts: Date.now(), archivos: inf.archivos || [] };
     let arr = []; try { const r = await storage.get("vv_mensajes"); if (r?.value) arr = JSON.parse(r.value); } catch { }
     const next = [...arr, msg]; try { localStorage.setItem("vv_mensajes", JSON.stringify(next)); } catch { } { const __ts = Date.now(); lastWrite["vv_mensajes"] = __ts; try { localStorage.setItem("vv_mensajes__ts", String(__ts)); } catch { } await storage.set("vv_mensajes", JSON.stringify(next)); await storage.set("vv_mensajes__ts", String(__ts)); }
     if (setMensajes) setMensajes(next);
@@ -3892,8 +4211,8 @@ function InformesView({ db, apiKey, onBack }) {
     {open && <Sheet title={`${open.obra} · ${open.fecha}`} onClose={() => setOpen(null)}>
       <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 8 }}>{open.titulo || "Informe"}</div>
       {open.texto && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "14px 15px", fontSize: 12.5, color: T.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{open.texto}</div>}
-      {(open.archivos || []).map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 8, fontSize: 13, fontWeight: 700, color: T.accent }}>📎 {a.nombre}</a>)}
-      <button onClick={() => enviarABelfast(open)} style={{ width: "100%", marginTop: 16, background: open.enviado ? T.al : T.navy, color: open.enviado ? T.accent : "#fff", border: open.enviado ? `1px solid ${T.accent}` : "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", borderBottom: open.enviado ? undefined : `2px solid ${BRASS}` }}>{open.enviado ? "✓ Enviado a Belfast · reenviar" : "📤 Enviar a Belfast"}</button>
+      {(open.archivos || []).map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 8, fontSize: 13, fontWeight: 700, color: T.accent }}><Ico n="clip" /> {a.nombre}</a>)}
+      <button onClick={() => enviarABelfast(open)} style={{ width: "100%", marginTop: 16, background: open.enviado ? T.al : T.navy, color: open.enviado ? T.accent : "#fff", border: open.enviado ? `1px solid ${T.accent}` : "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", borderBottom: open.enviado ? undefined : `2px solid ${BRASS}` }}>{open.enviado ? "✓ Enviado a Belfast · reenviar" : "Enviar a Belfast"}</button>
       <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center", marginTop: 8, lineHeight: 1.5 }}>Los informes ya aparecen solos en la pestaña Informes de Belfast. Con este botón, además le llega un aviso a Mensajes.</div>
     </Sheet>}
     {nuevo && <Sheet title="Nuevo informe técnico" onClose={() => setNuevo(null)}>
@@ -3901,7 +4220,7 @@ function InformesView({ db, apiKey, onBack }) {
       <Field label="Título"><TInput value={nuevo.titulo || ""} onChange={e => setNuevo({ ...nuevo, titulo: e.target.value })} placeholder="Ej: Inspección estructural PB" /></Field>
       <Field label="Detalle"><textarea value={nuevo.texto || ""} onChange={e => setNuevo({ ...nuevo, texto: e.target.value })} rows={5} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>
       <input ref={fileRef} type="file" multiple onChange={addArch} style={{ display: "none" }} />
-      <button onClick={() => fileRef.current?.click()} style={{ width: "100%", background: T.bg, border: `1px dashed ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, color: T.sub, cursor: "pointer", marginBottom: 8 }}>📎 Adjuntar archivos {(nuevo.archivos || []).length ? `(${(nuevo.archivos || []).length})` : ""}</button>
+      <button onClick={() => fileRef.current?.click()} style={{ width: "100%", background: T.bg, border: `1px dashed ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, color: T.sub, cursor: "pointer", marginBottom: 8 }}><Ico n="clip" /> Adjuntar archivos {(nuevo.archivos || []).length ? `(${(nuevo.archivos || []).length})` : ""}</button>
       <PBtn full onClick={guardarManual}>Guardar informe</PBtn>
     </Sheet>}
   </div>);
@@ -4040,7 +4359,7 @@ function CamaraTile({ cam, onDelete, obras }) {
       {cam.tipo === "iframe" ? <iframe src={cam.url} title={cam.nombre} style={{ width: "100%", height: "100%", border: "none" }} allow="autoplay; fullscreen" />
         : cam.tipo === "hls" ? <video src={cam.url} controls playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", background: "#000" }} onError={() => setErr(true)} />
           : <img src={src} alt={cam.nombre} style={{ width: "100%", height: "100%", objectFit: "cover", display: err ? "none" : "block" }} onError={() => setErr(true)} onLoad={() => setErr(false)} />}
-      {err && <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.6)", fontSize: 11.5, textAlign: "center", padding: 16, gap: 6 }}><div style={{ fontSize: 22 }}>📹</div><div>No se pudo cargar la cámara.<br />Revisá la URL, el acceso a la red y el formato (no RTSP).</div></div>}
+      {err && <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.6)", fontSize: 11.5, textAlign: "center", padding: 16, gap: 6 }}><div style={{ fontSize: 22 }}><Ico n="video" /> </div><div>No se pudo cargar la cámara.<br />Revisá la URL, el acceso a la red y el formato (no RTSP).</div></div>}
     </div>
   </div>);
 }
@@ -4627,11 +4946,11 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
-              {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "2px 7px" }}>🏗 {obraNom(obras, p.obra_id)}</span>}
+              {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "2px 7px" }}><Ico n="building" /> {obraNom(obras, p.obra_id)}</span>}
               {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "#FEF2F2", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
               <span style={{ fontSize: 10.5, color: T.muted }}>{esDeCasa(p.de) ? (p.de === "sebastian" || p.de === "nicolas" ? "Interno" : "Enviado") : "Recibido"} · {p.fecha}</span>
             </div>
-            <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>{ult?.porIA ? "🤖 " : ""}{ult?.texto}</div>
+            <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>{ult?.porIA ? "" : ""}{ult?.texto}</div>
           </div>
           <Badge color={e.c} bg={e.b}>{e.l}</Badge>
         </div>
@@ -4646,7 +4965,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
           <Badge color={e.c} bg={e.b}>{e.l}</Badge>
         </div>
         <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{esDeCasa(cur.de) ? (cur.de === "sebastian" ? "Consulta interna · Tita" : cur.de === "nicolas" ? "Consulta interna · Nicolás" : `Enviado a ${otroNom}`) : `Recibido de ${otroNom}`} · {cur.fecha} · prioridad {cur.prioridad}</div>
-        {cur.obra_id && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 6, padding: "4px 10px", marginTop: 8 }}>🏗 Obra: {obraNom(obras, cur.obra_id)}</div>}
+        {cur.obra_id && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 6, padding: "4px 10px", marginTop: 8 }}><Ico n="building" /> Obra: {obraNom(obras, cur.obra_id)}</div>}
         <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
           {Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{v.l}</button>)}
         </div>
@@ -4657,18 +4976,18 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
         <div style={{ maxWidth: "85%" }}>
           <div style={{ background: mine ? T.navy : T.card, color: mine ? "#fff" : T.text, border: mine ? "none" : `1px solid ${T.border}`, borderRadius: mine ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "10px 13px", fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
             {h.texto}
-            {(h.archivos || []).map((a, j) => a.img ? <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 7 }}><img src={a.url} alt={a.nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} /></a> : <a key={j} href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}>📎 {a.nombre}</a>)}
+            {(h.archivos || []).map((a, j) => a.img ? <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 7 }}><img src={a.url} alt={a.nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} /></a> : <a key={j} href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}><Ico n="clip" /> {a.nombre}</a>)}
           </div>
-          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "🤖 IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}{mine && i > 0 && <span onClick={() => borrarMsgHilo(cur.id, i)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
+          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}{mine && i > 0 && <span onClick={() => borrarMsgHilo(cur.id, i)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
         </div>
       </div>); })}
       <div style={{ marginTop: 12 }}>
         <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Escribí una respuesta…" rows={3} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text }} />
-        {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>{a.img ? "🖼" : "📎"} {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
+        {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>{a.img ? "" : ""} {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button onClick={() => fileRef.current?.click()} style={{ background: T.al, color: T.accent, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>📎 Adjuntar</button>
-          <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{iaLoad ? "Redactando…" : "🤖 IA"}</button>
+          <button onClick={() => fileRef.current?.click()} style={{ background: T.al, color: T.accent, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}><Ico n="clip" /> Adjuntar</button>
+          <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{iaLoad ? "Redactando…" : "IA"}</button>
           <PBtn onClick={() => responder(cur.id, reply, false, adj)} style={{ flex: 1 }}>Enviar</PBtn>
         </div>
       </div>
@@ -5015,18 +5334,18 @@ function MensajesVVView({ db, cfg, onBack }) {
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
     <SubHead id="mensajes" label="Mensajes" sub={`Chat con ${cn}`} onBack={onBack} />
     {(mensajes || []).length > 0 && <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 16px 0" }}>
-      <button onClick={vaciarMensajes} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🗑 Vaciar mensajes ({(mensajes || []).length})</button>
+      <button onClick={vaciarMensajes} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> Vaciar mensajes ({(mensajes || []).length})</button>
     </div>}
     {clienteArchivos.length > 0 && <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "9px 16px", display: "flex", gap: 7, overflowX: "auto" }}>
       <span style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", flexShrink: 0, alignSelf: "center" }}>Del cliente:</span>
-      {clienteArchivos.slice(0, 8).map(a => <a key={a.id} href={a.url} target="_blank" rel="noreferrer" style={{ flexShrink: 0, background: T.al, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>📎 {a.nombre}</a>)}
+      {clienteArchivos.slice(0, 8).map(a => <a key={a.id} href={a.url} target="_blank" rel="noreferrer" style={{ flexShrink: 0, background: T.al, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}><Ico n="clip" /> {a.nombre}</a>)}
     </div>}
     <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
       {mensajes.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "40px 18px", lineHeight: 1.6 }}>Sin mensajes todavía. Escribile a {cn} desde acá; lo ve en su app de cliente al instante.</div>}
       {mensajes.map((m, i) => { const mine = m.from === "vv"; return (<div key={m.id || i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 11 }}>
         <div style={{ maxWidth: "82%" }}>
           <div style={{ background: mine ? T.navy : T.card, color: mine ? "#fff" : T.text, border: mine ? "none" : `1px solid ${T.border}`, borderRadius: mine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "10px 13px", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>
-            {m.texto}{(m.archivos || []).map((a, j) => <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}>📎 {a.nombre}</a>)}
+            {m.texto}{(m.archivos || []).map((a, j) => <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}><Ico n="clip" /> {a.nombre}</a>)}
           </div>
           <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{mine ? "V+V" : cn} · {m.fecha}{mine && m.id && <span onClick={() => borrarMsg(m.id)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
         </div>
@@ -5034,7 +5353,7 @@ function MensajesVVView({ db, cfg, onBack }) {
       <div ref={bottomRef} />
     </div>
     <div style={{ borderTop: `1px solid ${T.border}`, background: T.card, padding: "10px 14px 14px" }}>
-      {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: T.bg, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>📎 {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
+      {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: T.bg, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}><Ico n="clip" /> {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <button onClick={() => fileRef.current?.click()} style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0 }}>＋</button>
@@ -5535,7 +5854,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       </select>
       <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFoto} style={{ display: "none" }} />
       {pendientes.length === 0
-        ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Preparando…" : "📷 Elegir foto(s)"}</button>
+        ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Preparando…" : "Elegir foto(s)"}</button>
         : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
             <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{pendientes.length === 1 ? "1 foto seleccionada" : `${pendientes.length} fotos seleccionadas`} — poné la fecha y analizá</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
@@ -5555,7 +5874,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
       <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 2 }}>🗓 Certificado semanal</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 2 }}><Ico n="calendar" /> Certificado semanal</div>
         <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.45, marginBottom: 9 }}>Junta todos los avances de la semana + la bitácora en un solo informe. La semana cierra los viernes.</div>
         <div style={{ display: "flex", gap: 8, marginBottom: 9 }}>
           <div style={{ flex: 1 }}><label style={{ fontSize: 10, fontWeight: 700, color: T.sub }}>DESDE (sáb)</label><input type="date" value={semDesde} onChange={e => setSemDesde(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13.5, color: T.text, boxSizing: "border-box", marginTop: 3 }} /></div>
@@ -5571,15 +5890,15 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fmtDMY(c.desde)} al {fmtDMY(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
-            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); setPdfHtml(buildPdfSemanal(c)); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📄 PDF</button>
-            <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>🗑</button>
+            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); setPdfHtml(buildPdfSemanal(c)); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+            <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
           </div>
         ))}
       </div>}
-      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📄 PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
+      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <button onClick={abrirRecuperar} style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>🛟 Recuperar fotos</button>
-        <button onClick={exportarBackup} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>💾 Backup</button>
+        <button onClick={abrirRecuperar} style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="life" /> Recuperar fotos</button>
+        <button onClick={exportarBackup} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="save" /> Backup</button>
       </div>
       {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
       {historial.map((h, idx) => (<div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
@@ -5596,12 +5915,12 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
             <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{h.fecha}{idx === 0 ? "  ·  última" : ""}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
-              <button onClick={() => analizarEntry(h)} disabled={busy} title="Analizar con IA" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: busy ? "default" : "pointer", flexShrink: 0 }}>🔍 IA</button>
-              <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📄 PDF</button>
-              <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>🗑 Borrar</button>
+              <button onClick={() => analizarEntry(h)} disabled={busy} title="Analizar con IA" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: busy ? "default" : "pointer", flexShrink: 0 }}><Ico n="search" /> IA</button>
+              <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+              <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> Borrar</button>
             </div>
           </div>
-          {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>📈 Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
+          {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}><Ico n="chart" /> Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
           <div style={{ fontSize: 10, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Estado</div>
           <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.descripcion}</div>
         </div>
@@ -5613,7 +5932,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{semData ? "Certificado semanal" : "Informe de avance"}</span>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => { const f = document.getElementById("avance-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Imprimir</button>
-          <button onClick={guardarPdf} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>📥 Guardar PDF</button>
+          <button onClick={guardarPdf} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}><Ico n="download" /> Guardar PDF</button>
         </div>
       </div>
       <iframe id="avance-pdf" srcDoc={pdfHtml} title="Avance PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
@@ -5650,9 +5969,8 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
 const WEB_NAV = [
   { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" },
   { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" }, { id:"mensajes", label:"Mensajes" },
-  { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos enviados" },
-  { id:"internos", label:"🔒 Privado" },
-  { id:"mas", label:"Más" },
+  { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos enviados" }, { id:"auditoria", label:"Auditoría" },
+    { id:"mas", label:"Más" },
 ];
 function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
   const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const tieneLogo = l1 || l2;
@@ -5743,6 +6061,7 @@ function App() {
   const [bitacora, setBitacora] = useStoredState("vv_bitacora", []);
   const [informesSem, setInformesSem] = useStoredState("vv_informes_sem", {});
   const [certifSem, setCertifSem] = useStoredState("vv_certif_sem", {});
+  const [auditoria, setAuditoria] = useStoredState("vv_auditoria", []);
   const [internos, setInternos] = useStoredState("vv_internos", []);
   const [mensajes, setMensajes] = useStoredState("vv_mensajes", []);
   const [pedidos, setPedidos] = useStoredState("vv_pedidos", []);
@@ -5871,7 +6190,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
@@ -5894,6 +6213,7 @@ function App() {
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
+            {view==="auditoria" && <AuditoriaView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="mensajes" && <MensajesVVView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="internos" && <InternosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
           </div>
