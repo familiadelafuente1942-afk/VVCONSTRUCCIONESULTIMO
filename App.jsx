@@ -1833,12 +1833,11 @@ function MIcon({ id }){
 
 const MAS_TILES = [
   { id:"personal", label:"Personal" },
-  { id:"matpedidos", label:"Pedido de materiales" },
+  { id:"formularios", label:"Formularios" },
   { id:"documentacion", label:"Documentación" },
   { id:"informes", label:"Informes" },
   { id:"infsemanal", label:"Informe semanal de obra" },
   { id:"cliente", label:"Panel cliente" },
-  { id:"pedidos", label:"Pedidos" },
   { id:"gestion", label:"Plan de gestión" },
   { id:"proyectos", label:"Proyectos", go:"proyectos" },
   { id:"seguimiento", label:"Seguimiento" }, { id:"materiales", label:"Materiales" },
@@ -2454,6 +2453,11 @@ function MatPedidosView({ db, cfg, onBack }) {
     if (phone) { const clean = String(phone).replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : ("549" + clean); return `https://wa.me/${num}?text=${t}`; }
     return `https://wa.me/?text=${t}`;
   }
+  // Días transcurridos desde que se pidió (para las alertas de definiciones y planos).
+  const diasDe = (p) => { const t0 = p.ts || 0; if (!t0) return 0; return Math.max(0, Math.floor((Date.now() - t0) / 86400000)); };
+  // SLA: 5 días. Amarillo desde 3, rojo al pasarse.
+  const alertaDe = (p) => { const d = diasDe(p); if (p.cumplido) return null; if (d >= 5) return { d, txt: `⚠ Vencido — ${d} días sin respuesta`, color: "#B91C1C", bg: "#FEF2F2", bd: "#FECACA" }; if (d >= 3) return { d, txt: `⏳ ${d} días esperando`, color: "#B45309", bg: "#FFFBEB", bd: "#FDE68A" }; return { d, txt: `${d === 0 ? "Pedido hoy" : d === 1 ? "1 día esperando" : d + " días esperando"}`, color: "#1B3A5B", bg: "#EFF6FF", bd: "#DBEAFE" }; };
+  const marcarCumplido = (id, val) => db.setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, cumplido: val, cumplidoFecha: val ? hoyStr() : "" } : x));
   function nuevo(tipo = "material") { setForm({ tipo, obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u", detalle: "" }], nota: "" }); }
   function addItem() { setForm(f => ({ ...f, items: [...f.items, { nombre: "", cantidad: "", unidad: "u", detalle: "" }] })); }
   function setItem(i, k, v) { setForm(f => ({ ...f, items: (f.items || []).map((it, j) => j === i ? { ...it, [k]: v } : it) })); }
@@ -2469,7 +2473,13 @@ function MatPedidosView({ db, cfg, onBack }) {
     alert(`✓ Pedido de ${tp.label.toLowerCase()} enviado a ${cn}. Le queda como NO LEÍDO hasta que lo levante.`);
   }
   function borrar(id) { if (confirm("¿Eliminar este pedido?")) setMatpedidos(prev => (prev || []).filter(x => x.id !== id)); }
-  const lista = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const [verCumplidos, setVerCumplidos] = useState(false);
+  const todos = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const lista = verCumplidos ? todos : todos.filter(p => !p.cumplido);
+  // Alertas de gestión: definiciones y planos pendientes (los cumplidos NO cuentan).
+  const pendDefPl = todos.filter(p => p.tipo !== "material" && !p.cumplido);
+  const vencidos = pendDefPl.filter(p => ((Date.now() - (p.ts || 0)) / 86400000) >= 5);
+  const cumplidosN = todos.filter(p => p.cumplido).length;
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="materiales" label="Pedidos y documentación" sub={`Enviado a ${cn}`} onBack={onBack} />
 
@@ -2481,6 +2491,15 @@ function MatPedidosView({ db, cfg, onBack }) {
     </div>
 
     {vista === "pedidos" && <div style={{ padding: "16px 20px" }}>
+      {(pendDefPl.length > 0 || cumplidosN > 0) && <div style={{ background: vencidos.length ? "#FEF2F2" : T.card, border: `1px solid ${vencidos.length ? "#FECACA" : T.border}`, borderLeft: `3px solid ${vencidos.length ? "#B91C1C" : BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 14 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: vencidos.length ? "#B91C1C" : T.navy }}>
+          {vencidos.length ? `⚠ ${vencidos.length} pedido(s) vencido(s)` : pendDefPl.length ? `${pendDefPl.length} definición/plano pendiente(s)` : "Sin pendientes de definiciones ni planos"}
+        </div>
+        <div style={{ fontSize: 11, color: T.muted, marginTop: 3, lineHeight: 1.45 }}>
+          {pendDefPl.length ? `${pendDefPl.length} esperando respuesta · ` : ""}{cumplidosN} cumplido(s). Se considera vencido a los 5 días sin respuesta.
+        </div>
+        {cumplidosN > 0 && <button onClick={() => setVerCumplidos(v => !v)} style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{verCumplidos ? "Ocultar cumplidos" : `Ver también los ${cumplidosN} cumplido(s)`}</button>}
+      </div>}
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Qué querés pedir</div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         {TIPOS_PEDIDO.map(t => (
@@ -2503,9 +2522,13 @@ function MatPedidosView({ db, cfg, onBack }) {
             {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, fontStyle: "italic" }}>{p.nota}</div>}
             <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 6, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado por ${cn}${p.leidoFecha ? " · " + p.leidoFecha : ""}` : `● No leído por ${cn}`}</div>
             {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 3 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
+            {p.tipo !== "material" && (p.cumplido
+              ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Cumplido{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
+              : (() => { const a = alertaDe(p); return a ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: a.color, background: a.bg, border: `1px solid ${a.bd}`, borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>{a.txt}</div> : null; })())}
           </div>
           <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
+        {p.tipo !== "material" && <button onClick={() => marcarCumplido(p.id, !p.cumplido)} style={{ width: "100%", marginTop: 10, background: p.cumplido ? T.bg : "#ECFDF5", color: p.cumplido ? T.sub : "#15803D", border: `1px solid ${p.cumplido ? T.border : "#A7F3D0"}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{p.cumplido ? "↩ Reabrir (volver a pendiente)" : "✓ Marcar como cumplido"}</button>}
         <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 10, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar por WhatsApp a los jefes de obra</button>
         {waFor === p.id && <div style={{ marginTop: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
@@ -5277,7 +5300,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
 const WEB_NAV = [
   { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" },
   { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" }, { id:"mensajes", label:"Mensajes" },
-  { id:"bitacora", label:"Bitácora" }, { id:"formularios", label:"Formularios" },
+  { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos" },
   { id:"internos", label:"🔒 Privado" },
   { id:"mas", label:"Más" },
 ];
@@ -5519,6 +5542,7 @@ function App() {
             {view==="informes" && <InformesView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
+            {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="mensajes" && <MensajesVVView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="internos" && <InternosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
           </div>
