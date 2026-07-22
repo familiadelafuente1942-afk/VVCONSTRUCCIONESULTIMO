@@ -2262,7 +2262,7 @@ function BitacoraView({ db, cfg, onBack }) {
 
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
 
-  return (<div>
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="documentacion" label="Bitácora de obra" sub="Cargá lo que va pasando para justificar adicionales" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
       {/* selector de obra */}
@@ -2780,11 +2780,15 @@ function MatPedidosView({ db, cfg, onBack }) {
     guardarMats(prev => (prev || []).filter(x => x.id !== id));
   }
   const [verCumplidos, setVerCumplidos] = useState(true);
+  const [fTipo, setFTipo] = useState("");
+  const [fObra, setFObra] = useState("");
   const todos = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   // Orden: primero los pendientes y después los cumplidos; dentro de cada grupo,
   // del pedido más NUEVO al más viejo (por fecha real del pedido).
   const fechaOrden = (p) => { if (p.ts) return p.ts; const m = String(p.fecha || "").match(/^(\d{2})\/(\d{2})\/(\d{2})$/); return m ? new Date(`20${m[3]}-${m[2]}-${m[1]}T12:00:00`).getTime() : 0; };
-  const lista = (verCumplidos ? todos : todos.filter(p => !p.cumplido)).slice().sort((a, b) => {
+  const obrasConPedidos = (obras || []).filter(o => todos.some(p => p.obra_id === o.id));
+  const filtrados = todos.filter(p => (!fObra || p.obra_id === fObra) && (!fTipo || (p.tipo || "material") === fTipo));
+  const lista = (verCumplidos ? filtrados : filtrados.filter(p => !p.cumplido)).slice().sort((a, b) => {
     const ca = !!a.cumplido, cb = !!b.cumplido;
     if (ca !== cb) return ca ? 1 : -1;
     return fechaOrden(b) - fechaOrden(a);
@@ -2814,6 +2818,20 @@ function MatPedidosView({ db, cfg, onBack }) {
         {cumplidosN > 0 && <button onClick={() => setVerCumplidos(v => !v)} style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{verCumplidos ? `Ocultar los ${cumplidosN} cumplido(s)` : `Mostrar los ${cumplidosN} cumplido(s)`}</button>}
       </div>}
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Qué querés pedir</div>
+      {todos.length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 10, marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 7, flexWrap: "wrap" }}>
+          <button onClick={() => setFTipo("")} style={{ background: fTipo === "" ? T.accent : T.card, color: fTipo === "" ? "#fff" : T.sub, border: `1px solid ${fTipo === "" ? T.accent : T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Todo</button>
+          {TIPOS_PEDIDO.map(t => (
+            <button key={t.id} onClick={() => setFTipo(fTipo === t.id ? "" : t.id)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, background: fTipo === t.id ? t.color : T.card, color: fTipo === t.id ? "#fff" : T.sub, border: `1px solid ${fTipo === t.id ? t.color : T.border}`, borderRadius: 8, padding: "6px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+              <span>{t.icon}</span>{t.label}
+            </button>
+          ))}
+        </div>
+        {obrasConPedidos.length > 1 && <select value={fObra} onChange={e => setFObra(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 600, color: T.text, boxSizing: "border-box" }}>
+          <option value="">Todas las obras</option>
+          {obrasConPedidos.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        </select>}
+      </div>}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         {TIPOS_PEDIDO.map(t => (
           <button key={t.id} onClick={() => nuevo(t.id)} style={{ flex: 1, background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", textAlign: "center", borderTop: `3px solid ${t.color}` }}>
