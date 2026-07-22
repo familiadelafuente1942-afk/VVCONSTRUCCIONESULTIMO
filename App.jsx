@@ -4798,14 +4798,26 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
     try {
       const txtAv = av.length ? av.map(h => `- ${h.fecha}: ${(h.avance || h.descripcion || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros visuales)";
       const txtBt = bt.length ? bt.map(h => `- ${fmtDMY(h.fecha)} · ${h.titulo || ""}: ${(h.desc || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros de bitácora)";
-      const sys = "Sos un jefe de obra civil en Argentina que redacta certificados semanales para la dirección de obra. Escribís profesional, claro y conciso, en español rioplatense neutro-formal. No inventás datos: sintetizás y ordenás lo que te pasan. Los porcentajes son estimaciones visuales.";
-      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtDMY(semDesde)} al ${fmtDMY(semHasta)} (cierre viernes).\n\nREGISTROS DE AVANCE (fotos analizadas, pueden ser de días salteados):\n${txtAv}\n\nBITÁCORA DE OBRA (recepción de materiales, documentación, hechos):\n${txtBt}\n\nRedactá el certificado semanal con este formato EXACTO:\nDESARROLLO: (3 a 6 renglones contando cómo evolucionó la obra en la semana, uniendo los distintos días en un relato único, con el % estimado de avance alcanzado)\nRECEPCIONES: \n- (viñetas cortas con materiales recibidos y documentación, según la bitácora; si no hay, poné "Sin registros en la semana")\nALERTAS: \n- (viñetas con pendientes, faltantes o demoras detectadas; si no hay, poné "Sin alertas")`;
-      const resp = await callAI([{ role: "user", content: instruc }], sys, apiKey, false);
+      // Fotos de la semana (hasta 6) para que la IA pueda evaluar orden, limpieza y protecciones.
+      const imgs = [];
+      try {
+        const urls = [];
+        for (const h of av) { for (const u of ((h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []))) { if (urls.length < 6) urls.push(u); } }
+        for (const u of urls) {
+          const r = await fetch(u); const bl = await r.blob();
+          const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(bl); });
+          imgs.push({ type: "image", source: { type: "base64", media_type: (String(dataUrl).match(/data:(.*?);/) || [])[1] || "image/jpeg", data: String(dataUrl).split(",")[1] } });
+        }
+      } catch (e) { }
+      const sys = "Sos un jefe de obra civil en Argentina que redacta certificados semanales para la dirección de obra. Escribís profesional, claro y conciso, en español rioplatense neutro-formal. No inventás datos: sintetizás y ordenás lo que te pasan. Los porcentajes son estimaciones visuales. En higiene y seguridad sos objetivo: describís solo lo que se ve en las fotos.";
+      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtDMY(semDesde)} al ${fmtDMY(semHasta)} (cierre viernes).\n\nREGISTROS DE AVANCE (fotos analizadas, pueden ser de días salteados):\n${txtAv}\n\nBITÁCORA DE OBRA (recepción de materiales, documentación, hechos):\n${txtBt}\n\nRedactá el certificado semanal con este formato EXACTO:\nDESARROLLO: (3 a 6 renglones contando cómo evolucionó la obra en la semana, uniendo los distintos días en un relato único, con el % estimado de avance alcanzado)\nRECEPCIONES: \n- (viñetas cortas con materiales recibidos y documentación, según la bitácora; si no hay, poné "Sin registros en la semana")\nLIMPIEZA Y SEGURIDAD: \n- (2 a 4 viñetas evaluando, SEGÚN LAS FOTOS ADJUNTAS: orden y limpieza de la obra —acopio de materiales, escombros, circulaciones libres— y uso de protecciones del personal —casco, chaleco, calzado de seguridad, arnés, guantes—. Si en las fotos no se ve personal, aclarálo. Si no hay fotos, poné "Sin fotos para evaluar")\nALERTAS: \n- (viñetas con pendientes, faltantes o demoras detectadas; si no hay, poné "Sin alertas")`;
+      const resp = await callAI([{ role: "user", content: imgs.length ? [...imgs, { type: "text", text: instruc }] : instruc }], sys, apiKey, false);
       const cortar = (re) => { const m = resp.match(re); return m ? m[1].trim() : ""; };
       const desarrollo = cortar(/DESARROLLO:\s*([\s\S]*?)(?:RECEPCIONES:|ALERTAS:|$)/i) || resp;
-      const recepciones = cortar(/RECEPCIONES:\s*([\s\S]*?)(?:ALERTAS:|$)/i);
+      const recepciones = cortar(/RECEPCIONES:\s*([\s\S]*?)(?:LIMPIEZA Y SEGURIDAD:|ALERTAS:|$)/i);
+      const limpieza = cortar(/LIMPIEZA Y SEGURIDAD:\s*([\s\S]*?)(?:ALERTAS:|$)/i);
       const alertas = cortar(/ALERTAS:\s*([\s\S]*)$/i);
-      const data = { desde: semDesde, hasta: semHasta, desarrollo, recepciones, alertas, av, bt, emitido: hoyStr() };
+      const data = { desde: semDesde, hasta: semHasta, desarrollo, recepciones, limpieza, alertas, av, bt, emitido: hoyStr() };
       const rec = { ...data, id: uid() + Date.now(), ts: Date.now() };
       if (setCertif) setCertif(prev => { const p = prev || {}; const otros = (p[obraId] || []).filter(x => !(x.desde === rec.desde && x.hasta === rec.hasta)); return { ...p, [obraId]: [rec, ...otros] }; });
       setSemData(data); setPdfEntries(av); setPdfHtml(buildPdfSemanal(data));
@@ -4855,6 +4867,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       <div class="barra"><div>Obra: <b>${_escPdf(nom)}</b></div><div>Semana: <b>${fmtDMY(d.desde)} al ${fmtDMY(d.hasta)}</b></div><div>Emitido: <b>${_escPdf(d.emitido)}</b></div></div>
       <h2>Desarrollo de la semana</h2><div class="parr">${_escPdf(d.desarrollo)}</div>
       <h2>Recepción de materiales y documentación</h2>${lista(d.recepciones, "Sin registros en la semana")}
+      <h2>Orden, limpieza y protección del personal</h2>${lista(d.limpieza, "Sin fotos para evaluar en la semana")}
       <h2>Pendientes y alertas</h2>${lista(d.alertas, "Sin alertas")}
       <h2>Registro visual del avance</h2>${visual}
       <h2>Bitácora de la semana</h2>${bita}
@@ -4979,6 +4992,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       const vinetas = (t, vacio) => { const it = String(t || "").split("\n").map(l => l.replace(/^[-•\s]+/, "").trim()).filter(Boolean); if (!it.length) { doc.setFont("helvetica", "italic"); doc.setFontSize(10); doc.setTextColor(150, 160, 175); ensure(14); doc.text(vacio, M + 6, y); y += 18; return; } doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); for (const x of it) { const lines = doc.splitTextToSize("•  " + x, W - 2 * M - 6); for (let k = 0; k < lines.length; k++) { ensure(14); doc.text(lines[k], M + (k === 0 ? 6 : 16), y); y += 14; } } y += 6; };
       titulo("Desarrollo de la semana"); parrafo(d.desarrollo);
       titulo("Recepción de materiales y documentación"); vinetas(d.recepciones, "Sin registros en la semana");
+      titulo("Orden, limpieza y protección del personal"); vinetas(d.limpieza, "Sin fotos para evaluar en la semana");
       titulo("Pendientes y alertas"); vinetas(d.alertas, "Sin alertas");
       titulo("Registro visual del avance");
       for (const h of d.av) {
