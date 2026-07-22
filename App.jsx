@@ -1887,6 +1887,7 @@ const MAS_TILES = [
   { id:"documentacion", label:"Documentación" },
   { id:"informes", label:"Informes" },
   { id:"auditoria", label:"Auditoría de obra" },
+  { id:"plantillas", label:"Plantillas de documentos" },
   { id:"internos", label:"Chat privado" },
   { id:"infsemanal", label:"Informe semanal de obra" },
   { id:"cliente", label:"Panel cliente" },
@@ -3291,6 +3292,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "documentacion": return <DocumentacionView db={db} cfg={cfg} onBack={back} />;
       case "bitacora": return <BitacoraView db={db} cfg={cfg} onBack={back} />;
       case "auditoria": return <AuditoriaView db={db} cfg={cfg} onBack={back} />;
+      case "plantillas": return <PlantillasView db={db} cfg={cfg} onBack={back} />;
       case "infsemanal": return <InformeSemanalView db={db} cfg={cfg} onBack={back} />;
       case "internos": return <InternosView db={db} cfg={cfg} onBack={back} />;
       case "matpedidos": return <MatPedidosView db={db} cfg={cfg} onBack={back} />;
@@ -5024,6 +5026,154 @@ const FORM_TPLS = [
   { id: "nota", nombre: "Nota de pedido de información", sub: "Solicitud a la Dirección de Obra", modo: "nota", lineas: true, textos: [{ k: "intro", l: "Texto de presentación" }, { k: "nota", l: "Nota / aclaración" }] },
 ];
 
+
+// ═══ PLANTILLAS DE DOCUMENTOS — se completan y se guardan en la obra ═══
+async function cargarZip() {
+  if (window.PizZip) return window.PizZip;
+  const urls = ["https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.4/pizzip.min.js", "https://cdn.jsdelivr.net/npm/pizzip@3.1.4/dist/pizzip.min.js", "https://unpkg.com/pizzip@3.1.4/dist/pizzip.min.js"];
+  for (const src of urls) {
+    try { await new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); if (window.PizZip) return window.PizZip; } catch (e) { }
+  }
+  throw new Error("zip");
+}
+function PlantillasView({ db, cfg, onBack }) {
+  const obras = db.obras || [];
+  const plantillas = db.plantillas || [];
+  const fileRef = useRef(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [usar, setUsar] = useState(null);   // plantilla que se está completando
+  const [busy, setBusy] = useState(false);
+
+  const icoArch = (nom = "") => { const e = (nom.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return "word"; if (e === "pdf") return "doc"; if (["xls", "xlsx", "csv"].includes(e)) return "excel"; if (["png", "jpg", "jpeg"].includes(e)) return "image"; return "clip"; };
+
+  async function subirPlantilla(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setSubiendo(true);
+    try {
+      const nuevas = [];
+      for (const f of files) {
+        if (f.size > 12 * 1024 * 1024) { alert(`"${f.name}" pesa más de 12 MB.`); continue; }
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const ext = (f.name.match(/\.([a-zA-Z0-9]+)$/) || [])[1] || "dat";
+        const url = await uploadFoto(dataUrl, "plantillas", `${uid()}.${ext}`);
+        nuevas.push({ id: uid() + Date.now(), nombre: f.name, url: url || dataUrl, tipo: f.type || "", ext: ext.toLowerCase(), ts: Date.now(), campos: [] });
+      }
+      db.setPlantillas([...nuevas, ...plantillas]);
+    } catch (err) { alert("No pude subir la plantilla."); }
+    setSubiendo(false);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+  const borrar = (id) => { if (confirm("¿Borrar esta plantilla? Los documentos ya generados en las obras no se tocan.")) db.setPlantillas(plantillas.filter(p => p.id !== id)); };
+
+  function abrirUsar(p) {
+    setUsar({ plantilla: p, obra_id: obras[0]?.id || "", fecha: new Date().toISOString().slice(0, 10), responsable: cfg?.responsableTecnico || "", extras: (p.campos || []).map(c => ({ k: c, v: "" })), nombreFinal: "" });
+  }
+
+  // Completa el .docx reemplazando {marcadores} y lo guarda en los Archivos de la obra.
+  async function generar() {
+    const u = usar; if (!u) return;
+    if (!u.obra_id) { alert("Elegí la obra."); return; }
+    const obra = obras.find(o => o.id === u.obra_id);
+    const [aa, mm, dd] = String(u.fecha || "").split("-");
+    const fechaTxt = aa ? `${dd}/${mm}/${aa.slice(2)}` : hoyStr();
+    const vals = { obra: obra?.nombre || "", fecha: fechaTxt, responsable: u.responsable || "", empresa: cfg?.empresa || "V+V Construcciones", sector: obra?.sector || "", avance: String(obra?.avance ?? "") };
+    (u.extras || []).forEach(x => { if ((x.k || "").trim()) vals[x.k.trim()] = x.v || ""; });
+    setBusy(true);
+    try {
+      const resp = await fetch(u.plantilla.url); const blob = await resp.blob();
+      let salida = blob, nombre = (u.nombreFinal || "").trim() || `${u.plantilla.nombre.replace(/\.[^.]+$/, "")} — ${obra?.nombre || ""} ${fechaTxt}.${u.plantilla.ext}`;
+      let completado = false;
+      if (u.plantilla.ext === "docx") {
+        try {
+          const PizZip = await cargarZip();
+          const buf = await blob.arrayBuffer();
+          const zip = new PizZip(buf);
+          ["word/document.xml", "word/header1.xml", "word/footer1.xml"].forEach(part => {
+            let xml = null; try { xml = zip.file(part) ? zip.file(part).asText() : null; } catch (e) { }
+            if (!xml) return;
+            // limpia marcadores partidos por Word: {ob}{ra} -> {obra}
+            xml = xml.replace(/\{[^<>{}]*?\}/g, m => m);
+            Object.keys(vals).forEach(k => { xml = xml.split("{" + k + "}").join(String(vals[k] || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")); });
+            zip.file(part, xml);
+            completado = true;
+          });
+          if (completado) salida = zip.generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+        } catch (e) { completado = false; }
+      }
+      // guardo el documento en los Archivos de la obra
+      const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(salida); });
+      const url = await uploadFoto(dataUrl, `obras/${u.obra_id}/documentos`, `${uid()}.${u.plantilla.ext}`);
+      const arch = { id: uid() + Date.now(), nombre, url: url || dataUrl, fecha: hoyStr(), desdePlantilla: u.plantilla.nombre };
+      db.setObras(prev => (prev || []).map(o => o.id === u.obra_id ? { ...o, archivos: [arch, ...(o.archivos || [])] } : o));
+      setBusy(false); setUsar(null);
+      alert(`✓ Documento guardado en los Archivos de ${obra?.nombre || "la obra"}.${completado ? "\n\nSe completaron los datos dentro del Word." : u.plantilla.ext === "docx" ? "\n\nOjo: no encontré marcadores para completar, se guardó una copia tal cual." : ""}`);
+    } catch (e) { setBusy(false); alert("No pude generar el documento. Probá de nuevo."); }
+  }
+
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 11px", fontSize: 13.5, color: T.text, boxSizing: "border-box" };
+  const lbl = { fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em" };
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
+    <SubHead id="documentacion" label="Plantillas de documentos" sub="Subí un modelo, completalo y guardalo en la obra" onBack={onBack} />
+    <div style={{ padding: "14px 18px" }}>
+      <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
+        Para que se complete solo, escribí en el Word los marcadores entre llaves: <b>{"{obra}"}</b>, <b>{"{fecha}"}</b>, <b>{"{responsable}"}</b>, <b>{"{empresa}"}</b>, <b>{"{sector}"}</b>. Podés sumar los tuyos y cargarlos al usar la plantilla.
+      </div>
+      <input ref={fileRef} type="file" multiple onChange={subirPlantilla} style={{ display: "none" }} />
+      <button onClick={() => fileRef.current?.click()} disabled={subiendo} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>{subiendo ? "Subiendo…" : <><Ico n="upload" s={15} c="#fff" /> Subir plantilla (Word, PDF, Excel)</>}</button>
+
+      {plantillas.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>Todavía no cargaste plantillas.<br />Subí el modelo que usás y después lo completás para cada obra.</div>}
+      {plantillas.map(p => (
+        <div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <Ico n={icoArch(p.nombre)} s={18} c={T.accent} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{p.ext?.toUpperCase()}{p.ext === "docx" ? " · se completa automáticamente" : " · se guarda una copia"}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
+            <button onClick={() => abrirUsar(p)} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 7, padding: "8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Usar en una obra</button>
+            <button onClick={() => descargarArchivo(p.url, p.nombre)} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Abrir</button>
+            <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "8px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} c="#EF4444" /></button>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {usar && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={() => setUsar(null)}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, width: "100%", maxHeight: "92vh", overflowY: "auto", borderRadius: "16px 16px 0 0", padding: "16px 18px calc(24px + env(safe-area-inset-bottom))" }}>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: T.navy, marginBottom: 2 }}>Completar y guardar en la obra</div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>{usar.plantilla.nombre}</div>
+        <label style={lbl}>Obra</label>
+        <select value={usar.obra_id} onChange={e => setUsar(u => ({ ...u, obra_id: e.target.value }))} style={{ ...inp, margin: "5px 0 10px" }}>
+          <option value="">— Elegí la obra —</option>
+          {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        </select>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1 }}><label style={lbl}>Fecha</label><input type="date" value={usar.fecha} onChange={e => setUsar(u => ({ ...u, fecha: e.target.value }))} style={{ ...inp, margin: "5px 0 10px" }} /></div>
+          <div style={{ flex: 1 }}><label style={lbl}>Responsable</label><input value={usar.responsable} onChange={e => setUsar(u => ({ ...u, responsable: e.target.value }))} placeholder="Nombre" style={{ ...inp, margin: "5px 0 10px" }} /></div>
+        </div>
+        <label style={lbl}>Otros datos a completar</label>
+        {(usar.extras || []).map((x, i) => (
+          <div key={i} style={{ display: "flex", gap: 6, margin: "5px 0" }}>
+            <input value={x.k} onChange={e => setUsar(u => ({ ...u, extras: u.extras.map((y, j) => j === i ? { ...y, k: e.target.value } : y) }))} placeholder="marcador (ej: etapa)" style={{ ...inp, flex: 1 }} />
+            <input value={x.v} onChange={e => setUsar(u => ({ ...u, extras: u.extras.map((y, j) => j === i ? { ...y, v: e.target.value } : y) }))} placeholder="valor" style={{ ...inp, flex: 1 }} />
+            <button onClick={() => setUsar(u => ({ ...u, extras: u.extras.filter((_, j) => j !== i) }))} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer" }}>✕</button>
+          </div>
+        ))}
+        <button onClick={() => setUsar(u => ({ ...u, extras: [...(u.extras || []), { k: "", v: "" }] }))} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", margin: "3px 0 12px" }}>+ Agregar dato</button>
+        <label style={lbl}>Nombre del archivo final (opcional)</label>
+        <input value={usar.nombreFinal} onChange={e => setUsar(u => ({ ...u, nombreFinal: e.target.value }))} placeholder="Se arma solo con la obra y la fecha" style={{ ...inp, margin: "5px 0 14px" }} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setUsar(null)} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 9, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={generar} disabled={busy} style={{ flex: 2, background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>{busy ? "Generando…" : "Generar y guardar en la obra"}</button>
+        </div>
+      </div>
+    </div>}
+  </div>);
+}
+
 function FormulariosView({ db, cfg, onBack }) {
   const adjRefForm = useRef(null);
   const [subiendoAdj, setSubiendoAdj] = useState(false);
@@ -6099,6 +6249,7 @@ function App() {
   const [informesSem, setInformesSem] = useStoredState("vv_informes_sem", {});
   const [certifSem, setCertifSem] = useStoredState("vv_certif_sem", {});
   const [auditoria, setAuditoria] = useStoredState("vv_auditoria", []);
+  const [plantillas, setPlantillas] = useStoredState("vv_plantillas", []);
   const [internos, setInternos] = useStoredState("vv_internos", []);
   const [mensajes, setMensajes] = useStoredState("vv_mensajes", []);
   const [pedidos, setPedidos] = useStoredState("vv_pedidos", []);
@@ -6227,7 +6378,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
