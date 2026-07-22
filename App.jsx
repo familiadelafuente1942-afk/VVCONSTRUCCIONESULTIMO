@@ -4687,7 +4687,7 @@ function ClientePanel({ db, cfg, onBack }) {
 // ── SHELL WEB INSTITUCIONAL (V+V) ────────────────────────────────────
 const LUXE_BG = "radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px) 0 0/22px 22px, radial-gradient(1100px 520px at 50% -8%, rgba(176,137,79,0.13), transparent 62%), linear-gradient(180deg,#0b141f 0%,#0a1019 100%)";
 const LUXE_HERO = "radial-gradient(620px 220px at 86% 0%, rgba(176,137,79,0.20), transparent 60%), linear-gradient(135deg,#101C2C 0%,#17283c 100%)";
-function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
+function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
@@ -4736,8 +4736,89 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
       <div class="foot">Generado por ${marca} · Seguimiento visual de avance de obra.</div>
     </div></body></html>`;
   }
-  const pdfUno = (h) => { setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
-  const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
+  const pdfUno = (h) => { setSemData(null); setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
+  const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setSemData(null); setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
+
+  // ══ CERTIFICADO SEMANAL — junta los avances de la semana + la bitácora. Cierra los VIERNES ══
+  const [semData, setSemData] = React.useState(null);
+  const rangoViernes = () => { const d = new Date(); const diff = (d.getDay() - 5 + 7) % 7; const fin = new Date(d); fin.setDate(d.getDate() - diff); const ini = new Date(fin); ini.setDate(fin.getDate() - 6); const iso = (x) => x.toISOString().slice(0, 10); return { desde: iso(ini), hasta: iso(fin) }; };
+  const [semDesde, setSemDesde] = React.useState(() => rangoViernes().desde);
+  const [semHasta, setSemHasta] = React.useState(() => rangoViernes().hasta);
+  const isoDeAvance = (f) => { const [d, m, a] = String(f || "").split("/"); return a ? `20${a}-${m}-${d}` : ""; };
+  const fmtDMY = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
+
+  async function armarSemanal() {
+    if (!obraId) { alert("Elegí una obra."); return; }
+    const dentro = (iso) => iso && iso >= semDesde && iso <= semHasta;
+    const av = ((avance || {})[obraId] || []).filter(h => dentro(isoDeAvance(h.fecha))).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    const bt = (bitacora || []).filter(h => h.obra_id === obraId && dentro(h.fecha)).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+    if (!av.length && !bt.length) { alert("No hay avances ni bitácora cargados en esa semana para esta obra."); return; }
+    setBusy(true); setStatus("Armando el certificado semanal…");
+    try {
+      const txtAv = av.length ? av.map(h => `- ${h.fecha}: ${(h.avance || h.descripcion || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros visuales)";
+      const txtBt = bt.length ? bt.map(h => `- ${fmtDMY(h.fecha)} · ${h.titulo || ""}: ${(h.desc || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros de bitácora)";
+      const sys = "Sos un jefe de obra civil en Argentina que redacta certificados semanales para la dirección de obra. Escribís profesional, claro y conciso, en español rioplatense neutro-formal. No inventás datos: sintetizás y ordenás lo que te pasan. Los porcentajes son estimaciones visuales.";
+      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtDMY(semDesde)} al ${fmtDMY(semHasta)} (cierre viernes).\n\nREGISTROS DE AVANCE (fotos analizadas, pueden ser de días salteados):\n${txtAv}\n\nBITÁCORA DE OBRA (recepción de materiales, documentación, hechos):\n${txtBt}\n\nRedactá el certificado semanal con este formato EXACTO:\nDESARROLLO: (3 a 6 renglones contando cómo evolucionó la obra en la semana, uniendo los distintos días en un relato único, con el % estimado de avance alcanzado)\nRECEPCIONES: \n- (viñetas cortas con materiales recibidos y documentación, según la bitácora; si no hay, poné "Sin registros en la semana")\nALERTAS: \n- (viñetas con pendientes, faltantes o demoras detectadas; si no hay, poné "Sin alertas")`;
+      const resp = await callAI([{ role: "user", content: instruc }], sys, apiKey, false);
+      const cortar = (re) => { const m = resp.match(re); return m ? m[1].trim() : ""; };
+      const desarrollo = cortar(/DESARROLLO:\s*([\s\S]*?)(?:RECEPCIONES:|ALERTAS:|$)/i) || resp;
+      const recepciones = cortar(/RECEPCIONES:\s*([\s\S]*?)(?:ALERTAS:|$)/i);
+      const alertas = cortar(/ALERTAS:\s*([\s\S]*)$/i);
+      const data = { desde: semDesde, hasta: semHasta, desarrollo, recepciones, alertas, av, bt, emitido: hoyStr() };
+      setSemData(data); setPdfEntries(av); setPdfHtml(buildPdfSemanal(data));
+      setStatus("");
+    } catch (e) { setStatus("No pude armar el certificado. Fijate que tengas crédito de API y probá de nuevo."); }
+    setBusy(false);
+  }
+
+  function buildPdfSemanal(d) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const nom = obra?.nombre || "Obra";
+    const vin = (t) => (t || "").split("\n").map(l => l.replace(/^[-•\s]+/, "").trim()).filter(Boolean);
+    const lista = (t, vacio) => { const it = vin(t); return it.length ? `<ul>${it.map(x => `<li>${_escPdf(x)}</li>`).join("")}</ul>` : `<div class="vacio">${vacio}</div>`; };
+    const visual = d.av.map(h => { const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []); return `<div class="ent"><div class="fecha">${_escPdf(h.fecha)}</div>${fs.length ? `<div class="fotos">${fs.map(u => `<img src="${u}" />`).join("")}</div>` : ""}<div class="txt">${_escPdf(h.avance || h.descripcion || "")}</div></div>`; }).join("") || `<div class="vacio">Sin registros visuales en la semana</div>`;
+    const bita = d.bt.length ? `<table><tr><th>Fecha</th><th>Hecho</th><th>Detalle</th></tr>${d.bt.map(h => `<tr><td>${_escPdf(fmtDMY(h.fecha))}</td><td>${_escPdf(h.titulo || "")}</td><td>${_escPdf(h.desc || "")}</td></tr>`).join("")}</table>` : `<div class="vacio">Sin registros de bitácora en la semana</div>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
+      .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      .parr { font-size: 12.5px; line-height: 1.6; text-align: justify; }
+      ul { margin: 0; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.55; margin-bottom: 3px; }
+      .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
+      table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+      th { background: #F1F5F9; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
+      .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+      .fecha { font-size: 12.5px; font-weight: 800; color: #B0894F; margin-bottom: 7px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+      .fotos img { width: calc(50% - 3px); max-height: 240px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
+      .fotos img:only-child { width: 100%; max-height: 320px; }
+      .txt { font-size: 12px; line-height: 1.5; page-break-inside: avoid; break-inside: avoid; }
+      .foot { margin-top: 20px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Certificado semanal de avance</div></div>
+      <div class="barra"><div>Obra: <b>${_escPdf(nom)}</b></div><div>Semana: <b>${fmtDMY(d.desde)} al ${fmtDMY(d.hasta)}</b></div><div>Emitido: <b>${_escPdf(d.emitido)}</b></div></div>
+      <h2>Desarrollo de la semana</h2><div class="parr">${_escPdf(d.desarrollo)}</div>
+      <h2>Recepción de materiales y documentación</h2>${lista(d.recepciones, "Sin registros en la semana")}
+      <h2>Pendientes y alertas</h2>${lista(d.alertas, "Sin alertas")}
+      <h2>Registro visual del avance</h2>${visual}
+      <h2>Bitácora de la semana</h2>${bita}
+      <div class="foot">Generado por ${marca} · Certificado semanal de avance de obra.</div>
+    </div></body></html>`;
+  }
+
   const [pdfEntries, setPdfEntries] = React.useState([]);
   // Guarda el avance mezclando con lo último de la nube por obra, para NO pisar
   // las otras obras (evita que al subir a una obra desaparezcan las demás).
@@ -4818,7 +4899,51 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
     } catch (e) { setStatus("No pude analizar. Fijate que tengas crédito de API y probá de nuevo."); }
     setBusy(false);
   }
+  async function guardarPdfSemanal(d) {
+    setStatus("Generando PDF…");
+    try {
+      const jsPDF = await cargarJsPDF();
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(); const M = 42; let y = M;
+      const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+      const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+      const nom = obra?.nombre || "Obra";
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      const loadImg = async (url) => { const r = await fetch(url); const bl = await r.blob(); const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(bl); }); const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 800, h: im.naturalHeight || 600 }); im.onerror = () => res({ w: 800, h: 600 }); im.src = data; }); let fmt = "JPEG"; try { fmt = data.substring(5, data.indexOf(";")).split("/")[1].toUpperCase(); if (fmt === "JPG") fmt = "JPEG"; } catch { } return { data, w: dim.w, h: dim.h, fmt }; };
+      if (logo) { try { const im = await loadImg(logo); let lw = Math.min(140, im.w); let lh = lw * im.h / im.w; if (lh > 66) { lh = 66; lw = lh * im.w / im.h; } doc.addImage(im.data, im.fmt, (W - lw) / 2, y, lw, lh); y += lh + 10; } catch { } }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text(marca, W / 2, y, { align: "center" }); y += 15;
+      doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("CERTIFICADO SEMANAL DE AVANCE", W / 2, y, { align: "center" }); y += 16;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 16;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(60, 72, 88);
+      doc.text(`Obra: ${nom}`, M, y); doc.text(`Semana: ${fmtDMY(d.desde)} al ${fmtDMY(d.hasta)}`, W - M, y, { align: "right" }); y += 13;
+      doc.text(`Emitido: ${d.emitido}`, M, y); y += 16;
+      const titulo = (t) => { ensure(30); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(27, 58, 91); doc.text(t, M, y); y += 5; doc.setDrawColor(176, 137, 79); doc.setLineWidth(2); doc.line(M, y, M + 26, y); y += 13; };
+      const parrafo = (t) => { doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); for (const ln of doc.splitTextToSize(String(t || ""), W - 2 * M)) { ensure(14); doc.text(ln, M, y); y += 14; } y += 6; };
+      const vinetas = (t, vacio) => { const it = String(t || "").split("\n").map(l => l.replace(/^[-•\s]+/, "").trim()).filter(Boolean); if (!it.length) { doc.setFont("helvetica", "italic"); doc.setFontSize(10); doc.setTextColor(150, 160, 175); ensure(14); doc.text(vacio, M + 6, y); y += 18; return; } doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); for (const x of it) { const lines = doc.splitTextToSize("•  " + x, W - 2 * M - 6); for (let k = 0; k < lines.length; k++) { ensure(14); doc.text(lines[k], M + (k === 0 ? 6 : 16), y); y += 14; } } y += 6; };
+      titulo("Desarrollo de la semana"); parrafo(d.desarrollo);
+      titulo("Recepción de materiales y documentación"); vinetas(d.recepciones, "Sin registros en la semana");
+      titulo("Pendientes y alertas"); vinetas(d.alertas, "Sin alertas");
+      titulo("Registro visual del avance");
+      for (const h of d.av) {
+        ensure(30); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(176, 137, 79); doc.text(String(h.fecha || ""), M, y); y += 14;
+        const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
+        for (const u of fs) { try { const im = await loadImg(u); const maxW = W - 2 * M; let iw = maxW, ih = iw * im.h / im.w; if (ih > 280) { ih = 280; iw = ih * im.w / im.h; } const libre = H - M - y; if (ih + 8 > libre) { if (libre > 150) { ih = libre - 10; iw = ih * im.w / im.h; if (iw > maxW) { iw = maxW; ih = iw * im.h / im.w; } } else { doc.addPage(); y = M; } } doc.addImage(im.data, im.fmt, M + (maxW - iw) / 2, y, iw, ih); y += ih + 8; } catch { } }
+        parrafo(h.avance || h.descripcion || "");
+      }
+      if (!d.av.length) { doc.setFont("helvetica", "italic"); doc.setFontSize(10); doc.setTextColor(150, 160, 175); ensure(14); doc.text("Sin registros visuales en la semana", M + 6, y); y += 18; }
+      titulo("Bitácora de la semana");
+      if (d.bt.length) { for (const h of d.bt) { ensure(26); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(15, 27, 45); doc.text(`${fmtDMY(h.fecha)} · ${h.titulo || ""}`, M, y); y += 13; parrafo(h.desc || ""); } }
+      else { doc.setFont("helvetica", "italic"); doc.setFontSize(10); doc.setTextColor(150, 160, 175); ensure(14); doc.text("Sin registros de bitácora en la semana", M + 6, y); y += 18; }
+      const blob = doc.output("blob"); const file = new File([blob], `Certificado semanal ${nom} ${fmtDMY(d.hasta)}.pdf`, { type: "application/pdf" });
+      setStatus("");
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: file.name }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) { setStatus("No pude generar el PDF."); }
+  }
+  async function cargarJsPDF() { if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"]; for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; } catch (e) { } } throw new Error("PDF"); }
+
   async function guardarPdf() {
+    if (semData) return guardarPdfSemanal(semData);
     const entries = pdfEntries;
     if (!entries.length) return;
     setStatus("Generando PDF…");
@@ -4945,7 +5070,16 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
           </div>}
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
-      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📄 PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
+      <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 2 }}>🗓 Certificado semanal</div>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.45, marginBottom: 9 }}>Junta todos los avances de la semana + la bitácora en un solo informe. La semana cierra los viernes.</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 9 }}>
+          <div style={{ flex: 1 }}><label style={{ fontSize: 10, fontWeight: 700, color: T.sub }}>DESDE (sáb)</label><input type="date" value={semDesde} onChange={e => setSemDesde(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13.5, color: T.text, boxSizing: "border-box", marginTop: 3 }} /></div>
+          <div style={{ flex: 1 }}><label style={{ fontSize: 10, fontWeight: 700, color: T.sub }}>HASTA (vie)</label><input type="date" value={semHasta} onChange={e => setSemHasta(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13.5, color: T.text, boxSizing: "border-box", marginTop: 3 }} /></div>
+        </div>
+        <button onClick={armarSemanal} disabled={busy} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Armando…" : "✓ Generar certificado de la semana"}</button>
+      </div>
+      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📄 PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <button onClick={abrirRecuperar} style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>🛟 Recuperar fotos</button>
         <button onClick={exportarBackup} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>💾 Backup</button>
@@ -4978,8 +5112,8 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
     </div>
     {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 300, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
-        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
-        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe de avance</span>
+        <button onClick={() => { setPdfHtml(null); setSemData(null); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{semData ? "Certificado semanal" : "Informe de avance"}</span>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => { const f = document.getElementById("avance-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Imprimir</button>
           <button onClick={guardarPdf} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>📥 Guardar PDF</button>
@@ -5252,7 +5386,7 @@ function App() {
             {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
-            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} />}
+            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
             {view==="chat" && <ChatIA db={db} cfg={cfg} apiKey={cfg.apiKey} msgs={chatMsgs} setMsgs={setChatMsgs} />}
