@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
+// Margen superior seguro: en modo app instalada (pantalla de inicio) iOS puede no
+// informar env(safe-area-inset-top); garantizamos un mínimo para no quedar bajo el notch.
+const SAFE_TOP_PX = (() => { try { return (window.navigator.standalone || window.matchMedia("(display-mode: standalone)").matches) ? 50 : 0; } catch (e) { return 0; } })();
+
 // ── SUPABASE CONFIG ─────────────────────────────────────────────
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const ONESIGNAL_APP_ID = ""; // ← Pegá acá tu App ID de OneSignal (después de crear la app en OneSignal)
@@ -1827,7 +1831,7 @@ const MAS_TILES = [
   { id:"personal", label:"Personal" },
   { id:"matpedidos", label:"Pedido de materiales" },
   { id:"documentacion", label:"Documentación" },
-  { id:"bitacora", label:"Bitácora de obra" },
+  { id:"informes", label:"Informes" },
   { id:"infsemanal", label:"Informe semanal de obra" },
   { id:"cliente", label:"Panel cliente" },
   { id:"pedidos", label:"Pedidos" },
@@ -2122,7 +2126,7 @@ function InformeSemanalView({ db, cfg, onBack }) {
     </div>
 
     {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 300, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: "calc(10px + env(safe-area-inset-top)) 14px 10px", background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
         <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
         <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe semanal</span>
         <div style={{ display: "flex", gap: 8 }}>
@@ -2300,7 +2304,7 @@ function BitacoraView({ db, cfg, onBack }) {
 
     {/* overlay PDF */}
     {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 500, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: T.navy }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: T.navy, flexShrink: 0, position: "relative", zIndex: 2 }}>
         <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
         <button onClick={() => { const f = document.getElementById("bita-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
       </div>
@@ -4717,12 +4721,12 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
       .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
       h1 { font-size: 15px; color: #0F1B2D; margin: 6px 0 2px; }
       .meta { font-size: 11px; color: #5B6B7F; }
-      .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; page-break-inside: avoid; }
+      .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
       .fecha { font-size: 13px; font-weight: 800; color: #B0894F; margin-bottom: 8px; }
       .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-      .fotos img { width: calc(50% - 3px); max-height: 260px; object-fit: contain; background: #0b0f14; border-radius: 6px; }
+      .fotos img { width: calc(50% - 3px); max-height: 260px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
       .fotos img:only-child { width: 100%; max-height: 340px; }
-      .bloque { margin-bottom: 8px; }
+      .bloque { margin-bottom: 8px; page-break-inside: avoid; break-inside: avoid; }
       .lbl { font-size: 9.5px; font-weight: 800; color: #1B3A5B; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
       .txt { font-size: 12px; color: #1a2433; line-height: 1.5; }
       .foot { margin-top: 14px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
@@ -4848,7 +4852,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
       for (const h of entries) {
         ensure(34); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(176, 137, 79); doc.text(String(h.fecha || ""), M, y); y += 15;
         const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
-        for (const u of fs) { try { const im = await loadImg(u); const maxW = W - 2 * M; let iw = maxW, ih = iw * im.h / im.w; if (ih > 300) { ih = 300; iw = ih * im.w / im.h; } ensure(ih + 8); doc.addImage(im.data, im.fmt, M + (maxW - iw) / 2, y, iw, ih); y += ih + 8; } catch { } }
+        for (const u of fs) { try { const im = await loadImg(u); const maxW = W - 2 * M; let iw = maxW, ih = iw * im.h / im.w; if (ih > 300) { ih = 300; iw = ih * im.w / im.h; } const libre = H - M - y; if (ih + 8 > libre) { if (libre > 150) { ih = libre - 10; iw = ih * im.w / im.h; if (iw > maxW) { iw = maxW; ih = iw * im.h / im.w; } } else { doc.addPage(); y = M; } } doc.addImage(im.data, im.fmt, M + (maxW - iw) / 2, y, iw, ih); y += ih + 8; } catch { } }
         block("AVANCE", h.avance); block("ESTADO", h.descripcion); y += 8;
       }
       const blob = doc.output("blob");
@@ -4973,7 +4977,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
       </div>))}
     </div>
     {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 300, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: "calc(10px + env(safe-area-inset-top)) 14px 10px", background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
         <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
         <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe de avance</span>
         <div style={{ display: "flex", gap: 8 }}>
@@ -4984,7 +4988,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
       <iframe id="avance-pdf" srcDoc={pdfHtml} title="Avance PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
     {recu !== null && <div style={{ position: "fixed", inset: 0, background: "#0b0f14", zIndex: 300, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: "calc(10px + env(safe-area-inset-top)) 14px 10px", background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
         <button onClick={() => setRecu(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Cerrar</button>
         <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Recuperar fotos de avance</span>
         <span style={{ width: 60 }} />
@@ -5015,7 +5019,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg }) {
 const WEB_NAV = [
   { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" },
   { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" }, { id:"mensajes", label:"Mensajes" },
-  { id:"informes", label:"Informes" }, { id:"formularios", label:"Formularios" },
+  { id:"bitacora", label:"Bitácora" }, { id:"formularios", label:"Formularios" },
   { id:"internos", label:"🔒 Privado" },
   { id:"mas", label:"Más" },
 ];
@@ -5254,6 +5258,7 @@ function App() {
             {view==="chat" && <ChatIA db={db} cfg={cfg} apiKey={cfg.apiKey} msgs={chatMsgs} setMsgs={setChatMsgs} />}
             {view==="mas" && <MasView cfg={cfg} setCfg={setCfg} sub={masSub} setSub={setMasSub} goView={go} db={db} apiKey={cfg.apiKey} />}
             {view==="informes" && <InformesView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
+            {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="mensajes" && <MensajesVVView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="internos" && <InternosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
