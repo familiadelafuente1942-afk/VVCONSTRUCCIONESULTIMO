@@ -3016,6 +3016,24 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
 
   useEffect(() => { const el = scrollRef.current; if (!el) return; const go = () => { el.scrollTop = el.scrollHeight; }; go(); [60, 160, 320, 600].forEach(t => setTimeout(go, t)); requestAnimationFrame(go); }, [msgs, loading]);
 
+  // Índice de TODOS los archivos de la app, para que la IA pueda encontrarlos y traerlos al chat.
+  function indiceArchivos() {
+    const { obras = [], documentacion = [], archivosGen = [], bitacora = [], personal = [], matpedidos = [] } = db;
+    const out = [];
+    const add = (nombre, url, obra, tipo) => { if (url && nombre) out.push({ nombre, url, obra: obra || "—", tipo }); };
+    obras.forEach(o => {
+      (o.planos || []).forEach(f => add(f.nombre || "plano", f.url, o.nombre, "plano"));
+      (o.archivos || []).forEach(f => add(f.nombre || "archivo", f.url, o.nombre, "archivo de obra"));
+      (o.informes || []).forEach(f => { if (f && f.url) add(f.nombre || "informe", f.url, o.nombre, "informe"); });
+      if (o.docs) Object.keys(o.docs).forEach(k => (Array.isArray(o.docs[k]) ? o.docs[k] : []).forEach(f => add(f.nombre || k, f.url, o.nombre, k)));
+    });
+    (bitacora || []).forEach(h => (h.adjuntos || []).forEach(a => add(a.nombre, a.url, obraNom(db.obras || [], h.obra_id), `bitácora — ${h.titulo || ""}`)));
+    (documentacion || []).forEach(d => add(d.nombre, d.url, obraNom(db.obras || [], d.obra_id), "documentación"));
+    (archivosGen || []).forEach(d => add(d.nombre, d.url, "general", "archivo general"));
+    (personal || []).forEach(p => (p.adjuntos || []).forEach(a => add(a.nombre, a.url, "personal", `documento de ${p.nombre}`)));
+    (matpedidos || []).forEach(m => (m.adjuntos || []).forEach(a => add(a.nombre, a.url, obraNom(db.obras || [], m.obra_id), "pedido de materiales")));
+    return out;
+  }
   function buildSystem() {
     const { obras, lics, personal, pedidos, mensajes, formularios, documentacion, archivosGen, tareas, matpedidos, materiales, subcontratos, proveedores, herramientas } = db;
     const cn = cfg?.clienteNombre || "el cliente";
@@ -3084,6 +3102,11 @@ SUBCONTRATOS:\n${(subcontratos || []).map(s => `· ${s.nombre || s.rubro || ""}$
 PROVEEDORES:\n${(proveedores || []).map(p => `· ${p.nombre || ""}${p.rubro ? " (" + p.rubro + ")" : ""}${p.telefono ? " tel " + p.telefono : ""}`).join("\n") || "(sin proveedores)"}
 
 HERRAMIENTAS:\n${(herramientas || []).map(h => `· ${h.nombre || ""}${h.obra_id ? " — " + obraNom(obras, h.obra_id) : ""}`).join("\n") || "(sin herramientas)"}
+
+ARCHIVOS DISPONIBLES (podés TRAERLOS al chat):
+${(() => { const ix = indiceArchivos(); return ix.length ? ix.map((f, i) => `[${i}] ${f.nombre} — ${f.tipo}${f.obra && f.obra !== "—" ? " · obra " + f.obra : ""}`).join("\n") : "(no hay archivos cargados todavía)"; })()}
+
+CÓMO ENTREGAR UN ARCHIVO: cuando el usuario pida un archivo, un PDF, un plano, un Word, una documentación o un adjunto, buscalo en la lista de arriba y ADJUNTALO escribiendo al final de tu respuesta una línea por archivo con este formato exacto: [[ARCHIVO:N]] (donde N es el número entre corchetes de la lista). El sistema lo convierte en un botón para abrirlo o descargarlo. NUNCA digas que no podés adjuntar archivos ni que solo leés datos: SÍ podés entregarlos con [[ARCHIVO:N]]. Si hay varios que puedan servir, ofrecé los más probables (hasta 5). Si de verdad no existe ninguno que coincida, decilo y aclarar dónde debería cargarse.
 
 Tenés acceso COMPLETO a todos estos datos de la app. Cuando te pidan un DATO PUNTUAL (un número, fecha, cantidad, teléfono, monto, cuántas fotos/videos, etc.), buscalo en estos datos y dá el valor EXACTO. No digas "no lo tengo" si el dato figura arriba. Respondé cualquier consulta sobre obras, avances, montos, fotos, videos, informes, formularios, archivos, documentación, tareas, materiales, subcontratos, proveedores, herramientas, personal y pedidos usando esta información. (Las fotos no las "ves", pero sabés cuántas hay y de qué obra; para verlas remití a la obra.)
 
@@ -3274,7 +3297,24 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         </div>
       </div>}
       {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
-        <div style={{ maxWidth: "84%", background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{m.content}</div>
+        <div style={{ maxWidth: "84%", background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{(() => { const txt = String(m.content || ""); if (m.role === "user" || !/\[\[ARCHIVO:\s*\d+\]\]/.test(txt)) return txt; return txt.replace(/\[\[ARCHIVO:\s*\d+\]\]/g, "").replace(/\n{3,}/g, "\n\n").trim(); })()}</div>
+        {m.role !== "user" && (() => {
+          const ix = indiceArchivos();
+          const ids = [...String(m.content || "").matchAll(/\[\[ARCHIVO:\s*(\d+)\]\]/g)].map(x => parseInt(x[1], 10));
+          const arch = [...new Set(ids)].map(i => ix[i]).filter(Boolean);
+          if (!arch.length) return null;
+          const icono = (nom = "") => { const e = (nom.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return "📝"; if (e === "pdf") return "📕"; if (["xls", "xlsx", "csv"].includes(e)) return "📊"; if (["png", "jpg", "jpeg", "webp", "heic"].includes(e)) return "🖼"; if (["dwg", "dxf"].includes(e)) return "📐"; return "📎"; };
+          return <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 7, maxWidth: "84%" }}>
+            {arch.map((f, k) => <button key={k} onClick={() => descargarArchivo(f.url, f.nombre)} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", textAlign: "left", width: "100%" }}>
+              <span style={{ fontSize: 17, flexShrink: 0 }}>{icono(f.nombre)}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: T.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</span>
+                <span style={{ display: "block", fontSize: 10.5, color: T.muted, marginTop: 1 }}>{f.tipo}{f.obra && f.obra !== "—" ? ` · ${f.obra}` : ""}</span>
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, flexShrink: 0 }}>Abrir</span>
+            </button>)}
+          </div>;
+        })()}
         {m.adjIA && m.adjIA.length > 0 && <div style={{ marginTop: 6, maxWidth: "84%", display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>{m.adjIA.map((a, j) => a.kind === "image" ? <img key={j} src={a.dataUrl} alt="" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}` }} /> : <span key={j} style={{ background: T.al, color: T.accent, borderRadius: 8, padding: "8px 11px", fontSize: 11.5, fontWeight: 700 }}>📄 {a.nombre.slice(0, 24)}</span>)}</div>}
         {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
         {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
