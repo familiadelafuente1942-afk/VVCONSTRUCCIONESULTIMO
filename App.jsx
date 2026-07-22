@@ -4467,7 +4467,7 @@ const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMon
 const isoHoy = () => new Date().toISOString().slice(0, 10);
 
 function GestionView({ db, cfg, onBack }) {
-  const { pedidos, obras, gestion, setGestion } = db;
+  const { pedidos, obras, gestion, setGestion, matpedidos } = db;
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
   const [mForm, setMForm] = useState(null);
@@ -4477,7 +4477,17 @@ function GestionView({ db, cfg, onBack }) {
 
   const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; const m = gMetricas(solic, real, g.plazo, p.estado === "resuelto"); return { id: p.id, auto: true, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, plazo: g.plazo, ...m }; });
   const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; const m = gMetricas(solic, real, it.plazo || g.plazo, !!real); return { ...it, auto: false, fechaSolic: solic, fechaReal: real, plazo: it.plazo || g.plazo, ...m }; });
-  const items = [...itemsPedidos, ...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
+  // Definiciones y planos pedidos a la Dirección de Obra: se miden igual que los pedidos
+  // de información. La "recepción registrada" (cumplido) es la fecha real de respuesta.
+  const parseDmy = (f) => { const m = String(f || "").match(/^(\d{2})\/(\d{2})\/(\d{2})$/); return m ? new Date(`20${m[3]}-${m[2]}-${m[1]}T12:00:00`) : null; };
+  const itemsMat = (matpedidos || []).filter(p => p.tipo === "definicion" || p.tipo === "plano").map(p => {
+    const solic = p.ts ? new Date(p.ts) : null;
+    const real = p.cumplido ? (parseDmy(p.cumplidoFecha) || new Date()) : null;
+    const m = gMetricas(solic, real, g.plazo, !!p.cumplido);
+    const desc = (p.items || []).map(it => it.nombre).filter(Boolean).join(", ") || (p.tipo === "plano" ? "Plano" : "Definición");
+    return { id: p.id, auto: true, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, plazo: g.plazo, ...m };
+  });
+  const items = [...itemsPedidos, ...itemsMat, ...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
   const perItem = (it) => (it.estado === "Vencido" || it.estado === "Fuera de plazo") ? it.retraso * (it.dotacion || g.dotacion) * g.costoPersona : 0;
   const total = items.length;
   const cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
