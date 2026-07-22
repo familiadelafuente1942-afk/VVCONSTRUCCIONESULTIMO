@@ -2006,7 +2006,7 @@ function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivo
 }
 
 // ── PANTALLA: MENSAJES ───────────────────────────────────────────────
-function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje }) {
+function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje, vaciarMensajes }) {
   const [input, setInput] = useState("");
   const [adj, setAdj] = useState([]);
   const [obraAdj, setObraAdj] = useState("");
@@ -2015,6 +2015,9 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje }) {
   async function addAdj(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "msg", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url }); } setAdj(p => [...p, ...nuevos]); if (!obraAdj && obras[0]) setObraAdj(obras[0].id); e.target.value = ""; }
   async function send() { const t = input.trim(); if (!t && adj.length === 0) return; await enviar(t, adj, adj.length ? obraAdj : ""); setInput(""); setAdj([]); setObraAdj(""); }
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    {mensajes.length > 0 && vaciarMensajes && <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 16px 0" }}>
+      <button onClick={vaciarMensajes} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🗑 Vaciar mensajes ({mensajes.length})</button>
+    </div>}
     <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
       {mensajes.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "40px 18px", lineHeight: 1.6 }}>Escribile a V+V Construcciones. Te avisamos acá cuando respondan.</div>}
       {mensajes.map((m, i) => { const mine = m.from === "cliente"; return (<div key={m.id || i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 11 }}>
@@ -3085,6 +3088,11 @@ function ClienteApp() {
     if (r?.value) { try { actual = JSON.parse(r.value); } catch { } }
     const next = [...actual, msg]; lastCount.current = next.length; setMensajes(next); return next;
   }
+  async function vaciarMensajes() {
+    if (!confirm("¿Borrar TODOS los mensajes?\n\nSe vacía el chat para las dos empresas y no se puede deshacer.")) return;
+    if (!confirm("Confirmá de nuevo: se borra TODO el historial de mensajes.")) return;
+    lastCount.current = 0; setMensajes([]);
+  }
   async function borrarMensaje(id) {
     if (!id || !confirm("¿Eliminar este mensaje? Se borra para las dos empresas.")) return;
     const r = await storage.get("vv_mensajes"); let actual = mensajes;
@@ -3142,7 +3150,7 @@ function ClienteApp() {
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
-          {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} />}
+          {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
           {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} />}
         </div>
       </div>

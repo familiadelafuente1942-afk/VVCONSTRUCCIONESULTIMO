@@ -4700,6 +4700,11 @@ function MensajesVVView({ db, cfg, onBack }) {
     if (r?.value) { try { actual = JSON.parse(r.value); } catch { } }
     const next = [...actual, msg]; lastRef.current = next.length; setMensajes(next); setInput(""); setAdj([]);
   }
+  async function vaciarMensajes() {
+    if (!confirm("¿Borrar TODOS los mensajes?\n\nSe vacía el chat para las dos empresas (V+V y el cliente) y no se puede deshacer.")) return;
+    if (!confirm("Confirmá de nuevo: se borra TODO el historial de mensajes.")) return;
+    lastRef.current = 0; setMensajes([]);
+  }
   async function borrarMsg(id) {
     if (!id || !confirm("¿Eliminar este mensaje? Se borra para las dos empresas.")) return;
     const r = await storage.get("vv_mensajes"); let actual = mensajes;
@@ -4708,6 +4713,9 @@ function MensajesVVView({ db, cfg, onBack }) {
   }
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
     <SubHead id="mensajes" label="Mensajes" sub={`Chat con ${cn}`} onBack={onBack} />
+    {(mensajes || []).length > 0 && <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 16px 0" }}>
+      <button onClick={vaciarMensajes} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🗑 Vaciar mensajes ({(mensajes || []).length})</button>
+    </div>}
     {clienteArchivos.length > 0 && <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "9px 16px", display: "flex", gap: 7, overflowX: "auto" }}>
       <span style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", flexShrink: 0, alignSelf: "center" }}>Del cliente:</span>
       {clienteArchivos.slice(0, 8).map(a => <a key={a.id} href={a.url} target="_blank" rel="noreferrer" style={{ flexShrink: 0, background: T.al, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>📎 {a.nombre}</a>)}
