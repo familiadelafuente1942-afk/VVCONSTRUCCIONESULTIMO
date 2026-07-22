@@ -619,9 +619,224 @@ function useAvisos(clave, mapaIds) {
 
 // ═══ OBRAS (compartido: idéntico a V+V) — inline, sin archivo aparte ═══
 // ══════════════════════════════════════════════════════════════════
-// ObrasGestion.jsx — COMPONENTE COMPARTIDO de gestión de Obras.
-// Lo usan App.jsx (V+V) y Cliente.jsx (Belfast) para que la pantalla
-// de Obras sea IDÉNTICA en las dos apps. No editar por separado.
+// ─── Avance de obra (espejo de V+V) ───
+function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
+  const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState("");
+  const fileRef = React.useRef(null);
+  const [fechaFoto, setFechaFoto] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [pendientes, setPendientes] = React.useState([]);
+  const obra = obras.find(o => o.id === obraId);
+  const historial = ((avance || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const [pdfHtml, setPdfHtml] = React.useState(null);
+  const _escPdf = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+  function buildPdfAvance(entries) {
+    const marca = (cfg?.nombre || "Belfast Construction Management").toUpperCase();
+    const logo = cfg?.logo || "";
+    const nom = obra?.nombre || "Obra";
+    const secc = entries.map(h => {
+      const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
+      const fotosH = fs.map(u => `<img src="${u}" />`).join("");
+      return `<div class="ent"><div class="fecha">${_escPdf(h.fecha)}</div>${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}${h.avance ? `<div class="bloque"><div class="lbl">Avance</div><div class="txt">${_escPdf(h.avance)}</div></div>` : ""}<div class="bloque"><div class="lbl">Estado</div><div class="txt">${_escPdf(h.descripcion)}</div></div></div>`;
+    }).join("");
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 14mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 16px; text-align: center; }
+      .logo { max-height: 96px; max-width: 320px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      h1 { font-size: 15px; color: #0F1B2D; margin: 6px 0 2px; }
+      .meta { font-size: 11px; color: #5B6B7F; }
+      .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+      .fecha { font-size: 13px; font-weight: 800; color: #B0894F; margin-bottom: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+      .fotos img { width: calc(50% - 3px); max-height: 260px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
+      .fotos img:only-child { width: 100%; max-height: 340px; }
+      .bloque { margin-bottom: 8px; page-break-inside: avoid; break-inside: avoid; }
+      .lbl { font-size: 9.5px; font-weight: 800; color: #1B3A5B; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+      .txt { font-size: 12px; color: #1a2433; line-height: 1.5; }
+      .foot { margin-top: 14px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Informe de avance de obra</div><h1>${_escPdf(nom)}</h1><div class="meta">${entries.length === 1 ? ("Fecha: " + _escPdf(entries[0].fecha)) : (entries.length + " registros")} · Emitido: ${hoyStr()}</div></div>
+      ${secc}
+      <div class="foot">Generado por ${marca} · Seguimiento visual de avance de obra.</div>
+    </div></body></html>`;
+  }
+  const pdfUno = (h) => { setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
+  const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
+  const [pdfEntries, setPdfEntries] = React.useState([]);
+  async function mergeSaveAvance(oid, transform) {
+    let cloud = {};
+    try { const r = await storage.get("vv_avance"); if (r && r.value) cloud = JSON.parse(r.value) || {}; } catch (e) { }
+    setAvance(prev => { const base = { ...cloud, ...(prev || {}) }; base[oid] = transform(base[oid] || []); return base; });
+  }
+  async function guardarPdf() {
+    const entries = pdfEntries;
+    if (!entries.length) return;
+    setStatus("Generando PDF…");
+    try {
+      const jsPDF = await (async () => {
+        if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+        const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+        for (const src of urls) {
+          try {
+            await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); });
+            if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+          } catch (e) { }
+        }
+        throw new Error("No se pudo cargar la librería PDF");
+      })();
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+      const M = 40; let y = M;
+      const marca = (cfg?.nombre || "Belfast Construction Management").toUpperCase();
+      const logo = cfg?.logo || "";
+      const nom = obra?.nombre || "Obra";
+      const loadImg = async (url) => { const r = await fetch(url); const blob = await r.blob(); const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); }); const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 800, h: im.naturalHeight || 600 }); im.onerror = () => res({ w: 800, h: 600 }); im.src = data; }); let fmt = "JPEG"; try { fmt = data.substring(5, data.indexOf(";")).split("/")[1].toUpperCase(); if (fmt === "JPG") fmt = "JPEG"; } catch { } return { data, w: dim.w, h: dim.h, fmt }; };
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      if (logo) { try { const im = await loadImg(logo); let lw = Math.min(150, im.w); let lh = lw * im.h / im.w; if (lh > 72) { lh = 72; lw = lh * im.w / im.h; } doc.addImage(im.data, im.fmt, (W - lw) / 2, y, lw, lh); y += lh + 10; } catch { } }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text(marca, W / 2, y, { align: "center" }); y += 15;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("INFORME DE AVANCE DE OBRA", W / 2, y, { align: "center" }); y += 15;
+      doc.setFontSize(12); doc.setTextColor(15, 27, 45); doc.text(nom, W / 2, y, { align: "center" }); y += 13;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(91, 107, 127); doc.text((entries.length === 1 ? ("Fecha: " + entries[0].fecha) : (entries.length + " registros")) + "   \u00b7   Emitido: " + hoyStr(), W / 2, y, { align: "center" }); y += 12;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 20;
+      const block = (label, txt) => { if (!txt) return; ensure(24); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(27, 58, 91); doc.text(label, M, y); y += 12; doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(26, 36, 51); const lines = doc.splitTextToSize(String(txt), W - 2 * M); for (const ln of lines) { ensure(14); doc.text(ln, M, y); y += 13; } y += 6; };
+      for (const h of entries) {
+        ensure(34); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(176, 137, 79); doc.text(String(h.fecha || ""), M, y); y += 15;
+        const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
+        for (const u of fs) { try { const im = await loadImg(u); const maxW = W - 2 * M; let iw = maxW, ih = iw * im.h / im.w; if (ih > 300) { ih = 300; iw = ih * im.w / im.h; } const libre = H - M - y; if (ih + 8 > libre) { if (libre > 150) { ih = libre - 10; iw = ih * im.w / im.h; if (iw > maxW) { iw = maxW; ih = iw * im.h / im.w; } } else { doc.addPage(); y = M; } } doc.addImage(im.data, im.fmt, M + (maxW - iw) / 2, y, iw, ih); y += ih + 8; } catch { } }
+        block("AVANCE", h.avance); block("ESTADO", h.descripcion); y += 8;
+      }
+      const blob = doc.output("blob");
+      const file = new File([blob], `Avance ${nom}.pdf`, { type: "application/pdf" });
+      setStatus("");
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: `Avance ${nom}` }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (err) { setStatus("No pude generar el PDF. Probá de nuevo."); }
+  }
+  async function onFoto(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return; e.target.value = "";
+    if (!obraId) { alert("Elegí una obra primero."); return; }
+    const sel = files.slice(0, 6);
+    setBusy(true); setStatus("Preparando fotos…");
+    try {
+      const pend = [];
+      for (const f of sel) {
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const comp = await compressImage(dataUrl, 1600, 0.7);
+        const b64 = String(comp).split(",")[1];
+        const mediaType = (String(comp).match(/data:(.*?);/) || [])[1] || "image/jpeg";
+        pend.push({ comp, b64, mediaType });
+      }
+      setPendientes(pend);
+      setFechaFoto(new Date().toISOString().slice(0, 10));
+      setStatus("");
+    } catch (err) { setStatus("No pude leer las fotos. Probá de nuevo."); }
+    setBusy(false);
+  }
+  async function analizar() {
+    if (!pendientes.length) return;
+    setBusy(true); setStatus(pendientes.length > 1 ? `Subiendo y analizando ${pendientes.length} fotos… (unos segundos)` : "Subiendo y analizando la foto… (unos segundos)");
+    try {
+      const urls = [], imgs = [];
+      for (const pf of pendientes) {
+        const url = await uploadArchivo(pf.comp, "avance", uid() + ".jpg");
+        urls.push(url || pf.comp);
+        imgs.push({ type: "image", source: { type: "base64", media_type: pf.mediaType, data: pf.b64 } });
+      }
+      const prev = historial[0];
+      const _fiso = fechaFoto || new Date().toISOString().slice(0, 10);
+      const [_aa, _mm, _dd] = _fiso.split("-");
+      const fechaHoy = `${_dd}/${_mm}/${_aa.slice(2)}`;
+      const tsFoto = new Date(_fiso + "T12:00:00").getTime();
+      const nF = pendientes.length;
+      const encab = nF > 1 ? `Te paso ${nF} fotos de la obra "${obra?.nombre || ""}" del día ${fechaHoy} (son del MISMO día, de distintos sectores/ángulos — analizalas como un CONJUNTO y dame una sola conclusión).` : `Foto de la obra "${obra?.nombre || ""}" del día ${fechaHoy}.`;
+      const sys = "Sos un inspector de obra civil en Argentina. Analizás fotos de avance de obra con criterio técnico. Sos honesto: el porcentaje es una ESTIMACIÓN visual, no una medición exacta. Escribí claro y breve, en español rioplatense (vos).";
+      const instruc = prev
+        ? `${encab}\n\nESTADO ANTERIOR (${prev.fecha}):\n${prev.descripcion}\n\nHacé DOS cosas:\n1) ESTADO ACTUAL: describí en 3-5 renglones qué se ve (estructura, mampostería, revoques, contrapisos, instalaciones, aberturas, terminaciones — lo que aplique).\n2) AVANCE: compará con el estado anterior. Qué se avanzó, qué falta, un % ESTIMADO de avance de la obra, y ALERTAS si no ves progreso esperable o algo raro.\nFormato EXACTO:\nESTADO ACTUAL: ...\nAVANCE: ...`
+        : `${encab} Es la PRIMERA carga (línea de base). Describí el ESTADO ACTUAL en 3-5 renglones (estructura, mampostería, revoques, instalaciones, aberturas, terminaciones — lo que aplique) y estimá un % de avance general.\nFormato EXACTO:\nESTADO ACTUAL: ...`;
+      const content = [...imgs, { type: "text", text: instruc }];
+      const resp = await callAI([{ role: "user", content }], sys, apiKey, false);
+      let descripcion = resp, avanceTxt = "";
+      const mA = resp.match(/AVANCE:\s*([\s\S]*)$/i);
+      const mE = resp.match(/ESTADO ACTUAL:\s*([\s\S]*?)(?:AVANCE:|$)/i);
+      if (mE) descripcion = mE[1].trim();
+      if (mA) avanceTxt = mA[1].trim();
+      const item = { id: uid() + Date.now(), fecha: fechaHoy, ts: tsFoto, descripcion, avance: avanceTxt, fotos: urls, fotoUrl: urls[0] };
+      await mergeSaveAvance(obraId, list => [item, ...list]);
+      setPendientes([]); setStatus("");
+    } catch (err) { setStatus("Hubo un error al analizar la(s) foto(s). Fijate que tengas crédito de API y probá de nuevo."); }
+    setBusy(false);
+  }
+  return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
+    <div style={{ padding: "14px 18px 4px", flexShrink: 0 }}><div style={{ fontSize: 10, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.12em" }}>Seguimiento visual</div><div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>Avance de obra</div><div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Subí una o varias fotos del día y la IA compara el avance con la anterior</div></div>
+    <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 28px", minHeight: 0 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
+      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, margin: "6px 0 14px" }}>
+        {obras.length === 0 && <option value="">No hay obras</option>}
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>
+      <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFoto} style={{ display: "none" }} />
+      {pendientes.length === 0
+        ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Preparando…" : "📷 Elegir foto(s)"}</button>
+        : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{pendientes.length === 1 ? "1 foto seleccionada" : `${pendientes.length} fotos seleccionadas`} — poné la fecha y analizá</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
+              {pendientes.map((pf, i) => <div key={i} style={{ position: "relative" }}>
+                <img src={pf.comp} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 7, display: "block", border: `1px solid ${T.border}` }} />
+                <button onClick={() => setPendientes(prev => prev.filter((_, j) => j !== i))} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 12, cursor: "pointer", lineHeight: 1 }}>✕</button>
+              </div>)}
+            </div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Fecha de la foto</label>
+            <input type="date" value={fechaFoto} onChange={e => setFechaFoto(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, margin: "6px 0 12px", boxSizing: "border-box" }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { setPendientes([]); setStatus(""); }} disabled={busy} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+              <button onClick={analizar} disabled={busy} style={{ flex: 2, background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Analizando…" : "✓ Analizar avance"}</button>
+              <button onClick={() => fileRef.current?.click()} disabled={busy} title="Agregar más" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "0 14px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
+            </div>
+          </div>}
+      {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
+      <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
+      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>📄 PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
+      {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
+      {historial.map((h, idx) => (<div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
+        {(() => { const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []); if (!fs.length) return null; if (fs.length === 1) return <img src={fs[0]} alt="" style={{ width: "100%", maxHeight: 340, objectFit: "contain", background: "#0b0f14", display: "block" }} />; return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, alignItems: "start", padding: 4, background: "#0b0f14" }}>{fs.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block" }}><img src={u} alt="" style={{ width: "100%", height: "auto", display: "block", borderRadius: 4 }} /></a>)}</div>; })()}
+        <div style={{ padding: "12px 14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{h.fecha}{idx === 0 ? "  ·  última" : ""}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
+              <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📄 PDF</button>
+            </div>
+          </div>
+          {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>📈 Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
+          <div style={{ fontSize: 10, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Estado</div>
+          <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.descripcion}</div>
+        </div>
+      </div>))}
+    </div>
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 300, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: "calc(10px + env(safe-area-inset-top)) 14px 10px", background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe de avance</span>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => { const f = document.getElementById("avance-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Imprimir</button>
+          <button onClick={guardarPdf} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>📥 Guardar PDF</button>
+        </div>
+      </div>
+      <iframe id="avance-pdf" srcDoc={pdfHtml} title="Avance PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+  </div>);
+}
+
+// ─── Gestión de Obras (mismo componente que V+V) ───
 // ══════════════════════════════════════════════════════════════════
 
 const SUPA_URL_OG = "https://bxhjgxzvayszfqwlwinq.supabase.co";
@@ -1669,7 +1884,7 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
 function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos }) {
@@ -2453,6 +2668,7 @@ function ClienteApp() {
   const T = theme(cfg.accent);
   const [screen, setScreen] = useState("asistente");
   const [obras, setObras] = useStored("vv_obras", []);
+  const [avance, setAvance] = useStored("vv_avance", {});
   useEffect(() => { if (localStorage.getItem("purge_canning_bf_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_bf_v1", "1"); } catch { } } catch { } })(); }, []);
   const [tareas, setTareas] = useStored("vv_tareas", []);
   const [mensajes, setMensajes] = useStored("vv_mensajes", []);
@@ -2671,6 +2887,7 @@ function ClienteApp() {
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
+          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} />}
