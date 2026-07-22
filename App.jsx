@@ -5027,6 +5027,160 @@ const FORM_TPLS = [
 ];
 
 
+// ═══ EDITOR DE PDF — escribir sobre el documento y guardarlo en la obra ═══
+async function cargarLib(nombre, urls, chequeo) {
+  if (chequeo()) return chequeo();
+  for (const src of urls) {
+    try { await new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); if (chequeo()) return chequeo(); } catch (e) { }
+  }
+  throw new Error(nombre);
+}
+const cargarPdfJs = () => cargarLib("pdfjs", [
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js",
+  "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"], () => window.pdfjsLib);
+const cargarPdfLib = () => cargarLib("pdflib", [
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js",
+  "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js",
+  "https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"], () => window.PDFLib);
+
+function PdfEditorView({ archivo, obras, cfg, onGuardar, onCerrar }) {
+  const [pdf, setPdf] = useState(null);
+  const [pag, setPag] = useState(1);
+  const [total, setTotal] = useState(1);
+  const [textos, setTextos] = useState([]);      // {pag, xPct, yPct, txt, size}
+  const [edit, setEdit] = useState(null);        // {xPct, yPct, txt}
+  const [size, setSize] = useState(11);
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [msg, setMsg] = useState("Abriendo el documento…");
+  const [busy, setBusy] = useState(false);
+  const cvRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const pdfjsLib = await cargarPdfJs();
+        try { pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; } catch (e) { }
+        const resp = await fetch(archivo.url); const buf = await resp.arrayBuffer();
+        const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+        setPdf(doc); setTotal(doc.numPages); setMsg("");
+      } catch (e) { setMsg("No pude abrir el PDF. Revisá la conexión y probá de nuevo."); }
+    })();
+  }, [archivo.url]);
+
+  useEffect(() => {
+    if (!pdf || !cvRef.current) return;
+    (async () => {
+      const page = await pdf.getPage(pag);
+      const anchoCaja = (wrapRef.current?.clientWidth || 360);
+      const v1 = page.getViewport({ scale: 1 });
+      const escala = anchoCaja / v1.width;
+      const vp = page.getViewport({ scale: escala * 2 });   // x2 para que se vea nítido
+      const cv = cvRef.current; cv.width = vp.width; cv.height = vp.height;
+      cv.style.width = anchoCaja + "px"; cv.style.height = (vp.height / 2) + "px";
+      await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+    })();
+  }, [pdf, pag]);
+
+  const tocar = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX ?? e.touches?.[0]?.clientX) - r.left) / r.width;
+    const y = ((e.clientY ?? e.touches?.[0]?.clientY) - r.top) / r.height;
+    setEdit({ xPct: Math.max(0, Math.min(1, x)), yPct: Math.max(0, Math.min(1, y)), txt: "" });
+  };
+  const confirmar = () => { if ((edit.txt || "").trim()) setTextos(t => [...t, { ...edit, pag, size }]); setEdit(null); };
+  const quitar = (i) => setTextos(t => t.filter((_, j) => j !== i));
+
+  const datos = () => {
+    const o = obras.find(x => x.id === obraId);
+    return { obra: o?.nombre || "", fecha: hoyStr(), empresa: cfg?.empresa || "V+V Construcciones", sector: o?.sector || "" };
+  };
+
+  async function guardar() {
+    if (!obraId) { alert("Elegí la obra."); return; }
+    if (!textos.length && !confirm("No escribiste nada. ¿Guardar igual una copia en la obra?")) return;
+    setBusy(true); setMsg("Guardando…");
+    try {
+      const { PDFDocument, StandardFonts, rgb } = await cargarPdfLib();
+      const resp = await fetch(archivo.url); const buf = await resp.arrayBuffer();
+      const doc = await PDFDocument.load(buf);
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const pages = doc.getPages();
+      textos.forEach(t => {
+        const pg = pages[(t.pag || 1) - 1]; if (!pg) return;
+        const { width, height } = pg.getSize();
+        const limpio = String(t.txt || "").replace(/[^\x00-\xFF]/g, "");
+        pg.drawText(limpio, { x: t.xPct * width, y: height - (t.yPct * height) - (t.size || 11) * 0.8, size: t.size || 11, font, color: rgb(0.06, 0.11, 0.18) });
+      });
+      const bytes = await doc.save();
+      let bin = ""; const arr = new Uint8Array(bytes);
+      for (let i = 0; i < arr.length; i += 8192) bin += String.fromCharCode.apply(null, arr.subarray(i, i + 8192));
+      const dataUrl = "data:application/pdf;base64," + btoa(bin);
+      const url = await uploadFoto(dataUrl, `obras/${obraId}/documentos`, `${uid()}.pdf`);
+      const o = obras.find(x => x.id === obraId);
+      const nombre = `${archivo.nombre.replace(/\.pdf$/i, "")} — ${o?.nombre || ""} ${hoyStr()}.pdf`;
+      onGuardar({ obraId, arch: { id: uid() + Date.now(), nombre, url: url || dataUrl, fecha: hoyStr(), desdePlantilla: archivo.nombre } });
+      setBusy(false);
+      alert(`✓ PDF completado y guardado en los Archivos de ${o?.nombre || "la obra"}.`);
+      onCerrar();
+    } catch (e) { setBusy(false); setMsg("No pude guardar el PDF. Probá de nuevo."); }
+  }
+
+  const enPag = textos.map((t, i) => ({ ...t, i })).filter(t => t.pag === pag);
+
+  return (<div style={{ position: "fixed", inset: 0, background: "#0b0f14", zIndex: 340, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0 }}>
+      <button onClick={onCerrar} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>‹ Salir</button>
+      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{archivo.nombre}</span>
+      <button onClick={guardar} disabled={busy} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>{busy ? "Guardando…" : "Guardar en obra"}</button>
+    </div>
+
+    <div style={{ display: "flex", gap: 7, alignItems: "center", padding: "9px 12px", background: "#111a26", flexShrink: 0, flexWrap: "wrap" }}>
+      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ flex: 1, minWidth: 120, background: "#1a2433", border: "1px solid #334155", color: "#fff", borderRadius: 8, padding: "8px 10px", fontSize: 12 }}>
+        <option value="">— Obra —</option>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>
+      <button onClick={() => setSize(s => Math.max(7, s - 1))} style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 7, padding: "8px 11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>A−</button>
+      <span style={{ color: "#cbd5e1", fontSize: 11.5, minWidth: 22, textAlign: "center" }}>{size}</span>
+      <button onClick={() => setSize(s => Math.min(28, s + 1))} style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 7, padding: "8px 11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>A+</button>
+      {textos.length > 0 && <button onClick={() => setTextos(t => t.slice(0, -1))} style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 7, padding: "8px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Deshacer</button>}
+    </div>
+
+    <div style={{ flex: 1, overflow: "auto", padding: 10 }}>
+      {msg && <div style={{ color: "#cbd5e1", fontSize: 12.5, textAlign: "center", padding: "16px 12px" }}>{msg}</div>}
+      <div ref={wrapRef} style={{ position: "relative", maxWidth: 900, margin: "0 auto", background: "#fff", borderRadius: 4, overflow: "hidden" }} onClick={tocar}>
+        <canvas ref={cvRef} style={{ display: "block", width: "100%" }} />
+        {enPag.map(t => (
+          <div key={t.i} onClick={e => { e.stopPropagation(); if (confirm("¿Borrar este texto?")) quitar(t.i); }}
+            style={{ position: "absolute", left: (t.xPct * 100) + "%", top: (t.yPct * 100) + "%", fontSize: t.size, color: "#0F1B2D", background: "rgba(176,137,79,.16)", border: "1px dashed #B0894F", borderRadius: 3, padding: "0 2px", whiteSpace: "nowrap", cursor: "pointer", transform: "translateY(-2px)" }}>{t.txt}</div>
+        ))}
+      </div>
+      {!msg && <div style={{ color: "#94a3b8", fontSize: 11.5, textAlign: "center", padding: "10px 14px", lineHeight: 1.5 }}>Tocá el documento donde quieras escribir. Para borrar un texto, tocalo.</div>}
+    </div>
+
+    {total > 1 && <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, padding: "10px 12px calc(12px + env(safe-area-inset-bottom))", background: "#111a26", flexShrink: 0 }}>
+      <button onClick={() => setPag(p => Math.max(1, p - 1))} disabled={pag <= 1} style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>‹</button>
+      <span style={{ color: "#cbd5e1", fontSize: 12 }}>Página {pag} de {total}</span>
+      <button onClick={() => setPag(p => Math.min(total, p + 1))} disabled={pag >= total} style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>›</button>
+    </div>}
+
+    {edit && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", zIndex: 360, display: "flex", alignItems: "flex-end" }} onClick={() => setEdit(null)}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", width: "100%", borderRadius: "16px 16px 0 0", padding: "16px 18px calc(20px + env(safe-area-inset-bottom))" }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: "#0F1B2D", marginBottom: 9 }}>Escribir en el documento</div>
+        <input autoFocus value={edit.txt} onChange={e => setEdit(x => ({ ...x, txt: e.target.value }))} onKeyDown={e => { if (e.key === "Enter") confirmar(); }} placeholder="Texto…" style={{ width: "100%", background: "#F5F7FA", border: "1px solid #E3E8EF", borderRadius: 8, padding: "12px", fontSize: 15, boxSizing: "border-box", marginBottom: 9 }} />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 11 }}>
+          {Object.entries(datos()).map(([k, v]) => v ? <button key={k} onClick={() => setEdit(x => ({ ...x, txt: (x.txt ? x.txt + " " : "") + v }))} style={{ background: "#EAF0F7", border: "1px solid #E3E8EF", color: "#1B3A5B", borderRadius: 7, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{k}</button> : null)}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setEdit(null)} style={{ flex: 1, background: "#F5F7FA", border: "1px solid #E3E8EF", color: "#5B6B7F", borderRadius: 9, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={confirmar} style={{ flex: 2, background: "#0F1B2D", color: "#fff", border: "1px solid #B0894F", borderRadius: 9, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Colocar</button>
+        </div>
+      </div>
+    </div>}
+  </div>);
+}
+
 // ═══ PLANTILLAS DE DOCUMENTOS — se completan y se guardan en la obra ═══
 async function cargarZip() {
   if (window.PizZip) return window.PizZip;
@@ -5042,6 +5196,7 @@ function PlantillasView({ db, cfg, onBack }) {
   const fileRef = useRef(null);
   const [subiendo, setSubiendo] = useState(false);
   const [usar, setUsar] = useState(null);   // plantilla que se está completando
+  const [editPdf, setEditPdf] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const icoArch = (nom = "") => { const e = (nom.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return "word"; if (e === "pdf") return "doc"; if (["xls", "xlsx", "csv"].includes(e)) return "excel"; if (["png", "jpg", "jpeg"].includes(e)) return "image"; return "clip"; };
@@ -5117,7 +5272,7 @@ function PlantillasView({ db, cfg, onBack }) {
     <SubHead id="documentacion" label="Plantillas de documentos" sub="Subí un modelo, completalo y guardalo en la obra" onBack={onBack} />
     <div style={{ padding: "14px 18px" }}>
       <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
-        Para que se complete solo, escribí en el Word los marcadores entre llaves: <b>{"{obra}"}</b>, <b>{"{fecha}"}</b>, <b>{"{responsable}"}</b>, <b>{"{empresa}"}</b>, <b>{"{sector}"}</b>. Podés sumar los tuyos y cargarlos al usar la plantilla.
+        Los PDF se completan con el editor: tocás el documento donde querés escribir. En los Word, usá marcadores entre llaves: <b>{"{obra}"}</b>, <b>{"{fecha}"}</b>, <b>{"{responsable}"}</b>, <b>{"{empresa}"}</b>, <b>{"{sector}"}</b>. Podés sumar los tuyos y cargarlos al usar la plantilla.
       </div>
       <input ref={fileRef} type="file" multiple onChange={subirPlantilla} style={{ display: "none" }} />
       <button onClick={() => fileRef.current?.click()} disabled={subiendo} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>{subiendo ? "Subiendo…" : <><Ico n="upload" s={15} c="#fff" /> Subir plantilla (Word, PDF, Excel)</>}</button>
@@ -5133,7 +5288,7 @@ function PlantillasView({ db, cfg, onBack }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
-            <button onClick={() => abrirUsar(p)} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 7, padding: "8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Usar en una obra</button>
+            <button onClick={() => p.ext === "pdf" ? setEditPdf(p) : abrirUsar(p)} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 7, padding: "8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{p.ext === "pdf" ? "Completar y guardar" : "Usar en una obra"}</button>
             <button onClick={() => descargarArchivo(p.url, p.nombre)} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Abrir</button>
             <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "8px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} c="#EF4444" /></button>
           </div>
@@ -5141,6 +5296,8 @@ function PlantillasView({ db, cfg, onBack }) {
       ))}
     </div>
 
+    {editPdf && <PdfEditorView archivo={editPdf} obras={obras} cfg={cfg} onCerrar={() => setEditPdf(null)}
+      onGuardar={({ obraId, arch }) => db.setObras(prev => (prev || []).map(o => o.id === obraId ? { ...o, archivos: [arch, ...(o.archivos || [])] } : o))} />}
     {usar && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={() => setUsar(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, width: "100%", maxHeight: "92vh", overflowY: "auto", borderRadius: "16px 16px 0 0", padding: "16px 18px calc(24px + env(safe-area-inset-bottom))" }}>
         <div style={{ fontSize: 14.5, fontWeight: 800, color: T.navy, marginBottom: 2 }}>Completar y guardar en la obra</div>
