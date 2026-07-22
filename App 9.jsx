@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
+// Margen superior seguro: en modo app instalada (pantalla de inicio) iOS puede no
+// informar env(safe-area-inset-top); garantizamos un mínimo para no quedar bajo el notch.
+const SAFE_TOP_PX = (() => { try { return (window.navigator.standalone || window.matchMedia("(display-mode: standalone)").matches) ? 50 : 0; } catch (e) { return 0; } })();
+
 // ── SUPABASE CONFIG ─────────────────────────────────────────────
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const ONESIGNAL_APP_ID = ""; // ← Pegá acá tu App ID de OneSignal (después de crear la app en OneSignal)
@@ -364,7 +368,7 @@ const DEFAULT_COLORS = { accent: "#1D4ED8", al: "#EFF6FF", bg: "#F1F5F9", card: 
 const DEFAULT_UBICACIONES = [{ id: "norte", code: "NORTE", name: "Zona Norte" }, { id: "sur", code: "SUR", name: "Zona Sur" }, { id: "oeste", code: "OESTE", name: "Zona Oeste" }, { id: "caba", code: "CABA", name: "Ciudad de Buenos Aires" }];
 
 const DEFAULT_TEXTOS = {
-    nav_ia: "IA", nav_inicio: "Inicio", nav_obras: "Obras", nav_personal: "Personal", nav_cargar: "Cargar", nav_mas: "Más",
+    nav_ia: "IA", nav_inicio: "Inicio", nav_obras: "Obras", nav_personal: "Personal", nav_cargar: "Cargar", nav_mas: "Más", nav_privado: "Privado",
     dash_titulo: "Panel operativo", dash_subtitulo: "V+V Construcciones",
     dash_proyectoes: "Proyectos", dash_obras_activas: "Obras activas", dash_alertas: "Alertas", dash_personal: "Personal",
     dash_obras_curso: "Obras en curso", dash_ver_todas: "Ver todas →", dash_acciones: "Acciones rápidas",
@@ -382,7 +386,7 @@ const DEFAULT_TEXTOS = {
     carg_fotos: "Cargá fotos nuevas", carg_tomar: "Tomar foto", carg_galeria: "Galería / PC",
     carg_generar: "Comparar y generar informe", carg_analizando: "Analizando...",
     carg_informe: "Informe generado", carg_nuevo: "+ Nuevo", carg_descargar: "⬇ Descargar",
-    chat_titulo: "Asistente IA", chat_placeholder: "Escribí o usá el micrófono…",
+    chat_titulo: "IA", chat_placeholder: "Escribí o usá el micrófono…",
     chat_hablar: "Hablar", chat_escuchando: "Escuchando…", chat_pausar: "Pausar", chat_voz_auto: "Voz auto",
     mas_titulo: "Más opciones", mas_config: "Configuración", mas_config_sub: "Estética · Logos · Empresa · Admin",
     mas_cerrar_sesion: "Cerrar sesión",
@@ -629,6 +633,7 @@ const NAV_DEFS = [
     { id: "obras", tk: "nav_obras", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.5 2.25a.75.75 0 000 1.5v16.5h-.75a.75.75 0 000 1.5h16.5a.75.75 0 000-1.5h-.75V3.75a.75.75 0 000-1.5h-15zM9 6a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm-.75 3.75A.75.75 0 019 9h1.5a.75.75 0 010 1.5H9a.75.75 0 01-.75-.75zM9 12a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm3.75-5.25A.75.75 0 0113.5 6H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 9a.75.75 0 000 1.5H15A.75.75 0 0015 9h-1.5zm-.75 3.75a.75.75 0 01.75-.75H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM9 19.5v-2.25a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75V19.5H9z" /></svg> },
     { id: "personal", tk: "nav_personal", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg> },
     { id: "cargar", tk: "nav_cargar", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 9a3.75 3.75 0 100 7.5A3.75 3.75 0 0012 9z" /><path fillRule="evenodd" clipRule="evenodd" d="M9.344 3.071a49.52 49.52 0 015.312 0c.967.052 1.83.585 2.332 1.39l.821 1.317c.24.383.645.643 1.11.71.386.054.77.113 1.152.177 1.432.239 2.429 1.493 2.429 2.909V18a3 3 0 01-3 3H6a3 3 0 01-3-3V9.574c0-1.416.997-2.67 2.429-2.909.382-.064.766-.123 1.151-.178a1.56 1.56 0 001.11-.71l.822-1.315a2.942 2.942 0 012.332-1.39zM6.75 12.75a5.25 5.25 0 1110.5 0 5.25 5.25 0 01-10.5 0zm12-1.5a.75.75 0 100-1.5.75.75 0 000 1.5z" /></svg> },
+    { id: "internos", tk: "nav_privado", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" /></svg> },
     { id: "mas", tk: "nav_mas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.5 12a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm6 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm6 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" /></svg> },
 ];
 
@@ -1554,6 +1559,10 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
                     {tab === "info" && (<div>
+                        <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 8, border: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
+                            <input value={detail.nombre || ''} onChange={e => upd(detail.id, { nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: T.text, padding: 0 }} />
+                        </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{getLabelUbic(cfg)}</div>
@@ -1826,6 +1835,8 @@ const MAS_TILES = [
   { id:"personal", label:"Personal" },
   { id:"matpedidos", label:"Pedido de materiales" },
   { id:"documentacion", label:"Documentación" },
+  { id:"informes", label:"Informes" },
+  { id:"infsemanal", label:"Informe semanal de obra" },
   { id:"cliente", label:"Panel cliente" },
   { id:"pedidos", label:"Pedidos" },
   { id:"gestion", label:"Plan de gestión" },
@@ -1870,6 +1881,479 @@ function Adjuntos({ items = [], onChange }) {
     {arch.map(a => (<div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>📎 {a.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{a.fecha}</div></div><a href={a.url} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a><button onClick={() => del(a.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button></div>))}
   </div>);
 }
+function InternosView({ db, cfg, onBack }) {
+  const internos = db.internos || [];
+  const obras = db.obras || [];
+  const [de, setDe] = useState(() => { try { return localStorage.getItem("vv_internos_yo") || ""; } catch { return ""; } });
+  const [texto, setTexto] = useState("");
+  const [obraId, setObraId] = useState("");
+  const guardarYo = (v) => { setDe(v); try { localStorage.setItem("vv_internos_yo", v); } catch { } };
+  const lista = [...internos].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+  const enviar = () => {
+    if (!texto.trim()) return;
+    const msg = { id: uid() + Date.now(), de: de.trim() || "V+V", texto: texto.trim(), obra_id: obraId || "", fecha: hoyStr(), ts: Date.now() };
+    db.setInternos(prev => [...(prev || []), msg]);
+    setTexto("");
+  };
+  const borrar = (id) => { if (confirm("¿Borrar este mensaje interno?")) db.setInternos(prev => (prev || []).filter(m => m.id !== id)); };
+  const obraNom = (id) => (obras.find(o => o.id === id) || {}).nombre || "";
+
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
+    <SubHead id="mensajes" label="Chat privado" sub="Consultas del equipo — Belfast no los ve" onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "9px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
+        🔒 Este canal es <b>privado de V+V</b>. Lo ven solo ustedes en esta app; no llega a Belfast ni al panel del cliente.
+      </div>
+
+      {/* nuevo mensaje */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 16, boxShadow: T.shadow }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <input value={de} onChange={e => guardarYo(e.target.value)} placeholder="Tu nombre" style={{ ...inp, flex: 1 }} />
+          <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...inp, flex: 1 }}>
+            <option value="">— Obra (opcional) —</option>
+            {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+          </select>
+        </div>
+        <textarea value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribí tu consulta o nota para el equipo…" rows={3} style={{ ...inp, resize: "vertical", lineHeight: 1.5, marginBottom: 8 }} />
+        <button onClick={enviar} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Enviar al equipo</button>
+      </div>
+
+      {/* lista */}
+      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "28px 18px" }}>Todavía no hay mensajes internos. Escribí el primero arriba.</div>}
+      {lista.map(m => (
+        <div key={m.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>{m.de}</span>
+            {m.obra_id && obraNom(m.obra_id) && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "1px 7px" }}>{obraNom(m.obra_id)}</span>}
+            <span style={{ fontSize: 10.5, color: T.muted, marginLeft: "auto" }}>{m.fecha}</span>
+          </div>
+          <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.texto}</div>
+          <button onClick={() => borrar(m.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginTop: 6, padding: 0, textDecoration: "underline" }}>Borrar</button>
+        </div>
+      ))}
+    </div>
+  </div>);
+}
+
+function InformeSemanalView({ db, cfg, onBack }) {
+  const obras = db.obras || [];
+  const informes = db.informesSem || {};
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const obra = obras.find(o => o.id === obraId);
+  // semana actual (lunes a domingo)
+  const lunes = (() => { const d = new Date(); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return d.toISOString().slice(0, 10); })();
+  const domingo = (() => { const d = new Date(lunes + "T12:00:00"); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10); })();
+  const [desde, setDesde] = useState(lunes);
+  const [hasta, setHasta] = useState(domingo);
+  const [hechos, setHechos] = useState([]);
+  const [proxima, setProxima] = useState([]);
+  const [obs, setObs] = useState("");
+  const [nuevoH, setNuevoH] = useState("");
+  const [nuevoP, setNuevoP] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const [pdfRep, setPdfRep] = useState(null);
+  const lista = ((informes || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+  const fmtFecha = (iso) => { if (!iso) return ""; const [a, m, d] = iso.split("-"); return `${d}/${m}/${a.slice(2)}`; };
+  const guardarLista = (obraKey, arr) => db.setInformesSem(prev => ({ ...(prev || {}), [obraKey]: arr }));
+
+  const addH = () => { if (!nuevoH.trim()) return; setHechos(p => [...p, nuevoH.trim()]); setNuevoH(""); };
+  const addP = () => { if (!nuevoP.trim()) return; setProxima(p => [...p, nuevoP.trim()]); setNuevoP(""); };
+
+  // Trae los avances (vv_avance) de esta obra dentro del rango como base de "lo hecho"
+  async function traerDeAvances() {
+    try {
+      let av = {};
+      try { const r = await mediaStorage.storageGet ? await mediaStorage.storageGet("vv_avance") : null; } catch { }
+      const raw = await storage.get("vv_avance");
+      if (raw && raw.value) av = JSON.parse(raw.value) || {};
+      const entradas = (av[obraId] || []).filter(h => { const [d, m, a] = (h.fecha || "").split("/"); if (!a) return false; const iso = `20${a}-${m}-${d}`; return iso >= desde && iso <= hasta; });
+      if (!entradas.length) { alert("No hay avances cargados en esta obra dentro de la semana elegida."); return; }
+      const items = entradas.map(h => `${h.fecha}: ${(h.avance || h.descripcion || "").replace(/\s+/g, " ").slice(0, 160)}`);
+      setHechos(p => [...p, ...items]);
+    } catch (e) { alert("No pude traer los avances."); }
+  }
+
+  // Redacta profesional con IA a partir de los ítems cargados
+  async function redactarIA() {
+    if (!hechos.length && !proxima.length) { alert("Cargá al menos un ítem primero."); return; }
+    setBusy(true);
+    try {
+      const sys = "Sos un jefe de obra civil en Argentina que redacta partes semanales para la dirección de obra. Escribís profesional, claro y conciso, en español rioplatense neutro-formal. No inventás datos: reordenás y mejorás la redacción de lo que te pasan.";
+      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtFecha(desde)} al ${fmtFecha(hasta)}.\n\nTRABAJOS REALIZADOS (borrador):\n${hechos.map(h => "- " + h).join("\n") || "(sin datos)"}\n\nPRÓXIMA SEMANA (borrador):\n${proxima.map(h => "- " + h).join("\n") || "(sin datos)"}\n\nDevolvé SOLO dos listas mejoradas, en viñetas cortas y profesionales, con este formato EXACTO:\nREALIZADO:\n- ...\nPROXIMA:\n- ...`;
+      const resp = await callAI([{ role: "user", content: instruc }], sys, cfg.apiKey, false);
+      const mR = resp.match(/REALIZADO:\s*([\s\S]*?)(?:PROXIMA:|$)/i);
+      const mP = resp.match(/PROXIMA:\s*([\s\S]*)$/i);
+      const parse = (t) => (t || "").split("\n").map(l => l.replace(/^[-•\s]+/, "").trim()).filter(Boolean);
+      if (mR && parse(mR[1]).length) setHechos(parse(mR[1]));
+      if (mP && parse(mP[1]).length) setProxima(parse(mP[1]));
+    } catch (e) { alert("No pude redactar con IA. Probá de nuevo."); }
+    setBusy(false);
+  }
+
+  const guardar = () => {
+    if (!obraId) { alert("Elegí una obra."); return; }
+    if (!hechos.length && !proxima.length) { alert("Cargá al menos un trabajo realizado o previsto."); return; }
+    const item = { id: uid() + Date.now(), desde, hasta, hechos: [...hechos], proxima: [...proxima], obs: obs.trim(), ts: Date.now(), emitido: hoyStr() };
+    guardarLista(obraId, [item, ...lista]);
+    setHechos([]); setProxima([]); setObs(""); setNuevoH(""); setNuevoP("");
+    alert("Informe semanal guardado.");
+  };
+  const borrar = (id) => { if (confirm("¿Borrar este informe semanal?")) guardarLista(obraId, lista.filter(x => x.id !== id)); };
+
+  const _esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+  function buildPdf(rep) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const li = (arr) => (arr && arr.length) ? `<ul>${arr.map(x => `<li>${_esc(x)}</li>`).join("")}</ul>` : `<div class="vacio">— sin registros —</div>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
+      .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      ul { margin: 0 0 4px; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.6; margin-bottom: 3px; }
+      .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
+      .obs { font-size: 12px; line-height: 1.55; color: #1a2433; background: #F8FAFC; border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
+      .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Informe semanal de obra</div></div>
+      <div class="barra"><div>Obra: <b>${_esc(obra?.nombre || "")}</b></div><div>Semana: <b>${fmtFecha(rep.desde)} al ${fmtFecha(rep.hasta)}</b></div><div>Emitido: <b>${_esc(rep.emitido || hoyStr())}</b></div></div>
+      <h2>Trabajos realizados esta semana</h2>${li(rep.hechos)}
+      <h2>Trabajos previstos para la próxima semana</h2>${li(rep.proxima)}
+      ${rep.obs ? `<h2>Observaciones</h2><div class="obs">${_esc(rep.obs)}</div>` : ""}
+      <div class="foot">Generado por ${marca} · Informe semanal de obra.</div>
+    </div></body></html>`;
+  }
+  const verPdf = (rep) => { setPdfRep(rep); setPdfHtml(buildPdf(rep)); };
+  const verPdfActual = () => { if (!hechos.length && !proxima.length) { alert("Cargá algo antes de generar el PDF."); return; } const rep = { desde, hasta, hechos, proxima, obs, emitido: hoyStr() }; setPdfRep(rep); setPdfHtml(buildPdf(rep)); };
+
+  async function guardarPdf(rep) {
+    setBusy(true);
+    try {
+      const jsPDF = await (async () => { if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"]; for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; } catch (e) { } } throw new Error("PDF"); })();
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(); const M = 42; let y = M;
+      const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+      const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+      const ensure = (n) => { if (y + n > H - M) { doc.addPage(); y = M; } };
+      const loadImg = async (url) => { const r = await fetch(url); const b = await r.blob(); const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); }); const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 300, h: im.naturalHeight || 100 }); im.onerror = () => res({ w: 300, h: 100 }); im.src = data; }); let fmt = "JPEG"; try { fmt = data.substring(5, data.indexOf(";")).split("/")[1].toUpperCase(); if (fmt === "JPG") fmt = "JPEG"; } catch { } return { data, ...dim, fmt }; };
+      if (logo) { try { const im = await loadImg(logo); let lw = Math.min(140, im.w); let lh = lw * im.h / im.w; if (lh > 66) { lh = 66; lw = lh * im.w / im.h; } doc.addImage(im.data, im.fmt, (W - lw) / 2, y, lw, lh); y += lh + 10; } catch { } }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text(marca, W / 2, y, { align: "center" }); y += 15;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("INFORME SEMANAL DE OBRA", W / 2, y, { align: "center" }); y += 16;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 16;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(60, 72, 88);
+      doc.text(`Obra: ${obra?.nombre || ""}`, M, y); doc.text(`Semana: ${fmtFecha(rep.desde)} al ${fmtFecha(rep.hasta)}`, W - M, y, { align: "right" }); y += 13; doc.text(`Emitido: ${rep.emitido || hoyStr()}`, M, y); y += 16;
+      const seccion = (titulo, arr) => { ensure(30); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(27, 58, 91); doc.text(titulo, M, y); y += 6; doc.setDrawColor(176, 137, 79); doc.setLineWidth(2); doc.line(M, y, M + 26, y); y += 13; doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); if (!arr || !arr.length) { doc.setTextColor(150, 160, 175); doc.text("— sin registros —", M + 6, y); y += 15; return; } for (const it of arr) { const lines = doc.splitTextToSize("•  " + it, W - 2 * M - 6); for (let k = 0; k < lines.length; k++) { ensure(14); doc.text(lines[k], M + (k === 0 ? 6 : 16), y); y += 14; } } y += 6; };
+      seccion("Trabajos realizados esta semana", rep.hechos);
+      seccion("Trabajos previstos para la próxima semana", rep.proxima);
+      if (rep.obs) { seccion("Observaciones", [rep.obs]); }
+      const blob = doc.output("blob"); const file = new File([blob], `Informe semanal ${obra?.nombre || "obra"}.pdf`, { type: "application/pdf" });
+      setBusy(false);
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: file.name }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) { setBusy(false); alert("No pude generar el PDF."); }
+  }
+
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 11px", fontSize: 14, color: T.text, boxSizing: "border-box" };
+
+  const ListaEditable = ({ items, setItems, nuevo, setNuevo, add, ph, color }) => (
+    <div style={{ marginBottom: 14 }}>
+      {items.map((it, i) => <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+        <span style={{ color, fontWeight: 800, fontSize: 14, lineHeight: "20px" }}>•</span>
+        <span style={{ flex: 1, fontSize: 13.5, color: T.text, lineHeight: 1.4 }}>{it}</span>
+        <button onClick={() => setItems(p => p.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 15, lineHeight: 1 }}>✕</button>
+      </div>)}
+      <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+        <input value={nuevo} onChange={e => setNuevo(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(); }} placeholder={ph} style={{ ...inp, flex: 1 }} />
+        <button onClick={add} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "0 16px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
+      </div>
+    </div>
+  );
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
+    <SubHead id="mas" label="Informe semanal de obra" sub="Lo hecho esta semana y lo previsto para la próxima" onBack={onBack} />
+    <div style={{ padding: "14px 18px" }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
+      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...inp, margin: "6px 0 12px" }}>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+        <div style={{ flex: 1 }}><label style={{ fontSize: 10.5, fontWeight: 700, color: T.sub }}>SEMANA DESDE</label><input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ ...inp, marginTop: 4 }} /></div>
+        <div style={{ flex: 1 }}><label style={{ fontSize: 10.5, fontWeight: 700, color: T.sub }}>HASTA</label><input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ ...inp, marginTop: 4 }} /></div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: T.navy }}>✅ Trabajos realizados</span>
+        <button onClick={traerDeAvances} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>↧ Traer de avances</button>
+      </div>
+      <ListaEditable items={hechos} setItems={setHechos} nuevo={nuevoH} setNuevo={setNuevoH} add={addH} ph="Ej: Se terminó la mampostería de PB…" color="#10B981" />
+
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 6 }}>📌 A realizar la próxima semana</div>
+      <ListaEditable items={proxima} setItems={setProxima} nuevo={nuevoP} setNuevo={setNuevoP} add={addP} ph="Ej: Iniciar contrapisos del 1º piso…" color="#B0894F" />
+
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Observaciones (opcional)</label>
+      <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} placeholder="Clima, faltantes, pedidos a la dirección de obra, etc." style={{ ...inp, resize: "vertical", lineHeight: 1.5, margin: "6px 0 14px" }} />
+
+      <button onClick={redactarIA} disabled={busy} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>{busy ? "Redactando…" : "✨ Mejorar redacción con IA"}</button>
+      <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+        <button onClick={guardar} style={{ flex: 1, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+        <button onClick={verPdfActual} style={{ flex: 1, background: T.al, color: T.navy, border: `1px solid ${T.border}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>📄 Ver PDF</button>
+      </div>
+
+      {lista.length > 0 && <div style={{ marginTop: 22 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Informes guardados de esta obra</div>
+        {lista.map(rep => <div key={rep.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div><div style={{ fontSize: 13, fontWeight: 800, color: T.navy }}>Semana {fmtFecha(rep.desde)} al {fmtFecha(rep.hasta)}</div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{(rep.hechos || []).length} realizados · {(rep.proxima || []).length} previstos</div></div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => verPdf(rep)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>📄 PDF</button>
+              <button onClick={() => borrar(rep.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>🗑</button>
+            </div>
+          </div>
+        </div>)}
+      </div>}
+    </div>
+
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 300, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe semanal</span>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => { const f = document.getElementById("sem-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Imprimir</button>
+          <button onClick={() => guardarPdf(pdfRep || { desde, hasta, hechos, proxima, obs, emitido: hoyStr() })} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>📥 Guardar PDF</button>
+        </div>
+      </div>
+      <iframe id="sem-pdf" srcDoc={pdfHtml} title="Informe semanal PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+  </div>);
+}
+
+function BitacoraView({ db, cfg, onBack }) {
+  const obras = db.obras || [];
+  const bitacora = db.bitacora || [];
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [abrir, setAbrir] = useState(false);
+  const [edit, setEdit] = useState(null); // hecho en edición
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [titulo, setTitulo] = useState("");
+  const [desc, setDesc] = useState("");
+  const [fotos, setFotos] = useState([]);
+  const [adjuntos, setAdjuntos] = useState([]);
+  const [subiendo, setSubiendo] = useState(false);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const fileRef = useRef(null);
+  const adjRef = useRef(null);
+
+  const obra = obras.find(o => o.id === obraId);
+  const hechos = bitacora.filter(h => h.obra_id === obraId).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
+
+  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEdit(null); setAbrir(false); };
+  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setAbrir(true); };
+
+  const agregarFotos = async (e) => {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setSubiendo(true);
+    const nuevas = [];
+    for (const f of files) {
+      try {
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const comp = await compressImage(dataUrl, 1600, 0.7);
+        const url = await uploadFoto(comp, `bitacora/${obraId}`, `${uid()}.jpg`);
+        if (url) nuevas.push({ id: uid(), url });
+      } catch { }
+    }
+    setFotos(prev => [...prev, ...nuevas]);
+    setSubiendo(false);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  async function agregarAdjuntos(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    if (!obraId) { alert("Elegí una obra primero."); return; }
+    setSubiendo(true);
+    try {
+      const nuevos = [];
+      for (const f of files) {
+        if (f.size > 12 * 1024 * 1024) { alert(`"${f.name}" pesa más de 12 MB. Subí uno más liviano.`); continue; }
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const ext = (f.name.match(/\.([a-zA-Z0-9]+)$/) || [])[1] || "dat";
+        const url = await uploadFoto(dataUrl, `bitacora/${obraId}/adj`, `${uid()}.${ext}`);
+        nuevos.push({ id: uid(), nombre: f.name, url: url || dataUrl, tipo: f.type || "", peso: f.size });
+      }
+      setAdjuntos(prev => [...prev, ...nuevos]);
+    } catch (err) { alert("No pude subir el archivo. Probá de nuevo."); }
+    setSubiendo(false);
+    if (adjRef.current) adjRef.current.value = "";
+  }
+  const iconoArch = (nom = "", tipo = "") => { const e = (nom.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return "📝"; if (e === "pdf") return "📕"; if (["xls", "xlsx", "csv"].includes(e)) return "📊"; if (["png", "jpg", "jpeg", "webp", "heic"].includes(e)) return "🖼"; return "📎"; };
+  const guardar = () => {
+    if (!titulo.trim() && !desc.trim()) { alert("Poné al menos un título o una descripción."); return; }
+    if (!obraId) { alert("Elegí una obra."); return; }
+    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, ts: edit?.ts || Date.now() };
+    db.setBitacora(prev => { const otros = (prev || []).filter(h => h.id !== hecho.id); return [...otros, hecho]; });
+    limpiar();
+  };
+  const borrar = (id) => { if (confirm("¿Borrar este hecho de la bitácora?")) db.setBitacora(prev => (prev || []).filter(h => h.id !== id)); };
+
+  const exportarPDF = () => {
+    if (!obra) return;
+    const marca = "V+V CONSTRUCCIONES";
+    const hoy = hoyStr();
+    const items = hechos.map((h, i) => {
+      const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
+      const fotosH = (h.fotos || []).map(ft => `<img src="${ft.url}" />`).join("");
+      return `<div class="hecho">
+        <div class="hh"><span class="num">${hechos.length - i}</span><span class="fecha">${fFmt}</span><span class="tit">${(h.titulo || "").replace(/</g, "&lt;")}</span></div>
+        ${h.desc ? `<div class="desc">${(h.desc || "").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</div>` : ""}
+        ${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}
+        ${(h.adjuntos || []).length ? `<div class="adj"><b>Adjuntos:</b> ${(h.adjuntos || []).map(a => (a.nombre || "").replace(/</g, "&lt;")).join(" · ")}</div>` : ""}
+      </div>`;
+    }).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 14mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 14px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; letter-spacing: -.01em; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      .meta { font-size: 11px; color: #5B6B7F; margin-top: 8px; }
+      h1 { font-size: 15px; color: #0F1B2D; margin: 4px 0 2px; }
+      .hecho { border: 1px solid #E3E8EF; border-left: 3px solid #1B3A5B; border-radius: 8px; padding: 11px 13px; margin-bottom: 11px; page-break-inside: avoid; }
+      .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; flex-wrap: wrap; }
+      .num { background: #0F1B2D; color: #fff; font-size: 10px; font-weight: 800; border-radius: 20px; padding: 1px 8px; }
+      .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
+      .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
+      .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
+      .adj { font-size: 10.5px; color: #1B3A5B; background: #F1F5F9; border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+      .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
+      .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+      .vacio { font-size: 12px; color: #98A2B3; text-align: center; padding: 30px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">
+        <div class="marca">${marca}</div>
+        <div class="tipo">Historial de obra · Bitácora</div>
+        <h1>${(obra.nombre || "").replace(/</g, "&lt;")}</h1>
+        <div class="meta">Comitente: ${(cfg?.comitente || "Belfast Construction Management")} · Emitido: ${hoy} · ${hechos.length} hecho${hechos.length !== 1 ? "s" : ""} registrado${hechos.length !== 1 ? "s" : ""}</div>
+      </div>
+      ${items || '<div class="vacio">Todavía no hay hechos cargados en esta obra.</div>'}
+      <div class="foot">Documento generado por ${marca} para respaldo y justificación de adicionales de obra.</div>
+    </div></body></html>`;
+    setPdfHtml(html);
+  };
+
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
+
+  return (<div>
+    <SubHead id="documentacion" label="Bitácora de obra" sub="Cargá lo que va pasando para justificar adicionales" onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      {/* selector de obra */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+        <select value={obraId} onChange={e => { setObraId(e.target.value); limpiar(); }} style={{ ...inp, flex: 1 }}>
+          <option value="">— Elegí una obra —</option>
+          {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        </select>
+        {obraId && hechos.length > 0 && <button onClick={exportarPDF} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>PDF</button>}
+      </div>
+
+      {obraId && <>
+        {/* botón nuevo / formulario */}
+        {!abrir && <button onClick={() => setAbrir(true)} style={{ width: "100%", background: T.al, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 10, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>+ Cargar un hecho</button>}
+
+        {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, color: T.sub, width: 46 }}>Fecha</span>
+              <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inp, flex: 1 }} />
+            </div>
+            <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título (ej: Cambio de nivel de platea)" style={inp} />
+            <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción: qué pasó, por qué, quién lo pidió, qué implica…" rows={4} style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
+            {/* fotos */}
+            {fotos.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {fotos.map(ft => (
+                <div key={ft.id} style={{ position: "relative" }}>
+                  <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />
+                  <button onClick={() => setFotos(prev => prev.filter(x => x.id !== ft.id))} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                </div>
+              ))}
+            </div>}
+            <input ref={fileRef} type="file" accept="image/*" multiple onChange={agregarFotos} style={{ display: "none" }} />
+            <button onClick={() => fileRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "📷 Agregar fotos"}</button>
+            {adjuntos.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {adjuntos.map(a => (
+                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px" }}>
+                  <span style={{ fontSize: 14 }}>{iconoArch(a.nombre, a.tipo)}</span>
+                  <span style={{ flex: 1, fontSize: 12, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span>
+                  <button onClick={() => setAdjuntos(prev => prev.filter(x => x.id !== a.id))} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer" }}>✕</button>
+                </div>
+              ))}
+            </div>}
+            <input ref={adjRef} type="file" multiple onChange={agregarAdjuntos} style={{ display: "none" }} />
+            <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "📎 Adjuntar archivo (Word, PDF, Excel…)"}</button>
+            <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
+              <button onClick={limpiar} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+              <button onClick={guardar} disabled={subiendo} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{edit ? "Guardar cambios" : "Guardar hecho"}</button>
+            </div>
+          </div>
+        </div>}
+
+        {/* lista de hechos */}
+        {hechos.length === 0 && !abrir && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px" }}>Todavía no cargaste hechos en esta obra. Tocá "+ Cargar un hecho" para empezar.</div>}
+        {hechos.map((h, i) => (
+          <div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.accent}`, borderRadius: 12, padding: 13, marginBottom: 10, boxShadow: T.shadow }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: T.navy, borderRadius: 20, padding: "1px 8px", flexShrink: 0 }}>{hechos.length - i}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 800, color: BRASS, flexShrink: 0 }}>{h.fecha ? h.fecha.split("-").reverse().join("/") : ""}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{h.titulo}</span>
+            </div>
+            {h.desc && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap", marginBottom: (h.fotos || []).length ? 9 : 0 }}>{h.desc}</div>}
+            {(h.fotos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {h.fotos.map(ft => <img key={ft.id} src={ft.url} style={{ width: 76, height: 76, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />)}
+            </div>}
+            {(h.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+              {h.adjuntos.map(a => <button key={a.id} onClick={() => descargarArchivo(a.url, a.nombre)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", maxWidth: "100%" }}><span>{iconoArch(a.nombre, a.tipo)}</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span></button>)}
+            </div>}
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button onClick={() => editarHecho(h)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+              <button onClick={() => borrar(h.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Borrar</button>
+            </div>
+          </div>
+        ))}
+      </>}
+      {!obraId && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Elegí una obra para empezar la bitácora.</div>}
+    </div>
+
+    {/* overlay PDF */}
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 500, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: T.navy, flexShrink: 0, position: "relative", zIndex: 2 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <button onClick={() => { const f = document.getElementById("bita-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="bita-pdf" srcDoc={pdfHtml} title="Bitácora PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+  </div>);
+}
+
 function DocumentacionView({ db, cfg, onBack }) {
   const documentacion = db.documentacion || [];
   const setDocumentacion = db.setDocumentacion;
@@ -1932,14 +2416,37 @@ function DocumentacionView({ db, cfg, onBack }) {
     </div>
   );
 }
+// Los pedidos ahora pueden ser de 3 tipos, todos con el mismo mecanismo.
+const TIPOS_PEDIDO = [
+  { id: "material", label: "Materiales", sing: "material", icon: "📦", color: "#1B3A5B" },
+  { id: "definicion", label: "Definiciones", sing: "definición", icon: "📐", color: "#B0894F" },
+  { id: "plano", label: "Planos", sing: "plano", icon: "🗂️", color: "#3B6E9E" },
+];
+const tipoDe = (id) => TIPOS_PEDIDO.find(t => t.id === id) || TIPOS_PEDIDO[0];
+
+// Documentación inicial básica de obra (para el remito de recepción).
+const DOCS_BASE = [
+  "Niveles",
+  "Eje de replanteo en platea",
+  "Planos de platea",
+  "Planos de estructura",
+  "Plano de replanteo de mampostería",
+  "Plano de mampostería",
+  "Plano de hogar",
+  "Plano de parrilla",
+  "Plano de vainas",
+];
+
 function MatPedidosView({ db, cfg, onBack }) {
   const { obras, matpedidos = [], setMatpedidos, personal = [] } = db;
+  const [vista, setVista] = useState("pedidos"); // "pedidos" | "recepcion"
   const cn = cfg?.clienteSigla || cfg?.clienteNombre || "Belfast";
   const [form, setForm] = useState(null);
   const [waFor, setWaFor] = useState(null);
   function waText(p) {
-    const lines = (p.items || []).map(it => `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
-    return `*Pedido de materiales* — ${obraNom(obras, p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde V+V Construcciones)`;
+    const tp = tipoDe(p.tipo);
+    const lines = (p.items || []).map(it => p.tipo === "material" ? `• ${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim() : `• ${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}`);
+    return `*Pedido de ${tp.label.toLowerCase()}* — ${obraNom(obras, p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde V+V Construcciones)`;
   }
   function marcarEnviado(id) { setMatpedidos(prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: "V+V" } : x)); }
   function waLink(text, phone) {
@@ -1947,30 +2454,52 @@ function MatPedidosView({ db, cfg, onBack }) {
     if (phone) { const clean = String(phone).replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : ("549" + clean); return `https://wa.me/${num}?text=${t}`; }
     return `https://wa.me/?text=${t}`;
   }
-  function nuevo() { setForm({ obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u" }], nota: "" }); }
-  function addItem() { setForm(f => ({ ...f, items: [...f.items, { nombre: "", cantidad: "", unidad: "u" }] })); }
+  function nuevo(tipo = "material") { setForm({ tipo, obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u", detalle: "" }], nota: "" }); }
+  function addItem() { setForm(f => ({ ...f, items: [...f.items, { nombre: "", cantidad: "", unidad: "u", detalle: "" }] })); }
   function setItem(i, k, v) { setForm(f => ({ ...f, items: (f.items || []).map((it, j) => j === i ? { ...it, [k]: v } : it) })); }
   function delItem(i) { setForm(f => ({ ...f, items: (f.items || []).filter((_, j) => j !== i) })); }
   function guardar() {
+    const tipo = form.tipo || "material";
+    const tp = tipoDe(tipo);
     const items = (form.items || []).filter(it => (it.nombre || "").trim());
-    if (!items.length) { alert("Agregá al menos un material."); return; }
-    const p = { id: uid() + Date.now(), obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), ts: Date.now(), de: "vv", leido: false, leidoFecha: "" };
+    if (!items.length) { alert(`Agregá al menos ${tipo === "material" ? "un material" : tipo === "plano" ? "un plano" : "una definición"}.`); return; }
+    const p = { id: uid() + Date.now(), tipo, obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), ts: Date.now(), de: "vv", leido: false, leidoFecha: "" };
     setMatpedidos(prev => [p, ...(prev || [])]); setForm(null);
-    pushNotify("Nuevo pedido de materiales", `V+V · ${obraNom(obras, form.obra_id)}: ${items.map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ").slice(0, 80)}`, "belfast");
-    alert(`✓ Pedido de materiales enviado a ${cn}. Le queda como NO LEÍDO hasta que lo levante.`);
+    pushNotify(`Nuevo pedido de ${tp.label.toLowerCase()}`, `V+V · ${obraNom(obras, form.obra_id)}: ${items.map(it => it.nombre).join(", ").slice(0, 80)}`, "belfast");
+    alert(`✓ Pedido de ${tp.label.toLowerCase()} enviado a ${cn}. Le queda como NO LEÍDO hasta que lo levante.`);
   }
-  function borrar(id) { if (confirm("¿Eliminar este pedido de materiales?")) setMatpedidos(prev => (prev || []).filter(x => x.id !== id)); }
+  function borrar(id) { if (confirm("¿Eliminar este pedido?")) setMatpedidos(prev => (prev || []).filter(x => x.id !== id)); }
   const lista = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
-    <SubHead id="materiales" label="Pedido de materiales" sub={`Registro · enviado a ${cn}`} onBack={onBack} />
-    <div style={{ padding: "16px 20px" }}>
-      <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>＋ Nuevo pedido de materiales</button>
-      {lista.length === 0 && <EmptyMsg>Sin pedidos de materiales todavía.</EmptyMsg>}
-      {lista.map(p => { const jefes = (personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim()); return (<Card key={p.id} style={{ padding: 13, marginBottom: 9 }}>
+    <SubHead id="materiales" label="Pedidos y documentación" sub={`Enviado a ${cn}`} onBack={onBack} />
+
+    {/* solapas */}
+    <div style={{ display: "flex", gap: 7, padding: "14px 20px 0" }}>
+      {[["pedidos", "Pedidos"], ["recepcion", "Recepción de docs"]].map(([k, l]) => (
+        <button key={k} onClick={() => setVista(k)} style={{ flex: 1, background: vista === k ? T.navy : "transparent", color: vista === k ? "#fff" : T.sub, border: `1px solid ${vista === k ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
+      ))}
+    </div>
+
+    {vista === "pedidos" && <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Qué querés pedir</div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {TIPOS_PEDIDO.map(t => (
+          <button key={t.id} onClick={() => nuevo(t.id)} style={{ flex: 1, background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", textAlign: "center", borderTop: `3px solid ${t.color}` }}>
+            <div style={{ fontSize: 20, marginBottom: 3 }}>{t.icon}</div>{t.label}
+          </button>
+        ))}
+      </div>
+
+      {lista.length === 0 && <EmptyMsg>Sin pedidos todavía. Elegí arriba qué querés pedir.</EmptyMsg>}
+      {lista.map(p => { const tp = tipoDe(p.tipo); const jefes = (personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim()); return (<Card key={p.id} style={{ padding: 13, marginBottom: 9 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{obraNom(obras, p.obra_id) || "Sin obra"} · {p.fecha}{p.de === "contratista" && <span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.empresa || "Contratista"}</span>}</div>
-            <div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}>{(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(" · ")}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: tp.color, borderRadius: 5, padding: "2px 7px" }}>{tp.icon} {tp.label}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{obraNom(obras, p.obra_id) || "Sin obra"} · {p.fecha}</span>
+              {p.de === "contratista" && <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.empresa || "Contratista"}</span>}
+            </div>
+            <div style={{ fontSize: 12, color: T.sub, marginTop: 6 }}>{(p.items || []).map(it => p.tipo === "material" ? `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim() : `${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}`).join(" · ")}</div>
             {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, fontStyle: "italic" }}>{p.nota}</div>}
             <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 6, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado por ${cn}${p.leidoFecha ? " · " + p.leidoFecha : ""}` : `● No leído por ${cn}`}</div>
             {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 3 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
@@ -1985,22 +2514,83 @@ function MatPedidosView({ db, cfg, onBack }) {
           <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>Los jefes de obra con teléfono cargado (en Personal) aparecen arriba para enviar directo.</div>
         </div>}
       </Card>); })}
-    </div>
-    {form && <Sheet title="Nuevo pedido de materiales" onClose={() => setForm(null)}>
+    </div>}
+
+    {vista === "recepcion" && <RecepcionDocs db={db} cfg={cfg} />}
+
+    {form && (() => { const tp = tipoDe(form.tipo); return <Sheet title={`Nuevo pedido de ${tp.label.toLowerCase()}`} onClose={() => setForm(null)}>
       <Field label="Obra"><Sel value={form.obra_id || ""} onChange={e => setForm({ ...form, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", margin: "6px 0 8px" }}>Materiales</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", margin: "6px 0 8px" }}>{tp.label}</div>
       {(form.items || []).map((it, i) => (<div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
-        <input value={it.nombre} onChange={e => setItem(i, "nombre", e.target.value)} placeholder="Material" style={{ flex: 2, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px", fontSize: 13, color: T.text }} />
-        <input value={it.cantidad} onChange={e => setItem(i, "cantidad", e.target.value)} placeholder="Cant." type="number" style={{ width: 62, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 13, color: T.text }} />
-        <input value={it.unidad} onChange={e => setItem(i, "unidad", e.target.value)} placeholder="u" style={{ width: 54, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 13, color: T.text }} />
+        <input value={it.nombre} onChange={e => setItem(i, "nombre", e.target.value)} placeholder={form.tipo === "material" ? "Material" : form.tipo === "plano" ? "Plano (ej: Estructura losa 1er piso)" : "Definición (ej: Tipo de piso)"} style={{ flex: 2, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px", fontSize: 13, color: T.text }} />
+        {form.tipo === "material" ? <>
+          <input value={it.cantidad} onChange={e => setItem(i, "cantidad", e.target.value)} placeholder="Cant." type="number" style={{ width: 62, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 13, color: T.text }} />
+          <input value={it.unidad} onChange={e => setItem(i, "unidad", e.target.value)} placeholder="u" style={{ width: 54, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 13, color: T.text }} />
+        </> : <input value={it.detalle || ""} onChange={e => setItem(i, "detalle", e.target.value)} placeholder="Detalle (opcional)" style={{ flex: 1.3, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 13, color: T.text }} />}
         {(form.items || []).length > 1 && <button onClick={() => delItem(i)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer" }}>✕</button>}
       </div>))}
-      <button onClick={addItem} style={{ background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>＋ Agregar material</button>
+      <button onClick={addItem} style={{ background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>＋ Agregar {tp.sing}</button>
       <Field label="Nota (opcional)"><textarea value={form.nota || ""} onChange={e => setForm({ ...form, nota: e.target.value })} rows={2} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} /></Field>
       <PBtn full onClick={guardar} style={{ marginTop: 6 }}>Enviar pedido a {cn}</PBtn>
-    </Sheet>}
+    </Sheet>; })()}
   </div>);
 }
+function RecepcionDocs({ db, cfg }) {
+  const { obras, docrecepcion = [], setDocrecepcion } = db;
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [nuevoItem, setNuevoItem] = useState("");
+  const cn = cfg?.clienteSigla || cfg?.clienteNombre || "Belfast";
+
+  const reg = (docrecepcion || []).find(r => r.obra_id === obraId);
+  const items = reg ? reg.items : DOCS_BASE.map((n, i) => ({ id: "base" + i, nombre: n, recibido: false, fecha: "" }));
+
+  const guardarItems = (nextItems) => {
+    const otros = (docrecepcion || []).filter(r => r.obra_id !== obraId);
+    setDocrecepcion([...otros, { obra_id: obraId, items: nextItems, upd: Date.now() }]);
+  };
+  const toggle = (id) => guardarItems(items.map(it => it.id === id ? { ...it, recibido: !it.recibido, fecha: !it.recibido ? hoyStr() : "" } : it));
+  const agregar = () => { const n = nuevoItem.trim(); if (!n) return; guardarItems([...items, { id: uid() + Date.now(), nombre: n, recibido: false, fecha: "" }]); setNuevoItem(""); };
+  const quitar = (id) => guardarItems(items.filter(it => it.id !== id));
+
+  const recibidos = items.filter(it => it.recibido).length;
+
+  function remitoWA() {
+    const o = obras.find(x => x.id === obraId);
+    const lineas = items.map(it => `${it.recibido ? "✅" : "⬜"} ${it.nombre}${it.recibido && it.fecha ? ` (${it.fecha})` : ""}`);
+    const txt = `*REMITO DE RECEPCIÓN DE DOCUMENTACIÓN*\nObra: ${o?.nombre || "—"}\nFecha: ${hoyStr()}\nDe: ${cfg?.nombre || "V+V Construcciones"}\nComitente: ${cn}\n\nDocumentación inicial básica:\n${lineas.join("\n")}\n\nRecibidos: ${recibidos} de ${items.length}\n\n(Registro emitido desde V+V Construcciones)`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
+  }
+
+  if (obras.length === 0) return <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>Primero cargá una obra.</div>;
+
+  return (<div style={{ padding: "16px 20px" }}>
+    <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Remito de recepción de la documentación inicial que te entrega {cn}. Marcá lo que fuiste recibiendo y generá el remito.</div>
+    <Field label="Obra"><Sel value={obraId} onChange={e => setObraId(e.target.value)}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+
+    <Card style={{ padding: 14, marginTop: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Documentación inicial</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: recibidos === items.length && items.length > 0 ? "#16A34A" : T.muted }}>{recibidos} de {items.length} recibidos</span>
+      </div>
+      {items.map(it => (<div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
+        <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.recibido ? "#16A34A" : T.border}`, background: it.recibido ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.recibido ? "✓" : ""}</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: it.recibido ? T.text : T.sub }}>{it.nombre}</div>
+          {it.recibido && it.fecha && <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 700 }}>Recibido {it.fecha}</div>}
+        </div>
+        {!DOCS_BASE.includes(it.nombre) && <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
+      </div>))}
+
+      <div style={{ display: "flex", gap: 7, marginTop: 12 }}>
+        <input value={nuevoItem} onChange={e => setNuevoItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} placeholder="Agregar otra definición o plano…" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} />
+        <button onClick={agregar} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "0 15px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>＋</button>
+      </div>
+    </Card>
+
+    <button onClick={remitoWA} style={{ width: "100%", marginTop: 14, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar remito de recepción por WhatsApp</button>
+  </div>);
+}
+
 function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
   if (sub === "config") return <MasConfig cfg={cfg} setCfg={setCfg} onBack={()=>setSub(null)} />;
   if (sub) {
@@ -2026,6 +2616,9 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "cliente": return <ClientePanel {...P} />;
       case "personal": return <PersonalView personal={db.personal} setPersonal={db.setPersonal} obras={db.obras} cfg={cfg} />;
       case "documentacion": return <DocumentacionView db={db} cfg={cfg} onBack={back} />;
+      case "bitacora": return <BitacoraView db={db} cfg={cfg} onBack={back} />;
+      case "infsemanal": return <InformeSemanalView db={db} cfg={cfg} onBack={back} />;
+      case "internos": return <InternosView db={db} cfg={cfg} onBack={back} />;
       case "matpedidos": return <MatPedidosView db={db} cfg={cfg} onBack={back} />;
       case "pedidos": return <PedidosView {...P} />;
       case "gestion": return <GestionView {...P} />;
@@ -2672,7 +3265,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v23 limpia-canning" title={cfg?.tituloAsistente || "Asistente IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v23 limpia-canning" title={cfg?.tituloAsistente || "IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "14px 16px", minHeight: 0 }}>
       {msgs.length === 0 && <div style={{ paddingTop: 8 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Preguntame sobre tus obras, personal o proyectos. También redacto notas y mails.</div>
@@ -3633,7 +4226,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
         {[["todos", "Todos"], ["recibidos", "Recibidos"], ["enviados", "Enviados"]].map(([k, l]) => <button key={k} onClick={() => setFiltro(k)} style={{ flex: 1, padding: "8px", borderRadius: T.rsm, border: `1px solid ${filtro === k ? T.accent : T.border}`, background: filtro === k ? T.al : T.card, color: filtro === k ? T.accent : T.sub, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
       </div>
-      {lista.length === 0 && <EmptyMsg>Sin pedidos. Creá uno o pedíselo al Asistente IA (“pedí definiciones a {otroNom} sobre…”).</EmptyMsg>}
+      {lista.length === 0 && <EmptyMsg>Sin pedidos. Creá uno o pedíselo a la IA (“pedí definiciones a {otroNom} sobre…”).</EmptyMsg>}
       {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado] || PEDIDO_ESTADOS.abierto; const ult = (p.hilo || [])[(p.hilo || []).length - 1]; return (<RowItem key={p.id} onClick={() => { setOpen(p.id); setReply(""); }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div style={{ minWidth: 0 }}>
@@ -4135,61 +4728,422 @@ function ClientePanel({ db, cfg, onBack }) {
 // ── SHELL WEB INSTITUCIONAL (V+V) ────────────────────────────────────
 const LUXE_BG = "radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px) 0 0/22px 22px, radial-gradient(1100px 520px at 50% -8%, rgba(176,137,79,0.13), transparent 62%), linear-gradient(180deg,#0b141f 0%,#0a1019 100%)";
 const LUXE_HERO = "radial-gradient(620px 220px at 86% 0%, rgba(176,137,79,0.20), transparent 60%), linear-gradient(135deg,#101C2C 0%,#17283c 100%)";
-function AvanceView({ obras, avance, setAvance, apiKey }) {
+function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
   const fileRef = React.useRef(null);
+  const [fechaFoto, setFechaFoto] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [pendientes, setPendientes] = React.useState([]);
   const obra = obras.find(o => o.id === obraId);
   const historial = ((avance || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  async function onFoto(e) {
-    const f = e.target.files?.[0]; if (!f) return; e.target.value = "";
-    if (!obraId) { alert("Elegí una obra primero."); return; }
-    setBusy(true); setStatus("Subiendo y analizando la foto… (unos segundos)");
+  const [pdfHtml, setPdfHtml] = React.useState(null);
+  const _escPdf = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+  function buildPdfAvance(entries) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const nom = obra?.nombre || "Obra";
+    const secc = entries.map(h => {
+      const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
+      const fotosH = fs.map(u => `<img src="${u}" />`).join("");
+      return `<div class="ent"><div class="fecha">${_escPdf(h.fecha)}</div>${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}${h.avance ? `<div class="bloque"><div class="lbl">Avance</div><div class="txt">${_escPdf(h.avance)}</div></div>` : ""}<div class="bloque"><div class="lbl">Estado</div><div class="txt">${_escPdf(h.descripcion)}</div></div></div>`;
+    }).join("");
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 14mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 16px; text-align: center; }
+      .logo { max-height: 96px; max-width: 320px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      h1 { font-size: 15px; color: #0F1B2D; margin: 6px 0 2px; }
+      .meta { font-size: 11px; color: #5B6B7F; }
+      .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+      .fecha { font-size: 13px; font-weight: 800; color: #B0894F; margin-bottom: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+      .fotos img { width: calc(50% - 3px); max-height: 260px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
+      .fotos img:only-child { width: 100%; max-height: 340px; }
+      .bloque { margin-bottom: 8px; page-break-inside: avoid; break-inside: avoid; }
+      .lbl { font-size: 9.5px; font-weight: 800; color: #1B3A5B; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+      .txt { font-size: 12px; color: #1a2433; line-height: 1.5; }
+      .foot { margin-top: 14px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Informe de avance de obra</div><h1>${_escPdf(nom)}</h1><div class="meta">${entries.length === 1 ? ("Fecha: " + _escPdf(entries[0].fecha)) : (entries.length + " registros")} · Emitido: ${hoyStr()}</div></div>
+      ${secc}
+      <div class="foot">Generado por ${marca} · Seguimiento visual de avance de obra.</div>
+    </div></body></html>`;
+  }
+  const pdfUno = (h) => { setSemData(null); setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
+  const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setSemData(null); setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
+
+  // ══ CERTIFICADO SEMANAL — junta los avances de la semana + la bitácora. Cierra los VIERNES ══
+  const [semData, setSemData] = React.useState(null);
+  const rangoViernes = () => { const d = new Date(); const diff = (d.getDay() - 5 + 7) % 7; const fin = new Date(d); fin.setDate(d.getDate() - diff); const ini = new Date(fin); ini.setDate(fin.getDate() - 6); const iso = (x) => x.toISOString().slice(0, 10); return { desde: iso(ini), hasta: iso(fin) }; };
+  const [semDesde, setSemDesde] = React.useState(() => rangoViernes().desde);
+  const [semHasta, setSemHasta] = React.useState(() => rangoViernes().hasta);
+  const isoDeAvance = (f) => { const [d, m, a] = String(f || "").split("/"); return a ? `20${a}-${m}-${d}` : ""; };
+  const fmtDMY = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
+
+  async function armarSemanal() {
+    if (!obraId) { alert("Elegí una obra."); return; }
+    const dentro = (iso) => iso && iso >= semDesde && iso <= semHasta;
+    const av = ((avance || {})[obraId] || []).filter(h => dentro(isoDeAvance(h.fecha))).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    const bt = (bitacora || []).filter(h => h.obra_id === obraId && dentro(h.fecha)).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+    if (!av.length && !bt.length) { alert("No hay avances ni bitácora cargados en esa semana para esta obra."); return; }
+    setBusy(true); setStatus("Armando el certificado semanal…");
     try {
-      const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
-      const comp = await compressImage(dataUrl, 1600, 0.7);
-      const b64 = String(comp).split(",")[1];
-      const mediaType = (String(comp).match(/data:(.*?);/) || [])[1] || "image/jpeg";
-      const url = await uploadFoto(comp, "avance", uid() + ".jpg");
-      const prev = historial[0];
-      const fechaHoy = hoyStr();
+      const txtAv = av.length ? av.map(h => `- ${h.fecha}: ${(h.avance || h.descripcion || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros visuales)";
+      const txtBt = bt.length ? bt.map(h => `- ${fmtDMY(h.fecha)} · ${h.titulo || ""}: ${(h.desc || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros de bitácora)";
+      const sys = "Sos un jefe de obra civil en Argentina que redacta certificados semanales para la dirección de obra. Escribís profesional, claro y conciso, en español rioplatense neutro-formal. No inventás datos: sintetizás y ordenás lo que te pasan. Los porcentajes son estimaciones visuales.";
+      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtDMY(semDesde)} al ${fmtDMY(semHasta)} (cierre viernes).\n\nREGISTROS DE AVANCE (fotos analizadas, pueden ser de días salteados):\n${txtAv}\n\nBITÁCORA DE OBRA (recepción de materiales, documentación, hechos):\n${txtBt}\n\nRedactá el certificado semanal con este formato EXACTO:\nDESARROLLO: (3 a 6 renglones contando cómo evolucionó la obra en la semana, uniendo los distintos días en un relato único, con el % estimado de avance alcanzado)\nRECEPCIONES: \n- (viñetas cortas con materiales recibidos y documentación, según la bitácora; si no hay, poné "Sin registros en la semana")\nALERTAS: \n- (viñetas con pendientes, faltantes o demoras detectadas; si no hay, poné "Sin alertas")`;
+      const resp = await callAI([{ role: "user", content: instruc }], sys, apiKey, false);
+      const cortar = (re) => { const m = resp.match(re); return m ? m[1].trim() : ""; };
+      const desarrollo = cortar(/DESARROLLO:\s*([\s\S]*?)(?:RECEPCIONES:|ALERTAS:|$)/i) || resp;
+      const recepciones = cortar(/RECEPCIONES:\s*([\s\S]*?)(?:ALERTAS:|$)/i);
+      const alertas = cortar(/ALERTAS:\s*([\s\S]*)$/i);
+      const data = { desde: semDesde, hasta: semHasta, desarrollo, recepciones, alertas, av, bt, emitido: hoyStr() };
+      setSemData(data); setPdfEntries(av); setPdfHtml(buildPdfSemanal(data));
+      setStatus("");
+    } catch (e) { setStatus("No pude armar el certificado. Fijate que tengas crédito de API y probá de nuevo."); }
+    setBusy(false);
+  }
+
+  function buildPdfSemanal(d) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const nom = obra?.nombre || "Obra";
+    const vin = (t) => (t || "").split("\n").map(l => l.replace(/^[-•\s]+/, "").trim()).filter(Boolean);
+    const lista = (t, vacio) => { const it = vin(t); return it.length ? `<ul>${it.map(x => `<li>${_escPdf(x)}</li>`).join("")}</ul>` : `<div class="vacio">${vacio}</div>`; };
+    const visual = d.av.map(h => { const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []); return `<div class="ent"><div class="fecha">${_escPdf(h.fecha)}</div>${fs.length ? `<div class="fotos">${fs.map(u => `<img src="${u}" />`).join("")}</div>` : ""}<div class="txt">${_escPdf(h.avance || h.descripcion || "")}</div></div>`; }).join("") || `<div class="vacio">Sin registros visuales en la semana</div>`;
+    const bita = d.bt.length ? `<table><tr><th>Fecha</th><th>Hecho</th><th>Detalle</th></tr>${d.bt.map(h => `<tr><td>${_escPdf(fmtDMY(h.fecha))}</td><td>${_escPdf(h.titulo || "")}</td><td>${_escPdf(h.desc || "")}</td></tr>`).join("")}</table>` : `<div class="vacio">Sin registros de bitácora en la semana</div>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
+      .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      .parr { font-size: 12.5px; line-height: 1.6; text-align: justify; }
+      ul { margin: 0; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.55; margin-bottom: 3px; }
+      .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
+      table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+      th { background: #F1F5F9; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
+      .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+      .fecha { font-size: 12.5px; font-weight: 800; color: #B0894F; margin-bottom: 7px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+      .fotos img { width: calc(50% - 3px); max-height: 240px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
+      .fotos img:only-child { width: 100%; max-height: 320px; }
+      .txt { font-size: 12px; line-height: 1.5; page-break-inside: avoid; break-inside: avoid; }
+      .foot { margin-top: 20px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Certificado semanal de avance</div></div>
+      <div class="barra"><div>Obra: <b>${_escPdf(nom)}</b></div><div>Semana: <b>${fmtDMY(d.desde)} al ${fmtDMY(d.hasta)}</b></div><div>Emitido: <b>${_escPdf(d.emitido)}</b></div></div>
+      <h2>Desarrollo de la semana</h2><div class="parr">${_escPdf(d.desarrollo)}</div>
+      <h2>Recepción de materiales y documentación</h2>${lista(d.recepciones, "Sin registros en la semana")}
+      <h2>Pendientes y alertas</h2>${lista(d.alertas, "Sin alertas")}
+      <h2>Registro visual del avance</h2>${visual}
+      <h2>Bitácora de la semana</h2>${bita}
+      <div class="foot">Generado por ${marca} · Certificado semanal de avance de obra.</div>
+    </div></body></html>`;
+  }
+
+  const [pdfEntries, setPdfEntries] = React.useState([]);
+  // Guarda el avance mezclando con lo último de la nube por obra, para NO pisar
+  // las otras obras (evita que al subir a una obra desaparezcan las demás).
+  async function mergeSaveAvance(oid, transform) {
+    let cloud = null;
+    for (let i = 0; i < 3 && cloud === null; i++) { try { const r = await storage.get("vv_avance"); cloud = (r && r.value) ? (JSON.parse(r.value) || {}) : {}; } catch (e) { await new Promise(res => setTimeout(res, 400)); } }
+    if (cloud === null) cloud = {};
+    setAvance(prev => { const base = { ...cloud, ...(prev || {}) }; base[oid] = transform(base[oid] || []); return base; });
+  }
+  // ── RECUPERACIÓN: lista las fotos de avance que quedaron en la nube ──
+  const [recu, setRecu] = React.useState(null); // null=cerrado | array de urls "huérfanas"
+  const [recuSel, setRecuSel] = React.useState([]);
+  const [recuFecha, setRecuFecha] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [recuMsg, setRecuMsg] = React.useState("");
+  async function abrirRecuperar() {
+    setRecu([]); setRecuSel([]); setRecuMsg("Buscando fotos en la nube…");
+    try {
+      const r = await fetch(`${SUPA_STORAGE_URL}/object/list/${SUPA_BUCKET}`, { method: "POST", headers: { "Content-Type": "application/json", apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY }, body: JSON.stringify({ prefix: "avance/", limit: 1000, sortBy: { column: "created_at", order: "desc" } }) });
+      const files = await r.json();
+      const urls = (Array.isArray(files) ? files : []).filter(f => f && f.name && !f.name.endsWith("/")).map(f => `${SUPA_URL}/storage/v1/object/public/${SUPA_BUCKET}/avance/${f.name}`);
+      const usados = new Set();
+      Object.values(avance || {}).forEach(arr => (arr || []).forEach(h => { (h.fotos || []).forEach(u => usados.add(u)); if (h.fotoUrl) usados.add(h.fotoUrl); }));
+      const huerfanas = urls.filter(u => !usados.has(u));
+      setRecu(huerfanas);
+      setRecuMsg(huerfanas.length === 0 ? "No encontré fotos sueltas en la nube (o ya están todas asignadas)." : `${huerfanas.length} foto(s) encontradas sin asignar. Elegí cuáles y a qué obra van.`);
+    } catch (e) { setRecuMsg("No pude leer la nube. Revisá la conexión y probá de nuevo."); }
+  }
+  async function recuperarAObra() {
+    if (!obraId) { alert("Elegí una obra arriba."); return; }
+    if (!recuSel.length) { alert("Marcá al menos una foto."); return; }
+    const _fiso = recuFecha || new Date().toISOString().slice(0, 10);
+    const [_aa, _mm, _dd] = _fiso.split("-");
+    const item = { id: uid() + Date.now(), fecha: `${_dd}/${_mm}/${_aa.slice(2)}`, ts: new Date(_fiso + "T12:00:00").getTime(), descripcion: "Foto recuperada (sin análisis).", avance: "", fotos: [...recuSel], fotoUrl: recuSel[0] };
+    await mergeSaveAvance(obraId, list => [item, ...list]);
+    setRecu(prev => (prev || []).filter(u => !recuSel.includes(u)));
+    setRecuSel([]);
+    setRecuMsg("Listo, se asignaron a la obra. Podés seguir con el resto.");
+  }
+  function exportarBackup() {
+    try {
+      const data = { _tipo: "backup_vv_avance", fecha: new Date().toISOString(), avance: avance || {} };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `backup-avance-${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) { alert("No pude generar el backup."); }
+  }
+  // Analiza (o re-analiza) con IA un informe ya cargado, usando sus propias fotos.
+  async function analizarEntry(h) {
+    const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
+    if (!fs.length) { alert("Este informe no tiene fotos para analizar."); return; }
+    setBusy(true); setStatus("Analizando con IA…");
+    try {
+      const imgs = [];
+      for (const u of fs) {
+        const r = await fetch(u); const blob = await r.blob();
+        const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+        const b64 = String(dataUrl).split(",")[1];
+        const mediaType = (String(dataUrl).match(/data:(.*?);/) || [])[1] || "image/jpeg";
+        imgs.push({ type: "image", source: { type: "base64", media_type: mediaType, data: b64 } });
+      }
+      const orden = ((avance || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      const idx = orden.findIndex(x => x.id === h.id);
+      const prev = idx >= 0 ? orden[idx + 1] : null;
+      const nF = fs.length;
+      const encab = nF > 1 ? `Te paso ${nF} fotos de la obra "${obra?.nombre || ""}" del día ${h.fecha} (son del MISMO día, de distintos sectores/ángulos — analizalas como un CONJUNTO y dame una sola conclusión).` : `Foto de la obra "${obra?.nombre || ""}" del día ${h.fecha}.`;
       const sys = "Sos un inspector de obra civil en Argentina. Analizás fotos de avance de obra con criterio técnico. Sos honesto: el porcentaje es una ESTIMACIÓN visual, no una medición exacta. Escribí claro y breve, en español rioplatense (vos).";
       const instruc = prev
-        ? `Foto de la obra "${obra?.nombre || ""}" de hoy (${fechaHoy}).\n\nESTADO ANTERIOR (${prev.fecha}):\n${prev.descripcion}\n\nHacé DOS cosas:\n1) ESTADO ACTUAL: describí en 3-5 renglones qué se ve hoy (estructura, mampostería, revoques, contrapisos, instalaciones, aberturas, terminaciones — lo que aplique).\n2) AVANCE: compará con el estado anterior. Qué se avanzó, qué falta, un % ESTIMADO de avance de la obra, y ALERTAS si no ves progreso esperable o algo raro.\nFormato EXACTO:\nESTADO ACTUAL: ...\nAVANCE: ...`
-        : `Foto de la obra "${obra?.nombre || ""}" de hoy (${fechaHoy}). Es la PRIMERA foto (línea de base). Describí el ESTADO ACTUAL en 3-5 renglones (estructura, mampostería, revoques, instalaciones, aberturas, terminaciones — lo que aplique) y estimá un % de avance general.\nFormato EXACTO:\nESTADO ACTUAL: ...`;
-      const content = [{ type: "image", source: { type: "base64", media_type: mediaType, data: b64 } }, { type: "text", text: instruc }];
+        ? `${encab}\n\nESTADO ANTERIOR (${prev.fecha}):\n${prev.descripcion}\n\nHacé DOS cosas:\n1) ESTADO ACTUAL: describí en 3-5 renglones qué se ve (estructura, mampostería, revoques, contrapisos, instalaciones, aberturas, terminaciones — lo que aplique).\n2) AVANCE: compará con el estado anterior. Qué se avanzó, qué falta, un % ESTIMADO de avance de la obra, y ALERTAS si no ves progreso esperable o algo raro.\nFormato EXACTO:\nESTADO ACTUAL: ...\nAVANCE: ...`
+        : `${encab} Es la PRIMERA carga (línea de base). Describí el ESTADO ACTUAL en 3-5 renglones (estructura, mampostería, revoques, instalaciones, aberturas, terminaciones — lo que aplique) y estimá un % de avance general.\nFormato EXACTO:\nESTADO ACTUAL: ...`;
+      const content = [...imgs, { type: "text", text: instruc }];
       const resp = await callAI([{ role: "user", content }], sys, apiKey, false);
       let descripcion = resp, avanceTxt = "";
       const mA = resp.match(/AVANCE:\s*([\s\S]*)$/i);
       const mE = resp.match(/ESTADO ACTUAL:\s*([\s\S]*?)(?:AVANCE:|$)/i);
       if (mE) descripcion = mE[1].trim();
       if (mA) avanceTxt = mA[1].trim();
-      const item = { id: uid() + Date.now(), fecha: fechaHoy, ts: Date.now(), descripcion, avance: avanceTxt, fotoUrl: url || comp };
-      setAvance(prevAv => ({ ...(prevAv || {}), [obraId]: [item, ...((prevAv || {})[obraId] || [])] }));
+      await mergeSaveAvance(obraId, list => list.map(x => x.id === h.id ? { ...x, descripcion, avance: avanceTxt } : x));
       setStatus("");
-    } catch (err) { setStatus("Hubo un error al analizar la foto. Fijate que tengas crédito de API y probá de nuevo."); }
+    } catch (e) { setStatus("No pude analizar. Fijate que tengas crédito de API y probá de nuevo."); }
+    setBusy(false);
+  }
+  async function guardarPdfSemanal(d) {
+    setStatus("Generando PDF…");
+    try {
+      const jsPDF = await cargarJsPDF();
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(); const M = 42; let y = M;
+      const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+      const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+      const nom = obra?.nombre || "Obra";
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      const loadImg = async (url) => { const r = await fetch(url); const bl = await r.blob(); const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(bl); }); const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 800, h: im.naturalHeight || 600 }); im.onerror = () => res({ w: 800, h: 600 }); im.src = data; }); let fmt = "JPEG"; try { fmt = data.substring(5, data.indexOf(";")).split("/")[1].toUpperCase(); if (fmt === "JPG") fmt = "JPEG"; } catch { } return { data, w: dim.w, h: dim.h, fmt }; };
+      if (logo) { try { const im = await loadImg(logo); let lw = Math.min(140, im.w); let lh = lw * im.h / im.w; if (lh > 66) { lh = 66; lw = lh * im.w / im.h; } doc.addImage(im.data, im.fmt, (W - lw) / 2, y, lw, lh); y += lh + 10; } catch { } }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text(marca, W / 2, y, { align: "center" }); y += 15;
+      doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("CERTIFICADO SEMANAL DE AVANCE", W / 2, y, { align: "center" }); y += 16;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 16;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(60, 72, 88);
+      doc.text(`Obra: ${nom}`, M, y); doc.text(`Semana: ${fmtDMY(d.desde)} al ${fmtDMY(d.hasta)}`, W - M, y, { align: "right" }); y += 13;
+      doc.text(`Emitido: ${d.emitido}`, M, y); y += 16;
+      const titulo = (t) => { ensure(30); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(27, 58, 91); doc.text(t, M, y); y += 5; doc.setDrawColor(176, 137, 79); doc.setLineWidth(2); doc.line(M, y, M + 26, y); y += 13; };
+      const parrafo = (t) => { doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); for (const ln of doc.splitTextToSize(String(t || ""), W - 2 * M)) { ensure(14); doc.text(ln, M, y); y += 14; } y += 6; };
+      const vinetas = (t, vacio) => { const it = String(t || "").split("\n").map(l => l.replace(/^[-•\s]+/, "").trim()).filter(Boolean); if (!it.length) { doc.setFont("helvetica", "italic"); doc.setFontSize(10); doc.setTextColor(150, 160, 175); ensure(14); doc.text(vacio, M + 6, y); y += 18; return; } doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); for (const x of it) { const lines = doc.splitTextToSize("•  " + x, W - 2 * M - 6); for (let k = 0; k < lines.length; k++) { ensure(14); doc.text(lines[k], M + (k === 0 ? 6 : 16), y); y += 14; } } y += 6; };
+      titulo("Desarrollo de la semana"); parrafo(d.desarrollo);
+      titulo("Recepción de materiales y documentación"); vinetas(d.recepciones, "Sin registros en la semana");
+      titulo("Pendientes y alertas"); vinetas(d.alertas, "Sin alertas");
+      titulo("Registro visual del avance");
+      for (const h of d.av) {
+        ensure(30); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(176, 137, 79); doc.text(String(h.fecha || ""), M, y); y += 14;
+        const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
+        for (const u of fs) { try { const im = await loadImg(u); const maxW = W - 2 * M; let iw = maxW, ih = iw * im.h / im.w; if (ih > 280) { ih = 280; iw = ih * im.w / im.h; } const libre = H - M - y; if (ih + 8 > libre) { if (libre > 150) { ih = libre - 10; iw = ih * im.w / im.h; if (iw > maxW) { iw = maxW; ih = iw * im.h / im.w; } } else { doc.addPage(); y = M; } } doc.addImage(im.data, im.fmt, M + (maxW - iw) / 2, y, iw, ih); y += ih + 8; } catch { } }
+        parrafo(h.avance || h.descripcion || "");
+      }
+      if (!d.av.length) { doc.setFont("helvetica", "italic"); doc.setFontSize(10); doc.setTextColor(150, 160, 175); ensure(14); doc.text("Sin registros visuales en la semana", M + 6, y); y += 18; }
+      titulo("Bitácora de la semana");
+      if (d.bt.length) { for (const h of d.bt) { ensure(26); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(15, 27, 45); doc.text(`${fmtDMY(h.fecha)} · ${h.titulo || ""}`, M, y); y += 13; parrafo(h.desc || ""); } }
+      else { doc.setFont("helvetica", "italic"); doc.setFontSize(10); doc.setTextColor(150, 160, 175); ensure(14); doc.text("Sin registros de bitácora en la semana", M + 6, y); y += 18; }
+      const blob = doc.output("blob"); const file = new File([blob], `Certificado semanal ${nom} ${fmtDMY(d.hasta)}.pdf`, { type: "application/pdf" });
+      setStatus("");
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: file.name }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) { setStatus("No pude generar el PDF."); }
+  }
+  async function cargarJsPDF() { if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"]; for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; } catch (e) { } } throw new Error("PDF"); }
+
+  async function guardarPdf() {
+    if (semData) return guardarPdfSemanal(semData);
+    const entries = pdfEntries;
+    if (!entries.length) return;
+    setStatus("Generando PDF…");
+    try {
+      const jsPDF = await (async () => {
+        if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+        const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+        for (const src of urls) {
+          try {
+            await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); });
+            if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+          } catch (e) { }
+        }
+        throw new Error("No se pudo cargar la librería PDF");
+      })();
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+      const M = 40; let y = M;
+      const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+      const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+      const nom = obra?.nombre || "Obra";
+      const loadImg = async (url) => { const r = await fetch(url); const blob = await r.blob(); const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); }); const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 800, h: im.naturalHeight || 600 }); im.onerror = () => res({ w: 800, h: 600 }); im.src = data; }); let fmt = "JPEG"; try { fmt = data.substring(5, data.indexOf(";")).split("/")[1].toUpperCase(); if (fmt === "JPG") fmt = "JPEG"; } catch { } return { data, w: dim.w, h: dim.h, fmt }; };
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      if (logo) { try { const im = await loadImg(logo); let lw = Math.min(150, im.w); let lh = lw * im.h / im.w; if (lh > 72) { lh = 72; lw = lh * im.w / im.h; } doc.addImage(im.data, im.fmt, (W - lw) / 2, y, lw, lh); y += lh + 10; } catch { } }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text(marca, W / 2, y, { align: "center" }); y += 15;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("INFORME DE AVANCE DE OBRA", W / 2, y, { align: "center" }); y += 15;
+      doc.setFontSize(12); doc.setTextColor(15, 27, 45); doc.text(nom, W / 2, y, { align: "center" }); y += 13;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(91, 107, 127); doc.text((entries.length === 1 ? ("Fecha: " + entries[0].fecha) : (entries.length + " registros")) + "   ·   Emitido: " + hoyStr(), W / 2, y, { align: "center" }); y += 12;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 20;
+      const block = (label, txt) => { if (!txt) return; ensure(24); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(27, 58, 91); doc.text(label, M, y); y += 12; doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(26, 36, 51); const lines = doc.splitTextToSize(String(txt), W - 2 * M); for (const ln of lines) { ensure(14); doc.text(ln, M, y); y += 13; } y += 6; };
+      for (const h of entries) {
+        ensure(34); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(176, 137, 79); doc.text(String(h.fecha || ""), M, y); y += 15;
+        const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
+        for (const u of fs) { try { const im = await loadImg(u); const maxW = W - 2 * M; let iw = maxW, ih = iw * im.h / im.w; if (ih > 300) { ih = 300; iw = ih * im.w / im.h; } const libre = H - M - y; if (ih + 8 > libre) { if (libre > 150) { ih = libre - 10; iw = ih * im.w / im.h; if (iw > maxW) { iw = maxW; ih = iw * im.h / im.w; } } else { doc.addPage(); y = M; } } doc.addImage(im.data, im.fmt, M + (maxW - iw) / 2, y, iw, ih); y += ih + 8; } catch { } }
+        block("AVANCE", h.avance); block("ESTADO", h.descripcion); y += 8;
+      }
+      const blob = doc.output("blob");
+      const file = new File([blob], `Avance ${nom}.pdf`, { type: "application/pdf" });
+      setStatus("");
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: `Avance ${nom}` }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (err) { setStatus("No pude generar el PDF. Probá de nuevo."); }
+  }
+  async function onFoto(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return; e.target.value = "";
+    if (!obraId) { alert("Elegí una obra primero."); return; }
+    const sel = files.slice(0, 6); // hasta 6 fotos por análisis (mismo día)
+    setBusy(true); setStatus("Preparando fotos…");
+    try {
+      const pend = [];
+      for (const f of sel) {
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const comp = await compressImage(dataUrl, 1600, 0.7);
+        const b64 = String(comp).split(",")[1];
+        const mediaType = (String(comp).match(/data:(.*?);/) || [])[1] || "image/jpeg";
+        pend.push({ comp, b64, mediaType });
+      }
+      setPendientes(pend);
+      setFechaFoto(new Date().toISOString().slice(0, 10));
+      setStatus("");
+    } catch (err) { setStatus("No pude leer las fotos. Probá de nuevo."); }
+    setBusy(false);
+  }
+  async function analizar() {
+    if (!pendientes.length) return;
+    setBusy(true); setStatus(pendientes.length > 1 ? `Subiendo y analizando ${pendientes.length} fotos… (unos segundos)` : "Subiendo y analizando la foto… (unos segundos)");
+    try {
+      const urls = [], imgs = [];
+      for (const pf of pendientes) {
+        const url = await uploadFoto(pf.comp, "avance", uid() + ".jpg");
+        urls.push(url || pf.comp);
+        imgs.push({ type: "image", source: { type: "base64", media_type: pf.mediaType, data: pf.b64 } });
+      }
+      const prev = historial[0];
+      const _fiso = fechaFoto || new Date().toISOString().slice(0, 10);
+      const [_aa, _mm, _dd] = _fiso.split("-");
+      const fechaHoy = `${_dd}/${_mm}/${_aa.slice(2)}`;
+      const tsFoto = new Date(_fiso + "T12:00:00").getTime();
+      const nF = pendientes.length;
+      const encab = nF > 1 ? `Te paso ${nF} fotos de la obra "${obra?.nombre || ""}" del día ${fechaHoy} (son del MISMO día, de distintos sectores/ángulos — analizalas como un CONJUNTO y dame una sola conclusión).` : `Foto de la obra "${obra?.nombre || ""}" del día ${fechaHoy}.`;
+      const sys = "Sos un inspector de obra civil en Argentina. Analizás fotos de avance de obra con criterio técnico. Sos honesto: el porcentaje es una ESTIMACIÓN visual, no una medición exacta. Escribí claro y breve, en español rioplatense (vos).";
+      const instruc = prev
+        ? `${encab}\n\nESTADO ANTERIOR (${prev.fecha}):\n${prev.descripcion}\n\nHacé DOS cosas:\n1) ESTADO ACTUAL: describí en 3-5 renglones qué se ve (estructura, mampostería, revoques, contrapisos, instalaciones, aberturas, terminaciones — lo que aplique).\n2) AVANCE: compará con el estado anterior. Qué se avanzó, qué falta, un % ESTIMADO de avance de la obra, y ALERTAS si no ves progreso esperable o algo raro.\nFormato EXACTO:\nESTADO ACTUAL: ...\nAVANCE: ...`
+        : `${encab} Es la PRIMERA carga (línea de base). Describí el ESTADO ACTUAL en 3-5 renglones (estructura, mampostería, revoques, instalaciones, aberturas, terminaciones — lo que aplique) y estimá un % de avance general.\nFormato EXACTO:\nESTADO ACTUAL: ...`;
+      const content = [...imgs, { type: "text", text: instruc }];
+      const resp = await callAI([{ role: "user", content }], sys, apiKey, false);
+      let descripcion = resp, avanceTxt = "";
+      const mA = resp.match(/AVANCE:\s*([\s\S]*)$/i);
+      const mE = resp.match(/ESTADO ACTUAL:\s*([\s\S]*?)(?:AVANCE:|$)/i);
+      if (mE) descripcion = mE[1].trim();
+      if (mA) avanceTxt = mA[1].trim();
+      const item = { id: uid() + Date.now(), fecha: fechaHoy, ts: tsFoto, descripcion, avance: avanceTxt, fotos: urls, fotoUrl: urls[0] };
+      await mergeSaveAvance(obraId, list => [item, ...list]);
+      setPendientes([]); setStatus("");
+    } catch (err) { setStatus("Hubo un error al analizar la(s) foto(s). Fijate que tengas crédito de API y probá de nuevo."); }
     setBusy(false);
   }
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
-    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Seguimiento visual" title="Avance de obra" sub="Subí una foto y la IA compara el avance con la anterior" /></div>
+    <div style={{ flexShrink: 0 }}><PageHead eyebrow="Seguimiento visual" title="Avance de obra" sub="Subí una o varias fotos del día y la IA compara el avance con la anterior" /></div>
     <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 28px", minHeight: 0 }}>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
       <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, margin: "6px 0 14px" }}>
         {obras.length === 0 && <option value="">No hay obras</option>}
         {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
       </select>
-      <input ref={fileRef} type="file" accept="image/*" onChange={onFoto} style={{ display: "none" }} />
-      <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Analizando…" : "📷 Tomar / subir foto de hoy"}</button>
+      <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFoto} style={{ display: "none" }} />
+      {pendientes.length === 0
+        ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Preparando…" : "📷 Elegir foto(s)"}</button>
+        : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{pendientes.length === 1 ? "1 foto seleccionada" : `${pendientes.length} fotos seleccionadas`} — poné la fecha y analizá</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
+              {pendientes.map((pf, i) => <div key={i} style={{ position: "relative" }}>
+                <img src={pf.comp} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 7, display: "block", border: `1px solid ${T.border}` }} />
+                <button onClick={() => setPendientes(prev => prev.filter((_, j) => j !== i))} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 12, cursor: "pointer", lineHeight: 1 }}>✕</button>
+              </div>)}
+            </div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Fecha de la foto</label>
+            <input type="date" value={fechaFoto} onChange={e => setFechaFoto(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, margin: "6px 0 12px", boxSizing: "border-box" }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { setPendientes([]); setStatus(""); }} disabled={busy} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+              <button onClick={analizar} disabled={busy} style={{ flex: 2, background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Analizando…" : "✓ Analizar avance"}</button>
+              <button onClick={() => fileRef.current?.click()} disabled={busy} title="Agregar más" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "0 14px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
+            </div>
+          </div>}
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
-      <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: sacá la foto siempre desde el mismo lugar y ángulo para que la comparación sea más precisa. El % es una estimación visual, no una medición exacta.</div>
+      <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
+      <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 2 }}>🗓 Certificado semanal</div>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.45, marginBottom: 9 }}>Junta todos los avances de la semana + la bitácora en un solo informe. La semana cierra los viernes.</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 9 }}>
+          <div style={{ flex: 1 }}><label style={{ fontSize: 10, fontWeight: 700, color: T.sub }}>DESDE (sáb)</label><input type="date" value={semDesde} onChange={e => setSemDesde(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13.5, color: T.text, boxSizing: "border-box", marginTop: 3 }} /></div>
+          <div style={{ flex: 1 }}><label style={{ fontSize: 10, fontWeight: 700, color: T.sub }}>HASTA (vie)</label><input type="date" value={semHasta} onChange={e => setSemHasta(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13.5, color: T.text, boxSizing: "border-box", marginTop: 3 }} /></div>
+        </div>
+        <button onClick={armarSemanal} disabled={busy} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Armando…" : "✓ Generar certificado de la semana"}</button>
+      </div>
+      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📄 PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <button onClick={abrirRecuperar} style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>🛟 Recuperar fotos</button>
+        <button onClick={exportarBackup} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>💾 Backup</button>
+      </div>
       {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
       {historial.map((h, idx) => (<div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
-        {h.fotoUrl && <img src={h.fotoUrl} alt="" style={{ width: "100%", maxHeight: 260, objectFit: "cover", display: "block" }} />}
+        {(() => {
+          const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
+          if (!fs.length) return null;
+          const borrarFoto = (i) => { if (!confirm("¿Borrar esta foto del informe? El informe y las demás fotos quedan.")) return; const rest = fs.filter((_, j) => j !== i); mergeSaveAvance(obraId, list => list.map(x => x.id === h.id ? { ...x, fotos: rest, fotoUrl: rest[0] || "" } : x)); };
+          const delBtn = (i) => <button onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); borrarFoto(i); }} title="Borrar esta foto" style={{ position: "absolute", top: 6, right: 6, background: "rgba(239,68,68,.92)", color: "#fff", border: "none", borderRadius: "50%", width: 26, height: 26, fontSize: 14, cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 4px rgba(0,0,0,.4)" }}>✕</button>;
+          if (fs.length === 1) return <div style={{ position: "relative" }}><img src={fs[0]} alt="" style={{ width: "100%", maxHeight: 340, objectFit: "contain", background: "#0b0f14", display: "block" }} />{delBtn(0)}</div>;
+          return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, alignItems: "start", padding: 4, background: "#0b0f14" }}>{fs.map((u, i) => <div key={i} style={{ position: "relative" }}><a href={u} target="_blank" rel="noreferrer" style={{ display: "block" }}><img src={u} alt="" style={{ width: "100%", height: "auto", display: "block", borderRadius: 4 }} /></a>{delBtn(i)}</div>)}</div>;
+        })()}
         <div style={{ padding: "12px 14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{h.fecha}{idx === 0 ? "  ·  última" : ""}</div>
-            {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
+              <button onClick={() => analizarEntry(h)} disabled={busy} title="Analizar con IA" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: busy ? "default" : "pointer", flexShrink: 0 }}>🔍 IA</button>
+              <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📄 PDF</button>
+              <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>🗑 Borrar</button>
+            </div>
           </div>
           {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>📈 Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
           <div style={{ fontSize: 10, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Estado</div>
@@ -4197,12 +5151,51 @@ function AvanceView({ obras, avance, setAvance, apiKey }) {
         </div>
       </div>))}
     </div>
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 300, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
+        <button onClick={() => { setPdfHtml(null); setSemData(null); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{semData ? "Certificado semanal" : "Informe de avance"}</span>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => { const f = document.getElementById("avance-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Imprimir</button>
+          <button onClick={guardarPdf} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>📥 Guardar PDF</button>
+        </div>
+      </div>
+      <iframe id="avance-pdf" srcDoc={pdfHtml} title="Avance PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+    {recu !== null && <div style={{ position: "fixed", inset: 0, background: "#0b0f14", zIndex: 300, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
+        <button onClick={() => setRecu(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Cerrar</button>
+        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Recuperar fotos de avance</span>
+        <span style={{ width: 60 }} />
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+        <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "#92400E", lineHeight: 1.5 }}>
+          Estas son las fotos de avance que quedaron guardadas en la nube y no están asignadas a ninguna obra. Marcá las que quieras, elegí <b>la obra</b> (arriba, en la pantalla de avance) y <b>la fecha</b>, y tocá recuperar.
+        </div>
+        <div style={{ color: "#fff", fontSize: 12.5, marginBottom: 10 }}>{recuMsg}</div>
+        {recu.length > 0 && <>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+            <span style={{ color: "#cbd5e1", fontSize: 12 }}>Obra: <b style={{ color: "#fff" }}>{obra?.nombre || "— elegí arriba —"}</b></span>
+            <input type="date" value={recuFecha} onChange={e => setRecuFecha(e.target.value)} style={{ background: "#1a2433", border: "1px solid #334155", color: "#fff", borderRadius: 8, padding: "8px 10px", fontSize: 13 }} />
+            <button onClick={() => setRecuSel(recuSel.length === recu.length ? [] : [...recu])} style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{recuSel.length === recu.length ? "Ninguna" : "Todas"}</button>
+            <button onClick={recuperarAObra} disabled={!recuSel.length || !obraId} style={{ background: (!recuSel.length || !obraId) ? "#334155" : BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginLeft: "auto" }}>Recuperar {recuSel.length || ""} a esta obra</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+            {recu.map((u, i) => { const sel = recuSel.includes(u); return <div key={i} onClick={() => setRecuSel(prev => sel ? prev.filter(x => x !== u) : [...prev, u])} style={{ position: "relative", cursor: "pointer", borderRadius: 8, overflow: "hidden", border: sel ? `3px solid ${BRASS}` : "3px solid transparent" }}>
+              <img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
+              {sel && <div style={{ position: "absolute", top: 4, right: 4, background: BRASS, color: "#fff", borderRadius: "50%", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800 }}>✓</div>}
+            </div>; })}
+          </div>
+        </>}
+      </div>
+    </div>}
   </div>);
 }
 const WEB_NAV = [
-  { id:"chat", label:"Asistente IA" }, { id:"dashboard", label:"Inicio" },
+  { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" },
   { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" }, { id:"mensajes", label:"Mensajes" },
-  { id:"informes", label:"Informes" }, { id:"formularios", label:"Formularios" },
+  { id:"bitacora", label:"Bitácora" }, { id:"formularios", label:"Formularios" },
+  { id:"internos", label:"🔒 Privado" },
   { id:"mas", label:"Más" },
 ];
 function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
@@ -4289,6 +5282,10 @@ function App() {
   const [formularios, setFormularios] = useStoredState("vv_formularios", []);
   const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
   const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
+  const [docrecepcion, setDocrecepcion] = useStoredState("vv_docrecepcion", []);
+  const [bitacora, setBitacora] = useStoredState("vv_bitacora", []);
+  const [informesSem, setInformesSem] = useStoredState("vv_informes_sem", {});
+  const [internos, setInternos] = useStoredState("vv_internos", []);
   const [mensajes, setMensajes] = useStoredState("vv_mensajes", []);
   const [pedidos, setPedidos] = useStoredState("vv_pedidos", []);
   const [clienteArchivos] = useStoredState("cliente_archivos", []);
@@ -4416,7 +5413,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
@@ -4430,14 +5427,16 @@ function App() {
             {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
-            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} />}
+            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
             {view==="chat" && <ChatIA db={db} cfg={cfg} apiKey={cfg.apiKey} msgs={chatMsgs} setMsgs={setChatMsgs} />}
             {view==="mas" && <MasView cfg={cfg} setCfg={setCfg} sub={masSub} setSub={setMasSub} goView={go} db={db} apiKey={cfg.apiKey} />}
             {view==="informes" && <InformesView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
+            {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="mensajes" && <MensajesVVView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
+            {view==="internos" && <InternosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
           </div>
         </div>
         <WebFooter cfg={cfg} />
