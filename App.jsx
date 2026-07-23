@@ -2753,16 +2753,34 @@ const tipoDe = (id) => TIPOS_PEDIDO.find(t => t.id === id) || TIPOS_PEDIDO[0];
 
 // Documentación inicial básica de obra (para el remito de recepción).
 const DOCS_BASE = [
-  "Niveles",
-  "Eje de replanteo en platea",
-  "Planos de platea",
-  "Planos de estructura",
-  "Plano de replanteo de mampostería",
-  "Plano de mampostería",
-  "Plano de hogar",
-  "Plano de parrilla",
-  "Plano de vainas",
+  { n: "Niveles", c: "Documentación técnica" },
+  { n: "Eje de replanteo en platea", c: "Documentación técnica" },
+  { n: "Planos de platea", c: "Documentación técnica" },
+  { n: "Planos de estructura", c: "Documentación técnica" },
+  { n: "Plano de replanteo de mampostería", c: "Documentación técnica" },
+  { n: "Plano de mampostería", c: "Documentación técnica" },
+  { n: "Plano de hogar", c: "Documentación técnica" },
+  { n: "Plano de parrilla", c: "Documentación técnica" },
+  { n: "Plano de vainas", c: "Documentación técnica" },
+  { n: "Cascos", c: "Elementos de protección" },
+  { n: "Chalecos reflectivos", c: "Elementos de protección" },
+  { n: "Calzado de seguridad", c: "Elementos de protección" },
+  { n: "Guantes", c: "Elementos de protección" },
+  { n: "Antiparras / protección ocular", c: "Elementos de protección" },
+  { n: "Protección auditiva", c: "Elementos de protección" },
+  { n: "Arnés y cabo de vida", c: "Elementos de protección" },
+  { n: "Barbijos / protección respiratoria", c: "Elementos de protección" },
+  { n: "Matafuegos", c: "Elementos de protección" },
+  { n: "Botiquín de primeros auxilios", c: "Elementos de protección" },
+  { n: "Vallado y señalización", c: "Elementos de protección" },
+  { n: "Póliza ART del personal", c: "Otros ítems" },
+  { n: "Alta temprana / F931", c: "Otros ítems" },
+  { n: "Seguro de responsabilidad civil", c: "Otros ítems" },
+  { n: "Llaves / acceso a la obra", c: "Otros ítems" },
+  { n: "Conexión de agua y luz de obra", c: "Otros ítems" },
+  { n: "Baño químico / obrador", c: "Otros ítems" },
 ];
+const DOC_CATS = ["Documentación técnica", "Elementos de protección", "Otros ítems"];
 
 
 // ═══ DEFINICIONES — misma pantalla que la app de Contratistas ═══
@@ -3225,17 +3243,18 @@ function RecepcionDocs({ db, cfg }) {
   const { obras, docrecepcion = [], setDocrecepcion } = db;
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   const [nuevoItem, setNuevoItem] = useState("");
+  const [catNuevo, setCatNuevo] = useState(DOC_CATS[0]);
   const cn = cfg?.clienteSigla || cfg?.clienteNombre || "Belfast";
 
   const reg = (docrecepcion || []).find(r => r.obra_id === obraId);
-  const items = reg ? reg.items : DOCS_BASE.map((n, i) => ({ id: "base" + i, nombre: n, recibido: false, fecha: "" }));
+  const items = reg ? reg.items : DOCS_BASE.map((d, i) => ({ id: "base" + i, nombre: d.n, cat: d.c, recibido: false, fecha: "" }));
 
   const guardarItems = (nextItems) => {
     const otros = (docrecepcion || []).filter(r => r.obra_id !== obraId);
     setDocrecepcion([...otros, { obra_id: obraId, items: nextItems, upd: Date.now() }]);
   };
   const toggle = (id) => guardarItems(items.map(it => it.id === id ? { ...it, recibido: !it.recibido, fecha: !it.recibido ? hoyStr() : "" } : it));
-  const agregar = () => { const n = nuevoItem.trim(); if (!n) return; guardarItems([...items, { id: uid() + Date.now(), nombre: n, recibido: false, fecha: "" }]); setNuevoItem(""); };
+  const agregar = () => { const n = nuevoItem.trim(); if (!n) return; guardarItems([...items, { id: uid() + Date.now(), nombre: n, cat: catNuevo, recibido: false, fecha: "" }]); setNuevoItem(""); };
   const quitar = (id) => guardarItems(items.filter(it => it.id !== id));
 
   const recibidos = items.filter(it => it.recibido).length;
@@ -3258,17 +3277,31 @@ function RecepcionDocs({ db, cfg }) {
         <span style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Documentación inicial</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: recibidos === items.length && items.length > 0 ? "#16A34A" : T.muted }}>{recibidos} de {items.length} recibidos</span>
       </div>
-      {items.map(it => (<div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
+      {DOC_CATS.concat(["Otros"]).map(cat => {
+        const delGrupo = items.filter(it => (it.cat || "Documentación técnica") === cat || (cat === "Otros" && it.cat && !DOC_CATS.includes(it.cat)));
+        if (!delGrupo.length) return null;
+        const okG = delGrupo.filter(it => it.recibido).length;
+        return (<div key={cat} style={{ marginTop: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>{cat}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: okG === delGrupo.length ? "#16A34A" : T.muted }}>{okG}/{delGrupo.length}</span>
+          </div>
+          {delGrupo.map(it => (<div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
         <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.recibido ? "#16A34A" : T.border}`, background: it.recibido ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.recibido ? "✓" : ""}</button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: it.recibido ? T.text : T.sub }}>{it.nombre}</div>
           {it.recibido && it.fecha && <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 700 }}>Recibido {it.fecha}</div>}
         </div>
-        {!DOCS_BASE.includes(it.nombre) && <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
+        {!DOCS_BASE.some(d => d.n === it.nombre) && <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
       </div>))}
+        </div>);
+      })}
 
       <div style={{ display: "flex", gap: 7, marginTop: 12 }}>
-        <input value={nuevoItem} onChange={e => setNuevoItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} placeholder="Agregar otra definición o plano…" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} />
+        <select value={catNuevo} onChange={e => setCatNuevo(e.target.value)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 12, color: T.text, maxWidth: 130 }}>
+          {DOC_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input value={nuevoItem} onChange={e => setNuevoItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} placeholder="Agregar ítem…" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} />
         <button onClick={agregar} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "0 15px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>＋</button>
       </div>
     </Card>
