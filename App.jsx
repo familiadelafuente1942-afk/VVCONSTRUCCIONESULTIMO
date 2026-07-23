@@ -3078,7 +3078,8 @@ function MatPedidosView({ db, cfg, onBack }) {
     });
   }
   const marcarCumplido = (id, val) => guardarMats(prev => (prev || []).map(x => x.id === id ? { ...x, cumplido: val, cumplidoFecha: val ? hoyStr() : "", upd: Date.now() } : x));
-  function nuevo(tipo = "material") { setForm({ tipo, obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u", detalle: "" }], nota: "" }); }
+  function nuevo(tipo = "material") {
+ setForm({ tipo, obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u", detalle: "" }], nota: "" }); }
   function addItem() { setForm(f => ({ ...f, items: [...f.items, { nombre: "", cantidad: "", unidad: "u", detalle: "" }] })); }
   function setItem(i, k, v) { setForm(f => ({ ...f, items: (f.items || []).map((it, j) => j === i ? { ...it, [k]: v } : it) })); }
   function delItem(i) { setForm(f => ({ ...f, items: (f.items || []).filter((_, j) => j !== i) })); }
@@ -3087,7 +3088,7 @@ function MatPedidosView({ db, cfg, onBack }) {
     const tp = tipoDe(tipo);
     const items = (form.items || []).filter(it => (it.nombre || "").trim());
     if (!items.length) { alert(`Agregá al menos ${tipo === "material" ? "un material" : tipo === "plano" ? "un plano" : "una definición"}.`); return; }
-    const p = { id: uid() + Date.now(), tipo, obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), ts: Date.now(), de: "vv", leido: false, leidoFecha: "" };
+    const p = { id: uid() + Date.now(), tipo, obra_id: form.obra_id, items, nota: form.nota || "", solicitante: (form.solicitante || "").trim(), fecha: hoyStr(), ts: Date.now(), de: "vv", leido: false, leidoFecha: "" };
     setMatpedidos(prev => [p, ...(prev || [])]); setForm(null);
     pushNotify(`Nuevo pedido de ${tp.label.toLowerCase()}`, `V+V · ${obraNom(obras, form.obra_id)}: ${items.map(it => it.nombre).join(", ").slice(0, 80)}`, "belfast");
     alert(`✓ Pedido de ${tp.label.toLowerCase()} enviado a ${cn}. Le queda como NO LEÍDO hasta que lo levante.`);
@@ -3169,6 +3170,7 @@ function MatPedidosView({ db, cfg, onBack }) {
               {p.de === "contratista" && <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.empresa || "Contratista"}</span>}
             </div>
             <div style={{ fontSize: 12, color: T.sub, marginTop: 6 }}>{(p.items || []).map(it => p.tipo === "material" ? `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim() : `${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}`).join(" · ")}</div>
+            {(p.solicitante || p.empresa) && <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 7, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, color: T.sub }}><Ico n="user" s={12} c={T.sub} /> Pidió: {p.solicitante || p.empresa}{p.solicitante && p.empresa ? ` (${p.empresa})` : ""}</div>}
             {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, fontStyle: "italic" }}>{p.nota}</div>}
             <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 6, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado por ${cn}${p.leidoFecha ? " · " + p.leidoFecha : ""}` : `● No leído por ${cn}`}</div>
             {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 3 }}><Ico n="send" /> Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
@@ -3204,6 +3206,7 @@ function MatPedidosView({ db, cfg, onBack }) {
         {(form.items || []).length > 1 && <button onClick={() => delItem(i)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer" }}>✕</button>}
       </div>))}
       <button onClick={addItem} style={{ background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>＋ Agregar {tp.sing}</button>
+      <Field label="Quién lo pide"><TInput value={form.solicitante || ""} onChange={e => { setForm({ ...form, solicitante: e.target.value }); try { localStorage.setItem("vv_solicitante", e.target.value); } catch (er) { } }} placeholder="Nombre y rol" /></Field>
       <Field label="Nota (opcional)"><textarea value={form.nota || ""} onChange={e => setForm({ ...form, nota: e.target.value })} rows={2} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} /></Field>
       <PBtn full onClick={guardar} style={{ marginTop: 6 }}>Enviar pedido a {cn}</PBtn>
     </Sheet>; })()}
