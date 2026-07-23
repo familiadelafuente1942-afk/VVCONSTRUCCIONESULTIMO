@@ -5849,7 +5849,7 @@ function ClientePanel({ db, cfg, onBack }) {
 // ── SHELL WEB INSTITUCIONAL (V+V) ────────────────────────────────────
 const LUXE_BG = "radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px) 0 0/22px 22px, radial-gradient(1100px 520px at 50% -8%, rgba(176,137,79,0.13), transparent 62%), linear-gradient(180deg,#0b141f 0%,#0a1019 100%)";
 const LUXE_HERO = "radial-gradient(620px 220px at 86% 0%, rgba(176,137,79,0.20), transparent 60%), linear-gradient(135deg,#101C2C 0%,#17283c 100%)";
-function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif }) {
+function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, docrecepcion = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
@@ -5919,6 +5919,17 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
     try {
       const txtAv = av.length ? av.map(h => `- ${h.fecha}: ${(h.avance || h.descripcion || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros visuales)";
       const txtBt = bt.length ? bt.map(h => `- ${fmtDMY(h.fecha)} · ${h.titulo || ""}: ${(h.desc || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros de bitácora)";
+      // Estado de la recepción de documentación / EPP / otros ítems de esta obra
+      const regDoc = (docrecepcion || []).find(r => r.obra_id === obraId);
+      const itemsDoc = regDoc ? (regDoc.items || []) : [];
+      const cats = ["Documentación técnica", "Elementos de protección", "Otros ítems"];
+      const recepEstado = cats.map(c => {
+        const g = itemsDoc.filter(x => (x.cat || "Documentación técnica") === c);
+        return { cat: c, total: g.length, ok: g.filter(x => x.recibido).length, faltan: g.filter(x => !x.recibido).map(x => x.nombre) };
+      }).filter(g => g.total > 0);
+      const txtDoc = recepEstado.length
+        ? recepEstado.map(g => `- ${g.cat}: ${g.ok} de ${g.total} recibidos.${g.faltan.length ? " Falta: " + g.faltan.join(", ") : " Completo."}`).join("\n")
+        : "(no se cargó el checklist de recepción para esta obra)";
       // Fotos de la semana (hasta 6) para que la IA pueda evaluar orden, limpieza y protecciones.
       const imgs = [];
       try {
@@ -5931,14 +5942,14 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         }
       } catch (e) { }
       const sys = "Sos un jefe de obra civil en Argentina que redacta certificados semanales para la dirección de obra. Escribís profesional, claro y conciso, en español rioplatense neutro-formal. No inventás datos: sintetizás y ordenás lo que te pasan. Los porcentajes son estimaciones visuales. En higiene y seguridad sos objetivo: describís solo lo que se ve en las fotos.";
-      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtDMY(semDesde)} al ${fmtDMY(semHasta)} (cierre viernes).\n\nREGISTROS DE AVANCE (fotos analizadas, pueden ser de días salteados):\n${txtAv}\n\nBITÁCORA DE OBRA (recepción de materiales, documentación, hechos):\n${txtBt}\n\nRedactá el certificado semanal con este formato EXACTO:\nDESARROLLO: (3 a 6 renglones contando cómo evolucionó la obra en la semana, uniendo los distintos días en un relato único, con el % estimado de avance alcanzado)\nRECEPCIONES: \n- (viñetas cortas con materiales recibidos y documentación, según la bitácora; si no hay, poné "Sin registros en la semana")\nLIMPIEZA Y SEGURIDAD: \n- (2 a 4 viñetas evaluando, SEGÚN LAS FOTOS ADJUNTAS: orden y limpieza de la obra —acopio de materiales, escombros, circulaciones libres— y uso de protecciones del personal —casco, chaleco, calzado de seguridad, arnés, guantes—. Si en las fotos no se ve personal, aclarálo. Si no hay fotos, poné "Sin fotos para evaluar")\nALERTAS: \n- (viñetas con pendientes, faltantes o demoras detectadas; si no hay, poné "Sin alertas")`;
+      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtDMY(semDesde)} al ${fmtDMY(semHasta)} (cierre viernes).\n\nREGISTROS DE AVANCE (fotos analizadas, pueden ser de días salteados):\n${txtAv}\n\nBITÁCORA DE OBRA (recepción de materiales, documentación, hechos):\n${txtBt}\n\nCHECKLIST DE RECEPCIÓN (documentación técnica, elementos de protección y otros ítems):\n${txtDoc}\n\nRedactá el certificado semanal con este formato EXACTO:\nDESARROLLO: (3 a 6 renglones contando cómo evolucionó la obra en la semana, uniendo los distintos días en un relato único, con el % estimado de avance alcanzado)\nRECEPCIONES: \n- (viñetas cortas con materiales recibidos y documentación, según la bitácora; si no hay, poné "Sin registros en la semana")\nLIMPIEZA Y SEGURIDAD: \n- (2 a 4 viñetas evaluando, SEGÚN LAS FOTOS ADJUNTAS: orden y limpieza de la obra —acopio de materiales, escombros, circulaciones libres— y uso de protecciones del personal —casco, chaleco, calzado de seguridad, arnés, guantes—. Si en las fotos no se ve personal, aclarálo. Si no hay fotos, poné "Sin fotos para evaluar")\nALERTAS: \n- (viñetas con pendientes, faltantes o demoras detectadas; incluí lo que falte del CHECKLIST DE RECEPCIÓN, sobre todo elementos de protección; si no hay, poné "Sin alertas")`;
       const resp = await callAI([{ role: "user", content: imgs.length ? [...imgs, { type: "text", text: instruc }] : instruc }], sys, apiKey, false);
       const cortar = (re) => { const m = resp.match(re); return m ? m[1].trim() : ""; };
       const desarrollo = cortar(/DESARROLLO:\s*([\s\S]*?)(?:RECEPCIONES:|ALERTAS:|$)/i) || resp;
       const recepciones = cortar(/RECEPCIONES:\s*([\s\S]*?)(?:LIMPIEZA Y SEGURIDAD:|ALERTAS:|$)/i);
       const limpieza = cortar(/LIMPIEZA Y SEGURIDAD:\s*([\s\S]*?)(?:ALERTAS:|$)/i);
       const alertas = cortar(/ALERTAS:\s*([\s\S]*)$/i);
-      const data = { desde: semDesde, hasta: semHasta, desarrollo, recepciones, limpieza, alertas, av, bt, emitido: hoyStr() };
+      const data = { desde: semDesde, hasta: semHasta, desarrollo, recepciones, limpieza, alertas, av, bt, recepEstado, emitido: hoyStr() };
       const rec = { ...data, id: uid() + Date.now(), ts: Date.now() };
       if (setCertif) setCertif(prev => { const p = prev || {}; const otros = (p[obraId] || []).filter(x => !(x.desde === rec.desde && x.hasta === rec.hasta)); return { ...p, [obraId]: [rec, ...otros] }; });
       setSemData(data); setPdfEntries(av); setPdfHtml(buildPdfSemanal(data));
@@ -5989,6 +6000,10 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       <h2>Desarrollo de la semana</h2><div class="parr">${_escPdf(d.desarrollo)}</div>
       <h2>Recepción de materiales y documentación</h2>${lista(d.recepciones, "Sin registros en la semana")}
       <h2>Orden, limpieza y protección del personal</h2>${lista(d.limpieza, "Sin fotos para evaluar en la semana")}
+      <h2>Recepción de documentación y elementos de protección</h2>
+      ${(d.recepEstado || []).length ? `<table><tr><th>Rubro</th><th style="width:74px">Recibido</th><th>Pendiente</th></tr>
+        ${(d.recepEstado || []).map(g => `<tr><td>${_escPdf(g.cat)}</td><td style="text-align:center;font-weight:700;color:${g.ok === g.total ? "#15803D" : "#B45309"}">${g.ok}/${g.total}</td><td>${g.faltan.length ? _escPdf(g.faltan.join(", ")) : "—"}</td></tr>`).join("")}</table>`
+        : `<div class="vacio">No se cargó el checklist de recepción para esta obra.</div>`}
       <h2>Pendientes y alertas</h2>${lista(d.alertas, "Sin alertas")}
       <h2>Registro visual del avance</h2>${visual}
       <h2>Bitácora de la semana</h2>${bita}
@@ -6114,6 +6129,15 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       titulo("Desarrollo de la semana"); parrafo(d.desarrollo);
       titulo("Recepción de materiales y documentación"); vinetas(d.recepciones, "Sin registros en la semana");
       titulo("Orden, limpieza y protección del personal"); vinetas(d.limpieza, "Sin fotos para evaluar en la semana");
+      titulo("Recepción de documentación y elementos de protección");
+      if ((d.recepEstado || []).length) {
+        for (const g of d.recepEstado) {
+          ensure(18); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(g.ok === g.total ? 21 : 180, g.ok === g.total ? 128 : 83, g.ok === g.total ? 61 : 9);
+          doc.text(`${g.cat}: ${g.ok} de ${g.total} recibidos`, M + 6, y); y += 13;
+          if (g.faltan.length) { doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90, 100, 115); for (const ln of doc.splitTextToSize("Pendiente: " + g.faltan.join(", "), W - 2 * M - 12)) { ensure(13); doc.text(ln, M + 12, y); y += 12; } }
+          y += 4;
+        }
+      } else { doc.setFont("helvetica", "italic"); doc.setFontSize(10); doc.setTextColor(150, 160, 175); ensure(14); doc.text("No se cargó el checklist de recepción para esta obra.", M + 6, y); y += 18; }
       titulo("Pendientes y alertas"); vinetas(d.alertas, "Sin alertas");
       titulo("Registro visual del avance");
       for (const h of d.av) {
@@ -6594,7 +6618,7 @@ function App() {
             {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
-            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} />}
+            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} docrecepcion={docrecepcion} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
             {view==="chat" && <ChatIA db={db} cfg={cfg} apiKey={cfg.apiKey} msgs={chatMsgs} setMsgs={setChatMsgs} />}
