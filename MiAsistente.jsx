@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 
+// Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
+const ETAPAS_OBRA = ["Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
+
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
   const P = {
@@ -1286,13 +1289,14 @@ function BitacoraPartBody({ obras, bitacora, setBitacora }) {
   const [desc, setDesc] = useState("");
   const [fotos, setFotos] = useState([]);
   const [adjuntos, setAdjuntos] = useState([]);
+  const [etapa, setEtapa] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const fotoRef = useRef(null); const adjRef = useRef(null);
   const lista = (bitacora || []).filter(h => h.obra_id === obraId).slice().sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
   const icoArch = (n = "") => { const e = (n.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return "word"; if (e === "pdf") return "doc"; if (["xls", "xlsx", "csv"].includes(e)) return "excel"; if (["png", "jpg", "jpeg"].includes(e)) return "image"; return "clip"; };
 
-  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEdit(null); setAbrir(false); };
-  const editar = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setAbrir(true); };
+  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEtapa(""); setEdit(null); setAbrir(false); };
+  const editar = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setEtapa(h.etapa || ""); setAbrir(true); };
 
   async function subir(e, tipo) {
     const files = Array.from(e.target.files || []); if (!files.length) return;
@@ -1317,7 +1321,7 @@ function BitacoraPartBody({ obras, bitacora, setBitacora }) {
   function guardar() {
     if (!obraId) { alert("Elegí una obra."); return; }
     if (!titulo.trim()) { alert("Ponele un título al hecho."); return; }
-    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, ts: edit?.ts || Date.now() };
+    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, etapa, ts: edit?.ts || Date.now() };
     const otros = (bitacora || []).filter(h => h.id !== hecho.id);
     setBitacora([...otros, hecho]);
     limpiar();
@@ -1339,6 +1343,11 @@ function BitacoraPartBody({ obras, bitacora, setBitacora }) {
     {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 14 }}>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Fecha</label>
       <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inp, margin: "5px 0 9px" }} />
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Etapa de obra</label>
+      <select value={etapa} onChange={e => setEtapa(e.target.value)} style={{ ...inp, margin: "5px 0 9px" }}>
+        <option value="">— Opcional —</option>
+        {ETAPAS_OBRA.map(x => <option key={x} value={x}>{x}</option>)}
+      </select>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Título</label>
       <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Recepción de hierro" style={{ ...inp, margin: "5px 0 9px" }} />
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Detalle</label>
@@ -1371,6 +1380,7 @@ function BitacoraPartBody({ obras, bitacora, setBitacora }) {
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: BRASS }}>{fmt(h.fecha)}</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{h.titulo}</span>
+          {h.etapa && <span style={{ fontSize: 9.5, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{h.etapa}</span>}
         </div>
         {h.desc && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap", marginBottom: (h.fotos || []).length ? 8 : 0 }}>{h.desc}</div>}
         {(h.fotos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>

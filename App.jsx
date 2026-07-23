@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
+// Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
+const ETAPAS_OBRA = ["Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
+
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
   const P = {
@@ -2472,6 +2475,7 @@ function BitacoraView({ db, cfg, onBack }) {
   const [desc, setDesc] = useState("");
   const [fotos, setFotos] = useState([]);
   const [adjuntos, setAdjuntos] = useState([]);
+  const [etapa, setEtapa] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const [pdfHtml, setPdfHtml] = useState(null);
   const fileRef = useRef(null);
@@ -2480,8 +2484,8 @@ function BitacoraView({ db, cfg, onBack }) {
   const obra = obras.find(o => o.id === obraId);
   const hechos = bitacora.filter(h => h.obra_id === obraId).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
 
-  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEdit(null); setAbrir(false); };
-  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setAbrir(true); };
+  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEtapa(""); setEdit(null); setAbrir(false); };
+  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setEtapa(h.etapa || ""); setAbrir(true); };
 
   const agregarFotos = async (e) => {
     const files = Array.from(e.target.files || []); if (!files.length) return;
@@ -2522,7 +2526,7 @@ function BitacoraView({ db, cfg, onBack }) {
   const guardar = () => {
     if (!titulo.trim() && !desc.trim()) { alert("Poné al menos un título o una descripción."); return; }
     if (!obraId) { alert("Elegí una obra."); return; }
-    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, ts: edit?.ts || Date.now() };
+    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, etapa, ts: edit?.ts || Date.now() };
     db.setBitacora(prev => { const otros = (prev || []).filter(h => h.id !== hecho.id); return [...otros, hecho]; });
     limpiar();
   };
@@ -2604,6 +2608,10 @@ function BitacoraView({ db, cfg, onBack }) {
               <span style={{ fontSize: 12, color: T.sub, width: 46 }}>Fecha</span>
               <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inp, flex: 1 }} />
             </div>
+            <select value={etapa} onChange={e => setEtapa(e.target.value)} style={{ ...inp, marginBottom: 8 }}>
+              <option value="">— Etapa de obra (opcional) —</option>
+              {ETAPAS_OBRA.map(x => <option key={x} value={x}>{x}</option>)}
+            </select>
             <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título (ej: Cambio de nivel de platea)" style={inp} />
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción: qué pasó, por qué, quién lo pidió, qué implica…" rows={4} style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
             {/* fotos */}
@@ -2643,6 +2651,7 @@ function BitacoraView({ db, cfg, onBack }) {
               <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: T.navy, borderRadius: 20, padding: "1px 8px", flexShrink: 0 }}>{hechos.length - i}</span>
               <span style={{ fontSize: 11.5, fontWeight: 800, color: BRASS, flexShrink: 0 }}>{h.fecha ? h.fecha.split("-").reverse().join("/") : ""}</span>
               <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{h.titulo}</span>
+              {h.etapa && <span style={{ fontSize: 9.5, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{h.etapa}</span>}
             </div>
             {h.desc && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap", marginBottom: (h.fotos || []).length ? 9 : 0 }}>{h.desc}</div>}
             {(h.fotos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
