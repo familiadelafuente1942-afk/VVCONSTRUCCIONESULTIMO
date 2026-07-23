@@ -1,5 +1,55 @@
 import React, { useState, useEffect, useRef } from "react";
 
+// ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
+function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
+  const P = {
+    doc: "M7 3h7l5 5v13H7z M14 3v5h5",
+    mic: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3",
+    building: "M3 21h18 M5 21V8l7-5 7 5v13 M9 21v-5h6v5 M9 11h1 M14 11h1",
+    robot: "M12 3v3 M6 6h12v12H6z M9.5 11v1.5 M14.5 11v1.5 M4 10v4 M20 10v4",
+    video: "M3 6h12v12H3z M15 10l6-3v10l-6-3",
+    list: "M8 6h13 M8 12h13 M8 18h13 M3.5 6h.01 M3.5 12h.01 M3.5 18h.01",
+    download: "M12 3v12 M7 11l5 5 5-5 M4 20h16",
+    upload: "M12 21V9 M7 13l5-5 5 5 M4 4h16",
+    card: "M3 6h18v12H3z M3 10h18 M7 15h4",
+    user: "M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 3.6-6 8-6s8 2 8 6",
+    link: "M10 13a5 5 0 007.5.5l2-2a5 5 0 00-7-7l-1 1 M14 11a5 5 0 00-7.5-.5l-2 2a5 5 0 007 7l1-1",
+    globe: "M12 21a9 9 0 100-18 9 9 0 000 18z M3 12h18 M12 3a14 14 0 000 18 M12 3a14 14 0 010 18",
+    cal2: "M4 6h16v15H4z M4 10h16 M8 3v4 M16 3v4",
+    money: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 7v10 M9.5 9.5h4a1.8 1.8 0 010 3.6h-3a1.8 1.8 0 000 3.6h4",
+    bell: "M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z M10.5 20a2 2 0 003 0",
+    sound: "M4 9h4l5-4v14l-5-4H4z M16.5 9.5a4 4 0 010 5",
+    contact: "M4 5h16v14H4z M9 11a2 2 0 100-4 2 2 0 000 4z M6.5 16c.6-1.6 1.9-2.4 2.5-2.4s1.9.8 2.5 2.4 M14 9h4 M14 13h4",
+    chart: "M4 20V10 M10 20V4 M16 20v-7 M3 20h18",
+    pin: "M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z M12 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
+    car: "M5 16h14 M6.5 16l1.2-5h8.6l1.2 5 M4 16h16v3H4z M7.5 19v1.5 M16.5 19v1.5",
+    wave: "M12 3v6 M8 6l8 0 M5 13a7 7 0 0014 0 M12 20v1",
+    tools: "M14.5 6.5a3.5 3.5 0 004.8 4.8l-9 9a2.1 2.1 0 01-3-3l9-9z M4 6l3-3 4 4-3 3z",
+    moon: "M20 14A8.5 8.5 0 019.9 4 8.5 8.5 0 1020 14z",
+    thumb: "M7 21V10l5-7 1.2.8a2 2 0 01.8 2.2L13 10h5.5a2 2 0 012 2.4l-1.3 6a2 2 0 01-2 1.6H7z M3 10h4v11H3z",
+
+    word: "M7 3h7l5 5v13H7z M14 3v5h5 M10 12l1.5 5 1.5-4 1.5 4L16 12",
+    excel: "M7 3h7l5 5v13H7z M14 3v5h5 M10 12l5 6 M15 12l-5 6",
+    box: "M3 7l9-4 9 4v10l-9 4-9-4z M3 7l9 4 9-4 M12 11v10",
+    ruler: "M3 15L15 3l6 6L9 21z M8 10l2 2 M11 7l2 2 M14 4l2 2",
+    plans: "M3 5h8l2 2h8v12H3z M8 12h8 M8 16h5",
+    camera: "M3 8h4l2-2h6l2 2h4v11H3z M12 16a3.2 3.2 0 100-6.4 3.2 3.2 0 000 6.4z",
+    clip: "M20 11l-8.5 8.5a4.5 4.5 0 01-6.4-6.4L14 4.3a3 3 0 014.2 4.2L9.7 17a1.5 1.5 0 01-2.1-2.1l8-8",
+    trash: "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6",
+    chat: "M4 5h16v11H9l-5 4z",
+    lock: "M6 10V7a6 6 0 1112 0v3 M4 10h16v11H4z M12 15v2",
+    save: "M5 3h11l3 3v15H5z M8 3v6h7V3 M8 14h8v7H8z",
+    calendar: "M4 6h16v15H4z M4 10h16 M8 3v4 M16 3v4",
+    search: "M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.3-4.3",
+    sparkle: "M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z",
+    check: "M4 12.5l5 5L20 6.5",
+    image: "M3 5h18v14H3z M8.5 11a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 16l-5-5-9 8",
+    life: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M5.6 5.6l3.9 3.9 M18.4 5.6l-3.9 3.9 M5.6 18.4l3.9-3.9 M18.4 18.4l-3.9-3.9",
+    send: "M21 3L10.5 13.5 M21 3l-6.8 18-3.7-7.5L3 9.8z",
+  }[n] || "M12 21a9 9 0 100-18 9 9 0 000 18z";
+  return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={st} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, verticalAlign: "-2px", display: "inline-block" }}>{P.split(" M").map((d, i) => <path key={i} d={(i ? "M" : "") + d} />)}</svg>;
+}
+
 // ════════════════════════════════════════════════════════════════════
 // APP DE CONTRATISTAS — Solo pedidos de materiales
 // Mismo backend Supabase que V+V y Belfast → los pedidos se comparten.
@@ -74,9 +124,9 @@ function TipoIcon({ tipo, size = 22, color = "currentColor" }) {
 }
 
 const TIPOS_PEDIDO = [
-  { id: "material", label: "Materiales", sing: "material", icon: "📦", color: "#1B3A5B" },
-  { id: "definicion", label: "Definiciones", sing: "definición", icon: "📐", color: "#B0894F" },
-  { id: "plano", label: "Planos", sing: "plano", icon: "🗂️", color: "#3B6E9E" },
+  { id: "material", label: "Materiales", sing: "material", icon: "box", color: "#1B3A5B" },
+  { id: "definicion", label: "Definiciones", sing: "definición", icon: "ruler", color: "#B0894F" },
+  { id: "plano", label: "Planos", sing: "plano", icon: "plans", color: "#3B6E9E" },
 ];
 const tipoDe = (id) => TIPOS_PEDIDO.find(t => t.id === id) || TIPOS_PEDIDO[0];
 const itemsTexto = (p) => (p.items || []).map(it => (p.tipo && p.tipo !== "material") ? `${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}` : `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
@@ -335,14 +385,14 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
         <button onClick={agregarManual} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "0 15px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>＋</button>
       </div>
 
-      <button onClick={pdfFaltantes} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📄 PDF de definiciones faltantes</button>
-      <button onClick={wordDefiniciones} style={{ width: "100%", background: "#2B579A", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📝 Word editable (todas + observaciones)</button>
-      <button onClick={waFaltantes} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}>📲 Enviar faltantes por WhatsApp</button>
+      <button onClick={pdfFaltantes} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}><Ico n="doc" /> PDF de definiciones faltantes</button>
+      <button onClick={wordDefiniciones} style={{ width: "100%", background: "#2B579A", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}><Ico n="word" /> Word editable (todas + observaciones)</button>
+      <button onClick={waFaltantes} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}><Ico n="send" /> Enviar faltantes por WhatsApp</button>
 
       {/* ── Google Form ── */}
       <div style={{ border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.card }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gformCfg ? 10 : (reg?.formId ? 10 : 0) }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>📋 Formulario para el jefe de obra</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}><Ico n="list" /> Formulario para el jefe de obra</div>
           <button onClick={() => setGformCfg(v => !v)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, color: T.sub, cursor: "pointer" }}>⚙︎ {gformUrl ? "Configurado" : "Configurar"}</button>
         </div>
 
@@ -376,7 +426,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
     {items.length === 0 && !cargando && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "10px", lineHeight: 1.6 }}>Subí el Excel de definiciones para armar el checklist.<br />También podés cargarlas a mano una vez que subas al menos una.</div>}
 
     {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#0F1B2D", zIndex: 500, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: T.navy, borderBottom: "1px solid rgba(255,255,255,.1)", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: T.navy, borderBottom: "1px solid rgba(255,255,255,.1)", alignItems: "center", flexShrink: 0, position: "relative", zIndex: 2 }}>
         <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.16)", color: "#fff", border: "none", borderRadius: 9, padding: "11px 16px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>‹ Volver</button>
         <div style={{ flex: 1 }} />
         <button onClick={imprimirPdf} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "11px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Guardar / Imprimir</button>
@@ -404,7 +454,7 @@ function RecepcionDocs({ obras, empresa, docrecepcion, persistDoc }) {
   const recibidos = items.filter(it => it.recibido).length;
 
   function remitoWA() {
-    const lineas = items.map(it => `${it.recibido ? "✅" : "⬜"} ${it.nombre}${it.recibido && it.fecha ? ` (${it.fecha})` : ""}`);
+    const lineas = items.map(it => `${it.recibido ? "" : "⬜"} ${it.nombre}${it.recibido && it.fecha ? ` (${it.fecha})` : ""}`);
     const txt = `*REMITO DE RECEPCIÓN DE DOCUMENTACIÓN*\nObra: ${obraNom(obraId)}\nFecha: ${hoyStr()}\nContratista: ${empresa}\n\nDocumentación inicial básica:\n${lineas.join("\n")}\n\nRecibidos: ${recibidos} de ${items.length}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
   }
@@ -437,12 +487,14 @@ function RecepcionDocs({ obras, empresa, docrecepcion, persistDoc }) {
       </div>
     </div>
 
-    <button onClick={remitoWA} style={{ width: "100%", marginTop: 14, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar remito de recepción por WhatsApp</button>
+    <button onClick={remitoWA} style={{ width: "100%", marginTop: 14, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> Enviar remito de recepción por WhatsApp</button>
   </div>);
 }
 
 export default function ContratistaApp() {
   const [empresa, setEmpresa] = useState(() => { try { return localStorage.getItem("contratista_empresa") || ""; } catch { return ""; } });
+  const [persona, setPersona] = useState(() => { try { return localStorage.getItem("contratista_persona") || ""; } catch { return ""; } });
+  const setPersonaP = (v) => { setPersona(v); try { localStorage.setItem("contratista_persona", v); } catch { } };
   const [tmpEmpresa, setTmpEmpresa] = useState("");
   const [obras, setObras] = useState([]);
   const [matpedidos, setMatpedidos] = useState([]);
@@ -507,7 +559,7 @@ export default function ContratistaApp() {
     await storage.set("vv_matpedidos", JSON.stringify(next)).catch(() => { });
   }
 
-  function nuevo(tipo = "material") { setForm({ tipo, obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u", detalle: "" }], nota: "", fecha_pedido: new Date().toISOString().slice(0, 10), fecha_necesita: "" }); }
+  function nuevo(tipo = "material") { setForm({ tipo, obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u", detalle: "" }], nota: "", fecha_pedido: new Date().toISOString().slice(0, 10), fecha_necesita: "", solicitante: persona }); }
   function editar(p) { setForm({ id: p.id, tipo: p.tipo || "material", obra_id: p.obra_id, items: (p.items && p.items.length ? p.items.map(it => ({ nombre: it.nombre || "", cantidad: it.cantidad != null ? String(it.cantidad) : "", unidad: it.unidad || "u", detalle: it.detalle || "" })) : [{ nombre: "", cantidad: "", unidad: "u", detalle: "" }]), nota: p.nota || "", fecha_pedido: p.fecha_pedido || "", fecha_necesita: p.fecha_necesita || "" }); }
   function fmtISO(iso) { if (!iso) return ""; const [y, m, d] = String(iso).split("-"); return d && m && y ? `${d}/${m}/${y}` : iso; }
   function icsEntrega(p) {
@@ -539,12 +591,12 @@ export default function ContratistaApp() {
     if (!items.length) { alert(`Agregá al menos ${tipo === "material" ? "un material" : tipo === "plano" ? "un plano" : "una definición"}.`); return; }
     const r = await storage.get("vv_matpedidos"); let arr = []; if (r?.value) { try { arr = JSON.parse(r.value); } catch { } }
     if (form.id) {
-      const next = arr.map(x => x.id === form.id ? { ...x, tipo, obra_id: form.obra_id, items, nota: form.nota || "", fecha_pedido: form.fecha_pedido || "", fecha_necesita: form.fecha_necesita || "", editadoFecha: hoyStr() } : x);
+      const next = arr.map(x => x.id === form.id ? { ...x, tipo, obra_id: form.obra_id, items, nota: form.nota || "", fecha_pedido: form.fecha_pedido || "", fecha_necesita: form.fecha_necesita || "", solicitante: (form.solicitante || persona || "").trim(), editadoFecha: hoyStr(), editadoPor: (form.solicitante || persona || "").trim() } : x);
       const pid = form.id; await persistMat(next); setForm(null); setWaFor(pid);
       alert("✓ Pedido actualizado. Ya se ve así en V+V y Belfast. Podés reenviarlo por WhatsApp abajo.");
       return;
     }
-    const p = { id: uid() + Date.now(), tipo, obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), fecha_pedido: form.fecha_pedido || "", fecha_necesita: form.fecha_necesita || "", ts: Date.now(), de: "contratista", empresa, leido: false, leidoFecha: "" };
+    const p = { id: uid() + Date.now(), tipo, obra_id: form.obra_id, items, nota: form.nota || "", fecha: hoyStr(), fecha_pedido: form.fecha_pedido || "", fecha_necesita: form.fecha_necesita || "", ts: Date.now(), de: "contratista", empresa, solicitante: (form.solicitante || persona || "").trim(), leido: false, leidoFecha: "" };
     await persistMat([p, ...arr]); setForm(null); setWaFor(p.id);
     pushNotify(`Nuevo pedido de ${tp.label.toLowerCase()}`, `${empresa}: ${items.map(it => it.nombre).join(", ").slice(0, 90)}`, "");
     alert("✓ Pedido enviado a V+V y Belfast. Ahora podés mandarlo por WhatsApp al encargado de obra (abajo).");
@@ -559,7 +611,7 @@ export default function ContratistaApp() {
   function waText(p) {
     const tp = tipoDe(p.tipo);
     const lines = itemsTexto(p).map(l => `• ${l}`);
-    return `*Pedido de ${tp.label.toLowerCase()}* — ${obraNom(p.obra_id)}\nFecha: ${p.fecha}${p.fecha_necesita ? `\n📅 *Necesito en obra: ${fmtISO(p.fecha_necesita)}*` : ""}\nContratista: ${p.empresa || empresa}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.`;
+    return `*Pedido de ${tp.label.toLowerCase()}* — ${obraNom(p.obra_id)}\nFecha: ${p.fecha}${p.fecha_necesita ? `\n*Necesito en obra: ${fmtISO(p.fecha_necesita)}*` : ""}\nContratista: ${p.empresa || empresa}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\nPor favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.`;
   }
   function waLink(text, phone) {
     const t = encodeURIComponent(text);
@@ -601,7 +653,7 @@ export default function ContratistaApp() {
         <div style={{ fontSize: 15, fontWeight: 800 }}>{empresa}</div>
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => setEstiloOpen(true)} title="Cambiar estilo" style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.2)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>🎨 Estilo</button>
+        <button onClick={() => setEstiloOpen(true)} title="Cambiar estilo" style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.2)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="sparkle" /> Estilo</button>
         <button onClick={() => { setTmpEmpresa(empresa); setEditEmpresa(true); }} style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.2)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Cambiar</button>
       </div>
     </div>
@@ -657,6 +709,32 @@ export default function ContratistaApp() {
           {obrasConPedidos.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
         </select>}
       </div>}
+      {listaTodos.length > 0 && (() => {
+        // Panel general: estado de cada obra según hace cuánto pidió materiales.
+        const filas = (obras || []).map(o => {
+          const ped = listaTodos.filter(p => p.obra_id === o.id);
+          const mats = ped.filter(p => (p.tipo || "material") === "material");
+          const ultMat = mats.reduce((m, x) => Math.max(m, x.ts || 0), 0);
+          const dm = ultMat ? Math.floor((Date.now() - ultMat) / 86400000) : null;
+          return { id: o.id, nombre: o.nombre, total: ped.length, dm };
+        }).filter(f => f.total > 0 || f.dm === null);
+        if (!filas.length) return null;
+        const orden = filas.slice().sort((a, b) => (b.dm === null ? 9999 : b.dm) - (a.dm === null ? 9999 : a.dm));
+        const txt = (n) => n === null ? "sin pedidos de material" : n === 0 ? "pidió hoy" : n === 1 ? "pidió ayer" : `hace ${n} días`;
+        const alerta = (n) => n === null || n >= 7;
+        return <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 11, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.navy, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Estado por obra</div>
+          {orden.map(f => (
+            <div key={f.id} onClick={() => setFObra(fObra === f.id ? "" : f.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: fObra === f.id ? T.al : "transparent" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: alerta(f.dm) ? "#D97706" : "#16A34A", flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</span>
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: alerta(f.dm) ? "#B45309" : T.sub, whiteSpace: "nowrap" }}>{txt(f.dm)}</span>
+              <span style={{ fontSize: 10, fontWeight: 800, color: T.sub, background: T.bg, borderRadius: 20, padding: "2px 8px", flexShrink: 0 }}>{f.total}</span>
+            </div>
+          ))}
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 6, lineHeight: 1.45 }}>Tocá una obra para filtrar. En ámbar, las que hace 7 días o más que no piden materiales.</div>
+        </div>;
+      })()}
       {listaTodos.length === 0 && <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Registro de pedidos (0)</div>}
       {listaTodos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Todavía no hay pedidos. Elegí arriba qué querés pedir.</div>}
       {listaTodos.length > 0 && lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 18px" }}>Ningún pedido con esos filtros.<br /><button onClick={() => { setFObra(""); setFTipo(""); }} style={{ marginTop: 8, background: "none", border: "none", color: T.accent, fontWeight: 700, fontSize: 12.5, cursor: "pointer", textDecoration: "underline" }}>Ver todos</button></div>}
@@ -666,25 +744,39 @@ export default function ContratistaApp() {
           <div style={{ fontSize: 14, fontWeight: 800, color: T.navy, flex: 1, minWidth: 0 }}>{g.nombre}</div>
           <div style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: T.navy, borderRadius: 20, padding: "3px 10px" }}>{g.pedidos.length} pedido{g.pedidos.length !== 1 ? "s" : ""}</div>
         </div>
+        {(() => {
+          const ult = g.pedidos.reduce((m, x) => Math.max(m, x.ts || 0), 0);
+          const d = ult ? Math.floor((Date.now() - ult) / 86400000) : null;
+          const mats = g.pedidos.filter(x => (x.tipo || "material") === "material");
+          const ultMat = mats.reduce((m, x) => Math.max(m, x.ts || 0), 0);
+          const dm = ultMat ? Math.floor((Date.now() - ultMat) / 86400000) : null;
+          const txt = (n) => n === 0 ? "hoy" : n === 1 ? "ayer" : `hace ${n} días`;
+          const alerta = dm === null || dm >= 7;
+          return <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 8px" }}>Último pedido: {d === null ? "—" : txt(d)}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: alerta ? "#B45309" : "#15803D", background: alerta ? "#FFFBEB" : "#ECFDF5", border: `1px solid ${alerta ? "#FDE68A" : "#A7F3D0"}`, borderRadius: 6, padding: "3px 8px" }}>Materiales: {dm === null ? "sin pedidos" : txt(dm)}</span>
+          </div>;
+        })()}
         {g.pedidos.map(p => { const mio = p.de === "contratista" && p.empresa === empresa; return (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${mio ? BRASS : tipoDe(p.tipo).color}`, borderRadius: T.rsm, padding: 13, marginBottom: 9, boxShadow: T.shadow }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoDe(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 7, verticalAlign: "middle" }}><TipoIcon tipo={p.tipo} size={12} color="#fff" /> {tipoDe(p.tipo).label}</span>{p.fecha}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoDe(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 7, verticalAlign: "middle" }}><TipoIcon tipo={p.tipo} size={12} color="#fff" /> {tipoDe(p.tipo).label}</span><span style={{ fontWeight: 800, color: T.navy }}>{obraNom(p.obra_id)}</span><span style={{ color: T.muted, fontWeight: 600 }}> · {p.fecha}</span></div>
           <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : p.de === "cliente" ? "#7C3AED" : BRASS, borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap" }}>{origenLabel(p)}</span>
         </div>
         <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{itemsTexto(p).map(l => `• ${l}`).join("\n")}</div>
+        {(p.solicitante || p.empresa) && <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 7, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, color: T.sub }}><Ico n="user" s={12} c={T.sub} /> Pidió: {p.solicitante || p.empresa}{p.solicitante && p.empresa ? ` (${p.empresa})` : ""}</div>}
         {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, fontStyle: "italic" }}>{p.nota}</div>}
         {p.fecha_necesita && <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700 }}>📅 Necesito en obra: {fmtISO(p.fecha_necesita)}</div>
-          <a href={icsEntrega(p)} download={`Entrega-${obraNom(p.obra_id).replace(/[^\w]/g, "_")}.ics`} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.navy, color: "#fff", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}>🔔 Agendar + alerta</a>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700 }}><Ico n="cal2" /> Necesito en obra: {fmtISO(p.fecha_necesita)}</div>
+          <a href={icsEntrega(p)} download={`Entrega-${obraNom(p.obra_id).replace(/[^\w]/g, "_")}.ics`} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.navy, color: "#fff", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}><Ico n="bell" /> Agendar + alerta</a>
         </div>}
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginTop: 7, gap: 8 }}>
           {mio && <div style={{ display: "flex", gap: 6, flexShrink: 0 }}><button onClick={() => editar(p)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button><button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Eliminar</button></div>}
         </div>
-        {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 6 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
-        <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 9, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Mandar por WhatsApp al encargado</button>
+        {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 6 }}><Ico n="send" /> Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
+        <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 9, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> Mandar por WhatsApp al encargado</button>
         {waFor === p.id && <div style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
-          {encargados(p.obra_id).map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}>📲 {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
+          {encargados(p.obra_id).map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}><Ico n="send" /> {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
           <a href={waLink(waText(p))} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Elegir contacto…</a>
           {encargados(p.obra_id).length === 0 && <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>No hay encargado con teléfono cargado para esta obra. Usá "Elegir contacto" o pedile a V+V que cargue el teléfono del encargado.</div>}
         </div>}
@@ -721,6 +813,8 @@ export default function ContratistaApp() {
             <input type="date" value={form.fecha_necesita || ""} onChange={e => setForm({ ...form, fecha_necesita: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px", fontSize: 15, color: T.text, margin: "6px 0 0", boxSizing: "border-box" }} />
           </div>
         </div>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Quién lo pide</label>
+        <input value={form.solicitante || ""} onChange={e => { setForm({ ...form, solicitante: e.target.value }); setPersonaP(e.target.value); }} placeholder="Nombre y rol (ej: Marcos Giménez — capataz)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13.5, color: T.text, margin: "6px 0 14px", boxSizing: "border-box" }} />
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Nota (opcional)</label>
         <textarea value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} rows={2} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13.5, color: T.text, margin: "6px 0 14px", boxSizing: "border-box", resize: "vertical" }} />
         <button onClick={guardar} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{form.id ? "Guardar cambios" : "Enviar pedido"}</button>
