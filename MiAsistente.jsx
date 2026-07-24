@@ -115,6 +115,75 @@ async function subirBucket(dataUrl, nombre) {
 }
 function fileToDataUrl(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); }); }
 
+
+// ── NOTIFICACIONES PROPIAS (sin servicios externos) ──
+const VAPID_PUBLIC = "BBCSBq5_m-TcF45KMJ_-B7LHaIvfFHbnHiHQnPyxJKxjE8zH0nxusjpQJWHl4cO3Zr1DWLc_wO7L_PhqrLsGJtE";
+function b64ToU8(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(s); const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+// Estado: "activo" | "bloqueado" | "no-soportado" | "inactivo"
+async function pushEstado() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "no-soportado";
+    if (Notification.permission === "denied") return "bloqueado";
+    const reg = await navigator.serviceWorker.getRegistration("/sw-push.js");
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    return sub ? "activo" : "inactivo";
+  } catch (e) { return "no-soportado"; }
+}
+async function activarPush(appTag) {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return { ok: false, msg: "Este dispositivo no soporta notificaciones. En iPhone hay que agregar la app a la pantalla de inicio." };
+    const permiso = await Notification.requestPermission();
+    if (permiso !== "granted") return { ok: false, msg: "No diste permiso para las notificaciones." };
+    const reg = await navigator.serviceWorker.register("/sw-push.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUBLIC) });
+    const r = await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), app: appTag }) });
+    const d = await r.json().catch(() => ({}));
+    return d && d.ok ? { ok: true, msg: "Listo, ya vas a recibir los avisos en este dispositivo." } : { ok: false, msg: "No pude registrar el dispositivo. Probá de nuevo." };
+  } catch (e) { return { ok: false, msg: "No pude activar las notificaciones: " + ((e && e.message) || "") }; }
+}
+async function desactivarPush() {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/sw-push.js");
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (sub) { await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), quitar: true }) }); await sub.unsubscribe(); }
+    return true;
+  } catch (e) { return false; }
+}
+// Reengancha en silencio si ya estaba activado en este dispositivo.
+async function initPush(appTag) {
+  try {
+    if (!("serviceWorker" in navigator) || Notification.permission !== "granted") return;
+    const reg = await navigator.serviceWorker.register("/sw-push.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUBLIC) });
+    await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), app: appTag }) });
+  } catch (e) { }
+}
+// sendAfter (ISO) = aviso programado; sin sendAfter = inmediato.
+async function pushNotify(title, message, app, url, sendAfter) {
+  try { await fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "", sendAfter: sendAfter || "" }) }); } catch (e) { }
+}
+// Convierte "dd/mm/aa" + "HH:MM" a fecha real; devuelve null si ya pasó.
+function fechaEvento(fecha, hora) {
+  try {
+    const m = String(fecha || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (!m) return null;
+    const aa = m[3].length === 2 ? "20" + m[3] : m[3];
+    const [h, mi] = String(hora || "09:00").split(":");
+    const d = new Date(Number(aa), Number(m[2]) - 1, Number(m[1]), Number(h || 9), Number(mi || 0), 0);
+    return isNaN(d.getTime()) ? null : d;
+  } catch (e) { return null; }
+}
+
 async function callAI(msgs, sys, apiKey, useSearch) {
   msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
   const body = { model: "claude-sonnet-5", max_tokens: 4096, thinking: { type: "disabled" }, messages: msgs };
@@ -235,6 +304,7 @@ export default function MiAsistente() {
   const scrollRef = useRef(null);
   const iaWait = useRef(null);
 
+  useEffect(() => { (async () => { initPush("miasistente"); })(); }, []);
   useEffect(() => { (async () => { const r = await storage.get("miasistente_pin"); if (r?.value) { setPinStored(r.value); try { if (localStorage.getItem("miasistente_trust") === "1") { setPinOk(true); return; } } catch { } } else setPinNew(true); })(); }, []);
 
   useEffect(() => {
@@ -530,6 +600,16 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   function agendarEvento(a) {
     const ev = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), hora: a.hora || "", titulo: a.titulo || a.texto || "Evento", nota: a.nota || "", ts: Date.now() };
     persistAgenda([...(agenda || []), ev].sort((x, y) => fechaMs(x.fecha, x.hora) - fechaMs(y.fecha, y.hora)));
+    // Programa el aviso para que llegue al celular aunque la app esté cerrada.
+    try {
+      const d = fechaEvento(ev.fecha, ev.hora);
+      if (d) {
+        const ahora = new Date();
+        const previo = new Date(d.getTime() - 30 * 60000);
+        if (previo > ahora) pushNotify("Agenda — en 30 min", `${ev.titulo}${ev.hora ? " · " + ev.hora : ""}`, "miasistente", "", previo.toISOString());
+        if (d > ahora) pushNotify("Agenda", `${ev.titulo}${ev.nota ? " · " + ev.nota : ""}`, "miasistente", "", d.toISOString());
+      }
+    } catch (e) { }
     return ev;
   }
   // Reparte las obras: las compartidas van a vv_obras (Belfast/V+V), las particulares
