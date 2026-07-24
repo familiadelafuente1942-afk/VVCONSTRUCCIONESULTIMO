@@ -4702,27 +4702,94 @@ function CotizacionView({ db, apiKey, onBack }) {
 function HerramientasView({ db, onBack }) {
   const { obras, herramientas, setHerramientas } = db;
   const [form, setForm] = useState(null);
+  const [fObra, setFObra] = useState("");
+  const [busca, setBusca] = useState("");
   const est = [{ id: "ok", c: "#16A34A", b: "#ECFDF5" }, { id: "reparación", c: "#F59E0B", b: "#FFFBEB" }, { id: "baja", c: "#EF4444", b: "#FEF2F2" }];
   function guardar() { if (!form.nombre?.trim()) return; if (form.id) setHerramientas(p => p.map(x => x.id === form.id ? form : x)); else setHerramientas(p => [...p, { ...form, id: uid() }]); setForm(null); }
+
+  const valorDe = (h) => (parseMontoNum(h.precio) || 0) * (Number(h.cantidad) || 1);
+  const lista = (herramientas || []).filter(h =>
+    (!fObra || (fObra === "_dep" ? !h.obra_id : h.obra_id === fObra)) &&
+    (!busca.trim() || `${h.nombre || ""} ${h.marca || ""} ${h.serie || ""}`.toLowerCase().includes(busca.trim().toLowerCase()))
+  );
+  const totalGral = (herramientas || []).reduce((a, h) => a + valorDe(h), 0);
+  // Agrupado por dónde está cada herramienta
+  const ubic = [{ id: "_dep", nombre: "Depósito" }, ...(obras || []).map(o => ({ id: o.id, nombre: o.nombre }))];
+  const porUbic = ubic.map(u => {
+    const items = (herramientas || []).filter(h => (u.id === "_dep" ? !h.obra_id : h.obra_id === u.id));
+    return { ...u, items, total: items.reduce((a, h) => a + valorDe(h), 0), unidades: items.reduce((a, h) => a + (Number(h.cantidad) || 1), 0) };
+  }).filter(u => u.items.length);
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
-    <SubHead id="herramientas" label="Herramientas" sub="Inventario y ubicación" onBack={onBack} />
+    <SubHead id="herramientas" label="Herramientas" sub="Inventario, valor y dónde está cada una" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
-      {herramientas.length === 0 && <EmptyMsg>Sin herramientas en el inventario.</EmptyMsg>}
-      {herramientas.map(h => { const e = est.find(x => x.id === h.estado) || est[0]; return (<RowItem key={h.id} onClick={() => setForm(h)} onDelete={() => setHerramientas(p => p.filter(x => x.id !== h.id))}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <div><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{h.nombre} {h.cantidad ? `×${h.cantidad}` : ""}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{obraNom(obras, h.obra_id)}</div></div>
+      {(herramientas || []).length > 0 && <>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <div style={{ flex: 1, background: T.navy, borderRadius: T.rsm, padding: "11px 13px" }}>
+            <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Invertido en herramientas</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginTop: 2 }}>{money(totalGral)}</div>
+          </div>
+          <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px" }}>
+            <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Unidades</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.navy, marginTop: 2 }}>{(herramientas || []).reduce((a, h) => a + (Number(h.cantidad) || 1), 0)}</div>
+          </div>
+        </div>
+
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 11, marginBottom: 12 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: T.navy, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 7 }}>Dónde está</div>
+          {porUbic.map(u => (
+            <div key={u.id} onClick={() => setFObra(fObra === u.id ? "" : u.id)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: fObra === u.id ? T.al : "transparent" }}>
+              <Ico n={u.id === "_dep" ? "box" : "building"} s={14} c={T.accent} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.nombre}</span>
+              <span style={{ fontSize: 10.5, color: T.muted, whiteSpace: "nowrap" }}>{u.unidades} u.</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: T.navy, whiteSpace: "nowrap" }}>{money(u.total)}</span>
+            </div>
+          ))}
+          {fObra && <button onClick={() => setFObra("")} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: "4px 0 0" }}>Ver todas</button>}
+        </div>
+
+        <TInput value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nombre, marca o número de serie…" />
+        <div style={{ height: 12 }} />
+      </>}
+
+      {lista.length === 0 && <EmptyMsg>{(herramientas || []).length ? "No hay herramientas que coincidan." : "Sin herramientas en el inventario."}</EmptyMsg>}
+      {lista.map(h => { const e = est.find(x => x.id === h.estado) || est[0]; return (<RowItem key={h.id} onClick={() => setForm(h)} onDelete={() => setHerramientas(p => p.filter(x => x.id !== h.id))}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{h.nombre} {h.cantidad && Number(h.cantidad) > 1 ? `×${h.cantidad}` : ""}</div>
+            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{h.marca ? h.marca + " · " : ""}{h.obra_id ? obraNom(obras, h.obra_id) : "Depósito"}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+              {h.precio && <span style={{ fontSize: 10.5, fontWeight: 800, color: T.navy, background: T.al, borderRadius: 6, padding: "2px 7px" }}>{money(parseMontoNum(h.precio))}{Number(h.cantidad) > 1 ? " c/u" : ""}</span>}
+              {h.fechaCompra && <span style={{ fontSize: 10.5, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 7px" }}>Compra {h.fechaCompra}</span>}
+              {h.serie && <span style={{ fontSize: 10.5, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 7px" }}>N° {h.serie}</span>}
+              {h.responsable && <span style={{ fontSize: 10.5, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 7px" }}>{h.responsable}</span>}
+            </div>
+          </div>
           <Badge color={e.c} bg={e.b}>{h.estado}</Badge>
         </div>
       </RowItem>); })}
     </div>
-    <AddFab onClick={() => setForm({ nombre: "", cantidad: "1", obra_id: obras[0]?.id || "", estado: "ok" })} label="Herramienta" />
+    <AddFab onClick={() => setForm({ nombre: "", cantidad: "1", obra_id: "", estado: "ok", precio: "", fechaCompra: hoyStr(), marca: "", serie: "", proveedor: "", responsable: "" })} label="Herramienta" />
     {form && <Sheet title={form.id ? "Editar herramienta" : "Nueva herramienta"} onClose={() => setForm(null)}>
-      <Field label="Herramienta / equipo"><TInput value={form.nombre || ""} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Amoladora Bosch" /></Field>
+      <Field label="Herramienta / equipo"><TInput value={form.nombre || ""} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Amoladora angular" /></Field>
+      <FieldRow>
+        <Field label="Marca / modelo"><TInput value={form.marca || ""} onChange={e => setForm({ ...form, marca: e.target.value })} placeholder="Bosch GWS 850" /></Field>
+        <Field label="N° de serie"><TInput value={form.serie || ""} onChange={e => setForm({ ...form, serie: e.target.value })} placeholder="Opcional" /></Field>
+      </FieldRow>
       <FieldRow>
         <Field label="Cantidad"><TInput type="number" value={form.cantidad || ""} onChange={e => setForm({ ...form, cantidad: e.target.value })} /></Field>
+        <Field label="Precio pagado (c/u)"><MontoInput value={form.precio || ""} onChange={v => setForm({ ...form, precio: v })} placeholder="0" /></Field>
+      </FieldRow>
+      <FieldRow>
+        <Field label="Fecha de compra"><TInput value={form.fechaCompra || ""} onChange={e => setForm({ ...form, fechaCompra: e.target.value })} placeholder="dd/mm/aa" /></Field>
+        <Field label="Proveedor"><TInput value={form.proveedor || ""} onChange={e => setForm({ ...form, proveedor: e.target.value })} placeholder="Dónde se compró" /></Field>
+      </FieldRow>
+      <Field label="Dónde está"><Sel value={form.obra_id || ""} onChange={e => setForm({ ...form, obra_id: e.target.value })}><option value="">Depósito</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      <FieldRow>
+        <Field label="A cargo de"><TInput value={form.responsable || ""} onChange={e => setForm({ ...form, responsable: e.target.value })} placeholder="Quién la tiene" /></Field>
         <Field label="Estado"><Sel value={form.estado || ""} onChange={e => setForm({ ...form, estado: e.target.value })}>{est.map(x => <option key={x.id} value={x.id}>{x.id}</option>)}</Sel></Field>
       </FieldRow>
-      <Field label="Obra / ubicación"><Sel value={form.obra_id || ""} onChange={e => setForm({ ...form, obra_id: e.target.value })}><option value="">Depósito</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      {form.precio && Number(form.cantidad) > 1 && <div style={{ fontSize: 11.5, color: T.sub, marginTop: -4, marginBottom: 8 }}>Total de este ítem: <b style={{ color: T.navy }}>{money((parseMontoNum(form.precio) || 0) * (Number(form.cantidad) || 1))}</b></div>}
       <Adjuntos items={form.adjuntos} onChange={next => setForm({ ...form, adjuntos: next })} />
       <PBtn full onClick={guardar} style={{ marginTop: 10 }}>{form.id ? "Guardar" : "Agregar"}</PBtn>
     </Sheet>}
