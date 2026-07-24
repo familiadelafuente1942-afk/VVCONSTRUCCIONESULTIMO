@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 // Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
-const ETAPAS_OBRA = ["Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
+const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
 
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
@@ -114,6 +114,75 @@ async function subirBucket(dataUrl, nombre) {
   return null;
 }
 function fileToDataUrl(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); }); }
+
+
+// ── NOTIFICACIONES PROPIAS (sin servicios externos) ──
+const VAPID_PUBLIC = "BBCSBq5_m-TcF45KMJ_-B7LHaIvfFHbnHiHQnPyxJKxjE8zH0nxusjpQJWHl4cO3Zr1DWLc_wO7L_PhqrLsGJtE";
+function b64ToU8(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(s); const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+// Estado: "activo" | "bloqueado" | "no-soportado" | "inactivo"
+async function pushEstado() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "no-soportado";
+    if (Notification.permission === "denied") return "bloqueado";
+    const reg = await navigator.serviceWorker.getRegistration("/sw-push.js");
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    return sub ? "activo" : "inactivo";
+  } catch (e) { return "no-soportado"; }
+}
+async function activarPush(appTag) {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return { ok: false, msg: "Este dispositivo no soporta notificaciones. En iPhone hay que agregar la app a la pantalla de inicio." };
+    const permiso = await Notification.requestPermission();
+    if (permiso !== "granted") return { ok: false, msg: "No diste permiso para las notificaciones." };
+    const reg = await navigator.serviceWorker.register("/sw-push.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUBLIC) });
+    const r = await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), app: appTag }) });
+    const d = await r.json().catch(() => ({}));
+    return d && d.ok ? { ok: true, msg: "Listo, ya vas a recibir los avisos en este dispositivo." } : { ok: false, msg: "No pude registrar el dispositivo. Probá de nuevo." };
+  } catch (e) { return { ok: false, msg: "No pude activar las notificaciones: " + ((e && e.message) || "") }; }
+}
+async function desactivarPush() {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/sw-push.js");
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (sub) { await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), quitar: true }) }); await sub.unsubscribe(); }
+    return true;
+  } catch (e) { return false; }
+}
+// Reengancha en silencio si ya estaba activado en este dispositivo.
+async function initPush(appTag) {
+  try {
+    if (!("serviceWorker" in navigator) || Notification.permission !== "granted") return;
+    const reg = await navigator.serviceWorker.register("/sw-push.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUBLIC) });
+    await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), app: appTag }) });
+  } catch (e) { }
+}
+// sendAfter (ISO) = aviso programado; sin sendAfter = inmediato.
+async function pushNotify(title, message, app, url, sendAfter) {
+  try { await fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "", sendAfter: sendAfter || "" }) }); } catch (e) { }
+}
+// Convierte "dd/mm/aa" + "HH:MM" a fecha real; devuelve null si ya pasó.
+function fechaEvento(fecha, hora) {
+  try {
+    const m = String(fecha || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (!m) return null;
+    const aa = m[3].length === 2 ? "20" + m[3] : m[3];
+    const [h, mi] = String(hora || "09:00").split(":");
+    const d = new Date(Number(aa), Number(m[2]) - 1, Number(m[1]), Number(h || 9), Number(mi || 0), 0);
+    return isNaN(d.getTime()) ? null : d;
+  } catch (e) { return null; }
+}
 
 async function callAI(msgs, sys, apiKey, useSearch) {
   msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
@@ -231,10 +300,16 @@ export default function MiAsistente() {
   const inputRef = useRef(null);
   const dictRef = useRef({ activo: false, base: "" });   // para poder cortar el dictado al enviar
   const lastSpokeRef = useRef(-1);
+  // ── DICTADO POR VOZ ──────────────────────────────────────────────
+  const silencioRef = useRef(null);   // temporizador: 2 s callado = mando el mensaje
+  const porVozRef = useRef(false);    // la pregunta entró por voz -> la respuesta se lee en voz alta
+  const enviarRef = useRef(null);     // siempre apunta al enviar() del último render (evita mandar texto viejo)
+  enviarRef.current = enviar;
   const apiKey = "";
   const scrollRef = useRef(null);
   const iaWait = useRef(null);
 
+  useEffect(() => { (async () => { initPush("miasistente"); })(); }, []);
   useEffect(() => { (async () => { const r = await storage.get("miasistente_pin"); if (r?.value) { setPinStored(r.value); try { if (localStorage.getItem("miasistente_trust") === "1") { setPinOk(true); return; } } catch { } } else setPinNew(true); })(); }, []);
 
   useEffect(() => {
@@ -269,7 +344,14 @@ export default function MiAsistente() {
   }, []);
   // Voz: leer en voz alta las respuestas nuevas cuando está activado.
   useEffect(() => { if (vozOn) { lastSpokeRef.current = msgs.length - 1; } else { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { } } }, [vozOn]);
-  useEffect(() => { if (!vozOn) return; const i = msgs.length - 1; const last = msgs[i]; if (last && last.role === "assistant" && i > lastSpokeRef.current) { lastSpokeRef.current = i; hablar(last.content); } }, [msgs, vozOn]);
+  useEffect(() => {
+    const i = msgs.length - 1; const last = msgs[i];
+    if (!last || last.role !== "assistant" || i <= lastSpokeRef.current) return;
+    // Habla si tenés la voz activada, o si esa pregunta se la hiciste hablando.
+    if (!vozOn && !porVozRef.current) return;
+    lastSpokeRef.current = i; porVozRef.current = false;
+    hablar(last.content);
+  }, [msgs, vozOn]);
 
   // Memoria persistente: carga el historial del chat y el perfil al abrir.
   useEffect(() => {
@@ -323,23 +405,64 @@ export default function MiAsistente() {
       synth.speak(u);
     } catch { }
   }
-  function dictar() {
+  // Segundos de silencio antes de mandar solo el mensaje dictado.
+  const PAUSA_ENVIO = 3000;
+
+  function limpiarSilencio() { if (silencioRef.current) { clearTimeout(silencioRef.current); silencioRef.current = null; } }
+
+  // Arranca el micrófono. Con reanudar=true es un reenganche automático
+  // (iOS corta el reconocimiento cada tanto aunque sigas hablando).
+  function arrancarDictado(reanudar) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert("Este teléfono no permite dictar desde la app. Tocá el cuadro de texto y usá el micrófono del teclado (dictado del iPhone)."); return; }
-    if (escuchando && recRef.current) { try { recRef.current.stop(); } catch { } return; }
-    let rec; try { rec = new SR(); } catch { alert("No pude activar el micrófono."); return; }
-    rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = false;
-    dictRef.current = { activo: true, base: input ? input + " " : "" };
+    let rec; try { rec = new SR(); } catch { setEscuchando(false); return; }
+    rec.lang = "es-AR";
+    rec.interimResults = true;
+    rec.continuous = true;   // ANTES estaba en false: por eso se cortaba en la primera pausa
+    if (!reanudar) dictRef.current = { activo: true, base: input ? input + " " : "" };
     rec.onresult = (e) => {
-      if (!dictRef.current.activo) return;                 // ya se envió: no vuelvo a escribir nada
+      if (!dictRef.current.activo) return;
       let fin = "", inter = "";
       for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else inter += t; }
       setInput((dictRef.current.base + fin + inter).replace(/\s+/g, " ").trimStart());
       if (fin) dictRef.current.base += fin;
+      // Cada palabra reinicia la cuenta: recién manda cuando te quedás callado.
+      limpiarSilencio();
+      silencioRef.current = setTimeout(() => pararDictado(true), PAUSA_ENVIO);
     };
-    rec.onend = () => { setEscuchando(false); recRef.current = null; dictRef.current.activo = false; };
-    rec.onerror = () => { setEscuchando(false); recRef.current = null; dictRef.current.activo = false; };
-    recRef.current = rec; setEscuchando(true); try { rec.start(); } catch { setEscuchando(false); }
+    rec.onend = () => {
+      recRef.current = null;
+      if (dictRef.current.activo) arrancarDictado(true);   // seguís hablando: lo vuelvo a levantar
+      else setEscuchando(false);
+    };
+    rec.onerror = (e) => {
+      recRef.current = null;
+      const err = e && e.error;
+      // "no-speech" y "aborted" son cortes normales del navegador, no un problema real.
+      if (dictRef.current.activo && (err === "no-speech" || err === "aborted" || err === "network")) { arrancarDictado(true); return; }
+      dictRef.current.activo = false; limpiarSilencio(); setEscuchando(false);
+    };
+    recRef.current = rec;
+    setEscuchando(true);
+    try { rec.start(); } catch { setEscuchando(false); }
+  }
+
+  // Corta el micrófono. Con mandar=true envía lo que dictaste.
+  function pararDictado(mandar) {
+    limpiarSilencio();
+    dictRef.current.activo = false;
+    if (recRef.current) { try { recRef.current.stop(); } catch { } }
+    setEscuchando(false);
+    if (mandar) {
+      porVozRef.current = true;                       // la respuesta se lee en voz alta
+      setTimeout(() => { const f = enviarRef.current; if (f) f(); }, 150);
+    }
+  }
+
+  function dictar() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert("Este teléfono no permite dictar desde la app. Tocá el cuadro de texto y usá el micrófono del teclado (dictado del iPhone)."); return; }
+    if (escuchando) { pararDictado(true); return; }   // tocar de nuevo = "ya terminé", lo manda
+    arrancarDictado(false);
   }
   function buildSystem() {
     const o = db.obras || [];
@@ -530,6 +653,16 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   function agendarEvento(a) {
     const ev = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), hora: a.hora || "", titulo: a.titulo || a.texto || "Evento", nota: a.nota || "", ts: Date.now() };
     persistAgenda([...(agenda || []), ev].sort((x, y) => fechaMs(x.fecha, x.hora) - fechaMs(y.fecha, y.hora)));
+    // Programa el aviso para que llegue al celular aunque la app esté cerrada.
+    try {
+      const d = fechaEvento(ev.fecha, ev.hora);
+      if (d) {
+        const ahora = new Date();
+        const previo = new Date(d.getTime() - 30 * 60000);
+        if (previo > ahora) pushNotify("Agenda — en 30 min", `${ev.titulo}${ev.hora ? " · " + ev.hora : ""}`, "miasistente", "", previo.toISOString());
+        if (d > ahora) pushNotify("Agenda", `${ev.titulo}${ev.nota ? " · " + ev.nota : ""}`, "miasistente", "", d.toISOString());
+      }
+    } catch (e) { }
     return ev;
   }
   // Reparte las obras: las compartidas van a vv_obras (Belfast/V+V), las particulares
@@ -699,6 +832,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     // Corto el dictado ANTES de limpiar: si sigue abierto, el iPhone vuelve a inyectar el texto.
     dictRef.current.activo = false;
     dictRef.current.base = "";
+    limpiarSilencio();
     if (recRef.current) { try { recRef.current.abort ? recRef.current.abort() : recRef.current.stop(); } catch { } recRef.current = null; }
     setEscuchando(false);
     setInput("");
