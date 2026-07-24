@@ -59,24 +59,61 @@ const SAFE_TOP_PX = (() => { try { return (window.navigator.standalone || window
 
 // ── SUPABASE CONFIG ─────────────────────────────────────────────
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
-const ONESIGNAL_APP_ID = ""; // ← Pegá acá tu App ID de OneSignal (después de crear la app en OneSignal)
-function initPush(appTag) {
-  if (!ONESIGNAL_APP_ID || typeof window === "undefined") return;
-  try {
-    if (document.getElementById("onesignal-sdk")) return;
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    const s = document.createElement("script");
-    s.id = "onesignal-sdk"; s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"; s.defer = true;
-    document.head.appendChild(s);
-    window.OneSignalDeferred.push(async function (OneSignal) {
-      try { await OneSignal.init({ appId: ONESIGNAL_APP_ID, allowLocalhostAsSecureOrigin: true }); } catch (e) {}
-      try { await OneSignal.User.addTag("app", appTag); } catch (e) {}
-      try { OneSignal.Slidedown.promptPush(); } catch (e) {}
-    });
-  } catch (e) {}
+// ── NOTIFICACIONES PROPIAS (sin servicios externos) ──
+const VAPID_PUBLIC = "BBCSBq5_m-TcF45KMJ_-B7LHaIvfFHbnHiHQnPyxJKxjE8zH0nxusjpQJWHl4cO3Zr1DWLc_wO7L_PhqrLsGJtE";
+function b64ToU8(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(s); const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
 }
-async function pushNotify(title, message, app, url) {
-  try { await fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "" }) }); } catch (e) {}
+// Estado: "activo" | "bloqueado" | "no-soportado" | "inactivo"
+async function pushEstado() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "no-soportado";
+    if (Notification.permission === "denied") return "bloqueado";
+    const reg = await navigator.serviceWorker.getRegistration("/sw-push.js");
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    return sub ? "activo" : "inactivo";
+  } catch (e) { return "no-soportado"; }
+}
+async function activarPush(appTag) {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return { ok: false, msg: "Este dispositivo no soporta notificaciones. En iPhone hay que agregar la app a la pantalla de inicio." };
+    const permiso = await Notification.requestPermission();
+    if (permiso !== "granted") return { ok: false, msg: "No diste permiso para las notificaciones." };
+    const reg = await navigator.serviceWorker.register("/sw-push.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUBLIC) });
+    const r = await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), app: appTag }) });
+    const d = await r.json().catch(() => ({}));
+    return d && d.ok ? { ok: true, msg: "Listo, ya vas a recibir los avisos en este dispositivo." } : { ok: false, msg: "No pude registrar el dispositivo. Probá de nuevo." };
+  } catch (e) { return { ok: false, msg: "No pude activar las notificaciones: " + ((e && e.message) || "") }; }
+}
+async function desactivarPush() {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/sw-push.js");
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (sub) { await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), quitar: true }) }); await sub.unsubscribe(); }
+    return true;
+  } catch (e) { return false; }
+}
+// Reengancha en silencio si ya estaba activado en este dispositivo.
+async function initPush(appTag) {
+  try {
+    if (!("serviceWorker" in navigator) || Notification.permission !== "granted") return;
+    const reg = await navigator.serviceWorker.register("/sw-push.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUBLIC) });
+    await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), app: appTag }) });
+  } catch (e) { }
+}
+// sendAfter (ISO) = aviso programado; sin sendAfter = inmediato.
+async function pushNotify(title, message, app, url, sendAfter) {
+  try { await fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "", sendAfter: sendAfter || "" }) }); } catch (e) { }
 }
 
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
@@ -3408,6 +3445,48 @@ function LogoSlot({ label, value, onSet, onClear }) {
   </div>);
 }
 
+function PushConfig({ T }) {
+  const [estado, setEstado] = useState("...");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { (async () => setEstado(await pushEstado()))(); }, []);
+  const activar = async () => {
+    setBusy(true); setMsg("");
+    const r = await activarPush("vv");
+    setMsg(r.msg); setEstado(await pushEstado()); setBusy(false);
+    setTimeout(() => setMsg(""), 8000);
+  };
+  const desactivar = async () => {
+    setBusy(true); await desactivarPush(); setEstado(await pushEstado());
+    setMsg("Notificaciones desactivadas en este dispositivo."); setBusy(false);
+    setTimeout(() => setMsg(""), 6000);
+  };
+  const probar = async () => {
+    setMsg("Enviando aviso de prueba…");
+    try {
+      const r = await fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "Prueba V+V", message: "Si ves esto, las notificaciones andan." }) });
+      const d = await r.json().catch(() => ({}));
+      setMsg(d && d.ok ? `Enviado a ${d.enviados || 0} dispositivo(s). Debería llegarte en unos segundos.` : ("No se envió: " + (d.reason || d.error || "revisá las claves en Vercel")));
+    } catch (e) { setMsg("No pude enviar la prueba."); }
+    setTimeout(() => setMsg(""), 10000);
+  };
+  const info = { activo: ["#16A34A", "Activadas en este dispositivo"], inactivo: ["#94A3B8", "Sin activar en este dispositivo"], bloqueado: ["#B91C1C", "Bloqueadas — habilitalas en Ajustes del teléfono"], "no-soportado": ["#B45309", "Agregá la app a la pantalla de inicio para poder activarlas"], "...": ["#94A3B8", "Verificando…"] }[estado] || ["#94A3B8", estado];
+  return (<div>
+    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 9 }}>
+      <span style={{ width: 8, height: 8, borderRadius: "50%", background: info[0], flexShrink: 0 }} />
+      <span style={{ fontSize: 11.5, fontWeight: 700, color: info[0] }}>{info[1]}</span>
+    </div>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {estado !== "activo" && <button onClick={activar} disabled={busy || estado === "bloqueado"} style={{ flex: 1, minWidth: 130, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{busy ? "Activando…" : "Activar notificaciones"}</button>}
+      {estado === "activo" && <>
+        <button onClick={probar} style={{ flex: 1, minWidth: 110, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Probar aviso</button>
+        <button onClick={desactivar} disabled={busy} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Desactivar</button>
+      </>}
+    </div>
+    {msg && <div style={{ fontSize: 11.5, color: T.sub, marginTop: 9, lineHeight: 1.45 }}>{msg}</div>}
+  </div>);
+}
+
 function MasConfig({ cfg, setCfg, onBack }) {
   const c = cfg.colors || DEFAULT_COLORS;
   function aplicarPreset(p){ setCfg(prev=>({ ...prev, themeId:p.id, colors:{ accent:p.accent, al:p.al, bg:p.bg, card:p.card, border:p.border, text:p.text, sub:p.sub, muted:p.muted, navy:p.navy } })); }
@@ -3416,6 +3495,10 @@ function MasConfig({ cfg, setCfg, onBack }) {
   return (<div style={{ flex:1, overflowY:"auto", paddingBottom:80 }}>
     <PageHead eyebrow="Sistema" title="Configuración" sub="Identidad visual de la app" back onBack={onBack} />
     <div style={{ padding:"16px 20px" }}>
+      <Eyebrow>Notificaciones al celular</Eyebrow>
+      <div style={{ fontSize:11.5, color:T.muted, marginBottom:9, lineHeight:1.5 }}>Activá los avisos en este dispositivo para que te lleguen con la app cerrada. Hay que activarlo una vez en cada teléfono.</div>
+      <PushConfig T={T} />
+      <div style={{ marginTop:20 }} />
       <Eyebrow>Logotipos</Eyebrow>
       <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Sin logo se muestra el texto “V+V Construcciones”.</div>
       <div style={{ display:"flex", gap:10 }}>
@@ -6549,7 +6632,7 @@ function App() {
   }, []);
   const requireAuth = (fn) => fn();
   useEffect(() => { try { if (!localStorage.getItem("vv_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, materiales: now, ia: now }; localStorage.setItem("vv_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("vv_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("vv_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
-  useEffect(() => { initPush("vv"); }, []);
+  useEffect(() => { (async () => { initPush("vv"); })(); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
