@@ -173,6 +173,34 @@ async function pushNotify(title, message, app, url, sendAfter) {
   try { await fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "", sendAfter: sendAfter || "" }) }); } catch (e) { }
 }
 // Convierte "dd/mm/aa" + "HH:MM" a fecha real; devuelve null si ya pasó.
+// ── Globito rojo en el ícono de la app (como Mensajes de iOS) ──────
+// setAppBadge pinta el número en el ícono del escritorio. El número queda
+// puesto al cerrar la app; se actualiza al abrirla o al volver a primer plano.
+// Requiere iOS 16.4+, app instalada en pantalla de inicio y notificaciones permitidas.
+function GlobitoPermiso() {
+  const [estado, setEstado] = React.useState(() => {
+    try {
+      if (!("Notification" in window) || !("setAppBadge" in navigator)) return "no";
+      if (localStorage.getItem("globito_off") === "1") return "no";
+      return Notification.permission;   // "default" | "granted" | "denied"
+    } catch { return "no"; }
+  });
+  if (estado !== "default") return null;
+  return (<div style={{ display: "flex", alignItems: "center", gap: 9, background: "#0F1B2D", borderRadius: 12, padding: "10px 12px", margin: "0 0 10px", border: "1px solid #B08D3E" }}>
+    <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: "#fff", lineHeight: 1.45 }}>Activá los avisos para ver el <b>número rojo en el ícono</b> cuando haya alertas, sin abrir la app.</div>
+    <button onClick={async () => { try { const p = await Notification.requestPermission(); setEstado(p); if (p === "granted") { try { await navigator.setAppBadge(1); setTimeout(() => navigator.clearAppBadge().catch(() => { }), 1500); } catch { } } } catch { setEstado("denied"); } }}
+      style={{ background: "#B08D3E", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 11.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>Activar</button>
+    <button onClick={() => { try { localStorage.setItem("globito_off", "1"); } catch { } setEstado("no"); }}
+      style={{ background: "none", border: "none", color: "rgba(255,255,255,.55)", fontSize: 15, cursor: "pointer", padding: "0 2px", flexShrink: 0 }}>×</button>
+  </div>);
+}
+async function ponerGlobito(n) {
+  try {
+    if (!("setAppBadge" in navigator)) return;
+    if (n > 0) await navigator.setAppBadge(Math.min(99, Math.round(n)));
+    else await navigator.clearAppBadge();
+  } catch { }
+}
 function fechaEvento(fecha, hora) {
   try {
     const m = String(fecha || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
@@ -300,6 +328,19 @@ export default function MiAsistente() {
   const inputRef = useRef(null);
   const dictRef = useRef({ activo: false, base: "" });   // para poder cortar el dictado al enviar
   const lastSpokeRef = useRef(-1);
+  // Globito del ícono: eventos de HOY que todavía no pasaron + mensajes sin leer.
+  useEffect(() => {
+    const calc = () => {
+      const ahora = Date.now();
+      const hoy = new Date().toISOString().slice(0, 10);
+      const deHoy = (agenda || []).filter(e => e.fecha === hoy && (!e.hora || fechaMs(e.fecha, e.hora) >= ahora)).length;
+      ponerGlobito(deHoy + (chatUnread || 0));
+    };
+    calc();
+    const onVis = () => { if (document.visibilityState === "visible") calc(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [agenda, chatUnread]);
   // ── DICTADO POR VOZ ──────────────────────────────────────────────
   const silencioRef = useRef(null);   // temporizador: 2 s callado = mando el mensaje
   const porVozRef = useRef(false);    // la pregunta entró por voz -> la respuesta se lee en voz alta
@@ -1044,6 +1085,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         <button onClick={() => setVozOn(v => !v)} style={{ background: vozOn ? T.accent : "none", border: `1px solid ${vozOn ? T.accent : T.border}`, color: vozOn ? "#fff" : T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}><Ico n="sound" /> Voz {vozOn ? "activada" : ""}</button>
         {modelo && <span style={{ fontSize: 10.5, color: T.muted }}>Modelo activo: {modelo.nombre}</span>}
       </div>
+      <GlobitoPermiso />
       {adjPend.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adjPend.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "" : a.kind === "texto" ? "" : ""} {a.nombre.slice(0, 22)} <span onClick={() => setAdjPend(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
         <div onClick={dictar} style={{ width: 132, height: 132, background: T.card, border: `2px solid ${escuchando ? "#DC2626" : T.accent}`, borderRadius: 20, boxShadow: "0 4px 14px rgba(0,0,0,.08)", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, position: "relative" }}>
