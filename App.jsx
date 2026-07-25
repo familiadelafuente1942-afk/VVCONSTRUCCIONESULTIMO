@@ -647,6 +647,17 @@ function AppBrand({ cfg }) {
 }
 
 function Card({ children, style = {}, onClick }) { return <div onClick={onClick} style={{ background: T.card, borderRadius: T.r, border: `1px solid ${T.border}`, boxShadow: T.shadow, ...style }}>{children}</div>; }
+// ── Globito rojo en el ícono de la app (como Mensajes de iOS) ──────
+// setAppBadge pinta el número en el ícono del escritorio. El número queda
+// puesto al cerrar la app; se actualiza al abrirla o al volver a primer plano.
+// Requiere iOS 16.4+, app instalada en pantalla de inicio y notificaciones permitidas.
+async function ponerGlobito(n) {
+  try {
+    if (!("setAppBadge" in navigator)) return;
+    if (n > 0) await navigator.setAppBadge(Math.min(99, Math.round(n)));
+    else await navigator.clearAppBadge();
+  } catch { }
+}
 function Badge({ color, bg, children, style = {} }) { return <span style={{ display: "inline-flex", alignItems: "center", fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 20, padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em", ...style }}>{children}</span>; }
 function PBtn({ children, onClick, disabled, full, style = {}, variant = "primary" }) {
     const v = { primary: { background: disabled ? "#E2E8F0" : "var(--accent,#1D4ED8)", color: disabled ? "#94A3B8" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "#FEF2F2", border: "1.5px solid #FECACA", color: "#EF4444", boxShadow: "none" } };
@@ -6949,6 +6960,8 @@ function App() {
   const unreadInformes = (obras || []).flatMap(o => o.informes || []).filter(inf => (inf.ts || 0) > (seen.informes || 0)).length;
   const unreadIA = (iaDialogo || []).filter(m => m.from && m.from !== "vv" && m.tipo === "q" && (m.ts || 0) > (seen.ia || 0)).length;
   const pendVV = pedidos.filter(p => p.para === "vv" && p.estado !== "resuelto").length;
+  // Globito del ícono: lo mismo que ves como "nuevo" adentro, pero desde el escritorio.
+  useEffect(() => { ponerGlobito(unreadMensajes + unreadMat + unreadInformes + unreadIA + pendVV); }, [unreadMensajes, unreadMat, unreadInformes, unreadIA, pendVV]);
 
   // ── QUÉ CUENTA COMO "NUEVO" EN CADA ÍCONO ──
   const idsAviso = (() => {
