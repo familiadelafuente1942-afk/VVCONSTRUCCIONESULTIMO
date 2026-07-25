@@ -3362,13 +3362,27 @@ function crCPM(tareas) {
   T2.forEach(fLS);
   return T2.map(t => ({ ...t, es: ES[t.id] ?? 0, ef: EF[t.id] ?? 0, critica: Math.round((LS[t.id] ?? 0) - (ES[t.id] ?? 0)) <= 0 }));
 }
-function CronogramaScreen({ T, cfg, crono, gestion }) {
+function CronogramaScreen(props) {
+  // Cualquier error acá adentro se muestra en pantalla, nunca deja el panel en blanco.
+  try { return CronogramaScreenInner(props); }
+  catch (e) {
+    const T = props.T || {};
+    return (<div style={{ padding: "20px" }}>
+      <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, padding: 16 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: "#B91C1C" }}>La pantalla de cronogramas tuvo un problema</div>
+        <div style={{ fontSize: 12, color: "#991B1B", marginTop: 6, wordBreak: "break-word" }}>Error: {String(e && e.message || e)}</div>
+        <div style={{ fontSize: 11, color: "#991B1B", marginTop: 6 }}>Sacale una captura a este mensaje y pasásela a Sebastián para corregirlo.</div>
+      </div>
+    </div>);
+  }
+}
+function CronogramaScreenInner({ T, cfg, crono, gestion }) {
   const g = { punit: {}, manual: [], ...(gestion || {}) };
   const enManual = new Set((g.manual || []).map(x => x.id));
   const [ab, setAb] = useState({});
   const hoy = crHoy();
   const obras = (crono?.obras || []);
-  const planes = obras.map(o => {
+  const planes = obras.map(o => { try {
     let tareas;
     if (o.modoManual) {
       tareas = (o.tareas || []).map(t => ({ ...t, vvInicio: t.desde || o.inicio || hoy, vvFin: (t.hasta && t.hasta >= (t.desde || "")) ? t.hasta : (t.desde || o.inicio || hoy), critica: false }));
@@ -3396,7 +3410,7 @@ function CronogramaScreen({ T, cfg, crono, gestion }) {
     // corrimiento contra la línea base fijada en el Cronograma de V+V
     const corr = (o.finBase && fin) ? crDiasEntre(o.finBase, fin) : null;
     return { o, tareas, fin, defsPend, venc, corr };
-  });
+  } catch (e) { return { o, tareas: [], fin: "", defsPend: [], venc: [], corr: null, error: String(e && e.message || e) }; } }).filter(p => p && p.o);
   const GEST_TAG = { punitorio: ["Punitorio", "#B91C1C", "#FEF2F2"], evaluacion: ["En evaluación", "#B45309", "#FFFBEB"], prorroga: ["Prórroga", "#2563EB", "#EFF6FF"], sin_perjuicio: ["Sin perjuicio", "#64748B", "#F1F5F9"] };
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "16px 20px" }}>
@@ -3416,6 +3430,7 @@ function CronogramaScreen({ T, cfg, crono, gestion }) {
             </div>
           </div>
           {abierta && <div style={{ borderTop: `1px solid ${T.border}`, padding: "4px 14px 13px" }}>
+            {planes.find(p => p.o.id === o.id)?.error && <div style={{ fontSize: 11, color: "#B91C1C", marginTop: 10 }}>No pude calcular esta obra: {planes.find(p => p.o.id === o.id).error}</div>}
             {corr !== null && corr > 0 && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 11px", marginTop: 10, fontSize: 11.5, color: "#991B1B", lineHeight: 1.5 }}>El fin de obra se corrió <b>+{corr} días (~{(corr / 30.44).toFixed(1)} meses)</b> respecto del plan original. Todo corrimiento adicional queda sujeto a redeterminación de precios sobre el saldo del contrato.</div>}
             {defsPend.length > 0 && <>
               <div style={{ fontSize: 10.5, fontWeight: 800, color: "#B91C1C", textTransform: "uppercase", letterSpacing: ".05em", marginTop: 10 }}>Definiciones a responder</div>
