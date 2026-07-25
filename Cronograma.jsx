@@ -990,7 +990,13 @@ function Gantt({ obra, plan, soloCriticas, guardarObra }) {
 }
 
 /* ─── Cabecera de obra ─── */
-function Hero({ obra, plan }) {
+function Hero({ obra, plan, guardarObra, redetIdx }) {
+  // Corrimiento contra la línea base: la foto del plan que congelaste el día uno.
+  const corr = (obra.finBase && plan.fin) ? diasEntre(obra.finBase, plan.fin) : null;
+  const mesesCorr = corr !== null ? corr / 30.44 : 0;
+  const saldo = plan.ligada ? Math.max(0, plan.contrato - plan.ejecutado) : 0;
+  const idx = numSimple(redetIdx);
+  const costoRedet = (corr > 0 && saldo > 0 && idx > 0) ? saldo * (idx / 100) * mesesCorr : 0;
   const pct = Math.min(100, plan.finDias / TOPE_DIAS * 100);
   const col = plan.excede ? "#FCA5A5" : plan.finDias > TOPE_DIAS * .92 ? "#FCD34D" : "#7DE0A6";
   return (<div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 18, padding: 20, boxShadow: SHD, borderTop: `3px solid ${BRASS}` }}>
@@ -1008,6 +1014,25 @@ function Hero({ obra, plan }) {
       {plan.excede
         ? `Te pasás ${plan.finDias - TOPE_DIAS} días del tope de 12 meses. Hay que acortar o solapar tareas del camino crítico.`
         : `${TOPE_DIAS - plan.finDias} días de margen sobre los 12 meses.`}
+    </div>
+
+    {/* ─ Redeterminación: qué cuesta cada corrimiento ─ */}
+    <div style={{ marginTop: 13, paddingTop: 11, borderTop: "1px solid rgba(255,255,255,.14)" }}>
+      {!obra.finBase && <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <div style={{ flex: 1, fontSize: 11, color: "rgba(255,255,255,.65)", lineHeight: 1.45 }}>Sin línea base fijada. Fijala hoy: congela el plan actual para medir cualquier corrimiento futuro y su costo por redeterminación.</div>
+        <button onClick={() => guardarObra(o => ({ ...o, finBase: plan.fin, finBaseFecha: hoyISO() }))} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "8px 12px", fontSize: 11, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>Fijar línea base</button>
+      </div>}
+      {obra.finBase && <div>
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: ".08em", textTransform: "uppercase" }}>Corrimiento vs línea base ({fmtCorta(obra.finBase)})</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 17, fontWeight: 800, color: corr > 0 ? "#FCA5A5" : "#7DE0A6" }}>{corr > 0 ? `+${corr} días (~${mesesCorr.toFixed(1)} meses)` : corr < 0 ? `${corr} días (adelantada)` : "sin corrimiento"}</span>
+          {costoRedet > 0 && <span style={{ fontSize: 12, color: "#FCA5A5", fontWeight: 700 }}>Redeterminación estimada: ${Math.round(costoRedet).toLocaleString("es-AR")}</span>}
+        </div>
+        {corr > 0 && !plan.ligada && <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", marginTop: 3 }}>Enganchá la obra con Finanzas para valorizar el corrimiento sobre el saldo del contrato.</div>}
+        {corr > 0 && plan.ligada && idx <= 0 && <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", marginTop: 3 }}>Cargá el índice mensual de redeterminación en Ajustes para valorizarlo.</div>}
+        {corr > 0 && costoRedet > 0 && <div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", marginTop: 3 }}>Saldo ${Math.round(saldo).toLocaleString("es-AR")} × {idx}% mensual × {mesesCorr.toFixed(1)} meses. Estimación de referencia para negociar; el cálculo fino sale del índice real del período.</div>}
+        <button onClick={() => { if (confirm("¿Re-fijar la línea base con el plan de HOY? El corrimiento vuelve a cero desde acá (usalo solo si renegociaron el plazo).")) guardarObra(o => ({ ...o, finBase: plan.fin, finBaseFecha: hoyISO() })); }} style={{ background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", color: "rgba(255,255,255,.7)", borderRadius: 7, padding: "5px 9px", fontSize: 9.5, fontWeight: 700, cursor: "pointer", marginTop: 7 }}>Re-fijar línea base</button>
+      </div>}
     </div>
 
     <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -1864,7 +1889,7 @@ function Lookahead({ plan, onAvisar, obra }) {
 }
 
 /* ═══════════════════ PANTALLA DE OBRA ═══════════════════ */
-function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, avisar, diasAviso }) {
+function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, avisar, diasAviso, redetIdx }) {
   const [vista, setVista] = useState("plan");
   const [soloCrit, setSoloCrit] = useState(false);
 
@@ -1931,7 +1956,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
       <button onClick={borrarObra} style={{ background: "none", border: "none", color: T.muted, fontSize: 11.5, cursor: "pointer" }}>Eliminar</button>
     </div>
 
-    <Hero obra={obra} plan={plan} />
+    <Hero obra={obra} plan={plan} guardarObra={guardarObra} redetIdx={redetIdx} />
 
     <div style={{ display: "flex", gap: 2, background: T.card, borderRadius: 12, padding: 4, margin: "14px 0", boxShadow: SHDsm, overflowX: "auto" }}>
       {VISTAS.map(([k, l]) => (
@@ -2306,7 +2331,7 @@ export default function Cronograma() {
   // Crea el cronograma directamente desde una obra que ya existe en V+V:
   // mismo nombre, vinculada por vvObraId (así Gestión sabe de qué obra hablamos).
   const crearDesdeVV = (ov) => {
-    const o = { id: uid(), nombre: ov.nombre || "Obra", inicio: ov.inicio || hoyISO(), finanzasObraId: "", vvObraId: ov.id, tareas: plantillaAObra(data.plantilla) };
+    const o = { id: uid(), nombre: ov.nombre || "Obra", inicio: ov.inicio || hoyISO(), finanzasObraId: "", vvObraId: ov.id, finBase: "", finBaseFecha: "", tareas: plantillaAObra(data.plantilla) };
     guardar({ ...data, obras: [...obras, o] });
     setObraId(o.id); setPantalla("obra");
   };
@@ -2315,8 +2340,8 @@ export default function Cronograma() {
     if (!nom.trim()) return;
     const manual = modoNuevo === "manual";
     const o = manual
-      ? { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", modoManual: true, tareas: [] }
-      : { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", tareas: plantillaAObra(data.plantilla) };
+      ? { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", modoManual: true, finBase: "", finBaseFecha: "", tareas: [] }
+      : { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", finBase: "", finBaseFecha: "", tareas: plantillaAObra(data.plantilla) };
     guardar({ ...data, obras: [...obras, o] });
     setNom(""); setIni(hoyISO()); setNueva(false); setModoNuevo("auto");
     setObraId(o.id); setPantalla("obra");
@@ -2408,7 +2433,7 @@ export default function Cronograma() {
 
     <main style={{ maxWidth: 1500, margin: "0 auto" }}>
       {pantalla === "obra" && obra && plan && (
-        <PantallaObra obra={obra} plan={plan} finanzas={finanzas} diasAviso={diasAviso}
+        <PantallaObra obra={obra} plan={plan} finanzas={finanzas} diasAviso={diasAviso} redetIdx={(data.cfg || {}).redet || 0}
           guardarObra={(fn) => guardarObra(obra.id, fn)}
           borrarObra={() => {
             if (!confirm(`¿Eliminar el cronograma de ${obra.nombre}?`)) return;
@@ -2569,6 +2594,14 @@ export default function Cronograma() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
             <input defaultValue={diasAviso} onBlur={e => guardar({ ...data, cfg: { ...data.cfg, aviso: Math.max(1, numSimple(e.target.value)) } })} inputMode="numeric" style={{ ...inpSm, width: 80, textAlign: "right" }} />
             <span style={{ fontSize: 13, color: T.sub }}>días</span>
+          </div>
+        </div>
+        <div style={{ background: T.card, borderRadius: 13, padding: 14, boxShadow: SHDsm, marginTop: 11 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>Índice de redeterminación (% mensual)</div>
+          <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>Cuánto se encarece el saldo del contrato por cada mes de corrimiento (ej: índice CAC ≈ 3–5% mensual). Se usa para estimar el mayor costo cuando el fin de obra se corre de la línea base.</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+            <input defaultValue={(data.cfg || {}).redet || ""} onBlur={e => guardar({ ...data, cfg: { ...data.cfg, redet: Math.max(0, numSimple(e.target.value)) } })} inputMode="decimal" placeholder="3.5" style={{ ...inpSm, width: 80, textAlign: "right" }} />
+            <span style={{ fontSize: 13, color: T.sub }}>% por mes</span>
           </div>
         </div>
         {[["El camino crítico", "Las tareas se encadenan con dependencias. La app calcula la holgura de cada una: las de holgura cero forman el camino crítico. Si una de esas se atrasa un día, la obra entera termina un día más tarde. Son las que hay que cuidar para entrar en los 12 meses."],
