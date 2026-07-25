@@ -2200,6 +2200,7 @@ export default function Cronograma() {
   const [refrescando, setRefrescando] = useState(false);
   const [okMsg, setOkMsg] = useState("");
   const [pantalla, setPantalla] = useState("obras");
+  const [alertasAb, setAlertasAb] = useState({});   // qué bloque de alertas está desplegado
   const [obraId, setObraId] = useState(null);
   const [nueva, setNueva] = useState(false);
   const [nom, setNom] = useState("");
@@ -2507,27 +2508,51 @@ export default function Cronograma() {
 
       {pantalla === "alertas" && (<div style={{ padding: "14px 16px 44px" }}>
         <h2 style={{ fontSize: 21, fontWeight: 800, margin: "0 0 3px", letterSpacing: "-.01em" }}>Alertas</h2>
-        <div style={{ fontSize: 12, color: T.sub, marginBottom: 14 }}>Definiciones de todas las obras, por urgencia. Avisa {diasAviso} días antes del límite.</div>
+        <div style={{ fontSize: 12, color: T.sub, marginBottom: 14 }}>Separadas por obra. Avisa {diasAviso} días antes del límite de cada definición.</div>
         {todasAlertas.length === 0 && (
           <div style={{ background: TONO.verde().b, border: `1px solid ${TONO.verde().bd}`, borderRadius: 14, padding: 22, textAlign: "center" }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: T.ok }}>Todo al día</div>
             <div style={{ fontSize: 12.5, color: T.sub, marginTop: 4 }}>No hay definiciones pendientes.</div>
           </div>
         )}
-        {[["Vencidas — están frenando la obra", todasAlertas.filter(d => d.estado === "vencida"), TONO.rojo().c],
-          [`Urgentes — dentro de ${diasAviso} días`, todasAlertas.filter(d => d.estado === "urgente"), TONO.ambar().c],
-          ["Más adelante", todasAlertas.filter(d => d.estado === "futura"), T.sub]].map(([tit, g, col]) => {
-          if (!g.length) return null;
-          return (<div key={tit} style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: col, textTransform: "uppercase", letterSpacing: ".06em" }}>{tit} ({g.length})</div>
-            {g.map(d => (<div key={d.obra.id + d.id}>
-              <div style={{ fontSize: 10.5, color: T.muted, fontWeight: 700, marginTop: 9, marginBottom: -3, textTransform: "uppercase" }}>{d.obra.nombre}</div>
-              <FilaDef d={d}
-                onToggle={() => marcarDef(d.obra.id, d.tareaId, d.id, x => ({ ...x, ok: !x.ok, fechaOk: !x.ok ? hoyISO() : "" }))}
-                onEditar={(c) => marcarDef(d.obra.id, d.tareaId, d.id, x => ({ ...x, ...c }))}
-                onBorrar={() => marcarDef(d.obra.id, d.tareaId, d.id, null)}
-                onAvisar={(p) => avisar(d.obra, d, p)} />
-            </div>))}
+        {obras.map(o => {
+          const deObra = todasAlertas.filter(d => d.obra.id === o.id);
+          if (!deObra.length) return null;
+          const venc = deObra.filter(d => d.estado === "vencida");
+          const urg = deObra.filter(d => d.estado === "urgente");
+          const fut = deObra.filter(d => d.estado === "futura");
+          // Cada obra es un bloque desplegable. Arranca abierta SOLO si tiene
+          // algo que atender ya (vencida o urgente); lo tranquilo, plegado.
+          const abierta = alertasAb[o.id] !== undefined ? alertasAb[o.id] : (venc.length + urg.length > 0);
+          return (<div key={o.id} style={{ background: T.card, borderRadius: 13, marginBottom: 11, boxShadow: SHDsm, overflow: "hidden", borderLeft: `4px solid ${venc.length ? TONO.rojo().c : urg.length ? TONO.ambar().c : T.ok}` }}>
+            <div onClick={() => setAlertasAb(p => ({ ...p, [o.id]: !abierta }))} style={{ padding: "13px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 9 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14.5, fontWeight: 800 }}>{o.nombre}</div>
+                <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>{deObra.length} definici{deObra.length === 1 ? "ón" : "ones"} pendiente{deObra.length === 1 ? "" : "s"}</div>
+              </div>
+              <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+                {venc.length > 0 && <Chip color={TONO.rojo().c} fondo={TONO.rojo().b}>{venc.length} vencida{venc.length > 1 ? "s" : ""}</Chip>}
+                {urg.length > 0 && <Chip color={TONO.ambar().c} fondo={TONO.ambar().b}>{urg.length} urgente{urg.length > 1 ? "s" : ""}</Chip>}
+                {venc.length === 0 && urg.length === 0 && <Chip color={TONO.verde().c} fondo={TONO.verde().b}>al día</Chip>}
+                <span style={{ fontSize: 11, color: T.muted }}>{abierta ? "▲" : "▼"}</span>
+              </div>
+            </div>
+            {abierta && <div style={{ padding: "0 14px 13px", borderTop: `1px solid ${T.border}` }}>
+              {[["Vencidas — están frenando la obra", venc, TONO.rojo().c],
+                [`Urgentes — dentro de ${diasAviso} días`, urg, TONO.ambar().c],
+                ["Más adelante", fut, T.sub]].map(([tit, g, col]) => {
+                if (!g.length) return null;
+                return (<div key={tit} style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, color: col, textTransform: "uppercase", letterSpacing: ".06em" }}>{tit} ({g.length})</div>
+                  {g.map(d => (<FilaDef key={d.obra.id + d.id} d={d}
+                    onToggle={() => marcarDef(d.obra.id, d.tareaId, d.id, x => ({ ...x, ok: !x.ok, fechaOk: !x.ok ? hoyISO() : "" }))}
+                    onEditar={(c) => marcarDef(d.obra.id, d.tareaId, d.id, x => ({ ...x, ...c }))}
+                    onBorrar={() => marcarDef(d.obra.id, d.tareaId, d.id, null)}
+                    onAvisar={(p) => avisar(d.obra, d, p)}
+                    onGestion={async () => { const ok = await enviarAGestion({ obraNombre: d.obra.nombre || "", obraVvId: d.obra.vvObraId || "", tarea: { nombre: d.tareaNombre, critica: d.critica }, def: d }); if (ok) marcarDef(d.obra.id, d.tareaId, d.id, x => ({ ...x, enGestion: true })); return ok; }} />))}
+                </div>);
+              })}
+            </div>}
           </div>);
         })}
       </div>)}
