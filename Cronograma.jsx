@@ -518,6 +518,8 @@ function calcObra(obra, diasAviso, finanzas) {
       const durCal = diasEntre(vvInicio, vvFin) + 1;
       const dias = durCal;
       const desvio = (t.bfFin && vvFin) ? diasEntre(t.bfFin, vvFin) : null;
+      const desvRealIni = (t.realInicio && vvInicio) ? diasEntre(vvInicio, t.realInicio) : null;
+      const desvReal = (t.realFin && vvFin) ? diasEntre(vvFin, t.realFin) : null;
       const defs = (t.defs || []).map(d => {
         const limite = isoMas(vvInicio, -numSimple(d.diasAntes));
         const faltan = limite ? diasEntre(hoy, limite) : null;
@@ -530,7 +532,7 @@ function calcObra(obra, diasAviso, finanzas) {
       const trabas = defs.filter(d => !d.ok);
       const arrancaEn = diasEntre(hoy, vvInicio);
       const bloqueada = trabas.length > 0 && arrancaEn <= aviso;
-      return { ...t, es: offCal, ef: offCal + durCal, critica: false, holgura: null, vvInicio, vvFin, dias, desvio, defs, trabas, bloqueada, arrancaEn, offCal, durCal };
+      return { ...t, es: offCal, ef: offCal + durCal, critica: false, holgura: null, vvInicio, vvFin, dias, desvio, desvReal, desvRealIni, defs, trabas, bloqueada, arrancaEn, offCal, durCal };
     });
     const fin = tareas.reduce((m, t) => (!m || t.vvFin > m) ? t.vvFin : m, "");
     const ini = tareas.reduce((m, t) => (!m || t.vvInicio < m) ? t.vvInicio : m, "");
@@ -575,6 +577,9 @@ function calcObra(obra, diasAviso, finanzas) {
     const vvInicio = habilDesde(obra.inicio, t.es);
     const vvFin = habilDesde(obra.inicio, t.ef - 1);   // el último día que se trabaja
     const desvio = (t.bfFin && vvFin) ? diasEntre(t.bfFin, vvFin) : null;
+    // desvío REAL: lo ejecutado contra el plan. Positivo = arrancó/terminó tarde.
+    const desvRealIni = (t.realInicio && vvInicio) ? diasEntre(vvInicio, t.realInicio) : null;
+    const desvReal = (t.realFin && vvFin) ? diasEntre(vvFin, t.realFin) : null;
     // posición en el calendario, para dibujar el Gantt (los meses son corridos)
     const offCal = diasEntre(obra.inicio, vvInicio);
     const durCal = diasEntre(vvInicio, vvFin) + 1;
@@ -594,7 +599,7 @@ function calcObra(obra, diasAviso, finanzas) {
     const arrancaEn = diasEntre(hoy, vvInicio);
     const bloqueada = trabas.length > 0 && arrancaEn <= aviso;
 
-    return { ...t, vvInicio, vvFin, desvio, defs, trabas, bloqueada, arrancaEn, offCal, durCal };
+    return { ...t, vvInicio, vvFin, desvio, desvReal, desvRealIni, defs, trabas, bloqueada, arrancaEn, offCal, durCal };
   });
 
   // el plazo se mide en días de CALENDARIO (los 12 meses son corridos, no hábiles)
@@ -669,6 +674,28 @@ async function crearPedido({ para, asunto, detalle, prioridad }) {
   const r1 = await storage.set("vv_pedidos", JSON.stringify(lista));
   await storage.set("vv_pedidos__ts", String(Date.now()));
   return r1.ok;
+}
+
+/* Una definición vencida sobre una tarea es un CANDIDATO a punitorio: la mando
+   al circuito de Gestión (vv_gestion.manual) con la tarea ya identificada, para
+   evaluarla ahí con la dotación y el costo reales. La fecha de solicitud es el
+   día en que la definición debía estar (limite) con plazo 0: el retraso arranca
+   a contar desde ese día. */
+async function enviarAGestion({ obraNombre, tarea, def }) {
+  let g = {};
+  try { const r = await storage.get("vv_gestion"); if (r?.value) g = JSON.parse(r.value) || {}; } catch { }
+  const manual = Array.isArray(g.manual) ? g.manual : [];
+  const id = "cron_" + def.id;
+  if (manual.some(x => x.id === id)) return true;   // ya estaba: no duplico
+  const it = {
+    id, tipo: "Definición", obra_id: "",
+    descripcion: `${def.nombre} — traba "${tarea.nombre}" (${obraNombre})${tarea.critica ? " · CAMINO CRÍTICO" : ""}`,
+    imputable: "Belfast", fechaSolic: def.limite || hoyISO(), plazo: 0, fechaReal: "",
+  };
+  const next = { ...g, manual: [...manual, it] };
+  const r1 = await storage.set("vv_gestion", JSON.stringify(next));
+  try { await storage.set("vv_gestion__ts", String(Date.now())); } catch { }
+  return r1?.ok !== false;
 }
 
 /* ═══════════════════ PIEZAS ═══════════════════ */
@@ -996,10 +1023,11 @@ function Hero({ obra, plan }) {
 }
 
 /* ─── Una definición ─── */
-function FilaDef({ d, onToggle, onAvisar, onBorrar, onEditar, compacto }) {
+function FilaDef({ d, onToggle, onAvisar, onBorrar, onEditar, compacto, onGestion }) {
   const s = semDe(d.estado);
   const [abierto, setAbierto] = useState(false);
   const [porQue, setPorQue] = useState(false);
+  const [mandando, setMandando] = useState(false);
   return (<div style={{ background: s.b, borderRadius: 11, padding: "11px 12px", marginTop: 8, border: `1px solid ${d.estado === "vencida" ? s.bd : T.border}` }}>
     <div style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
       <button onClick={onToggle} style={{
@@ -1040,6 +1068,7 @@ function FilaDef({ d, onToggle, onAvisar, onBorrar, onEditar, compacto }) {
       <div style={{ display: "flex", gap: 6, marginTop: 9, flexWrap: "wrap" }}>
         <Btn chico tipo={d.avisadoVV ? "suave" : "primario"} onClick={() => onAvisar("vv")}>{d.avisadoVV ? "✓ Avisado a V+V" : "Avisar a V+V"}</Btn>
         <Btn chico tipo={d.avisadoBF ? "suave" : "brass"} onClick={() => onAvisar("cliente")}>{d.avisadoBF ? "✓ Pedido a Belfast" : "Pedir a Belfast"}</Btn>
+        {d.estado === "vencida" && onGestion && <Btn chico tipo={d.enGestion ? "suave" : "peligro"} disabled={mandando || d.enGestion} onClick={async () => { setMandando(true); const ok = await onGestion(); setMandando(false); if (!ok) alert("No pude mandarlo a Gestión. Probá de nuevo."); }}>{d.enGestion ? "✓ En Gestión" : mandando ? "Enviando…" : "→ Candidato a punitorio"}</Btn>}
         {!compacto && <Btn chico tipo="suave" onClick={() => setAbierto(!abierto)}>{abierto ? "Cerrar" : "Editar"}</Btn>}
       </div>
     )}
@@ -1057,7 +1086,7 @@ function FilaDef({ d, onToggle, onAvisar, onBorrar, onEditar, compacto }) {
 }
 
 /* ─── Una tarea, en modo edición ─── */
-function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar, manual }) {
+function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar, manual, obraNombre }) {
   const [ab, setAb] = useState(false);
   const col = t.critica ? T.critico : (COLOR_ETAPA[t.etapa] || T.accent);
   const rojas = t.trabas.filter(d => d.estado === "vencida").length;
@@ -1084,6 +1113,13 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar, man
                   {t.desvio > 0 ? `${t.desvio}d tarde` : `${Math.abs(t.desvio)}d antes`}
                 </span>
               )}
+            </div>
+          )}
+          {t.realInicio && (
+            <div style={{ fontSize: 11.5, color: T.text, fontWeight: 700, marginTop: 1 }}>
+              Real: {fmtCorta(t.realInicio)}{t.realFin ? ` → ${fmtCorta(t.realFin)}` : " → en curso"}
+              {t.desvRealIni !== null && t.desvRealIni > 0 && <span style={{ color: T.danger, marginLeft: 6 }}>arrancó +{t.desvRealIni}d</span>}
+              {t.desvReal !== null && t.desvReal !== 0 && <span style={{ color: t.desvReal > 0 ? T.danger : T.ok, marginLeft: 6 }}>{t.desvReal > 0 ? `terminó +${t.desvReal}d` : `terminó ${t.desvReal}d antes`}</span>}
             </div>
           )}
         </div>
@@ -1172,6 +1208,25 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar, man
         </div>
       </div>
 
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: T.text, textTransform: "uppercase", marginTop: 14, letterSpacing: ".05em" }}>Fechas reales de ejecución</div>
+      <div style={{ fontSize: 10.5, color: T.sub, marginTop: 3, lineHeight: 1.45 }}>Cuándo se trabajó de verdad. Es la evidencia del plan contra la realidad: cargala siempre.</div>
+      <div style={{ display: "flex", gap: 7, marginTop: 6 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Arrancó</div>
+          <div style={{ display: "flex", gap: 5 }}>
+            <input type="date" defaultValue={t.realInicio || ""} onBlur={e => onEditar({ realInicio: e.target.value })} style={{ ...inpSm, flex: 1 }} />
+            {!t.realInicio && <button onClick={() => onEditar({ realInicio: hoyISO() })} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "0 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>hoy</button>}
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 3 }}>Terminó</div>
+          <div style={{ display: "flex", gap: 5 }}>
+            <input type="date" defaultValue={t.realFin || ""} onBlur={e => onEditar({ realFin: e.target.value })} style={{ ...inpSm, flex: 1 }} />
+            {t.realInicio && !t.realFin && <button onClick={() => onEditar({ realFin: hoyISO() })} style={{ background: T.ok, color: "#fff", border: "none", borderRadius: 8, padding: "0 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>hoy</button>}
+          </div>
+        </div>
+      </div>
+
       <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginTop: 15, letterSpacing: ".05em" }}>
         Definiciones que la traban ({(t.defs || []).length})
       </div>
@@ -1180,7 +1235,8 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar, man
           onToggle={() => onDef(d.id, x => ({ ...x, ok: !x.ok, fechaOk: !x.ok ? hoyISO() : "" }))}
           onEditar={(c) => onDef(d.id, x => ({ ...x, ...c }))}
           onBorrar={() => onDef(d.id, null)}
-          onAvisar={(p) => onAvisar(d, p)} />
+          onAvisar={(p) => onAvisar(d, p)}
+          onGestion={async () => { const ok = await enviarAGestion({ obraNombre: obraNombre || "", tarea: t, def: d }); if (ok) onDef(d.id, x => ({ ...x, enGestion: true })); return ok; }} />
       ))}
       <div style={{ marginTop: 9 }}><Btn chico tipo="suave" onClick={onAddDef}>+ Agregar definición</Btn></div>
 
@@ -1817,7 +1873,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
     ...o, tareas: [...(o.tareas || []), {
       id: uid(), cod: "T" + String((o.tareas || []).length + 1).padStart(2, "0"),
       etapa: "Terminaciones", nombre: "Nueva tarea", dias: 10, deps: [], peso: 1,
-      avance: 0, certificado: false, pagado: false, bfInicio: "", bfFin: "", defs: [],
+      avance: 0, certificado: false, pagado: false, bfInicio: "", bfFin: "", realInicio: "", realFin: "", defs: [],
       desde: o.modoManual ? (o.inicio || hoyISO()) : "", hasta: "",
     }],
   }));
@@ -1964,7 +2020,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
         return (<div key={et} style={{ marginTop: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: COLOR_ETAPA[et], textTransform: "uppercase", letterSpacing: ".06em" }}>{et}</div>
           {ts.map(t => (
-            <FilaTarea key={t.id} t={t} plan={plan} manual={!!obra.modoManual}
+            <FilaTarea key={t.id} t={t} plan={plan} manual={!!obra.modoManual} obraNombre={obra.nombre || ""}
               onEditar={(c) => editarTarea(t.id, c)}
               onBorrar={() => borrarTarea(t.id)}
               onAddDef={() => addDef(t.id)}
