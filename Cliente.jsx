@@ -2189,7 +2189,7 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
 function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos }) {
@@ -3335,6 +3335,116 @@ function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaRea
 const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "#ECFDF5" }, "En plazo": { c: "#3B82F6", b: "#EFF6FF" }, "Fuera de plazo": { c: "#F59E0B", b: "#FFFBEB" }, "Vencido": { c: "#EF4444", b: "#FEF2F2" } };
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 
+/* ═══ CRONOGRAMAS (solo lectura, espejo de la app Cronograma de V+V) ═══
+   Belfast ve el mismo plan que V+V: fechas planificadas, fechas comprometidas,
+   fechas REALES de ejecución y las definiciones que le tocan responder —
+   con su estado en el circuito de Gestión. Mismo motor de cálculo. */
+const crNum = (x) => { const n = Number(String(x ?? "").replace(",", ".")); return isNaN(n) ? 0 : n; };
+const crHoy = () => new Date().toISOString().slice(0, 10);
+function crIsoMas(iso, dias) { if (!iso) return ""; const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + Math.round(crNum(dias))); return d.toISOString().slice(0, 10); }
+function crDiasEntre(a, b) { if (!a || !b) return 0; return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000); }
+function crEsHabil(iso) { if (!iso) return false; if (FERIADOS.has(iso)) return false; const d = new Date(iso + "T12:00:00"); const w = d.getDay(); return w >= 1 && w <= 5; }
+function crPrimerHabil(iso) { let f = iso; for (let i = 0; i < 7; i++) { if (crEsHabil(f)) return f; f = crIsoMas(f, 1); } return iso; }
+function crHabilDesde(inicio, n) { if (!inicio) return ""; let f = crPrimerHabil(inicio); let q = Math.max(0, Math.round(crNum(n))); let g = 0; while (q > 0 && g < 20000) { f = crIsoMas(f, 1); if (crEsHabil(f)) q--; g++; } return f; }
+const CR_MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function crFmt(iso) { if (!iso) return "—"; const d = new Date(iso + "T12:00:00"); return `${d.getDate()} ${CR_MES[d.getMonth()]}`; }
+function crCPM(tareas) {
+  const T2 = (tareas || []).filter(t => t && t.id).map(t => ({ ...t, dias: Math.max(1, crNum(t.dias)), deps: (t.deps || []).filter(d => d && d.cod) }));
+  const porCod = {}; T2.forEach(t => { if (t.cod) porCod[t.cod] = t; });
+  const ES = {}, EF = {}, vis = {}, ok = {};
+  function fES(t) { if (ok[t.id]) return ES[t.id]; if (vis[t.id]) { ES[t.id] = 0; EF[t.id] = t.dias; return 0; } vis[t.id] = true; let es = 0; for (const d of t.deps) { const p = porCod[d.cod]; if (!p || p.id === t.id) continue; fES(p); const c = d.tipo === "CC" ? ES[p.id] + crNum(d.lag) : EF[p.id] + crNum(d.lag); if (c > es) es = c; } es = Math.max(0, es); ES[t.id] = es; EF[t.id] = es + t.dias; vis[t.id] = false; ok[t.id] = true; return es; }
+  T2.forEach(fES);
+  const fin = T2.reduce((m, t) => Math.max(m, EF[t.id] || 0), 0);
+  const suc = {}; T2.forEach(t => { suc[t.id] = []; });
+  T2.forEach(sx => { for (const d of sx.deps) { const p = porCod[d.cod]; if (!p || p.id === sx.id) continue; suc[p.id].push({ s: sx, tipo: d.tipo, lag: crNum(d.lag) }); } });
+  const LS = {}, LF = {}, ok2 = {}, vis2 = {};
+  function fLS(t) { if (ok2[t.id]) return LS[t.id]; if (vis2[t.id]) { LF[t.id] = fin; LS[t.id] = fin - t.dias; return LS[t.id]; } vis2[t.id] = true; let lf = fin; for (const { s: sx, tipo, lag } of suc[t.id] || []) { if (tipo !== "FC") continue; fLS(sx); const c = LS[sx.id] - lag; if (c < lf) lf = c; } let ls = lf - t.dias; for (const { s: sx, tipo, lag } of suc[t.id] || []) { if (tipo !== "CC") continue; fLS(sx); const c = LS[sx.id] - lag; if (c < ls) ls = c; } LF[t.id] = lf; LS[t.id] = ls; vis2[t.id] = false; ok2[t.id] = true; return ls; }
+  T2.forEach(fLS);
+  return T2.map(t => ({ ...t, es: ES[t.id] ?? 0, ef: EF[t.id] ?? 0, critica: Math.round((LS[t.id] ?? 0) - (ES[t.id] ?? 0)) <= 0 }));
+}
+function CronogramaScreen({ T, cfg, crono, gestion }) {
+  const g = { punit: {}, manual: [], ...(gestion || {}) };
+  const enManual = new Set((g.manual || []).map(x => x.id));
+  const [ab, setAb] = useState({});
+  const hoy = crHoy();
+  const obras = (crono?.obras || []);
+  const planes = obras.map(o => {
+    let tareas;
+    if (o.modoManual) {
+      tareas = (o.tareas || []).map(t => ({ ...t, vvInicio: t.desde || o.inicio || hoy, vvFin: (t.hasta && t.hasta >= (t.desde || "")) ? t.hasta : (t.desde || o.inicio || hoy), critica: false }));
+    } else {
+      tareas = crCPM(o.tareas || []).map(t => ({ ...t, vvInicio: crHabilDesde(o.inicio, t.es), vvFin: crHabilDesde(o.inicio, t.ef - 1) }));
+    }
+    tareas = tareas.map(t => {
+      const desvReal = (t.realFin && t.vvFin) ? crDiasEntre(t.vvFin, t.realFin) : null;
+      const desvRealIni = (t.realInicio && t.vvInicio) ? crDiasEntre(t.vvInicio, t.realInicio) : null;
+      const defs = (t.defs || []).map(d => {
+        const limite = crIsoMas(t.vvInicio, -crNum(d.diasAntes));
+        const faltan = limite ? crDiasEntre(hoy, limite) : null;
+        let estado = "futura";
+        if (d.ok) estado = "ok"; else if (faltan !== null && faltan < 0) estado = "vencida"; else if (faltan !== null && faltan <= 15) estado = "urgente";
+        const gid = "cron_" + d.id;
+        const dec = g.punit[gid];
+        const gest = dec ? (dec.decision === "confirmado" ? "punitorio" : dec.decision === "prorroga" ? "prorroga" : "sin_perjuicio") : (enManual.has(gid) ? "evaluacion" : null);
+        return { ...d, limite, faltan, estado, gest, tarea: t.nombre, critica: t.critica };
+      });
+      return { ...t, desvReal, desvRealIni, defs };
+    });
+    const fin = tareas.reduce((m, t) => (!m || t.vvFin > m) ? t.vvFin : m, "");
+    const defsPend = tareas.flatMap(t => t.defs).filter(d => !d.ok);
+    const venc = defsPend.filter(d => d.estado === "vencida");
+    return { o, tareas, fin, defsPend, venc };
+  });
+  const GEST_TAG = { punitorio: ["Punitorio", "#B91C1C", "#FEF2F2"], evaluacion: ["En evaluación", "#B45309", "#FFFBEB"], prorroga: ["Prórroga", "#2563EB", "#EFF6FF"], sin_perjuicio: ["Sin perjuicio", "#64748B", "#F1F5F9"] };
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.55, marginBottom: 14 }}>El plan de cada obra: fechas planificadas, comprometidas y REALES, y las definiciones pendientes de {cfg?.nombre || "Belfast"} con su estado en Gestión. Responder a tiempo evita que un retraso pase a evaluación de punitorio.</div>
+      {planes.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin cronogramas cargados.</div>}
+      {planes.map(({ o, tareas, fin, defsPend, venc }) => {
+        const abierta = ab[o.id] !== undefined ? ab[o.id] : venc.length > 0;
+        return (<Card T={T} key={o.id} style={{ padding: 0, marginBottom: 12, overflow: "hidden", borderLeft: `4px solid ${venc.length ? "#EF4444" : "#16A34A"}` }}>
+          <div onClick={() => setAb(p => ({ ...p, [o.id]: !abierta }))} style={{ padding: "13px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 9 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{o.nombre}</div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Fin estimado: {crFmt(fin)} · {tareas.length} tareas</div>
+            </div>
+            <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+              {venc.length > 0 ? <Badge c="#B91C1C" b="#FEF2F2">{venc.length} vencida{venc.length > 1 ? "s" : ""}</Badge> : defsPend.length > 0 ? <Badge c="#B45309" b="#FFFBEB">{defsPend.length} pendiente{defsPend.length > 1 ? "s" : ""}</Badge> : <Badge c="#16A34A" b="#ECFDF5">al día</Badge>}
+              <span style={{ fontSize: 11, color: T.muted }}>{abierta ? "▲" : "▼"}</span>
+            </div>
+          </div>
+          {abierta && <div style={{ borderTop: `1px solid ${T.border}`, padding: "4px 14px 13px" }}>
+            {defsPend.length > 0 && <>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: "#B91C1C", textTransform: "uppercase", letterSpacing: ".05em", marginTop: 10 }}>Definiciones a responder</div>
+              {defsPend.map(d => { const tag = d.gest ? GEST_TAG[d.gest] : null; return (<div key={d.id} style={{ background: d.estado === "vencida" ? "#FEF2F2" : d.estado === "urgente" ? "#FFFBEB" : T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 11px", marginTop: 7 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{d.nombre}</div>
+                    <div style={{ fontSize: 10.5, color: T.sub, marginTop: 2 }}>Traba <b>{d.tarea}</b>{d.critica && <span style={{ color: "#B91C1C", fontWeight: 800 }}> · CAMINO CRÍTICO</span>}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 3, color: d.estado === "vencida" ? "#B91C1C" : d.estado === "urgente" ? "#B45309" : T.muted }}>
+                      {d.estado === "vencida" ? `Vencida hace ${Math.abs(d.faltan)} días (límite ${crFmt(d.limite)})` : `Definir antes del ${crFmt(d.limite)} — faltan ${d.faltan} días`}
+                    </div>
+                  </div>
+                  {tag && <Badge c={tag[1]} b={tag[2]}>{tag[0]}</Badge>}
+                </div>
+              </div>); })}
+            </>}
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", marginTop: 13 }}>Tareas</div>
+            {tareas.map(t => (<div key={t.id} style={{ padding: "8px 0", borderBottom: `1px solid ${T.bg}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, minWidth: 0, flex: 1 }}>{t.nombre}{t.critica && <span style={{ fontSize: 9, color: "#B91C1C", fontWeight: 800, marginLeft: 6 }}>CRÍTICA</span>}</div>
+                {crNum(t.avance) > 0 && <Badge c="#16A34A" b="#ECFDF5">{crNum(t.avance)}%</Badge>}
+              </div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Plan: {crFmt(t.vvInicio)} → {crFmt(t.vvFin)}{t.bfInicio && t.bfFin ? ` · Comprometido: ${crFmt(t.bfInicio)} → ${crFmt(t.bfFin)}` : ""}</div>
+              {t.realInicio && <div style={{ fontSize: 10.5, color: T.text, fontWeight: 700, marginTop: 1 }}>Real: {crFmt(t.realInicio)}{t.realFin ? ` → ${crFmt(t.realFin)}` : " → en curso"}{t.desvRealIni > 0 ? <span style={{ color: "#B91C1C" }}> · arrancó +{t.desvRealIni}d</span> : null}{t.desvReal !== null && t.desvReal !== 0 ? <span style={{ color: t.desvReal > 0 ? "#B91C1C" : "#16A34A" }}> · terminó {t.desvReal > 0 ? "+" : ""}{t.desvReal}d</span> : null}</div>}
+            </div>))}
+          </div>}
+        </Card>);
+      })}
+    </div>
+  </div>);
+}
+
 function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, reuniones: [], ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
@@ -3529,6 +3639,7 @@ function ClienteApp() {
   const [pedidos, setPedidos] = useStored("vv_pedidos", []);
   const [personal, setPersonal] = useStored("vv_personal", []);
   const [gestion] = useStored("vv_gestion", {});
+  const [crono] = useStored("vv_cronograma", { obras: [] });
   const [formularios] = useStored("vv_formularios", []);
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
   const [contactos, setContactos] = useStored("cliente_contactos", []);
@@ -3749,6 +3860,7 @@ function ClienteApp() {
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
+          {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
