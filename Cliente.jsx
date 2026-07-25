@@ -3323,68 +3323,97 @@ const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "#ECFDF5" }, "En plazo": {
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 
 function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
-  const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], ...(gestion || {}) };
+  const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
   const cli = cfg?.nombre || "Belfast";
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
-  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; const m = gMetricas(solic, real, g.plazo, p.estado === "resuelto"); return { id: p.id, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, ...m }; });
-  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; const m = gMetricas(solic, real, it.plazo || g.plazo, !!real); return { ...it, fechaSolic: solic, fechaReal: real, ...m }; });
+  // Misma lectura de decisiones que V+V: acá Belfast VE lo mismo que V+V
+  // decidió, con el cálculo abierto. Transparencia total, sin sorpresas.
+  const conDecision = (base) => {
+    const d = g.punit[base.id];
+    const plazoEf = (base.plazoBase || g.plazo) + (d?.decision === "prorroga" ? (d.prorrogaDias || 0) : 0);
+    const m = gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
+    return { ...base, plazo: plazoEf, ...m, dec: d || null };
+  };
+  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; return conDecision({ id: p.id, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: p.estado === "resuelto" }); });
+  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const parseDmy = (f) => { const m = String(f || "").match(/^(\d{2})\/(\d{2})\/(\d{2})$/); return m ? new Date(`20${m[3]}-${m[2]}-${m[1]}T12:00:00`) : null; };
   const itemsMat = (matpedidos || []).filter(p => p.tipo === "definicion" || p.tipo === "plano").map(p => {
     const solic = p.ts ? new Date(p.ts) : null;
     const real = p.cumplido ? (parseDmy(p.cumplidoFecha) || new Date()) : null;
-    const m = gMetricas(solic, real, g.plazo, !!p.cumplido);
     const desc = (p.items || []).map(it => it.nombre).filter(Boolean).join(", ") || (p.tipo === "plano" ? "Plano" : "Definición");
-    return { id: p.id, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, ...m };
+    return conDecision({ id: p.id, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: !!p.cumplido });
   });
   const items = [...itemsPedidos, ...itemsMat, ...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
-  const perItem = it => (it.estado === "Vencido" || it.estado === "Fuera de plazo") ? it.retraso * (it.dotacion || g.dotacion) * g.costoPersona : 0;
+  const perItem = it => (it.dec?.decision === "confirmado") ? it.retraso * (Number(it.dec.personas) || g.dotacion) * (Number(it.dec.costoDia) || g.costoPersona) : 0;
+  const esVencido = it => it.estado === "Vencido" || it.estado === "Fuera de plazo";
+  const confirmados = items.filter(it => it.dec?.decision === "confirmado");
+  const enEval = items.filter(it => esVencido(it) && !it.dec);
   const total = items.length, cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
   const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
-  const grp = n => items.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
+  const grp = n => confirmados.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
   const perjB = grp(cli), perjVV = grp("V+V"), perjE = grp("Estudio"), perjT = perjB + perjVV + perjE;
   const cnt = e => items.filter(i => i.estado === e).length;
-  const TABS = [["registro", "Registro"], ["panel", "Panel"], ["punitorios", "Punitorios"], ["plan", "Plan"]];
+  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "#FEF2F2" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "#F1F5F9" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "#EFF6FF" } };
+  const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"]];
+
+  const ItemCard = ({ it }) => {
+    const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
+    return (<Card T={T} style={{ padding: 13, marginBottom: 9 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · plazo {it.plazo} d · <b style={{ color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</b></div>
+          {it.dec?.decision === "confirmado" && <div style={{ fontSize: 11, marginTop: 6, color: T.sub, lineHeight: 1.5 }}><b style={{ color: "#B91C1C" }}>Perjuicio: {money(pj)}</b> — {it.retraso} d × {Number(it.dec.personas) || g.dotacion} pers. × {money(Number(it.dec.costoDia) || g.costoPersona)}{it.dec.tarea ? <><br />Tarea detenida: {it.dec.tarea}</> : null}</div>}
+          {it.dec?.decision === "prorroga" && <div style={{ fontSize: 11, marginTop: 6, color: "#2563EB" }}>Prórroga acordada: +{it.dec.prorrogaDias} días háb.{it.dec.nota ? ` — ${it.dec.nota}` : ""}</div>}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end", flexShrink: 0 }}>
+          <Badge c={e.c} b={e.b}>{it.estado}</Badge>
+          {db2 && <Badge c={db2.c} b={db2.b}>{db2.t}</Badge>}
+          {!it.dec && esVencido(it) && <Badge c="#B45309" b="#FFFBEB">En evaluación</Badge>}
+        </div>
+      </div>
+    </Card>);
+  };
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "14px 20px 0" }}>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? "#EAEEF3" : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700 }}>{l}</button>)}</div>
     </div>
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
-      <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Desempeño medido sobre los pedidos (plazo {g.plazo} días háb.). Vista de seguimiento.</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Desempeño medido sobre los pedidos (plazo {g.plazo} días háb.).</div>
       {items.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin ítems.</div>}
-      {items.map(it => { const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); return (<Card T={T} key={it.id} style={{ padding: 13, marginBottom: 9 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-          <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
-            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · {it.dias} d háb. · <b style={{ color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</b></div>
-            {pj > 0 && <div style={{ fontSize: 11, fontWeight: 700, color: "#EF4444", marginTop: 5 }}>Perjuicio: {money(pj)}</div>}
-          </div>
-          <Badge c={e.c} b={e.b}>{it.estado}</Badge>
-        </div>
-      </Card>); })}
+      {items.map(it => <ItemCard key={it.id} it={it} />)}
+    </div>}
+    {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.55, marginBottom: 14 }}>Solo se imputan los retrasos que detuvieron una tarea en condiciones de avanzar, evaluados caso por caso con la dotación y el costo reales. Los retrasos marcados "en evaluación" no tienen monto asignado.</div>
+      <Eyebrow T={T}>Punitorios confirmados ({confirmados.length}) — {money(perjT)}</Eyebrow>
+      {confirmados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Sin punitorios confirmados.</div>}
+      {confirmados.map(it => <ItemCard key={it.id} it={it} />)}
+      {enEval.length > 0 && <>
+        <div style={{ height: 8 }} />
+        <Eyebrow T={T}>En evaluación ({enEval.length})</Eyebrow>
+        {enEval.map(it => <ItemCard key={it.id} it={it} />)}
+      </>}
+      <div style={{ height: 14 }} />
+      <Card T={T} style={{ padding: 14 }}>
+        <Eyebrow T={T}>Criterio de cálculo</Eyebrow>
+        <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.7 }}>Perjuicio = días de retraso × dotación afectada × costo diario por persona.<br />Referencia: {money(g.costoPersona)} por persona/día. Cada punitorio usa la dotación real de esa parada.</div>
+      </Card>
     </div>}
     {tab === "panel" && <div style={{ padding: "16px 20px" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginBottom: 14 }}>
-        {[["Ítems", total, T.accent], ["% Cumplimiento", pctCumpl + "%", "#16A34A"], ["Días háb. prom.", diasProm, "#3B82F6"], ["Perjuicio total", money(perjT), "#EF4444"]].map(([l, v, c]) => <div key={l} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px" }}><div style={{ fontSize: 17, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{l}</div></div>)}
+        {[["Ítems", total, T.accent], ["% Cumplimiento", pctCumpl + "%", "#16A34A"], ["Días háb. prom.", diasProm, "#3B82F6"], ["Perjuicio confirmado", money(perjT), "#EF4444"]].map(([l, v, c]) => <div key={l} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px" }}><div style={{ fontSize: 17, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{l}</div></div>)}
       </div>
       <Eyebrow T={T}>Por estado</Eyebrow>
       <Card T={T} style={{ padding: 13, marginBottom: 14 }}>{["Cumplido", "En plazo", "Fuera de plazo", "Vencido"].map(s => { const e = GEST_ESTADOS[s]; return (<div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: e.c }} /><span style={{ fontSize: 12.5, color: T.text }}>{s}</span></div><span style={{ fontSize: 13, fontWeight: 800 }}>{cnt(s)}</span></div>); })}</Card>
-      <Eyebrow T={T}>Perjuicio imputable</Eyebrow>
+      <Eyebrow T={T}>Perjuicio confirmado por responsable</Eyebrow>
       <Card T={T} style={{ padding: 13 }}>{[[cli, perjB], ["Estudio", perjE], ["V+V", perjVV]].map(([n, v]) => <div key={n} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{n}</span><span style={{ fontSize: 13, fontWeight: 800, color: v > 0 ? "#EF4444" : T.muted }}>{money(v)}</span></div>)}<div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>TOTAL</span><span style={{ fontSize: 14, fontWeight: 800, color: "#EF4444" }}>{money(perjT)}</span></div></Card>
     </div>}
-    {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
-      <Card T={T} style={{ padding: 14, marginBottom: 14 }}>
-        <Eyebrow T={T}>Parámetros</Eyebrow>
-        <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.8 }}>Plazo estándar: <b>{g.plazo} días hábiles</b><br />Dotación parada: <b>{g.dotacion} personas</b><br />Costo diario por persona: <b>{money(g.costoPersona)}</b></div>
-        <div style={{ background: "#EAEEF3", borderRadius: T.rsm, padding: "11px 13px", marginTop: 10 }}><div style={{ fontSize: 11.5, color: T.sub }}>Perjuicio por día de retraso</div><div style={{ fontSize: 18, fontWeight: 800, color: "#EF4444" }}>{money(g.dotacion * g.costoPersona)}</div></div>
-      </Card>
-      <Eyebrow T={T}>Simulador acumulado</Eyebrow>
-      <Card T={T} style={{ padding: 13 }}>{[1, 2, 3, 5, 7, 10, 15].map(d => <div key={d} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.sub }}>{d} día{d > 1 ? "s" : ""}</span><span style={{ fontSize: 12.5, fontWeight: 700 }}>{money(d * g.dotacion * g.costoPersona)}</span></div>)}</Card>
-    </div>}
     {tab === "plan" && <div style={{ padding: "16px 20px" }}>
-      {[["Objetivo", "Medir tiempos de definición y certificación, detectar desvíos y valorizar el perjuicio económico de los retrasos."], ["SLA", `Pedidos de información: respuesta en máx. ${g.plazo} días hábiles. Certificados: entrega en máx. ${g.plazo} días hábiles.`], ["Política de punitorios", "Por cada día de retraso imputable que detenga una tarea en condiciones de avanzar: perjuicio = días × dotación parada × costo diario. Se presenta en la reunión mensual."]].map(([t, d], i) => <Card T={T} key={i} style={{ padding: 14, marginBottom: 10 }}><div style={{ fontSize: 13, fontWeight: 800, color: T.accent, marginBottom: 6 }}>{t}</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6 }}>{d}</div></Card>)}
+      {[["Objetivo", "Medir tiempos de definición y certificación, detectar desvíos y valorizar el perjuicio económico de los retrasos."], ["SLA", `Pedidos de información: respuesta en máx. ${g.plazo} días hábiles. Certificados: entrega en máx. ${g.plazo} días hábiles.`], ["Circuito de imputación", "El sistema detecta los vencimientos en forma automática. Cada retraso se evalúa caso por caso: solo se computa punitorio si detuvo una tarea en condiciones de avanzar, identificando la tarea y la dotación real. Las prórrogas acordadas extienden el plazo y quedan documentadas."], ["Política de punitorios", "Por cada día de retraso imputable que detenga una tarea en condiciones de avanzar: perjuicio = días × dotación afectada × costo diario. Cada punitorio se documenta con su cronología y cálculo abierto, y se presenta en la reunión mensual."]].map(([t, d], i) => <Card T={T} key={i} style={{ padding: 14, marginBottom: 10 }}><div style={{ fontSize: 13, fontWeight: 800, color: T.accent, marginBottom: 6 }}>{t}</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6 }}>{d}</div></Card>)}
     </div>}
   </div>);
 }

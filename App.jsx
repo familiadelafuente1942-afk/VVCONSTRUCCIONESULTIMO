@@ -5658,69 +5658,189 @@ const isoHoy = () => new Date().toISOString().slice(0, 10);
 
 function GestionView({ db, cfg, onBack }) {
   const { pedidos, obras, gestion, setGestion, matpedidos } = db;
-  const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], ...(gestion || {}) };
+  const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
   const [mForm, setMForm] = useState(null);
   const [rForm, setRForm] = useState(null);
+  const [pForm, setPForm] = useState(null);      // decisión sobre un vencido
+  const [pdfPunit, setPdfPunit] = useState(null); // PDF de un punitorio confirmado
   const upd = (patch) => setGestion({ ...g, ...patch });
   const cli = cfg?.clienteNombre || "Belfast";
 
-  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; const m = gMetricas(solic, real, g.plazo, p.estado === "resuelto"); return { id: p.id, auto: true, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, plazo: g.plazo, ...m }; });
-  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; const m = gMetricas(solic, real, it.plazo || g.plazo, !!real); return { ...it, auto: false, fechaSolic: solic, fechaReal: real, plazo: it.plazo || g.plazo, ...m }; });
-  // Definiciones y planos pedidos a la Dirección de Obra: se miden igual que los pedidos
-  // de información. La "recepción registrada" (cumplido) es la fecha real de respuesta.
+  // ── Ítems medidos ──────────────────────────────────────────────────
+  // La decisión (punitorio sí/no/prórroga) vive en g.punit[id]; la prórroga
+  // acordada extiende el plazo de ESE ítem, así el reloj refleja lo pactado.
+  const conDecision = (base) => {
+    const d = g.punit[base.id];
+    const plazoEf = (base.plazoBase || g.plazo) + (d?.decision === "prorroga" ? (d.prorrogaDias || 0) : 0);
+    const m = gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
+    return { ...base, plazo: plazoEf, ...m, dec: d || null };
+  };
+  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; return conDecision({ id: p.id, auto: true, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: p.estado === "resuelto" }); });
+  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, auto: false, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const parseDmy = (f) => { const m = String(f || "").match(/^(\d{2})\/(\d{2})\/(\d{2})$/); return m ? new Date(`20${m[3]}-${m[2]}-${m[1]}T12:00:00`) : null; };
   const itemsMat = (matpedidos || []).filter(p => p.tipo === "definicion" || p.tipo === "plano").map(p => {
     const solic = p.ts ? new Date(p.ts) : null;
     const real = p.cumplido ? (parseDmy(p.cumplidoFecha) || new Date()) : null;
-    const m = gMetricas(solic, real, g.plazo, !!p.cumplido);
     const desc = (p.items || []).map(it => it.nombre).filter(Boolean).join(", ") || (p.tipo === "plano" ? "Plano" : "Definición");
-    return { id: p.id, auto: true, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, plazo: g.plazo, ...m };
+    return conDecision({ id: p.id, auto: true, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: !!p.cumplido });
   });
   const items = [...itemsPedidos, ...itemsMat, ...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
-  const perItem = (it) => (it.estado === "Vencido" || it.estado === "Fuera de plazo") ? it.retraso * (it.dotacion || g.dotacion) * g.costoPersona : 0;
+
+  // ── El corazón del cambio: el perjuicio SOLO nace de una confirmación ──
+  // Un ítem vencido es un CANDIDATO. Recién cuando se confirma (qué tarea
+  // frenó, cuánta gente real, a qué costo) empieza a valer plata, y el
+  // cálculo usa esos datos, no los genéricos.
+  const perItem = (it) => {
+    if (!it.dec || it.dec.decision !== "confirmado") return 0;
+    return it.retraso * (Number(it.dec.personas) || g.dotacion) * (Number(it.dec.costoDia) || g.costoPersona);
+  };
+  const esVencido = it => it.estado === "Vencido" || it.estado === "Fuera de plazo";
+  const enEval = items.filter(it => esVencido(it) && !it.dec);
+  const confirmados = items.filter(it => it.dec?.decision === "confirmado");
+  const sinPerj = items.filter(it => it.dec?.decision === "sin_perjuicio");
+  const prorrogas = items.filter(it => it.dec?.decision === "prorroga");
+
   const total = items.length;
   const cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
   const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
-  const grp = (n) => items.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
+  const grp = (n) => confirmados.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
   const perjBelfast = grp(cli), perjVV = grp("V+V"), perjEstudio = grp("Estudio"), perjTotal = perjBelfast + perjVV + perjEstudio;
   const cnt = (e) => items.filter(i => i.estado === e).length;
-  const perjDia = g.dotacion * g.costoPersona;
 
+  function decidir(id, decision, datos = {}) { upd({ punit: { ...g.punit, [id]: { decision, ...datos, ts: Date.now() } } }); setPForm(null); }
+  function quitarDecision(id) { const p = { ...g.punit }; delete p[id]; upd({ punit: p }); }
   function guardarManual() { if (!mForm.descripcion?.trim()) return; const it = { ...mForm, id: mForm.id || uid() }; const exists = (g.manual || []).some(x => x.id === it.id); upd({ manual: exists ? g.manual.map(x => x.id === it.id ? it : x) : [...(g.manual || []), it] }); setMForm(null); }
   function guardarReunion() { const it = { ...rForm, id: rForm.id || uid() }; const exists = (g.reuniones || []).some(x => x.id === it.id); upd({ reuniones: exists ? g.reuniones.map(x => x.id === it.id ? it : x) : [it, ...(g.reuniones || [])] }); setRForm(null); }
 
-  const TABS = [["registro", "Registro"], ["panel", "Panel"], ["punitorios", "Punitorios"], ["plan", "Plan"], ["reunion", "Reunión"]];
+  // ── PDF de reclamo individual (un documento por punitorio) ─────────
+  const _e = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function htmlPunit(it) {
+    const d = it.dec || {}; const pj = perItem(it);
+    const personas = Number(d.personas) || g.dotacion, costo = Number(d.costoDia) || g.costoPersona;
+    return `<!doctype html><html><head><meta charset="utf-8"><style>
+      @page{size:A4;margin:22mm 18mm}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0}
+      .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:22px}
+      .marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
+      .tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
+      h1{font-size:15px;color:#0F1B2D;margin:18px 0 4px}
+      .meta{font-size:11px;color:#64748B}
+      table{width:100%;border-collapse:collapse;margin:14px 0}
+      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top}
+      th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9.5px;letter-spacing:1px}
+      .calc{background:#F8FAFC;border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
+      .tot{font-size:16px;font-weight:bold;color:#B91C1C;margin-top:6px}
+      .firmas{display:flex;justify-content:space-between;margin-top:70px}
+      .firma{width:44%;border-top:1px solid #1a202c;padding-top:6px;font-size:10.5px;text-align:center;color:#475569}
+      .nota{font-size:10px;color:#94A3B8;margin-top:26px;border-top:1px solid #E2E8F0;padding-top:8px}
+    </style></head><body>
+      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Registro de perjuicio por demora imputable</div></div>
+      <h1>${_e(it.tipo)}: ${_e(it.descripcion)}</h1>
+      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(it.imputable)} · Emitido: ${hoyStr()}</div>
+      <table>
+        <tr><th>Concepto</th><th>Detalle</th></tr>
+        <tr><td>Fecha de solicitud</td><td>${fmtD(it.fechaSolic)}</td></tr>
+        <tr><td>Plazo comprometido</td><td>${it.plazo} días hábiles${it.dec && it.plazo !== it.plazoBase ? ` (incluye prórroga acordada)` : ""}</td></tr>
+        <tr><td>Respuesta / entrega</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Sin respuesta a la fecha de emisión"}</td></tr>
+        <tr><td>Días hábiles transcurridos</td><td>${it.dias}</td></tr>
+        <tr><td><b>Días de retraso</b></td><td><b>${it.retraso}</b></td></tr>
+        <tr><td>Tarea detenida</td><td>${_e(d.tarea || "—")}</td></tr>
+        <tr><td>Dotación afectada</td><td>${personas} persona${personas === 1 ? "" : "s"}</td></tr>
+        ${d.nota ? `<tr><td>Observaciones</td><td>${_e(d.nota)}</td></tr>` : ""}
+      </table>
+      <div class="calc">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Cálculo del perjuicio</div>
+        <div style="margin-top:6px">${it.retraso} día${it.retraso === 1 ? "" : "s"} de retraso × ${personas} persona${personas === 1 ? "" : "s"} × ${money(costo)} por persona/día</div>
+        <div class="tot">Perjuicio: ${money(pj)}</div>
+        ${!it.fechaReal ? `<div style="font-size:10.5px;color:#B91C1C;margin-top:5px">El ítem continúa sin respuesta: el perjuicio sigue devengándose por cada día hábil adicional (${money(personas * costo)}/día).</div>` : ""}
+      </div>
+      <div style="font-size:11.5px">El presente registro se emite conforme a la política de gestión acordada entre las partes: por cada día de retraso imputable que detenga una tarea en condiciones de avanzar, se computa un perjuicio equivalente a los días de retraso por la dotación afectada por su costo diario. La cronología surge del registro contemporáneo de la aplicación de gestión de obra.</div>
+      <div class="firmas"><div class="firma">${_e(cfg?.firmante || "Sebastián De la Fuente")}<br/>V+V Construcciones</div><div class="firma">${_e(cli)}<br/>Recibido / Conforme</div></div>
+      <div class="nota">Documento generado por el sistema de gestión V+V Construcciones. ID ${_e(it.id)}.</div>
+    </body></html>`;
+  }
+
+  const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
+  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "#FEF2F2" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "#F1F5F9" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "#EFF6FF" } };
+
+  // Tarjeta compartida por Registro y Punitorios
+  const ItemCard = ({ it, conAcciones }) => {
+    const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
+    return (<Card style={{ padding: 13, marginBottom: 9 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 10.5, color: T.muted }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · plazo {it.plazo} d</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</span>
+            {!it.auto && <button onClick={() => setMForm({ ...g.manual.find(x => x.id === it.id) })} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>editar</button>}
+            {!it.auto && <button onClick={() => { quitarDecision(it.id); upd({ manual: g.manual.filter(x => x.id !== it.id), punit: Object.fromEntries(Object.entries(g.punit).filter(([k]) => k !== it.id)) }); }} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>✕</button>}
+          </div>
+          {it.dec?.decision === "confirmado" && <div style={{ fontSize: 11, marginTop: 6, color: T.sub, lineHeight: 1.5 }}><b style={{ color: "#B91C1C" }}>Perjuicio: {money(pj)}</b> — {it.retraso} d × {Number(it.dec.personas) || g.dotacion} pers. × {money(Number(it.dec.costoDia) || g.costoPersona)}{it.dec.tarea ? <><br />Frenó: {it.dec.tarea}</> : null}</div>}
+          {it.dec?.decision === "prorroga" && <div style={{ fontSize: 11, marginTop: 6, color: "#2563EB" }}>Prórroga acordada: +{it.dec.prorrogaDias} días háb.{it.dec.nota ? ` — ${it.dec.nota}` : ""}</div>}
+          {it.dec?.decision === "sin_perjuicio" && it.dec.nota && <div style={{ fontSize: 11, marginTop: 6, color: T.muted }}>{it.dec.nota}</div>}
+          {conAcciones && <div style={{ display: "flex", gap: 7, marginTop: 9, flexWrap: "wrap" }}>
+            {!it.dec && esVencido(it) && <button onClick={() => setPForm({ it, personas: g.dotacion, costoDia: g.costoPersona, tarea: "", nota: "", modo: "confirmar", prorrogaDias: g.plazo })} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "8px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Evaluar</button>}
+            {it.dec?.decision === "confirmado" && <button onClick={() => setPdfPunit(it)} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>PDF reclamo</button>}
+            {it.dec && <button onClick={() => quitarDecision(it.id)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 8, padding: "8px 12px", fontSize: 11.5, cursor: "pointer" }}>Rever</button>}
+          </div>}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end", flexShrink: 0 }}>
+          <Badge color={e.c} bg={e.b}>{it.estado}</Badge>
+          {db2 && <Badge color={db2.c} bg={db2.b}>{db2.t}</Badge>}
+          {!it.dec && esVencido(it) && <Badge color="#B45309" bg="#FFFBEB">En evaluación</Badge>}
+        </div>
+      </div>
+    </Card>);
+  };
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="gestion" label="Plan de gestión" sub="Desempeño, desvíos y perjuicio económico" onBack={onBack} />
     <div style={{ padding: "14px 20px 0" }}>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>
-        {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? T.al : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+        {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? T.al : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer", position: "relative" }}>{l}{k === "punitorios" && enEval.length > 0 && <span style={{ position: "absolute", top: -5, right: -5, background: "#EF4444", color: "#fff", borderRadius: 10, minWidth: 17, height: 17, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{enEval.length}</span>}</button>)}
       </div>
     </div>
 
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
-      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Los pedidos de la app se miden solos (plazo {g.plazo} días háb.). Sumá manualmente certificados u otros con el botón ＋.</div>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Los pedidos de la app se miden solos (plazo {g.plazo} días háb.). Acá se ve TODO; los vencidos se evalúan en la pestaña Punitorios. Sumá certificados u otros con ＋.</div>
       {items.length === 0 && <EmptyMsg>Sin ítems. Cargá pedidos o agregá un registro manual.</EmptyMsg>}
-      {items.map(it => { const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); return (<Card key={it.id} style={{ padding: 13, marginBottom: 9 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
-              <span style={{ fontSize: 10.5, color: T.muted }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · {it.dias} d háb.</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</span>
-              {!it.auto && <button onClick={() => setMForm({ ...g.manual.find(x => x.id === it.id) })} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>editar</button>}
-              {!it.auto && <button onClick={() => upd({ manual: g.manual.filter(x => x.id !== it.id) })} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>✕</button>}
-            </div>
-            {pj > 0 && <div style={{ fontSize: 11, fontWeight: 700, color: "#EF4444", marginTop: 5 }}>Perjuicio: {money(pj)}</div>}
-          </div>
-          <Badge color={e.c} bg={e.b}>{it.estado}</Badge>
-        </div>
-      </Card>); })}
+      {items.map(it => <ItemCard key={it.id} it={it} conAcciones={false} />)}
       <AddFab onClick={() => setMForm({ tipo: "Certificado", obra_id: obras[0]?.id || "", descripcion: "", imputable: "Estudio", fechaSolic: isoHoy(), plazo: g.plazo, fechaReal: "" })} label="Registro" />
+    </div>}
+
+    {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
+      <div style={{ background: T.al, border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 16, fontSize: 11.5, color: T.sub, lineHeight: 1.55 }}>El sistema detecta los vencidos solo. <b>Ningún vencido vale plata hasta que lo confirmes</b>: al evaluar decidís si frenó trabajo (punitorio, con la dotación y costo reales), si no frenó nada (queda como incumplimiento sin perjuicio) o si hubo prórroga acordada (el plazo se extiende y queda escrito).</div>
+
+      <Eyebrow>En evaluación ({enEval.length})</Eyebrow>
+      {enEval.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Nada pendiente de evaluar.</div>}
+      {enEval.map(it => <ItemCard key={it.id} it={it} conAcciones={true} />)}
+
+      <div style={{ height: 8 }} />
+      <Eyebrow>Punitorios confirmados ({confirmados.length}) — {money(perjTotal)}</Eyebrow>
+      {confirmados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Sin punitorios confirmados.</div>}
+      {confirmados.map(it => <ItemCard key={it.id} it={it} conAcciones={true} />)}
+
+      {(sinPerj.length > 0 || prorrogas.length > 0) && <>
+        <div style={{ height: 8 }} />
+        <Eyebrow>Resueltos sin perjuicio ({sinPerj.length + prorrogas.length})</Eyebrow>
+        {[...prorrogas, ...sinPerj].map(it => <ItemCard key={it.id} it={it} conAcciones={true} />)}
+      </>}
+
+      <div style={{ height: 14 }} />
+      <Card style={{ padding: 15 }}>
+        <Eyebrow>Parámetros por defecto</Eyebrow>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Se precargan al evaluar; en cada punitorio podés ajustar la dotación y el costo reales de ESA parada.</div>
+        <FieldRow>
+          <Field label="Plazo (días háb.)"><TInput type="number" value={g.plazo} onChange={e => upd({ plazo: +e.target.value || 0 })} /></Field>
+          <Field label="Dotación típica"><TInput type="number" value={g.dotacion} onChange={e => upd({ dotacion: +e.target.value || 0 })} /></Field>
+        </FieldRow>
+        <Field label="Costo diario por persona ($)"><TInput type="number" value={g.costoPersona} onChange={e => upd({ costoPersona: +e.target.value || 0 })} /></Field>
+        <Eyebrow>Costo diario por oficio (referencia)</Eyebrow>
+        {(g.oficios || []).map((o, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{o.oficio}</span><input type="number" value={o.costo} onChange={e => upd({ oficios: g.oficios.map((x, j) => j === i ? { ...x, costo: +e.target.value || 0 } : x) })} style={{ width: 110, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 9px", fontSize: 12.5, color: T.text, textAlign: "right" }} /></div>))}
+      </Card>
     </div>}
 
     {tab === "panel" && <div style={{ padding: "16px 20px" }}>
@@ -5728,45 +5848,26 @@ function GestionView({ db, cfg, onBack }) {
         <MiniStat label="Ítems" value={total} color={T.accent} />
         <MiniStat label="% Cumplimiento" value={pctCumpl + "%"} color="#16A34A" />
         <MiniStat label="Días háb. prom." value={diasProm} color="#3B82F6" />
-        <MiniStat label="Perjuicio total" value={money(perjTotal)} color="#EF4444" />
+        <MiniStat label="Perjuicio confirmado" value={money(perjTotal)} color="#EF4444" />
       </div>
+      {enEval.length > 0 && <div onClick={() => setTab("punitorios")} style={{ background: "#FFFBEB", border: "1px solid #F59E0B", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 14, fontSize: 12, color: "#92400E", cursor: "pointer", fontWeight: 600 }}>⚠ {enEval.length} vencido{enEval.length > 1 ? "s" : ""} sin evaluar — tocá para revisarlos</div>}
       <Eyebrow>Por estado</Eyebrow>
       <Card style={{ padding: 13, marginBottom: 14 }}>
         {["Cumplido", "En plazo", "Fuera de plazo", "Vencido"].map(s => { const e = GEST_ESTADOS[s]; return (<div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.bg}` }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: e.c }} /><span style={{ fontSize: 12.5, color: T.text }}>{s}</span></div><span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{cnt(s)}</span></div>); })}
       </Card>
-      <Eyebrow>Perjuicio imputable</Eyebrow>
+      <Eyebrow>Perjuicio confirmado por responsable</Eyebrow>
       <Card style={{ padding: 13 }}>
         {[[cli, perjBelfast], ["Estudio", perjEstudio], ["V+V (interno)", perjVV]].map(([n, v]) => (<div key={n} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${T.bg}` }}><span style={{ fontSize: 12.5, color: T.text }}>{n}</span><span style={{ fontSize: 13, fontWeight: 800, color: v > 0 ? "#EF4444" : T.muted }}>{money(v)}</span></div>))}
         <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 9 }}><span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>TOTAL</span><span style={{ fontSize: 14, fontWeight: 800, color: "#EF4444" }}>{money(perjTotal)}</span></div>
       </Card>
     </div>}
 
-    {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
-      <Card style={{ padding: 15, marginBottom: 14 }}>
-        <Eyebrow>Parámetros (editables)</Eyebrow>
-        <FieldRow>
-          <Field label="Plazo (días háb.)"><TInput type="number" value={g.plazo} onChange={e => upd({ plazo: +e.target.value || 0 })} /></Field>
-          <Field label="Dotación parada"><TInput type="number" value={g.dotacion} onChange={e => upd({ dotacion: +e.target.value || 0 })} /></Field>
-        </FieldRow>
-        <Field label="Costo diario por persona ($)"><TInput type="number" value={g.costoPersona} onChange={e => upd({ costoPersona: +e.target.value || 0 })} /></Field>
-        <div style={{ background: T.al, borderRadius: T.rsm, padding: "11px 13px", marginTop: 6 }}><div style={{ fontSize: 11.5, color: T.sub }}>Perjuicio por día de retraso</div><div style={{ fontSize: 18, fontWeight: 800, color: "#EF4444" }}>{money(perjDia)}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{g.dotacion} pers. × {money(g.costoPersona)}</div></div>
-      </Card>
-      <Eyebrow>Costo diario por oficio</Eyebrow>
-      <Card style={{ padding: 13, marginBottom: 14 }}>
-        {(g.oficios || []).map((o, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{o.oficio}</span><input type="number" value={o.costo} onChange={e => upd({ oficios: g.oficios.map((x, j) => j === i ? { ...x, costo: +e.target.value || 0 } : x) })} style={{ width: 110, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 9px", fontSize: 12.5, color: T.text, textAlign: "right" }} /></div>))}
-      </Card>
-      <Eyebrow>Simulador acumulado</Eyebrow>
-      <Card style={{ padding: 13 }}>
-        {[1, 2, 3, 4, 5, 7, 10, 15].map(d => (<div key={d} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.bg}` }}><span style={{ fontSize: 12.5, color: T.sub }}>{d} día{d > 1 ? "s" : ""} de retraso</span><span style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{money(d * perjDia)}</span></div>))}
-      </Card>
-    </div>}
-
     {tab === "plan" && <div style={{ padding: "16px 20px" }}>
       {[["1. Objetivo", ["Medir tiempos de definición y certificación, detectar desvíos y valorizar el perjuicio económico de los retrasos para tomar decisiones y reclamar lo que corresponda."]],
       ["2. Estándares (SLA)", [`Pedidos de información (${cli}/Estudio): respuesta en máx. ${g.plazo} días hábiles desde la solicitud.`, `Certificados de obra (Héctor Ayala): entrega en máx. ${g.plazo} días hábiles desde la visita.`, "Toda solicitud y certificado se carga el mismo día en el Registro."]],
-      ["3. Qué mejorar", ["Anticipación: pedir definiciones y materiales durante la tarea previa, no al terminarla.", "Seguimiento: revisar el Panel semanalmente y escalar los vencidos.", "Trazabilidad: fechar solicitud, respuesta y entrega sin excepción.", "Responsabilidad: asignar a cada desvío su causa (V+V / " + cli + " / Estudio)."]],
-      ["4. Política de punitorios", ["Por cada día de retraso imputable a " + cli + " o al Estudio que detenga una tarea en condiciones de avanzar, se computa un perjuicio = Días de retraso × Dotación parada × Costo diario. Se presenta en la reunión mensual como perjuicio económico medible."]],
-      ["5. Responsables", ["V+V: carga del registro, certificaciones en plazo (Héctor Ayala), seguimiento.", cli + " / Estudio: respuesta a pedidos y provisión de definiciones en plazo."]]
+      ["3. Circuito de imputación", ["El sistema detecta el vencimiento en forma automática (candidato).", "V+V evalúa cada candidato: se confirma como punitorio SOLO si el retraso detuvo una tarea en condiciones de avanzar, identificando la tarea y la dotación real afectada.", "Los retrasos que no frenaron trabajo quedan registrados como incumplimiento de plazo, sin perjuicio económico.", "Las prórrogas acordadas entre las partes extienden el plazo del ítem y quedan documentadas."]],
+      ["4. Política de punitorios", ["Por cada día de retraso imputable a " + cli + " o al Estudio que detenga una tarea en condiciones de avanzar: perjuicio = días de retraso × dotación afectada × costo diario por persona.", "Cada punitorio confirmado se documenta con su cronología, la tarea detenida y el cálculo abierto, y se presenta en la reunión mensual."]],
+      ["5. Responsables", ["V+V: carga del registro, certificaciones en plazo (Héctor Ayala), evaluación de candidatos y emisión de reclamos.", cli + " / Estudio: respuesta a pedidos y provisión de definiciones en plazo."]]
       ].map(([titulo, puntos], i) => (<Card key={i} style={{ padding: 15, marginBottom: 11 }}>
         <div style={{ fontSize: 13.5, fontWeight: 800, color: T.accent, marginBottom: 8 }}>{titulo}</div>
         {puntos.map((p, j) => <div key={j} style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6, marginBottom: 5, paddingLeft: 12, position: "relative" }}><span style={{ position: "absolute", left: 0, color: BRASS }}>·</span>{p}</div>)}
@@ -5816,6 +5917,47 @@ function GestionView({ db, cfg, onBack }) {
       <Field label="Acciones acordadas"><textarea value={rForm.acciones} onChange={e => setRForm({ ...rForm, acciones: e.target.value })} rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>
       <PBtn full onClick={guardarReunion} style={{ marginTop: 6 }}>Guardar</PBtn>
     </Sheet>}
+
+    {pForm && <Sheet title="Evaluar retraso" onClose={() => setPForm(null)}>
+      <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55, marginBottom: 12 }}><b style={{ color: T.text }}>{pForm.it.descripcion}</b><br />{pForm.it.retraso} día{pForm.it.retraso === 1 ? "" : "s"} de retraso sobre el plazo de {pForm.it.plazo} días hábiles.</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[["confirmar", "Frenó trabajo"], ["sin", "No frenó nada"], ["prorroga", "Prórroga acordada"]].map(([m, l]) => <button key={m} onClick={() => setPForm({ ...pForm, modo: m })} style={{ flex: 1, padding: "10px 6px", borderRadius: 9, border: `1.5px solid ${pForm.modo === m ? T.accent : T.border}`, background: pForm.modo === m ? T.al : T.card, color: pForm.modo === m ? T.accent : T.sub, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+      </div>
+      {pForm.modo === "confirmar" && <>
+        <Field label="¿Qué tarea quedó detenida?"><TInput value={pForm.tarea} onChange={e => setPForm({ ...pForm, tarea: e.target.value })} placeholder="Ej: Mampostería sector norte, PB" /></Field>
+        <FieldRow>
+          <Field label="Personas paradas (reales)"><TInput type="number" value={pForm.personas} onChange={e => setPForm({ ...pForm, personas: e.target.value })} /></Field>
+          <Field label="Costo por persona/día ($)"><TInput type="number" value={pForm.costoDia} onChange={e => setPForm({ ...pForm, costoDia: e.target.value })} /></Field>
+        </FieldRow>
+        <Field label="Observaciones (opcional)"><TInput value={pForm.nota} onChange={e => setPForm({ ...pForm, nota: e.target.value })} placeholder="Contexto, referencia a bitácora…" /></Field>
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: "#991B1B" }}>{pForm.it.retraso} d × {Number(pForm.personas) || 0} pers. × {money(Number(pForm.costoDia) || 0)}</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "#B91C1C" }}>{money(pForm.it.retraso * (Number(pForm.personas) || 0) * (Number(pForm.costoDia) || 0))}</div>
+          {!pForm.it.fechaReal && <div style={{ fontSize: 10.5, color: "#991B1B", marginTop: 3 }}>Sigue sin respuesta: el monto crece {money((Number(pForm.personas) || 0) * (Number(pForm.costoDia) || 0))} por día hábil.</div>}
+        </div>
+        <PBtn full disabled={!pForm.tarea.trim()} onClick={() => decidir(pForm.it.id, "confirmado", { tarea: pForm.tarea.trim(), personas: Number(pForm.personas) || g.dotacion, costoDia: Number(pForm.costoDia) || g.costoPersona, nota: pForm.nota.trim() })}>Confirmar punitorio</PBtn>
+      </>}
+      {pForm.modo === "sin" && <>
+        <Field label="Por qué no generó perjuicio (opcional)"><TInput value={pForm.nota} onChange={e => setPForm({ ...pForm, nota: e.target.value })} placeholder="Ej: la cuadrilla siguió con otro frente" /></Field>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Queda registrado como incumplimiento de plazo (baja el % de cumplimiento de {cli}) pero sin monto.</div>
+        <PBtn full onClick={() => decidir(pForm.it.id, "sin_perjuicio", { nota: pForm.nota.trim() })}>Registrar sin perjuicio</PBtn>
+      </>}
+      {pForm.modo === "prorroga" && <>
+        <Field label="Días hábiles adicionales acordados"><TInput type="number" value={pForm.prorrogaDias} onChange={e => setPForm({ ...pForm, prorrogaDias: e.target.value })} /></Field>
+        <Field label="Con quién se acordó / referencia"><TInput value={pForm.nota} onChange={e => setPForm({ ...pForm, nota: e.target.value })} placeholder="Ej: acordado con Enrico por mensaje del 20/07" /></Field>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>El plazo del ítem pasa a {pForm.it.plazoBase} + {Number(pForm.prorrogaDias) || 0} días hábiles y la extensión queda documentada. Si aun así vence, vuelve a evaluación.</div>
+        <PBtn full disabled={!(Number(pForm.prorrogaDias) > 0)} onClick={() => decidir(pForm.it.id, "prorroga", { prorrogaDias: Number(pForm.prorrogaDias), nota: pForm.nota.trim() })}>Registrar prórroga</PBtn>
+      </>}
+    </Sheet>}
+
+    {pdfPunit && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
+      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={() => setPdfPunit(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
+        <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Reclamo — {pdfPunit.descripcion}</div>
+        <button onClick={() => { const f = document.getElementById("punit-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="punit-pdf" srcDoc={htmlPunit(pdfPunit)} title="Reclamo punitorio" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
   </div>);
 }
 
