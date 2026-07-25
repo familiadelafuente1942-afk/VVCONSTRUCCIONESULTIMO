@@ -188,8 +188,21 @@ function diasEntre(a, b) {
 /* ═══ DÍAS HÁBILES ═══
    Se trabaja de lunes a viernes. Las duraciones de las tareas se cuentan en días
    hábiles; las fechas del calendario salen salteando sábados y domingos.        */
+// Feriados nacionales argentinos. Un día feriado NO es hábil: no corre plazo
+// ni se programa trabajo. Si el gobierno agrega puentes turísticos, se suman acá.
+const FERIADOS = new Set([
+  // 2026
+  "2026-01-01", "2026-02-16", "2026-02-17", "2026-03-24", "2026-04-02", "2026-04-03",
+  "2026-05-01", "2026-05-25", "2026-06-17", "2026-06-20", "2026-07-09", "2026-08-17",
+  "2026-10-12", "2026-11-20", "2026-12-08", "2026-12-25",
+  // 2027 (trasladables sujetos a confirmación oficial)
+  "2027-01-01", "2027-02-08", "2027-02-09", "2027-03-24", "2027-03-26", "2027-04-02",
+  "2027-05-01", "2027-05-25", "2027-06-17", "2027-06-20", "2027-07-09", "2027-08-16",
+  "2027-10-11", "2027-11-22", "2027-12-08", "2027-12-25",
+]);
 function esHabil(iso) {
   if (!iso) return false;
+  if (FERIADOS.has(iso)) return false;
   const d = new Date(iso + "T12:00:00");
   if (isNaN(d.getTime())) return false;
   const dow = d.getDay();          // 0 domingo … 6 sábado
@@ -681,14 +694,14 @@ async function crearPedido({ para, asunto, detalle, prioridad }) {
    evaluarla ahí con la dotación y el costo reales. La fecha de solicitud es el
    día en que la definición debía estar (limite) con plazo 0: el retraso arranca
    a contar desde ese día. */
-async function enviarAGestion({ obraNombre, tarea, def }) {
+async function enviarAGestion({ obraNombre, obraVvId, tarea, def }) {
   let g = {};
   try { const r = await storage.get("vv_gestion"); if (r?.value) g = JSON.parse(r.value) || {}; } catch { }
   const manual = Array.isArray(g.manual) ? g.manual : [];
   const id = "cron_" + def.id;
   if (manual.some(x => x.id === id)) return true;   // ya estaba: no duplico
   const it = {
-    id, tipo: "Definición", obra_id: "",
+    id, tipo: "Definición", obra_id: obraVvId || "",
     descripcion: `${def.nombre} — traba "${tarea.nombre}" (${obraNombre})${tarea.critica ? " · CAMINO CRÍTICO" : ""}`,
     imputable: "Belfast", fechaSolic: def.limite || hoyISO(), plazo: 0, fechaReal: "",
   };
@@ -1086,7 +1099,7 @@ function FilaDef({ d, onToggle, onAvisar, onBorrar, onEditar, compacto, onGestio
 }
 
 /* ─── Una tarea, en modo edición ─── */
-function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar, manual, obraNombre }) {
+function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar, manual, obraNombre, obraVvId }) {
   const [ab, setAb] = useState(false);
   const col = t.critica ? T.critico : (COLOR_ETAPA[t.etapa] || T.accent);
   const rojas = t.trabas.filter(d => d.estado === "vencida").length;
@@ -1236,7 +1249,7 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar, man
           onEditar={(c) => onDef(d.id, x => ({ ...x, ...c }))}
           onBorrar={() => onDef(d.id, null)}
           onAvisar={(p) => onAvisar(d, p)}
-          onGestion={async () => { const ok = await enviarAGestion({ obraNombre: obraNombre || "", tarea: t, def: d }); if (ok) onDef(d.id, x => ({ ...x, enGestion: true })); return ok; }} />
+          onGestion={async () => { const ok = await enviarAGestion({ obraNombre: obraNombre || "", obraVvId: obraVvId || "", tarea: t, def: d }); if (ok) onDef(d.id, x => ({ ...x, enGestion: true })); return ok; }} />
       ))}
       <div style={{ marginTop: 9 }}><Btn chico tipo="suave" onClick={onAddDef}>+ Agregar definición</Btn></div>
 
@@ -2020,7 +2033,7 @@ function PantallaObra({ obra, plan, finanzas, guardarObra, borrarObra, volver, a
         return (<div key={et} style={{ marginTop: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: COLOR_ETAPA[et], textTransform: "uppercase", letterSpacing: ".06em" }}>{et}</div>
           {ts.map(t => (
-            <FilaTarea key={t.id} t={t} plan={plan} manual={!!obra.modoManual} obraNombre={obra.nombre || ""}
+            <FilaTarea key={t.id} t={t} plan={plan} manual={!!obra.modoManual} obraNombre={obra.nombre || ""} obraVvId={obra.vvObraId || ""}
               onEditar={(c) => editarTarea(t.id, c)}
               onBorrar={() => borrarTarea(t.id)}
               onAddDef={() => addDef(t.id)}
@@ -2181,6 +2194,7 @@ function ConfigModal({ data, save, onClose }) {
 export default function Cronograma() {
   const [data, setData] = useState({ plantilla: [], obras: [], cfg: { aviso: 15 }, config: {} });
   const [finanzas, setFinanzas] = useState({ obras: [] });
+  const [obrasVV, setObrasVV] = useState([]);   // las obras cargadas en la app V+V (solo lectura)
   const [cargando, setCargando] = useState(true);
   const [verConfig, setVerConfig] = useState(false);
   const [refrescando, setRefrescando] = useState(false);
@@ -2211,6 +2225,7 @@ export default function Cronograma() {
       }
       // traigo las obras de Finanzas, para poder enganchar el contrato
       try {
+        try { const ro = await storage.get("vv_obras"); if (ro?.value) { const l = JSON.parse(ro.value); if (Array.isArray(l)) setObrasVV(l); } } catch { }
         const r = await storage.get("vv_finanzas");
         if (r?.value) { const f = JSON.parse(r.value); setFinanzas({ obras: f?.obras || [] }); }
       } catch { }
@@ -2286,6 +2301,14 @@ export default function Cronograma() {
       return { ...t, defs: (t.defs || []).map(d => d.id === did ? fn(d) : d) };
     }),
   }));
+
+  // Crea el cronograma directamente desde una obra que ya existe en V+V:
+  // mismo nombre, vinculada por vvObraId (así Gestión sabe de qué obra hablamos).
+  const crearDesdeVV = (ov) => {
+    const o = { id: uid(), nombre: ov.nombre || "Obra", inicio: ov.inicio || hoyISO(), finanzasObraId: "", vvObraId: ov.id, tareas: plantillaAObra(data.plantilla) };
+    guardar({ ...data, obras: [...obras, o] });
+    setObraId(o.id); setPantalla("obra");
+  };
 
   const crearObra = () => {
     if (!nom.trim()) return;
@@ -2422,6 +2445,24 @@ export default function Cronograma() {
             {modoNuevo === "manual" ? "Arranca vacía. Vas agregando tareas y en cada una ponés la fecha desde y hasta." : `Copia las ${data.plantilla?.length || 0} tareas del modelo, con sus dependencias y definiciones.`}
           </div>
         </div>}
+
+        {(() => {
+          const yaTienen = new Set(obras.map(o => o.vvObraId).filter(Boolean));
+          const nombres = new Set(obras.map(o => (o.nombre || "").trim().toLowerCase()));
+          const sinCrono = (obrasVV || []).filter(ov => ov && ov.id && !yaTienen.has(ov.id) && !nombres.has((ov.nombre || "").trim().toLowerCase()));
+          if (!sinCrono.length) return null;
+          return (<div style={{ background: T.card, borderRadius: 13, padding: 14, marginBottom: 14, boxShadow: SHDsm, borderLeft: `4px solid ${BRASS}` }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 3 }}>Obras de V+V sin cronograma</div>
+            <div style={{ fontSize: 11, color: T.sub, marginBottom: 10, lineHeight: 1.5 }}>Estas obras ya están cargadas en la app V+V. Tocá una y se crea su cronograma con el modelo, sin retipear nada.</div>
+            {sinCrono.map(ov => (<div key={ov.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 0", borderTop: `1px solid ${T.border}` }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700 }}>{ov.nombre}</div>
+                <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{ov.estado ? `Estado: ${ov.estado}` : ""}{ov.avance != null ? ` · avance ${ov.avance}%` : ""}</div>
+              </div>
+              <Btn chico onClick={() => crearDesdeVV(ov)}>Crear cronograma</Btn>
+            </div>))}
+          </div>);
+        })()}
 
         {obras.length === 0 && !nueva && (
           <div style={{ background: T.card, borderRadius: 14, padding: 26, textAlign: "center", boxShadow: SHDsm }}>
