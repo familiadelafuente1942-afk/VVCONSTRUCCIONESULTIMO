@@ -15,6 +15,7 @@ export default defineConfig({
         finanzas: resolve(__dirname, 'finanzas.html'),
         muebles: resolve(__dirname, 'muebles.html'),
         cronograma: resolve(__dirname, 'cronograma.html'),
+        viajes: resolve(__dirname, 'viajes.html'),
       },
     },
   },
