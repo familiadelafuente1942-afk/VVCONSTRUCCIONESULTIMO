@@ -2533,6 +2533,28 @@ function BitacoraView({ db, cfg, onBack }) {
   const obras = db.obras || [];
   const bitacora = db.bitacora || [];
   const [obraId, setObraId] = useState(obras[0]?.id || "");
+  // Mismo mecanismo que en Avance: "visto" por obra, guardado aparte.
+  const [seenBitacora, setSeenBitacora] = useState(() => {
+    try {
+      const guardado = localStorage.getItem("vv_bitacora_seen");
+      if (guardado) return JSON.parse(guardado);
+      const base = {}; obras.forEach(o => { base[o.id] = Date.now(); });
+      try { localStorage.setItem("vv_bitacora_seen", JSON.stringify(base)); } catch { }
+      return base;
+    } catch { return {}; }
+  });
+  function bitacoraNuevas(oid) { return bitacora.filter(h => h.obra_id === oid && (h.ts || 0) > (seenBitacora[oid] || 0)).length; }
+  useEffect(() => {
+    if (!obraId) return;
+    const t = setTimeout(() => {
+      setSeenBitacora(prev => {
+        const next = { ...prev, [obraId]: Date.now() };
+        try { localStorage.setItem("vv_bitacora_seen", JSON.stringify(next)); } catch { }
+        return next;
+      });
+    }, 900);
+    return () => clearTimeout(t);
+  }, [obraId]);
   const [abrir, setAbrir] = useState(false);
   const [edit, setEdit] = useState(null); // hecho en edición
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
@@ -2657,7 +2679,7 @@ function BitacoraView({ db, cfg, onBack }) {
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
         <select value={obraId} onChange={e => { setObraId(e.target.value); limpiar(); }} style={{ ...inp, flex: 1 }}>
           <option value="">— Elegí una obra —</option>
-          {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+          {obras.map(o => { const n = bitacoraNuevas(o.id); return <option key={o.id} value={o.id}>{o.nombre}{n > 0 ? ` 🔴 ${n} nueva${n > 1 ? "s" : ""}` : ""}</option>; })}
         </select>
         {obraId && hechos.length > 0 && <button onClick={exportarPDF} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>PDF</button>}
       </div>
@@ -6224,6 +6246,32 @@ async function extraerCuadros(file, n = 6) {
 
 function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, docrecepcion = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  // "Visto" por obra, guardado aparte — cuántas fotos son nuevas desde la
+  // última vez que entraste a mirar esa obra puntual. Se guarda solo, sin
+  // tocar el resto del sistema de avisos.
+  const [seenAvance, setSeenAvance] = React.useState(() => {
+    try {
+      const guardado = localStorage.getItem("vv_avance_seen");
+      if (guardado) return JSON.parse(guardado);
+      // Primera vez que se activa esto: lo de HOY ya cuenta como "visto" —
+      // si no, todas las fotos viejas de cada obra saldrían como "nuevas".
+      const base = {}; obras.forEach(o => { base[o.id] = Date.now(); });
+      try { localStorage.setItem("vv_avance_seen", JSON.stringify(base)); } catch { }
+      return base;
+    } catch { return {}; }
+  });
+  function avanceNuevos(oid) { return ((avance || {})[oid] || []).filter(x => (x.ts || 0) > (seenAvance[oid] || 0)).length; }
+  React.useEffect(() => {
+    if (!obraId) return;
+    const t = setTimeout(() => {
+      setSeenAvance(prev => {
+        const next = { ...prev, [obraId]: Date.now() };
+        try { localStorage.setItem("vv_avance_seen", JSON.stringify(next)); } catch { }
+        return next;
+      });
+    }, 900);   // una pequeña demora, así cuenta como "lo miró de verdad" y no solo pasó por arriba
+    return () => clearTimeout(t);
+  }, [obraId]);
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
   const fileRef = React.useRef(null);
@@ -6669,7 +6717,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
       <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, margin: "6px 0 14px" }}>
         {obras.length === 0 && <option value="">No hay obras</option>}
-        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        {obras.map(o => { const n = avanceNuevos(o.id); return <option key={o.id} value={o.id}>{o.nombre}{n > 0 ? ` 🔴 ${n} foto${n > 1 ? "s" : ""} nueva${n > 1 ? "s" : ""}` : ""}</option>; })}
       </select>
       <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFoto} style={{ display: "none" }} />
       <input ref={videoRef} type="file" accept="video/*" multiple onChange={onVideo} style={{ display: "none" }} />
