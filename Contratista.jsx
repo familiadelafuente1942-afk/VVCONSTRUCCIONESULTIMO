@@ -677,7 +677,7 @@ export default function ContratistaApp() {
     (!fObra || p.obra_id === fObra) &&
     (!fTipo || (p.tipo || "material") === fTipo)
   );
-  const obrasConPedidos = obras.filter(o => listaTodos.some(p => p.obra_id === o.id));
+  const obrasConPedidos = obras;   // antes solo mostraba las que YA tenían algún pedido — dejaba obras nuevas invisibles en el filtro hasta que alguien ya les hubiera cargado uno
   // agrupar los pedidos por obra, para el registro general
   const grupos = [];
   lista.forEach(p => { let g = grupos.find(x => x.obra_id === p.obra_id); if (!g) { g = { obra_id: p.obra_id, nombre: obraNom(p.obra_id) || "Sin obra", pedidos: [] }; grupos.push(g); } g.pedidos.push(p); });
