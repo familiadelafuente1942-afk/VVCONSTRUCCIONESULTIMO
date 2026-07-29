@@ -546,6 +546,7 @@ export default function ContratistaApp() {
   const [matpedidos, setMatpedidos] = useState([]);
   const [vista, setVista] = useState("pedidos"); // "pedidos" | "recepcion" | "definiciones"
   const [fObra, setFObra] = useState("");   // filtro obra ("" = todas)
+  const [diagOpen, setDiagOpen] = useState(false);   // panel de diagnóstico temporal
   const [fTipo, setFTipo] = useState("");   // filtro tipo ("" = todos)
   const [fEstado, setFEstado] = useState(""); // "" | "pendiente" | "levantado"
   const [docrecepcion, setDocrecepcion] = useState([]);
@@ -578,11 +579,13 @@ export default function ContratistaApp() {
     let alive = true;
     async function pull() {
       try {
-        const [ro, rm, rp] = await Promise.all([storage.get("vv_obras"), storage.get("vv_matpedidos"), storage.get("vv_personal")]);
+        const [ro, rm, rp, rr] = await Promise.all([storage.get("vv_obras"), storage.get("vv_matpedidos"), storage.get("vv_personal"), storage.get("vv_obras_remap")]);
         if (!alive) return;
+        let remapObj = {};
+        try { if (rr?.value) remapObj = JSON.parse(rr.value) || {}; } catch { }
         if (ro?.value) { try { setObras(JSON.parse(ro.value).filter(o => { const n = (o.nombre || "").toLowerCase(); return !(n.includes("canning") && n.includes("815")); })); } catch { } }
         if (rp?.value) { try { setPersonal(JSON.parse(rp.value)); } catch { } }
-        if (rm?.value && Date.now() - lastWrite.current > 8000) { try { const mp = JSON.parse(rm.value); setMatpedidos(prev => JSON.stringify(mp) !== JSON.stringify(prev) ? mp : prev); } catch { } }
+        if (rm?.value && Date.now() - lastWrite.current > 8000) { try { let mp = JSON.parse(rm.value); if (Object.keys(remapObj).length) mp = mp.map(p => remapObj[p.obra_id] ? { ...p, obra_id: remapObj[p.obra_id] } : p); setMatpedidos(prev => JSON.stringify(mp) !== JSON.stringify(prev) ? mp : prev); } catch { } }
         try { const rd = await storage.get("vv_docrecepcion"); if (alive && rd?.value && Date.now() - lastWriteDoc.current > 8000) { const dd = JSON.parse(rd.value); setDocrecepcion(prev => JSON.stringify(dd) !== JSON.stringify(prev) ? dd : prev); } } catch { }
         try { const rf = await storage.get("vv_definiciones"); if (alive && rf?.value && Date.now() - lastWriteDef.current > 8000) { const df = JSON.parse(rf.value); setDefiniciones(prev => JSON.stringify(df) !== JSON.stringify(prev) ? df : prev); } } catch { }
       } catch { }
@@ -782,6 +785,22 @@ export default function ContratistaApp() {
           <div style={{ fontSize: 10, color: T.muted, marginTop: 6, lineHeight: 1.45 }}>Tocá una obra para filtrar. En ámbar, las que hace 7 días o más que no piden materiales.</div>
         </div>;
       })()}
+      {/* Diagnóstico: mientras estamos resolviendo el bug de obras que no
+          matchean con sus pedidos, esto muestra los datos crudos — así se
+          puede ver a simple vista qué id tiene cada obra, y a qué id
+          apunta cada pedido, sin adivinar. Se puede sacar después. */}
+      <div style={{ marginBottom: 14 }}>
+        <button onClick={() => setDiagOpen(v => !v)} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, cursor: "pointer", textDecoration: "underline", padding: 0 }}>{diagOpen ? "Ocultar diagnóstico" : "Ver diagnóstico (ids crudos)"}</button>
+        {diagOpen && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 11, marginTop: 8, fontSize: 10.5, fontFamily: "monospace" }}>
+          <div style={{ fontWeight: 800, marginBottom: 4, color: T.navy }}>OBRAS ({(obras || []).length}):</div>
+          {(obras || []).map(o => <div key={o.id} style={{ marginBottom: 2, color: T.text }}>{o.nombre} → <span style={{ color: T.sub }}>{o.id}</span></div>)}
+          <div style={{ fontWeight: 800, margin: "10px 0 4px", color: T.navy }}>PEDIDOS DE MATERIAL ({(matpedidos || []).length}):</div>
+          {(matpedidos || []).map(p => {
+            const obraMatch = (obras || []).find(o => o.id === p.obra_id);
+            return <div key={p.id} style={{ marginBottom: 2, color: obraMatch ? T.text : "#B91C1C" }}>{obraMatch ? obraMatch.nombre : "⚠ SIN OBRA (huérfano)"} → obra_id: <span style={{ color: T.sub }}>{p.obra_id || "(vacío)"}</span></div>;
+          })}
+        </div>}
+      </div>
       {listaTodos.length === 0 && <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Registro de pedidos (0)</div>}
       {listaTodos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Todavía no hay pedidos. Elegí arriba qué querés pedir.</div>}
       {listaTodos.length > 0 && lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 18px" }}>Ningún pedido con esos filtros.<br /><button onClick={() => { setFObra(""); setFTipo(""); }} style={{ marginTop: 8, background: "none", border: "none", color: T.accent, fontWeight: 700, fontSize: 12.5, cursor: "pointer", textDecoration: "underline" }}>Ver todos</button></div>}
