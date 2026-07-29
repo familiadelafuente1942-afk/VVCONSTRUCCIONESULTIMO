@@ -512,7 +512,7 @@ const DEFAULT_COLORS = { accent: "#1D4ED8", al: "#EFF6FF", bg: "#F1F5F9", card: 
 const DEFAULT_UBICACIONES = [{ id: "norte", code: "NORTE", name: "Zona Norte" }, { id: "sur", code: "SUR", name: "Zona Sur" }, { id: "oeste", code: "OESTE", name: "Zona Oeste" }, { id: "caba", code: "CABA", name: "Ciudad de Buenos Aires" }];
 
 const DEFAULT_TEXTOS = {
-    nav_ia: "IA", nav_inicio: "Inicio", nav_obras: "Obras", nav_personal: "Personal", nav_cargar: "Cargar", nav_mas: "Más", nav_privado: "Privado",
+    nav_ia: "IA", nav_inicio: "Inicio", nav_obras: "Obras", nav_personal: "Personal", nav_cargar: "Cargar", nav_mas: "Más", nav_privado: "Privado", nav_drone: "Drone IA",
     dash_titulo: "Panel operativo", dash_subtitulo: "V+V Construcciones",
     dash_proyectoes: "Proyectos", dash_obras_activas: "Obras activas", dash_alertas: "Alertas", dash_personal: "Personal",
     dash_obras_curso: "Obras en curso", dash_ver_todas: "Ver todas →", dash_acciones: "Acciones rápidas",
@@ -801,6 +801,7 @@ function LoginModal({ titulo, onSuccess, onClose }) {
 // ── NAVEGACIÓN ─────────────────────────────────────────────────────────
 const NAV_DEFS = [
     { id: "chat", tk: "nav_ia", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" /></svg> },
+    { id: "drone", tk: "nav_drone", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="10" width="6" height="4" rx="1" fill="currentColor" stroke="none" /><circle cx="4" cy="5" r="2.2" /><circle cx="20" cy="5" r="2.2" /><circle cx="4" cy="19" r="2.2" /><circle cx="20" cy="19" r="2.2" /><line x1="6" y1="6.5" x2="10" y2="10.5" /><line x1="18" y1="6.5" x2="14" y2="10.5" /><line x1="6" y1="17.5" x2="10" y2="13.5" /><line x1="18" y1="17.5" x2="14" y2="13.5" /></svg> },
     { id: "dashboard", tk: "nav_inicio", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M11.47 3.841a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.061l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 101.061 1.061l8.69-8.69z" /><path d="M12 5.432l8.159 8.159.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198l.091-.086L12 5.432z" /></svg> },
     { id: "obras", tk: "nav_obras", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.5 2.25a.75.75 0 000 1.5v16.5h-.75a.75.75 0 000 1.5h16.5a.75.75 0 000-1.5h-.75V3.75a.75.75 0 000-1.5h-15zM9 6a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm-.75 3.75A.75.75 0 019 9h1.5a.75.75 0 010 1.5H9a.75.75 0 01-.75-.75zM9 12a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm3.75-5.25A.75.75 0 0113.5 6H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 9a.75.75 0 000 1.5H15A.75.75 0 0015 9h-1.5zm-.75 3.75a.75.75 0 01.75-.75H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM9 19.5v-2.25a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75V19.5H9z" /></svg> },
     { id: "personal", tk: "nav_personal", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg> },
@@ -2004,11 +2005,13 @@ function MIcon({ id }){
 }
 
 const MAS_TILES = [
+  { id:"mensajes", label:"Mensajes" },
   { id:"personal", label:"Personal" },
   { id:"formularios", label:"Formularios" },
   { id:"documentacion", label:"Documentación" },
   { id:"informes", label:"Informes" },
   { id:"auditoria", label:"Auditoría de obra" },
+  { id:"drone", label:"🚁 Drone IA" },
   { id:"plantillas", label:"Plantillas de documentos" },
   { id:"internos", label:"Chat privado" },
   { id:"infsemanal", label:"Informe semanal de obra" },
@@ -3211,6 +3214,213 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
 }
 
 
+// ── Drone IA: misiones de vuelo, galería georreferenciada, comparación
+// antes/ahora, lectura asistida por IA (NO medición automática oficial),
+// informe PDF, e integración con Tareas. ─────────────────────────────
+function DroneIAView({ db, cfg, apiKey, onBack }) {
+  const { obras = [], dronevuelos = [], setDronevuelos, setTareas } = db;
+  const [tab, setTab] = useState("vuelos");
+  const [nuevo, setNuevo] = useState(null);
+  const [detalle, setDetalle] = useState(null);
+  const [fObra, setFObra] = useState("");
+  const [analizando, setAnalizando] = useState(false);
+  const [genPdf, setGenPdf] = useState(false);
+  const camRef = useRef(null), galRef = useRef(null);
+  const [compObra, setCompObra] = useState(obras[0]?.id || "");
+  const [compA, setCompA] = useState(null);
+  const [compB, setCompB] = useState(null);
+
+  function guardarVuelos(fn) { setDronevuelos(prev => fn(prev || [])); }
+  const obraNombre = (id) => obras.find(o => o.id === id)?.nombre || "—";
+
+  function crearVuelo() {
+    if (!nuevo?.obra_id) { alert("Elegí una obra."); return; }
+    const v = { id: uid(), obra_id: nuevo.obra_id, fecha: nuevo.fecha || hoyStr(), piloto: (nuevo.piloto || "").trim(), dronModelo: (nuevo.dronModelo || "").trim(), duracionMin: nuevo.duracionMin || "", notas: (nuevo.notas || "").trim(), ts: Date.now(), fotos: [], analisisIA: null, analisisFecha: "" };
+    guardarVuelos(p => [v, ...p]);
+    setNuevo(null);
+    setDetalle(v);
+  }
+  function borrarVuelo(id) {
+    if (!confirm("¿Eliminar este vuelo y sus fotos? No se puede deshacer.")) return;
+    guardarVuelos(p => p.filter(x => x.id !== id));
+    setDetalle(null);
+  }
+  async function agregarFotos(vueloId, files) {
+    const nuevas = await Promise.all(Array.from(files).map(async f => ({ id: uid(), url: await toDataUrl(f), lat: null, lon: null, ts: Date.now() })));
+    guardarVuelos(p => p.map(v => v.id === vueloId ? { ...v, fotos: [...(v.fotos || []), ...nuevas] } : v));
+    setDetalle(d => d && d.id === vueloId ? { ...d, fotos: [...(d.fotos || []), ...nuevas] } : d);
+  }
+  function marcarUbicacion(vueloId, fotoId) {
+    if (!navigator.geolocation) { alert("Este dispositivo no tiene GPS disponible."); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const upd = v => v.id === vueloId ? { ...v, fotos: (v.fotos || []).map(f => f.id === fotoId ? { ...f, lat: pos.coords.latitude, lon: pos.coords.longitude } : f) } : v;
+        guardarVuelos(p => p.map(upd));
+        setDetalle(d => d ? upd(d) : d);
+      },
+      () => alert("No pude obtener la ubicación — revisá los permisos de GPS del navegador."),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+  function borrarFoto(vueloId, fotoId) {
+    const upd = v => v.id === vueloId ? { ...v, fotos: (v.fotos || []).filter(f => f.id !== fotoId) } : v;
+    guardarVuelos(p => p.map(upd));
+    setDetalle(d => d ? upd(d) : d);
+  }
+
+  async function analizarVuelo(vuelo) {
+    if (!vuelo.fotos?.length) { alert("Agregá al menos una foto para analizar."); return; }
+    setAnalizando(true);
+    try {
+      const obra = obras.find(o => o.id === vuelo.obra_id);
+      const content = [];
+      vuelo.fotos.slice(-8).forEach(f => { try { content.push({ type: 'image', source: { type: 'base64', media_type: getMediaType(f.url), data: getBase64(f.url) } }); } catch { } });
+      content.push({ type: 'text', text: `Analizá estas ${Math.min(vuelo.fotos.length, 8)} fotos aéreas (de drone) de la obra "${obra?.nombre || ''}" (${obra?.sector || '—'}, avance registrado en el sistema: ${obra?.avance || 0}%), tomadas el ${vuelo.fecha}. Redactá una lectura en español rioplatense con: 1) qué se ve avanzado o distinto desde la vista aérea, 2) cualquier cosa puntual que convenga revisar en persona (sin afirmar que sea un problema, solo señalarlo), 3) una conclusión breve. Aclará al final que es una lectura orientativa de IA sobre fotos, no una medición oficial de avance.` });
+      const r = await callAI([{ role: 'user', content }], "Sos un asistente que ayuda a leer fotos aéreas de obra para V+V Construcciones. Das lecturas orientativas y siempre aclarás que hace falta confirmación humana antes de tomarlas como oficiales. Español rioplatense, tono técnico y directo.", apiKey, false);
+      guardarVuelos(p => p.map(v => v.id === vuelo.id ? { ...v, analisisIA: r, analisisFecha: hoyStr() } : v));
+      setDetalle(d => d && d.id === vuelo.id ? { ...d, analisisIA: r, analisisFecha: hoyStr() } : d);
+    } catch { alert("No pude generar la lectura de IA. Probá de nuevo."); }
+    setAnalizando(false);
+  }
+
+  function crearTareaDesde(vuelo) {
+    if (!vuelo.analisisIA) return;
+    setTareas(p => [...p, { id: uid(), obra_id: vuelo.obra_id, nombre: `Revisar — vuelo drone ${vuelo.fecha}`, detalle: vuelo.analisisIA.slice(0, 500), avance: 0 }]);
+    alert(`Tarea creada en "${obraNombre(vuelo.obra_id)}".`);
+  }
+
+  async function cargarJsPDFDrone() {
+    if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+    const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+    for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; } catch { } }
+    throw new Error("No se pudo cargar la librería PDF");
+  }
+  async function generarInformePDF(vuelo) {
+    setGenPdf(true);
+    try {
+      const jsPDF = await cargarJsPDFDrone();
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+      const M = 40; let y = M;
+      const nom = obraNombre(vuelo.obra_id);
+      const loadImg = async (url) => { const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 800, h: im.naturalHeight || 600 }); im.onerror = () => res({ w: 800, h: 600 }); im.src = url; }); let fmt = "JPEG"; try { fmt = url.substring(5, url.indexOf(";")).split("/")[1].toUpperCase(); if (fmt === "JPG") fmt = "JPEG"; } catch { } return { data: url, w: dim.w, h: dim.h, fmt }; };
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text((cfg?.empresa || "V+V Construcciones").toUpperCase(), W / 2, y, { align: "center" }); y += 15;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("INFORME DE VUELO DRONE", W / 2, y, { align: "center" }); y += 15;
+      doc.setFontSize(12); doc.setTextColor(15, 27, 45); doc.text(nom, W / 2, y, { align: "center" }); y += 13;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(91, 107, 127); doc.text(`Fecha: ${vuelo.fecha}   ·   Piloto: ${vuelo.piloto || "—"}   ·   Emitido: ${hoyStr()}`, W / 2, y, { align: "center" }); y += 12;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 20;
+      const block = (label, txt) => { if (!txt) return; ensure(24); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(27, 58, 91); doc.text(label, M, y); y += 12; doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(26, 36, 51); const lines = doc.splitTextToSize(String(txt), W - 2 * M); for (const ln of lines) { ensure(14); doc.text(ln, M, y); y += 13; } y += 6; };
+      block("DRON / DURACIÓN", `${vuelo.dronModelo || "—"}${vuelo.duracionMin ? ` · ${vuelo.duracionMin} min` : ""}`);
+      block("NOTAS DEL VUELO", vuelo.notas);
+      for (const f of (vuelo.fotos || [])) { try { const im = await loadImg(f.url); const maxW = W - 2 * M; let iw = maxW, ih = iw * im.h / im.w; if (ih > 300) { ih = 300; iw = ih * im.w / im.h; } const libre = H - M - y; if (ih + 8 > libre) { if (libre > 150) { ih = libre - 10; iw = ih * im.w / im.h; if (iw > maxW) { iw = maxW; ih = iw * im.h / im.w; } } else { doc.addPage(); y = M; } } doc.addImage(im.data, im.fmt, M + (maxW - iw) / 2, y, iw, ih); y += ih + 4; if (f.lat && f.lon) { doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(148, 163, 184); doc.text(`📍 ${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}`, M + (maxW - iw) / 2, y); y += 12; } else y += 6; } catch { } }
+      if (vuelo.analisisIA) { ensure(24); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(27, 58, 91); doc.text("LECTURA ORIENTATIVA DE IA (no es una medición oficial)", M, y); y += 12; doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(26, 36, 51); const lines = doc.splitTextToSize(vuelo.analisisIA, W - 2 * M); for (const ln of lines) { ensure(14); doc.text(ln, M, y); y += 13; } }
+      const blob = doc.output("blob");
+      const file = new File([blob], `Vuelo drone ${nom} ${vuelo.fecha}.pdf`, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: `Vuelo drone ${nom}` }); setGenPdf(false); return; } catch (e) { if (e && e.name === "AbortError") { setGenPdf(false); return; } } }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch { alert("No pude generar el PDF. Probá de nuevo."); }
+    setGenPdf(false);
+  }
+
+  const vuelosFiltrados = (dronevuelos || []).filter(v => !fObra || v.obra_id === fObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const fotosCompObra = (dronevuelos || []).filter(v => v.obra_id === compObra).flatMap(v => (v.fotos || []).map(f => ({ ...f, vueloFecha: v.fecha })));
+
+  // ── Detalle de un vuelo ──
+  if (detalle) {
+    const vuelo = (dronevuelos || []).find(v => v.id === detalle.id) || detalle;
+    return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
+      <PageHead eyebrow={obraNombre(vuelo.obra_id)} title={`Vuelo — ${vuelo.fecha}`} sub={`${vuelo.piloto ? "Piloto: " + vuelo.piloto : ""}${vuelo.dronModelo ? " · " + vuelo.dronModelo : ""}`} back onBack={() => setDetalle(null)} />
+      <div style={{ padding: "16px 20px" }}>
+        {vuelo.notas && <Card style={{ padding: 13, marginBottom: 14 }}><Lbl>Notas del vuelo</Lbl><div style={{ fontSize: 13, color: T.text }}>{vuelo.notas}</div></Card>}
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <Lbl>Fotos ({(vuelo.fotos || []).length})</Lbl>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => camRef.current?.click()} style={{ background: T.accentLight, border: "none", color: T.accent, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>📷 Cámara</button>
+            <button onClick={() => galRef.current?.click()} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🖼 Galería</button>
+          </div>
+        </div>
+        <input ref={camRef} type="file" accept="image/*" capture="environment" multiple onChange={e => { agregarFotos(vuelo.id, e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+        <input ref={galRef} type="file" accept="image/*" multiple onChange={e => { agregarFotos(vuelo.id, e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+
+        {(vuelo.fotos || []).length === 0 && <EmptyMsg>Todavía no hay fotos en este vuelo.</EmptyMsg>}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
+          {(vuelo.fotos || []).map(f => (<div key={f.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
+            <img src={f.url} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
+            <button onClick={() => borrarFoto(vuelo.id, f.id)} style={{ position: "absolute", top: 5, right: 5, background: "rgba(15,23,42,.6)", border: "none", color: "#fff", borderRadius: 14, width: 22, height: 22, fontSize: 12, cursor: "pointer" }}>✕</button>
+            {f.lat ? <div style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(15,23,42,.65)", color: "#fff", fontSize: 9, borderRadius: 6, padding: "2px 6px" }}>📍 {f.lat.toFixed(4)}, {f.lon.toFixed(4)}</div>
+              : <button onClick={() => marcarUbicacion(vuelo.id, f.id)} style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(255,255,255,.92)", border: "none", color: T.accent, fontSize: 9, fontWeight: 700, borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}>📍 Marcar ubicación</button>}
+          </div>))}
+        </div>
+
+        <PBtn full onClick={() => analizarVuelo(vuelo)} disabled={analizando} style={{ marginBottom: 10 }}>{analizando ? "Analizando…" : "✨ Analizar con IA (lectura orientativa)"}</PBtn>
+        {vuelo.analisisIA && <Card style={{ padding: 13, marginBottom: 14, background: T.accentLight }}>
+          <Lbl>Lectura de IA — {vuelo.analisisFecha} <span style={{ textTransform: "none", fontWeight: 500 }}>(orientativa, no es medición oficial)</span></Lbl>
+          <div style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{vuelo.analisisIA}</div>
+          <button onClick={() => crearTareaDesde(vuelo)} style={{ marginTop: 10, background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>+ Crear tarea desde esta lectura</button>
+        </Card>}
+
+        <PBtn full variant="ghost" onClick={() => generarInformePDF(vuelo)} disabled={genPdf} style={{ marginBottom: 10 }}>{genPdf ? "Generando…" : "📄 Generar informe PDF"}</PBtn>
+        <PBtn full variant="danger" onClick={() => borrarVuelo(vuelo.id)}>Eliminar vuelo</PBtn>
+      </div>
+    </div>);
+  }
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
+    <PageHead eyebrow="Relevamiento aéreo" title="🚁 Drone IA" sub="Misiones, historial, comparación y lectura asistida por IA" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+        <button onClick={() => setTab("vuelos")} style={{ flex: 1, background: tab === "vuelos" ? T.accent : T.card, color: tab === "vuelos" ? "#fff" : T.sub, border: `1px solid ${tab === "vuelos" ? T.accent : T.border}`, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Vuelos</button>
+        <button onClick={() => setTab("comparar")} style={{ flex: 1, background: tab === "comparar" ? T.accent : T.card, color: tab === "comparar" ? "#fff" : T.sub, border: `1px solid ${tab === "comparar" ? T.accent : T.border}`, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Comparar antes/ahora</button>
+      </div>
+
+      {tab === "vuelos" && <>
+        <PBtn full onClick={() => setNuevo({ obra_id: obras[0]?.id || "", fecha: hoyStr() })} style={{ marginBottom: 14 }}>+ Nuevo vuelo</PBtn>
+        {obras.length > 1 && <Sel value={fObra} onChange={e => setFObra(e.target.value)}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel>}
+        <div style={{ height: 12 }} />
+        {vuelosFiltrados.length === 0 && <EmptyMsg>Todavía no hay vuelos cargados. Tocá "+ Nuevo vuelo" para empezar.</EmptyMsg>}
+        {vuelosFiltrados.map(v => (<RowItem key={v.id} onClick={() => setDetalle(v)}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{obraNombre(v.obra_id)} — {v.fecha}</div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{v.piloto ? `Piloto: ${v.piloto}` : "Sin piloto cargado"} · {(v.fotos || []).length} foto{(v.fotos || []).length !== 1 ? "s" : ""}{v.analisisIA ? " · con lectura IA" : ""}</div>
+            </div>
+          </div>
+        </RowItem>))}
+      </>}
+
+      {tab === "comparar" && <>
+        <Field label="Obra"><Sel value={compObra} onChange={e => { setCompObra(e.target.value); setCompA(null); setCompB(null); }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        {fotosCompObra.length < 2 && <EmptyMsg>Hacen falta al menos 2 fotos cargadas en vuelos de esta obra para comparar.</EmptyMsg>}
+        {fotosCompObra.length >= 2 && <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+            {[["ANTES", compA, setCompA], ["AHORA", compB, setCompB]].map(([label, sel, setSel]) => (<div key={label}>
+              <Lbl>{label}</Lbl>
+              {sel ? <div style={{ position: "relative" }}><img src={sel.url} style={{ width: "100%", height: 150, objectFit: "cover", borderRadius: 10, border: `1px solid ${T.border}` }} /><div style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>{sel.vueloFecha}</div></div>
+                : <div style={{ height: 150, borderRadius: 10, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: T.muted }}>Elegí abajo</div>}
+            </div>))}
+          </div>
+          <Lbl>Tocá una foto para asignarla</Lbl>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6 }}>
+            {fotosCompObra.map(f => (<img key={f.id} src={f.url} onClick={() => (!compA ? setCompA(f) : setCompB(f))} style={{ width: "100%", height: 60, objectFit: "cover", borderRadius: 6, cursor: "pointer", border: `1px solid ${T.border}` }} />))}
+          </div>
+        </>}
+      </>}
+    </div>
+
+    {nuevo && <Sheet title="Nuevo vuelo" onClose={() => setNuevo(null)}>
+      <Field label="Obra"><Sel value={nuevo.obra_id} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      <Field label="Fecha"><TInput type="date" value={nuevo.fecha} onChange={e => setNuevo({ ...nuevo, fecha: e.target.value })} /></Field>
+      <Field label="Piloto"><TInput value={nuevo.piloto || ""} onChange={e => setNuevo({ ...nuevo, piloto: e.target.value })} placeholder="Quién voló" /></Field>
+      <Field label="Modelo de dron"><TInput value={nuevo.dronModelo || ""} onChange={e => setNuevo({ ...nuevo, dronModelo: e.target.value })} placeholder="Ej: DJI Mini 4 Pro" /></Field>
+      <Field label="Duración (minutos)"><TInput type="number" value={nuevo.duracionMin || ""} onChange={e => setNuevo({ ...nuevo, duracionMin: e.target.value })} /></Field>
+      <Field label="Notas"><TInput value={nuevo.notas || ""} onChange={e => setNuevo({ ...nuevo, notas: e.target.value })} placeholder="Condiciones, zona relevada, etc." /></Field>
+      <PBtn full onClick={crearVuelo}>Crear vuelo</PBtn>
+    </Sheet>}
+  </div>);
+}
+
 function MatPedidosView({ db, cfg, onBack }) {
   const { obras, matpedidos = [], setMatpedidos, personal = [] } = db;
   const [vista, setVista] = useState("pedidos"); // "pedidos" | "recepcion"
@@ -3686,7 +3896,7 @@ function PreviewStub({ titulo }) {
 }
 
 const NAV = [
-  { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" }, { id:"obras", label:"Obras" },
+  { id:"chat", label:"IA" }, { id:"drone", label:"Drone IA" }, { id:"dashboard", label:"Inicio" }, { id:"obras", label:"Obras" },
   { id:"personal", label:"Personal" }, { id:"cargar", label:"Cargar", fab:true }, { id:"mas", label:"Más" },
 ];
 
@@ -6909,8 +7119,8 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
   </div>);
 }
 const WEB_NAV = [
-  { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" },
-  { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" }, { id:"mensajes", label:"Mensajes" },
+  { id:"chat", label:"IA" }, { id:"drone", label:"Drone IA" }, { id:"dashboard", label:"Inicio" },
+  { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" },
   { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos enviados" }, { id:"auditoria", label:"Auditoría" },
     { id:"mas", label:"Más" },
 ];
@@ -6998,6 +7208,7 @@ function App() {
   const [formularios, setFormularios] = useStoredState("vv_formularios", []);
   const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
   const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
+  const [dronevuelos, setDronevuelos] = useStoredState("vv_drone", []);
   const [definiciones, setDefiniciones] = useStoredState("vv_definiciones", []);
   const [docrecepcion, setDocrecepcion] = useStoredState("vv_docrecepcion", []);
   const [bitacora, setBitacora] = useStoredState("vv_bitacora", []);
@@ -7049,7 +7260,7 @@ function App() {
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
-    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
+    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
     let alive = true;
     const pullAll = async () => {
       for (const [key, setter] of stores) {
@@ -7115,6 +7326,14 @@ function App() {
       await storage.set("vv_obras__ts", String(Date.now())).catch(() => { });
       await storage.set("vv_obras_del", JSON.stringify(tumbas)).catch(() => { });
       try { localStorage.setItem("vv_obras_del", JSON.stringify(tumbas)); } catch { }
+      // El mapa de "id viejo -> id que sobrevivió" queda guardado en la nube
+      // también — así Contratista, Cliente, y cualquier otra app pueden
+      // arreglar sus propios pedidos huérfanos, sin depender de que esta
+      // app (V+V) sea la primera que se abre.
+      let remapGuardado = {};
+      try { const rr = await storage.get("vv_obras_remap"); if (rr?.value) remapGuardado = JSON.parse(rr.value) || {}; } catch { }
+      remapGuardado = { ...remapGuardado, ...remap };
+      await storage.set("vv_obras_remap", JSON.stringify(remapGuardado)).catch(() => { });
       setObras(obrasLimpias);
 
       try {
@@ -7199,7 +7418,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
@@ -7222,6 +7441,7 @@ function App() {
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
+            {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="auditoria" && <AuditoriaView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="mensajes" && <MensajesVVView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="internos" && <InternosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
