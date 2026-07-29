@@ -797,7 +797,23 @@ export default function ContratistaApp() {
           <div style={{ fontWeight: 800, margin: "10px 0 4px", color: T.navy }}>PEDIDOS DE MATERIAL ({(matpedidos || []).length}):</div>
           {(matpedidos || []).map(p => {
             const obraMatch = (obras || []).find(o => o.id === p.obra_id);
-            return <div key={p.id} style={{ marginBottom: 2, color: obraMatch ? T.text : "#B91C1C" }}>{obraMatch ? obraMatch.nombre : "⚠ SIN OBRA (huérfano)"} → obra_id: <span style={{ color: T.sub }}>{p.obra_id || "(vacío)"}</span></div>;
+            if (obraMatch) return <div key={p.id} style={{ marginBottom: 2, color: T.text }}>{obraMatch.nombre} → obra_id: <span style={{ color: T.sub }}>{p.obra_id}</span></div>;
+            // Huérfano: se puede ver qué pidieron y reasignarlo a mano,
+            // tocando la obra correcta — no hay forma de adivinarlo solo.
+            return <div key={p.id} style={{ marginBottom: 8, padding: "6px 0", borderTop: `1px dashed ${T.border}` }}>
+              <div style={{ color: "#B91C1C", marginBottom: 2 }}>⚠ SIN OBRA (huérfano) → obra_id: {p.obra_id || "(vacío)"} — {p.fecha || ""}</div>
+              <div style={{ color: T.sub, marginBottom: 4 }}>Pidió: {(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).filter(Boolean).join(", ") || "(sin items)"}</div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {(obras || []).map(o => <button key={o.id} onClick={async () => {
+                  const nuevos = (matpedidos || []).map(x => x.id === p.id ? { ...x, obra_id: o.id, upd: Date.now() } : x);
+                  setMatpedidos(nuevos);
+                  lastWrite.current = Date.now();
+                  try { localStorage.setItem("vv_matpedidos", JSON.stringify(nuevos)); } catch { }
+                  await storage.set("vv_matpedidos", JSON.stringify(nuevos)).catch(() => { });
+                  alert(`Reasignado a ${o.nombre}.`);
+                }} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer" }}>→ {o.nombre}</button>)}
+              </div>
+            </div>;
           })}
         </div>}
       </div>
