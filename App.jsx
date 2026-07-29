@@ -358,6 +358,17 @@ const FORCE_CLOUD = (() => { try { return new URLSearchParams(window.location.se
 // Marca de última escritura local por clave (para no pisar un cambio recién hecho al sincronizar)
 const lastWrite = {};
 // Carga desde localStorage SINCRÓNICAMENTE (sin flash), persiste en ambos lados
+// Junta obras de dos fuentes (por id) sin duplicar y sin resucitar lo
+// borrado. Si el mismo id está en las dos, gana la de "prioridad"
+// (la que se acaba de tocar en ESTE dispositivo) — y se suma cualquier
+// obra que la nube tenga y acá no (la que cargó otro dispositivo).
+function fusionarObras(prioridad, otras, tumbas) {
+  const mapa = new Map();
+  (otras || []).forEach(o => { if (o?.id) mapa.set(o.id, o); });
+  (prioridad || []).forEach(o => { if (o?.id) mapa.set(o.id, o); });
+  Object.keys(tumbas || {}).forEach(id => mapa.delete(id));
+  return Array.from(mapa.values());
+}
 function useStoredState(key, defaultValue) {
     const [state, setState] = useState(() => {
         const local = storage.getLocal(key);
@@ -365,29 +376,37 @@ function useStoredState(key, defaultValue) {
         return defaultValue;
     });
     const [cloudSynced, setCloudSynced] = useState(false);
+    const esObras = key === "vv_obras";   // las obras se editan desde varios dispositivos: acá hace falta FUSIONAR, no "gana el más nuevo entero" (eso tapaba obras que otro cargó)
 
     // Al montar: sincronizar con Supabase una sola vez
     useEffect(() => {
         (async () => {
             try {
-                const r = await storage.get(key);
-                if (r?.value) {
-                    const cloudData = JSON.parse(r.value);
-                    if (FORCE_CLOUD) {
-                        // Forzar la versión de la nube (lo último cargado por cualquier dispositivo)
-                        setState(cloudData);
-                        try { localStorage.setItem(key, r.value); } catch { }
-                    } else {
-                        // Gana el MÁS RECIENTE, no el más grande.
-                        // (Antes ganaba el más grande: como borrar SIEMPRE achica los datos,
-                        //  la versión con la obra borrada se descartaba y la obra resucitaba.)
-                        const rTs = await storage.get(key + "__ts");
-                        const cloudTs = Number(rTs?.value || 0);
-                        let localTs = 0;
-                        try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
-                        if (cloudTs >= localTs) {
+                if (esObras) {
+                    const [rCloud, rDel] = await Promise.all([storage.get(key), storage.get(key + "_del")]);
+                    const cloud = rCloud?.value ? JSON.parse(rCloud.value) : [];
+                    const tumbas = rDel?.value ? JSON.parse(rDel.value) : {};
+                    setState(prevLocal => fusionarObras(prevLocal, cloud, tumbas));
+                } else {
+                    const r = await storage.get(key);
+                    if (r?.value) {
+                        const cloudData = JSON.parse(r.value);
+                        if (FORCE_CLOUD) {
+                            // Forzar la versión de la nube (lo último cargado por cualquier dispositivo)
                             setState(cloudData);
-                            try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+                            try { localStorage.setItem(key, r.value); } catch { }
+                        } else {
+                            // Gana el MÁS RECIENTE, no el más grande.
+                            // (Antes ganaba el más grande: como borrar SIEMPRE achica los datos,
+                            //  la versión con la obra borrada se descartaba y la obra resucitaba.)
+                            const rTs = await storage.get(key + "__ts");
+                            const cloudTs = Number(rTs?.value || 0);
+                            let localTs = 0;
+                            try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
+                            if (cloudTs >= localTs) {
+                                setState(cloudData);
+                                try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+                            }
                         }
                     }
                 }
@@ -398,6 +417,41 @@ function useStoredState(key, defaultValue) {
 
     // Persiste cada vez que cambia el estado
     const setAndPersist = useCallback((updater) => {
+        if (esObras) {
+            // Con obras: guardamos el cambio local al toque (para que se vea
+            // ya mismo), y en paralelo lo fusionamos con lo que haya en la
+            // nube — así lo que otro dispositivo cargó mientras tanto no
+            // se pierde. Lo que borraste acá queda con lápida, para que no
+            // "resucite" si otro dispositivo todavía tiene la copia vieja.
+            setState(prev => {
+                const next = typeof updater === 'function' ? updater(prev) : updater;
+                (async () => {
+                    try {
+                        const idsPrev = new Set((prev || []).map(o => o?.id));
+                        const idsNext = new Set((next || []).map(o => o?.id));
+                        const borrados = [...idsPrev].filter(id => id && !idsNext.has(id));
+                        let tumbas = {};
+                        try { const r = await storage.get(key + "_del"); if (r?.value) tumbas = JSON.parse(r.value) || {}; } catch { }
+                        if (borrados.length) {
+                            borrados.forEach(id => { tumbas[id] = Date.now(); });
+                            try { await storage.set(key + "_del", JSON.stringify(tumbas)); } catch { }
+                        }
+                        let cloud = [];
+                        try { const r = await storage.get(key); if (r?.value) cloud = JSON.parse(r.value) || []; } catch { }
+                        const fusionado = fusionarObras(next, cloud, tumbas);
+                        const json = JSON.stringify(fusionado);
+                        const ts = Date.now();
+                        lastWrite[key] = ts;
+                        try { localStorage.setItem(key, json); localStorage.setItem(key + "__ts", String(ts)); } catch { }
+                        storage.set(key, json).catch(() => { });
+                        storage.set(key + "__ts", String(ts)).catch(() => { });
+                        setState(fusionado);
+                    } catch { }
+                })();
+                return next;
+            });
+            return;
+        }
         setState(prev => {
             const next = typeof updater === 'function' ? updater(prev) : updater;
             // Guardar inmediatamente en ambos lados
@@ -2533,28 +2587,34 @@ function BitacoraView({ db, cfg, onBack }) {
   const obras = db.obras || [];
   const bitacora = db.bitacora || [];
   const [obraId, setObraId] = useState(obras[0]?.id || "");
-  // Mismo mecanismo que en Avance: "visto" por obra, guardado aparte.
+  // Mismo criterio que en Avance: comparar por identidad (qué entradas son
+  // nuevas), no por fecha — más seguro, no depende de qué fecha le hayan
+  // puesto a la entrada.
   const [seenBitacora, setSeenBitacora] = useState(() => {
     try {
-      const guardado = localStorage.getItem("vv_bitacora_seen");
+      const guardado = localStorage.getItem("vv_bitacora_seen_ids");
       if (guardado) return JSON.parse(guardado);
-      const base = {}; obras.forEach(o => { base[o.id] = Date.now(); });
-      try { localStorage.setItem("vv_bitacora_seen", JSON.stringify(base)); } catch { }
+      const base = {}; obras.forEach(o => { base[o.id] = bitacora.filter(h => h.obra_id === o.id).map(h => h.id); });
+      try { localStorage.setItem("vv_bitacora_seen_ids", JSON.stringify(base)); } catch { }
       return base;
     } catch { return {}; }
   });
-  function bitacoraNuevas(oid) { return bitacora.filter(h => h.obra_id === oid && (h.ts || 0) > (seenBitacora[oid] || 0)).length; }
+  function bitacoraNuevas(oid) {
+    const vistos = new Set(seenBitacora[oid] || []);
+    return bitacora.filter(h => h.obra_id === oid && h.id && !vistos.has(h.id)).length;
+  }
   useEffect(() => {
     if (!obraId) return;
     const t = setTimeout(() => {
       setSeenBitacora(prev => {
-        const next = { ...prev, [obraId]: Date.now() };
-        try { localStorage.setItem("vv_bitacora_seen", JSON.stringify(next)); } catch { }
+        const idsActuales = bitacora.filter(h => h.obra_id === obraId).map(h => h.id);
+        const next = { ...prev, [obraId]: idsActuales };
+        try { localStorage.setItem("vv_bitacora_seen_ids", JSON.stringify(next)); } catch { }
         return next;
       });
     }, 900);
     return () => clearTimeout(t);
-  }, [obraId]);
+  }, [obraId, bitacora]);
   const [abrir, setAbrir] = useState(false);
   const [edit, setEdit] = useState(null); // hecho en edición
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
@@ -6246,32 +6306,38 @@ async function extraerCuadros(file, n = 6) {
 
 function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, docrecepcion = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
-  // "Visto" por obra, guardado aparte — cuántas fotos son nuevas desde la
-  // última vez que entraste a mirar esa obra puntual. Se guarda solo, sin
-  // tocar el resto del sistema de avisos.
+  // "Visto" por obra, guardado aparte — pero comparando QUÉ FOTOS son
+  // nuevas (por su id), no por fecha. La fecha de cada foto es el día de
+  // obra que eligieron al cargarla, no el momento real en que se subió —
+  // si suben hoy una foto con fecha de ayer, comparar por fecha la
+  // dejaba afuera. Comparando por id, no importa qué fecha le pusieron.
   const [seenAvance, setSeenAvance] = React.useState(() => {
     try {
-      const guardado = localStorage.getItem("vv_avance_seen");
+      const guardado = localStorage.getItem("vv_avance_seen_ids");
       if (guardado) return JSON.parse(guardado);
-      // Primera vez que se activa esto: lo de HOY ya cuenta como "visto" —
-      // si no, todas las fotos viejas de cada obra saldrían como "nuevas".
-      const base = {}; obras.forEach(o => { base[o.id] = Date.now(); });
-      try { localStorage.setItem("vv_avance_seen", JSON.stringify(base)); } catch { }
+      // Primera vez que se activa esto: lo que ya existe hoy cuenta como
+      // visto — si no, todas las fotos viejas saldrían como "nuevas".
+      const base = {}; obras.forEach(o => { base[o.id] = ((avance || {})[o.id] || []).map(x => x.id); });
+      try { localStorage.setItem("vv_avance_seen_ids", JSON.stringify(base)); } catch { }
       return base;
     } catch { return {}; }
   });
-  function avanceNuevos(oid) { return ((avance || {})[oid] || []).filter(x => (x.ts || 0) > (seenAvance[oid] || 0)).length; }
+  function avanceNuevos(oid) {
+    const vistos = new Set(seenAvance[oid] || []);
+    return ((avance || {})[oid] || []).filter(x => x.id && !vistos.has(x.id)).length;
+  }
   React.useEffect(() => {
     if (!obraId) return;
     const t = setTimeout(() => {
       setSeenAvance(prev => {
-        const next = { ...prev, [obraId]: Date.now() };
-        try { localStorage.setItem("vv_avance_seen", JSON.stringify(next)); } catch { }
+        const idsActuales = ((avance || {})[obraId] || []).map(x => x.id);
+        const next = { ...prev, [obraId]: idsActuales };
+        try { localStorage.setItem("vv_avance_seen_ids", JSON.stringify(next)); } catch { }
         return next;
       });
     }, 900);   // una pequeña demora, así cuenta como "lo miró de verdad" y no solo pasó por arriba
     return () => clearTimeout(t);
-  }, [obraId]);
+  }, [obraId, avance]);   // también re-marca si vos mismo subís una foto mientras estás mirando esta obra
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
   const fileRef = React.useRef(null);
