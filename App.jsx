@@ -7084,6 +7084,70 @@ function App() {
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   const [iaDialogo, setIaDialogo] = useState([]);
   useEffect(() => { if (localStorage.getItem("purge_canning_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_v1", "1"); } catch { } } catch { } })(); }, []);
+  // Limpieza única: obras que quedaron DUPLICADAS con nombre igual pero id
+  // distinto (de antes de que la fusión entre dispositivos anduviera bien).
+  // Se deja UNA sola (la que tenga más datos cargados) y se reparan los
+  // pedidos de materiales / pedidos de información que apuntaban a la que
+  // se saca — así no quedan "huérfanos" sin obra asociada.
+  useEffect(() => { if (localStorage.getItem("purge_dup_obras_v2")) return; (async () => {
+    try {
+      const r = await storage.get("vv_obras");
+      if (!r?.value) { try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { } return; }
+      const arr = JSON.parse(r.value);
+      const grupos = new Map();
+      arr.forEach(o => { const k = (o.nombre || "").trim().toLowerCase(); if (!k) return; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(o); });
+      const remap = {}; const idsABorrar = new Set();
+      grupos.forEach(lista => {
+        if (lista.length < 2) return;
+        const orden = lista.slice().sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length);
+        const sobrevive = orden[0];
+        orden.slice(1).forEach(o => { remap[o.id] = sobrevive.id; idsABorrar.add(o.id); });
+      });
+      if (idsABorrar.size === 0) { try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { } return; }
+
+      const obrasLimpias = arr.filter(o => !idsABorrar.has(o.id));
+      let tumbas = {};
+      try { const rt = await storage.get("vv_obras_del"); if (rt?.value) tumbas = JSON.parse(rt.value) || {}; } catch { }
+      idsABorrar.forEach(id => { tumbas[id] = Date.now(); });
+      lastWrite["vv_obras"] = Date.now();
+      try { localStorage.setItem("vv_obras", JSON.stringify(obrasLimpias)); localStorage.setItem("vv_obras__ts", String(Date.now())); } catch { }
+      await storage.set("vv_obras", JSON.stringify(obrasLimpias)).catch(() => { });
+      await storage.set("vv_obras__ts", String(Date.now())).catch(() => { });
+      await storage.set("vv_obras_del", JSON.stringify(tumbas)).catch(() => { });
+      try { localStorage.setItem("vv_obras_del", JSON.stringify(tumbas)); } catch { }
+      setObras(obrasLimpias);
+
+      try {
+        const rm = await storage.get("vv_matpedidos");
+        if (rm?.value) {
+          const mats = JSON.parse(rm.value);
+          const arreglados = mats.map(p => remap[p.obra_id] ? { ...p, obra_id: remap[p.obra_id], upd: Date.now() } : p);
+          if (arreglados.some((p, i) => p.obra_id !== mats[i].obra_id)) {
+            lastWrite["vv_matpedidos"] = Date.now();
+            try { localStorage.setItem("vv_matpedidos", JSON.stringify(arreglados)); } catch { }
+            await storage.set("vv_matpedidos", JSON.stringify(arreglados)).catch(() => { });
+            setMatpedidos(arreglados);
+          }
+        }
+      } catch { }
+
+      try {
+        const rp = await storage.get("vv_pedidos");
+        if (rp?.value) {
+          const peds = JSON.parse(rp.value);
+          const arreglados = peds.map(p => remap[p.obra_id] ? { ...p, obra_id: remap[p.obra_id] } : p);
+          if (arreglados.some((p, i) => p.obra_id !== peds[i].obra_id)) {
+            lastWrite["vv_pedidos"] = Date.now();
+            try { localStorage.setItem("vv_pedidos", JSON.stringify(arreglados)); } catch { }
+            await storage.set("vv_pedidos", JSON.stringify(arreglados)).catch(() => { });
+            setPedidos(arreglados);
+          }
+        }
+      } catch { }
+
+      try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { }
+    } catch { }
+  })(); }, []);
   useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
