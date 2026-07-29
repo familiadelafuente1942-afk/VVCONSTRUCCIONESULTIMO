@@ -547,6 +547,56 @@ function getUbics(cfg) { return (cfg?.ubicaciones?.length ? cfg.ubicaciones : DE
 function getLabelUbic(cfg) { return cfg?.labelUbicacion || "Zona/Barrio"; }
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
+// Lee las coordenadas GPS que el drone graba DENTRO del archivo de la foto
+// (datos EXIF). Hay que leerlas del archivo original: cuando la app reduce
+// la foto para guardarla, esos datos se pierden. Así el punto en el mapa es
+// donde estaba el drone de verdad, no donde está el teléfono ahora.
+function leerGpsDeFoto(file) {
+  return new Promise((res) => {
+    const reader = new FileReader();
+    reader.onerror = () => res(null);
+    reader.onload = (e) => {
+      try {
+        const dv = new DataView(e.target.result);
+        if (dv.byteLength < 4 || dv.getUint16(0) !== 0xFFD8) { res(null); return; }   // no es JPEG
+        let off = 2, exifIni = -1;
+        while (off < dv.byteLength - 4) {
+          if (dv.getUint16(off) === 0xFFE1) { exifIni = off + 4; break; }             // segmento APP1 = donde vive el EXIF
+          if ((dv.getUint16(off) & 0xFF00) !== 0xFF00) break;
+          off += 2 + dv.getUint16(off + 2);
+        }
+        if (exifIni < 0) { res(null); return; }
+        let s = ""; for (let i = 0; i < 4; i++) s += String.fromCharCode(dv.getUint8(exifIni + i));
+        if (s !== "Exif") { res(null); return; }
+        const tiff = exifIni + 6;
+        const le = dv.getUint16(tiff) === 0x4949;                                     // orden de bytes del archivo
+        const u16 = (p) => dv.getUint16(p, le), u32 = (p) => dv.getUint32(p, le);
+        const ifd0 = tiff + u32(tiff + 4);
+        let gpsOff = 0;
+        const n0 = u16(ifd0);
+        for (let i = 0; i < n0; i++) { const ent = ifd0 + 2 + i * 12; if (u16(ent) === 0x8825) { gpsOff = u32(ent + 8); break; } }
+        if (!gpsOff) { res(null); return; }
+        const gps = tiff + gpsOff, ng = u16(gps);
+        let lat = null, lon = null, latRef = "N", lonRef = "E";
+        const gradosDe = (p) => {   // EXIF guarda grados/minutos/segundos como 3 fracciones
+          const val = [];
+          for (let k = 0; k < 3; k++) { const num = u32(p + k * 8), den = u32(p + k * 8 + 4); val.push(den ? num / den : 0); }
+          return val[0] + val[1] / 60 + val[2] / 3600;
+        };
+        for (let i = 0; i < ng; i++) {
+          const ent = gps + 2 + i * 12, tag = u16(ent), cnt = u32(ent + 4), valOff = u32(ent + 8);
+          if (tag === 0x0001) latRef = String.fromCharCode(dv.getUint8(ent + 8));
+          if (tag === 0x0003) lonRef = String.fromCharCode(dv.getUint8(ent + 8));
+          if (tag === 0x0002 && cnt === 3) lat = gradosDe(tiff + valOff);
+          if (tag === 0x0004 && cnt === 3) lon = gradosDe(tiff + valOff);
+        }
+        if (lat == null || lon == null) { res(null); return; }
+        res({ lat: latRef === "S" ? -lat : lat, lon: lonRef === "W" ? -lon : lon });
+      } catch { res(null); }
+    };
+    reader.readAsArrayBuffer(file.slice(0, 128 * 1024));   // el EXIF está al principio: no hace falta leer todo
+  });
+}
 function toDataUrl(f, maxW = 1400) {
     return new Promise((res, rej) => {
         const reader = new FileReader();
@@ -3246,15 +3296,23 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
     setDetalle(null);
   }
   async function agregarFotos(vueloId, files) {
-    const nuevas = await Promise.all(Array.from(files).map(async f => ({ id: uid(), url: await toDataUrl(f), lat: null, lon: null, ts: Date.now() })));
+    // Leo el GPS del archivo ORIGINAL (antes de reducirlo) y además guardo
+    // de dónde salió cada coordenada, para no mezclar la del drone con una
+    // marcada a mano desde el teléfono.
+    const nuevas = await Promise.all(Array.from(files).map(async f => {
+      const geo = await leerGpsDeFoto(f);
+      return { id: uid(), url: await toDataUrl(f), lat: geo?.lat ?? null, lon: geo?.lon ?? null, geoOrigen: geo ? "foto" : null, ts: Date.now() };
+    }));
     guardarVuelos(p => p.map(v => v.id === vueloId ? { ...v, fotos: [...(v.fotos || []), ...nuevas] } : v));
     setDetalle(d => d && d.id === vueloId ? { ...d, fotos: [...(d.fotos || []), ...nuevas] } : d);
+    const conGps = nuevas.filter(n => n.lat != null).length;
+    if (nuevas.length && !conGps) alert("Estas fotos no traen coordenadas guardadas adentro. Puede pasar si el drone tenía el GPS apagado, o si la foto ya venía recortada/reenviada (por ejemplo, mandada por WhatsApp, que borra esos datos). Podés marcar la ubicación a mano en cada una.");
   }
   function marcarUbicacion(vueloId, fotoId) {
     if (!navigator.geolocation) { alert("Este dispositivo no tiene GPS disponible."); return; }
     navigator.geolocation.getCurrentPosition(
       pos => {
-        const upd = v => v.id === vueloId ? { ...v, fotos: (v.fotos || []).map(f => f.id === fotoId ? { ...f, lat: pos.coords.latitude, lon: pos.coords.longitude } : f) } : v;
+        const upd = v => v.id === vueloId ? { ...v, fotos: (v.fotos || []).map(f => f.id === fotoId ? { ...f, lat: pos.coords.latitude, lon: pos.coords.longitude, geoOrigen: "telefono" } : f) } : v;
         guardarVuelos(p => p.map(upd));
         setDetalle(d => d ? upd(d) : d);
       },
@@ -3349,8 +3407,8 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
           {(vuelo.fotos || []).map(f => (<div key={f.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
             <img src={f.url} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
             <button onClick={() => borrarFoto(vuelo.id, f.id)} style={{ position: "absolute", top: 5, right: 5, background: "rgba(15,23,42,.6)", border: "none", color: "#fff", borderRadius: 14, width: 22, height: 22, fontSize: 12, cursor: "pointer" }}>✕</button>
-            {f.lat ? <div style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(15,23,42,.65)", color: "#fff", fontSize: 9, borderRadius: 6, padding: "2px 6px" }}>📍 {f.lat.toFixed(4)}, {f.lon.toFixed(4)}</div>
-              : <button onClick={() => marcarUbicacion(vuelo.id, f.id)} style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(255,255,255,.92)", border: "none", color: T.accent, fontSize: 9, fontWeight: 700, borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}>📍 Marcar ubicación</button>}
+            {f.lat ? <div style={{ position: "absolute", bottom: 5, left: 5, background: f.geoOrigen === "foto" ? "rgba(22,163,74,.88)" : "rgba(15,23,42,.65)", color: "#fff", fontSize: 9, borderRadius: 6, padding: "2px 6px" }}>📍 {f.lat.toFixed(4)}, {f.lon.toFixed(4)}{f.geoOrigen === "foto" ? " · del drone" : " · a mano"}</div>
+              : <button onClick={() => marcarUbicacion(vuelo.id, f.id)} style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(255,255,255,.92)", border: "none", color: T.accent, fontSize: 9, fontWeight: 700, borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}>📍 Marcar a mano</button>}
           </div>))}
         </div>
 
