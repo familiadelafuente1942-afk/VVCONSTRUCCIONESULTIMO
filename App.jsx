@@ -597,6 +597,46 @@ function leerGpsDeFoto(file) {
     reader.readAsArrayBuffer(file.slice(0, 128 * 1024));   // el EXIF está al principio: no hace falta leer todo
   });
 }
+// La IA NO puede mirar videos — solo imágenes. Así que de cada video
+// sacamos varios fotogramas repartidos a lo largo de la filmación, y ESOS
+// se analizan y se guardan. El video original queda en tu teléfono: pesa
+// demasiado para guardarlo acá adentro (uno de drone son cientos de MB).
+function extraerFotogramas(file, cantidad = 6) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    v.preload = "metadata"; v.muted = true; v.playsInline = true; v.src = url;
+    const limpiar = () => { try { URL.revokeObjectURL(url); } catch { } };
+    v.onerror = () => { limpiar(); rej(new Error("No pude leer este video. Puede estar en un formato que el navegador no abre.")); };
+    v.onloadedmetadata = async () => {
+      const dur = v.duration;
+      if (!dur || !isFinite(dur) || dur <= 0) { limpiar(); rej(new Error("No pude leer la duración del video.")); return; }
+      const c = document.createElement("canvas");
+      const maxW = 1200, ratio = v.videoWidth > maxW ? maxW / v.videoWidth : 1;
+      c.width = Math.round((v.videoWidth || 1200) * ratio);
+      c.height = Math.round((v.videoHeight || 675) * ratio);
+      const ctx = c.getContext("2d");
+      const salida = [];
+      for (let i = 0; i < cantidad; i++) {
+        const t = (dur * (i + 0.5)) / cantidad;
+        try {
+          await new Promise((ok) => {
+            let listo = false;
+            const onSeek = () => { if (listo) return; listo = true; v.removeEventListener("seeked", onSeek); ok(); };
+            v.addEventListener("seeked", onSeek);
+            v.currentTime = t;
+            setTimeout(onSeek, 4000);   // si el navegador no avisa, seguimos igual
+          });
+          ctx.drawImage(v, 0, 0, c.width, c.height);
+          salida.push({ url: c.toDataURL("image/jpeg", 0.75), segundo: Math.round(t) });
+        } catch { }
+      }
+      limpiar();
+      if (!salida.length) { rej(new Error("No pude sacar ningún fotograma de este video.")); return; }
+      res(salida);
+    };
+  });
+}
 function toDataUrl(f, maxW = 1400) {
     return new Promise((res, rej) => {
         const reader = new FileReader();
@@ -3275,7 +3315,8 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
   const [fObra, setFObra] = useState("");
   const [analizando, setAnalizando] = useState(false);
   const [genPdf, setGenPdf] = useState(false);
-  const camRef = useRef(null), galRef = useRef(null);
+  const [procesandoVideo, setProcesandoVideo] = useState(false);
+  const camRef = useRef(null), galRef = useRef(null), vidRef = useRef(null);
   const [compObra, setCompObra] = useState(obras[0]?.id || "");
   const [compA, setCompA] = useState(null);
   const [compB, setCompB] = useState(null);
@@ -3308,6 +3349,25 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
     const conGps = nuevas.filter(n => n.lat != null).length;
     if (nuevas.length && !conGps) alert("Estas fotos no traen coordenadas guardadas adentro. Puede pasar si el drone tenía el GPS apagado, o si la foto ya venía recortada/reenviada (por ejemplo, mandada por WhatsApp, que borra esos datos). Podés marcar la ubicación a mano en cada una.");
   }
+  async function agregarVideo(vueloId, files) {
+    const archivos = Array.from(files);
+    if (!archivos.length) return;
+    setProcesandoVideo(true);
+    try {
+      let total = 0;
+      for (const f of archivos) {
+        const frames = await extraerFotogramas(f, 6);
+        const nuevas = frames.map(fr => ({ id: uid(), url: fr.url, lat: null, lon: null, geoOrigen: null, deVideo: f.name || "video", segundo: fr.segundo, ts: Date.now() }));
+        total += nuevas.length;
+        guardarVuelos(p => p.map(v => v.id === vueloId ? { ...v, fotos: [...(v.fotos || []), ...nuevas] } : v));
+        setDetalle(d => d && d.id === vueloId ? { ...d, fotos: [...(d.fotos || []), ...nuevas] } : d);
+      }
+      alert(`Saqué ${total} fotogramas del video y quedaron cargados acá, listos para analizar. El video original NO se guarda en la app (pesa demasiado) — tenelo aparte en el teléfono si lo necesitás.`);
+    } catch (e) {
+      alert(e?.message || "No pude procesar el video.");
+    }
+    setProcesandoVideo(false);
+  }
   function marcarUbicacion(vueloId, fotoId) {
     if (!navigator.geolocation) { alert("Este dispositivo no tiene GPS disponible."); return; }
     navigator.geolocation.getCurrentPosition(
@@ -3332,8 +3392,10 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
     try {
       const obra = obras.find(o => o.id === vuelo.obra_id);
       const content = [];
-      vuelo.fotos.slice(-8).forEach(f => { try { content.push({ type: 'image', source: { type: 'base64', media_type: getMediaType(f.url), data: getBase64(f.url) } }); } catch { } });
-      content.push({ type: 'text', text: `Analizá estas ${Math.min(vuelo.fotos.length, 8)} fotos aéreas (de drone) de la obra "${obra?.nombre || ''}" (${obra?.sector || '—'}, avance registrado en el sistema: ${obra?.avance || 0}%), tomadas el ${vuelo.fecha}. Redactá una lectura en español rioplatense con: 1) qué se ve avanzado o distinto desde la vista aérea, 2) cualquier cosa puntual que convenga revisar en persona (sin afirmar que sea un problema, solo señalarlo), 3) una conclusión breve. Aclará al final que es una lectura orientativa de IA sobre fotos, no una medición oficial de avance.` });
+      const usadas = vuelo.fotos.slice(-8);
+      const deVideo = usadas.filter(f => f.deVideo).length;
+      usadas.forEach(f => { try { content.push({ type: 'image', source: { type: 'base64', media_type: getMediaType(f.url), data: getBase64(f.url) } }); } catch { } });
+      content.push({ type: 'text', text: `Analizá estas ${usadas.length} imágenes aéreas (de drone) de la obra "${obra?.nombre || ''}" (${obra?.sector || '—'}, avance registrado en el sistema: ${obra?.avance || 0}%), tomadas el ${vuelo.fecha}.${deVideo ? ` ATENCIÓN: ${deVideo} de estas imágenes son fotogramas sacados de un video del mismo vuelo, en distintos momentos — o sea que pueden mostrar el mismo sector desde ángulos o alturas diferentes, no necesariamente lugares distintos. Tenelo en cuenta para no contar dos veces lo mismo.` : ""} Redactá una lectura en español rioplatense con: 1) qué se ve avanzado o distinto desde la vista aérea, 2) cualquier cosa puntual que convenga revisar en persona (sin afirmar que sea un problema, solo señalarlo), 3) una conclusión breve. Aclará al final que es una lectura orientativa de IA sobre imágenes, no una medición oficial de avance.` });
       const r = await callAI([{ role: 'user', content }], "Sos un asistente que ayuda a leer fotos aéreas de obra para V+V Construcciones. Das lecturas orientativas y siempre aclarás que hace falta confirmación humana antes de tomarlas como oficiales. Español rioplatense, tono técnico y directo.", apiKey, false);
       guardarVuelos(p => p.map(v => v.id === vuelo.id ? { ...v, analisisIA: r, analisisFecha: hoyStr() } : v));
       setDetalle(d => d && d.id === vuelo.id ? { ...d, analisisIA: r, analisisFecha: hoyStr() } : d);
@@ -3397,15 +3459,19 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={() => camRef.current?.click()} style={{ background: T.accentLight, border: "none", color: T.accent, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>📷 Cámara</button>
             <button onClick={() => galRef.current?.click()} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🖼 Galería</button>
+            <button onClick={() => vidRef.current?.click()} disabled={procesandoVideo} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", opacity: procesandoVideo ? 0.6 : 1 }}>{procesandoVideo ? "Procesando…" : "🎬 Video"}</button>
           </div>
         </div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8, lineHeight: 1.45 }}>De un video saco 6 fotogramas repartidos y los cargo como fotos — la IA no puede mirar video, pero sí esos cuadros. El video en sí no se guarda acá.</div>
         <input ref={camRef} type="file" accept="image/*" capture="environment" multiple onChange={e => { agregarFotos(vuelo.id, e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
         <input ref={galRef} type="file" accept="image/*" multiple onChange={e => { agregarFotos(vuelo.id, e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+        <input ref={vidRef} type="file" accept="video/*" multiple onChange={e => { agregarVideo(vuelo.id, e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
 
         {(vuelo.fotos || []).length === 0 && <EmptyMsg>Todavía no hay fotos en este vuelo.</EmptyMsg>}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
           {(vuelo.fotos || []).map(f => (<div key={f.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
             <img src={f.url} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
+            {f.deVideo && <div style={{ position: "absolute", top: 5, left: 5, background: "rgba(124,58,237,.88)", color: "#fff", fontSize: 8.5, fontWeight: 700, borderRadius: 5, padding: "2px 5px" }}>🎬 video · {f.segundo}s</div>}
             <button onClick={() => borrarFoto(vuelo.id, f.id)} style={{ position: "absolute", top: 5, right: 5, background: "rgba(15,23,42,.6)", border: "none", color: "#fff", borderRadius: 14, width: 22, height: 22, fontSize: 12, cursor: "pointer" }}>✕</button>
             {f.lat ? <div style={{ position: "absolute", bottom: 5, left: 5, background: f.geoOrigen === "foto" ? "rgba(22,163,74,.88)" : "rgba(15,23,42,.65)", color: "#fff", fontSize: 9, borderRadius: 6, padding: "2px 6px" }}>📍 {f.lat.toFixed(4)}, {f.lon.toFixed(4)}{f.geoOrigen === "foto" ? " · del drone" : " · a mano"}</div>
               : <button onClick={() => marcarUbicacion(vuelo.id, f.id)} style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(255,255,255,.92)", border: "none", color: T.accent, fontSize: 9, fontWeight: 700, borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}>📍 Marcar a mano</button>}
