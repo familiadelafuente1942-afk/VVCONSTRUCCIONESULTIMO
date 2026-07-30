@@ -47,15 +47,11 @@ function Ico({ n, s = 18, c = "currentColor", st = 1.7 }) {
 }
 
 const SECCIONES = [
-  { id: "novedades", label: "Novedades", icon: "bell" },
   { id: "renders", label: "Renders", icon: "camera" },
   { id: "fotos", label: "Fotos de avance", icon: "camera" },
   { id: "cronograma", label: "Cronograma", icon: "calendar" },
   { id: "informes", label: "Informes", icon: "doc" },
-  { id: "actas", label: "Actas", icon: "clip" },
-  { id: "checklist", label: "Checklist", icon: "checkmark" },
   { id: "planos", label: "Planos", icon: "plans" },
-  { id: "mensajes", label: "Mensajes", icon: "chat" },
 ];
 
 // ─── Pantalla de entrada: código + nombre, como el perfil de Mis Viajes ───
@@ -226,12 +222,32 @@ function SeccionCronograma({ obra, tareas, onBack }) {
     </div>
   </div>);
 }
-function SeccionInformes({ obra, onBack }) {
+function SeccionInformes({ obra, certif, onBack }) {
+  // Lo mismo que ve Belfast en su pantalla de Informes: los certificados
+  // semanales de avance, más los informes cargados a la obra.
+  const certs = ((certif || {})[obra.id] || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
   const items = (obra.informes || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return (<div>
     <SubHead titulo="Informes" onBack={onBack} />
     <div style={{ padding: 18 }}>
-      {items.length === 0 && <EmptyMsg>Todavía no hay informes cargados.</EmptyMsg>}
+      {certs.length === 0 && items.length === 0 && <EmptyMsg>Todavía no hay informes cargados para esta obra.</EmptyMsg>}
+
+      {certs.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 9 }}>Certificados semanales de avance</div>}
+      {certs.map(c => (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.brass, marginBottom: 5 }}>Semana {fFecha(c.desde)} al {fFecha(c.hasta)}</div>
+        {c.desarrollo && <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 8 }}>{c.desarrollo}</div>}
+        {[["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
+          <div key={lbl} style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 9.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 2 }}>{lbl}</div>
+            <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{txt}</div>
+          </div>) : null)}
+        {(c.av || []).some(a => (a.fotos || []).length || a.fotoUrl) && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginTop: 10 }}>
+          {(c.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])).map((u, i) => (
+            <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>))}
+        </div>}
+      </div>))}
+
+      {items.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 9px" }}>Otros informes</div>}
       {items.map((it, i) => (<div key={it.id || i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
         <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 4 }}>{it.titulo || `Informe del ${fFecha(it.fecha)}`}</div>
         <div style={{ fontSize: 11, color: T.muted, marginBottom: 6 }}>{fFecha(it.fecha)}</div>
@@ -312,15 +328,11 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
     return () => clearInterval(t);
   }, [fotos.length]);
 
-  if (seccion === "novedades") return <SeccionNovedades obra={obra} certif={certif} onBack={() => setSeccion(null)} />;
   if (seccion === "renders") return <SeccionRenders obra={obra} renders={renders} onBack={() => setSeccion(null)} />;
   if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} />;
   if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} />;
-  if (seccion === "informes") return <SeccionInformes obra={obra} onBack={() => setSeccion(null)} />;
-  if (seccion === "actas") return <SeccionActas obra={obra} auditoria={auditoria} onBack={() => setSeccion(null)} />;
-  if (seccion === "checklist") return <SeccionChecklist obra={obra} formularios={formularios} onBack={() => setSeccion(null)} />;
+  if (seccion === "informes") return <SeccionInformes obra={obra} certif={certif} onBack={() => setSeccion(null)} />;
   if (seccion === "planos") return <SeccionPlanos obra={obra} onBack={() => setSeccion(null)} />;
-  if (seccion === "mensajes") return <SeccionMensajes onBack={() => setSeccion(null)} />;
 
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
     <div style={{ position: "relative", height: "calc(280px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", boxSizing: "border-box", background: T.navy, overflow: "hidden" }}>
