@@ -49,6 +49,7 @@ function Ico({ n, s = 18, c = "currentColor", st = 1.7 }) {
 const SECCIONES = [
   { id: "novedades", label: "Novedades", icon: "bell" },
   { id: "renders", label: "Renders", icon: "camera" },
+  { id: "fotos", label: "Fotos de avance", icon: "camera" },
   { id: "cronograma", label: "Cronograma", icon: "calendar" },
   { id: "informes", label: "Informes", icon: "doc" },
   { id: "actas", label: "Actas", icon: "clip" },
@@ -132,15 +133,49 @@ function SeccionNovedades({ obra, onBack }) {
     </div>
   </div>);
 }
+// Un render es una IMAGEN cargada entre los planos de la obra. Los planos
+// técnicos (pdf, dwg) no son renders y no van acá.
+const EXT_IMAGEN = ["jpg", "jpeg", "png", "webp", "avif", "heic"];
+function esRender(p) {
+  const ext = String(p.tipo || (p.nombre || "").split(".").pop() || "").toLowerCase();
+  if (/render/i.test(p.nombre || "")) return true;
+  return EXT_IMAGEN.includes(ext);
+}
+function rendersDe(obra) { return (obra.planos || []).filter(esRender); }
+
 function SeccionRenders({ obra, onBack }) {
-  const fotos = obra.fotos || [];
+  const renders = rendersDe(obra);
   return (<div>
-    <SubHead titulo="Renders y fotos" onBack={onBack} />
+    <SubHead titulo="Renders" onBack={onBack} />
     <div style={{ padding: 18 }}>
-      {fotos.length === 0 && <EmptyMsg>Todavía no hay imágenes cargadas.</EmptyMsg>}
+      {renders.length === 0 && <EmptyMsg>Todavía no hay renders cargados para esta obra.</EmptyMsg>}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        {fotos.map((f, i) => <a key={f.id || i} href={f.url} target="_blank" rel="noreferrer" style={{ display: "block", aspectRatio: "1", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={f.url} alt={f.nombre || ""} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /></a>)}
+        {renders.map((f, i) => <a key={f.id || i} href={f.url} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
+          <img src={f.url} alt={f.nombre || ""} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
+        </a>)}
       </div>
+    </div>
+  </div>);
+}
+
+// Las fotos son las del AVANCE DE OBRA (lo que se va viendo en el tiempo),
+// no los renders. Vienen agrupadas por fecha.
+function SeccionFotos({ obra, avance, onBack }) {
+  const historial = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const conFotos = historial.map(h => ({ ...h, fotos: (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []) })).filter(h => h.fotos.length);
+  return (<div>
+    <SubHead titulo="Fotos de avance" onBack={onBack} />
+    <div style={{ padding: 18 }}>
+      {conFotos.length === 0 && <EmptyMsg>Todavía no hay fotos de avance cargadas.</EmptyMsg>}
+      {conFotos.map((h, i) => (<div key={h.id || i} style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.brass, marginBottom: 7 }}>{fFecha(h.fecha) || h.fecha}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {h.fotos.map((u, j) => <a key={j} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
+            <img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
+          </a>)}
+        </div>
+        {h.descripcion && <div style={{ fontSize: 12.5, color: T.sub, marginTop: 7, lineHeight: 1.5 }}>{h.descripcion}</div>}
+      </div>))}
     </div>
   </div>);
 }
@@ -241,10 +276,11 @@ function SeccionMensajes({ onBack }) {
 }
 
 // ─── Panel principal ───
-function Panel({ obra, nombreCliente, tareas, auditoria, formularios }) {
+function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance }) {
   const [seccion, setSeccion] = useState(null);
   const [idx, setIdx] = useState(0);
-  const fotos = obra.fotos || [];
+  // En el banner van los RENDERS (cómo va a quedar), no las fotos de obra.
+  const fotos = rendersDe(obra);
   useEffect(() => {
     if (fotos.length < 2) return;
     const t = setInterval(() => setIdx(i => (i + 1) % fotos.length), 3800);
@@ -253,6 +289,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios }) {
 
   if (seccion === "novedades") return <SeccionNovedades obra={obra} onBack={() => setSeccion(null)} />;
   if (seccion === "renders") return <SeccionRenders obra={obra} onBack={() => setSeccion(null)} />;
+  if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} />;
   if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} />;
   if (seccion === "informes") return <SeccionInformes obra={obra} onBack={() => setSeccion(null)} />;
   if (seccion === "actas") return <SeccionActas obra={obra} auditoria={auditoria} onBack={() => setSeccion(null)} />;
@@ -288,12 +325,12 @@ export default function ClientePropietarioApp() {
   const [estado, setEstado] = useState("cargando"); // cargando | entrada | panel | error
   const [obra, setObra] = useState(null);
   const [nombreCliente, setNombreCliente] = useState("");
-  const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [] });
+  const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {} });
 
   async function cargarObra(codigo, nombre) {
     try {
-      const [ro, rt, ra, rf] = await Promise.all([
-        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"),
+      const [ro, rt, ra, rf, rav] = await Promise.all([
+        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"),
       ]);
       const obras = ro?.value ? JSON.parse(ro.value) : [];
       const encontrada = obras.find(o => (o.codigoCliente || "").toUpperCase() === codigo.toUpperCase());
@@ -304,6 +341,7 @@ export default function ClientePropietarioApp() {
         tareas: rt?.value ? JSON.parse(rt.value) : [],
         auditoria: ra?.value ? JSON.parse(ra.value) : [],
         formularios: rf?.value ? JSON.parse(rf.value) : [],
+        avance: rav?.value ? JSON.parse(rav.value) : {},
       });
       setEstado("panel");
     } catch { setEstado("entrada"); }
@@ -317,5 +355,5 @@ export default function ClientePropietarioApp() {
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
   if (estado === "entrada") return <Entrada onEntrar={cargarObra} />;
-  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} />;
+  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} />;
 }
