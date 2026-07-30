@@ -227,8 +227,7 @@ function SeccionInformes({ obra, certif, avance, onBack }) {
   // Lo mismo que ve Belfast en su pantalla de Informes: certificados
   // semanales, informes de avance, y los informes cargados a la obra.
   const certs = ((certif || {})[obra.id] || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
-  // Solo los que tienen el informe armado (el PDF con logos que emite V+V).
-  const avs = ((avance || {})[obra.id] || []).filter(a => a.html).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const avs = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const items = (obra.informes || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   if (doc) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(10px + env(safe-area-inset-top)) 12px 10px" }}>
@@ -268,14 +267,14 @@ function SeccionInformes({ obra, certif, avance, onBack }) {
       </div>))}
 
       {avs.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 9px" }}>Informes de avance</div>}
-      {avs.map(a => (
-        <button key={a.id} onClick={() => setDoc({ html: a.html, titulo: `Informe de avance ${a.fecha}` })} style={{ width: "100%", textAlign: "left", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 14, marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
-            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Informe de avance</div>
-          </div>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.brass, flexShrink: 0 }}>Ver informe →</div>
-        </button>))}
+      {avs.map(a => { const fs = (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : []); return (
+        <div key={a.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 3 }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
+          {a.descripcion && <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{a.descripcion}</div>}
+          {fs.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginTop: 9 }}>
+            {fs.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>)}
+          </div>}
+        </div>); })}
 
       {items.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 9px" }}>Otros informes</div>}
       {items.map((it, i) => (<div key={it.id || i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
