@@ -3643,13 +3643,22 @@ function GrabarReunion({ db, cfg, apiKey, onBack }) {
     setPaso("armando");
     try {
       const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
-      const sys = `Sos un asistente que arma minutas de reunión de obra para V+V Construcciones, a partir de una transcripción de voz (puede tener errores de dictado, cortes, muletillas). Español rioplatense. Devolvé SOLO la minuta, con esta estructura fija, sin agregar nada que no se haya dicho:
+      const sys = `Recibís la transcripción de voz de una reunión grabada. Puede tener errores de dictado, cortes, muletillas, o gente hablando encima. Tu trabajo es UNO SOLO: pasarla en limpio y ordenarla, armando un texto con hilo lógico y fácil de leer.
+
+REGLAS INNEGOCIABLES:
+- NUNCA comentes, juzgues ni aclares de qué trata la conversación. No digas si es de obra o no, si es relevante, si es informal, ni si te parece adecuada. No opines sobre el contenido.
+- NUNCA te niegues ni pidas más contexto. Sea cual sea el tema, escribí lo que se escuchó.
+- No agregues advertencias, disclaimers, ni notas del tipo "esta conversación no parece de trabajo". Nada de eso.
+- Escribí SOLO lo que se dijo, ordenado y con sentido. No inventes nada que no esté en la transcripción.
+- Si se distingue quién habla, marcalo. Si no, escribilo de corrido pero ordenado por temas, respetando el orden en que se hablaron.
+- Español rioplatense, claro y natural.
+
+FORMATO: empezá siempre con este encabezado exacto:
 MINUTA DE REUNIÓN
-Obra: ${obraNombre || "—"} · Fecha: ${fFechaLarga(fecha)} · Tema: ${titulo}
-TEMAS TRATADOS (numerados, un renglón por tema)
-ACUERDOS / DECISIONES (numerados)
-PENDIENTES (numerados, con quién queda a cargo si se dijo)
-Si algo de la transcripción no se entiende bien, usá tu criterio para interpretarlo sin inventar información nueva.`;
+${obraNombre ? `Obra: ${obraNombre} · ` : ""}Fecha: ${fFechaLarga(fecha)} · Tema: ${titulo}
+
+Después el desarrollo de lo hablado, ordenado y legible.
+Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISIONES" y/o "PENDIENTES" (numerados). Si no hubo acuerdos ni pendientes, no pongas esas secciones — no las fuerces.`;
       const resp = await callAI([{ role: "user", content: `Transcripción de la reunión:\n\n${texto}` }], sys, apiKey, false);
       setMinutaTexto(resp || "");
       const registro = { id: uid(), titulo: titulo.trim(), fecha, obra_id: obraId || null, transcripcion: texto, minutaTexto: resp || "", ts: Date.now() };
@@ -3690,7 +3699,12 @@ Si algo de la transcripción no se entiende bien, usá tu criterio para interpre
       doc.text(`${fFechaLarga(fecha)}${obraNombre ? "   ·   Obra: " + obraNombre : ""}`, W / 2, y, { align: "center" }); y += 14;
       doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 22;
       doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51);
-      const cuerpo = minutaTexto.replace(/^MINUTA DE REUNI[OÓ]N\s*\n?/i, "").replace(new RegExp(`^Obra:.*${fFechaLarga(fecha).slice(0, 4)}.*\\n?`, "i"), "").trim();
+      const cuerpo = minutaTexto.split("\n").filter((ln, i) => {
+        const t = ln.trim();
+        if (i < 3 && /^MINUTA DE REUNI[OÓ]N$/i.test(t)) return false;
+        if (i < 3 && /^(Obra|Fecha|Tema)\s*:/i.test(t)) return false;
+        return true;
+      }).join("\n").trim();
       const lineas = doc.splitTextToSize(cuerpo || minutaTexto, W - 2 * M);
       for (const ln of lineas) {
         const esTitulo = /^(TEMAS TRATADOS|ACUERDOS|PENDIENTES)/i.test(ln.trim());
@@ -4198,7 +4212,7 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <input value={cfg.apiKey||""} onChange={e=>setCfg(p=>({...p,apiKey:e.target.value}))} placeholder="sk-ant-..." style={{ width:"100%", background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", fontSize:13, color:T.text }} />
       <div style={{ marginTop:20 }}><Eyebrow>Actualizaciones</Eyebrow></div>
       <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"13px 14px" }}>
-        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-navcel</b></div>
+        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-minlibre</b></div>
         <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Trae la última versión y todo lo último cargado (fotos, archivos, pedidos y cambios de cualquier dispositivo). Limpia la caché.</div>
         <button onClick={()=>{ try{ if(window.caches) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))); }catch(e){} location.replace(location.pathname+"?sync="+Date.now()); }} style={{ width:"100%", background:T.accent, color:"#fff", border:"none", borderRadius:T.rsm, padding:"12px", fontSize:13.5, fontWeight:700, cursor:"pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -7547,7 +7561,7 @@ function WebFooter({ cfg }) {
   return (<div style={{ background:T.navy, color:"rgba(255,255,255,.55)", flexShrink:0, borderTop:`2px solid ${BRASS}` }}>
     <div style={{ maxWidth:1180, margin:"0 auto", padding:"11px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, fontSize:11 }}>
       <span style={{ fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,.8)" }}>V+V CONSTRUCCIONES</span>
-      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-navcel</span>
+      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-minlibre</span>
     </div>
   </div>);
 }
