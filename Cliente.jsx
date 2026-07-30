@@ -2569,7 +2569,7 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-propinf</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-infav</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -3175,7 +3175,8 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
     </div>}
   </div>);
 }
-function InformesScreen({ T, obras, formularios = [], certif = {} }) {
+function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {} }) {
+  const [avAbierto, setAvAbierto] = React.useState(null);
   const [certAbierto, setCertAbierto] = React.useState(null);
   const [filtro, setFiltro] = useState("");
   const [open, setOpen] = useState(null);
@@ -3188,6 +3189,10 @@ function InformesScreen({ T, obras, formularios = [], certif = {} }) {
   const certsTodos = obras.flatMap(o => ((certif || {})[o.id] || []).map(c => ({ ...c, _obra: o.nombre, _obraId: o.id })))
     .filter(c => !filtro || c._obraId === filtro)
     .sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
+  // Informes de avance: cada carga de fotos con su lectura de la IA.
+  const avTodos = obras.flatMap(o => ((avance || {})[o.id] || []).map(a => ({ ...a, _obra: o.nombre, _obraId: o.id })))
+    .filter(a => !filtro || a._obraId === filtro)
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
 
       {/* Certificados semanales emitidos por V+V — sólo lectura */}
@@ -3216,6 +3221,27 @@ function InformesScreen({ T, obras, formularios = [], certif = {} }) {
             </div>}
           </div>}
         </div>))}
+      </div>}
+
+      {/* Informes de avance — cada carga de fotos con su lectura */}
+      {avTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Informes de avance</div>
+        {avTodos.map(a => { const fs = (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : []); return (
+          <div key={a.id} onClick={() => setAvAbierto(avAbierto?.id === a.id ? null : a)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
+                <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{a._obra}{fs.length ? ` · ${fs.length} foto${fs.length > 1 ? "s" : ""}` : ""}</div>
+              </div>
+              <div style={{ fontSize: 12, color: T.muted, flexShrink: 0 }}>{avAbierto?.id === a.id ? "▲" : "▼"}</div>
+            </div>
+            {avAbierto?.id === a.id && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
+              {a.descripcion && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: fs.length ? 9 : 0 }}>{a.descripcion}</div>}
+              {fs.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>
+                {fs.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>)}
+              </div>}
+            </div>}
+          </div>); })}
       </div>}
     <div style={{ padding: "16px 20px" }}>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Obra</label>
@@ -4137,7 +4163,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-propinf</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-infav</span>
     </div>
   </div>);
 }
@@ -4392,7 +4418,7 @@ function ClienteApp() {
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
-          {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} />}
+          {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} avance={avance} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
