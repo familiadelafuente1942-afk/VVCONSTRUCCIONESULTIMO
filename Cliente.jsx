@@ -2569,7 +2569,7 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-obraarriba</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-docpro</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -3177,6 +3177,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
 }
 function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {} }) {
   const [avAbierto, setAvAbierto] = React.useState(null);
+  const [docAbierto, setDocAbierto] = React.useState(null);   // el informe armado, con logos
   const [certAbierto, setCertAbierto] = React.useState(null);
   const [filtro, setFiltro] = useState("");
   const [open, setOpen] = useState(null);
@@ -3193,6 +3194,15 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {} }
   const avTodos = obras.flatMap(o => ((avance || {})[o.id] || []).map(a => ({ ...a, _obra: o.nombre, _obraId: o.id })))
     .filter(a => !filtro || a._obraId === filtro)
     .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  if (docAbierto) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(10px + env(safe-area-inset-top)) 12px 10px" }}>
+      <button onClick={() => setDocAbierto(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>← Volver</button>
+      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{docAbierto.titulo}</span>
+      <button onClick={() => { const f = document.getElementById("doc-cliente"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Imprimir / PDF</button>
+    </div>
+    <iframe id="doc-cliente" srcDoc={docAbierto.html} title={docAbierto.titulo} style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+  </div>);
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
 
       {/* La obra se elige PRIMERO: filtra los certificados, los avances y los informes de abajo. */}
@@ -3204,13 +3214,15 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {} }
       {/* Certificados semanales emitidos por V+V — sólo lectura */}
       {certsTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Certificados semanales de avance</div>
-        {certsTodos.map(c => (<div key={c.id} onClick={() => setCertAbierto(certAbierto?.id === c.id ? null : c)} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+        {certsTodos.map(c => (<div key={c.id} onClick={() => c.html ? setDocAbierto({ html: c.html, titulo: `Certificado ${fFechaCorta(c.desde)} al ${fFechaCorta(c.hasta)}` }) : setCertAbierto(certAbierto?.id === c.id ? null : c)} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{c._obra} · {(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
-            <div style={{ fontSize: 12, color: T.muted, flexShrink: 0 }}>{certAbierto?.id === c.id ? "▲" : "▼"}</div>
+            {c.html
+              ? <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>
+              : <div style={{ fontSize: 12, color: T.muted, flexShrink: 0 }}>{certAbierto?.id === c.id ? "▲" : "▼"}</div>}
           </div>
           {certAbierto?.id === c.id && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
             {[["Desarrollo", c.desarrollo], ["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
@@ -4167,7 +4179,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-obraarriba</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-docpro</span>
     </div>
   </div>);
 }

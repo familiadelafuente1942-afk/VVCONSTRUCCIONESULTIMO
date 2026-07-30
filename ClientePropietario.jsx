@@ -223,18 +223,36 @@ function SeccionCronograma({ obra, tareas, onBack }) {
   </div>);
 }
 function SeccionInformes({ obra, certif, avance, onBack }) {
+  const [doc, setDoc] = useState(null);   // el informe armado, con logos
   // Lo mismo que ve Belfast en su pantalla de Informes: certificados
   // semanales, informes de avance, y los informes cargados a la obra.
   const certs = ((certif || {})[obra.id] || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
   const avs = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const items = (obra.informes || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  if (doc) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(10px + env(safe-area-inset-top)) 12px 10px" }}>
+      <button onClick={() => setDoc(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>← Volver</button>
+      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.titulo}</span>
+      <button onClick={() => { const f = document.getElementById("doc-prop"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: T.brass, border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Imprimir / PDF</button>
+    </div>
+    <iframe id="doc-prop" srcDoc={doc.html} title={doc.titulo} style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+  </div>);
+
   return (<div>
     <SubHead titulo="Informes" onBack={onBack} />
     <div style={{ padding: 18 }}>
       {certs.length === 0 && avs.length === 0 && items.length === 0 && <EmptyMsg>Todavía no hay informes cargados para esta obra.</EmptyMsg>}
 
       {certs.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 9 }}>Certificados semanales de avance</div>}
-      {certs.map(c => (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
+      {certs.map(c => c.html ? (
+        <button key={c.id} onClick={() => setDoc({ html: c.html, titulo: `Certificado ${fFecha(c.desde)} al ${fFecha(c.hasta)}` })} style={{ width: "100%", textAlign: "left", background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Semana {fFecha(c.desde)} al {fFecha(c.hasta)}</div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Emitido {c.emitido}</div>
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.brass, flexShrink: 0 }}>Ver informe →</div>
+        </button>
+      ) : (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.brass, marginBottom: 5 }}>Semana {fFecha(c.desde)} al {fFecha(c.hasta)}</div>
         {c.desarrollo && <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 8 }}>{c.desarrollo}</div>}
         {[["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (

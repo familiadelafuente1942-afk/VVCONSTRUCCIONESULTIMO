@@ -4343,7 +4343,7 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <input value={cfg.apiKey||""} onChange={e=>setCfg(p=>({...p,apiKey:e.target.value}))} placeholder="sk-ant-..." style={{ width:"100%", background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", fontSize:13, color:T.text }} />
       <div style={{ marginTop:20 }}><Eyebrow>Actualizaciones</Eyebrow></div>
       <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"13px 14px" }}>
-        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-obraarriba</b></div>
+        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-docpro</b></div>
         <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Trae la última versión y todo lo último cargado (fotos, archivos, pedidos y cambios de cualquier dispositivo). Limpia la caché.</div>
         <button onClick={()=>{ try{ if(window.caches) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))); }catch(e){} location.replace(location.pathname+"?sync="+Date.now()); }} style={{ width:"100%", background:T.accent, color:"#fff", border:"none", borderRadius:T.rsm, padding:"12px", fontSize:13.5, fontWeight:700, cursor:"pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -7160,7 +7160,10 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       const limpieza = cortar(/LIMPIEZA Y SEGURIDAD:\s*([\s\S]*?)(?:ALERTAS:|$)/i);
       const alertas = cortar(/ALERTAS:\s*([\s\S]*)$/i);
       const data = { desde: semDesde, hasta: semHasta, desarrollo, recepciones, limpieza, alertas, av, bt, recepEstado, emitido: hoyStr() };
-      const rec = { ...data, id: uid() + Date.now(), ts: Date.now() };
+      // Guardo el documento ya armado (el mismo que se imprime, con logos y
+      // formato) para que Belfast y el propietario vean EXACTAMENTE eso.
+      let htmlDoc = ""; try { htmlDoc = buildPdfSemanal(data); } catch { }
+      const rec = { ...data, html: htmlDoc, id: uid() + Date.now(), ts: Date.now() };
       if (setCertif) setCertif(prev => { const p = prev || {}; const otros = (p[obraId] || []).filter(x => !(x.desde === rec.desde && x.hasta === rec.hasta)); return { ...p, [obraId]: [rec, ...otros] }; });
       setSemData(data); setPdfEntries(av); setPdfHtml(buildPdfSemanal(data));
       setStatus("");
@@ -7550,7 +7553,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fmtDMY(c.desde)} al {fmtDMY(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
-            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); setPdfHtml(buildPdfSemanal(c)); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); const h = buildPdfSemanal(c); setPdfHtml(h); if (!c.html && setCertif) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(x => x.id === c.id ? { ...x, html: h } : x) })); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
             <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
           </div>
         ))}
@@ -7692,7 +7695,7 @@ function WebFooter({ cfg }) {
   return (<div style={{ background:T.navy, color:"rgba(255,255,255,.55)", flexShrink:0, borderTop:`2px solid ${BRASS}` }}>
     <div style={{ maxWidth:1180, margin:"0 auto", padding:"11px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, fontSize:11 }}>
       <span style={{ fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,.8)" }}>V+V CONSTRUCCIONES</span>
-      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-obraarriba</span>
+      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-docpro</span>
     </div>
   </div>);
 }
