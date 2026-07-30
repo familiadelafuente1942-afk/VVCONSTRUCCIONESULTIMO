@@ -123,12 +123,28 @@ function SubHead({ titulo, onBack }) {
 function EmptyMsg({ children }) { return <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 20px", lineHeight: 1.6 }}>{children}</div>; }
 
 // ─── Secciones (todas de solo lectura) ───
-function SeccionNovedades({ obra, onBack }) {
+function SeccionNovedades({ obra, certif, onBack }) {
+  // Las novedades son los certificados semanales de avance (lo mismo que ve
+  // Belfast en su pantalla de Informes), más los informes cargados a la obra.
+  const certs = ((certif || {})[obra.id] || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
   const items = (obra.informes || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return (<div>
     <SubHead titulo="Novedades" onBack={onBack} />
     <div style={{ padding: 18 }}>
-      {items.length === 0 && <EmptyMsg>Todavía no hay novedades cargadas para esta obra.</EmptyMsg>}
+      {certs.length === 0 && items.length === 0 && <EmptyMsg>Todavía no hay novedades cargadas para esta obra.</EmptyMsg>}
+      {certs.map(c => (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.brass, marginBottom: 5 }}>Semana {fFecha(c.desde)} al {fFecha(c.hasta)}</div>
+        {c.desarrollo && <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 8 }}>{c.desarrollo}</div>}
+        {[["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
+          <div key={lbl} style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 9.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 2 }}>{lbl}</div>
+            <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{txt}</div>
+          </div>) : null)}
+        {(c.av || []).some(a => (a.fotos || []).length || a.fotoUrl) && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginTop: 10 }}>
+          {(c.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])).map((u, i) => (
+            <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>))}
+        </div>}
+      </div>))}
       {items.map((it, i) => (<div key={it.id || i} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.brass, marginBottom: 5 }}>{fFecha(it.fecha) || ""}</div>
         <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{it.texto || it.titulo || "Informe cargado."}</div>
@@ -285,7 +301,7 @@ function SeccionMensajes({ onBack }) {
 }
 
 // ─── Panel principal ───
-function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders }) {
+function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif }) {
   const [seccion, setSeccion] = useState(null);
   const [idx, setIdx] = useState(0);
   // En el banner van los RENDERS (cómo va a quedar), no las fotos de obra.
@@ -296,7 +312,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
     return () => clearInterval(t);
   }, [fotos.length]);
 
-  if (seccion === "novedades") return <SeccionNovedades obra={obra} onBack={() => setSeccion(null)} />;
+  if (seccion === "novedades") return <SeccionNovedades obra={obra} certif={certif} onBack={() => setSeccion(null)} />;
   if (seccion === "renders") return <SeccionRenders obra={obra} renders={renders} onBack={() => setSeccion(null)} />;
   if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} />;
   if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} />;
@@ -334,12 +350,12 @@ export default function ClientePropietarioApp() {
   const [estado, setEstado] = useState("cargando"); // cargando | entrada | panel | error
   const [obra, setObra] = useState(null);
   const [nombreCliente, setNombreCliente] = useState("");
-  const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {}, renders: {} });
+  const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {}, renders: {}, certif: {} });
 
   async function cargarObra(codigo, nombre) {
     try {
-      const [ro, rt, ra, rf, rav, rr] = await Promise.all([
-        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"), storage.get("vv_renders"),
+      const [ro, rt, ra, rf, rav, rr, rc] = await Promise.all([
+        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"), storage.get("vv_renders"), storage.get("vv_certif_sem"),
       ]);
       const obras = ro?.value ? JSON.parse(ro.value) : [];
       const encontrada = obras.find(o => (o.codigoCliente || "").toUpperCase() === codigo.toUpperCase());
@@ -352,6 +368,7 @@ export default function ClientePropietarioApp() {
         formularios: rf?.value ? JSON.parse(rf.value) : [],
         avance: rav?.value ? JSON.parse(rav.value) : {},
         renders: rr?.value ? JSON.parse(rr.value) : {},
+        certif: rc?.value ? JSON.parse(rc.value) : {},
       });
       setEstado("panel");
     } catch { setEstado("entrada"); }
@@ -365,5 +382,5 @@ export default function ClientePropietarioApp() {
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
   if (estado === "entrada") return <Entrada onEntrar={cargarObra} />;
-  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} />;
+  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} />;
 }
