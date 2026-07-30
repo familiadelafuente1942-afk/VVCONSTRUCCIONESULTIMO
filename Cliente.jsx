@@ -707,7 +707,10 @@ function useAvisos(clave, mapaIds) {
 // ═══ OBRAS (compartido: idéntico a V+V) — inline, sin archivo aparte ═══
 // ══════════════════════════════════════════════════════════════════
 // ─── Avance de obra (espejo de V+V) ───
-function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
+const fFechaCorta = (iso) => { if (!iso) return ""; const p = String(iso).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0].slice(2)}` : String(iso); };
+function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {} }) {
+  // Certificado semanal abierto (los emite V+V; acá se ven en modo lectura).
+  const [certAbierto, setCertAbierto] = React.useState(null);
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
@@ -870,6 +873,34 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
         {obras.length === 0 && <option value="">No hay obras</option>}
         {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
       </select>
+
+      {/* Certificados semanales emitidos por V+V — sólo lectura */}
+      {((certif || {})[obraId] || []).length > 0 && <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>Certificados semanales</div>
+        {((certif || {})[obraId] || []).map(c => (<div key={c.id} onClick={() => setCertAbierto(certAbierto?.id === c.id ? null : c)} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
+            </div>
+            <div style={{ fontSize: 12, color: T.muted, flexShrink: 0 }}>{certAbierto?.id === c.id ? "▲" : "▼"}</div>
+          </div>
+          {certAbierto?.id === c.id && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
+            {[["Desarrollo", c.desarrollo], ["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
+              <div key={lbl} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{lbl}</div>
+                <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{txt}</div>
+              </div>) : null)}
+            {(c.av || []).some(a => (a.fotos || []).length || a.fotoUrl) && <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Fotos de la semana</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>
+                {(c.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])).map((u, i) => (
+                  <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>))}
+              </div>
+            </div>}
+          </div>}
+        </div>))}
+      </div>}
       <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFoto} style={{ display: "none" }} />
       {pendientes.length === 0
         ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Preparando…" : "Elegir foto(s)"}</button>
@@ -1072,6 +1103,13 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
 
   // Manda el PDF ya guardado: abre el menú del teléfono para elegir
   // WhatsApp, Mail, o lo que sea. El PDF sigue guardado acá igual.
+  // Descarta la grabación que se acaba de hacer, sin tener que ir a
+  // buscarla a la lista de minutas anteriores.
+  function borrarEstaGrabacion() {
+    if (!confirm("¿Borrar esta grabación?\n\nSe borra el audio transcripto y la minuta. No se puede deshacer.")) return;
+    if (minutaId && setMinutas) setMinutas(p => (p || []).filter(x => x.id !== minutaId));
+    setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null);
+  }
   async function mandarPdf() {
     if (!pdfUrl) return;
     const nombreArchivo = `Minuta - ${titulo} - ${fecha}.pdf`;
@@ -1172,7 +1210,8 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
         <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginBottom: 10 }}>👁 Ver el PDF (queda guardado acá)</a>
         <PBtn T={T} full onClick={() => mandarPdf()} style={{ marginBottom: 10 }}>📤 Mandar por WhatsApp o Mail</PBtn>
       </>}
-      <button onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null); }} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Grabar otra reunión</button>
+      <button onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null); }} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>Grabar otra reunión</button>
+      <button onClick={borrarEstaGrabacion} style={{ width: "100%", background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🗑 Borrar esta grabación</button>
     </div>
   </div>);
 
@@ -1186,9 +1225,12 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
       <PBtn T={T} full onClick={empezar} disabled={!sttOk} style={{ marginTop: 8 }}>🔴 Empezar a grabar</PBtn>
       {minutas.length > 0 && <>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", margin: "22px 0 10px" }}>Minutas anteriores</div>
-        {minutas.slice(0, 15).map(m => (<div key={m.id} onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setMinutaId(m.id); setPdfUrl(m.pdfUrl || null); setPaso("lista"); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8, cursor: "pointer" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
-          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
+        {minutas.slice(0, 15).map(m => (<div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8 }}>
+          <div onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setMinutaId(m.id); setPdfUrl(m.pdfUrl || null); setPaso("lista"); }} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
+          </div>
+          <button onClick={() => { if (confirm(`¿Borrar "${m.titulo}"?\n\nSe borra la grabación y la minuta. No se puede deshacer.`)) setMinutas(p => (p || []).filter(x => x.id !== m.id)); }} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", padding: 6, flexShrink: 0, fontSize: 15 }}>🗑</button>
         </div>))}
       </>}
     </div>
@@ -2438,11 +2480,39 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje, vaciar
 }
 
 // ── PANTALLA: AJUSTES ────────────────────────────────────────────────
-function AjustesScreen({ T, cfg, setCfg, obras = [], setObras }) {
+function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, setRenders }) {
   const logoRef = useRef(null);
   async function setLogo(f) { const d = await fileToDataUrl(f, 600); const url = await uploadArchivo(d, "logos", "cliente_logo"); setCfg(p => ({ ...p, logo: url })); }
   // Le pone (o le cambia) el código de acceso a una obra. Ese código es el
   // que se le pasa al dueño para que entre a ver SU obra, y nada más.
+  // ── Renders del panel del propietario ─────────────────────────────
+  // Se suben acá como imágenes y son las que rotan en el banner y las que
+  // se ven en la sección "Renders" de la app del dueño.
+  const [obraRender, setObraRender] = useState(obras[0]?.id || "");
+  const [subiendoR, setSubiendoR] = useState(false);
+  const renderRef = useRef(null);
+  const rendersDeObra = (renders || {})[obraRender] || [];
+  async function subirRenders(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !obraRender) { if (e.target) e.target.value = ""; return; }
+    setSubiendoR(true);
+    const nuevos = [];
+    for (const f of files) {
+      try {
+        const data = await fileToDataUrl(f, 1600);
+        const url = await uploadArchivo(data, `renders/${obraRender}`, `${Date.now()}_${(f.name || "render").replace(/\W+/g, "_")}`);
+        nuevos.push({ id: uid(), nombre: f.name || "Render", url: url || data, ts: Date.now() });
+      } catch { }
+    }
+    if (nuevos.length && setRenders) setRenders(p => ({ ...(p || {}), [obraRender]: [...((p || {})[obraRender] || []), ...nuevos] }));
+    setSubiendoR(false);
+    if (e.target) e.target.value = "";
+    if (!nuevos.length) alert("No pude subir las imágenes. Probá de nuevo.");
+  }
+  function borrarRender(id) {
+    if (!confirm("¿Sacar este render del panel del propietario?")) return;
+    if (setRenders) setRenders(p => ({ ...(p || {}), [obraRender]: ((p || {})[obraRender] || []).filter(r => r.id !== id) }));
+  }
   const setCodigo = (obraId, valor) => {
     const limpio = String(valor || "").toUpperCase().replace(/\s+/g, "");
     if (setObras) setObras(p => (p || []).map(o => o.id === obraId ? { ...o, codigoCliente: limpio } : o));
@@ -2470,6 +2540,29 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras }) {
             style={{ width: 140, flexShrink: 0, background: T.bg, border: `1px solid ${o.codigoCliente ? BRASS : T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 12.5, fontWeight: 800, color: o.codigoCliente ? T.accent : T.text, textAlign: "center", letterSpacing: "0.04em" }}
           />
         </div>))}
+      </Card>
+
+      <Eyebrow T={T}>Renders del panel del propietario</Eyebrow>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Subí acá las imágenes de renders. Son las que pasan como diapositivas en el banner y las que ve el dueño en la sección "Renders".</div>
+      <Card T={T} style={{ padding: 13, marginBottom: 22 }}>
+        {obras.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, textAlign: "center", padding: 8 }}>Todavía no hay obras cargadas.</div>
+          : <>
+            <select value={obraRender} onChange={e => setObraRender(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: T.text, marginBottom: 10, boxSizing: "border-box" }}>
+              {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+            </select>
+            <input ref={renderRef} type="file" accept="image/*" multiple onChange={subirRenders} style={{ display: "none" }} />
+            <button onClick={() => renderRef.current?.click()} disabled={subiendoR} style={{ width: "100%", background: T.accentLight, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 9, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: rendersDeObra.length ? 11 : 0 }}>{subiendoR ? "Subiendo…" : "＋ Importar renders (imágenes)"}</button>
+            {rendersDeObra.length > 0 && <>
+              <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 7 }}>{rendersDeObra.length} render{rendersDeObra.length > 1 ? "s" : ""} · pasan en este orden</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                {rendersDeObra.map(r => (<div key={r.id} style={{ position: "relative", borderRadius: 8, overflow: "hidden", border: `1px solid ${T.border}` }}>
+                  <img src={r.url} alt={r.nombre} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
+                  <button onClick={() => borrarRender(r.id)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(220,38,38,.92)", border: "none", color: "#fff", borderRadius: 6, width: 22, height: 22, fontSize: 12, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                </div>))}
+              </div>
+            </>}
+          </>}
       </Card>
 
       <Eyebrow T={T}>Identidad del cliente</Eyebrow>
@@ -2504,7 +2597,7 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras }) {
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-codigos</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-certif</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -4038,7 +4131,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-codigos</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-certif</span>
     </div>
   </div>);
 }
@@ -4070,6 +4163,8 @@ function ClienteApp() {
   // Las reuniones de Belfast son PRIVADAS: van en su propia clave, separada
   // de "vv_minutas" (las de V+V). Ninguna de las dos empresas ve las del otro.
   const [minutas, setMinutas] = useStored("cliente_minutas", []);
+  const [renders, setRenders] = useStored("vv_renders", {});
+  const [certifSem] = useStored("vv_certif_sem", {});
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
   const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length; // pedidos de V+V sin levantar
@@ -4286,7 +4381,7 @@ function ClienteApp() {
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
-          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} />}
+          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} />}
           {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
@@ -4297,7 +4392,7 @@ function ClienteApp() {
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
-          {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} />}
+          {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} renders={renders} setRenders={setRenders} />}
         </div>
       </div>
       <WebClientFooter T={T} cfg={cfg} />
