@@ -966,6 +966,13 @@ function Dashboard({ lics, obras, personal, alerts, setView, setDetailObraId, re
             </div>
         </div>}
         <div style={{ padding: web ? "18px 18px 14px" : "14px 18px" }}>
+            <button onClick={() => setView("minutas")} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, background: T.navy, border: `1px solid ${BRASS || T.accent}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16, cursor: "pointer" }}>
+                <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Ico n="mic" s={19} c="#fff" /></div>
+                <div style={{ flex: 1, textAlign: "left" }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>🎙 Grabar reunión</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginTop: 1 }}>Se arma la minuta sola y se manda por PDF</div>
+                </div>
+            </button>
             {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
                 <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1482,7 +1489,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
         {fotos.length === 0
             ? <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_fotos')}</div>
             : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: informe ? 14 : 0 }}>
-                {fotos.map(f => {
+                {fotos.slice().reverse().map(f => {
                     const sel = selFotos.includes(f.id);
                     return (<div key={f.id} onClick={() => modoSel && toggleSel(f.id)} style={{ borderRadius: T.rsm, overflow: "hidden", border: `2px solid ${sel ? "#10B981" : T.border}`, cursor: modoSel ? "pointer" : "default", position: "relative" }}>
                         {sel && <div style={{ position: "absolute", top: 5, right: 5, width: 20, height: 20, borderRadius: "50%", background: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</div>}
@@ -1826,6 +1833,10 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
                             <input value={detail.nombre || ''} onChange={e => upd(detail.id, { nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: T.text, padding: 0 }} />
                         </div>
+                        <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 8, border: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Código para el panel del propietario</div>
+                            <input value={detail.codigoCliente || ''} onChange={e => upd(detail.id, { codigoCliente: e.target.value.toUpperCase().replace(/\s+/g, "") })} placeholder="Ej: CASTORES475 — se lo das al dueño" style={{ width: "100%", background: "transparent", border: "none", fontSize: 13, fontWeight: 700, color: T.accent, padding: 0 }} />
+                        </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{getLabelUbic(cfg)}</div>
@@ -1929,6 +1940,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                 <Field label={t(cfg, 'obras_inicio')}><TInput value={form.inicio || ""} onChange={e => setForm(p => ({ ...p, inicio: e.target.value }))} placeholder="dd/mm/aa" /></Field>
                 <Field label={t(cfg, 'obras_cierre')}><TInput value={form.cierre || ""} onChange={e => setForm(p => ({ ...p, cierre: e.target.value }))} placeholder="dd/mm/aa" /></Field>
             </FieldRow>
+            <Field label="Código para el panel del propietario (opcional)"><TInput value={form.codigoCliente || ""} onChange={e => setForm(p => ({ ...p, codigoCliente: e.target.value.toUpperCase().replace(/\s+/g, "") }))} placeholder="Ej: CASTORES475" /></Field>
             <PBtn full onClick={add} disabled={!String(form.nombre || "").trim()}>{t(cfg, 'obras_nueva')}</PBtn>
         </Sheet>)}
     </div>);
@@ -2101,7 +2113,8 @@ const MAS_TILES = [
   { id:"documentacion", label:"Documentación" },
   { id:"informes", label:"Informes" },
   { id:"auditoria", label:"Auditoría de obra" },
-  { id:"drone", label:"🚁 Drone IA" },
+  { id:"drone", label:"🚁 Drone IA", go:"drone" },
+  { id:"minutas", label:"🎙 Grabar reunión", go:"minutas" },
   { id:"plantillas", label:"Plantillas de documentos" },
   { id:"internos", label:"Chat privado" },
   { id:"infsemanal", label:"Informe semanal de obra" },
@@ -3315,6 +3328,7 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
   const [fObra, setFObra] = useState("");
   const [analizando, setAnalizando] = useState(false);
   const [genPdf, setGenPdf] = useState(false);
+  const [reenviando, setReenviando] = useState(false);
   const [procesandoVideo, setProcesandoVideo] = useState(false);
   const camRef = useRef(null), galRef = useRef(null), vidRef = useRef(null);
   const [compObra, setCompObra] = useState(obras[0]?.id || "");
@@ -3435,12 +3449,33 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
       block("NOTAS DEL VUELO", vuelo.notas);
       for (const f of (vuelo.fotos || [])) { try { const im = await loadImg(f.url); const maxW = W - 2 * M; let iw = maxW, ih = iw * im.h / im.w; if (ih > 300) { ih = 300; iw = ih * im.w / im.h; } const libre = H - M - y; if (ih + 8 > libre) { if (libre > 150) { ih = libre - 10; iw = ih * im.w / im.h; if (iw > maxW) { iw = maxW; ih = iw * im.h / im.w; } } else { doc.addPage(); y = M; } } doc.addImage(im.data, im.fmt, M + (maxW - iw) / 2, y, iw, ih); y += ih + 4; if (f.lat && f.lon) { doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(148, 163, 184); doc.text(`📍 ${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}`, M + (maxW - iw) / 2, y); y += 12; } else y += 6; } catch { } }
       if (vuelo.analisisIA) { ensure(24); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(27, 58, 91); doc.text("LECTURA ORIENTATIVA DE IA (no es una medición oficial)", M, y); y += 12; doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(26, 36, 51); const lines = doc.splitTextToSize(vuelo.analisisIA, W - 2 * M); for (const ln of lines) { ensure(14); doc.text(ln, M, y); y += 13; } }
-      const blob = doc.output("blob");
-      const file = new File([blob], `Vuelo drone ${nom} ${vuelo.fecha}.pdf`, { type: "application/pdf" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: `Vuelo drone ${nom}` }); setGenPdf(false); return; } catch (e) { if (e && e.name === "AbortError") { setGenPdf(false); return; } } }
-      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+      // En vez de compartir y salir de la app, subimos el PDF a un lugar
+      // persistente (el mismo que usan las fotos y los planos) y lo dejamos
+      // guardado EN el vuelo — así queda ahí siempre, y se puede reenviar
+      // las veces que haga falta sin volver a generarlo.
+      const nombreArchivo = `Vuelo dron ${nom} ${vuelo.fecha}.pdf`;
+      const dataUrl = doc.output("datauristring");
+      const url = await uploadFoto(dataUrl, `informes-drone/${vuelo.obra_id || "sin-obra"}`, `${vuelo.id}.pdf`);
+      guardarVuelos(p => p.map(v => v.id === vuelo.id ? { ...v, informePdfUrl: url, informePdfNombre: nombreArchivo } : v));
+      setDetalle(d => d && d.id === vuelo.id ? { ...d, informePdfUrl: url, informePdfNombre: nombreArchivo } : d);
     } catch { alert("No pude generar el PDF. Probá de nuevo."); }
     setGenPdf(false);
+  }
+  async function reenviarABelfast(vuelo) {
+    if (!vuelo.informePdfUrl) return;
+    const { mensajes = [], setMensajes } = db;
+    if (!setMensajes) { alert("No encuentro el chat de mensajes con Belfast."); return; }
+    setReenviando(true);
+    try {
+      const nom = obraNombre(vuelo.obra_id);
+      const msg = { id: uid() + Date.now(), from: "vv", texto: `Informe del vuelo de drone — ${nom}, ${vuelo.fecha}.`, fecha: hoyStr(), ts: Date.now(), archivos: [{ nombre: vuelo.informePdfNombre || "informe.pdf", url: vuelo.informePdfUrl }] };
+      const r = await storage.get("vv_mensajes"); let actual = mensajes;
+      if (r?.value) { try { actual = JSON.parse(r.value); } catch { } }
+      const next = [...actual, msg];
+      setMensajes(next);
+      alert("Enviado — Belfast lo va a ver en Mensajes.");
+    } catch { alert("No pude reenviarlo ahora. Probá de nuevo."); }
+    setReenviando(false);
   }
 
   const vuelosFiltrados = (dronevuelos || []).filter(v => !fObra || v.obra_id === fObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
@@ -3485,7 +3520,11 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
           <button onClick={() => crearTareaDesde(vuelo)} style={{ marginTop: 10, background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>+ Crear tarea desde esta lectura</button>
         </Card>}
 
-        <PBtn full variant="ghost" onClick={() => generarInformePDF(vuelo)} disabled={genPdf} style={{ marginBottom: 10 }}>{genPdf ? "Generando…" : "📄 Generar informe PDF"}</PBtn>
+        <PBtn full variant="ghost" onClick={() => generarInformePDF(vuelo)} disabled={genPdf} style={{ marginBottom: 10 }}>{genPdf ? "Generando…" : vuelo.informePdfUrl ? "🔄 Volver a generar el informe" : "📄 Generar informe PDF"}</PBtn>
+        {vuelo.informePdfUrl && <>
+          <a href={vuelo.informePdfUrl} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginBottom: 10 }}>👁 Ver el informe (queda guardado acá)</a>
+          <PBtn full onClick={() => reenviarABelfast(vuelo)} disabled={reenviando} style={{ marginBottom: 10 }}>{reenviando ? "Enviando…" : "✉ Reenviar a Belfast"}</PBtn>
+        </>}
         <PBtn full variant="danger" onClick={() => borrarVuelo(vuelo.id)}>Eliminar vuelo</PBtn>
       </div>
     </div>);
@@ -3542,6 +3581,189 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
       <Field label="Notas"><TInput value={nuevo.notas || ""} onChange={e => setNuevo({ ...nuevo, notas: e.target.value })} placeholder="Condiciones, zona relevada, etc." /></Field>
       <PBtn full onClick={crearVuelo}>Crear vuelo</PBtn>
     </Sheet>}
+  </div>);
+}
+
+// ── Grabar reunión: graba sin cortes (reinicia el reconocimiento de voz
+// solo, sin que se note), y al terminar arma la minuta y la manda por PDF
+// — con el share nativo del teléfono, para Mail, WhatsApp, lo que sea. ──
+function GrabarReunion({ db, cfg, apiKey, onBack }) {
+  const { obras = [], minutas = [], setMinutas } = db;
+  const [paso, setPaso] = useState("form"); // form | grabando | armando | lista
+  const [titulo, setTitulo] = useState("");
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [obraId, setObraId] = useState("");
+  const [transcripcion, setTranscripcion] = useState("");
+  const [segundos, setSegundos] = useState(0);
+  const [minutaTexto, setMinutaTexto] = useState("");
+  const [generandoPdf, setGenerandoPdf] = useState(false);
+  const recRef = useRef(null);
+  const activoRef = useRef(false);   // true mientras el usuario quiere seguir grabando
+  const baseRef = useRef("");        // todo lo ya confirmado antes del reinicio actual
+  const timerRef = useRef(null);
+  const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  function fFechaLarga(iso) {
+    try { return new Date(iso + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" }); } catch { return iso; }
+  }
+
+  function arrancarReco() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    rec.lang = "es-AR"; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = (e) => {
+      let finales = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) finales += e.results[i][0].transcript + " ";
+      if (finales) { baseRef.current = (baseRef.current + " " + finales).trim(); setTranscripcion(baseRef.current); }
+    };
+    rec.onend = () => {
+      // Los navegadores cortan el reconocimiento solo cada tanto (por
+      // silencio, o por un límite de tiempo interno). Si el usuario
+      // todavía quiere seguir grabando, lo reiniciamos al toque — así la
+      // reunión sigue grabándose de corrido, sin que se note el corte.
+      if (activoRef.current) { try { rec.start(); } catch { setTimeout(() => { if (activoRef.current) try { rec.start(); } catch { } }, 300); } }
+    };
+    rec.onerror = (e) => {
+      if (e.error === "no-speech" || e.error === "aborted") return;   // normal, sigue solo
+      if (activoRef.current && e.error !== "not-allowed") { try { rec.start(); } catch { } }
+    };
+    recRef.current = rec;
+    rec.start();
+  }
+
+  function empezar() {
+    if (!titulo.trim()) { alert("Ponele un título a la reunión."); return; }
+    if (!sttOk) { alert("Este navegador no permite grabar con reconocimiento de voz. Probá desde Chrome o Safari en el celular."); return; }
+    baseRef.current = ""; setTranscripcion(""); setSegundos(0);
+    activoRef.current = true;
+    arrancarReco();
+    timerRef.current = setInterval(() => setSegundos(s => s + 1), 1000);
+    setPaso("grabando");
+  }
+
+  async function terminar() {
+    activoRef.current = false;
+    try { recRef.current?.stop(); } catch { }
+    clearInterval(timerRef.current);
+    const texto = transcripcion.trim();
+    if (!texto) { alert("No capté nada de audio. Probá de nuevo, más cerca del micrófono."); setPaso("form"); return; }
+    setPaso("armando");
+    try {
+      const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
+      const sys = `Sos un asistente que arma minutas de reunión de obra para V+V Construcciones, a partir de una transcripción de voz (puede tener errores de dictado, cortes, muletillas). Español rioplatense. Devolvé SOLO la minuta, con esta estructura fija, sin agregar nada que no se haya dicho:
+MINUTA DE REUNIÓN
+Obra: ${obraNombre || "—"} · Fecha: ${fFechaLarga(fecha)} · Tema: ${titulo}
+TEMAS TRATADOS (numerados, un renglón por tema)
+ACUERDOS / DECISIONES (numerados)
+PENDIENTES (numerados, con quién queda a cargo si se dijo)
+Si algo de la transcripción no se entiende bien, usá tu criterio para interpretarlo sin inventar información nueva.`;
+      const resp = await callAI([{ role: "user", content: `Transcripción de la reunión:\n\n${texto}` }], sys, apiKey, false);
+      setMinutaTexto(resp || "");
+      const registro = { id: uid(), titulo: titulo.trim(), fecha, obra_id: obraId || null, transcripcion: texto, minutaTexto: resp || "", ts: Date.now() };
+      if (setMinutas) setMinutas(p => [registro, ...(p || [])]);
+      setPaso("lista");
+    } catch {
+      alert("No pude generar la minuta ahora. La transcripción completa sigue abajo, la podés copiar a mano.");
+      setPaso("lista");
+    }
+  }
+
+  function cancelar() {
+    activoRef.current = false;
+    try { recRef.current?.stop(); } catch { }
+    clearInterval(timerRef.current);
+    setPaso("form");
+  }
+
+  async function generarPdf() {
+    setGenerandoPdf(true);
+    try {
+      let jsPDF;
+      if (window.jspdf && window.jspdf.jsPDF) jsPDF = window.jspdf.jsPDF;
+      else {
+        const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+        for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) { jsPDF = window.jspdf.jsPDF; break; } } catch { } }
+        if (!jsPDF) throw new Error("No se pudo cargar la librería de PDF");
+      }
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+      const M = 40; let y = M;
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text((cfg?.empresa || "V+V Construcciones").toUpperCase(), W / 2, y, { align: "center" }); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("MINUTA DE REUNIÓN", W / 2, y, { align: "center" }); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(15, 27, 45); doc.text(titulo, W / 2, y, { align: "center" }); y += 14;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(91, 107, 127);
+      doc.text(`${fFechaLarga(fecha)}${obraNombre ? "   ·   Obra: " + obraNombre : ""}`, W / 2, y, { align: "center" }); y += 14;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 22;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51);
+      const cuerpo = minutaTexto.replace(/^MINUTA DE REUNI[OÓ]N\s*\n?/i, "").replace(new RegExp(`^Obra:.*${fFechaLarga(fecha).slice(0, 4)}.*\\n?`, "i"), "").trim();
+      const lineas = doc.splitTextToSize(cuerpo || minutaTexto, W - 2 * M);
+      for (const ln of lineas) {
+        const esTitulo = /^(TEMAS TRATADOS|ACUERDOS|PENDIENTES)/i.test(ln.trim());
+        ensure(esTitulo ? 22 : 15);
+        if (esTitulo) { y += 6; doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(27, 58, 91); doc.text(ln, M, y); y += 15; doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); }
+        else { doc.text(ln, M, y); y += 14; }
+      }
+      const blob = doc.output("blob");
+      const nombreArchivo = `Minuta - ${titulo} - ${fecha}.pdf`;
+      const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: nombreArchivo, text: `Minuta de reunión — ${titulo}` });
+        setGenerandoPdf(false); return;
+      }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombreArchivo; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch { alert("No pude generar el PDF. Probá de nuevo."); }
+    setGenerandoPdf(false);
+  }
+
+  const mm = String(Math.floor(segundos / 60)).padStart(2, "0"), ss = String(segundos % 60).padStart(2, "0");
+
+  if (paso === "grabando") return (<div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <PageHead eyebrow="Grabando" title={titulo} back onBack={cancelar} />
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 20px" }}>
+      <div style={{ width: 90, height: 90, borderRadius: "50%", background: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, animation: "pulse 1.4s infinite" }}>
+        <Ico n="mic" s={36} c="#fff" />
+      </div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: T.text, fontVariantNumeric: "tabular-nums" }}>{mm}:{ss}</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 22 }}>Grabando — se reinicia solo, no hace falta que hagas nada</div>
+      <div style={{ width: "100%", maxWidth: 480, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, flex: 1, overflowY: "auto", fontSize: 13, color: T.sub, lineHeight: 1.6, marginBottom: 22, minHeight: 120 }}>
+        {transcripcion || "Escuchando… empezá a hablar."}
+      </div>
+      <PBtn full onClick={terminar} style={{ maxWidth: 480, background: "#DC2626" }}>⏹ Terminar y armar la minuta</PBtn>
+    </div>
+  </div>);
+
+  if (paso === "armando") return (<div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 30 }}>
+    <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 6 }}>Armando la minuta…</div>
+    <div style={{ fontSize: 12, color: T.muted }}>Un momento, esto no tarda.</div>
+  </div>);
+
+  if (paso === "lista") return (<div style={{ minHeight: "100vh" }}>
+    <PageHead eyebrow="Lista" title="Minuta de reunión" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16, whiteSpace: "pre-wrap", fontSize: 13, color: T.text, lineHeight: 1.6 }}>{minutaTexto || "No pude armar la minuta con IA — acá tenés la transcripción completa para copiar a mano:\n\n" + transcripcion}</div>
+      <PBtn full onClick={generarPdf} disabled={generandoPdf} style={{ marginBottom: 10 }}>{generandoPdf ? "Generando…" : "📄 Compartir PDF (Mail, WhatsApp…)"}</PBtn>
+      <PBtn full variant="ghost" onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); }}>Grabar otra reunión</PBtn>
+    </div>
+  </div>);
+
+  return (<div style={{ minHeight: "100vh" }}>
+    <PageHead eyebrow="Reuniones" title="🎙 Grabar reunión" sub="Grabá la reunión de corrido — se arma la minuta sola al terminar" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      {!sttOk && <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
+      <Field label="Título de la reunión"><TInput value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Reunión de avance semanal" /></Field>
+      <Field label="Fecha"><TInput type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></Field>
+      {obras.length > 0 && <Field label="Obra (opcional)"><Sel value={obraId} onChange={e => setObraId(e.target.value)}><option value="">— Sin asignar —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
+      <PBtn full onClick={empezar} disabled={!sttOk} style={{ marginTop: 8 }}>🔴 Empezar a grabar</PBtn>
+      {minutas.length > 0 && <>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", margin: "22px 0 10px" }}>Minutas anteriores</div>
+        {minutas.slice(0, 15).map(m => (<div key={m.id} onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setPaso("lista"); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8, cursor: "pointer" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
+        </div>))}
+      </>}
+    </div>
   </div>);
 }
 
@@ -3977,7 +4199,7 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <input value={cfg.apiKey||""} onChange={e=>setCfg(p=>({...p,apiKey:e.target.value}))} placeholder="sk-ant-..." style={{ width:"100%", background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", fontSize:13, color:T.text }} />
       <div style={{ marginTop:20 }}><Eyebrow>Actualizaciones</Eyebrow></div>
       <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"13px 14px" }}>
-        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 01-07-IA</b></div>
+        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-minutas</b></div>
         <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Trae la última versión y todo lo último cargado (fotos, archivos, pedidos y cambios de cualquier dispositivo). Limpia la caché.</div>
         <button onClick={()=>{ try{ if(window.caches) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))); }catch(e){} location.replace(location.pathname+"?sync="+Date.now()); }} style={{ width:"100%", background:T.accent, color:"#fff", border:"none", borderRadius:T.rsm, padding:"12px", fontSize:13.5, fontWeight:700, cursor:"pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -4292,6 +4514,14 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional.
 
+MINUTAS DE REUNIÓN: si te piden armar, redactar o pasar en limpio una minuta de reunión (por texto o dictada), pedí — solo si no te lo dieron — obra, fecha y quiénes participaron, y con eso redactá la minuta directo, con esta estructura fija:
+MINUTA DE REUNIÓN
+Obra: · Fecha: · Participantes:
+TEMAS TRATADOS (numerados, un renglón por tema con lo relevante)
+ACUERDOS / DECISIONES (numerados)
+PENDIENTES (numerados, con quién queda a cargo si se dijo)
+Sé fiel a lo que te contaron — no inventes acuerdos ni asistentes que no se mencionaron. Si dictan la reunión de corrido y desordenada, ordenala vos en esa estructura sin agregar nada que no se haya dicho.
+
 IMPORTANTE — QUIÉN ES QUIÉN (no los confundas NUNCA):
 · V+V Construcciones = tu empresa, la casa. Sebastián es el Presidente; Nicolás Arcussi es el CEO / Director de Operaciones.
 · ${cn} = el CLIENTE, una empresa EXTERNA (el comitente/mandante). Cuando decís "el cliente" o "${cn}" te referís a esta empresa de afuera.
@@ -4523,6 +4753,18 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     }, 6000);
     return () => clearInterval(iv);
   }, []);
+  async function descargarMinuta(texto) {
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const filas = esc(texto).split("\n").map(l => l.trim() ? `<p style="margin:0 0 6px">${l}</p>` : "").join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Minuta de reunión</title></head><body style="font-family:Calibri,Arial,sans-serif;color:#0F1B2D;padding:20px;line-height:1.5">${filas}</body></html>`;
+    const nombre = `Minuta_${hoyStr().replace(/\//g, "-")}.doc`;
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+    try {
+      const file = new File([blob], nombre, { type: "application/msword" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nombre }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
   function toggleVoz() {
     if (!sttOk) return;
     if (escuchando) { recRef.current?.stop(); setEscuchando(false); return; }
@@ -4533,7 +4775,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     rec.onerror = () => setEscuchando(false);
     recRef.current = rec; rec.start(); setEscuchando(true);
   }
-  const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
+  const QUICK = ["📝 Redactá una minuta de la reunión que te voy a contar", "Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
     <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v23 limpia-canning" title={cfg?.tituloAsistente || "IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
@@ -4579,6 +4821,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           </div>
         </div>}
         {m.accionDone && <div style={{ maxWidth: "84%", marginTop: 6, fontSize: 11.5, color: "#16A34A", fontWeight: 700 }}>✓ {m.accionResultado}</div>}
+        {m.role !== "user" && /MINUTA DE REUNI[OÓ]N/i.test(String(m.content || "")) && <button onClick={() => descargarMinuta(m.content)} style={{ marginTop: 7, background: "#2B579A", color: "#fff", border: "none", borderRadius: 9, padding: "9px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Ico n="word" /> Descargar minuta (Word)</button>}
       </div>))}
       {loading && <div style={{ display: "flex", gap: 5, padding: "6px 4px" }}>{[0, 1, 2].map(i => <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: T.muted, animation: "pulse 1s infinite", animationDelay: `${i * .15}s` }} />)}</div>}
       <div ref={bottomRef} />
@@ -7305,7 +7548,7 @@ function WebFooter({ cfg }) {
   return (<div style={{ background:T.navy, color:"rgba(255,255,255,.55)", flexShrink:0, borderTop:`2px solid ${BRASS}` }}>
     <div style={{ maxWidth:1180, margin:"0 auto", padding:"11px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, fontSize:11 }}>
       <span style={{ fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,.8)" }}>V+V CONSTRUCCIONES</span>
-      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 01-07-IA</span>
+      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-minutas</span>
     </div>
   </div>);
 }
@@ -7333,6 +7576,7 @@ function App() {
   const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
   const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
   const [dronevuelos, setDronevuelos] = useStoredState("vv_drone", []);
+  const [minutas, setMinutas] = useStoredState("vv_minutas", []);
   const [definiciones, setDefiniciones] = useStoredState("vv_definiciones", []);
   const [docrecepcion, setDocrecepcion] = useStoredState("vv_docrecepcion", []);
   const [bitacora, setBitacora] = useStoredState("vv_bitacora", []);
@@ -7384,7 +7628,7 @@ function App() {
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
-    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
+    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_minutas", setMinutas], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
     let alive = true;
     const pullAll = async () => {
       for (const [key, setter] of stores) {
@@ -7542,7 +7786,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
@@ -7566,6 +7810,7 @@ function App() {
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
+            {view==="minutas" && <GrabarReunion db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="auditoria" && <AuditoriaView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="mensajes" && <MensajesVVView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="internos" && <InternosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
