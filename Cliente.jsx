@@ -924,6 +924,204 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
 }
 
 // ─── Bitácora de obra (espejo de V+V) ───
+// Drone IA — solo consulta: el cliente ve los vuelos, fotos y la lectura
+// de IA que ya cargó V+V, pero no puede crear vuelos ni pedir análisis
+// nuevos (eso es una tarea operativa del lado de V+V).
+function DroneIAClienteView({ T, obras, dronevuelos }) {
+  const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  const [detalle, setDetalle] = React.useState(null);
+  const obraNombre = (id) => obras.find(o => o.id === id)?.nombre || "—";
+  const vuelos = (dronevuelos || []).filter(v => v.obra_id === obraId).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+  if (detalle) return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <div style={{ padding: "16px 20px" }}>
+      <button onClick={() => setDetalle(null)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, width: 32, height: 32, fontSize: 15, color: T.sub, cursor: "pointer", marginBottom: 14 }}>←</button>
+      <div style={{ fontSize: 19, fontWeight: 800, color: T.text, marginBottom: 2 }}>Vuelo — {detalle.fecha}</div>
+      <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 16 }}>{detalle.piloto ? `Piloto: ${detalle.piloto}` : ""}{detalle.dronModelo ? ` · ${detalle.dronModelo}` : ""}</div>
+      {detalle.notas && <Card T={T} style={{ padding: 13, marginBottom: 14 }}><Lbl>Notas del vuelo</Lbl><div style={{ fontSize: 13, color: T.text }}>{detalle.notas}</div></Card>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
+        {(detalle.fotos || []).map(f => (<div key={f.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
+          <img src={f.url} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
+          {f.lat && <div style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(15,23,42,.65)", color: "#fff", fontSize: 9, borderRadius: 6, padding: "2px 6px" }}>📍 {f.lat.toFixed(4)}, {f.lon.toFixed(4)}</div>}
+        </div>))}
+      </div>
+      {detalle.analisisIA && <Card T={T} style={{ padding: 13, background: T.accentLight || T.bg }}>
+        <Lbl>Lectura de IA — {detalle.analisisFecha} <span style={{ textTransform: "none", fontWeight: 500 }}>(orientativa, no es una medición oficial)</span></Lbl>
+        <div style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{detalle.analisisIA}</div>
+      </Card>}
+    </div>
+  </div>);
+
+  return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 19, fontWeight: 800, color: T.text, marginBottom: 12 }}>🚁 Drone IA</div>
+      {obras.length > 1 && <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, marginBottom: 14 }}>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>}
+      {vuelos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Todavía no hay vuelos cargados para {obraNombre(obraId)}.</div>}
+      {vuelos.map(v => (<div key={v.id} onClick={() => setDetalle(v)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", marginBottom: 8, cursor: "pointer" }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{v.fecha}</div>
+        <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{v.piloto ? `Piloto: ${v.piloto}` : "Sin piloto cargado"} · {(v.fotos || []).length} foto{(v.fotos || []).length !== 1 ? "s" : ""}{v.analisisIA ? " · con lectura IA" : ""}</div>
+      </div>))}
+    </div>
+  </div>);
+}
+
+function GrabarReunionCliente({ T, cfg, apiKey, obras, minutas = [], setMinutas, onBack }) {
+  const [paso, setPaso] = useState("form");
+  const [titulo, setTitulo] = useState("");
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [obraId, setObraId] = useState("");
+  const [transcripcion, setTranscripcion] = useState("");
+  const [segundos, setSegundos] = useState(0);
+  const [minutaTexto, setMinutaTexto] = useState("");
+  const [generandoPdf, setGenerandoPdf] = useState(false);
+  const recRef = useRef(null);
+  const activoRef = useRef(false);
+  const baseRef = useRef("");
+  const timerRef = useRef(null);
+  const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  function fFechaLarga(iso) { try { return new Date(iso + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" }); } catch { return iso; } }
+
+  function arrancarReco() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    rec.lang = "es-AR"; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = (e) => {
+      let finales = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) finales += e.results[i][0].transcript + " ";
+      if (finales) { baseRef.current = (baseRef.current + " " + finales).trim(); setTranscripcion(baseRef.current); }
+    };
+    rec.onend = () => { if (activoRef.current) { try { rec.start(); } catch { setTimeout(() => { if (activoRef.current) try { rec.start(); } catch { } }, 300); } } };
+    rec.onerror = (e) => { if (e.error === "no-speech" || e.error === "aborted") return; if (activoRef.current && e.error !== "not-allowed") { try { rec.start(); } catch { } } };
+    recRef.current = rec;
+    rec.start();
+  }
+
+  function empezar() {
+    if (!titulo.trim()) { alert("Ponele un título a la reunión."); return; }
+    if (!sttOk) { alert("Este navegador no permite grabar con reconocimiento de voz. Probá desde Chrome o Safari en el celular."); return; }
+    baseRef.current = ""; setTranscripcion(""); setSegundos(0);
+    activoRef.current = true;
+    arrancarReco();
+    timerRef.current = setInterval(() => setSegundos(s => s + 1), 1000);
+    setPaso("grabando");
+  }
+
+  async function terminar() {
+    activoRef.current = false;
+    try { recRef.current?.stop(); } catch { }
+    clearInterval(timerRef.current);
+    const texto = transcripcion.trim();
+    if (!texto) { alert("No capté nada de audio. Probá de nuevo, más cerca del micrófono."); setPaso("form"); return; }
+    setPaso("armando");
+    try {
+      const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
+      const sys = `Sos un asistente que arma minutas de reunión de obra para ${cfg?.nombre || "el comitente"}, a partir de una transcripción de voz (puede tener errores de dictado, cortes, muletillas). Español rioplatense. Devolvé SOLO la minuta, con esta estructura fija, sin agregar nada que no se haya dicho:
+MINUTA DE REUNIÓN
+Obra: ${obraNombre || "—"} · Fecha: ${fFechaLarga(fecha)} · Tema: ${titulo}
+TEMAS TRATADOS (numerados, un renglón por tema)
+ACUERDOS / DECISIONES (numerados)
+PENDIENTES (numerados, con quién queda a cargo si se dijo)
+Si algo de la transcripción no se entiende bien, usá tu criterio para interpretarlo sin inventar información nueva.`;
+      const resp = await callAI([{ role: "user", content: `Transcripción de la reunión:\n\n${texto}` }], sys, apiKey, false);
+      setMinutaTexto(resp || "");
+      const registro = { id: uid(), titulo: titulo.trim(), fecha, obra_id: obraId || null, transcripcion: texto, minutaTexto: resp || "", ts: Date.now() };
+      if (setMinutas) setMinutas(p => [registro, ...(p || [])]);
+      setPaso("lista");
+    } catch { alert("No pude generar la minuta ahora. La transcripción completa sigue abajo, la podés copiar a mano."); setPaso("lista"); }
+  }
+
+  function cancelar() { activoRef.current = false; try { recRef.current?.stop(); } catch { } clearInterval(timerRef.current); setPaso("form"); }
+
+  async function generarPdf() {
+    setGenerandoPdf(true);
+    try {
+      let jsPDF;
+      if (window.jspdf && window.jspdf.jsPDF) jsPDF = window.jspdf.jsPDF;
+      else {
+        const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+        for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) { jsPDF = window.jspdf.jsPDF; break; } } catch { } }
+        if (!jsPDF) throw new Error("No se pudo cargar la librería de PDF");
+      }
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+      const M = 40; let y = M;
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text((cfg?.nombre || "Minuta de reunión").toUpperCase(), W / 2, y, { align: "center" }); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("MINUTA DE REUNIÓN", W / 2, y, { align: "center" }); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(15, 27, 45); doc.text(titulo, W / 2, y, { align: "center" }); y += 14;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(91, 107, 127);
+      doc.text(`${fFechaLarga(fecha)}${obraNombre ? "   ·   Obra: " + obraNombre : ""}`, W / 2, y, { align: "center" }); y += 14;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 22;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51);
+      const cuerpo = minutaTexto.replace(/^MINUTA DE REUNI[OÓ]N\s*\n?/i, "").trim();
+      const lineas = doc.splitTextToSize(cuerpo || minutaTexto, W - 2 * M);
+      for (const ln of lineas) {
+        const esTitulo = /^(TEMAS TRATADOS|ACUERDOS|PENDIENTES)/i.test(ln.trim());
+        ensure(esTitulo ? 22 : 15);
+        if (esTitulo) { y += 6; doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(27, 58, 91); doc.text(ln, M, y); y += 15; doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); }
+        else { doc.text(ln, M, y); y += 14; }
+      }
+      const blob = doc.output("blob");
+      const nombreArchivo = `Minuta - ${titulo} - ${fecha}.pdf`;
+      const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nombreArchivo, text: `Minuta de reunión — ${titulo}` }); setGenerandoPdf(false); return; }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombreArchivo; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch { alert("No pude generar el PDF. Probá de nuevo."); }
+    setGenerandoPdf(false);
+  }
+
+  const mm = String(Math.floor(segundos / 60)).padStart(2, "0"), ss = String(segundos % 60).padStart(2, "0");
+
+  if (paso === "grabando") return (<div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <AppHeader T={T} title={titulo} sub="Grabando" back onBack={cancelar} />
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px 20px" }}>
+      <div style={{ width: 90, height: 90, borderRadius: "50%", background: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, flexShrink: 0 }}><Ico n="mic" s={36} c="#fff" /></div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: T.text, flexShrink: 0 }}>{mm}:{ss}</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 18, flexShrink: 0 }}>Grabando — se reinicia solo, no hace falta que hagas nada</div>
+      {/* Único cuadro que scrollea — así el botón de terminar queda
+          siempre fijo abajo, visible, sin importar cuánto dure la reunión. */}
+      <div style={{ width: "100%", maxWidth: 480, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, flex: 1, minHeight: 0, overflowY: "auto", fontSize: 13, color: T.sub, lineHeight: 1.6, marginBottom: 16 }}>{transcripcion || "Escuchando… empezá a hablar."}</div>
+      <PBtn T={T} full onClick={terminar} style={{ maxWidth: 480, background: "#DC2626", flexShrink: 0 }}>⏹ Terminar y armar la minuta</PBtn>
+    </div>
+  </div>);
+
+  if (paso === "armando") return (<div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 30 }}>
+    <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 6 }}>Armando la minuta…</div>
+    <div style={{ fontSize: 12, color: T.muted }}>Un momento, esto no tarda.</div>
+  </div>);
+
+  if (paso === "lista") return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <AppHeader T={T} title="Minuta de reunión" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16, whiteSpace: "pre-wrap", fontSize: 13, color: T.text, lineHeight: 1.6 }}>{minutaTexto || "No pude armar la minuta con IA — acá tenés la transcripción completa para copiar a mano:\n\n" + transcripcion}</div>
+      <PBtn T={T} full onClick={generarPdf} disabled={generandoPdf} style={{ marginBottom: 10 }}>{generandoPdf ? "Generando…" : "📄 Compartir PDF (Mail, WhatsApp…)"}</PBtn>
+      <button onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); }} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Grabar otra reunión</button>
+    </div>
+  </div>);
+
+  return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <AppHeader T={T} title="🎙 Grabar reunión" sub="Se arma la minuta sola al terminar" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      {!sttOk && <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
+      <Field label="Título de la reunión"><TInput value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Reunión de avance semanal" /></Field>
+      <Field label="Fecha"><TInput type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></Field>
+      {obras.length > 0 && <Field label="Obra (opcional)"><Sel value={obraId} onChange={e => setObraId(e.target.value)}><option value="">— Sin asignar —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
+      <PBtn T={T} full onClick={empezar} disabled={!sttOk} style={{ marginTop: 8 }}>🔴 Empezar a grabar</PBtn>
+      {minutas.length > 0 && <>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", margin: "22px 0 10px" }}>Minutas anteriores</div>
+        {minutas.slice(0, 15).map(m => (<div key={m.id} onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setPaso("lista"); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8, cursor: "pointer" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
+        </div>))}
+      </>}
+    </div>
+  </div>);
+}
+
 function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   const [abrir, setAbrir] = useState(false);
@@ -2028,7 +2226,7 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
               </div>)}
               <label style={{ display: "block", textAlign: "center", background: T.navy, color: "#fff", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>{subP ? "Subiendo…" : "＋ Subir plano (PDF/CAD)"}<input type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={e => subirPlanos(e, o)} style={{ display: "none" }} /></label>
             </div>
-            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({(o.fotos || []).length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{(o.fotos || []).map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
+            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({(o.fotos || []).length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{(o.fotos || []).slice().reverse().map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
             {(o.videos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Videos ({o.videos.length})</div>{o.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", borderRadius: 6, marginBottom: 8, background: "#000", display: "block" }} />)}</div>}
             {ts.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Cronograma</div>{ts.map(t => <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}><span style={{ flex: 1, fontSize: 12, color: T.text }}>{t.nombre}</span><div style={{ width: 70, height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${t.avance || 0}%`, background: BRASS }} /></div><span style={{ fontSize: 11, fontWeight: 700, color: T.muted, width: 32, textAlign: "right" }}>{t.avance || 0}%</span></div>)}</div>}
             {ult && <div><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Último informe · {ult.fecha}</div><div style={{ background: T.bg, borderRadius: T.rsm, padding: "11px 13px", fontSize: 12, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{ult.texto}</div></div>}
@@ -2172,7 +2370,7 @@ function AjustesScreen({ T, cfg, setCfg }) {
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 01-07-IA</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-globito</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -2189,13 +2387,38 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "drone", label: "Drone IA", icon: "M12 8a2 2 0 100 4 2 2 0 000-4zM4 4a2 2 0 100 4 2 2 0 000-4zM20 4a2 2 0 100 4 2 2 0 000-4zM4 16a2 2 0 100 4 2 2 0 000-4zM20 16a2 2 0 100 4 2 2 0 000-4zM6 6l4 4M18 6l-4 4M6 18l4-4M18 18l-4-4" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
-function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos }) {
+function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos, onMinutas }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+  const [escuchando, setEscuchando] = useState(false);
+  const recRef = useRef(null);
+  const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  async function descargarMinuta(texto) {
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const filas = esc(texto).split("\n").map(l => l.trim() ? `<p style="margin:0 0 6px">${l}</p>` : "").join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Minuta de reunión</title></head><body style="font-family:Calibri,Arial,sans-serif;color:#0F1B2D;padding:20px;line-height:1.5">${filas}</body></html>`;
+    const nombre = `Minuta_${hoyStr().replace(/\//g, "-")}.doc`;
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+    try {
+      const file = new File([blob], nombre, { type: "application/msword" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nombre }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+  function toggleVoz() {
+    if (!sttOk) return;
+    if (escuchando) { recRef.current?.stop(); setEscuchando(false); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = false; rec.continuous = false;
+    rec.onresult = e => { const txt = e.results[0][0].transcript; setInput(p => (p ? p + " " : "") + txt); };
+    rec.onend = () => setEscuchando(false);
+    rec.onerror = () => setEscuchando(false);
+    recRef.current = rec; rec.start(); setEscuchando(true);
+  }
   const cnDeb = "V+V";
   const DEBATE_MAX = 18;
   const [debateOpen, setDebateOpen] = useState(false);
@@ -2273,6 +2496,14 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
     const per = (personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${p.telefono ? ` · tel ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.sitios || []).length ? ` [cargado en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n");
     const msj = (mensajes || []).slice(-8).map(m => `· ${m.from === "cliente" ? "Nosotros" : "V+V"}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de ${cfg.nombre} (comitente), en contacto con V+V Construcciones (la empresa que ejecuta la obra). Español rioplatense, claro y cordial. Estás CONECTADO a los mismos datos y al asistente de V+V: comparten la base de datos en tiempo real (obras, personal, pedidos, mensajes); ves lo que carga la otra empresa y ellos ven lo que cargás vos. NUNCA digas que no podés comunicarte con V+V ni con su asistente: SÍ podés, mandándoles un mensaje directo (les aparece en su pantalla de Mensajes) y ellos te responden. REGLA CLAVE: si te piden COMUNICARTE, HABLAR, AVISAR, DECIRLE o PREGUNTARLE algo a V+V, usá SIEMPRE la acción "enviar_mensaje" (se envía directo). "crear_pedido" es solo para pedidos formales de definiciones/documentación. También podés: informar sobre el avance de las obras, GESTIONAR PEDIDOS, cargar PERSONAL a los sitios/barrios (vos tramitás el acceso a los barrios privados), MANDAR WHATSAPP a los jefes de obra/contactos (usás la agenda de Personal → Contactos), y BUSCAR EN INTERNET información actual (normativa, código de edificación, proveedores, precios, datos de empresas). Priorizá fuentes argentinas y citá la fuente.
+
+MINUTAS DE REUNIÓN: si te piden armar, redactar o pasar en limpio una minuta de reunión (por texto o dictada), pedí — solo si no te lo dieron — obra, fecha y quiénes participaron, y con eso redactá la minuta directo, con esta estructura fija:
+MINUTA DE REUNIÓN
+Obra: · Fecha: · Participantes:
+TEMAS TRATADOS (numerados, un renglón por tema con lo relevante)
+ACUERDOS / DECISIONES (numerados)
+PENDIENTES (numerados, con quién queda a cargo si se dijo)
+Sé fiel a lo que te contaron — no inventes acuerdos ni asistentes que no se mencionaron. Si dictan la reunión de corrido y desordenada, ordenala vos en esa estructura sin agregar nada que no se haya dicho.
 
 OBRAS:\n${ob || "(sin obras)"}
 
@@ -2447,13 +2678,20 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
     window.addEventListener("focus", tick);
     return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", tick); };
   }, []);
-  const QUICK = ["¿Cómo viene el avance de cada obra?", "Cargá al personal de [obra] al barrio…", "¿Hay pedidos sin resolver?"];
+  const QUICK = ["📝 Redactá una minuta de la reunión que te voy a contar", "¿Cómo viene el avance de cada obra?", "Cargá al personal de [obra] al barrio…", "¿Hay pedidos sin resolver?"];
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
     {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", borderBottom: "1px solid #FECACA", padding: "11px 16px", cursor: "pointer", flexShrink: 0 }}>
       <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
       <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de V+V</div><div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{pendObras ? `Obras: ${pendObras}` : "Tocá para ver"} →</div></div>
     </div>}
     <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px" }}>
+      {onMinutas && <button onClick={onMinutas} style={{ width: "100%", maxWidth: 760, margin: "0 auto 16px", display: "flex", alignItems: "center", gap: 12, background: T.navy, border: `1px solid ${BRASS}`, borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}>
+        <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Ico n="mic" s={19} c="#fff" /></div>
+        <div style={{ flex: 1, textAlign: "left" }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>🎙 Grabar reunión</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginTop: 1 }}>Se arma la minuta sola y se manda por PDF</div>
+        </div>
+      </button>}
       {msgs.length === 0 && <div style={{ paddingTop: 4 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Consultá sobre tus obras o gestioná pedidos con V+V. Puedo crear y responder pedidos por vos.</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 560, margin: "0 auto" }}>{QUICK.map((q, i) => <button key={i} onClick={() => send(q)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", fontSize: 13, color: T.text, textAlign: "left", boxShadow: T.shadow }}>{q}</button>)}</div>
@@ -2461,6 +2699,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
           <div style={{ maxWidth: "84%", background: m.role === "user" ? T.accent : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{m.content}</div>
+          {m.role !== "user" && /MINUTA DE REUNI[OÓ]N/i.test(String(m.content || "")) && <button onClick={() => descargarMinuta(m.content)} style={{ marginTop: 7, background: "#2B579A", color: "#fff", border: "none", borderRadius: 9, padding: "9px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Ico n="word" /> Descargar minuta (Word)</button>}
           {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}><Ico n="send" /> {m.waLabel || "Enviar por WhatsApp"}</a>}
           {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}><Ico n="ruler" /> </span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
           {m.media && m.media.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.mediaTipo === "videos"
@@ -2499,6 +2738,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}><Ico n="mic" /> Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, maxWidth: 760, margin: "0 auto" }}>
         <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí tu consulta…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        {sttOk && <button onClick={toggleVoz} title="Dictar por voz" style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#DC2626" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>🎙</button>}
         <button onClick={() => send()} disabled={loading || !input.trim()} style={{ width: 42, height: 42, borderRadius: T.rsm, background: input.trim() && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, flexShrink: 0 }}>↑</button>
       </div>
     </div>
@@ -3664,7 +3904,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 01-07-IA</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-globito</span>
     </div>
   </div>);
 }
@@ -3692,6 +3932,8 @@ function ClienteApp() {
   const [crono] = useStored("vv_cronograma", { obras: [] });
   const [formularios] = useStored("vv_formularios", []);
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
+  const [dronevuelos] = useStored("vv_drone", []);
+  const [minutas, setMinutas] = useStored("vv_minutas", []);
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
   const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length; // pedidos de V+V sin levantar
@@ -3722,6 +3964,9 @@ function ClienteApp() {
     formularios: (formularios || []).filter(f => f.compartido).map(f => "fm:" + f.id),
     archivos:    (archivosVV || []).map(a => "ar:" + (a.id || a.url || a.nombre)),
     obras:       (obras || []).map(o => "ob:" + o.id),              // ← OBRA NUEVA
+    // la bitácora siempre la carga V+V (el cliente no escribe acá), así que
+    // cada hecho nuevo cuenta como aviso — mismo criterio que "obras".
+    bitacora:    (bitacora || []).map(h => "bt:" + h.id),
     personal:    (personal || []).map(p => "pe:" + p.id),
     gestion:     [],
     ajustes:     [],
@@ -3901,8 +4146,10 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} />}
+          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
+          {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
+          {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
           {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} />}
           {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
