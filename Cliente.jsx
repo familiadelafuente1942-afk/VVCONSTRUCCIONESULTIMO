@@ -2438,11 +2438,40 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje, vaciar
 }
 
 // ── PANTALLA: AJUSTES ────────────────────────────────────────────────
-function AjustesScreen({ T, cfg, setCfg }) {
+function AjustesScreen({ T, cfg, setCfg, obras = [], setObras }) {
   const logoRef = useRef(null);
   async function setLogo(f) { const d = await fileToDataUrl(f, 600); const url = await uploadArchivo(d, "logos", "cliente_logo"); setCfg(p => ({ ...p, logo: url })); }
+  // Le pone (o le cambia) el código de acceso a una obra. Ese código es el
+  // que se le pasa al dueño para que entre a ver SU obra, y nada más.
+  const setCodigo = (obraId, valor) => {
+    const limpio = String(valor || "").toUpperCase().replace(/\s+/g, "");
+    if (setObras) setObras(p => (p || []).map(o => o.id === obraId ? { ...o, codigoCliente: limpio } : o));
+  };
+  const linkPanel = typeof window !== "undefined" ? `${window.location.origin}/propietario.html` : "/propietario.html";
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <div style={{ padding: "16px 20px" }}>
+      <Eyebrow T={T}>Códigos de clientes</Eyebrow>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>
+        Cada obra puede tener un código. Se lo pasás al dueño junto con este link y entra a ver solo su obra:
+        <span style={{ display: "block", marginTop: 4, color: T.accent, fontWeight: 700, wordBreak: "break-all" }}>{linkPanel}</span>
+      </div>
+      <Card T={T} style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
+        {obras.length === 0 && <div style={{ padding: 16, fontSize: 12.5, color: T.muted, textAlign: "center" }}>Todavía no hay obras cargadas.</div>}
+        {obras.map((o, i) => (<div key={o.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 13px", borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.nombre}</div>
+            {o.codigoCliente && <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 700, marginTop: 1 }}>✓ ya tiene código</div>}
+          </div>
+          <input
+            value={o.codigoCliente || ""}
+            onChange={e => setCodigo(o.id, e.target.value)}
+            placeholder="Sin código"
+            style={{ width: 140, flexShrink: 0, background: T.bg, border: `1px solid ${o.codigoCliente ? BRASS : T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 12.5, fontWeight: 800, color: o.codigoCliente ? T.accent : T.text, textAlign: "center", letterSpacing: "0.04em" }}
+          />
+        </div>))}
+      </Card>
+
       <Eyebrow T={T}>Identidad del cliente</Eyebrow>
       <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Personalizá el nombre y el logo que ve este cliente.</div>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Nombre del cliente</label>
@@ -2475,7 +2504,7 @@ function AjustesScreen({ T, cfg, setCfg }) {
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-dronedia</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-codigos</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -4009,7 +4038,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-dronedia</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-codigos</span>
     </div>
   </div>);
 }
@@ -4268,7 +4297,7 @@ function ClienteApp() {
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
-          {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} />}
+          {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} />}
         </div>
       </div>
       <WebClientFooter T={T} cfg={cfg} />
