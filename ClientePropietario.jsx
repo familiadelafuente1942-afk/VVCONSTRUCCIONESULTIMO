@@ -81,7 +81,7 @@ function Entrada({ onEntrar }) {
     setBuscando(false);
   }
 
-  return (<div style={{ minHeight: "100vh", background: T.navy, display: "flex", flexDirection: "column", justifyContent: "center", padding: "20px 24px", boxSizing: "border-box" }}>
+  return (<div style={{ minHeight: "100vh", background: T.navy, display: "flex", flexDirection: "column", justifyContent: "center", padding: "20px 24px", paddingTop: "calc(20px + env(safe-area-inset-top))", paddingBottom: "calc(20px + env(safe-area-inset-bottom))", boxSizing: "border-box" }}>
     <div style={{ width: 76, height: 76, borderRadius: "50%", border: `2px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 22px" }}>
       <Ico n="building" s={32} c={T.brass} />
     </div>
@@ -111,7 +111,10 @@ function FilaSeccion({ label, icon, onClick }) {
 }
 
 function SubHead({ titulo, onBack }) {
-  return (<div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "16px 18px", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 5 }}>
+  // paddingTop con env(safe-area-inset-top): en el iPhone, con la app
+  // instalada en la pantalla de inicio, el contenido arranca DEBAJO del
+  // reloj y la señal. Sin esto, el título queda encimado con la hora.
+  return (<div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "16px 18px", paddingTop: "calc(16px + env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 5 }}>
     <button onClick={onBack} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.sub }}><Ico n="back" s={16} /></button>
     <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{titulo}</div>
   </div>);
@@ -298,7 +301,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance }) 
   if (seccion === "mensajes") return <SeccionMensajes onBack={() => setSeccion(null)} />;
 
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
-    <div style={{ position: "relative", height: 280, background: T.navy, overflow: "hidden" }}>
+    <div style={{ position: "relative", height: "calc(280px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", boxSizing: "border-box", background: T.navy, overflow: "hidden" }}>
       {fotos.map((f, i) => <div key={f.id || i} style={{ position: "absolute", inset: 0, backgroundImage: `url(${f.url})`, backgroundSize: "cover", backgroundPosition: "center", opacity: i === idx ? 1 : 0, transition: "opacity 1.4s ease" }} />)}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(15,27,45,.55) 0%, rgba(15,27,45,.25) 40%, rgba(15,27,45,.92) 100%)" }} />
       <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 20px", textAlign: "center" }}>
