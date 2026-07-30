@@ -1,5 +1,88 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
+const DOCS_BASE = [
+  { n: "Niveles", c: "Documentación técnica" },
+  { n: "Eje de replanteo en platea", c: "Documentación técnica" },
+  { n: "Planos de platea", c: "Documentación técnica" },
+  { n: "Planos de estructura", c: "Documentación técnica" },
+  { n: "Plano de replanteo de mampostería", c: "Documentación técnica" },
+  { n: "Plano de mampostería", c: "Documentación técnica" },
+  { n: "Plano de hogar", c: "Documentación técnica" },
+  { n: "Plano de parrilla", c: "Documentación técnica" },
+  { n: "Plano de vainas", c: "Documentación técnica" },
+  { n: "Cascos", c: "Elementos de protección" },
+  { n: "Chalecos reflectivos", c: "Elementos de protección" },
+  { n: "Calzado de seguridad", c: "Elementos de protección" },
+  { n: "Guantes", c: "Elementos de protección" },
+  { n: "Antiparras / protección ocular", c: "Elementos de protección" },
+  { n: "Protección auditiva", c: "Elementos de protección" },
+  { n: "Arnés y cabo de vida", c: "Elementos de protección" },
+  { n: "Barbijos / protección respiratoria", c: "Elementos de protección" },
+  { n: "Matafuegos", c: "Elementos de protección" },
+  { n: "Botiquín de primeros auxilios", c: "Elementos de protección" },
+  { n: "Vallado y señalización", c: "Elementos de protección" },
+  { n: "Póliza ART del personal", c: "Otros ítems" },
+  { n: "Alta temprana / F931", c: "Otros ítems" },
+  { n: "Seguro de responsabilidad civil", c: "Otros ítems" },
+  { n: "Llaves / acceso a la obra", c: "Otros ítems" },
+  { n: "Conexión de agua y luz de obra", c: "Otros ítems" },
+  { n: "Baño químico / obrador", c: "Otros ítems" },
+];
+const DOC_CATS = ["Documentación técnica", "Elementos de protección", "Otros ítems"];
+
+// Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
+const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
+
+// ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
+function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
+  const P = {
+    doc: "M7 3h7l5 5v13H7z M14 3v5h5",
+    mic: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3",
+    building: "M3 21h18 M5 21V8l7-5 7 5v13 M9 21v-5h6v5 M9 11h1 M14 11h1",
+    robot: "M12 3v3 M6 6h12v12H6z M9.5 11v1.5 M14.5 11v1.5 M4 10v4 M20 10v4",
+    video: "M3 6h12v12H3z M15 10l6-3v10l-6-3",
+    list: "M8 6h13 M8 12h13 M8 18h13 M3.5 6h.01 M3.5 12h.01 M3.5 18h.01",
+    download: "M12 3v12 M7 11l5 5 5-5 M4 20h16",
+    upload: "M12 21V9 M7 13l5-5 5 5 M4 4h16",
+    card: "M3 6h18v12H3z M3 10h18 M7 15h4",
+    user: "M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 3.6-6 8-6s8 2 8 6",
+    link: "M10 13a5 5 0 007.5.5l2-2a5 5 0 00-7-7l-1 1 M14 11a5 5 0 00-7.5-.5l-2 2a5 5 0 007 7l1-1",
+    globe: "M12 21a9 9 0 100-18 9 9 0 000 18z M3 12h18 M12 3a14 14 0 000 18 M12 3a14 14 0 010 18",
+    cal2: "M4 6h16v15H4z M4 10h16 M8 3v4 M16 3v4",
+    money: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 7v10 M9.5 9.5h4a1.8 1.8 0 010 3.6h-3a1.8 1.8 0 000 3.6h4",
+    bell: "M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z M10.5 20a2 2 0 003 0",
+    sound: "M4 9h4l5-4v14l-5-4H4z M16.5 9.5a4 4 0 010 5",
+    contact: "M4 5h16v14H4z M9 11a2 2 0 100-4 2 2 0 000 4z M6.5 16c.6-1.6 1.9-2.4 2.5-2.4s1.9.8 2.5 2.4 M14 9h4 M14 13h4",
+    chart: "M4 20V10 M10 20V4 M16 20v-7 M3 20h18",
+    pin: "M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z M12 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
+    car: "M5 16h14 M6.5 16l1.2-5h8.6l1.2 5 M4 16h16v3H4z M7.5 19v1.5 M16.5 19v1.5",
+    wave: "M12 3v6 M8 6l8 0 M5 13a7 7 0 0014 0 M12 20v1",
+    tools: "M14.5 6.5a3.5 3.5 0 004.8 4.8l-9 9a2.1 2.1 0 01-3-3l9-9z M4 6l3-3 4 4-3 3z",
+    moon: "M20 14A8.5 8.5 0 019.9 4 8.5 8.5 0 1020 14z",
+    thumb: "M7 21V10l5-7 1.2.8a2 2 0 01.8 2.2L13 10h5.5a2 2 0 012 2.4l-1.3 6a2 2 0 01-2 1.6H7z M3 10h4v11H3z",
+
+    word: "M7 3h7l5 5v13H7z M14 3v5h5 M10 12l1.5 5 1.5-4 1.5 4L16 12",
+    excel: "M7 3h7l5 5v13H7z M14 3v5h5 M10 12l5 6 M15 12l-5 6",
+    box: "M3 7l9-4 9 4v10l-9 4-9-4z M3 7l9 4 9-4 M12 11v10",
+    ruler: "M3 15L15 3l6 6L9 21z M8 10l2 2 M11 7l2 2 M14 4l2 2",
+    plans: "M3 5h8l2 2h8v12H3z M8 12h8 M8 16h5",
+    camera: "M3 8h4l2-2h6l2 2h4v11H3z M12 16a3.2 3.2 0 100-6.4 3.2 3.2 0 000 6.4z",
+    clip: "M20 11l-8.5 8.5a4.5 4.5 0 01-6.4-6.4L14 4.3a3 3 0 014.2 4.2L9.7 17a1.5 1.5 0 01-2.1-2.1l8-8",
+    trash: "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6",
+    chat: "M4 5h16v11H9l-5 4z",
+    lock: "M6 10V7a6 6 0 1112 0v3 M4 10h16v11H4z M12 15v2",
+    save: "M5 3h11l3 3v15H5z M8 3v6h7V3 M8 14h8v7H8z",
+    calendar: "M4 6h16v15H4z M4 10h16 M8 3v4 M16 3v4",
+    search: "M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.3-4.3",
+    sparkle: "M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z",
+    check: "M4 12.5l5 5L20 6.5",
+    image: "M3 5h18v14H3z M8.5 11a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 16l-5-5-9 8",
+    life: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M5.6 5.6l3.9 3.9 M18.4 5.6l-3.9 3.9 M5.6 18.4l3.9-3.9 M18.4 18.4l-3.9-3.9",
+    send: "M21 3L10.5 13.5 M21 3l-6.8 18-3.7-7.5L3 9.8z",
+  }[n] || "M12 21a9 9 0 100-18 9 9 0 000 18z";
+  return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={st} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, verticalAlign: "-2px", display: "inline-block" }}>{P.split(" M").map((d, i) => <path key={i} d={(i ? "M" : "") + d} />)}</svg>;
+}
+
 // Margen superior seguro: en modo app instalada (pantalla de inicio) iOS puede no
 // informar env(safe-area-inset-top); garantizamos un mínimo para no quedar bajo el notch.
 const SAFE_TOP_PX = (() => { try { return (window.navigator.standalone || window.matchMedia("(display-mode: standalone)").matches) ? 50 : 0; } catch (e) { return 0; } })();
@@ -624,7 +707,10 @@ function useAvisos(clave, mapaIds) {
 // ═══ OBRAS (compartido: idéntico a V+V) — inline, sin archivo aparte ═══
 // ══════════════════════════════════════════════════════════════════
 // ─── Avance de obra (espejo de V+V) ───
-function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
+const fFechaCorta = (iso) => { if (!iso) return ""; const p = String(iso).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0].slice(2)}` : String(iso); };
+function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {} }) {
+  // Certificado semanal abierto (los emite V+V; acá se ven en modo lectura).
+  const [certAbierto, setCertAbierto] = React.useState(null);
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
@@ -787,9 +873,37 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
         {obras.length === 0 && <option value="">No hay obras</option>}
         {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
       </select>
+
+      {/* Certificados semanales emitidos por V+V — sólo lectura */}
+      {((certif || {})[obraId] || []).length > 0 && <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>Certificados semanales</div>
+        {((certif || {})[obraId] || []).map(c => (<div key={c.id} onClick={() => setCertAbierto(certAbierto?.id === c.id ? null : c)} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
+            </div>
+            <div style={{ fontSize: 12, color: T.muted, flexShrink: 0 }}>{certAbierto?.id === c.id ? "▲" : "▼"}</div>
+          </div>
+          {certAbierto?.id === c.id && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
+            {[["Desarrollo", c.desarrollo], ["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
+              <div key={lbl} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{lbl}</div>
+                <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{txt}</div>
+              </div>) : null)}
+            {(c.av || []).some(a => (a.fotos || []).length || a.fotoUrl) && <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Fotos de la semana</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>
+                {(c.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])).map((u, i) => (
+                  <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>))}
+              </div>
+            </div>}
+          </div>}
+        </div>))}
+      </div>}
       <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFoto} style={{ display: "none" }} />
       {pendientes.length === 0
-        ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Preparando…" : "📷 Elegir foto(s)"}</button>
+        ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Preparando…" : "Elegir foto(s)"}</button>
         : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
             <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{pendientes.length === 1 ? "1 foto seleccionada" : `${pendientes.length} fotos seleccionadas`} — poné la fecha y analizá</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
@@ -808,7 +922,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
           </div>}
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
-      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>📄 PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
+      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
       {historial.map((h, idx) => (<div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
         {(() => { const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []); if (!fs.length) return null; if (fs.length === 1) return <img src={fs[0]} alt="" style={{ width: "100%", maxHeight: 340, objectFit: "contain", background: "#0b0f14", display: "block" }} />; return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, alignItems: "start", padding: 4, background: "#0b0f14" }}>{fs.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block" }}><img src={u} alt="" style={{ width: "100%", height: "auto", display: "block", borderRadius: 4 }} /></a>)}</div>; })()}
@@ -817,10 +931,10 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
             <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{h.fecha}{idx === 0 ? "  ·  última" : ""}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
-              <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📄 PDF</button>
+              <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
             </div>
           </div>
-          {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>📈 Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
+          {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}><Ico n="chart" /> Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
           <div style={{ fontSize: 10, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Estado</div>
           <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.descripcion}</div>
         </div>
@@ -832,13 +946,538 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
         <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe de avance</span>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => { const f = document.getElementById("avance-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Imprimir</button>
-          <button onClick={guardarPdf} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>📥 Guardar PDF</button>
+          <button onClick={guardarPdf} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}><Ico n="download" /> Guardar PDF</button>
         </div>
       </div>
       <iframe id="avance-pdf" srcDoc={pdfHtml} title="Avance PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
   </div>);
 }
+
+// ─── Bitácora de obra (espejo de V+V) ───
+// Drone IA — solo consulta: el cliente ve los vuelos, fotos y la lectura
+// de IA que ya cargó V+V, pero no puede crear vuelos ni pedir análisis
+// nuevos (eso es una tarea operativa del lado de V+V).
+function DroneIAClienteView({ T, obras, dronevuelos }) {
+  const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  const [detalle, setDetalle] = React.useState(null);
+  const obraNombre = (id) => obras.find(o => o.id === id)?.nombre || "—";
+  const vuelos = (dronevuelos || []).filter(v => v.obra_id === obraId).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Vuelos de HOY, de todas las obras juntas — lo primero que se ve.
+  const hoyISOd = new Date().toISOString().slice(0, 10);
+  const esDeHoy = (v) => { try { return new Date(v.ts).toISOString().slice(0, 10) === hoyISOd; } catch { return false; } };
+  const vuelosHoy = (dronevuelos || []).filter(esDeHoy).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const horaVuelo = (v) => { try { return new Date(v.ts).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }); } catch { return ""; } };
+
+  if (detalle) return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <div style={{ padding: "16px 20px" }}>
+      <button onClick={() => setDetalle(null)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, width: 32, height: 32, fontSize: 15, color: T.sub, cursor: "pointer", marginBottom: 14 }}>←</button>
+      <div style={{ fontSize: 19, fontWeight: 800, color: T.text, marginBottom: 2 }}>Vuelo — {detalle.fecha}</div>
+      <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 16 }}>{detalle.piloto ? `Piloto: ${detalle.piloto}` : ""}{detalle.dronModelo ? ` · ${detalle.dronModelo}` : ""}</div>
+      {detalle.notas && <Card T={T} style={{ padding: 13, marginBottom: 14 }}><Lbl>Notas del vuelo</Lbl><div style={{ fontSize: 13, color: T.text }}>{detalle.notas}</div></Card>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
+        {(detalle.fotos || []).map(f => (<div key={f.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
+          <img src={f.url} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
+          {f.lat && <div style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(15,23,42,.65)", color: "#fff", fontSize: 9, borderRadius: 6, padding: "2px 6px" }}>📍 {f.lat.toFixed(4)}, {f.lon.toFixed(4)}</div>}
+        </div>))}
+      </div>
+      {detalle.analisisIA && <Card T={T} style={{ padding: 13, background: T.accentLight || T.bg }}>
+        <Lbl>Lectura de IA — {detalle.analisisFecha} <span style={{ textTransform: "none", fontWeight: 500 }}>(orientativa, no es una medición oficial)</span></Lbl>
+        <div style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{detalle.analisisIA}</div>
+      </Card>}
+    </div>
+  </div>);
+
+  return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 19, fontWeight: 800, color: T.text, marginBottom: 12 }}>🚁 Drone IA</div>
+      {/* Los vuelos de hoy, de todas las obras */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: vuelosHoy.length ? 10 : 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
+        </div>
+        {vuelosHoy.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, marginTop: 8 }}>Todavía no se cargó ningún vuelo hoy.</div>
+          : vuelosHoy.map(v => (<div key={v.id} onClick={() => setDetalle(v)} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: `1px solid ${T.border}`, cursor: "pointer" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: BRASS, flexShrink: 0, minWidth: 42, fontVariantNumeric: "tabular-nums" }}>{horaVuelo(v)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{obraNombre(v.obra_id)}</div>
+              <div style={{ fontSize: 11, color: T.sub, marginTop: 1 }}>{v.piloto ? `Piloto: ${v.piloto}` : "Sin piloto"}{v.analisisIA ? " · con lectura IA" : ""}</div>
+            </div>
+            {(v.fotos || []).length > 0 && <div style={{ fontSize: 10.5, color: T.muted, flexShrink: 0 }}>📷 {(v.fotos || []).length}</div>}
+          </div>))}
+      </div>
+      {obras.length > 1 && <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, marginBottom: 14 }}>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>}
+      {vuelos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Todavía no hay vuelos cargados para {obraNombre(obraId)}.</div>}
+      {vuelos.map(v => (<div key={v.id} onClick={() => setDetalle(v)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", marginBottom: 8, cursor: "pointer" }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{v.fecha}</div>
+        <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{v.piloto ? `Piloto: ${v.piloto}` : "Sin piloto cargado"} · {(v.fotos || []).length} foto{(v.fotos || []).length !== 1 ? "s" : ""}{v.analisisIA ? " · con lectura IA" : ""}</div>
+      </div>))}
+    </div>
+  </div>);
+}
+
+function GrabarReunionCliente({ T, cfg, apiKey, obras, minutas = [], setMinutas, onBack }) {
+  const [paso, setPaso] = useState("form");
+  const [titulo, setTitulo] = useState("");
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [obraId, setObraId] = useState("");
+  const [transcripcion, setTranscripcion] = useState("");
+  const [segundos, setSegundos] = useState(0);
+  const [minutaTexto, setMinutaTexto] = useState("");
+  const [generandoPdf, setGenerandoPdf] = useState(false);
+  const recRef = useRef(null);
+  const activoRef = useRef(false);
+  const baseRef = useRef("");
+  const timerRef = useRef(null);
+  // Qué minuta está abierta y si ya tiene el PDF generado y guardado.
+  const [minutaId, setMinutaId] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  function fFechaLarga(iso) { try { return new Date(iso + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" }); } catch { return iso; } }
+
+  function arrancarReco() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    rec.lang = "es-AR"; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = (e) => {
+      let finales = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) finales += e.results[i][0].transcript + " ";
+      if (finales) { baseRef.current = (baseRef.current + " " + finales).trim(); setTranscripcion(baseRef.current); }
+    };
+    rec.onend = () => { if (activoRef.current) { try { rec.start(); } catch { setTimeout(() => { if (activoRef.current) try { rec.start(); } catch { } }, 300); } } };
+    rec.onerror = (e) => { if (e.error === "no-speech" || e.error === "aborted") return; if (activoRef.current && e.error !== "not-allowed") { try { rec.start(); } catch { } } };
+    recRef.current = rec;
+    rec.start();
+  }
+
+  function empezar() {
+    if (!titulo.trim()) { alert("Ponele un título a la reunión."); return; }
+    if (!sttOk) { alert("Este navegador no permite grabar con reconocimiento de voz. Probá desde Chrome o Safari en el celular."); return; }
+    baseRef.current = ""; setTranscripcion(""); setSegundos(0);
+    activoRef.current = true;
+    arrancarReco();
+    timerRef.current = setInterval(() => setSegundos(s => s + 1), 1000);
+    setPaso("grabando");
+  }
+
+  async function terminar() {
+    activoRef.current = false;
+    try { recRef.current?.stop(); } catch { }
+    clearInterval(timerRef.current);
+    const texto = transcripcion.trim();
+    if (!texto) { alert("No capté nada de audio. Probá de nuevo, más cerca del micrófono."); setPaso("form"); return; }
+    setPaso("armando");
+    try {
+      const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
+      const sys = `Recibís la transcripción de voz de una reunión grabada. Puede tener errores de dictado, cortes, muletillas, o gente hablando encima. Tu trabajo es UNO SOLO: pasarla en limpio y ordenarla, armando un texto con hilo lógico y fácil de leer.
+
+REGLAS INNEGOCIABLES:
+- NUNCA comentes, juzgues ni aclares de qué trata la conversación. No digas si es de obra o no, si es relevante, si es informal, ni si te parece adecuada. No opines sobre el contenido.
+- NUNCA te niegues ni pidas más contexto. Sea cual sea el tema, escribí lo que se escuchó.
+- No agregues advertencias, disclaimers, ni notas del tipo "esta conversación no parece de trabajo". Nada de eso.
+- Escribí SOLO lo que se dijo, ordenado y con sentido. No inventes nada que no esté en la transcripción.
+- Si se distingue quién habla, marcalo. Si no, escribilo de corrido pero ordenado por temas, respetando el orden en que se hablaron.
+- Español rioplatense, claro y natural.
+
+FORMATO: empezá siempre con este encabezado exacto:
+MINUTA DE REUNIÓN
+${obraNombre ? `Obra: ${obraNombre} · ` : ""}Fecha: ${fFechaLarga(fecha)} · Tema: ${titulo}
+
+Después el desarrollo de lo hablado, ordenado y legible.
+Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISIONES" y/o "PENDIENTES" (numerados). Si no hubo acuerdos ni pendientes, no pongas esas secciones — no las fuerces.`;
+      const resp = await callAI([{ role: "user", content: `Transcripción de la reunión:\n\n${texto}` }], sys, apiKey, false);
+      setMinutaTexto(resp || "");
+      const registro = { id: uid(), titulo: titulo.trim(), fecha, obra_id: obraId || null, transcripcion: texto, minutaTexto: resp || "", ts: Date.now() };
+      if (setMinutas) setMinutas(p => [registro, ...(p || [])]);
+      setMinutaId(registro.id); setPdfUrl(null);
+      setPaso("lista");
+    } catch { alert("No pude generar la minuta ahora. La transcripción completa sigue abajo, la podés copiar a mano."); setPaso("lista"); }
+  }
+
+  function cancelar() { activoRef.current = false; try { recRef.current?.stop(); } catch { } clearInterval(timerRef.current); setPaso("form"); }
+
+  // Manda el PDF ya guardado: abre el menú del teléfono para elegir
+  // WhatsApp, Mail, o lo que sea. El PDF sigue guardado acá igual.
+  // Descarta la grabación que se acaba de hacer, sin tener que ir a
+  // buscarla a la lista de minutas anteriores.
+  function borrarEstaGrabacion() {
+    if (!confirm("¿Borrar esta grabación?\n\nSe borra el audio transcripto y la minuta. No se puede deshacer.")) return;
+    if (minutaId && setMinutas) setMinutas(p => (p || []).filter(x => x.id !== minutaId));
+    setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null);
+  }
+  async function mandarPdf() {
+    if (!pdfUrl) return;
+    const nombreArchivo = `Minuta - ${titulo} - ${fecha}.pdf`;
+    try {
+      let blob;
+      if (pdfUrl.startsWith("data:")) {
+        // PDF incrustado: lo paso a archivo sin salir a la red.
+        const b64 = pdfUrl.split(",")[1] || "";
+        const bin = atob(b64); const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        blob = new Blob([arr], { type: "application/pdf" });
+      } else {
+        const r = await fetch(pdfUrl);
+        blob = await r.blob();
+      }
+      const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: nombreArchivo, text: `Minuta de reunión — ${titulo}` });
+        return;
+      }
+      const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = nombreArchivo; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      window.open(pdfUrl, "_blank");   // último recurso: abrirlo para compartir a mano
+    }
+  }
+  async function generarPdf() {
+    setGenerandoPdf(true);
+    try {
+      let jsPDF;
+      if (window.jspdf && window.jspdf.jsPDF) jsPDF = window.jspdf.jsPDF;
+      else {
+        const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+        for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) { jsPDF = window.jspdf.jsPDF; break; } } catch { } }
+        if (!jsPDF) throw new Error("No se pudo cargar la librería de PDF");
+      }
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+      const M = 40; let y = M;
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text((cfg?.nombre || "Minuta de reunión").toUpperCase(), W / 2, y, { align: "center" }); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("MINUTA DE REUNIÓN", W / 2, y, { align: "center" }); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(15, 27, 45); doc.text(titulo, W / 2, y, { align: "center" }); y += 14;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(91, 107, 127);
+      doc.text(`${fFechaLarga(fecha)}${obraNombre ? "   ·   Obra: " + obraNombre : ""}`, W / 2, y, { align: "center" }); y += 14;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 22;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51);
+      const cuerpo = minutaTexto.split("\n").filter((ln, i) => {
+        const t = ln.trim();
+        if (i < 3 && /^MINUTA DE REUNI[OÓ]N$/i.test(t)) return false;
+        if (i < 3 && /^(Obra|Fecha|Tema)\s*:/i.test(t)) return false;
+        return true;
+      }).join("\n").trim();
+      const lineas = doc.splitTextToSize(cuerpo || minutaTexto, W - 2 * M);
+      for (const ln of lineas) {
+        const esTitulo = /^(TEMAS TRATADOS|ACUERDOS|PENDIENTES)/i.test(ln.trim());
+        ensure(esTitulo ? 22 : 15);
+        if (esTitulo) { y += 6; doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(27, 58, 91); doc.text(ln, M, y); y += 15; doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); }
+        else { doc.text(ln, M, y); y += 14; }
+      }
+      const blob = doc.output("blob");
+      // El PDF NO se va de la app: se sube y queda guardado EN la minuta.
+      const dataUrl = doc.output("datauristring");
+      const url = await uploadFoto(dataUrl, "minutas-cliente", `${minutaId || uid()}.pdf`);
+      setPdfUrl(url);
+      if (minutaId && setMinutas) setMinutas(p => (p || []).map(m => m.id === minutaId ? { ...m, pdfUrl: url } : m));
+    } catch { alert("No pude generar el PDF. Probá de nuevo."); }
+    setGenerandoPdf(false);
+  }
+
+  const mm = String(Math.floor(segundos / 60)).padStart(2, "0"), ss = String(segundos % 60).padStart(2, "0");
+
+  if (paso === "grabando") return (<div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <AppHeader T={T} title={titulo} sub="Grabando" back onBack={cancelar} />
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px 20px" }}>
+      <div style={{ width: 90, height: 90, borderRadius: "50%", background: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, flexShrink: 0 }}><Ico n="mic" s={36} c="#fff" /></div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: T.text, flexShrink: 0 }}>{mm}:{ss}</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 18, flexShrink: 0 }}>Grabando — se reinicia solo, no hace falta que hagas nada</div>
+      {/* Único cuadro que scrollea — así el botón de terminar queda
+          siempre fijo abajo, visible, sin importar cuánto dure la reunión. */}
+      <div style={{ width: "100%", maxWidth: 480, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, flex: 1, minHeight: 0, overflowY: "auto", fontSize: 13, color: T.sub, lineHeight: 1.6, marginBottom: 16 }}>{transcripcion || "Escuchando… empezá a hablar."}</div>
+      <PBtn T={T} full onClick={terminar} style={{ maxWidth: 480, background: "#DC2626", flexShrink: 0 }}>⏹ Terminar y armar la minuta</PBtn>
+    </div>
+  </div>);
+
+  if (paso === "armando") return (<div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 30 }}>
+    <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 6 }}>Armando la minuta…</div>
+    <div style={{ fontSize: 12, color: T.muted }}>Un momento, esto no tarda.</div>
+  </div>);
+
+  if (paso === "lista") return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <AppHeader T={T} title="Minuta de reunión" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16, whiteSpace: "pre-wrap", fontSize: 13, color: T.text, lineHeight: 1.6 }}>{minutaTexto || "No pude armar la minuta con IA — acá tenés la transcripción completa para copiar a mano:\n\n" + transcripcion}</div>
+      <PBtn T={T} full onClick={generarPdf} disabled={generandoPdf} style={{ marginBottom: 10 }}>{generandoPdf ? "Generando…" : pdfUrl ? "🔄 Volver a generar el PDF" : "📄 Generar el PDF de la minuta"}</PBtn>
+      {pdfUrl && <>
+        <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginBottom: 10 }}>👁 Ver el PDF (queda guardado acá)</a>
+        <PBtn T={T} full onClick={() => mandarPdf()} style={{ marginBottom: 10 }}>📤 Mandar por WhatsApp o Mail</PBtn>
+      </>}
+      <button onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null); }} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>Grabar otra reunión</button>
+      <button onClick={borrarEstaGrabacion} style={{ width: "100%", background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🗑 Borrar esta grabación</button>
+    </div>
+  </div>);
+
+  return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <AppHeader T={T} title="🎙 Grabar reunión" sub="Se arma la minuta sola al terminar" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      {!sttOk && <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
+      <Field label="Título de la reunión"><TInput value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Reunión de avance semanal" /></Field>
+      <Field label="Fecha"><TInput type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></Field>
+      {obras.length > 0 && <Field label="Obra (opcional)"><Sel value={obraId} onChange={e => setObraId(e.target.value)}><option value="">— Sin asignar —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
+      <PBtn T={T} full onClick={empezar} disabled={!sttOk} style={{ marginTop: 8 }}>🔴 Empezar a grabar</PBtn>
+      {minutas.length > 0 && <>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", margin: "22px 0 10px" }}>Minutas anteriores</div>
+        {minutas.slice(0, 15).map(m => (<div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8 }}>
+          <div onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setMinutaId(m.id); setPdfUrl(m.pdfUrl || null); setPaso("lista"); }} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
+          </div>
+          <button onClick={() => { if (confirm(`¿Borrar "${m.titulo}"?\n\nSe borra la grabación y la minuta. No se puede deshacer.`)) setMinutas(p => (p || []).filter(x => x.id !== m.id)); }} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", padding: 6, flexShrink: 0, fontSize: 15 }}>🗑</button>
+        </div>))}
+      </>}
+    </div>
+  </div>);
+}
+
+function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [abrir, setAbrir] = useState(false);
+  const [edit, setEdit] = useState(null); // hecho en edición
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [titulo, setTitulo] = useState("");
+  const [desc, setDesc] = useState("");
+  const [fotos, setFotos] = useState([]);
+  const [adjuntos, setAdjuntos] = useState([]);
+  const [subiendo, setSubiendo] = useState(false);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const fileRef = useRef(null);
+  const adjRef = useRef(null);
+
+  const obra = obras.find(o => o.id === obraId);
+  const hechos = bitacora.filter(h => h.obra_id === obraId).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
+
+  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEdit(null); setAbrir(false); };
+  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setAbrir(true); };
+
+  const agregarFotos = async (e) => {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setSubiendo(true);
+    const nuevas = [];
+    for (const f of files) {
+      try {
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const comp = await compressImage(dataUrl, 1600, 0.7);
+        const url = await uploadArchivo(comp, `bitacora/${obraId}`, `${uid()}.jpg`);
+        if (url) nuevas.push({ id: uid(), url });
+      } catch { }
+    }
+    setFotos(prev => [...prev, ...nuevas]);
+    setSubiendo(false);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  async function agregarAdjuntos(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    if (!obraId) { alert("Elegí una obra primero."); return; }
+    setSubiendo(true);
+    try {
+      const nuevos = [];
+      for (const f of files) {
+        if (f.size > 12 * 1024 * 1024) { alert(`"${f.name}" pesa más de 12 MB. Subí uno más liviano.`); continue; }
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const ext = (f.name.match(/\.([a-zA-Z0-9]+)$/) || [])[1] || "dat";
+        const url = await uploadArchivo(dataUrl, `bitacora/${obraId}/adj`, `${uid()}.${ext}`);
+        nuevos.push({ id: uid(), nombre: f.name, url: url || dataUrl, tipo: f.type || "", peso: f.size });
+      }
+      setAdjuntos(prev => [...prev, ...nuevos]);
+    } catch (err) { alert("No pude subir el archivo. Probá de nuevo."); }
+    setSubiendo(false);
+    if (adjRef.current) adjRef.current.value = "";
+  }
+  const iconoArch = (nom = "", tipo = "") => { const e = (nom.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return ""; if (e === "pdf") return ""; if (["xls", "xlsx", "csv"].includes(e)) return ""; if (["png", "jpg", "jpeg", "webp", "heic"].includes(e)) return ""; return ""; };
+  const guardar = () => {
+    if (!titulo.trim() && !desc.trim()) { alert("Poné al menos un título o una descripción."); return; }
+    if (!obraId) { alert("Elegí una obra."); return; }
+    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, ts: edit?.ts || Date.now() };
+    setBitacora(prev => { const otros = (prev || []).filter(h => h.id !== hecho.id); return [...otros, hecho]; });
+    limpiar();
+  };
+  const borrar = (id) => { if (confirm("¿Borrar este hecho de la bitácora?")) setBitacora(prev => (prev || []).filter(h => h.id !== id)); };
+
+  const exportarPDF = () => {
+    if (!obra) return;
+    const marca = "V+V CONSTRUCCIONES";
+    const hoy = hoyStr();
+    const items = hechos.map((h, i) => {
+      const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
+      const fotosH = (h.fotos || []).map(ft => `<img src="${ft.url}" />`).join("");
+      return `<div class="hecho">
+        <div class="hh"><span class="num">${hechos.length - i}</span><span class="fecha">${fFmt}</span><span class="tit">${(h.titulo || "").replace(/</g, "&lt;")}</span></div>
+        ${h.desc ? `<div class="desc">${(h.desc || "").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</div>` : ""}
+        ${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}
+        ${(h.adjuntos || []).length ? `<div class="adj"><b>Adjuntos:</b> ${(h.adjuntos || []).map(a => (a.nombre || "").replace(/</g, "&lt;")).join(" · ")}</div>` : ""}
+      </div>`;
+    }).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 14mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 14px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; letter-spacing: -.01em; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      .meta { font-size: 11px; color: #5B6B7F; margin-top: 8px; }
+      h1 { font-size: 15px; color: #0F1B2D; margin: 4px 0 2px; }
+      .hecho { border: 1px solid #E3E8EF; border-left: 3px solid #1B3A5B; border-radius: 8px; padding: 11px 13px; margin-bottom: 11px; page-break-inside: avoid; }
+      .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; flex-wrap: wrap; }
+      .num { background: #0F1B2D; color: #fff; font-size: 10px; font-weight: 800; border-radius: 20px; padding: 1px 8px; }
+      .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
+      .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
+      .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
+      .adj { font-size: 10.5px; color: #1B3A5B; background: #F1F5F9; border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+      .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
+      .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+      .vacio { font-size: 12px; color: #98A2B3; text-align: center; padding: 30px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">
+        <div class="marca">${marca}</div>
+        <div class="tipo">Historial de obra · Bitácora</div>
+        <h1>${(obra.nombre || "").replace(/</g, "&lt;")}</h1>
+        <div class="meta">Comitente: ${(cfg?.comitente || "Belfast Construction Management")} · Emitido: ${hoy} · ${hechos.length} hecho${hechos.length !== 1 ? "s" : ""} registrado${hechos.length !== 1 ? "s" : ""}</div>
+      </div>
+      ${items || '<div class="vacio">Todavía no hay hechos cargados en esta obra.</div>'}
+      <div class="foot">Documento generado por ${marca} para respaldo y justificación de adicionales de obra.</div>
+    </div></body></html>`;
+    setPdfHtml(html);
+  };
+
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
+
+  // ── Lo del día, de TODAS las obras juntas ──────────────────────────
+  // Lo primero que se ve al entrar: qué se cargó hoy, en qué obra y a qué
+  // hora. Así no hay que ir obra por obra buscando qué hay nuevo.
+  const hoyISO = new Date().toISOString().slice(0, 10);
+  const mismaFecha = (h) => {
+    if (h.fecha === hoyISO) return true;
+    if (h.ts) { try { return new Date(h.ts).toISOString().slice(0, 10) === hoyISO; } catch { } }
+    return false;
+  };
+  const delDia = (bitacora || []).filter(mismaFecha).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Horario de 24 h (16:45, no "04:45 p. m.") — es como se usa en obra.
+  const horaDe = (h) => { try { return new Date(h.ts).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }); } catch { return ""; } };
+  const nombreObra = (id) => obras.find(o => o.id === id)?.nombre || "Sin obra";
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
+    <div style={{ padding: "14px 18px 4px", flexShrink: 0 }}><div style={{ fontSize: 10, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.12em" }}>Registro diario</div><div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>Bitácora de obra</div><div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Lo que va pasando en obra, día por día</div></div>
+    <div style={{ padding: "16px 20px" }}>
+      {/* Lo cargado hoy, de todas las obras */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: delDia.length ? 10 : 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
+        </div>
+        {delDia.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, marginTop: 8 }}>Todavía no se cargó nada hoy.</div>
+          : delDia.map(h => (<div key={h.id} onClick={() => setObraId(h.obra_id)} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: `1px solid ${T.border}`, cursor: "pointer" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: BRASS, flexShrink: 0, minWidth: 42, fontVariantNumeric: "tabular-nums" }}>{horaDe(h)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{h.titulo || h.desc?.slice(0, 60) || "(sin título)"}</div>
+              <div style={{ fontSize: 11, color: T.sub, marginTop: 1 }}>{nombreObra(h.obra_id)}{h.etapa ? ` · ${h.etapa}` : ""}</div>
+            </div>
+            {(h.fotos || []).length > 0 && <div style={{ fontSize: 10.5, color: T.muted, flexShrink: 0 }}>📷 {(h.fotos || []).length}</div>}
+          </div>))}
+      </div>
+
+      {/* selector de obra */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+        <select value={obraId} onChange={e => { setObraId(e.target.value); limpiar(); }} style={{ ...inp, flex: 1 }}>
+          <option value="">— Elegí una obra —</option>
+          {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        </select>
+        {obraId && hechos.length > 0 && <button onClick={exportarPDF} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>PDF</button>}
+      </div>
+
+      {obraId && <>
+        {/* botón nuevo / formulario */}
+        
+        {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, color: T.sub, width: 46 }}>Fecha</span>
+              <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inp, flex: 1 }} />
+            </div>
+            <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título (ej: Cambio de nivel de platea)" style={inp} />
+            <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción: qué pasó, por qué, quién lo pidió, qué implica…" rows={4} style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
+            {/* fotos */}
+            {fotos.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {fotos.map(ft => (
+                <div key={ft.id} style={{ position: "relative" }}>
+                  <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />
+                  <button onClick={() => setFotos(prev => prev.filter(x => x.id !== ft.id))} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                </div>
+              ))}
+            </div>}
+            <input ref={fileRef} type="file" accept="image/*" multiple onChange={agregarFotos} style={{ display: "none" }} />
+            <button onClick={() => fileRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "Agregar fotos"}</button>
+            {adjuntos.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {adjuntos.map(a => (
+                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px" }}>
+                  <span style={{ fontSize: 14 }}>{iconoArch(a.nombre, a.tipo)}</span>
+                  <span style={{ flex: 1, fontSize: 12, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span>
+                  <button onClick={() => setAdjuntos(prev => prev.filter(x => x.id !== a.id))} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer" }}>✕</button>
+                </div>
+              ))}
+            </div>}
+            <input ref={adjRef} type="file" multiple onChange={agregarAdjuntos} style={{ display: "none" }} />
+            <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "Adjuntar archivo (Word, PDF, Excel…)"}</button>
+            <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
+              <button onClick={limpiar} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+              <button onClick={guardar} disabled={subiendo} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{edit ? "Guardar cambios" : "Guardar hecho"}</button>
+            </div>
+          </div>
+        </div>}
+
+        {/* lista de hechos */}
+        {hechos.length === 0 && !abrir && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px" }}>Todavía no hay hechos cargados en esta obra. Los carga V+V desde su app.</div>}
+        {hechos.map((h, i) => (
+          <div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.accent}`, borderRadius: 12, padding: 13, marginBottom: 10, boxShadow: T.shadow }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: T.navy, borderRadius: 20, padding: "1px 8px", flexShrink: 0 }}>{hechos.length - i}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 800, color: BRASS, flexShrink: 0 }}>{h.fecha ? h.fecha.split("-").reverse().join("/") : ""}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{h.titulo}</span>
+              {h.etapa && <span style={{ fontSize: 9.5, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{h.etapa}</span>}
+            </div>
+            {h.desc && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap", marginBottom: (h.fotos || []).length ? 9 : 0 }}>{h.desc}</div>}
+            {(h.fotos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {h.fotos.map(ft => <img key={ft.id} src={ft.url} style={{ width: 76, height: 76, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />)}
+            </div>}
+            {(h.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+              {h.adjuntos.map(a => <button key={a.id} onClick={() => window.open(a.url, "_blank")} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", maxWidth: "100%" }}><span>{iconoArch(a.nombre, a.tipo)}</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span></button>)}
+            </div>}
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                            
+            </div>
+          </div>
+        ))}
+      </>}
+      {!obraId && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Elegí una obra para empezar la bitácora.</div>}
+    </div>
+
+    {/* overlay PDF */}
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 500, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: T.navy, flexShrink: 0, position: "relative", zIndex: 2 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <button onClick={() => { const f = document.getElementById("bita-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="bita-pdf" srcDoc={pdfHtml} title="Bitácora PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+  </div>);
+}
+
+
 
 // ─── Gestión de Obras (mismo componente que V+V) ───
 // ══════════════════════════════════════════════════════════════════
@@ -1141,7 +1780,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
         <input ref={videoRef} type="file" accept="video/*" multiple onChange={handleVideo} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
             <PBtn_OG onClick={() => fileRef.current?.click()} style={{ flex: 1, padding: "11px 0", fontSize: 13 }}>{t(cfg, 'obras_agregar_fotos')}</PBtn_OG>
-            <button onClick={() => videoRef.current?.click()} style={{ background: T.accentLight, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>🎥 Video</button>
+            <button onClick={() => videoRef.current?.click()} style={{ background: T.accentLight, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}><Ico n="video" /> Video</button>
             {fotos.length > 0 && <button onClick={() => { setModoSel(v => !v); setSelFotos([]); }} style={{ background: modoSel ? T.accent : T.accentLight, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12, fontWeight: 700, color: modoSel ? "#fff" : T.accent, cursor: "pointer", flexShrink: 0 }}>
                 {modoSel ? "Cancelar" : "Seleccionar"}
             </button>}
@@ -1176,7 +1815,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} /><span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Informe IA generado</span></div>
                 <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => { try { navigator.clipboard.writeText(informe); } catch { } }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 10px", fontSize: 11, color: T.sub, cursor: "pointer" }}>📋 Copiar</button>
+                    <button onClick={() => { try { navigator.clipboard.writeText(informe); } catch { } }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 10px", fontSize: 11, color: T.sub, cursor: "pointer" }}><Ico n="list" /> Copiar</button>
                     <button onClick={() => setInforme('')} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, padding: "4px 8px", fontSize: 11, color: "#EF4444", cursor: "pointer" }}>✕</button>
                 </div>
             </div>
@@ -1254,7 +1893,7 @@ function TabInformes({ detail, upd }) {
                 <Field label="Fecha"><TInput value={form.fecha || ""} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aa" /></Field>
             </FieldRow>
             <Field label="Notas"><textarea value={form.notas || ""} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} placeholder="Observaciones..." rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} /></Field>
-            <PBtn_OG full onClick={() => fileRef.current?.click()}>📎 Seleccionar archivo</PBtn_OG>
+            <PBtn_OG full onClick={() => fileRef.current?.click()}><Ico n="clip" /> Seleccionar archivo</PBtn_OG>
         </Sheet>)}
     </div>);
 }
@@ -1329,7 +1968,7 @@ function TabGastos({ detail, upd }) {
                                 <span style={{ fontSize: 11, color: T.muted }}>{g.fecha}</span>
                             </div>
                             <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{g.desc}</div>
-                            {g.quien && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>👤 {g.quien}</div>}
+                            {g.quien && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}><Ico n="user" /> {g.quien}</div>}
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
                             <div style={{ fontSize: 15, fontWeight: 800, color: T.accent }}>${parseMontoNum_OG(g.monto).toLocaleString('es-AR')}</div>
@@ -1381,7 +2020,7 @@ function TabGastos({ detail, upd }) {
                     </div>
                 ) : (
                     <button onClick={() => compRef.current?.click()} style={{ width: "100%", background: T.bg, border: `1.5px dashed ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 12, fontWeight: 600, color: T.sub, cursor: "pointer" }}>
-                        📎 Adjuntar comprobante
+                        Adjuntar comprobante
                     </button>
                 )}
             </Field>
@@ -1498,6 +2137,10 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
                     {tab === "info" && (<div>
+                        <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 8, border: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
+                            <input value={detail.nombre || ''} onChange={e => upd(detail.id, { nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: T.text, padding: 0 }} />
+                        </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{getLabelUbic(cfg)}</div>
@@ -1524,7 +2167,7 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
                                 <input value={detail.monto || ''} onChange={e => upd(detail.id, { monto: e.target.value })} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
                             <div style={{ background: detail.pagado > 0 ? "#ECFDF5" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>💰 Pagado</div>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}><Ico n="money" /> Pagado</div>
                                 <input value={detail.pagado || ''} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); upd(detail.id, { pagado: v ? parseFloat(v) : 0 }); }} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: "#10B981", padding: 0 }} />
                             </div>
                         </div>
@@ -1548,7 +2191,7 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
                         <button onClick={() => planoRef.current && planoRef.current.click()} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS_OG}`, marginBottom: 14 }}>＋ Subir plano (PDF / CAD)</button>
                         {(detail.planos || []).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "22px 16px", lineHeight: 1.5 }}>Sin planos cargados.<br />Subí acá los planos de la obra (PDF, DWG, DXF…). Belfast también los ve y los puede subir.</div>}
                         {(detail.planos || []).map(p => <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 7 }}>
-                            <div style={{ width: 34, height: 34, borderRadius: 8, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>📐</div>
+                            <div style={{ width: 34, height: 34, borderRadius: 8, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}><Ico n="ruler" /> </div>
                             <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{p.nombre}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}</div></div>
                             <a href={p.url} target="_blank" rel="noreferrer" download={p.nombre} style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a>
                             <button onClick={() => upd(detail.id, { planos: (detail.planos || []).filter(x => x.id !== p.id) })} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
@@ -1683,10 +2326,10 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
           <div key={i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 12px", boxShadow: T.shadow }}><div style={{ fontSize: 19, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3 }}>{l}</div></div>)}
       </div>
       <div style={{ background: T.navy, borderRadius: T.rsm, padding: "15px 17px", marginBottom: 20, borderBottom: `2px solid ${BRASS}` }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span>Resumen económico</span>{ecoUnlocked && <button onClick={() => setEcoUnlocked(false)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.55)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>🔒 Bloquear</button>}</div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span>Resumen económico</span>{ecoUnlocked && <button onClick={() => setEcoUnlocked(false)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.55)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}><Ico n="lock" /> Bloquear</button>}</div>
         {ecoUnlocked ? [["Contratado", contratado, "#fff"], ["Certificado", certificado, "#16A34A"], ["Saldo", contratado - certificado, BRASS]].map(([l, v, c], i) =>
           <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderTop: i ? "1px solid rgba(255,255,255,.08)" : "none" }}><span style={{ fontSize: 12.5, color: "rgba(255,255,255,.75)" }}>{l}</span><span style={{ fontSize: 14, fontWeight: 800, color: c }}>{money(v)}</span></div>)
-          : <div><div style={{ fontSize: 12, color: "rgba(255,255,255,.7)", marginBottom: 11, lineHeight: 1.5 }}>🔒 Protegido. Ingresá la contraseña para ver los montos.</div>
+          : <div><div style={{ fontSize: 12, color: "rgba(255,255,255,.7)", marginBottom: 11, lineHeight: 1.5 }}><Ico n="lock" /> Protegido. Ingresá la contraseña para ver los montos.</div>
             <div style={{ display: "flex", gap: 8 }}>
               <input type="password" value={pinInput} onChange={e => setPinInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { if (pinInput === ecoPin) { setEcoUnlocked(true); setPinInput(""); } else alert("Contraseña incorrecta."); } }} placeholder="Contraseña" style={{ flex: 1, background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", borderRadius: T.rsm, padding: "10px 12px", fontSize: 14, color: "#fff", outline: "none" }} />
               <button onClick={() => { if (pinInput === ecoPin) { setEcoUnlocked(true); setPinInput(""); } else alert("Contraseña incorrecta."); }} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Ver</button>
@@ -1707,7 +2350,7 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
             <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
               <Badge c={e.c} b={e.b}>{e.l}</Badge>
               {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra"
-                style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>🗑</button>}
+                style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}><Ico n="trash" /> </button>}
             </div>
           </div>
           <div style={{ margin: "12px 0 6px" }}>
@@ -1716,21 +2359,21 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <div style={{ flex: 1, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Certificado</div><div style={{ fontSize: 12.5, fontWeight: 800, color: "#16A34A", marginTop: 2 }}>{pct}%</div></div>
-            <div style={{ flex: 2, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Saldo pendiente</div><div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginTop: 2 }}>{ecoUnlocked ? money(contr - cert) : "🔒 •••••"}</div></div>
+            <div style={{ flex: 2, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Saldo pendiente</div><div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginTop: 2 }}>{ecoUnlocked ? money(contr - cert) : "•••••"}</div></div>
           </div>
           <button onClick={() => setOpen(isOpen ? null : o.id)} style={{ width: "100%", marginTop: 12, background: "none", border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, color: T.accent }}>{isOpen ? "Ocultar detalle ▲" : `Ver detalle${forms.length ? ` · ${forms.length} formulario${forms.length > 1 ? "s" : ""}` : ""}${(o.planos || []).length ? ` · ${(o.planos || []).length} plano${(o.planos || []).length > 1 ? "s" : ""}` : ""} ▼`}</button>
           {isOpen && <div style={{ marginTop: 12 }}>
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Planos (PDF / CAD){(o.planos || []).length ? ` (${(o.planos || []).length})` : ""}</div>
               {(o.planos || []).map(p => <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}>
-                <div style={{ width: 30, height: 30, borderRadius: 7, background: "#EAEEF3", color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>📐</div>
+                <div style={{ width: 30, height: 30, borderRadius: 7, background: "#EAEEF3", color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}><Ico n="ruler" /> </div>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{p.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}</div></div>
                 <a href={p.url} target="_blank" rel="noreferrer" download={p.nombre} style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, textDecoration: "none", flexShrink: 0 }}>Abrir</a>
                 <button onClick={() => borrarPlano(o, p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
               </div>)}
               <label style={{ display: "block", textAlign: "center", background: T.navy, color: "#fff", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>{subP ? "Subiendo…" : "＋ Subir plano (PDF/CAD)"}<input type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={e => subirPlanos(e, o)} style={{ display: "none" }} /></label>
             </div>
-            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({(o.fotos || []).length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{(o.fotos || []).map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
+            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({(o.fotos || []).length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{(o.fotos || []).slice().reverse().map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
             {(o.videos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Videos ({o.videos.length})</div>{o.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", borderRadius: 6, marginBottom: 8, background: "#000", display: "block" }} />)}</div>}
             {ts.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Cronograma</div>{ts.map(t => <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}><span style={{ flex: 1, fontSize: 12, color: T.text }}>{t.nombre}</span><div style={{ width: 70, height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${t.avance || 0}%`, background: BRASS }} /></div><span style={{ fontSize: 11, fontWeight: 700, color: T.muted, width: 32, textAlign: "right" }}>{t.avance || 0}%</span></div>)}</div>}
             {ult && <div><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Último informe · {ult.fecha}</div><div style={{ background: T.bg, borderRadius: T.rsm, padding: "11px 13px", fontSize: 12, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{ult.texto}</div></div>}
@@ -1764,7 +2407,7 @@ function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivo
     setSubiendo(false); e.target.value = "";
   }
   const FileRow = ({ a, mine, onDelete }) => (<div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px", marginBottom: 8, boxShadow: T.shadow, display: "flex", alignItems: "center", gap: 11 }}>
-    <div style={{ width: 36, height: 36, borderRadius: 8, background: mine ? "#EAEEF3" : T.bg, color: mine ? T.accent : T.muted, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>📄</div>
+    <div style={{ width: 36, height: 36, borderRadius: 8, background: mine ? "#EAEEF3" : T.bg, color: mine ? T.accent : T.muted, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}><Ico n="doc" /> </div>
     <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.nombre || "archivo"}</div><div style={{ fontSize: 11, color: T.muted }}>{a.fecha || a.obra || ""}</div></div>
     {a.url && <a href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ background: T.bg, color: T.accent, borderRadius: 7, padding: "7px 11px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Abrir</a>}
     {onDelete && <button onClick={() => { if (confirm("¿Eliminar este archivo?")) onDelete(); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: 7, padding: "7px 9px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>}
@@ -1792,7 +2435,7 @@ function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivo
 }
 
 // ── PANTALLA: MENSAJES ───────────────────────────────────────────────
-function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje }) {
+function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje, vaciarMensajes }) {
   const [input, setInput] = useState("");
   const [adj, setAdj] = useState([]);
   const [obraAdj, setObraAdj] = useState("");
@@ -1801,13 +2444,16 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje }) {
   async function addAdj(e) { const files = Array.from(e.target.files); if (!files.length) return; const nuevos = []; for (const f of files) { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "msg", f.name.replace(/\W+/g, "_")); nuevos.push({ nombre: f.name, url }); } setAdj(p => [...p, ...nuevos]); if (!obraAdj && obras[0]) setObraAdj(obras[0].id); e.target.value = ""; }
   async function send() { const t = input.trim(); if (!t && adj.length === 0) return; await enviar(t, adj, adj.length ? obraAdj : ""); setInput(""); setAdj([]); setObraAdj(""); }
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    {mensajes.length > 0 && vaciarMensajes && <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 16px 0" }}>
+      <button onClick={vaciarMensajes} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> Vaciar mensajes ({mensajes.length})</button>
+    </div>}
     <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
       {mensajes.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "40px 18px", lineHeight: 1.6 }}>Escribile a V+V Construcciones. Te avisamos acá cuando respondan.</div>}
       {mensajes.map((m, i) => { const mine = m.from === "cliente"; return (<div key={m.id || i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 11 }}>
         <div style={{ maxWidth: "82%" }}>
           <div style={{ background: mine ? T.accent : T.card, color: mine ? "#fff" : T.text, border: mine ? "none" : `1px solid ${T.border}`, borderRadius: mine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "10px 13px", fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>
             {m.texto}
-            {(m.archivos || []).map((a, j) => <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}>📎 {a.nombre}</a>)}
+            {(m.archivos || []).map((a, j) => <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}><Ico n="clip" /> {a.nombre}</a>)}
           </div>
           <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{mine ? "Vos" : "V+V"} · {m.fecha}{mine && m.id && borrarMensaje && <span onClick={() => borrarMensaje(m.id)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
         </div>
@@ -1815,7 +2461,7 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje }) {
       <div ref={bottomRef} />
     </div>
     <div style={{ borderTop: `1px solid ${T.border}`, background: T.card, padding: "10px 14px 14px" }}>
-      {adj.length > 0 && <><div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: T.bg, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>📎 {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>
+      {adj.length > 0 && <><div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: T.bg, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}><Ico n="clip" /> {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
           <span style={{ fontSize: 11.5, color: T.muted, fontWeight: 600, flexShrink: 0 }}>Cargar a obra:</span>
           <select value={obraAdj} onChange={e => setObraAdj(e.target.value)} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12.5, color: T.text }}>
@@ -1834,11 +2480,91 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje }) {
 }
 
 // ── PANTALLA: AJUSTES ────────────────────────────────────────────────
-function AjustesScreen({ T, cfg, setCfg }) {
+function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, setRenders }) {
   const logoRef = useRef(null);
   async function setLogo(f) { const d = await fileToDataUrl(f, 600); const url = await uploadArchivo(d, "logos", "cliente_logo"); setCfg(p => ({ ...p, logo: url })); }
+  // Le pone (o le cambia) el código de acceso a una obra. Ese código es el
+  // que se le pasa al dueño para que entre a ver SU obra, y nada más.
+  // ── Renders del panel del propietario ─────────────────────────────
+  // Se suben acá como imágenes y son las que rotan en el banner y las que
+  // se ven en la sección "Renders" de la app del dueño.
+  const [obraRender, setObraRender] = useState(obras[0]?.id || "");
+  const [subiendoR, setSubiendoR] = useState(false);
+  const renderRef = useRef(null);
+  const rendersDeObra = (renders || {})[obraRender] || [];
+  async function subirRenders(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !obraRender) { if (e.target) e.target.value = ""; return; }
+    setSubiendoR(true);
+    const nuevos = [];
+    for (const f of files) {
+      try {
+        const data = await fileToDataUrl(f, 1600);
+        const url = await uploadArchivo(data, `renders/${obraRender}`, `${Date.now()}_${(f.name || "render").replace(/\W+/g, "_")}`);
+        nuevos.push({ id: uid(), nombre: f.name || "Render", url: url || data, ts: Date.now() });
+      } catch { }
+    }
+    if (nuevos.length && setRenders) setRenders(p => ({ ...(p || {}), [obraRender]: [...((p || {})[obraRender] || []), ...nuevos] }));
+    setSubiendoR(false);
+    if (e.target) e.target.value = "";
+    if (!nuevos.length) alert("No pude subir las imágenes. Probá de nuevo.");
+  }
+  function borrarRender(id) {
+    if (!confirm("¿Sacar este render del panel del propietario?")) return;
+    if (setRenders) setRenders(p => ({ ...(p || {}), [obraRender]: ((p || {})[obraRender] || []).filter(r => r.id !== id) }));
+  }
+  const setCodigo = (obraId, valor) => {
+    const limpio = String(valor || "").toUpperCase().replace(/\s+/g, "");
+    if (setObras) setObras(p => (p || []).map(o => o.id === obraId ? { ...o, codigoCliente: limpio } : o));
+  };
+  const linkPanel = typeof window !== "undefined" ? `${window.location.origin}/propietario.html` : "/propietario.html";
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <div style={{ padding: "16px 20px" }}>
+      <Eyebrow T={T}>Códigos de clientes</Eyebrow>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>
+        Cada obra puede tener un código. Se lo pasás al dueño junto con este link y entra a ver solo su obra:
+        <span style={{ display: "block", marginTop: 4, color: T.accent, fontWeight: 700, wordBreak: "break-all" }}>{linkPanel}</span>
+      </div>
+      <Card T={T} style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
+        {obras.length === 0 && <div style={{ padding: 16, fontSize: 12.5, color: T.muted, textAlign: "center" }}>Todavía no hay obras cargadas.</div>}
+        {obras.map((o, i) => (<div key={o.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 13px", borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.nombre}</div>
+            {o.codigoCliente && <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 700, marginTop: 1 }}>✓ ya tiene código</div>}
+          </div>
+          <input
+            value={o.codigoCliente || ""}
+            onChange={e => setCodigo(o.id, e.target.value)}
+            placeholder="Sin código"
+            style={{ width: 140, flexShrink: 0, background: T.bg, border: `1px solid ${o.codigoCliente ? BRASS : T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 12.5, fontWeight: 800, color: o.codigoCliente ? T.accent : T.text, textAlign: "center", letterSpacing: "0.04em" }}
+          />
+        </div>))}
+      </Card>
+
+      <Eyebrow T={T}>Renders del panel del propietario</Eyebrow>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Subí acá las imágenes de renders. Son las que pasan como diapositivas en el banner y las que ve el dueño en la sección "Renders".</div>
+      <Card T={T} style={{ padding: 13, marginBottom: 22 }}>
+        {obras.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, textAlign: "center", padding: 8 }}>Todavía no hay obras cargadas.</div>
+          : <>
+            <select value={obraRender} onChange={e => setObraRender(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: T.text, marginBottom: 10, boxSizing: "border-box" }}>
+              {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+            </select>
+            <input ref={renderRef} type="file" accept="image/*" multiple onChange={subirRenders} style={{ display: "none" }} />
+            <button onClick={() => renderRef.current?.click()} disabled={subiendoR} style={{ width: "100%", background: T.accentLight, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 9, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: rendersDeObra.length ? 11 : 0 }}>{subiendoR ? "Subiendo…" : "＋ Importar renders (imágenes)"}</button>
+            {rendersDeObra.length > 0 && <>
+              <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 7 }}>{rendersDeObra.length} render{rendersDeObra.length > 1 ? "s" : ""} · pasan en este orden</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                {rendersDeObra.map(r => (<div key={r.id} style={{ position: "relative", borderRadius: 8, overflow: "hidden", border: `1px solid ${T.border}` }}>
+                  <img src={r.url} alt={r.nombre} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
+                  <button onClick={() => borrarRender(r.id)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(220,38,38,.92)", border: "none", color: "#fff", borderRadius: 6, width: 22, height: 22, fontSize: 12, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                </div>))}
+              </div>
+            </>}
+          </>}
+      </Card>
+
       <Eyebrow T={T}>Identidad del cliente</Eyebrow>
       <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Personalizá el nombre y el logo que ve este cliente.</div>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Nombre del cliente</label>
@@ -1871,7 +2597,7 @@ function AjustesScreen({ T, cfg, setCfg }) {
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 01-07-IA</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-certif</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -1884,17 +2610,42 @@ function AjustesScreen({ T, cfg, setCfg }) {
 function Toast({ T, toast }) {
   if (!toast) return null;
   return (<div style={{ position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 500, background: T.navy, color: "#fff", borderRadius: 12, padding: "12px 18px", boxShadow: "0 8px 28px rgba(0,0,0,.3)", borderBottom: `2px solid ${BRASS}`, animation: "slidein .35s ease", display: "flex", alignItems: "center", gap: 10, maxWidth: 360 }}>
-    <span style={{ fontSize: 18 }}>📩</span><span style={{ fontSize: 13, fontWeight: 600 }}>{toast}</span>
+    <span style={{ fontSize: 18 }}><Ico n="chat" /> </span><span style={{ fontSize: 13, fontWeight: 600 }}>{toast}</span>
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "pedidos", label: "Pedidos", icon: "M9 5h6M9 9h6M9 13h4M5 3h14v18H5z" }, { id: "materiales", label: "Materiales", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "drone", label: "Drone IA", icon: "M12 8a2 2 0 100 4 2 2 0 000-4zM4 4a2 2 0 100 4 2 2 0 000-4zM20 4a2 2 0 100 4 2 2 0 000-4zM4 16a2 2 0 100 4 2 2 0 000-4zM20 16a2 2 0 100 4 2 2 0 000-4zM6 6l4 4M18 6l-4 4M6 18l4-4M18 18l-4-4" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
-function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos }) {
+function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos, onMinutas }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+  const [escuchando, setEscuchando] = useState(false);
+  const recRef = useRef(null);
+  const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  async function descargarMinuta(texto) {
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const filas = esc(texto).split("\n").map(l => l.trim() ? `<p style="margin:0 0 6px">${l}</p>` : "").join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Minuta de reunión</title></head><body style="font-family:Calibri,Arial,sans-serif;color:#0F1B2D;padding:20px;line-height:1.5">${filas}</body></html>`;
+    const nombre = `Minuta_${hoyStr().replace(/\//g, "-")}.doc`;
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+    try {
+      const file = new File([blob], nombre, { type: "application/msword" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nombre }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+  function toggleVoz() {
+    if (!sttOk) return;
+    if (escuchando) { recRef.current?.stop(); setEscuchando(false); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = false; rec.continuous = false;
+    rec.onresult = e => { const txt = e.results[0][0].transcript; setInput(p => (p ? p + " " : "") + txt); };
+    rec.onend = () => setEscuchando(false);
+    rec.onerror = () => setEscuchando(false);
+    recRef.current = rec; rec.start(); setEscuchando(true);
+  }
   const cnDeb = "V+V";
   const DEBATE_MAX = 18;
   const [debateOpen, setDebateOpen] = useState(false);
@@ -1920,7 +2671,7 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
       if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(resp || ""))) {
         const rE = await storage.get("ia_debate"); const debE = rE?.value ? JSON.parse(rE.value) : deb;
         debE.active = false; await saveDebate(debE); setDebateActive(false);
-        setMsgs(prev => [...prev, { role: "assistant", content: "🎙 Debate frenado: no hay crédito de API disponible. Recargá créditos en console.anthropic.com y volvé a intentar.", debate: true }]);
+        setMsgs(prev => [...prev, { role: "assistant", content: "Debate frenado: no hay crédito de API disponible. Recargá créditos en console.anthropic.com y volvé a intentar.", debate: true }]);
         debateBusy.current = false; return;
       }
       const r2 = await storage.get("ia_debate"); const deb2 = r2?.value ? JSON.parse(r2.value) : deb;
@@ -1935,13 +2686,13 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
     const tema = debateTema.trim(); if (!tema) return;
     const deb = { active: true, tema, turnos: [], maxTurnos: DEBATE_MAX, startedBy: "cliente", ts: Date.now() };
     await saveDebate(deb); debateSeen.current = 0; setDebateActive(true); setDebateOpen(false); setDebateTema("");
-    setMsgs(prev => [...prev, { role: "assistant", content: `🎙 Debate técnico iniciado con la IA de V+V: "${tema}". Dejá las dos apps abiertas y mirá cómo se van respondiendo en vivo.`, debate: true }]);
+    setMsgs(prev => [...prev, { role: "assistant", content: `Debate técnico iniciado con la IA de V+V: "${tema}". Dejá las dos apps abiertas y mirá cómo se van respondiendo en vivo.`, debate: true }]);
     runDebateTurn();
   }
   async function stopDebate() {
     const r = await storage.get("ia_debate"); const deb = r?.value ? JSON.parse(r.value) : null;
     if (deb) { deb.active = false; await saveDebate(deb); }
-    setDebateActive(false); setMsgs(prev => [...prev, { role: "assistant", content: "🎙 Debate frenado.", debate: true }]);
+    setDebateActive(false); setMsgs(prev => [...prev, { role: "assistant", content: "Debate frenado.", debate: true }]);
   }
   useEffect(() => {
     const iv = setInterval(async () => {
@@ -1950,8 +2701,8 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
         if (!deb) return;
         if ((deb.turnos || []).length > debateSeen.current) {
           const nuevos = deb.turnos.slice(debateSeen.current); debateSeen.current = deb.turnos.length;
-          setMsgs(prev => [...prev, ...nuevos.map(t => ({ role: "assistant", content: `🎙 IA ${t.from === "cliente" ? (cfg.sigla || "Belfast") : cnDeb}: ${t.texto}`, debate: true }))]);
-          if (!deb.active && (deb.turnos || []).length >= deb.maxTurnos) setMsgs(prev => [...prev, { role: "assistant", content: "🎙 Debate finalizado.", debate: true }]);
+          setMsgs(prev => [...prev, ...nuevos.map(t => ({ role: "assistant", content: `IA ${t.from === "cliente" ? (cfg.sigla || "Belfast") : cnDeb}: ${t.texto}`, debate: true }))]);
+          if (!deb.active && (deb.turnos || []).length >= deb.maxTurnos) setMsgs(prev => [...prev, { role: "assistant", content: "Debate finalizado.", debate: true }]);
         }
         if (deb.active && (deb.turnos || []).length < deb.maxTurnos) {
           const last = deb.turnos[deb.turnos.length - 1];
@@ -1972,6 +2723,14 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
     const per = (personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${p.telefono ? ` · tel ${p.telefono}` : ""}${p.dni ? ` · DNI ${p.dni}` : ""}${p.cuil ? ` · CUIL ${p.cuil}` : ""}${(p.sitios || []).length ? ` [cargado en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n");
     const msj = (mensajes || []).slice(-8).map(m => `· ${m.from === "cliente" ? "Nosotros" : "V+V"}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de ${cfg.nombre} (comitente), en contacto con V+V Construcciones (la empresa que ejecuta la obra). Español rioplatense, claro y cordial. Estás CONECTADO a los mismos datos y al asistente de V+V: comparten la base de datos en tiempo real (obras, personal, pedidos, mensajes); ves lo que carga la otra empresa y ellos ven lo que cargás vos. NUNCA digas que no podés comunicarte con V+V ni con su asistente: SÍ podés, mandándoles un mensaje directo (les aparece en su pantalla de Mensajes) y ellos te responden. REGLA CLAVE: si te piden COMUNICARTE, HABLAR, AVISAR, DECIRLE o PREGUNTARLE algo a V+V, usá SIEMPRE la acción "enviar_mensaje" (se envía directo). "crear_pedido" es solo para pedidos formales de definiciones/documentación. También podés: informar sobre el avance de las obras, GESTIONAR PEDIDOS, cargar PERSONAL a los sitios/barrios (vos tramitás el acceso a los barrios privados), MANDAR WHATSAPP a los jefes de obra/contactos (usás la agenda de Personal → Contactos), y BUSCAR EN INTERNET información actual (normativa, código de edificación, proveedores, precios, datos de empresas). Priorizá fuentes argentinas y citá la fuente.
+
+MINUTAS DE REUNIÓN: si te piden armar, redactar o pasar en limpio una minuta de reunión (por texto o dictada), pedí — solo si no te lo dieron — obra, fecha y quiénes participaron, y con eso redactá la minuta directo, con esta estructura fija:
+MINUTA DE REUNIÓN
+Obra: · Fecha: · Participantes:
+TEMAS TRATADOS (numerados, un renglón por tema con lo relevante)
+ACUERDOS / DECISIONES (numerados)
+PENDIENTES (numerados, con quién queda a cargo si se dijo)
+Sé fiel a lo que te contaron — no inventes acuerdos ni asistentes que no se mencionaron. Si dictan la reunión de corrido y desordenada, ordenala vos en esa estructura sin agregar nada que no se haya dicho.
 
 OBRAS:\n${ob || "(sin obras)"}
 
@@ -2078,7 +2837,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
         if (iaSeen.current < 0) iaSeen.current = arr.length;
         else if (arr.length > iaSeen.current) {
           const nuevos = arr.slice(iaSeen.current).filter(m => m.from === "cliente" || m.to === "cliente" || (m.from === "vv" && m.tipo === "q" && !m.to)); iaSeen.current = arr.length;
-          if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `🔗 IA ${m.from === "cliente" ? cfg.nombre : "V+V"} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
+          if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(m => ({ role: "assistant", content: `IA ${m.from === "cliente" ? cfg.nombre : "V+V"} ${m.tipo === "q" ? "consultó" : "respondió"}: ${m.texto}` }))]);
         }
         const pend = arr.find(m => m.from === "vv" && m.tipo === "q" && !m.answered && (Date.now() - (m.ts || 0) < 300000));
         if (pend && !iaBusy.current && cfg?.iaAuto !== false) {
@@ -2113,7 +2872,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
           else {
             const nuevos = incoming.filter(p => !pedSeen.current.has(p.id));
             nuevos.forEach(p => pedSeen.current.add(p.id));
-            if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(p => ({ role: "assistant", content: `📥 Te llegó un pedido de V+V: "${p.asunto}"${p.detalle ? " — " + p.detalle : ""}${p.prioridad === "alta" ? " ⚠ URGENTE" : ""}. Está en Pedidos. Decime si querés que lo responda.` }))]);
+            if (nuevos.length) setMsgs(prev => [...prev, ...nuevos.map(p => ({ role: "assistant", content: `Te llegó un pedido de V+V: "${p.asunto}"${p.detalle ? " — " + p.detalle : ""}${p.prioridad === "alta" ? " ⚠ URGENTE" : ""}. Está en Pedidos. Decime si querés que lo responda.` }))]);
           }
         }
         // Avisar pedidos de MATERIALES nuevos y dejar listo el WhatsApp al jefe de obra
@@ -2133,7 +2892,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
               const clean = jefe ? String(jefe.telefono).replace(/\D/g, "") : "";
               const num = clean ? (clean.startsWith("54") ? clean : ("549" + clean)) : "";
               const url = num ? `https://wa.me/${num}?text=${t}` : `https://wa.me/?text=${t}`;
-              setMsgs(prev => [...prev, { role: "assistant", content: `📲 Llegó un pedido de materiales para ${obraN}.${jefe ? ` Te lo dejo listo para reenviar al jefe de obra ${jefe.nombre} por WhatsApp:` : ` Te lo dejo listo para reenviar por WhatsApp (elegí el contacto):`}`, waLink: url, waLabel: jefe ? `Enviar a ${jefe.nombre}` : "Abrir WhatsApp" }]);
+              setMsgs(prev => [...prev, { role: "assistant", content: `Llegó un pedido de materiales para ${obraN}.${jefe ? ` Te lo dejo listo para reenviar al jefe de obra ${jefe.nombre} por WhatsApp:` : ` Te lo dejo listo para reenviar por WhatsApp (elegí el contacto):`}`, waLink: url, waLabel: jefe ? `Enviar a ${jefe.nombre}` : "Abrir WhatsApp" }]);
             }
           }
         }
@@ -2146,13 +2905,20 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
     window.addEventListener("focus", tick);
     return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", tick); };
   }, []);
-  const QUICK = ["¿Cómo viene el avance de cada obra?", "Cargá al personal de [obra] al barrio…", "¿Hay pedidos sin resolver?"];
+  const QUICK = ["📝 Redactá una minuta de la reunión que te voy a contar", "¿Cómo viene el avance de cada obra?", "Cargá al personal de [obra] al barrio…", "¿Hay pedidos sin resolver?"];
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
     {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", borderBottom: "1px solid #FECACA", padding: "11px 16px", cursor: "pointer", flexShrink: 0 }}>
       <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
       <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de V+V</div><div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{pendObras ? `Obras: ${pendObras}` : "Tocá para ver"} →</div></div>
     </div>}
     <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px" }}>
+      {onMinutas && <button onClick={onMinutas} style={{ width: "100%", maxWidth: 760, margin: "0 auto 16px", display: "flex", alignItems: "center", gap: 12, background: T.navy, border: `1px solid ${BRASS}`, borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}>
+        <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Ico n="mic" s={19} c="#fff" /></div>
+        <div style={{ flex: 1, textAlign: "left" }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>🎙 Grabar reunión</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginTop: 1 }}>Se arma la minuta sola y se manda por PDF</div>
+        </div>
+      </button>}
       {msgs.length === 0 && <div style={{ paddingTop: 4 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Consultá sobre tus obras o gestioná pedidos con V+V. Puedo crear y responder pedidos por vos.</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 560, margin: "0 auto" }}>{QUICK.map((q, i) => <button key={i} onClick={() => send(q)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", fontSize: 13, color: T.text, textAlign: "left", boxShadow: T.shadow }}>{q}</button>)}</div>
@@ -2160,14 +2926,15 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
           <div style={{ maxWidth: "84%", background: m.role === "user" ? T.accent : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{m.content}</div>
-          {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
-          {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
+          {m.role !== "user" && /MINUTA DE REUNI[OÓ]N/i.test(String(m.content || "")) && <button onClick={() => descargarMinuta(m.content)} style={{ marginTop: 7, background: "#2B579A", color: "#fff", border: "none", borderRadius: 9, padding: "9px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Ico n="word" /> Descargar minuta (Word)</button>}
+          {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}><Ico n="send" /> {m.waLabel || "Enviar por WhatsApp"}</a>}
+          {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}><Ico n="ruler" /> </span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
           {m.media && m.media.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.mediaTipo === "videos"
             ? m.media.map((u, i) => <video key={i} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000", display: "block" }} />)
             : <div style={{ display: "grid", gridTemplateColumns: m.media.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>{m.media.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" download><img src={u} alt="" style={{ width: "100%", borderRadius: 10, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div>}
             <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Tocá para abrir en grande o descargar/compartir.</div>
           </div>}
-          {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
+          {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}><Ico n="send" /> {m.waLabel || "Enviar por WhatsApp"}</a>}
           {m.accion && !m.accionDone && !m.accionDescartada && <div style={{ maxWidth: "84%", marginTop: 7, background: T.bg, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px 13px" }}>
             <div style={{ fontSize: 10.5, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Acción propuesta</div>
             <div style={{ fontSize: 12.5, color: T.text, marginBottom: 10 }}>{accionLabel(m.accion)}</div>
@@ -2185,7 +2952,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
     <div style={{ borderTop: `1px solid ${T.border}`, background: T.card, padding: "10px 14px 14px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 760, margin: "0 auto 8px" }}>
         {debateActive ? <button onClick={stopDebate} style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Frenar debate</button>
-          : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.accent : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🎙 Debate IA</button>}
+          : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.accent : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="mic" /> Debate IA</button>}
         {msgs.length > 0 && <button onClick={() => setMsgs([])} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginLeft: "auto" }}>Limpiar</button>}
       </div>
       {debateOpen && !debateActive && <div style={{ maxWidth: 760, margin: "0 auto 8px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px" }}>
@@ -2195,9 +2962,10 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
           <button onClick={startDebate} disabled={!debateTema.trim()} style={{ background: debateTema.trim() ? T.navy : T.border, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "10px 16px", fontSize: 12.5, fontWeight: 700, cursor: debateTema.trim() ? "pointer" : "default" }}>Iniciar</button>
         </div>
       </div>}
-      {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}>🎙 Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
+      {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}><Ico n="mic" /> Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, maxWidth: 760, margin: "0 auto" }}>
         <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí tu consulta…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        {sttOk && <button onClick={toggleVoz} title="Dictar por voz" style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#DC2626" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>🎙</button>}
         <button onClick={() => send()} disabled={loading || !input.trim()} style={{ width: 42, height: 42, borderRadius: T.rsm, background: input.trim() && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, flexShrink: 0 }}>↑</button>
       </div>
     </div>
@@ -2261,10 +3029,10 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
               <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>
               <div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{p.de === miSide ? "Enviado" : "Recibido"} · {p.fecha}</div>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 4 }}>
-                {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: "#EAEEF3", borderRadius: 5, padding: "2px 7px" }}>🏗 {nomObra(p.obra_id)}</span>}
+                {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: "#EAEEF3", borderRadius: 5, padding: "2px 7px" }}><Ico n="building" /> {nomObra(p.obra_id)}</span>}
                 {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "#FEF2F2", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
               </div>
-              <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 230 }}>{ult?.porIA ? "🤖 " : ""}{ult?.texto}</div>
+              <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 230 }}>{ult?.porIA ? "" : ""}{ult?.texto}</div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
               <Badge c={e.c} b={e.b}>{e.l}</Badge>
@@ -2276,7 +3044,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
         <button onClick={() => setOpen(null)} style={{ background: "none", border: "none", color: T.accent, fontSize: 12.5, fontWeight: 700, marginBottom: 12 }}>← Volver</button>
         <Card T={T} style={{ padding: 14, marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}><div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{cur.asunto}</div><Badge c={e.c} b={e.b}>{e.l}</Badge></div>
-          {cur.obra_id && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: T.accent, background: "#EAEEF3", borderRadius: 6, padding: "4px 10px", marginTop: 8 }}>🏗 Obra: {nomObra(cur.obra_id)}</div>}
+          {cur.obra_id && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: T.accent, background: "#EAEEF3", borderRadius: 6, padding: "4px 10px", marginTop: 8 }}><Ico n="building" /> Obra: {nomObra(cur.obra_id)}</div>}
           <div style={{ fontSize: 11.5, color: T.muted, marginTop: 6 }}>{cur.de === miSide ? "Enviado a V+V" : "Recibido de V+V"} · {cur.fecha} · prioridad {cur.prioridad}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 12 }}>{Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700 }}>{v.l}</button>)}</div>
           <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
@@ -2286,17 +3054,17 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
           <div style={{ maxWidth: "85%" }}>
             <div style={{ background: mine ? T.accent : T.card, color: mine ? "#fff" : T.text, border: mine ? "none" : `1px solid ${T.border}`, borderRadius: mine ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "10px 13px", fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
               {h.texto}
-              {(h.archivos || []).map((a, j) => a.img ? <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 7 }}><img src={a.url} alt={a.nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} /></a> : <a key={j} href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}>📎 {a.nombre}</a>)}
+              {(h.archivos || []).map((a, j) => a.img ? <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 7 }}><img src={a.url} alt={a.nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} /></a> : <a key={j} href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}><Ico n="clip" /> {a.nombre}</a>)}
             </div>
-            <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "🤖 IA · " : ""}{mine ? cfg.nombre : "V+V"} · {h.fecha}</div>
+            <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "IA · " : ""}{mine ? cfg.nombre : "V+V"} · {h.fecha}</div>
           </div>
         </div>); })}
         <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Escribí una respuesta…" rows={3} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, marginTop: 8 }} />
-        {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: "#EAEEF3", borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>{a.img ? "🖼" : "📎"} {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
+        {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: "#EAEEF3", borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>{a.img ? "" : ""} {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button onClick={() => fileRef.current?.click()} style={{ width: 44, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, fontSize: 17 }}>＋</button>
-          <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: "#EAEEF3", color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700 }}>{iaLoad ? "Redactando…" : "🤖 Redactar con IA"}</button>
+          <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: "#EAEEF3", color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700 }}>{iaLoad ? "Redactando…" : "Redactar con IA"}</button>
           <PBtn T={T} onClick={() => responder(cur.id, reply, false, adj)} style={{ flex: 1 }}>Enviar</PBtn>
         </div>
       </>); })()}
@@ -2349,7 +3117,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
       <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.55, marginBottom: 10 }}>Tu agenda propia de Belfast. Estos teléfonos los usa la app para reenviar los pedidos de materiales por WhatsApp.</div>
       {(contactos || []).map(c => (<Card T={T} key={c.id} style={{ padding: 12, marginBottom: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#25D366", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>📲</div>
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#25D366", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}><Ico n="send" /> </div>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{c.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{c.rol || "—"} · {nomObra(c.obra_id)} · {c.telefono}</div></div>
           <button onClick={() => setCForm({ id: c.id, nombre: c.nombre || "", rol: c.rol || "", obra_id: c.obra_id || "", telefono: c.telefono || "" })} style={{ background: "none", border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
           <button onClick={() => borrarC(c.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, width: 30, height: 30, fontSize: 13, cursor: "pointer" }}>✕</button>
@@ -2365,7 +3133,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
           <div style={{ width: 40, height: 40, borderRadius: "50%", background: T.navy, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>{(p.nombre || "?").slice(0, 1).toUpperCase()}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{p.nombre}</div>
-            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {nomObra(p.obra_id)}{p.telefono ? ` · 📲 ${p.telefono}` : ""}</div>
+            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {nomObra(p.obra_id)}{p.telefono ? ` · ${p.telefono}` : ""}</div>
             {(p.sitios || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>{p.sitios.map((s, i) => <span key={i} style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", background: "#ECFDF5", borderRadius: 5, padding: "2px 6px" }}>✓ {s.sitio}</span>)}</div>}
           </div>
           {vc > 0 ? <Badge c="#EF4444" b="#FEF2F2">{vc} vence</Badge> : docn > 0 ? <Badge c="#16A34A" b="#ECFDF5">{docn} doc</Badge> : <Badge c="#94A3B8" b="#F8FAFC">s/doc</Badge>}
@@ -2377,7 +3145,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 1180, margin: "0 auto", padding: "20px", maxHeight: "85vh", overflowY: "auto", animation: "up .25s ease" }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>{detalle.nombre}</div>
         <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 14 }}>{detalle.rol} · {detalle.empresa || "V+V"} · {nomObra(detalle.obra_id)}</div>
-        {detalle.telefono && <a href={`https://wa.me/${(() => { const c = String(detalle.telefono).replace(/\D/g, ""); return c.startsWith("54") ? c : "549" + c; })()}`} target="_blank" rel="noreferrer" style={{ display: "inline-block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 14 }}>📲 WhatsApp · {detalle.telefono}</a>}
+        {detalle.telefono && <a href={`https://wa.me/${(() => { const c = String(detalle.telefono).replace(/\D/g, ""); return c.startsWith("54") ? c : "549" + c; })()}`} target="_blank" rel="noreferrer" style={{ display: "inline-block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 14 }}><Ico n="send" /> WhatsApp · {detalle.telefono}</a>}
         <Eyebrow T={T}>Documentación</Eyebrow>
         {Object.keys(detalle.docs || {}).length === 0 && <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Sin documentación cargada.</div>}
         {Object.entries(detalle.docs || {}).map(([k, d]) => { const dias = d?.vence ? diasHasta(d.vence) : null; return (<div key={k} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 7 }}>
@@ -2499,110 +3267,808 @@ function FormulariosScreen({ T, obras, formularios = [] }) {
   </div>);
 }
 
-const TIPOS_PEDIDO_CLI = { material: { label: "Materiales", icon: "📦", color: "#1B3A5B" }, definicion: { label: "Definiciones", icon: "📐", color: "#B0894F" }, plano: { label: "Planos", icon: "🗂️", color: "#3B6E9E" } };
+const TIPOS_PEDIDO_CLI = { material: { label: "Materiales", icon: "box", color: "#1B3A5B" }, definicion: { label: "Definiciones", icon: "ruler", color: "#B0894F" }, plano: { label: "Planos", icon: "plans", color: "#3B6E9E" } };
 const tipoPedCli = (id) => TIPOS_PEDIDO_CLI[id] || TIPOS_PEDIDO_CLI.material;
 const itemsTexto = (p) => (p.items || []).map(it => (p.tipo && p.tipo !== "material") ? `${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}` : `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
 
-function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matpedidos = [], setMatpedidos }) {
+
+// ═══ DEFINICIONES — misma pantalla que la app de Contratistas ═══
+function cargarXLSX() {
+  return new Promise((resolve, reject) => {
+    if (window.XLSX) return resolve(window.XLSX);
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.onload = () => resolve(window.XLSX);
+    s.onerror = () => reject(new Error("No se pudo cargar el lector de Excel."));
+    document.head.appendChild(s);
+  });
+}
+function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [cargando, setCargando] = useState(false);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const pdfRef = useRef(null);
+  const imprimirPdf = () => { try { const w = pdfRef.current && pdfRef.current.contentWindow; if (w) { w.focus(); w.print(); } } catch { alert("No se pudo abrir la impresión."); } };
+  const [nuevoRubro, setNuevoRubro] = useState("");
+  const [nuevaDef, setNuevaDef] = useState("");
+  const obraNom = id => obras.find(o => o.id === id)?.nombre || "—";
+  const reg = (definiciones || []).find(r => r.obra_id === obraId);
+  const items = reg ? reg.items : [];
+
+  const guardar = (nextItems) => {
+    const otros = (definiciones || []).filter(r => r.obra_id !== obraId);
+    persistDef([...otros, { ...(reg || {}), obra_id: obraId, items: nextItems, upd: Date.now() }]);
+  };
+  const patchReg = (patch) => {
+    const otros = (definiciones || []).filter(r => r.obra_id !== obraId);
+    persistDef([...otros, { obra_id: obraId, items, upd: Date.now(), ...(reg || {}), ...patch }]);
+  };
+  const [gformUrl, setGformUrl] = useState(() => { try { return localStorage.getItem("contratista_gform_url") || ""; } catch { return ""; } });
+  const [gformCfg, setGformCfg] = useState(false);
+  const [gformBusy, setGformBusy] = useState("");
+  const guardarGformUrl = (v) => { setGformUrl(v); try { localStorage.setItem("contratista_gform_url", v.trim()); } catch { } };
+
+  async function subirExcel(e) {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    setCargando(true);
+    try {
+      const XLSX = await cargarXLSX();
+      const ab = await file.arrayBuffer();
+      const pares = parseDefinicionesXLSX(XLSX, ab);
+      if (!pares.length) { alert("No pude leer definiciones en ese archivo. Fijate que tenga los rubros y las definiciones (como el Excel de V+V)."); setCargando(false); return; }
+      const nuevos = pares.map(p => ({ id: uid() + Math.random().toString(36).slice(2, 5), rubro: p.rubro, nombre: p.item, tiene: false }));
+      // no pisar lo ya marcado: si ya había ítems, agrego los que no estén
+      const existentesKey = new Set(items.map(i => (i.rubro + "|" + i.nombre).toLowerCase()));
+      const merge = [...items, ...nuevos.filter(n => !existentesKey.has((n.rubro + "|" + n.nombre).toLowerCase()))];
+      guardar(merge);
+      alert(`✓ Cargué ${nuevos.length} definiciones de "${file.name}". Marcá las que ya tenés.`);
+    } catch (err) { alert(err.message || "No se pudo leer el archivo."); }
+    setCargando(false);
+  }
+
+  const toggle = (id) => guardar(items.map(it => it.id === id ? { ...it, tiene: !it.tiene } : it));
+  const setObs = (id, v) => guardar(items.map(it => it.id === id ? { ...it, obs: v } : it));
+  const quitar = (id) => guardar(items.filter(it => it.id !== id));
+  const agregarManual = () => {
+    const nom = nuevaDef.trim(); if (!nom) return;
+    guardar([...items, { id: uid() + Math.random().toString(36).slice(2, 5), rubro: (nuevoRubro.trim() || "General"), nombre: nom, tiene: false }]);
+    setNuevaDef("");
+  };
+  const limpiar = () => { if (window.confirm("¿Borrar todas las definiciones de esta obra?")) guardar([]); };
+
+  const tienen = items.filter(i => i.tiene).length;
+  const faltan = items.length - tienen;
+  // agrupar por rubro para mostrar y para el PDF
+  const grupos = [];
+  items.forEach(it => { let g = grupos.find(x => x.rubro === it.rubro); if (!g) { g = { rubro: it.rubro, items: [] }; grupos.push(g); } g.items.push(it); });
+
+  function pdfFaltantes() {
+    const faltantes = grupos.map(g => ({ rubro: g.rubro, items: g.items.filter(i => !i.tiene) })).filter(g => g.items.length);
+    const rowsHtml = faltantes.map(g => `<tr class="rub"><td colspan="2">${g.rubro}</td></tr>` + g.items.map(i => `<tr><td class="dot">•</td><td>${i.nombre}${i.obs ? `<div style="font-size:11px;color:#5B6B7F;margin-top:2px">Obs: ${String(i.obs).replace(/</g, "&lt;")}</div>` : ""}</td></tr>`).join("")).join("");
+    const pct = items.length ? Math.round(tienen / items.length * 100) : 0;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Definiciones faltantes ${obraNom(obraId)}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 40px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 34px;border-bottom:4px solid #B0894F}.brand{font-size:20px;font-weight:800}.brand small{display:block;font-size:9px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{font-size:12px;font-weight:800;color:#B0894F;text-transform:uppercase;letter-spacing:1px;margin-top:6px}.wrap{padding:0 34px}.meta{display:flex;justify-content:space-between;margin:18px 0;font-size:12px;color:#5B6B7F}.kpi{display:flex;gap:0;margin:14px 0;border:1px solid #E3E8EF;border-radius:8px;overflow:hidden}.kpi div{flex:1;text-align:center;padding:10px;border-right:1px solid #E3E8EF}.kpi div:last-child{border-right:none}.kpi b{display:block;font-size:20px}.kpi span{font-size:8px;color:#5B6B7F;text-transform:uppercase}table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}td{padding:7px 8px;border-bottom:1px solid #EEF1F5;vertical-align:top}.rub td{background:#EAF0F7;color:#1B3A5B;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.dot{width:20px;color:#B0894F;text-align:center}.obs{font-size:10px;color:#5B6B7F;margin-top:20px;border-top:1px solid #D6DCE4;padding-top:8px}.firmas{display:flex;justify-content:space-between;margin-top:44px}.firma{width:44%;text-align:center;font-size:10px;color:#5B6B7F}.firma .ln{border-top:1px solid #0F1B2D;padding-top:5px;margin-top:34px}@media print{.noprint{display:none}}</style></head><body><div class="head"><div class="brand">V+V CONSTRUCCIONES<small>CONSTRUCTORA</small></div><div class="doc">Definiciones faltantes de obra</div></div><div class="wrap"><div class="meta"><div>Obra: <b>${obraNom(obraId)}</b></div><div>Fecha: ${hoyStr()}</div></div><div class="kpi"><div><b style="color:#B91C1C">${faltan}</b><span>Faltantes</span></div><div><b style="color:#16A34A">${tienen}</b><span>Definidas</span></div><div><b>${items.length}</b><span>Total</span></div><div><b>${pct}%</b><span>Definido</span></div></div>${faltantes.length ? `<table><tbody>${rowsHtml}</tbody></table>` : '<p style="padding:20px 0;text-align:center;color:#16A34A;font-weight:700">No hay definiciones faltantes. Todas resueltas.</p>'}<div class="obs">Las definiciones pendientes atrasan el normal desarrollo de las tareas de albañilería, revoques y colocaciones. Es importante resolverlas para poder dar curso a las tareas, contrataciones y pedidos de materiales.</div><div class="firmas"><div class="firma"><div class="ln">${empresa || "V+V Construcciones"}</div></div><div class="firma"><div class="ln">Belfast CM — Recibido</div></div></div></div></body></html>`;
+    setPdfHtml(html);
+  }
+  function waFaltantes() {
+    const faltantes = grupos.map(g => ({ rubro: g.rubro, items: g.items.filter(i => !i.tiene) })).filter(g => g.items.length);
+    const txt = `*DEFINICIONES FALTANTES*\nObra: ${obraNom(obraId)}\nFecha: ${hoyStr()}\n\n` + faltantes.map(g => `*${g.rubro}*\n` + g.items.map(i => `• ${i.nombre}${i.obs ? ` (${i.obs})` : ""}`).join("\n")).join("\n\n") + `\n\nFaltan ${faltan} de ${items.length} definiciones.\n(V+V Construcciones)`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
+  }
+
+  // Genera un Word (.doc) EDITABLE con TODAS las definiciones (faltantes y las que ya tenés) + observaciones.
+  // Documento Word-compatible por HTML: se abre y edita en Word / Pages / Google Docs, sin depender de CDN.
+  async function wordDefiniciones() {
+    const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const filas = grupos.map(g => {
+      const cab = `<tr><td colspan="3" style="background:#EAF0F7;color:#1B3A5B;font-weight:bold;font-size:11pt;padding:6px 8px;border:1px solid #B8C4D4">${esc(g.rubro)}</td></tr>`;
+      const its = g.items.map(it => `<tr>
+        <td style="padding:6px 8px;border:1px solid #C9D2DE;width:52%">${esc(it.nombre)}</td>
+        <td style="padding:6px 8px;border:1px solid #C9D2DE;width:16%;font-weight:bold;color:${it.tiene ? "#16A34A" : "#B45309"}">${it.tiene ? "TENEMOS" : "FALTA"}</td>
+        <td style="padding:6px 8px;border:1px solid #C9D2DE;width:32%">${esc(it.obs || "")}</td>
+      </tr>`).join("");
+      return cab + its;
+    }).join("");
+    const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset="utf-8"><title>Definiciones ${esc(obraNom(obraId))}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>
+  body{font-family:Calibri,Arial,sans-serif;color:#0F1B2D;font-size:11pt}
+  h1{font-size:15pt;color:#0F1B2D;margin:0 0 2px}
+  .marca{font-size:16pt;font-weight:bold;color:#0F1B2D}
+  .doc{font-size:10pt;font-weight:bold;color:#B0894F;text-transform:uppercase;letter-spacing:1px}
+  .meta{font-size:10pt;color:#5B6B7F;margin:10px 0 4px}
+  table{border-collapse:collapse;width:100%;margin-top:8px}
+  th{background:#0F1B2D;color:#fff;font-size:10pt;padding:7px 8px;border:1px solid #0F1B2D;text-align:left}
+  .nota{font-size:9.5pt;color:#5B6B7F;margin-top:16px;border-top:1px solid #D6DCE4;padding-top:8px}
+</style></head>
+<body>
+  <div class="marca">V+V CONSTRUCCIONES</div>
+  <div class="doc">Definiciones de obra</div>
+  <div class="meta"><b>Obra:</b> ${esc(obraNom(obraId))} &nbsp;·&nbsp; <b>Fecha:</b> ${hoyStr()} &nbsp;·&nbsp; Faltan ${faltan} de ${items.length} (${items.length ? Math.round(tienen / items.length * 100) : 0}% definido)</div>
+  <table>
+    <thead><tr><th>Definición</th><th>Estado</th><th>Observación</th></tr></thead>
+    <tbody>${filas || '<tr><td colspan="3" style="padding:10px;border:1px solid #C9D2DE">Sin definiciones cargadas.</td></tr>'}</tbody>
+  </table>
+  <div class="nota">Documento editable generado por V+V Construcciones. Las definiciones pendientes atrasan el desarrollo de las tareas de albañilería, revoques y colocaciones; es importante resolverlas para dar curso a las tareas, contrataciones y pedidos de materiales.</div>
+</body></html>`;
+    const nombre = `Definiciones_${(obraNom(obraId) || "obra").replace(/[^\w\s-]/g, "").replace(/\s+/g, "_")}.doc`;
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+    // iOS/Safari bloquea la descarga directa de blobs → usamos el menú de compartir de Apple.
+    try {
+      const file = new File([blob], nombre, { type: "application/msword" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: nombre });
+        return;
+      }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    // Fallback (escritorio y navegadores sin share): descarga por enlace.
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nombre;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  // ── GOOGLE FORM (vía Apps Script) ──
+  async function postGform(payload) {
+    if (!gformUrl.trim()) throw new Error("Primero configurá la URL de Apps Script (tocá el engranaje).");
+    const r = await fetch(gformUrl.trim(), { method: "POST", body: JSON.stringify(payload), redirect: "follow" });
+    const txt = await r.text();
+    let data; try { data = JSON.parse(txt); } catch { throw new Error("Respuesta inesperada de Google. Revisá que la URL termine en /exec y esté publicada como 'Cualquier usuario'."); }
+    if (!data.ok) throw new Error(data.error || "Error al hablar con Google.");
+    return data;
+  }
+
+  async function generarGform() {
+    if (!items.length) { alert("No hay definiciones cargadas en esta obra."); return; }
+    setGformBusy("crear");
+    try {
+      const data = await postGform({ action: "crear", obra: obraNom(obraId), items: items.map(i => ({ rubro: i.rubro, nombre: i.nombre })) });
+      patchReg({ formId: data.formId, formUrl: data.viewUrl, formEdit: data.editUrl });
+      setGformBusy("");
+      // compartir el link (share sheet en iOS)
+      const link = data.viewUrl;
+      try {
+        if (navigator.share) { await navigator.share({ title: `Definiciones ${obraNom(obraId)}`, text: `Formulario de definiciones – ${obraNom(obraId)}`, url: link }); return; }
+      } catch (e) { if (e && e.name === "AbortError") return; }
+      window.prompt("Formulario creado. Copiá el link y mandáselo al jefe de obra:", link);
+    } catch (err) { setGformBusy(""); alert(err.message || "No se pudo crear el formulario."); }
+  }
+
+  async function traerRespuestas(silencioso) {
+    if (!reg?.formId) { if (!silencioso) alert("Todavía no generaste el formulario de esta obra."); return; }
+    setGformBusy("leer");
+    try {
+      const data = await postGform({ action: "leer", formId: reg.formId });
+      if (!data.respondido) { setGformBusy(""); if (!silencioso) alert("El formulario todavía no tiene respuestas."); return; }
+      const estados = data.estados || {};
+      const nextItems = items.map(it => estados[it.nombre] ? { ...it, tiene: estados[it.nombre] === "tenemos" } : it);
+      const otros = (definiciones || []).filter(r => r.obra_id !== obraId);
+      persistDef([...otros, { ...(reg || {}), obra_id: obraId, items: nextItems, upd: Date.now(), gformObs: data.obs || {}, gformFecha: data.fecha }]);
+      setGformBusy("");
+      if (!silencioso) alert("✓ Actualicé las definiciones con las respuestas del jefe de obra.");
+    } catch (err) { setGformBusy(""); if (!silencioso) alert(err.message || "No se pudieron traer las respuestas."); }
+  }
+
+  // Auto-traer respuestas al abrir una obra que ya tiene formulario
+  const ultObra = useRef("");
+  useEffect(() => {
+    if (obraId && obraId !== ultObra.current && reg?.formId && gformUrl.trim()) { ultObra.current = obraId; traerRespuestas(true); }
+    else if (obraId !== ultObra.current) ultObra.current = obraId;
+  }, [obraId, reg?.formId]);
+
+  return (<div>
+    <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Subí el Excel de definiciones, marcá las que ya tenés, y generá el PDF de faltantes para Belfast.</div>
+    <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
+    <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px", fontSize: 14, color: T.text, margin: "6px 0 14px", boxSizing: "border-box" }}>
+      {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+    </select>
+
+    <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: cargando ? "default" : "pointer", opacity: cargando ? 0.6 : 1, marginBottom: 14 }}>
+      {cargando ? "Leyendo el Excel…" : "⬆︎ Subir Excel de definiciones"}
+      <input type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={cargando} onChange={subirExcel} style={{ display: "none" }} />
+    </label>
+
+    {items.length > 0 && <>
+      {/* resumen */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        {[["Faltan", faltan, "#B91C1C"], ["Tenemos", tienen, "#16A34A"], ["Total", items.length, T.text]].map(([l, v, c]) => (
+          <div key={l} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 4px", textAlign: "center" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: c }}>{v}</div>
+            <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {grupos.map(g => (<div key={g.rubro} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 13, marginBottom: 10 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{g.rubro}</div>
+        {g.items.map(it => (<div key={it.id} style={{ padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.tiene ? "#16A34A" : T.border}`, background: it.tiene ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.tiene ? "✓" : ""}</button>
+            <div style={{ flex: 1, fontSize: 13, color: it.tiene ? T.text : T.sub }}>{it.nombre}<span style={{ fontSize: 9.5, fontWeight: 800, color: it.tiene ? "#16A34A" : "#B45309", marginLeft: 6 }}>{it.tiene ? "TENEMOS" : "FALTA"}</span></div>
+            <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>
+          </div>
+          <input defaultValue={it.obs || ""} onBlur={e => setObs(it.id, e.target.value)} placeholder="Observación (opcional)…" style={{ width: "100%", marginTop: 6, marginLeft: 34, maxWidth: "calc(100% - 34px)", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 10px", fontSize: 12, color: T.text, boxSizing: "border-box" }} />
+        </div>))}
+      </div>))}
+
+      {/* agregar manual */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        <input value={nuevoRubro} onChange={e => setNuevoRubro(e.target.value)} placeholder="Rubro" style={{ width: 110, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, color: T.text }} />
+        <input value={nuevaDef} onChange={e => setNuevaDef(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregarManual(); } }} placeholder="Agregar definición…" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, color: T.text }} />
+        <button onClick={agregarManual} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "0 15px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>＋</button>
+      </div>
+
+      <button onClick={pdfFaltantes} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}><Ico n="doc" /> PDF de definiciones faltantes</button>
+      <button onClick={wordDefiniciones} style={{ width: "100%", background: "#2B579A", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}><Ico n="word" /> Word editable (todas + observaciones)</button>
+      <button onClick={waFaltantes} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 9 }}><Ico n="send" /> Enviar faltantes por WhatsApp</button>
+
+      {/* ── Google Form ── */}
+      <div style={{ border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.card }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gformCfg ? 10 : (reg?.formId ? 10 : 0) }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}><Ico n="list" /> Formulario para el jefe de obra</div>
+          <button onClick={() => setGformCfg(v => !v)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, color: T.sub, cursor: "pointer" }}>⚙︎ {gformUrl ? "Configurado" : "Configurar"}</button>
+        </div>
+
+        {gformCfg && <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 6 }}>Pegá la URL de tu Apps Script (la que termina en <b>/exec</b>). La creás una sola vez con el instructivo que te pasé.</div>
+          <input value={gformUrl} onChange={e => guardarGformUrl(e.target.value)} placeholder="https://script.google.com/…/exec" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 11px", fontSize: 12, color: T.text, boxSizing: "border-box" }} />
+        </div>}
+
+        {!reg?.formId
+          ? <button onClick={generarGform} disabled={gformBusy === "crear" || !gformUrl} style={{ width: "100%", background: gformUrl ? "#4285F4" : T.border, color: "#fff", border: "none", borderRadius: 9, padding: "12px", fontSize: 13, fontWeight: 700, cursor: gformUrl ? "pointer" : "default" }}>{gformBusy === "crear" ? "Creando el formulario…" : "Generar Google Form"}</button>
+          : <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              <div style={{ display: "flex", gap: 7 }}>
+                <button onClick={generarGform} style={{ flex: 1, background: "#4285F4", color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Compartir link</button>
+                <button onClick={() => traerRespuestas(false)} disabled={gformBusy === "leer"} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{gformBusy === "leer" ? "Trayendo…" : "↻ Traer respuestas"}</button>
+              </div>
+              {reg.gformFecha && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center" }}>Última respuesta cargada: {new Date(reg.gformFecha).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>}
+              <button onClick={() => { if (confirm("¿Desvincular este formulario? Vas a poder generar uno nuevo.")) patchReg({ formId: null, formUrl: null, formEdit: null }); }} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, cursor: "pointer", textDecoration: "underline" }}>Desvincular formulario</button>
+            </div>}
+      </div>
+
+      {/* observaciones del jefe (de las respuestas del form) */}
+      {reg?.gformObs && Object.keys(reg.gformObs).some(k => reg.gformObs[k]) && <div style={{ border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.al }}>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.navy, marginBottom: 6 }}>Observaciones del jefe de obra</div>
+        {Object.keys(reg.gformObs).filter(k => reg.gformObs[k]).map(k => (
+          <div key={k} style={{ fontSize: 12, color: T.text, marginBottom: 4, lineHeight: 1.4 }}><b>{k}:</b> {reg.gformObs[k]}</div>
+        ))}
+      </div>}
+      <button onClick={limpiar} style={{ width: "100%", background: "none", color: T.muted, border: "none", padding: "8px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>Borrar todo y empezar de nuevo</button>
+    </>}
+
+    {items.length === 0 && !cargando && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "10px", lineHeight: 1.6 }}>Subí el Excel de definiciones para armar el checklist.<br />También podés cargarlas a mano una vez que subas al menos una.</div>}
+
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#0F1B2D", zIndex: 500, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: T.navy, borderBottom: "1px solid rgba(255,255,255,.1)", alignItems: "center", flexShrink: 0, position: "relative", zIndex: 2 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.16)", color: "#fff", border: "none", borderRadius: 9, padding: "11px 16px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>‹ Volver</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={imprimirPdf} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "11px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe ref={pdfRef} srcDoc={pdfHtml} title="pdf" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+  </div>);
+}
+
+
+
+// ═══ Recepción de docs (igual que la app de Contratistas) ═══
+function RecepcionDocs({ obras, empresa, docrecepcion, persistDoc }) {
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [nuevoItem, setNuevoItem] = useState("");
+  const [catNuevo, setCatNuevo] = useState(DOC_CATS[0]);
+  const obraNom = id => obras.find(o => o.id === id)?.nombre || "—";
+
+  const reg = (docrecepcion || []).find(r => r.obra_id === obraId);
+  const items = reg ? reg.items : DOCS_BASE.map((d, i) => ({ id: "base" + i, nombre: d.n, cat: d.c, recibido: false, fecha: "" }));
+
+  const guardarItems = (nextItems) => {
+    const otros = (docrecepcion || []).filter(r => r.obra_id !== obraId);
+    persistDoc([...otros, { obra_id: obraId, items: nextItems, upd: Date.now() }]);
+  };
+  const toggle = (id) => guardarItems(items.map(it => it.id === id ? { ...it, recibido: !it.recibido, fecha: !it.recibido ? hoyStr() : "" } : it));
+  const agregar = () => { const n = nuevoItem.trim(); if (!n) return; guardarItems([...items, { id: uid() + Date.now(), nombre: n, cat: catNuevo, recibido: false, fecha: "" }]); setNuevoItem(""); };
+  const quitar = (id) => guardarItems(items.filter(it => it.id !== id));
+  const recibidos = items.filter(it => it.recibido).length;
+
+  function remitoWA() {
+    const lineas = items.map(it => `${it.recibido ? "" : "⬜"} ${it.nombre}${it.recibido && it.fecha ? ` (${it.fecha})` : ""}`);
+    const txt = `*REMITO DE RECEPCIÓN DE DOCUMENTACIÓN*\nObra: ${obraNom(obraId)}\nFecha: ${hoyStr()}\nContratista: ${empresa}\n\nDocumentación inicial básica:\n${lineas.join("\n")}\n\nRecibidos: ${recibidos} de ${items.length}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
+  }
+
+  if (obras.length === 0) return <div style={{ padding: "40px 20px", textAlign: "center", color: T.muted, fontSize: 13 }}>Todavía no hay obras cargadas.</div>;
+
+  return (<div>
+    <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Remito de recepción de la documentación inicial de obra. Marcá lo que fuiste recibiendo y generá el remito.</div>
+    <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
+    <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px", fontSize: 14, color: T.text, margin: "6px 0 14px", boxSizing: "border-box" }}>
+      {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+    </select>
+
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Documentación inicial</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: recibidos === items.length && items.length > 0 ? "#16A34A" : T.muted }}>{recibidos} de {items.length} recibidos</span>
+      </div>
+      {DOC_CATS.concat(["Otros"]).map(cat => {
+        const delGrupo = items.filter(it => (it.cat || "Documentación técnica") === cat || (cat === "Otros" && it.cat && !DOC_CATS.includes(it.cat)));
+        if (!delGrupo.length) return null;
+        const okG = delGrupo.filter(it => it.recibido).length;
+        return (<div key={cat} style={{ marginTop: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>{cat}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: okG === delGrupo.length ? "#16A34A" : T.muted }}>{okG}/{delGrupo.length}</span>
+          </div>
+          {delGrupo.map(it => (<div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
+        <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.recibido ? "#16A34A" : T.border}`, background: it.recibido ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.recibido ? "✓" : ""}</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: it.recibido ? T.text : T.sub }}>{it.nombre}</div>
+          {it.recibido && it.fecha && <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 700 }}>Recibido {it.fecha}</div>}
+        </div>
+        {!DOCS_BASE.some(d => d.n === it.nombre) && <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
+      </div>))}
+        </div>);
+      })}
+      <div style={{ display: "flex", gap: 7, marginTop: 12 }}>
+        <select value={catNuevo} onChange={e => setCatNuevo(e.target.value)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 12, color: T.text, maxWidth: 130 }}>
+          {DOC_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input value={nuevoItem} onChange={e => setNuevoItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} placeholder="Agregar ítem…" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} />
+        <button onClick={agregar} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "0 15px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>＋</button>
+      </div>
+    </div>
+
+    <button onClick={remitoWA} style={{ width: "100%", marginTop: 14, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> Enviar remito de recepción por WhatsApp</button>
+  </div>);
+}
+
+
+function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matpedidos = [], setMatpedidos, definiciones = [], setDefiniciones, docrecepcion = [], setDocrecepcion }) {
+  // Estado del pedido de información (definiciones y planos): cuánto hace que espera
+  // y cuándo V+V registró la recepción.
+  const diasDe = (p) => { const t0 = p.ts || 0; return t0 ? Math.max(0, Math.floor((Date.now() - t0) / 86400000)) : 0; };
+  const alertaDe = (p) => { const d = diasDe(p); if (d >= 5) return { txt: `⚠ Vencido — ${d} días sin respuesta`, color: "#B91C1C", bg: "#FEF2F2", bd: "#FECACA" }; if (d >= 3) return { txt: `⏳ ${d} días esperando`, color: "#B45309", bg: "#FFFBEB", bd: "#FDE68A" }; return { txt: d === 0 ? "Pedido hoy" : d === 1 ? "1 día esperando" : `${d} días esperando`, color: "#1B3A5B", bg: "#EFF6FF", bd: "#DBEAFE" }; };
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const [waFor, setWaFor] = useState(null);
   function marcarEnviado(id) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
+  function levantar(id, val) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, leido: val, leidoFecha: val ? hoyStr() : "", leidoPor: val ? (cfg?.nombre || cfg?.sigla || "Belfast") : "" } : x)); }
   function waText(p) {
     const tp = tipoPedCli(p.tipo);
     const lines = itemsTexto(p).map(l => `• ${l}`);
-    return `*Pedido de ${tp.label.toLowerCase()}* — ${nomObra(p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\n✅ Por favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
+    return `*Pedido de ${tp.label.toLowerCase()}* — ${nomObra(p.obra_id)}\nFecha: ${p.fecha}${p.de === "contratista" && p.empresa ? `\nContratista: ${p.empresa}` : ""}\n\n${lines.join("\n")}${p.nota ? "\n\nNota: " + p.nota : ""}\n\nPor favor, confirmá la recepción respondiendo este mensaje con *OK / RECIBIDO*.\n\n(Enviado desde ${cfg?.nombre || "Belfast"})`;
   }
   function waLink(text, phone) {
     const t = encodeURIComponent(text);
     if (phone) { const clean = String(phone).replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : ("549" + clean); return `https://wa.me/${num}?text=${t}`; }
     return `https://wa.me/?text=${t}`;
   }
-  const lista = (matpedidos || []).filter(p => p.de !== "cliente").sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const [vistaMat, setVistaMat] = useState("pedidos");
+  const [form, setForm] = useState(null);
+  function nuevo(tipo = "material") { setForm({ tipo, obra_id: obras[0]?.id || "", items: [{ nombre: "", cantidad: "", unidad: "u", detalle: "" }], nota: "", fecha_pedido: new Date().toISOString().slice(0, 10), fecha_necesita: "" }); }
+  function addItem() { setForm(f => ({ ...f, items: [...f.items, { nombre: "", cantidad: "", unidad: "u", detalle: "" }] })); }
+  function setItem(i, k, v) { setForm(f => ({ ...f, items: f.items.map((it, j) => j === i ? { ...it, [k]: v } : it) })); }
+  function delItem(i) { setForm(f => ({ ...f, items: f.items.filter((_, j) => j !== i) })); }
+  async function guardar() {
+    const tipo = form.tipo || "material";
+    const items = (form.items || []).filter(it => (it.nombre || "").trim()).map(it => ({ nombre: it.nombre.trim(), cantidad: it.cantidad != null ? String(it.cantidad) : "", unidad: it.unidad || "u", detalle: (it.detalle || "").trim() }));
+    if (!items.length) { alert(`Agregá al menos ${tipo === "material" ? "un material" : tipo === "plano" ? "un plano" : "una definición"}.`); return; }
+    const p = { id: uid() + Date.now(), tipo, obra_id: form.obra_id, items, nota: form.nota || "", solicitante: (form.solicitante || "").trim(), fecha: hoyStr(), fecha_pedido: form.fecha_pedido || "", fecha_necesita: form.fecha_necesita || "", ts: Date.now(), de: "cliente", empresa: cfg?.nombre || "Belfast", leido: false, leidoFecha: "" };
+    aplicarMats(setMatpedidos, prev => [p, ...(prev || [])]);
+    setForm(null);
+    alert("✓ Pedido enviado a V+V.");
+  }
+  const [fTipo, setFTipo] = useState("");
+  const [fObra, setFObra] = useState("");
+  const lista = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const obrasConPedidos = (obras || []).filter(o => lista.some(p => p.obra_id === o.id));
+  const listaF = lista.filter(p => (!fObra || p.obra_id === fObra) && (!fTipo || (p.tipo || "material") === fTipo));
+  const infoPend = lista.filter(p => p.tipo !== "material" && !p.cumplido);
+  const infoVenc = infoPend.filter(p => diasDe(p) >= 5);
+  const infoOk = lista.filter(p => p.tipo !== "material" && p.cumplido);
+  const tabsMat = (<div style={{ display: "flex", gap: 7, padding: "14px 16px 0" }}>
+    {[["pedidos", "Pedidos recibidos"], ["definiciones", "Definiciones"], ["recepcion", "Recepción de docs"]].map(([k, l]) => (
+      <button key={k} onClick={() => setVistaMat(k)} style={{ flex: 1, background: vistaMat === k ? T.navy : "transparent", color: vistaMat === k ? "#fff" : T.sub, border: `1px solid ${vistaMat === k ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
+    ))}
+  </div>);
+  if (vistaMat === "recepcion") return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
+    {tabsMat}
+    <RecepcionDocs obras={obras} empresa={cfg?.nombre || "Belfast"} docrecepcion={docrecepcion} persistDoc={setDocrecepcion} />
+  </div>);
+  if (vistaMat === "definiciones") return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
+    <div style={{ display: "flex", gap: 7, padding: "14px 16px 0" }}>
+      {[["pedidos", "Pedidos recibidos"], ["definiciones", "Definiciones"], ["recepcion", "Recepción de docs"]].map(([k, l]) => (
+        <button key={k} onClick={() => setVistaMat(k)} style={{ flex: 1, background: vistaMat === k ? T.navy : "transparent", color: vistaMat === k ? "#fff" : T.sub, border: `1px solid ${vistaMat === k ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
+      ))}
+    </div>
+    <DefinicionesView obras={obras} empresa={cfg?.nombre || "Belfast"} definiciones={definiciones} persistDef={setDefiniciones} />
+  </div>);
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
+    <div style={{ display: "flex", gap: 7, padding: "14px 16px 0" }}>
+      {[["pedidos", "Pedidos recibidos"], ["definiciones", "Definiciones"], ["recepcion", "Recepción de docs"]].map(([k, l]) => (
+        <button key={k} onClick={() => setVistaMat(k)} style={{ flex: 1, background: vistaMat === k ? T.navy : "transparent", color: vistaMat === k ? "#fff" : T.sub, border: `1px solid ${vistaMat === k ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
+      ))}
+    </div>
+    {(infoPend.length > 0 || infoOk.length > 0) && <div style={{ margin: "14px 16px 0", background: infoVenc.length ? "#FEF2F2" : "#fff", border: `1px solid ${infoVenc.length ? "#FECACA" : T.border}`, borderLeft: `3px solid ${infoVenc.length ? "#B91C1C" : BRASS}`, borderRadius: 10, padding: "11px 13px" }}>
+      <div style={{ fontSize: 12.5, fontWeight: 800, color: infoVenc.length ? "#B91C1C" : T.navy }}>
+        {infoVenc.length ? `⚠ ${infoVenc.length} pedido(s) de información vencido(s)` : infoPend.length ? `${infoPend.length} pedido(s) de información pendiente(s)` : "Sin pedidos de información pendientes"}
+      </div>
+      <div style={{ fontSize: 11, color: T.muted, marginTop: 3, lineHeight: 1.45 }}>Definiciones y planos solicitados por V+V. {infoOk.length} con recepción registrada. Se considera vencido a los 5 días sin respuesta.</div>
+    </div>}
     <div style={{ padding: "16px 20px" }}>
       <Eyebrow T={T}>Pedidos de V+V · materiales, definiciones y planos</Eyebrow>
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px", lineHeight: 1.55 }}>Todavía no recibiste pedidos de materiales.<br />Cuando V+V cargue uno, aparece acá.</div>}
-      {lista.map(p => { const jefes = [...(contactos || []).filter(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()), ...(personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim())]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${tipoPedCli(p.tipo).color}` }}>
+      <div style={{ padding: "14px 16px 0" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Qué querés pedir</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {Object.keys(TIPOS_PEDIDO_CLI).map(k => { const t = TIPOS_PEDIDO_CLI[k]; return (
+            <button key={k} onClick={() => nuevo(k)} style={{ flex: 1, background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", textAlign: "center", borderTop: `3px solid ${t.color}` }}>
+              <div style={{ fontSize: 20, marginBottom: 3 }}><Ico n={t.icon} s={18} /></div>{t.label}
+            </button>); })}
+        </div>
+      </div>
+      {lista.length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 10, margin: "0 16px 12px" }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 7, flexWrap: "wrap" }}>
+          <button onClick={() => setFTipo("")} style={{ background: fTipo === "" ? T.accent : T.card, color: fTipo === "" ? "#fff" : T.sub, border: `1px solid ${fTipo === "" ? T.accent : T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Todo</button>
+          {Object.keys(TIPOS_PEDIDO_CLI).map(k => { const t = TIPOS_PEDIDO_CLI[k]; return (
+            <button key={k} onClick={() => setFTipo(fTipo === k ? "" : k)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, background: fTipo === k ? t.color : T.card, color: fTipo === k ? "#fff" : T.sub, border: `1px solid ${fTipo === k ? t.color : T.border}`, borderRadius: 8, padding: "6px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+              <span><Ico n={t.icon} s={18} /></span>{t.label}
+            </button>); })}
+        </div>
+        {obrasConPedidos.length > 1 && <select value={fObra} onChange={e => setFObra(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 600, color: T.text, boxSizing: "border-box" }}>
+          <option value="">Todas las obras</option>
+          {obrasConPedidos.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        </select>}
+      </div>}
+      {listaF.map(p => { const jefes = [...(contactos || []).filter(c => (!c.obra_id || c.obra_id === p.obra_id) && (c.telefono || "").trim()), ...(personal || []).filter(pe => pe.obra_id === p.obra_id && (pe.telefono || "").trim())]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${tipoPedCli(p.tipo).color}` }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoPedCli(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 8 }}>{tipoPedCli(p.tipo).icon} {tipoPedCli(p.tipo).label}</span>{nomObra(p.obra_id)} · {p.fecha}<span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.de === "vv" ? "V+V" : (p.empresa || "Contratista")}</span></div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoPedCli(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 8 }}><Ico n={tipoPedCli(p.tipo).icon} s={13} c="#fff" /> {tipoPedCli(p.tipo).label}</span>{nomObra(p.obra_id)} · {p.fecha}<span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : BRASS, borderRadius: 5, padding: "2px 7px" }}>{p.de === "vv" ? "V+V" : (p.empresa || "Contratista")}</span></div>
           <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{itemsTexto(p).map(l => `• ${l}`).join("\n")}</div>
+          {(p.solicitante || p.empresa) && <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 7, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, color: T.sub }}><Ico n="user" s={12} c={T.sub} /> Pidió: {p.solicitante || p.empresa}{p.solicitante && p.empresa ? ` (${p.empresa})` : ""}</div>}
           {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 5, fontStyle: "italic" }}>{p.nota}</div>}
+          <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 6, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado${p.leidoFecha ? " · " + p.leidoFecha : ""}` : "● Sin levantar"}</div>
+          {p.tipo !== "material" && (p.cumplido
+            ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Recepción registrada{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
+            : (() => { const a = alertaDe(p); return <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: a.color, background: a.bg, border: `1px solid ${a.bd}`, borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>{a.txt}</div>; })())}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 11 }}>
-          <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📲 Enviar por WhatsApp</button>
+          <button onClick={() => levantar(p.id, !p.leido)} style={{ flex: 1, background: p.leido ? T.bg : "#ECFDF5", color: p.leido ? T.sub : "#15803D", border: `1px solid ${p.leido ? T.border : "#A7F3D0"}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{p.leido ? "↩ Marcar sin levantar" : "✓ Levantar pedido"}</button>
+          <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> WhatsApp</button>
           <button onClick={() => { if (confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) aplicarMats(setMatpedidos, prev => (prev || []).filter(x => x.id !== p.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: T.rsm, padding: "10px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
-        {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 5 }}>📲 Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
+        {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 5 }}><Ico n="send" /> Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
         {waFor === p.id && <div style={{ marginTop: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
-          {jefes.map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}>📲 {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
+          {jefes.map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}><Ico n="send" /> {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
           <a href={waLink(waText(p))} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Elegir contacto de WhatsApp…</a>
           <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>Se abre WhatsApp con el pedido ya escrito. Los jefes de obra con teléfono cargado aparecen arriba.</div>
         </div>}
       </Card>); })}
     </div>
+    {form && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={() => setForm(null)}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 620, padding: 20, maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 14 }}>{form.id ? `Editar pedido de ${tipoPedCli(form.tipo).label.toLowerCase()}` : `Nuevo pedido de ${tipoPedCli(form.tipo).label.toLowerCase()}`}</div>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
+        <select value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px", fontSize: 14, color: T.text, margin: "6px 0 14px", boxSizing: "border-box" }}>
+          {obras.length === 0 && <option value="">(sin obras cargadas)</option>}
+          {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        </select>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>{tipoPedCli(form.tipo).label}</div>
+        {form.items.map((it, i) => (<div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
+          <input value={it.nombre} onChange={e => setItem(i, "nombre", e.target.value)} placeholder={form.tipo === "material" ? "Material" : form.tipo === "plano" ? "Plano (ej: Estructura losa)" : "Definición (ej: Tipo de piso)"} style={{ flex: 2, minWidth: 0, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13.5, color: T.text }} />
+          {(form.tipo || "material") === "material" ? <>
+            <input value={it.cantidad} onChange={e => setItem(i, "cantidad", e.target.value)} placeholder="Cant." type="number" style={{ width: 60, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 8px", fontSize: 13.5, color: T.text }} />
+            <input value={it.unidad} onChange={e => setItem(i, "unidad", e.target.value)} placeholder="u" style={{ width: 50, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 8px", fontSize: 13.5, color: T.text }} />
+          </> : <input value={it.detalle || ""} onChange={e => setItem(i, "detalle", e.target.value)} placeholder="Detalle (opcional)" style={{ flex: 1.2, minWidth: 0, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 8px", fontSize: 13.5, color: T.text }} />}
+          {form.items.length > 1 && <button onClick={() => delItem(i)} style={{ background: "none", border: "none", color: T.muted, fontSize: 16, cursor: "pointer" }}>✕</button>}
+        </div>))}
+        <button onClick={addItem} style={{ background: T.al, color: T.accent, border: "none", borderRadius: T.rsm, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Agregar {tipoPedCli(form.tipo).sing}</button>
+        <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Fecha del pedido</label>
+            <input type="date" value={form.fecha_pedido || ""} onChange={e => setForm({ ...form, fecha_pedido: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 15, color: T.text, margin: "6px 0 0", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: T.accent, textTransform: "uppercase" }}>Necesito en obra</label>
+            <input type="date" value={form.fecha_necesita || ""} onChange={e => setForm({ ...form, fecha_necesita: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px", fontSize: 15, color: T.text, margin: "6px 0 0", boxSizing: "border-box" }} />
+          </div>
+        </div>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Quién lo pide</label>
+        <input value={form.solicitante || ""} onChange={e => setForm({ ...form, solicitante: e.target.value })} placeholder="Nombre y rol" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13.5, color: T.text, margin: "6px 0 14px", boxSizing: "border-box" }} />
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Nota (opcional)</label>
+        <textarea value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} rows={2} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13.5, color: T.text, margin: "6px 0 14px", boxSizing: "border-box", resize: "vertical" }} />
+        <button onClick={guardar} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{form.id ? "Guardar cambios" : "Enviar pedido"}</button>
+      </div>
+    </div>}
   </div>);
 }
-function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6) n++; } return n; }
+// Feriados nacionales argentinos. Un día feriado NO es hábil: no corre plazo
+// ni se programa trabajo. Si el gobierno agrega puentes turísticos, se suman acá.
+const FERIADOS = new Set([
+  // 2026
+  "2026-01-01", "2026-02-16", "2026-02-17", "2026-03-24", "2026-04-02", "2026-04-03",
+  "2026-05-01", "2026-05-25", "2026-06-17", "2026-06-20", "2026-07-09", "2026-08-17",
+  "2026-10-12", "2026-11-20", "2026-12-08", "2026-12-25",
+  // 2027 (trasladables sujetos a confirmación oficial)
+  "2027-01-01", "2027-02-08", "2027-02-09", "2027-03-24", "2027-03-26", "2027-04-02",
+  "2027-05-01", "2027-05-25", "2027-06-17", "2027-06-20", "2027-07-09", "2027-08-16",
+  "2027-10-11", "2027-11-22", "2027-12-08", "2027-12-25",
+]);
+const _isoDe = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(cur))) n++; } return n; }
 function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaReal || new Date(); const dias = diasHabiles(fechaSolic, fin); const desvio = dias - plazo; let estado; if (fechaReal || cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo"; else estado = desvio <= 0 ? "En plazo" : "Vencido"; return { dias, desvio, estado, retraso: Math.max(0, desvio) }; }
 const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "#ECFDF5" }, "En plazo": { c: "#3B82F6", b: "#EFF6FF" }, "Fuera de plazo": { c: "#F59E0B", b: "#FFFBEB" }, "Vencido": { c: "#EF4444", b: "#FEF2F2" } };
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 
-function GestionScreen({ T, cfg, pedidos, obras, gestion }) {
-  const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], ...(gestion || {}) };
+/* ═══ CRONOGRAMAS (solo lectura, espejo de la app Cronograma de V+V) ═══
+   Belfast ve el mismo plan que V+V: fechas planificadas, fechas comprometidas,
+   fechas REALES de ejecución y las definiciones que le tocan responder —
+   con su estado en el circuito de Gestión. Mismo motor de cálculo. */
+const crNum = (x) => { const n = Number(String(x ?? "").replace(",", ".")); return isNaN(n) ? 0 : n; };
+const crHoy = () => new Date().toISOString().slice(0, 10);
+function crIsoMas(iso, dias) { if (!iso) return ""; const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + Math.round(crNum(dias))); return d.toISOString().slice(0, 10); }
+function crDiasEntre(a, b) { if (!a || !b) return 0; return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000); }
+function crEsHabil(iso) { if (!iso) return false; if (FERIADOS.has(iso)) return false; const d = new Date(iso + "T12:00:00"); const w = d.getDay(); return w >= 1 && w <= 5; }
+function crPrimerHabil(iso) { let f = iso; for (let i = 0; i < 7; i++) { if (crEsHabil(f)) return f; f = crIsoMas(f, 1); } return iso; }
+function crHabilDesde(inicio, n) { if (!inicio) return ""; let f = crPrimerHabil(inicio); let q = Math.max(0, Math.round(crNum(n))); let g = 0; while (q > 0 && g < 20000) { f = crIsoMas(f, 1); if (crEsHabil(f)) q--; g++; } return f; }
+const CR_MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function crFmt(iso) { if (!iso) return "—"; const d = new Date(iso + "T12:00:00"); return `${d.getDate()} ${CR_MES[d.getMonth()]}`; }
+function crCPM(tareas) {
+  const T2 = (tareas || []).filter(t => t && t.id).map(t => ({ ...t, dias: Math.max(1, crNum(t.dias)), deps: (t.deps || []).filter(d => d && d.cod) }));
+  const porCod = {}; T2.forEach(t => { if (t.cod) porCod[t.cod] = t; });
+  const ES = {}, EF = {}, vis = {}, ok = {};
+  function fES(t) { if (ok[t.id]) return ES[t.id]; if (vis[t.id]) { ES[t.id] = 0; EF[t.id] = t.dias; return 0; } vis[t.id] = true; let es = 0; for (const d of t.deps) { const p = porCod[d.cod]; if (!p || p.id === t.id) continue; fES(p); const c = d.tipo === "CC" ? ES[p.id] + crNum(d.lag) : EF[p.id] + crNum(d.lag); if (c > es) es = c; } es = Math.max(0, es); ES[t.id] = es; EF[t.id] = es + t.dias; vis[t.id] = false; ok[t.id] = true; return es; }
+  T2.forEach(fES);
+  const fin = T2.reduce((m, t) => Math.max(m, EF[t.id] || 0), 0);
+  const suc = {}; T2.forEach(t => { suc[t.id] = []; });
+  T2.forEach(sx => { for (const d of sx.deps) { const p = porCod[d.cod]; if (!p || p.id === sx.id) continue; suc[p.id].push({ s: sx, tipo: d.tipo, lag: crNum(d.lag) }); } });
+  const LS = {}, LF = {}, ok2 = {}, vis2 = {};
+  function fLS(t) { if (ok2[t.id]) return LS[t.id]; if (vis2[t.id]) { LF[t.id] = fin; LS[t.id] = fin - t.dias; return LS[t.id]; } vis2[t.id] = true; let lf = fin; for (const { s: sx, tipo, lag } of suc[t.id] || []) { if (tipo !== "FC") continue; fLS(sx); const c = LS[sx.id] - lag; if (c < lf) lf = c; } let ls = lf - t.dias; for (const { s: sx, tipo, lag } of suc[t.id] || []) { if (tipo !== "CC") continue; fLS(sx); const c = LS[sx.id] - lag; if (c < ls) ls = c; } LF[t.id] = lf; LS[t.id] = ls; vis2[t.id] = false; ok2[t.id] = true; return ls; }
+  T2.forEach(fLS);
+  return T2.map(t => ({ ...t, es: ES[t.id] ?? 0, ef: EF[t.id] ?? 0, critica: Math.round((LS[t.id] ?? 0) - (ES[t.id] ?? 0)) <= 0 }));
+}
+function CronogramaScreen(props) {
+  // Cualquier error acá adentro se muestra en pantalla, nunca deja el panel en blanco.
+  try { return CronogramaScreenInner(props); }
+  catch (e) {
+    const T = props.T || {};
+    return (<div style={{ padding: "20px" }}>
+      <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, padding: 16 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: "#B91C1C" }}>La pantalla de cronogramas tuvo un problema</div>
+        <div style={{ fontSize: 12, color: "#991B1B", marginTop: 6, wordBreak: "break-word" }}>Error: {String(e && e.message || e)}</div>
+        <div style={{ fontSize: 11, color: "#991B1B", marginTop: 6 }}>Sacale una captura a este mensaje y pasásela a Sebastián para corregirlo.</div>
+      </div>
+    </div>);
+  }
+}
+function CronogramaScreenInner({ T, cfg, crono, gestion }) {
+  const g = { punit: {}, manual: [], ...(gestion || {}) };
+  const enManual = new Set((g.manual || []).map(x => x.id));
+  const [ab, setAb] = useState({});
+  const hoy = crHoy();
+  const obras = (crono?.obras || []);
+  const planes = obras.map(o => { try {
+    let tareas;
+    if (o.modoManual) {
+      tareas = (o.tareas || []).map(t => ({ ...t, vvInicio: t.desde || o.inicio || hoy, vvFin: (t.hasta && t.hasta >= (t.desde || "")) ? t.hasta : (t.desde || o.inicio || hoy), critica: false }));
+    } else {
+      tareas = crCPM(o.tareas || []).map(t => ({ ...t, vvInicio: crHabilDesde(o.inicio, t.es), vvFin: crHabilDesde(o.inicio, t.ef - 1) }));
+    }
+    tareas = tareas.map(t => {
+      const desvReal = (t.realFin && t.vvFin) ? crDiasEntre(t.vvFin, t.realFin) : null;
+      const desvRealIni = (t.realInicio && t.vvInicio) ? crDiasEntre(t.vvInicio, t.realInicio) : null;
+      const defs = (t.defs || []).map(d => {
+        const limite = crIsoMas(t.vvInicio, -crNum(d.diasAntes));
+        const faltan = limite ? crDiasEntre(hoy, limite) : null;
+        let estado = "futura";
+        if (d.ok) estado = "ok"; else if (faltan !== null && faltan < 0) estado = "vencida"; else if (faltan !== null && faltan <= 15) estado = "urgente";
+        const gid = "cron_" + d.id;
+        const dec = g.punit[gid];
+        const gest = dec ? (dec.decision === "confirmado" ? "punitorio" : dec.decision === "prorroga" ? "prorroga" : "sin_perjuicio") : (enManual.has(gid) ? "evaluacion" : null);
+        return { ...d, limite, faltan, estado, gest, tarea: t.nombre, critica: t.critica };
+      });
+      return { ...t, desvReal, desvRealIni, defs };
+    });
+    const fin = tareas.reduce((m, t) => (!m || t.vvFin > m) ? t.vvFin : m, "");
+    const defsPend = tareas.flatMap(t => t.defs).filter(d => !d.ok);
+    const venc = defsPend.filter(d => d.estado === "vencida");
+    // corrimiento contra la línea base fijada en el Cronograma de V+V
+    const corr = (o.finBase && fin) ? crDiasEntre(o.finBase, fin) : null;
+    return { o, tareas, fin, defsPend, venc, corr };
+  } catch (e) { return { o, tareas: [], fin: "", defsPend: [], venc: [], corr: null, error: String(e && e.message || e) }; } }).filter(p => p && p.o);
+  const GEST_TAG = { punitorio: ["Punitorio", "#B91C1C", "#FEF2F2"], evaluacion: ["En evaluación", "#B45309", "#FFFBEB"], prorroga: ["Prórroga", "#2563EB", "#EFF6FF"], sin_perjuicio: ["Sin perjuicio", "#64748B", "#F1F5F9"] };
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.55, marginBottom: 14 }}>El plan de cada obra: fechas planificadas, comprometidas y REALES, y las definiciones pendientes de {cfg?.nombre || "Belfast"} con su estado en Gestión. Responder a tiempo evita que un retraso pase a evaluación de punitorio.</div>
+      {planes.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin cronogramas cargados.</div>}
+      {planes.map(({ o, tareas, fin, defsPend, venc, corr }) => {
+        const abierta = ab[o.id] !== undefined ? ab[o.id] : venc.length > 0;
+        return (<Card T={T} key={o.id} style={{ padding: 0, marginBottom: 12, overflow: "hidden", borderLeft: `4px solid ${venc.length ? "#EF4444" : "#16A34A"}` }}>
+          <div onClick={() => setAb(p => ({ ...p, [o.id]: !abierta }))} style={{ padding: "13px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 9 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{o.nombre}</div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Fin estimado: {crFmt(fin)} · {tareas.length} tareas{corr !== null && corr > 0 ? <span style={{ color: "#B91C1C", fontWeight: 800 }}> · corrida +{corr} días</span> : ""}</div>
+            </div>
+            <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+              {venc.length > 0 ? <Badge c="#B91C1C" b="#FEF2F2">{venc.length} vencida{venc.length > 1 ? "s" : ""}</Badge> : defsPend.length > 0 ? <Badge c="#B45309" b="#FFFBEB">{defsPend.length} pendiente{defsPend.length > 1 ? "s" : ""}</Badge> : <Badge c="#16A34A" b="#ECFDF5">al día</Badge>}
+              <span style={{ fontSize: 11, color: T.muted }}>{abierta ? "▲" : "▼"}</span>
+            </div>
+          </div>
+          {abierta && <div style={{ borderTop: `1px solid ${T.border}`, padding: "4px 14px 13px" }}>
+            {planes.find(p => p.o.id === o.id)?.error && <div style={{ fontSize: 11, color: "#B91C1C", marginTop: 10 }}>No pude calcular esta obra: {planes.find(p => p.o.id === o.id).error}</div>}
+            {corr !== null && corr > 0 && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 11px", marginTop: 10, fontSize: 11.5, color: "#991B1B", lineHeight: 1.5 }}>El fin de obra se corrió <b>+{corr} días (~{(corr / 30.44).toFixed(1)} meses)</b> respecto del plan original. Todo corrimiento adicional queda sujeto a redeterminación de precios sobre el saldo del contrato.</div>}
+            {defsPend.length > 0 && <>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: "#B91C1C", textTransform: "uppercase", letterSpacing: ".05em", marginTop: 10 }}>Definiciones a responder</div>
+              {defsPend.map(d => { const tag = d.gest ? GEST_TAG[d.gest] : null; return (<div key={d.id} style={{ background: d.estado === "vencida" ? "#FEF2F2" : d.estado === "urgente" ? "#FFFBEB" : T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 11px", marginTop: 7 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{d.nombre}</div>
+                    <div style={{ fontSize: 10.5, color: T.sub, marginTop: 2 }}>Traba <b>{d.tarea}</b>{d.critica && <span style={{ color: "#B91C1C", fontWeight: 800 }}> · CAMINO CRÍTICO</span>}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 3, color: d.estado === "vencida" ? "#B91C1C" : d.estado === "urgente" ? "#B45309" : T.muted }}>
+                      {d.estado === "vencida" ? `Vencida hace ${Math.abs(d.faltan)} días (límite ${crFmt(d.limite)})` : `Definir antes del ${crFmt(d.limite)} — faltan ${d.faltan} días`}
+                    </div>
+                  </div>
+                  {tag && <Badge c={tag[1]} b={tag[2]}>{tag[0]}</Badge>}
+                </div>
+              </div>); })}
+            </>}
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", marginTop: 13 }}>Tareas</div>
+            {tareas.map(t => (<div key={t.id} style={{ padding: "8px 0", borderBottom: `1px solid ${T.bg}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, minWidth: 0, flex: 1 }}>{t.nombre}{t.critica && <span style={{ fontSize: 9, color: "#B91C1C", fontWeight: 800, marginLeft: 6 }}>CRÍTICA</span>}</div>
+                {crNum(t.avance) > 0 && <Badge c="#16A34A" b="#ECFDF5">{crNum(t.avance)}%</Badge>}
+              </div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Plan: {crFmt(t.vvInicio)} → {crFmt(t.vvFin)}{t.bfInicio && t.bfFin ? ` · Comprometido: ${crFmt(t.bfInicio)} → ${crFmt(t.bfFin)}` : ""}</div>
+              {t.realInicio && <div style={{ fontSize: 10.5, color: T.text, fontWeight: 700, marginTop: 1 }}>Real: {crFmt(t.realInicio)}{t.realFin ? ` → ${crFmt(t.realFin)}` : " → en curso"}{t.desvRealIni > 0 ? <span style={{ color: "#B91C1C" }}> · arrancó +{t.desvRealIni}d</span> : null}{t.desvReal !== null && t.desvReal !== 0 ? <span style={{ color: t.desvReal > 0 ? "#B91C1C" : "#16A34A" }}> · terminó {t.desvReal > 0 ? "+" : ""}{t.desvReal}d</span> : null}</div>}
+            </div>))}
+          </div>}
+        </Card>);
+      })}
+    </div>
+  </div>);
+}
+
+// ── Globito rojo en el ícono de la app (como Mensajes de iOS) ──────
+// setAppBadge pinta el número en el ícono del escritorio. El número queda
+// puesto al cerrar la app; se actualiza al abrirla o al volver a primer plano.
+// Requiere iOS 16.4+, app instalada en pantalla de inicio y notificaciones permitidas.
+function GlobitoPermiso() {
+  const [estado, setEstado] = React.useState(() => {
+    try {
+      if (!("Notification" in window) || !("setAppBadge" in navigator)) return "no";
+      if (localStorage.getItem("globito_off") === "1") return "no";
+      return Notification.permission;   // "default" | "granted" | "denied"
+    } catch { return "no"; }
+  });
+  if (estado !== "default") return null;
+  return (<div style={{ display: "flex", alignItems: "center", gap: 9, background: "#0F1B2D", borderRadius: 12, padding: "10px 12px", margin: "0 0 10px", border: "1px solid #B08D3E" }}>
+    <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: "#fff", lineHeight: 1.45 }}>Activá los avisos para ver el <b>número rojo en el ícono</b> cuando haya alertas, sin abrir la app.</div>
+    <button onClick={async () => { try { const p = await Notification.requestPermission(); setEstado(p); if (p === "granted") { try { await navigator.setAppBadge(1); setTimeout(() => navigator.clearAppBadge().catch(() => { }), 1500); } catch { } } } catch { setEstado("denied"); } }}
+      style={{ background: "#B08D3E", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 11.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>Activar</button>
+    <button onClick={() => { try { localStorage.setItem("globito_off", "1"); } catch { } setEstado("no"); }}
+      style={{ background: "none", border: "none", color: "rgba(255,255,255,.55)", fontSize: 15, cursor: "pointer", padding: "0 2px", flexShrink: 0 }}>×</button>
+  </div>);
+}
+async function ponerGlobito(n) {
+  try {
+    if (!("setAppBadge" in navigator)) return;
+    if (n > 0) await navigator.setAppBadge(Math.min(99, Math.round(n)));
+    else await navigator.clearAppBadge();
+  } catch { }
+}
+function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
+  const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, reuniones: [], ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
   const cli = cfg?.nombre || "Belfast";
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
-  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; const m = gMetricas(solic, real, g.plazo, p.estado === "resuelto"); return { id: p.id, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, ...m }; });
-  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; const m = gMetricas(solic, real, it.plazo || g.plazo, !!real); return { ...it, fechaSolic: solic, fechaReal: real, ...m }; });
-  const items = [...itemsPedidos, ...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
-  const perItem = it => (it.estado === "Vencido" || it.estado === "Fuera de plazo") ? it.retraso * (it.dotacion || g.dotacion) * g.costoPersona : 0;
+  // Misma lectura de decisiones que V+V: acá Belfast VE lo mismo que V+V
+  // decidió, con el cálculo abierto. Transparencia total, sin sorpresas.
+  const conDecision = (base) => {
+    const d = g.punit[base.id];
+    const plazoEf = (base.plazoBase || g.plazo) + (d?.decision === "prorroga" ? (d.prorrogaDias || 0) : 0);
+    const m = gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
+    return { ...base, plazo: plazoEf, ...m, dec: d || null };
+  };
+  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; return conDecision({ id: p.id, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: p.estado === "resuelto" }); });
+  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
+  const parseDmy = (f) => { const m = String(f || "").match(/^(\d{2})\/(\d{2})\/(\d{2})$/); return m ? new Date(`20${m[3]}-${m[2]}-${m[1]}T12:00:00`) : null; };
+  const itemsMat = (matpedidos || []).filter(p => p.tipo === "definicion" || p.tipo === "plano").map(p => {
+    const solic = p.ts ? new Date(p.ts) : null;
+    const real = p.cumplido ? (parseDmy(p.cumplidoFecha) || new Date()) : null;
+    const desc = (p.items || []).map(it => it.nombre).filter(Boolean).join(", ") || (p.tipo === "plano" ? "Plano" : "Definición");
+    return conDecision({ id: p.id, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: !!p.cumplido });
+  });
+  const items = [...itemsPedidos, ...itemsMat, ...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
+  const perItem = it => (it.dec?.decision === "confirmado") ? it.retraso * (Number(it.dec.personas) || g.dotacion) * (Number(it.dec.costoDia) || g.costoPersona) : 0;
+  const esVencido = it => it.estado === "Vencido" || it.estado === "Fuera de plazo";
+  const confirmados = items.filter(it => it.dec?.decision === "confirmado");
+  const enEval = items.filter(it => esVencido(it) && !it.dec);
   const total = items.length, cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
   const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
-  const grp = n => items.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
+  const grp = n => confirmados.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
   const perjB = grp(cli), perjVV = grp("V+V"), perjE = grp("Estudio"), perjT = perjB + perjVV + perjE;
   const cnt = e => items.filter(i => i.estado === e).length;
-  const TABS = [["registro", "Registro"], ["panel", "Panel"], ["punitorios", "Punitorios"], ["plan", "Plan"]];
+  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "#FEF2F2" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "#F1F5F9" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "#EFF6FF" } };
+  const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
+
+  const ItemCard = ({ it }) => {
+    const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
+    return (<Card T={T} style={{ padding: 13, marginBottom: 9 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · plazo {it.plazo} d · <b style={{ color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</b></div>
+          {it.dec?.decision === "confirmado" && <div style={{ fontSize: 11, marginTop: 6, color: T.sub, lineHeight: 1.5 }}><b style={{ color: "#B91C1C" }}>Perjuicio: {money(pj)}</b> — {it.retraso} d × {Number(it.dec.personas) || g.dotacion} pers. × {money(Number(it.dec.costoDia) || g.costoPersona)}{it.dec.tarea ? <><br />Tarea detenida: {it.dec.tarea}</> : null}</div>}
+          {it.dec?.decision === "prorroga" && <div style={{ fontSize: 11, marginTop: 6, color: "#2563EB" }}>Prórroga acordada: +{it.dec.prorrogaDias} días háb.{it.dec.nota ? ` — ${it.dec.nota}` : ""}</div>}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end", flexShrink: 0 }}>
+          <Badge c={e.c} b={e.b}>{it.estado}</Badge>
+          {db2 && <Badge c={db2.c} b={db2.b}>{db2.t}</Badge>}
+          {!it.dec && esVencido(it) && <Badge c="#B45309" b="#FFFBEB">En evaluación</Badge>}
+        </div>
+      </div>
+    </Card>);
+  };
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "14px 20px 0" }}>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? "#EAEEF3" : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700 }}>{l}</button>)}</div>
     </div>
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
-      <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Desempeño medido sobre los pedidos (plazo {g.plazo} días háb.). Vista de seguimiento.</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Desempeño medido sobre los pedidos (plazo {g.plazo} días háb.).</div>
       {items.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin ítems.</div>}
-      {items.map(it => { const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); return (<Card T={T} key={it.id} style={{ padding: 13, marginBottom: 9 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-          <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
-            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · {it.dias} d háb. · <b style={{ color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</b></div>
-            {pj > 0 && <div style={{ fontSize: 11, fontWeight: 700, color: "#EF4444", marginTop: 5 }}>Perjuicio: {money(pj)}</div>}
-          </div>
-          <Badge c={e.c} b={e.b}>{it.estado}</Badge>
-        </div>
-      </Card>); })}
+      {items.map(it => <ItemCard key={it.id} it={it} />)}
+    </div>}
+    {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.55, marginBottom: 14 }}>Solo se imputan los retrasos que detuvieron una tarea en condiciones de avanzar, evaluados caso por caso con la dotación y el costo reales. Los retrasos marcados "en evaluación" no tienen monto asignado.</div>
+      <Eyebrow T={T}>Punitorios confirmados ({confirmados.length}) — {money(perjT)}</Eyebrow>
+      {confirmados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Sin punitorios confirmados.</div>}
+      {confirmados.map(it => <ItemCard key={it.id} it={it} />)}
+      {enEval.length > 0 && <>
+        <div style={{ height: 8 }} />
+        <Eyebrow T={T}>En evaluación ({enEval.length})</Eyebrow>
+        {enEval.map(it => <ItemCard key={it.id} it={it} />)}
+      </>}
+      <div style={{ height: 14 }} />
+      <Card T={T} style={{ padding: 14 }}>
+        <Eyebrow T={T}>Criterio de cálculo</Eyebrow>
+        <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.7 }}>Perjuicio = días de retraso × dotación afectada × costo diario por persona.<br />Referencia: {money(g.costoPersona)} por persona/día. Cada punitorio usa la dotación real de esa parada.</div>
+      </Card>
     </div>}
     {tab === "panel" && <div style={{ padding: "16px 20px" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginBottom: 14 }}>
-        {[["Ítems", total, T.accent], ["% Cumplimiento", pctCumpl + "%", "#16A34A"], ["Días háb. prom.", diasProm, "#3B82F6"], ["Perjuicio total", money(perjT), "#EF4444"]].map(([l, v, c]) => <div key={l} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px" }}><div style={{ fontSize: 17, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{l}</div></div>)}
+        {[["Ítems", total, T.accent], ["% Cumplimiento", pctCumpl + "%", "#16A34A"], ["Días háb. prom.", diasProm, "#3B82F6"], ["Perjuicio confirmado", money(perjT), "#EF4444"]].map(([l, v, c]) => <div key={l} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px" }}><div style={{ fontSize: 17, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{l}</div></div>)}
       </div>
       <Eyebrow T={T}>Por estado</Eyebrow>
       <Card T={T} style={{ padding: 13, marginBottom: 14 }}>{["Cumplido", "En plazo", "Fuera de plazo", "Vencido"].map(s => { const e = GEST_ESTADOS[s]; return (<div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: e.c }} /><span style={{ fontSize: 12.5, color: T.text }}>{s}</span></div><span style={{ fontSize: 13, fontWeight: 800 }}>{cnt(s)}</span></div>); })}</Card>
-      <Eyebrow T={T}>Perjuicio imputable</Eyebrow>
+      <Eyebrow T={T}>Perjuicio confirmado por responsable</Eyebrow>
       <Card T={T} style={{ padding: 13 }}>{[[cli, perjB], ["Estudio", perjE], ["V+V", perjVV]].map(([n, v]) => <div key={n} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{n}</span><span style={{ fontSize: 13, fontWeight: 800, color: v > 0 ? "#EF4444" : T.muted }}>{money(v)}</span></div>)}<div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>TOTAL</span><span style={{ fontSize: 14, fontWeight: 800, color: "#EF4444" }}>{money(perjT)}</span></div></Card>
     </div>}
-    {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
-      <Card T={T} style={{ padding: 14, marginBottom: 14 }}>
-        <Eyebrow T={T}>Parámetros</Eyebrow>
-        <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.8 }}>Plazo estándar: <b>{g.plazo} días hábiles</b><br />Dotación parada: <b>{g.dotacion} personas</b><br />Costo diario por persona: <b>{money(g.costoPersona)}</b></div>
-        <div style={{ background: "#EAEEF3", borderRadius: T.rsm, padding: "11px 13px", marginTop: 10 }}><div style={{ fontSize: 11.5, color: T.sub }}>Perjuicio por día de retraso</div><div style={{ fontSize: 18, fontWeight: 800, color: "#EF4444" }}>{money(g.dotacion * g.costoPersona)}</div></div>
-      </Card>
-      <Eyebrow T={T}>Simulador acumulado</Eyebrow>
-      <Card T={T} style={{ padding: 13 }}>{[1, 2, 3, 5, 7, 10, 15].map(d => <div key={d} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.sub }}>{d} día{d > 1 ? "s" : ""}</span><span style={{ fontSize: 12.5, fontWeight: 700 }}>{money(d * g.dotacion * g.costoPersona)}</span></div>)}</Card>
-    </div>}
     {tab === "plan" && <div style={{ padding: "16px 20px" }}>
-      {[["Objetivo", "Medir tiempos de definición y certificación, detectar desvíos y valorizar el perjuicio económico de los retrasos."], ["SLA", `Pedidos de información: respuesta en máx. ${g.plazo} días hábiles. Certificados: entrega en máx. ${g.plazo} días hábiles.`], ["Política de punitorios", "Por cada día de retraso imputable que detenga una tarea en condiciones de avanzar: perjuicio = días × dotación parada × costo diario. Se presenta en la reunión mensual."]].map(([t, d], i) => <Card T={T} key={i} style={{ padding: 14, marginBottom: 10 }}><div style={{ fontSize: 13, fontWeight: 800, color: T.accent, marginBottom: 6 }}>{t}</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6 }}>{d}</div></Card>)}
+      {[["1. Objetivo", ["Medir tiempos de definición y certificación, detectar desvíos y valorizar el perjuicio económico de los retrasos para tomar decisiones y reclamar lo que corresponda."]],
+      ["2. Estándares (SLA)", [`Pedidos de información (${cli}/Estudio): respuesta en máx. ${g.plazo} días hábiles desde la solicitud.`, `Certificados de obra (Héctor Ayala): entrega en máx. ${g.plazo} días hábiles desde la visita.`, "Toda solicitud y certificado se carga el mismo día en el Registro."]],
+      ["3. Circuito de imputación", ["El sistema detecta el vencimiento en forma automática (candidato).", "V+V evalúa cada candidato: se confirma como punitorio SOLO si el retraso detuvo una tarea en condiciones de avanzar, identificando la tarea y la dotación real afectada.", "Los retrasos que no frenaron trabajo quedan registrados como incumplimiento de plazo, sin perjuicio económico.", "Las prórrogas acordadas entre las partes extienden el plazo del ítem y quedan documentadas."]],
+      ["4. Política de punitorios", ["Por cada día de retraso imputable a " + cli + " o al Estudio que detenga una tarea en condiciones de avanzar: perjuicio = días de retraso × dotación afectada × costo diario por persona.", "Cada punitorio confirmado se documenta con su cronología, la tarea detenida y el cálculo abierto, y se presenta en la reunión mensual."]],
+      ["5. Responsables", ["V+V: carga del registro, certificaciones en plazo (Héctor Ayala), evaluación de candidatos y emisión de reclamos.", cli + " / Estudio: respuesta a pedidos y provisión de definiciones en plazo."]]
+      ].map(([titulo, puntos], i) => (<Card T={T} key={i} style={{ padding: 15, marginBottom: 11 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: T.accent, marginBottom: 8 }}>{titulo}</div>
+        {puntos.map((p, j) => <div key={j} style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6, marginBottom: 5, paddingLeft: 12, position: "relative" }}><span style={{ position: "absolute", left: 0, color: "#B08D3E" }}>·</span>{p}</div>)}
+      </Card>))}
+    </div>}
+    {tab === "reunion" && <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Reuniones empresa a empresa V+V — {cli}. Lo acordado queda a la vista de las dos partes.</div>
+      {(g.reuniones || []).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin reuniones registradas.</div>}
+      {(g.reuniones || []).map(r => (<Card T={T} key={r.id} style={{ padding: 14, marginBottom: 9 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{r.periodo || "Reunión"}{r.fecha ? ` · ${r.fecha}` : ""}</div>
+        {r.participantes && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>Participantes: {r.participantes}</div>}
+        {r.flojo && <div style={{ fontSize: 12, color: T.sub, marginTop: 6 }}><b>Flojo:</b> {r.flojo}</div>}
+        {r.mejorar && <div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}><b>A mejorar:</b> {r.mejorar}</div>}
+        {r.acciones && <div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}><b>Acciones acordadas:</b> {r.acciones}</div>}
+      </Card>))}
     </div>}
   </div>);
 }
@@ -2610,6 +4076,10 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion }) {
 // ── SHELL WEB INSTITUCIONAL (Cliente) ────────────────────────────────
 function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
   const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);   // sirve para TODOS los íconos
+  // Globito del ícono de Belfast: la suma de los avisos de todas las secciones.
+  useEffect(() => {
+    try { const tot = ["mensajes", "materiales", "informes", "bitacora", "avance", "chat", "pedidos", "archivos"].reduce((s2, k) => s2 + (badge(k) || 0), 0); ponerGlobito(tot); } catch { }
+  });
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
       <div style={{ background: T.navy, color: "#fff" }}>
@@ -2661,7 +4131,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 01-07-IA</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-certif</span>
     </div>
   </div>);
 }
@@ -2673,6 +4143,9 @@ function ClienteApp() {
   const [screen, setScreen] = useState("asistente");
   const [obras, setObras] = useStored("vv_obras", []);
   const [avance, setAvance] = useStored("vv_avance", {});
+  const [definiciones, setDefiniciones] = useStored("vv_definiciones", []);
+  const [docrecepcion, setDocrecepcion] = useStored("vv_docrecepcion", []);
+  const [bitacora, setBitacora] = useStored("vv_bitacora", []);
   useEffect(() => { if (localStorage.getItem("purge_canning_bf_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_bf_v1", "1"); } catch { } } catch { } })(); }, []);
   const [tareas, setTareas] = useStored("vv_tareas", []);
   const [mensajes, setMensajes] = useStored("vv_mensajes", []);
@@ -2683,11 +4156,18 @@ function ClienteApp() {
   const [pedidos, setPedidos] = useStored("vv_pedidos", []);
   const [personal, setPersonal] = useStored("vv_personal", []);
   const [gestion] = useStored("vv_gestion", {});
+  const [crono] = useStored("vv_cronograma", { obras: [] });
   const [formularios] = useStored("vv_formularios", []);
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
+  const [dronevuelos] = useStored("vv_drone", []);
+  // Las reuniones de Belfast son PRIVADAS: van en su propia clave, separada
+  // de "vv_minutas" (las de V+V). Ninguna de las dos empresas ve las del otro.
+  const [minutas, setMinutas] = useStored("cliente_minutas", []);
+  const [renders, setRenders] = useStored("vv_renders", {});
+  const [certifSem] = useStored("vv_certif_sem", {});
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
-  const unreadMat = 0; // materiales es solo un registro: no genera aviso de "sin levantar"
+  const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length; // pedidos de V+V sin levantar
   const pendPed = (pedidos || []).filter(p => p.para === "cliente" && p.estado !== "resuelto").length;
   const lastPed = useRef(null);
   const lastForms = useRef(null);
@@ -2715,6 +4195,9 @@ function ClienteApp() {
     formularios: (formularios || []).filter(f => f.compartido).map(f => "fm:" + f.id),
     archivos:    (archivosVV || []).map(a => "ar:" + (a.id || a.url || a.nombre)),
     obras:       (obras || []).map(o => "ob:" + o.id),              // ← OBRA NUEVA
+    // la bitácora siempre la carga V+V (el cliente no escribe acá), así que
+    // cada hecho nuevo cuenta como aviso — mismo criterio que "obras".
+    bitacora:    (bitacora || []).map(h => "bt:" + h.id),
     personal:    (personal || []).map(p => "pe:" + p.id),
     gestion:     [],
     ajustes:     [],
@@ -2843,6 +4326,11 @@ function ClienteApp() {
     if (r?.value) { try { actual = JSON.parse(r.value); } catch { } }
     const next = [...actual, msg]; lastCount.current = next.length; setMensajes(next); return next;
   }
+  async function vaciarMensajes() {
+    if (!confirm("¿Borrar TODOS los mensajes?\n\nSe vacía el chat para las dos empresas y no se puede deshacer.")) return;
+    if (!confirm("Confirmá de nuevo: se borra TODO el historial de mensajes.")) return;
+    lastCount.current = 0; setMensajes([]);
+  }
   async function borrarMensaje(id) {
     if (!id || !confirm("¿Eliminar este mensaje? Se borra para las dos empresas.")) return;
     const r = await storage.get("vv_mensajes"); let actual = mensajes;
@@ -2873,7 +4361,7 @@ function ClienteApp() {
     if (!obraId || !files?.length) return;
     const nom = obras.find(o => o.id === obraId)?.nombre || "una obra";
     await agregarAObra(obraId, files);
-    await postMensaje({ id: uid() + Date.now(), from: "cliente", texto: `📎 Subí documentación a ${nom}: ${files.map(f => f.nombre).join(", ")}`, fecha: hoyStr(), ts: Date.now(), archivos: files });
+    await postMensaje({ id: uid() + Date.now(), from: "cliente", texto: `Subí documentación a ${nom}: ${files.map(f => f.nombre).join(", ")}`, fecha: hoyStr(), ts: Date.now(), archivos: files });
     await acuseRecibo(obraId, files);
   }
   async function enviar(texto, archivos, obraId) {
@@ -2889,23 +4377,28 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} />}
+          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
-          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} />}
+          {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
+          {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
+          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} />}
+          {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
-          {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} />}
+          {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
-          {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} />}
+          {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
+          {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
-          {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} />}
-          {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} />}
+          {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
+          {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} renders={renders} setRenders={setRenders} />}
         </div>
       </div>
       <WebClientFooter T={T} cfg={cfg} />
     </div>
     <SyncBanner />
+    <div style={{ padding: "10px 16px 0" }}><GlobitoPermiso /></div>
   </div>);
 }
 
