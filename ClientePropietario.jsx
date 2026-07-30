@@ -222,15 +222,16 @@ function SeccionCronograma({ obra, tareas, onBack }) {
     </div>
   </div>);
 }
-function SeccionInformes({ obra, certif, onBack }) {
-  // Lo mismo que ve Belfast en su pantalla de Informes: los certificados
-  // semanales de avance, más los informes cargados a la obra.
+function SeccionInformes({ obra, certif, avance, onBack }) {
+  // Lo mismo que ve Belfast en su pantalla de Informes: certificados
+  // semanales, informes de avance, y los informes cargados a la obra.
   const certs = ((certif || {})[obra.id] || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
+  const avs = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const items = (obra.informes || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return (<div>
     <SubHead titulo="Informes" onBack={onBack} />
     <div style={{ padding: 18 }}>
-      {certs.length === 0 && items.length === 0 && <EmptyMsg>Todavía no hay informes cargados para esta obra.</EmptyMsg>}
+      {certs.length === 0 && avs.length === 0 && items.length === 0 && <EmptyMsg>Todavía no hay informes cargados para esta obra.</EmptyMsg>}
 
       {certs.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 9 }}>Certificados semanales de avance</div>}
       {certs.map(c => (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
@@ -246,6 +247,16 @@ function SeccionInformes({ obra, certif, onBack }) {
             <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>))}
         </div>}
       </div>))}
+
+      {avs.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 9px" }}>Informes de avance</div>}
+      {avs.map(a => { const fs = (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : []); return (
+        <div key={a.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 3 }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
+          {a.descripcion && <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{a.descripcion}</div>}
+          {fs.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginTop: 9 }}>
+            {fs.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>)}
+          </div>}
+        </div>); })}
 
       {items.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 9px" }}>Otros informes</div>}
       {items.map((it, i) => (<div key={it.id || i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
@@ -331,7 +342,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
   if (seccion === "renders") return <SeccionRenders obra={obra} renders={renders} onBack={() => setSeccion(null)} />;
   if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} />;
   if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} />;
-  if (seccion === "informes") return <SeccionInformes obra={obra} certif={certif} onBack={() => setSeccion(null)} />;
+  if (seccion === "informes") return <SeccionInformes obra={obra} certif={certif} avance={avance} onBack={() => setSeccion(null)} />;
   if (seccion === "planos") return <SeccionPlanos obra={obra} onBack={() => setSeccion(null)} />;
 
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
