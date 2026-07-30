@@ -2710,6 +2710,33 @@ function BitacoraView({ db, cfg, onBack }) {
     return () => clearTimeout(t);
   }, [obraId, bitacora]);
   const [abrir, setAbrir] = useState(false);
+  // Importar hechos en lote (por ejemplo, los sacados de un chat de obra).
+  // Se pega un JSON con {fecha, titulo, desc, etapa} y se cargan todos de
+  // una a la obra elegida arriba.
+  const [impAbierto, setImpAbierto] = useState(false);
+  const [impTexto, setImpTexto] = useState("");
+  function importarHechos() {
+    if (!obraId) { alert("Elegí primero la obra."); return; }
+    let arr = null;
+    try { arr = JSON.parse(impTexto); } catch { alert("Eso no es un JSON válido. Copiá y pegá el archivo completo, desde el [ hasta el ]."); return; }
+    if (!Array.isArray(arr) || !arr.length) { alert("El JSON tiene que ser una lista de hechos."); return; }
+    const yaHay = new Set((db.bitacora || []).filter(h => h.obra_id === obraId).map(h => `${h.fecha}|${(h.titulo || "").trim()}`));
+    const nuevos = [];
+    for (const it of arr) {
+      const fecha = String(it.fecha || "").slice(0, 10);
+      const titulo = String(it.titulo || "").trim();
+      if (!fecha || !titulo) continue;
+      if (yaHay.has(`${fecha}|${titulo}`)) continue;   // no duplico si ya está
+      let ts = Date.now();
+      try { ts = new Date(fecha + "T12:00:00").getTime() || ts; } catch { }
+      nuevos.push({ id: uid(), obra_id: obraId, fecha, titulo, desc: String(it.desc || "").trim(), etapa: String(it.etapa || "").trim(), fotos: [], adjuntos: [], ts });
+    }
+    if (!nuevos.length) { alert("No había hechos nuevos para cargar (puede que ya estuvieran todos)."); return; }
+    if (!confirm(`Se van a cargar ${nuevos.length} hecho${nuevos.length > 1 ? "s" : ""} en ${obraNom(obras, obraId)}.\n\n¿Confirmás?`)) return;
+    db.setBitacora(prev => [...(prev || []), ...nuevos]);
+    setImpTexto(""); setImpAbierto(false);
+    alert(`Listo: se cargaron ${nuevos.length} hechos.`);
+  }
   const [edit, setEdit] = useState(null); // hecho en edición
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [titulo, setTitulo] = useState("");
@@ -2873,6 +2900,16 @@ function BitacoraView({ db, cfg, onBack }) {
       {obraId && <>
         {/* botón nuevo / formulario */}
         {!abrir && <button onClick={() => setAbrir(true)} style={{ width: "100%", background: T.al, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 10, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>+ Cargar un hecho</button>}
+        {!abrir && !impAbierto && <button onClick={() => setImpAbierto(true)} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 10, padding: "11px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", marginBottom: 14 }}>⬇ Importar varios hechos de una vez</button>}
+        {impAbierto && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 4 }}>Importar hechos a {obraNom(obras, obraId) || "esta obra"}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginBottom: 9, lineHeight: 1.5 }}>Pegá acá el archivo de hechos completo (desde el [ hasta el ]). Los que ya estén cargados no se duplican.</div>
+          <textarea value={impTexto} onChange={e => setImpTexto(e.target.value)} placeholder='[ { "fecha": "2026-03-27", "titulo": "…", "desc": "…", "etapa": "…" } ]' style={{ width: "100%", minHeight: 130, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 11.5, color: T.text, boxSizing: "border-box", fontFamily: "monospace" }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button onClick={importarHechos} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Cargar los hechos</button>
+            <button onClick={() => { setImpAbierto(false); setImpTexto(""); }} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "11px 16px", fontSize: 12.5, cursor: "pointer" }}>Cancelar</button>
+          </div>
+        </div>}
 
         {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
@@ -4298,7 +4335,7 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <input value={cfg.apiKey||""} onChange={e=>setCfg(p=>({...p,apiKey:e.target.value}))} placeholder="sk-ant-..." style={{ width:"100%", background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", fontSize:13, color:T.text }} />
       <div style={{ marginTop:20 }}><Eyebrow>Actualizaciones</Eyebrow></div>
       <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"13px 14px" }}>
-        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-codigos</b></div>
+        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-import</b></div>
         <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Trae la última versión y todo lo último cargado (fotos, archivos, pedidos y cambios de cualquier dispositivo). Limpia la caché.</div>
         <button onClick={()=>{ try{ if(window.caches) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))); }catch(e){} location.replace(location.pathname+"?sync="+Date.now()); }} style={{ width:"100%", background:T.accent, color:"#fff", border:"none", borderRadius:T.rsm, padding:"12px", fontSize:13.5, fontWeight:700, cursor:"pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -7647,7 +7684,7 @@ function WebFooter({ cfg }) {
   return (<div style={{ background:T.navy, color:"rgba(255,255,255,.55)", flexShrink:0, borderTop:`2px solid ${BRASS}` }}>
     <div style={{ maxWidth:1180, margin:"0 auto", padding:"11px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, fontSize:11 }}>
       <span style={{ fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,.8)" }}>V+V CONSTRUCCIONES</span>
-      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-codigos</span>
+      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-import</span>
     </div>
   </div>);
 }
