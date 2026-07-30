@@ -144,16 +144,22 @@ function esRender(p) {
   if (/render/i.test(p.nombre || "")) return true;
   return EXT_IMAGEN.includes(ext);
 }
-function rendersDe(obra) { return (obra.planos || []).filter(esRender); }
+// Primero los renders subidos a mano desde Belfast (Ajustes). Si esa obra
+// no tiene ninguno cargado, se cae a los planos que sean imagen, como antes.
+function rendersDe(obra, renders) {
+  const propios = ((renders || {})[obra.id] || []);
+  if (propios.length) return propios;
+  return (obra.planos || []).filter(esRender);
+}
 
-function SeccionRenders({ obra, onBack }) {
-  const renders = rendersDe(obra);
+function SeccionRenders({ obra, renders, onBack }) {
+  const lista = rendersDe(obra, renders);
   return (<div>
     <SubHead titulo="Renders" onBack={onBack} />
     <div style={{ padding: 18 }}>
-      {renders.length === 0 && <EmptyMsg>Todavía no hay renders cargados para esta obra.</EmptyMsg>}
+      {lista.length === 0 && <EmptyMsg>Todavía no hay renders cargados para esta obra.</EmptyMsg>}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        {renders.map((f, i) => <a key={f.id || i} href={f.url} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
+        {lista.map((f, i) => <a key={f.id || i} href={f.url} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
           <img src={f.url} alt={f.nombre || ""} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
         </a>)}
       </div>
@@ -279,11 +285,11 @@ function SeccionMensajes({ onBack }) {
 }
 
 // ─── Panel principal ───
-function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance }) {
+function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders }) {
   const [seccion, setSeccion] = useState(null);
   const [idx, setIdx] = useState(0);
   // En el banner van los RENDERS (cómo va a quedar), no las fotos de obra.
-  const fotos = rendersDe(obra);
+  const fotos = rendersDe(obra, renders);   // lo que rota en el banner
   useEffect(() => {
     if (fotos.length < 2) return;
     const t = setInterval(() => setIdx(i => (i + 1) % fotos.length), 3800);
@@ -291,7 +297,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance }) 
   }, [fotos.length]);
 
   if (seccion === "novedades") return <SeccionNovedades obra={obra} onBack={() => setSeccion(null)} />;
-  if (seccion === "renders") return <SeccionRenders obra={obra} onBack={() => setSeccion(null)} />;
+  if (seccion === "renders") return <SeccionRenders obra={obra} renders={renders} onBack={() => setSeccion(null)} />;
   if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} />;
   if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} />;
   if (seccion === "informes") return <SeccionInformes obra={obra} onBack={() => setSeccion(null)} />;
@@ -328,12 +334,12 @@ export default function ClientePropietarioApp() {
   const [estado, setEstado] = useState("cargando"); // cargando | entrada | panel | error
   const [obra, setObra] = useState(null);
   const [nombreCliente, setNombreCliente] = useState("");
-  const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {} });
+  const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {}, renders: {} });
 
   async function cargarObra(codigo, nombre) {
     try {
-      const [ro, rt, ra, rf, rav] = await Promise.all([
-        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"),
+      const [ro, rt, ra, rf, rav, rr] = await Promise.all([
+        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"), storage.get("vv_renders"),
       ]);
       const obras = ro?.value ? JSON.parse(ro.value) : [];
       const encontrada = obras.find(o => (o.codigoCliente || "").toUpperCase() === codigo.toUpperCase());
@@ -345,6 +351,7 @@ export default function ClientePropietarioApp() {
         auditoria: ra?.value ? JSON.parse(ra.value) : [],
         formularios: rf?.value ? JSON.parse(rf.value) : [],
         avance: rav?.value ? JSON.parse(rav.value) : {},
+        renders: rr?.value ? JSON.parse(rr.value) : {},
       });
       setEstado("panel");
     } catch { setEstado("entrada"); }
@@ -358,5 +365,5 @@ export default function ClientePropietarioApp() {
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
   if (estado === "entrada") return <Entrada onEntrar={cargarObra} />;
-  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} />;
+  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} />;
 }
