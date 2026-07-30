@@ -980,6 +980,9 @@ function GrabarReunionCliente({ T, cfg, apiKey, obras, minutas = [], setMinutas,
   const activoRef = useRef(false);
   const baseRef = useRef("");
   const timerRef = useRef(null);
+  // Qué minuta está abierta y si ya tiene el PDF generado y guardado.
+  const [minutaId, setMinutaId] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
   const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
   function fFechaLarga(iso) { try { return new Date(iso + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" }); } catch { return iso; } }
@@ -1038,12 +1041,41 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
       setMinutaTexto(resp || "");
       const registro = { id: uid(), titulo: titulo.trim(), fecha, obra_id: obraId || null, transcripcion: texto, minutaTexto: resp || "", ts: Date.now() };
       if (setMinutas) setMinutas(p => [registro, ...(p || [])]);
+      setMinutaId(registro.id); setPdfUrl(null);
       setPaso("lista");
     } catch { alert("No pude generar la minuta ahora. La transcripción completa sigue abajo, la podés copiar a mano."); setPaso("lista"); }
   }
 
   function cancelar() { activoRef.current = false; try { recRef.current?.stop(); } catch { } clearInterval(timerRef.current); setPaso("form"); }
 
+  // Manda el PDF ya guardado: abre el menú del teléfono para elegir
+  // WhatsApp, Mail, o lo que sea. El PDF sigue guardado acá igual.
+  async function mandarPdf() {
+    if (!pdfUrl) return;
+    const nombreArchivo = `Minuta - ${titulo} - ${fecha}.pdf`;
+    try {
+      let blob;
+      if (pdfUrl.startsWith("data:")) {
+        // PDF incrustado: lo paso a archivo sin salir a la red.
+        const b64 = pdfUrl.split(",")[1] || "";
+        const bin = atob(b64); const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        blob = new Blob([arr], { type: "application/pdf" });
+      } else {
+        const r = await fetch(pdfUrl);
+        blob = await r.blob();
+      }
+      const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: nombreArchivo, text: `Minuta de reunión — ${titulo}` });
+        return;
+      }
+      const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = nombreArchivo; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      window.open(pdfUrl, "_blank");   // último recurso: abrirlo para compartir a mano
+    }
+  }
   async function generarPdf() {
     setGenerandoPdf(true);
     try {
@@ -1080,10 +1112,11 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
         else { doc.text(ln, M, y); y += 14; }
       }
       const blob = doc.output("blob");
-      const nombreArchivo = `Minuta - ${titulo} - ${fecha}.pdf`;
-      const file = new File([blob], nombreArchivo, { type: "application/pdf" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nombreArchivo, text: `Minuta de reunión — ${titulo}` }); setGenerandoPdf(false); return; }
-      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombreArchivo; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+      // El PDF NO se va de la app: se sube y queda guardado EN la minuta.
+      const dataUrl = doc.output("datauristring");
+      const url = await uploadFoto(dataUrl, "minutas-cliente", `${minutaId || uid()}.pdf`);
+      setPdfUrl(url);
+      if (minutaId && setMinutas) setMinutas(p => (p || []).map(m => m.id === minutaId ? { ...m, pdfUrl: url } : m));
     } catch { alert("No pude generar el PDF. Probá de nuevo."); }
     setGenerandoPdf(false);
   }
@@ -1112,8 +1145,12 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
     <AppHeader T={T} title="Minuta de reunión" back onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16, whiteSpace: "pre-wrap", fontSize: 13, color: T.text, lineHeight: 1.6 }}>{minutaTexto || "No pude armar la minuta con IA — acá tenés la transcripción completa para copiar a mano:\n\n" + transcripcion}</div>
-      <PBtn T={T} full onClick={generarPdf} disabled={generandoPdf} style={{ marginBottom: 10 }}>{generandoPdf ? "Generando…" : "📄 Compartir PDF (Mail, WhatsApp…)"}</PBtn>
-      <button onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); }} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Grabar otra reunión</button>
+      <PBtn T={T} full onClick={generarPdf} disabled={generandoPdf} style={{ marginBottom: 10 }}>{generandoPdf ? "Generando…" : pdfUrl ? "🔄 Volver a generar el PDF" : "📄 Generar el PDF de la minuta"}</PBtn>
+      {pdfUrl && <>
+        <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginBottom: 10 }}>👁 Ver el PDF (queda guardado acá)</a>
+        <PBtn T={T} full onClick={() => mandarPdf()} style={{ marginBottom: 10 }}>📤 Mandar por WhatsApp o Mail</PBtn>
+      </>}
+      <button onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null); }} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Grabar otra reunión</button>
     </div>
   </div>);
 
@@ -1127,7 +1164,7 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
       <PBtn T={T} full onClick={empezar} disabled={!sttOk} style={{ marginTop: 8 }}>🔴 Empezar a grabar</PBtn>
       {minutas.length > 0 && <>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", margin: "22px 0 10px" }}>Minutas anteriores</div>
-        {minutas.slice(0, 15).map(m => (<div key={m.id} onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setPaso("lista"); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8, cursor: "pointer" }}>
+        {minutas.slice(0, 15).map(m => (<div key={m.id} onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setMinutaId(m.id); setPdfUrl(m.pdfUrl || null); setPaso("lista"); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8, cursor: "pointer" }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
           <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
         </div>))}
@@ -1254,9 +1291,41 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
 
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
 
+  // ── Lo del día, de TODAS las obras juntas ──────────────────────────
+  // Lo primero que se ve al entrar: qué se cargó hoy, en qué obra y a qué
+  // hora. Así no hay que ir obra por obra buscando qué hay nuevo.
+  const hoyISO = new Date().toISOString().slice(0, 10);
+  const mismaFecha = (h) => {
+    if (h.fecha === hoyISO) return true;
+    if (h.ts) { try { return new Date(h.ts).toISOString().slice(0, 10) === hoyISO; } catch { } }
+    return false;
+  };
+  const delDia = (bitacora || []).filter(mismaFecha).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Horario de 24 h (16:45, no "04:45 p. m.") — es como se usa en obra.
+  const horaDe = (h) => { try { return new Date(h.ts).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }); } catch { return ""; } };
+  const nombreObra = (id) => obras.find(o => o.id === id)?.nombre || "Sin obra";
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <div style={{ padding: "14px 18px 4px", flexShrink: 0 }}><div style={{ fontSize: 10, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.12em" }}>Registro diario</div><div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>Bitácora de obra</div><div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Lo que va pasando en obra, día por día</div></div>
     <div style={{ padding: "16px 20px" }}>
+      {/* Lo cargado hoy, de todas las obras */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: delDia.length ? 10 : 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
+        </div>
+        {delDia.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, marginTop: 8 }}>Todavía no se cargó nada hoy.</div>
+          : delDia.map(h => (<div key={h.id} onClick={() => setObraId(h.obra_id)} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: `1px solid ${T.border}`, cursor: "pointer" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: BRASS, flexShrink: 0, minWidth: 42, fontVariantNumeric: "tabular-nums" }}>{horaDe(h)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{h.titulo || h.desc?.slice(0, 60) || "(sin título)"}</div>
+              <div style={{ fontSize: 11, color: T.sub, marginTop: 1 }}>{nombreObra(h.obra_id)}{h.etapa ? ` · ${h.etapa}` : ""}</div>
+            </div>
+            {(h.fotos || []).length > 0 && <div style={{ fontSize: 10.5, color: T.muted, flexShrink: 0 }}>📷 {(h.fotos || []).length}</div>}
+          </div>))}
+      </div>
+
       {/* selector de obra */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
         <select value={obraId} onChange={e => { setObraId(e.target.value); limpiar(); }} style={{ ...inp, flex: 1 }}>
@@ -2384,7 +2453,7 @@ function AjustesScreen({ T, cfg, setCfg }) {
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-minlibre</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-bitdia</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -3918,7 +3987,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-minlibre</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-bitdia</span>
     </div>
   </div>);
 }
@@ -3947,7 +4016,9 @@ function ClienteApp() {
   const [formularios] = useStored("vv_formularios", []);
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
   const [dronevuelos] = useStored("vv_drone", []);
-  const [minutas, setMinutas] = useStored("vv_minutas", []);
+  // Las reuniones de Belfast son PRIVADAS: van en su propia clave, separada
+  // de "vv_minutas" (las de V+V). Ninguna de las dos empresas ve las del otro.
+  const [minutas, setMinutas] = useStored("cliente_minutas", []);
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
   const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length; // pedidos de V+V sin levantar

@@ -2831,9 +2831,41 @@ function BitacoraView({ db, cfg, onBack }) {
 
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
 
+  // ── Lo del día, de TODAS las obras juntas ──────────────────────────
+  // Al entrar, lo primero que se ve es qué se cargó hoy y en qué obra,
+  // con la hora. Así no hay que ir obra por obra adivinando dónde hay algo
+  // nuevo. Al otro día esto se vacía solo y cada hecho queda en su obra.
+  const hoyISO = new Date().toISOString().slice(0, 10);
+  const mismaFecha = (h) => {
+    if (h.fecha === hoyISO) return true;
+    if (h.ts) { try { return new Date(h.ts).toISOString().slice(0, 10) === hoyISO; } catch { } }
+    return false;
+  };
+  const delDia = (bitacora || []).filter(mismaFecha).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Horario de 24 h (16:45, no "04:45 p. m.") — es como se usa en obra.
+  const horaDe = (h) => { try { return new Date(h.ts).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }); } catch { return ""; } };
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="documentacion" label="Bitácora de obra" sub="Cargá lo que va pasando para justificar adicionales" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
+      {/* Lo cargado hoy, de todas las obras */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: delDia.length ? 10 : 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
+        </div>
+        {delDia.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, marginTop: 8 }}>Todavía no se cargó nada hoy.</div>
+          : delDia.map(h => (<div key={h.id} onClick={() => setObraId(h.obra_id)} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: `1px solid ${T.border}`, cursor: "pointer" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: BRASS, flexShrink: 0, minWidth: 42, fontVariantNumeric: "tabular-nums" }}>{horaDe(h)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{h.titulo || h.desc?.slice(0, 60) || "(sin título)"}</div>
+              <div style={{ fontSize: 11, color: T.sub, marginTop: 1 }}>{obraNom(obras, h.obra_id) || "Sin obra"}{h.etapa ? ` · ${h.etapa}` : ""}</div>
+            </div>
+            {(h.fotos || []).length > 0 && <div style={{ fontSize: 10.5, color: T.muted, flexShrink: 0 }}>📷 {(h.fotos || []).length}</div>}
+          </div>))}
+      </div>
+
       {/* selector de obra */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
         <select value={obraId} onChange={e => { setObraId(e.target.value); limpiar(); }} style={{ ...inp, flex: 1 }}>
@@ -3594,6 +3626,9 @@ function GrabarReunion({ db, cfg, apiKey, onBack }) {
   const activoRef = useRef(false);   // true mientras el usuario quiere seguir grabando
   const baseRef = useRef("");        // todo lo ya confirmado antes del reinicio actual
   const timerRef = useRef(null);
+  // Qué minuta está abierta y si ya tiene el PDF generado y guardado.
+  const [minutaId, setMinutaId] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
   const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
   function fFechaLarga(iso) {
@@ -3643,17 +3678,27 @@ function GrabarReunion({ db, cfg, apiKey, onBack }) {
     setPaso("armando");
     try {
       const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
-      const sys = `Sos un asistente que arma minutas de reunión de obra para V+V Construcciones, a partir de una transcripción de voz (puede tener errores de dictado, cortes, muletillas). Español rioplatense. Devolvé SOLO la minuta, con esta estructura fija, sin agregar nada que no se haya dicho:
+      const sys = `Recibís la transcripción de voz de una reunión grabada. Puede tener errores de dictado, cortes, muletillas, o gente hablando encima. Tu trabajo es UNO SOLO: pasarla en limpio y ordenarla, armando un texto con hilo lógico y fácil de leer.
+
+REGLAS INNEGOCIABLES:
+- NUNCA comentes, juzgues ni aclares de qué trata la conversación. No digas si es de obra o no, si es relevante, si es informal, ni si te parece adecuada. No opines sobre el contenido.
+- NUNCA te niegues ni pidas más contexto. Sea cual sea el tema, escribí lo que se escuchó.
+- No agregues advertencias, disclaimers, ni notas del tipo "esta conversación no parece de trabajo". Nada de eso.
+- Escribí SOLO lo que se dijo, ordenado y con sentido. No inventes nada que no esté en la transcripción.
+- Si se distingue quién habla, marcalo. Si no, escribilo de corrido pero ordenado por temas, respetando el orden en que se hablaron.
+- Español rioplatense, claro y natural.
+
+FORMATO: empezá siempre con este encabezado exacto:
 MINUTA DE REUNIÓN
-Obra: ${obraNombre || "—"} · Fecha: ${fFechaLarga(fecha)} · Tema: ${titulo}
-TEMAS TRATADOS (numerados, un renglón por tema)
-ACUERDOS / DECISIONES (numerados)
-PENDIENTES (numerados, con quién queda a cargo si se dijo)
-Si algo de la transcripción no se entiende bien, usá tu criterio para interpretarlo sin inventar información nueva.`;
+${obraNombre ? `Obra: ${obraNombre} · ` : ""}Fecha: ${fFechaLarga(fecha)} · Tema: ${titulo}
+
+Después el desarrollo de lo hablado, ordenado y legible.
+Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISIONES" y/o "PENDIENTES" (numerados). Si no hubo acuerdos ni pendientes, no pongas esas secciones — no las fuerces.`;
       const resp = await callAI([{ role: "user", content: `Transcripción de la reunión:\n\n${texto}` }], sys, apiKey, false);
       setMinutaTexto(resp || "");
       const registro = { id: uid(), titulo: titulo.trim(), fecha, obra_id: obraId || null, transcripcion: texto, minutaTexto: resp || "", ts: Date.now() };
       if (setMinutas) setMinutas(p => [registro, ...(p || [])]);
+      setMinutaId(registro.id); setPdfUrl(null);
       setPaso("lista");
     } catch {
       alert("No pude generar la minuta ahora. La transcripción completa sigue abajo, la podés copiar a mano.");
@@ -3668,6 +3713,34 @@ Si algo de la transcripción no se entiende bien, usá tu criterio para interpre
     setPaso("form");
   }
 
+  // Manda el PDF ya guardado: abre el menú del teléfono para elegir
+  // WhatsApp, Mail, o lo que sea. El PDF sigue guardado acá igual.
+  async function mandarPdf() {
+    if (!pdfUrl) return;
+    const nombreArchivo = `Minuta - ${titulo} - ${fecha}.pdf`;
+    try {
+      let blob;
+      if (pdfUrl.startsWith("data:")) {
+        // PDF incrustado: lo paso a archivo sin salir a la red.
+        const b64 = pdfUrl.split(",")[1] || "";
+        const bin = atob(b64); const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        blob = new Blob([arr], { type: "application/pdf" });
+      } else {
+        const r = await fetch(pdfUrl);
+        blob = await r.blob();
+      }
+      const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: nombreArchivo, text: `Minuta de reunión — ${titulo}` });
+        return;
+      }
+      const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = nombreArchivo; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      window.open(pdfUrl, "_blank");   // último recurso: abrirlo para compartir a mano
+    }
+  }
   async function generarPdf() {
     setGenerandoPdf(true);
     try {
@@ -3690,7 +3763,12 @@ Si algo de la transcripción no se entiende bien, usá tu criterio para interpre
       doc.text(`${fFechaLarga(fecha)}${obraNombre ? "   ·   Obra: " + obraNombre : ""}`, W / 2, y, { align: "center" }); y += 14;
       doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 22;
       doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51);
-      const cuerpo = minutaTexto.replace(/^MINUTA DE REUNI[OÓ]N\s*\n?/i, "").replace(new RegExp(`^Obra:.*${fFechaLarga(fecha).slice(0, 4)}.*\\n?`, "i"), "").trim();
+      const cuerpo = minutaTexto.split("\n").filter((ln, i) => {
+        const t = ln.trim();
+        if (i < 3 && /^MINUTA DE REUNI[OÓ]N$/i.test(t)) return false;
+        if (i < 3 && /^(Obra|Fecha|Tema)\s*:/i.test(t)) return false;
+        return true;
+      }).join("\n").trim();
       const lineas = doc.splitTextToSize(cuerpo || minutaTexto, W - 2 * M);
       for (const ln of lineas) {
         const esTitulo = /^(TEMAS TRATADOS|ACUERDOS|PENDIENTES)/i.test(ln.trim());
@@ -3699,13 +3777,13 @@ Si algo de la transcripción no se entiende bien, usá tu criterio para interpre
         else { doc.text(ln, M, y); y += 14; }
       }
       const blob = doc.output("blob");
-      const nombreArchivo = `Minuta - ${titulo} - ${fecha}.pdf`;
-      const file = new File([blob], nombreArchivo, { type: "application/pdf" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: nombreArchivo, text: `Minuta de reunión — ${titulo}` });
-        setGenerandoPdf(false); return;
-      }
-      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombreArchivo; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+      // El PDF NO se va de la app: se sube y queda guardado EN la minuta.
+      // Desde ahí se puede abrir o mandar por WhatsApp/Mail las veces que
+      // haga falta, sin volver a generarlo.
+      const dataUrl = doc.output("datauristring");
+      const url = await uploadFoto(dataUrl, "minutas", `${minutaId || uid()}.pdf`);
+      setPdfUrl(url);
+      if (minutaId && setMinutas) setMinutas(p => (p || []).map(m => m.id === minutaId ? { ...m, pdfUrl: url } : m));
     } catch { alert("No pude generar el PDF. Probá de nuevo."); }
     setGenerandoPdf(false);
   }
@@ -3739,8 +3817,12 @@ Si algo de la transcripción no se entiende bien, usá tu criterio para interpre
     <PageHead eyebrow="Lista" title="Minuta de reunión" back onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16, whiteSpace: "pre-wrap", fontSize: 13, color: T.text, lineHeight: 1.6 }}>{minutaTexto || "No pude armar la minuta con IA — acá tenés la transcripción completa para copiar a mano:\n\n" + transcripcion}</div>
-      <PBtn full onClick={generarPdf} disabled={generandoPdf} style={{ marginBottom: 10 }}>{generandoPdf ? "Generando…" : "📄 Compartir PDF (Mail, WhatsApp…)"}</PBtn>
-      <PBtn full variant="ghost" onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); }}>Grabar otra reunión</PBtn>
+      <PBtn full onClick={generarPdf} disabled={generandoPdf} style={{ marginBottom: 10 }}>{generandoPdf ? "Generando…" : pdfUrl ? "🔄 Volver a generar el PDF" : "📄 Generar el PDF de la minuta"}</PBtn>
+      {pdfUrl && <>
+        <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginBottom: 10 }}>👁 Ver el PDF (queda guardado acá)</a>
+        <PBtn full onClick={() => mandarPdf()} style={{ marginBottom: 10 }}>📤 Mandar por WhatsApp o Mail</PBtn>
+      </>}
+      <PBtn full variant="ghost" onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null); }}>Grabar otra reunión</PBtn>
     </div>
   </div>);
 
@@ -3755,7 +3837,7 @@ Si algo de la transcripción no se entiende bien, usá tu criterio para interpre
       {minutas.length > 0 && <>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", margin: "22px 0 10px" }}>Minutas anteriores</div>
         {minutas.slice(0, 15).map(m => (<div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8 }}>
-          <div onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setPaso("lista"); }} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+          <div onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setMinutaId(m.id); setPdfUrl(m.pdfUrl || null); setPaso("lista"); }} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
             <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
           </div>
@@ -4198,7 +4280,7 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <input value={cfg.apiKey||""} onChange={e=>setCfg(p=>({...p,apiKey:e.target.value}))} placeholder="sk-ant-..." style={{ width:"100%", background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", fontSize:13, color:T.text }} />
       <div style={{ marginTop:20 }}><Eyebrow>Actualizaciones</Eyebrow></div>
       <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"13px 14px" }}>
-        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-navcel</b></div>
+        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-bitdia</b></div>
         <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Trae la última versión y todo lo último cargado (fotos, archivos, pedidos y cambios de cualquier dispositivo). Limpia la caché.</div>
         <button onClick={()=>{ try{ if(window.caches) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))); }catch(e){} location.replace(location.pathname+"?sync="+Date.now()); }} style={{ width:"100%", background:T.accent, color:"#fff", border:"none", borderRadius:T.rsm, padding:"12px", fontSize:13.5, fontWeight:700, cursor:"pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -7547,7 +7629,7 @@ function WebFooter({ cfg }) {
   return (<div style={{ background:T.navy, color:"rgba(255,255,255,.55)", flexShrink:0, borderTop:`2px solid ${BRASS}` }}>
     <div style={{ maxWidth:1180, margin:"0 auto", padding:"11px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, fontSize:11 }}>
       <span style={{ fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,.8)" }}>V+V CONSTRUCCIONES</span>
-      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-navcel</span>
+      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-bitdia</span>
     </div>
   </div>);
 }
