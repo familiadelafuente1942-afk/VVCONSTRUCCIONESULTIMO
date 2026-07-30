@@ -512,7 +512,7 @@ const DEFAULT_COLORS = { accent: "#1D4ED8", al: "#EFF6FF", bg: "#F1F5F9", card: 
 const DEFAULT_UBICACIONES = [{ id: "norte", code: "NORTE", name: "Zona Norte" }, { id: "sur", code: "SUR", name: "Zona Sur" }, { id: "oeste", code: "OESTE", name: "Zona Oeste" }, { id: "caba", code: "CABA", name: "Ciudad de Buenos Aires" }];
 
 const DEFAULT_TEXTOS = {
-    nav_ia: "IA", nav_inicio: "Inicio", nav_obras: "Obras", nav_personal: "Personal", nav_cargar: "Cargar", nav_mas: "Más", nav_privado: "Privado", nav_drone: "Drone IA",
+    nav_ia: "IA", nav_inicio: "Inicio", nav_obras: "Obras", nav_personal: "Personal", nav_cargar: "Cargar", nav_mas: "Más", nav_privado: "Privado", nav_drone: "Drone IA", nav_minutas: "Reunión",
     dash_titulo: "Panel operativo", dash_subtitulo: "V+V Construcciones",
     dash_proyectoes: "Proyectos", dash_obras_activas: "Obras activas", dash_alertas: "Alertas", dash_personal: "Personal",
     dash_obras_curso: "Obras en curso", dash_ver_todas: "Ver todas →", dash_acciones: "Acciones rápidas",
@@ -892,6 +892,7 @@ function LoginModal({ titulo, onSuccess, onClose }) {
 const NAV_DEFS = [
     { id: "chat", tk: "nav_ia", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" /></svg> },
     { id: "drone", tk: "nav_drone", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="10" width="6" height="4" rx="1" fill="currentColor" stroke="none" /><circle cx="4" cy="5" r="2.2" /><circle cx="20" cy="5" r="2.2" /><circle cx="4" cy="19" r="2.2" /><circle cx="20" cy="19" r="2.2" /><line x1="6" y1="6.5" x2="10" y2="10.5" /><line x1="18" y1="6.5" x2="14" y2="10.5" /><line x1="6" y1="17.5" x2="10" y2="13.5" /><line x1="18" y1="17.5" x2="14" y2="13.5" /></svg> },
+    { id: "minutas", tk: "nav_minutas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z" /><path d="M5 11a7 7 0 0014 0" /><path d="M12 18v3" /></svg> },
     { id: "dashboard", tk: "nav_inicio", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M11.47 3.841a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.061l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 101.061 1.061l8.69-8.69z" /><path d="M12 5.432l8.159 8.159.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198l.091-.086L12 5.432z" /></svg> },
     { id: "obras", tk: "nav_obras", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.5 2.25a.75.75 0 000 1.5v16.5h-.75a.75.75 0 000 1.5h16.5a.75.75 0 000-1.5h-.75V3.75a.75.75 0 000-1.5h-15zM9 6a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm-.75 3.75A.75.75 0 019 9h1.5a.75.75 0 010 1.5H9a.75.75 0 01-.75-.75zM9 12a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm3.75-5.25A.75.75 0 0113.5 6H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 9a.75.75 0 000 1.5H15A.75.75 0 0015 9h-1.5zm-.75 3.75a.75.75 0 01.75-.75H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM9 19.5v-2.25a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75V19.5H9z" /></svg> },
     { id: "personal", tk: "nav_personal", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg> },
@@ -966,13 +967,6 @@ function Dashboard({ lics, obras, personal, alerts, setView, setDetailObraId, re
             </div>
         </div>}
         <div style={{ padding: web ? "18px 18px 14px" : "14px 18px" }}>
-            <button onClick={() => setView("minutas")} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, background: T.navy, border: `1px solid ${BRASS || T.accent}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16, cursor: "pointer" }}>
-                <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Ico n="mic" s={19} c="#fff" /></div>
-                <div style={{ flex: 1, textAlign: "left" }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>🎙 Grabar reunión</div>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginTop: 1 }}>Se arma la minuta sola y se manda por PDF</div>
-                </div>
-            </button>
             {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
                 <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -2114,7 +2108,6 @@ const MAS_TILES = [
   { id:"informes", label:"Informes" },
   { id:"auditoria", label:"Auditoría de obra" },
   { id:"drone", label:"🚁 Drone IA", go:"drone" },
-  { id:"minutas", label:"🎙 Grabar reunión", go:"minutas" },
   { id:"plantillas", label:"Plantillas de documentos" },
   { id:"internos", label:"Chat privado" },
   { id:"infsemanal", label:"Informe semanal de obra" },
@@ -3719,18 +3712,21 @@ Si algo de la transcripción no se entiende bien, usá tu criterio para interpre
 
   const mm = String(Math.floor(segundos / 60)).padStart(2, "0"), ss = String(segundos % 60).padStart(2, "0");
 
-  if (paso === "grabando") return (<div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+  if (paso === "grabando") return (<div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
     <PageHead eyebrow="Grabando" title={titulo} back onBack={cancelar} />
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 20px" }}>
-      <div style={{ width: 90, height: 90, borderRadius: "50%", background: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, animation: "pulse 1.4s infinite" }}>
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px 20px" }}>
+      <div style={{ width: 90, height: 90, borderRadius: "50%", background: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, animation: "pulse 1.4s infinite", flexShrink: 0 }}>
         <Ico n="mic" s={36} c="#fff" />
       </div>
-      <div style={{ fontSize: 30, fontWeight: 800, color: T.text, fontVariantNumeric: "tabular-nums" }}>{mm}:{ss}</div>
-      <div style={{ fontSize: 12, color: T.muted, marginBottom: 22 }}>Grabando — se reinicia solo, no hace falta que hagas nada</div>
-      <div style={{ width: "100%", maxWidth: 480, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, flex: 1, overflowY: "auto", fontSize: 13, color: T.sub, lineHeight: 1.6, marginBottom: 22, minHeight: 120 }}>
+      <div style={{ fontSize: 30, fontWeight: 800, color: T.text, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{mm}:{ss}</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 18, flexShrink: 0 }}>Grabando — se reinicia solo, no hace falta que hagas nada</div>
+      {/* Este cuadro es el ÚNICO que scrollea — así, por más larga que se
+          ponga la reunión, el botón de terminar queda siempre fijo abajo,
+          visible, sin que haga falta scrollear la pantalla para tocarlo. */}
+      <div style={{ width: "100%", maxWidth: 480, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, flex: 1, minHeight: 0, overflowY: "auto", fontSize: 13, color: T.sub, lineHeight: 1.6, marginBottom: 16 }}>
         {transcripcion || "Escuchando… empezá a hablar."}
       </div>
-      <PBtn full onClick={terminar} style={{ maxWidth: 480, background: "#DC2626" }}>⏹ Terminar y armar la minuta</PBtn>
+      <PBtn full onClick={terminar} style={{ maxWidth: 480, background: "#DC2626", flexShrink: 0 }}>⏹ Terminar y armar la minuta</PBtn>
     </div>
   </div>);
 
@@ -3758,9 +3754,12 @@ Si algo de la transcripción no se entiende bien, usá tu criterio para interpre
       <PBtn full onClick={empezar} disabled={!sttOk} style={{ marginTop: 8 }}>🔴 Empezar a grabar</PBtn>
       {minutas.length > 0 && <>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", margin: "22px 0 10px" }}>Minutas anteriores</div>
-        {minutas.slice(0, 15).map(m => (<div key={m.id} onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setPaso("lista"); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8, cursor: "pointer" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
-          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
+        {minutas.slice(0, 15).map(m => (<div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8 }}>
+          <div onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setPaso("lista"); }} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
+          </div>
+          <button onClick={() => { if (confirm(`¿Borrar "${m.titulo}"?`)) setMinutas(p => (p || []).filter(x => x.id !== m.id)); }} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", padding: 6, flexShrink: 0 }}><Ico n="tacho" s={16} /></button>
         </div>))}
       </>}
     </div>
@@ -4199,7 +4198,7 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <input value={cfg.apiKey||""} onChange={e=>setCfg(p=>({...p,apiKey:e.target.value}))} placeholder="sk-ant-..." style={{ width:"100%", background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", fontSize:13, color:T.text }} />
       <div style={{ marginTop:20 }}><Eyebrow>Actualizaciones</Eyebrow></div>
       <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"13px 14px" }}>
-        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-minutas</b></div>
+        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-navcel</b></div>
         <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Trae la última versión y todo lo último cargado (fotos, archivos, pedidos y cambios de cualquier dispositivo). Limpia la caché.</div>
         <button onClick={()=>{ try{ if(window.caches) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))); }catch(e){} location.replace(location.pathname+"?sync="+Date.now()); }} style={{ width:"100%", background:T.accent, color:"#fff", border:"none", borderRadius:T.rsm, padding:"12px", fontSize:13.5, fontWeight:700, cursor:"pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -7486,7 +7485,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
   </div>);
 }
 const WEB_NAV = [
-  { id:"chat", label:"IA" }, { id:"drone", label:"Drone IA" }, { id:"dashboard", label:"Inicio" },
+  { id:"chat", label:"IA" }, { id:"drone", label:"Drone IA" }, { id:"minutas", label:"Grabar reunión" }, { id:"dashboard", label:"Inicio" },
   { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" },
   { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos enviados" }, { id:"auditoria", label:"Auditoría" },
     { id:"mas", label:"Más" },
@@ -7548,7 +7547,7 @@ function WebFooter({ cfg }) {
   return (<div style={{ background:T.navy, color:"rgba(255,255,255,.55)", flexShrink:0, borderTop:`2px solid ${BRASS}` }}>
     <div style={{ maxWidth:1180, margin:"0 auto", padding:"11px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, fontSize:11 }}>
       <span style={{ fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,.8)" }}>V+V CONSTRUCCIONES</span>
-      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-minutas</span>
+      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-navcel</span>
     </div>
   </div>);
 }
