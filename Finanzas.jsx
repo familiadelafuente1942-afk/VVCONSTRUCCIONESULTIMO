@@ -1604,8 +1604,9 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
         const mesIni = mesDe(form.inicio || hoyISO());
         const { factor } = indiceAcumulado(data.precioBase.mes, mesIni, data.cacMensual || {});
         const precio = Math.round(numMoney(data.precioBase.valor) * factor);
-        setForm({ ...form, precioCliente: fmtMiles(precio) });
-      }} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: -6, marginBottom: 12 }}>↺ Traer precio de la tabla (a la fecha de Inicio)</button>}
+        setForm({ ...form, precioCliente: fmtMiles(precio), mesBase: mesIni });
+      }} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: -6, marginBottom: 4 }}>↺ Traer precio de la tabla (a la fecha de Inicio)</button>}
+      {data.precioBase && data.precioBase.mes && <div style={{ fontSize: 10, color: T.muted, marginBottom: 8, lineHeight: 1.4 }}>Al traerlo, también fija "Mes base redeterminación (CAC)" más abajo al mes de Inicio — para que certificados y precio queden atados al mismo mes.</div>}
       <Field label="Costo interno $/m²" hint="Tu costo por m² (ej: 260.000). Presupuesto costo = m² × este valor."><input value={form.costoM2} onChange={e => setForm({ ...form, costoM2: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="260.000" style={inp} /></Field>
       {(pCli > 0 || pCos > 0) && <div style={{ background: T.al, borderRadius: 9, padding: 10, marginBottom: 12, display: "flex", justifyContent: "space-around" }}><span style={{ fontSize: 12, color: T.sub }}>Cliente: <Money v={pCli} c={T.accent} /></span><span style={{ fontSize: 12, color: T.sub }}>Costo: <Money v={pCos} c={T.warn} /></span></div>}
       <div style={{ display: "flex", gap: 10 }}>
