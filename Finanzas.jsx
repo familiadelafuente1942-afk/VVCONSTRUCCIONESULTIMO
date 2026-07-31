@@ -283,6 +283,56 @@ function TablaPreciosTab({ data, save }) {
   const [form, setForm] = useState({ valor: pb.valor ? fmtMiles(pb.valor) : "409.000", mes: pb.mes || "2025-11" });
   useEffect(() => { setForm({ valor: pb.valor ? fmtMiles(pb.valor) : "409.000", mes: pb.mes || "2025-11" }); }, [data.precioBase]);
   const guardarBase = () => save({ ...data, precioBase: { valor: numMoney(form.valor), mes: form.mes } });
+  const setIndice = (mes, valor) => {
+    const next = { ...(data.cacMensual || {}) };
+    if (String(valor).trim() === "") delete next[mes]; else next[mes] = num(valor);
+    save({ ...data, cacMensual: next });
+  };
+
+  const [importando, setImportando] = useState(false);
+  const fileImportRef = useRef(null);
+  async function importarPlanilla(e) {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    setImportando(true);
+    try {
+      const XLSX = await cargarXLSX();
+      const ab = await file.arrayBuffer();
+      const { ipc, obras: obrasXls } = parsePlanillaRedet(XLSX, ab);
+      const nMesesIpc = Object.keys(ipc).length;
+      const nombresXls = Object.keys(obrasXls);
+      if (!nMesesIpc && !nombresXls.length) { alert("No pude encontrar la hoja \"Inflación\" ni \"Cobros y Pagos\" en ese archivo."); setImportando(false); return; }
+      const norm = (s) => sinTildes(s);
+      const obrasApp = data.obras || [];
+      const matches = nombresXls.map(nom => ({ nom, obra: obrasApp.find(o => norm(o.nombre) === norm(nom)) }));
+      const sinMatch = matches.filter(m => !m.obra).map(m => m.nom);
+      const nFilas = matches.reduce((a, m) => a + (m.obra ? (obrasXls[m.nom] || []).length : 0), 0);
+      const detalle = `Encontré en la planilla:\n· ${nMesesIpc} mes(es) de IPC\n· ${matches.filter(m => m.obra).length} obra(s) que coinciden con las tuyas (${nFilas} filas de cobro/pago)` +
+        (sinMatch.length ? `\n\nNO encontré en tu app estas obras de la planilla (no se importan): ${sinMatch.join(", ")}` : "") +
+        `\n\n¿Importar?`;
+      if (!window.confirm(detalle)) { setImportando(false); return; }
+
+      const cacNext = { ...(data.cacMensual || {}), ...ipc };
+      const movsPrev = data.movimientos || [];
+      const existentes = new Set(movsPrev.map(m => m.impId).filter(Boolean));
+      const nuevos = [];
+      matches.forEach(m => {
+        if (!m.obra) return;
+        (obrasXls[m.nom] || []).forEach(fila => {
+          [["cobro", fila.cobro], ["pago", fila.pago]].forEach(([tipo, monto]) => {
+            if (!monto) return;
+            const impId = `imp_${m.obra.id}_${fila.fecha}_${tipo}_${monto}`;
+            if (existentes.has(impId)) return;
+            existentes.add(impId);
+            nuevos.push({ id: uid() + Math.random().toString(36).slice(2, 6), obraId: m.obra.id, monto, fecha: fila.fecha, nota: "Importado de planilla", ts: Date.now(), tipo, impId });
+          });
+        });
+      });
+      save(logH({ ...data, cacMensual: cacNext, movimientos: [...movsPrev, ...nuevos] }, `Importó planilla: ${nMesesIpc} mes(es) IPC, ${nuevos.length} movimiento(s)`));
+      alert(`✓ Importado.\n· IPC: ${nMesesIpc} mes(es)\n· Movimientos nuevos: ${nuevos.length}${nuevos.length < nFilas ? ` (${nFilas - nuevos.length} ya estaban cargados, no se duplicaron)` : ""}`);
+    } catch (err) { alert(err.message || "No se pudo leer el archivo."); }
+    setImportando(false);
+  }
 
   const mesBase = pb.mes || "2025-11";
   const valorBase = numMoney(pb.valor != null ? pb.valor : 409000);
@@ -294,8 +344,15 @@ function TablaPreciosTab({ data, save }) {
 
   return <div style={{ padding: "14px 16px 40px" }}>
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Importar planilla (.xlsx)</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Si venís cargando cobros e IPC en Excel, subí el archivo acá y te carga el IPC mensual y los cobros/pagos por obra en Gastos, todo de una.</div>
+      <input ref={fileImportRef} type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={importando} onChange={importarPlanilla} style={{ display: "none" }} />
+      <button onClick={() => fileImportRef.current && fileImportRef.current.click()} disabled={importando} style={{ width: "100%", background: importando ? T.al : T.navy, color: importando ? T.sub : "#fff", border: `1px solid ${BRASS}`, borderRadius: 10, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: importando ? "default" : "pointer" }}>{importando ? "Leyendo…" : "＋ Elegir archivo Excel"}</button>
+    </div>
+
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Precio base</div>
-      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>El precio que sabías que era correcto en un mes determinado. Desde ahí, la tabla lo va actualizando solo con el IPC de la Cámara, mes a mes, hasta hoy.</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>El precio que sabías que era correcto en un mes determinado. Desde ahí, la tabla lo va actualizando sola con el IPC que cargues abajo, mes a mes, hasta hoy.</div>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}><label style={lb}>Precio $/m²</label><input value={form.valor} onChange={e => setForm({ ...form, valor: fmtMiles(e.target.value) })} inputMode="numeric" style={inp2} /></div>
         <div style={{ flex: 1 }}><label style={lb}>Mes de ese precio</label><input type="month" value={form.mes} onChange={e => setForm({ ...form, mes: e.target.value })} style={inp2} /></div>
@@ -307,14 +364,18 @@ function TablaPreciosTab({ data, save }) {
       <div style={{ fontSize: 10, opacity: .7, textTransform: "uppercase", letterSpacing: "0.08em" }}>Precio hoy ({nomMesCorto(hoyMes)})</div>
       <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>{money(precioHoy)}</div>
       <div style={{ fontSize: 11, opacity: .75, marginTop: 4 }}>Base {money(valorBase)} en {nomMesCorto(mesBase)} · acumulado {(factor * 100 - 100).toFixed(2)}%</div>
-      {faltan > 0 && <div style={{ fontSize: 10.5, color: "#FCA5A5", marginTop: 6 }}>⚠ Faltan {faltan} mes(es) de IPC en Redeterminación — precio incompleto</div>}
+      {faltan > 0 && <div style={{ fontSize: 10.5, color: "#FCA5A5", marginTop: 6 }}>⚠ Faltan {faltan} mes(es) de IPC — precio incompleto</div>}
     </div>
 
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Mes a mes</div>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Mes a mes</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Cargá acá el % de la Cámara de cada mes cuando salga. Este es el único lugar de la app donde se carga — todo lo demás (obras nuevas, certificados) lo toma de acá solo.</div>
       {meses.map(m => (<div key={m.mes} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
-        <span style={{ fontSize: 12.5, color: T.sub, width: 62 }}>{nomMesCorto(m.mes)}{m.mes === mesBase ? " ·base" : ""}</span>
-        <span style={{ fontSize: 11, color: m.provisorio ? "#B45309" : T.muted, width: 70, textAlign: "center" }}>{m.mes === mesBase ? "—" : (m.provisorio ? "sin IPC" : (m.rate * 100).toFixed(1) + "%")}</span>
+        <span style={{ fontSize: 12.5, color: T.sub, width: 54 }}>{nomMesCorto(m.mes)}{m.mes === mesBase ? " ·base" : ""}</span>
+        {m.mes === mesBase
+          ? <span style={{ fontSize: 11, color: T.muted, width: 84, textAlign: "center" }}>—</span>
+          : <input value={cac[m.mes] != null ? cac[m.mes] : ""} onChange={e => setIndice(m.mes, e.target.value)} inputMode="decimal" placeholder="% CAC"
+              style={{ width: 84, background: m.provisorio ? "rgba(240,165,0,.10)" : T.bg, border: `1px solid ${m.provisorio ? "rgba(240,165,0,.5)" : T.border}`, borderRadius: 7, padding: "6px 4px", fontSize: 13, color: T.text, textAlign: "center", boxSizing: "border-box" }} />}
         <b style={{ fontSize: 13 }}>{money(valorBase * m.factor)}</b>
       </div>))}
     </div>
@@ -583,497 +644,6 @@ function mensajeCertificadoTexto(obra, data, certsDe, indices) {
     `El PDF del certificado te lo adjunto aparte. Cualquier cosa avisame. Saludos.`;
 }
 
-// Componentes del índice de la construcción. Lo que se ajusta en los contratos de
-// mano de obra NO es el índice general (que promedia materiales), sino el capítulo MANO DE OBRA.
-const CAC_COMP = {
-  mo: { nom: "Mano de obra", det: "Capítulo Mano de Obra del índice de la construcción. Es el que corresponde si lo que ajustás es mano de obra.", en: "Mano de Obra (labour) chapter" },
-  mat: { nom: "Materiales", det: "Capítulo Materiales. Se mueve muy distinto de la mano de obra.", en: "Materiales (materials) chapter" },
-  gral: { nom: "General", det: "Índice general: promedia materiales + mano de obra + gastos generales. NO sirve si ajustás solo mano de obra.", en: "General index (all chapters)" },
-};
-
-// Busca el índice en internet (la IA con búsqueda web, del lado del servidor).
-// NO escribe nada solo: devuelve los valores para que los revises.
-async function buscarCAC(desde, hasta, comp) {
-  const C = CAC_COMP[comp] || CAC_COMP.mo;
-  const sys = `Sos un asistente de datos para una constructora argentina.
-Buscá en internet la VARIACIÓN MENSUAL (%) del capítulo **${C.en}** del Índice del Costo de la Construcción argentino.
-
-MUY IMPORTANTE: NO quiero el índice general ni el nivel general. Quiero EXCLUSIVAMENTE el capítulo/rubro **${C.nom}**.
-Si la fuente publica el índice desagregado por capítulos (Materiales / Mano de Obra / Gastos Generales), tomá SOLO el de ${C.nom}.
-Si solo encontrás el nivel general y no el capítulo desagregado, NO lo devuelvas: informalo en "nota".
-
-Fuentes válidas, en este orden:
-1. Cámara Argentina de la Construcción (camarco.org.ar) — su índice de costos con apertura por capítulo.
-2. INDEC — Índice del Costo de la Construcción (ICC) en el Gran Buenos Aires, capítulo ${C.nom}.
-Aclará SIEMPRE en "fuente" de cuál de las dos salió, porque no dan lo mismo.
-
-Respondé ÚNICAMENTE con JSON válido, sin markdown ni texto alrededor:
-{"meses":[{"mes":"AAAA-MM","variacion":3.5,"indice":1234.56}],"fuente":"nombre + URL","capitulo":"${C.nom}","nota":"aclaración breve"}
-"variacion" = variación mensual en % respecto del mes anterior, número (ej: 3.5). Obligatorio.
-Si un mes no fue publicado todavía, omitilo. NUNCA inventes un valor.
-Si no encontrás el capítulo desagregado, devolvé {"meses":[],"fuente":"","capitulo":"${C.nom}","nota":"explicá qué encontraste y qué no"}.`;
-  const body = {
-    model: "claude-sonnet-5",
-    max_tokens: 2500,
-    system: sys,
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }],
-    messages: [{ role: "user", content: `Variación mensual del capítulo ${C.nom} desde ${desde} hasta ${hasta} inclusive. Solo el JSON.` }],
-  };
-  const r = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const d = await r.json();
-  if (d.error) throw new Error(d.error.message || "Error de la IA");
-  const texto = (d.content || []).filter(c => c.type === "text").map(c => c.text).join("\n");
-  const m = texto.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("La IA no devolvió datos usables.");
-  const j = JSON.parse(m[0]);
-  return {
-    meses: (j.meses || []).filter(x => x && x.mes && x.variacion != null && isFinite(Number(x.variacion))),
-    fuente: j.fuente || "", capitulo: j.capitulo || C.nom, nota: j.nota || "", comp,
-  };
-}
-
-// ============ REDETERMINACIÓN (CAC acumulativo) ============
-// Toma un precio de m² y le aplica el CAC mes a mes SOBRE EL MONTO YA AJUSTADO.
-// El precio redeterminado baja a una obra nueva como precio base del presupuesto.
-// OJO: la obra nueva arranca con mesBase = el mes al que redeterminamos. Si dejáramos
-// el mes viejo, los certificados volverían a aplicar el mismo CAC (lo contaría dos veces).
-function RedeterminacionTab({ obras, data, save }) {
-  const cac = data.cacMensual || {};
-  const comp = data.cacComp || "mo";                      // por defecto: MANO DE OBRA
-  const setComp = (c) => save({ ...data, cacComp: c });
-  const hayCargados = Object.keys(cac).length > 0;
-  const sinMarcar = hayCargados && !data.cacComp;         // cargados antes de que existiera el selector
-  const [buscando, setBuscando] = useState(false);
-  const [errBusq, setErrBusq] = useState("");
-  const [importando, setImportando] = useState(false);
-  const fileImportRef = useRef(null);
-  async function importarPlanilla(e) {
-    const file = e.target.files && e.target.files[0]; e.target.value = "";
-    if (!file) return;
-    setImportando(true);
-    try {
-      const XLSX = await cargarXLSX();
-      const ab = await file.arrayBuffer();
-      const { ipc, obras: obrasXls } = parsePlanillaRedet(XLSX, ab);
-      const nMesesIpc = Object.keys(ipc).length;
-      const nombresXls = Object.keys(obrasXls);
-      if (!nMesesIpc && !nombresXls.length) { alert("No pude encontrar la hoja \"Inflación\" ni \"Cobros y Pagos\" en ese archivo."); setImportando(false); return; }
-      const norm = (s) => sinTildes(s);
-      const matches = nombresXls.map(nom => ({ nom, obra: (obras || []).find(o => norm(o.nombre) === norm(nom)) }));
-      const sinMatch = matches.filter(m => !m.obra).map(m => m.nom);
-      const nFilas = matches.reduce((a, m) => a + (m.obra ? (obrasXls[m.nom] || []).length : 0), 0);
-      const detalle = `Encontré en la planilla:\n· ${nMesesIpc} mes(es) de IPC\n· ${matches.filter(m => m.obra).length} obra(s) que coinciden con las tuyas (${nFilas} filas de cobro/pago)` +
-        (sinMatch.length ? `\n\nNO encontré en tu app estas obras de la planilla (no se importan): ${sinMatch.join(", ")}` : "") +
-        `\n\n¿Importar?`;
-      if (!window.confirm(detalle)) { setImportando(false); return; }
-
-      const cacNext = { ...(data.cacMensual || {}), ...ipc };
-      const movsPrev = data.movimientos || [];
-      const existentes = new Set(movsPrev.map(m => m.impId).filter(Boolean));
-      const nuevos = [];
-      matches.forEach(m => {
-        if (!m.obra) return;
-        (obrasXls[m.nom] || []).forEach(fila => {
-          [["cobro", fila.cobro], ["pago", fila.pago]].forEach(([tipo, monto]) => {
-            if (!monto) return;
-            const impId = `imp_${m.obra.id}_${fila.fecha}_${tipo}_${monto}`;
-            if (existentes.has(impId)) return; // ya importado antes, no duplicar
-            existentes.add(impId);
-            nuevos.push({ id: uid() + Math.random().toString(36).slice(2, 6), obraId: m.obra.id, monto, fecha: fila.fecha, nota: "Importado de planilla", ts: Date.now(), tipo, impId });
-          });
-        });
-      });
-      save(logH({ ...data, cacMensual: cacNext, movimientos: [...movsPrev, ...nuevos] }, `Importó planilla: ${nMesesIpc} mes(es) IPC, ${nuevos.length} movimiento(s)`));
-      alert(`✓ Importado.\n· IPC: ${nMesesIpc} mes(es)\n· Movimientos nuevos: ${nuevos.length}${nuevos.length < nFilas ? ` (${nFilas - nuevos.length} ya estaban cargados, no se duplicaron)` : ""}`);
-    } catch (err) { alert(err.message || "No se pudo leer el archivo."); }
-    setImportando(false);
-  }
-  const cot = data.redet || {};
-  const setCot = (k, v) => save({ ...data, redet: { ...cot, [k]: v } });
-  const setIndice = (mes, valor) => {
-    const next = { ...(data.cacMensual || {}) };
-    if (String(valor).trim() === "") delete next[mes]; else next[mes] = num(valor);
-    save({ ...data, cacMensual: next });
-  };
-
-  const hoyMes = mesDe(hoyISO());
-  const pb = data.precioBase || {};
-  const base = numMoney(cot.base != null ? cot.base : (pb.valor != null ? pb.valor : 409000));
-  const mesBase = cot.mesBase || pb.mes || hoyMes;
-  const mesHasta = cot.mesHasta || hoyMes;
-  const costoBase = numMoney(cot.costoBase);
-
-  const meses = [];
-  let ym = mesBase, guard = 0;
-  while (ym <= mesHasta && guard++ < 240) { meses.push(ym); ym = addMonthYM(ym, 1); }
-
-  // ---- ACUMULACIÓN COMPUESTA (misma función que usa la Tabla de Precios) ----
-  const { meses: idxMeses } = indiceAcumulado(mesBase, mesHasta, cac);
-  let prevPrecio = base, faltan = 0;
-  const filas = idxMeses.map((m, i) => {
-    const precio = base * m.factor;
-    const row = { mes: m.mes, primero: i === 0, precio, factor: m.factor, rate: m.rate, provisorio: m.provisorio };
-    if (i > 0) { row.ajuste = precio - prevPrecio; if (m.provisorio) faltan++; }
-    prevPrecio = precio;
-    return row;
-  });
-  const factor = filas.length ? filas[filas.length - 1].factor : 1;
-  const precioRedet = base * factor;
-  const costoRedet = costoBase * factor;
-  const acumPct = (factor - 1) * 100;
-  const sumaSimple = filas.slice(1).reduce((a, f) => a + (f.rate || 0), 0) * 100;
-
-  const nomMes = (mm) => { if (!mm) return ""; const [y, m] = String(mm).split("-"); return ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][+m - 1] + " " + y.slice(2); };
-  const inp2 = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 9, padding: "12px", fontSize: 16, color: T.text, width: "100%", boxSizing: "border-box" };
-  const lb = { fontSize: 10.5, color: T.sub, fontWeight: 700, display: "block", marginBottom: 4 };
-
-  // ---- buscar el CAC en internet (la IA propone; vos confirmás) ----
-  const buscarEnInternet = async () => {
-    setErrBusq(""); setBuscando(true);
-    try {
-      const pedir = meses.slice(1);
-      if (!pedir.length) { setErrBusq("Elegí un período primero."); setBuscando(false); return; }
-      const res = await buscarCAC(pedir[0], pedir[pedir.length - 1], comp);
-      if (!res.meses.length) { setErrBusq(res.nota || "No encontré datos de CAC para ese período."); setBuscando(false); return; }
-      // se guarda como TABLA DE REFERENCIA, aparte de tu planilla. No cambia ningún cálculo.
-      const refPrev = (data.cacRef && data.cacRef.meses) || [];
-      const mapa = {}; refPrev.forEach(x => { mapa[x.mes] = x; }); res.meses.forEach(x => { mapa[x.mes] = x; });
-      save({ ...data, cacComp: comp, cacRef: { meses: Object.values(mapa).sort((a, b) => a.mes < b.mes ? -1 : 1), fuente: res.fuente, capitulo: res.capitulo, nota: res.nota, comp, ts: Date.now() } });
-    } catch (e) { setErrBusq(e.message || "No pude buscar. Revisá la conexión."); }
-    setBuscando(false);
-  };
-  // huella de los índices del período: si cambia alguno, el "chequeado" se cae solo
-  const huella = meses.slice(1).map(mm => `${mm}:${cac[mm] != null ? cac[mm] : "-"}`).join("|") + "|" + mesBase + "|" + base;
-  const verificado = cot.verifHuella === huella;
-  const setVerificado = (v) => setCot("verifHuella", v ? huella : "");
-
-  const ref = data.cacRef || null;
-  const refDe = (mm) => (ref && (ref.meses || []).find(x => x.mes === mm)) || null;
-  const usarRef = (mm, v) => setIndice(mm, v);
-  const borrarIndices = () => {
-    if (!window.confirm("Borrar TODOS los índices cargados.\n\nSe borran de la planilla y de los certificados que los usan.\n¿Seguro?")) return;
-    save({ ...data, cacMensual: {}, cacRef: null, cacComp: comp, redet: { ...cot, verifHuella: "" } });
-  };
-  const cargarTodosRef = () => {
-    if (!ref) return;
-    const next = { ...(data.cacMensual || {}) };
-    (ref.meses || []).forEach(x => { if (meses.includes(x.mes)) next[x.mes] = Number(x.variacion); });
-    save({ ...data, cacMensual: next });
-  };
-
-  // ---- REDETERMINAR: el precio ajustado pasa a ser el nuevo precio base ----
-  const redeterminar = () => {
-    if (!verificado) return;
-    const obraLig = (obras || []).find(o => o.id === cot.obraId);
-    const detalle = `Base ${money(base)}/m² (${nomMes(mesBase)}) → ${money(precioRedet)}/m² (${nomMes(mesHasta)})\nCAC acumulado: ${acumPct.toFixed(2)}% en ${filas.length - 1} mes(es)` +
-      (costoBase > 0 ? `\nCosto: ${money(costoBase)} → ${money(costoRedet)}/m²` : "") +
-      (obraLig ? `\n\nTambién se actualiza la obra "${obraLig.nombre}" y su mes base pasa a ${nomMes(mesHasta)}.` : "");
-    if (!window.confirm("REDETERMINAR EL PRECIO\n\n" + detalle + "\n\n¿Confirmás?")) return;
-
-    const hist = [...(data.redetHist || []), {
-      id: uid() + Date.now(), ts: Date.now(),
-      baseAnt: base, mesAnt: mesBase, baseNuevo: Math.round(precioRedet), mesNuevo: mesHasta,
-      costoAnt: costoBase || null, costoNuevo: costoBase > 0 ? Math.round(costoRedet) : null,
-      acum: Number(acumPct.toFixed(2)), meses: filas.length - 1,
-      obra: obraLig ? obraLig.nombre : "", obraId: obraLig ? obraLig.id : "",
-    }];
-    const obrasNext = obraLig
-      ? (data.obras || []).map(o => o.id === obraLig.id
-        ? { ...o, precioCliente: Math.round(precioRedet), costoM2: costoBase > 0 ? Math.round(costoRedet) : o.costoM2, mesBase: mesHasta }
-        : o)
-      : (data.obras || []);
-    save({
-      ...data,
-      obras: obrasNext,
-      redetHist: hist,
-      redet: {
-        ...cot,
-        base: fmtMiles(Math.round(precioRedet)),          // el nuevo precio ES la base
-        costoBase: costoBase > 0 ? fmtMiles(Math.round(costoRedet)) : cot.costoBase,
-        mesBase: mesHasta,                                 // y el mes base avanza
-        mesHasta: mesHasta,
-        verifHuella: "",                                   // se descheckea: es otro período
-      },
-    });
-    alert(`Precio redeterminado.\n\nNuevo precio base: ${money(precioRedet)}/m² desde ${nomMes(mesHasta)}.` + (obraLig ? `\nObra "${obraLig.nombre}" actualizada.` : ""));
-  };
-
-  // ---- traer el precio de una obra que ya tenés ----
-  const traerDeObra = (id) => {
-    const o = (obras || []).find(x => x.id === id);
-    if (!o) return;
-    save({ ...data, redet: { ...cot, base: fmtMiles(o.precioCliente), costoBase: fmtMiles(o.costoM2), mesBase: o.mesBase || mesDe(o.inicio), mesHasta: hoyMes, m2: fmtMiles(o.m2), origen: o.nombre } });
-  };
-
-  // ---- crear la obra nueva con el precio ya redeterminado ----
-  const m2 = numMoney(cot.m2);
-  const crearObra = () => {
-    const nom = String(cot.nombreObra || "").trim();
-    if (!nom) { alert("Poné el nombre de la obra nueva."); return; }
-    if (!m2) { alert("Poné los m² de la obra."); return; }
-    if (faltan > 0 && !window.confirm(`Te faltan ${faltan} mes(es) de CAC. El precio va a quedar POR DEBAJO del real.\n¿Crear la obra igual?`)) return;
-    const obra = {
-      id: uid() + Date.now(),
-      nombre: nom,
-      inicio: hoyISO(),
-      mesBase: mesHasta,                                  // el precio YA está redeterminado a este mes
-      plazoMeses: num(cot.plazoMeses) || 12,
-      anticipoTipo: "pct", anticipoPct: num(cot.anticipoPct) || 0, anticipoMontoFijo: 0,
-      imprevistosPct: 5,
-      m2,
-      precioCliente: Math.round(precioRedet),
-      costoM2: Math.round(costoRedet),
-      tipoRubros: "completa",
-      rubros: rubrosDePlantilla("completa", [], true, data),
-      costoExtra: [{ id: uid(), nombre: "Impuestos / IIBB", tipo: "pct", valor: "" }],
-      firmasPresup: {},
-      notaRedet: `Precio redeterminado: base ${money(base)}/m² de ${nomMes(mesBase)} → ${money(precioRedet)}/m² a ${nomMes(mesHasta)} (CAC acumulado ${acumPct.toFixed(2)}%)`,
-    };
-    save({ ...data, obras: [...(data.obras || []), obra] });
-    alert(`Obra "${nom}" creada.\nPrecio: ${money(precioRedet)}/m² · ${m2} m² · Total ${money(precioRedet * m2)}\nMes base: ${nomMes(mesHasta)}\n\nAndá a la solapa Presupuestos para cargarle los rubros.`);
-  };
-
-  // ---- actualizar una obra que ya existe ----
-  const aplicarAObra = (id) => {
-    const o = (obras || []).find(x => x.id === id);
-    if (!o) return;
-    if (!window.confirm(`Actualizar "${o.nombre}":\n· Precio cliente: ${money(o.precioCliente)} → ${money(precioRedet)} /m²\n· Mes base: ${nomMes(o.mesBase)} → ${nomMes(mesHasta)}\n\nEl mes base cambia para que los certificados NO vuelvan a aplicar el mismo ajuste.`)) return;
-    save({ ...data, obras: (data.obras || []).map(x => x.id === id ? { ...x, precioCliente: Math.round(precioRedet), costoM2: costoRedet ? Math.round(costoRedet) : x.costoM2, mesBase: mesHasta } : x) });
-    alert("Obra actualizada.");
-  };
-
-  return <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 30px" }}>
-
-    {/* 0 · IMPORTAR PLANILLA */}
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>0 · Importar planilla (.xlsx)</div>
-      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Si venís cargando cobros e IPC en Excel, subí el archivo acá y te carga el IPC mensual y los cobros/pagos por obra en Gastos, todo de una. No pisa nada de lo que ya tenés cargado, solo agrega lo que falte.</div>
-      <input ref={fileImportRef} type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={importando} onChange={importarPlanilla} style={{ display: "none" }} />
-      <button onClick={() => fileImportRef.current && fileImportRef.current.click()} disabled={importando} style={{ width: "100%", background: importando ? T.al : T.navy, color: importando ? T.sub : "#fff", border: `1px solid ${BRASS}`, borderRadius: 10, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: importando ? "default" : "pointer" }}>{importando ? "Leyendo…" : "＋ Elegir archivo Excel"}</button>
-    </div>
-
-    {/* 1 · DE DÓNDE SALE EL PRECIO */}
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>1 · Precio de partida</div>
-      {pb.mes && <button type="button" onClick={() => save({ ...data, redet: { base: pb.valor, mesBase: pb.mes, mesHasta: hoyMes } })} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}>↺ Reiniciar con precio base de la Tabla de Precios ({money(numMoney(pb.valor))} en {nomMes(pb.mes)} → hoy)</button>}
-      <div style={{ fontSize: 9.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Este botón borra y vuelve a armar TODO lo de esta calculadora (precio, mes base y mes hasta) desde cero. Usalo si algo quedó trabado.</div>
-      {(obras || []).length > 0 && <div style={{ marginBottom: 10 }}>
-        <label style={lb}>Traerlo de una obra que ya tenés</label>
-        <select value="" onChange={e => e.target.value && traerDeObra(e.target.value)} style={{ ...inp2, fontSize: 14 }}>
-          <option value="">— elegí una obra para copiar su precio —</option>
-          {(obras || []).map(o => <option key={o.id} value={o.id}>{o.nombre} · {money(o.precioCliente)}/m² ({nomMes(o.mesBase)})</option>)}
-        </select>
-        {cot.origen && <div style={{ fontSize: 10.5, color: BRASS, marginTop: 5, fontWeight: 700 }}>Tomado de: {cot.origen}</div>}
-      </div>}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <div>
-          <label style={lb}>Precio cliente /m²</label>
-          <input value={cot.base != null ? cot.base : 409000} onChange={e => setCot("base", e.target.value)} inputMode="numeric" style={inp2} />
-        </div>
-        <div>
-          <label style={lb}>Mes de ese precio</label>
-          <input type="month" value={mesBase} onChange={e => setCot("mesBase", e.target.value)} style={inp2} />
-        </div>
-        <div>
-          <label style={lb}>Costo /m² (opcional)</label>
-          <input value={cot.costoBase || ""} onChange={e => setCot("costoBase", e.target.value)} inputMode="numeric" placeholder="para mantener el margen" style={inp2} />
-        </div>
-        <div>
-          <label style={lb}>Redeterminar hasta</label>
-          <input type="month" value={mesHasta} onChange={e => setCot("mesHasta", e.target.value)} style={inp2} />
-        </div>
-      </div>
-    </div>
-
-    {/* 2 · EL PRECIO REDETERMINADO */}
-    <div style={{ background: `linear-gradient(135deg, ${T.navy}, #1B3A5B)`, borderRadius: 14, padding: 16, marginBottom: 12, color: "#fff" }}>
-      <div style={{ fontSize: 10.5, opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>Precio redeterminado a {nomMes(mesHasta)}</div>
-      <div style={{ fontSize: 31, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 4 }}>{money(precioRedet)}<span style={{ fontSize: 15, opacity: 0.7 }}> /m²</span></div>
-      <div style={{ fontSize: 12, opacity: 0.75, marginTop: 3 }}>Partiendo de {money(base)}/m² en {nomMes(mesBase)}</div>
-      <div style={{ height: 1, background: "rgba(255,255,255,.15)", margin: "12px 0" }} />
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 5 }}>
-        <span style={{ opacity: 0.75 }}>CAC acumulado ({Math.max(0, filas.length - 1)} meses)</span>
-        <b style={{ color: BRASS }}>{acumPct.toFixed(2)} %</b>
-      </div>
-      {costoBase > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 5 }}>
-        <span style={{ opacity: 0.75 }}>Costo /m² redeterminado</span><b>{money(costoRedet)}</b>
-      </div>}
-      {m2 > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 800, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.15)" }}>
-        <span>{m2.toLocaleString("es-AR")} m² × {money(precioRedet)}</span><span style={{ color: BRASS }}>{money(precioRedet * m2)}</span>
-      </div>}
-    </div>
-
-    {faltan > 0 && <div style={{ background: "rgba(240,165,0,.12)", border: "1px solid rgba(240,165,0,.35)", borderRadius: 10, padding: "11px 12px", marginBottom: 12, fontSize: 11.5, color: "#8A6100", lineHeight: 1.55 }}>
-      ⚠ Faltan <b>{faltan}</b> mes(es) de índice CAC. Los estoy tomando como <b>0%</b>: el precio de arriba está <b>por debajo del real</b>. Cargalos abajo.
-    </div>}
-
-    {/* CHEQUEO + REDETERMINAR */}
-    <div style={{ background: T.card, border: `2px solid ${verificado ? "#16A34A" : T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
-      <button onClick={() => setVerificado(!verificado)} disabled={filas.length < 2}
-        style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, background: verificado ? "rgba(22,163,74,.10)" : T.al, border: `1px solid ${verificado ? "#16A34A" : T.border}`, borderRadius: 10, padding: "12px", cursor: filas.length < 2 ? "default" : "pointer", textAlign: "left" }}>
-        <span style={{ width: 24, height: 24, borderRadius: 6, border: `2px solid ${verificado ? "#16A34A" : T.border}`, background: verificado ? "#16A34A" : "transparent", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, flexShrink: 0 }}>{verificado ? "✓" : ""}</span>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: verificado ? "#16A34A" : T.sub, lineHeight: 1.4 }}>Chequeé los índices CAC. Están todos bien cargados.</span>
-      </button>
-
-      {faltan > 0 && verificado && <div style={{ fontSize: 10.5, color: "#8A6100", marginTop: 7, lineHeight: 1.5 }}>⚠ Igual te faltan {faltan} mes(es): el precio va a quedar por debajo del real.</div>}
-
-      <button onClick={redeterminar} disabled={!verificado}
-        style={{ width: "100%", marginTop: 10, background: verificado ? `linear-gradient(135deg, ${BRASS}, #C89A5E)` : T.border, color: verificado ? "#fff" : T.muted, border: "none", borderRadius: 11, padding: "16px", fontSize: 15, fontWeight: 800, letterSpacing: "0.02em", cursor: verificado ? "pointer" : "default", boxShadow: verificado ? "0 4px 14px rgba(176,137,79,.35)" : "none" }}>
-        REDETERMINAR PRECIO
-      </button>
-      <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5, textAlign: "center" }}>
-        {verificado
-          ? <>El precio pasa a ser <b style={{ color: BRASS }}>{money(precioRedet)}/m²</b> con mes base <b>{nomMes(mesHasta)}</b>{cot.obraId ? ", y se actualiza la obra ligada" : ""}.</>
-          : "Marcá la casilla de arriba para habilitarlo."}
-      </div>
-      {(obras || []).length > 0 && <div style={{ marginTop: 9 }}>
-        <label style={lb}>Obra a redeterminar (opcional)</label>
-        <select value={cot.obraId || ""} onChange={e => setCot("obraId", e.target.value)} style={{ ...inp2, fontSize: 13.5 }}>
-          <option value="">— ninguna: solo redeterminar el precio de acá —</option>
-          {(obras || []).map(o => <option key={o.id} value={o.id}>{o.nombre} ({money(o.precioCliente)}/m², base {nomMes(o.mesBase)})</option>)}
-        </select>
-      </div>}
-    </div>
-
-    {/* HISTORIAL */}
-    {(data.redetHist || []).length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Redeterminaciones hechas</div>
-      {[...(data.redetHist || [])].reverse().map(h => <div key={h.id} style={{ borderLeft: `3px solid ${BRASS}`, paddingLeft: 10, marginBottom: 10 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800 }}>{money(h.baseAnt)} → <span style={{ color: BRASS }}>{money(h.baseNuevo)}</span> /m²</div>
-        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{nomMes(h.mesAnt)} → {nomMes(h.mesNuevo)} · CAC {h.acum}% en {h.meses} mes(es){h.obra ? ` · ${h.obra}` : ""}</div>
-        <div style={{ fontSize: 9.5, color: T.muted }}>{new Date(h.ts).toLocaleDateString("es-AR")}</div>
-      </div>)}
-    </div>}
-
-    {/* 3 · PASARLO A UNA OBRA */}
-    <div style={{ background: T.card, border: `2px solid ${BRASS}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", marginBottom: 4 }}>2 · Pasarlo a una obra</div>
-      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>El precio redeterminado queda como <b>precio base del presupuesto</b>, y el mes base de la obra pasa a ser <b>{nomMes(mesHasta)}</b> — así los certificados no vuelven a aplicar el mismo ajuste.</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 9 }}>
-        <div style={{ gridColumn: "span 2" }}>
-          <label style={lb}>Nombre de la obra nueva</label>
-          <input value={cot.nombreObra || ""} onChange={e => setCot("nombreObra", e.target.value)} placeholder="ej: Canning Lote 815" style={inp2} />
-        </div>
-        <div>
-          <label style={lb}>Superficie total (m²)</label>
-          <input value={cot.m2 || ""} onChange={e => setCot("m2", e.target.value)} inputMode="decimal" style={inp2} />
-        </div>
-        <div>
-          <label style={lb}>Plazo (meses)</label>
-          <input value={cot.plazoMeses || ""} onChange={e => setCot("plazoMeses", e.target.value)} inputMode="numeric" placeholder="12" style={inp2} />
-        </div>
-        <div>
-          <label style={lb}>Anticipo (%)</label>
-          <input value={cot.anticipoPct || ""} onChange={e => setCot("anticipoPct", e.target.value)} inputMode="decimal" placeholder="0" style={inp2} />
-        </div>
-        <div style={{ display: "flex", alignItems: "flex-end" }}>
-          <div style={{ fontSize: 11, color: T.sub, lineHeight: 1.4 }}>Total: <b style={{ color: BRASS, fontSize: 13 }}>{m2 > 0 ? money(precioRedet * m2) : "—"}</b></div>
-        </div>
-      </div>
-      <button onClick={crearObra} style={{ width: "100%", background: BRASS, color: "#fff", border: "none", borderRadius: 10, padding: "14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Crear obra con este precio</button>
-      {(obras || []).length > 0 && <div style={{ marginTop: 9 }}>
-        <label style={lb}>…o actualizar una obra que ya existe</label>
-        <select value="" onChange={e => e.target.value && aplicarAObra(e.target.value)} style={{ ...inp2, fontSize: 14 }}>
-          <option value="">— redeterminar una obra existente —</option>
-          {(obras || []).map(o => <option key={o.id} value={o.id}>{o.nombre} ({money(o.precioCliente)}/m²)</option>)}
-        </select>
-      </div>}
-    </div>
-
-    {/* QUÉ ÍNDICE SE AJUSTA */}
-    <div style={{ background: T.card, border: `2px solid ${comp === "mo" ? T.border : "#DC2626"}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>¿Qué índice ajusta el contrato?</div>
-      <div style={{ display: "flex", gap: 6 }}>
-        {Object.entries(CAC_COMP).map(([k, v]) => { const act = comp === k;
-          return <button key={k} onClick={() => setComp(k)} style={{ flex: 1, background: act ? (k === "mo" ? "#16A34A" : "#DC2626") : T.al, color: act ? "#fff" : T.sub, border: `1px solid ${act ? (k === "mo" ? "#16A34A" : "#DC2626") : T.border}`, borderRadius: 9, padding: "11px 4px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>{act ? "✓ " : ""}{v.nom}</button>; })}
-      </div>
-      <div style={{ fontSize: 10.5, color: T.sub, marginTop: 8, lineHeight: 1.55 }}>{(CAC_COMP[comp] || CAC_COMP.mo).det}</div>
-      {comp !== "mo" && <div style={{ background: "rgba(220,38,38,.08)", border: "1px solid rgba(220,38,38,.3)", borderRadius: 8, padding: "9px 11px", marginTop: 8, fontSize: 11, color: "#DC2626", lineHeight: 1.5 }}>
-        ⚠ Si lo que ajustás es <b>mano de obra</b>, este índice no corresponde: mezcla el precio de los materiales, que se mueve muy distinto.
-      </div>}
-      {sinMarcar && <div style={{ background: "rgba(220,38,38,.10)", border: "1px solid rgba(220,38,38,.35)", borderRadius: 9, padding: "11px 12px", marginTop: 9, fontSize: 11.5, color: "#DC2626", lineHeight: 1.55 }}>
-        <b>⚠ Los índices que tenés cargados pueden ser del índice GENERAL.</b><br />
-        Se cargaron antes de que existiera este selector, así que no sé de qué capítulo son. Si ajustás mano de obra, <b>están mal</b>. Borralos y traé los de mano de obra.
-        <button onClick={borrarIndices} style={{ width: "100%", marginTop: 9, background: "#DC2626", color: "#fff", border: "none", borderRadius: 8, padding: "11px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Borrar los índices cargados y empezar de nuevo</button>
-      </div>}
-      {hayCargados && !sinMarcar && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span>{Object.keys(cac).length} mes(es) cargados como <b style={{ color: comp === "mo" ? "#16A34A" : "#DC2626" }}>{(CAC_COMP[comp] || CAC_COMP.mo).nom}</b></span>
-        <button onClick={borrarIndices} style={{ background: "none", border: "none", color: "#DC2626", fontSize: 10.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>borrar todos</button>
-      </div>}
-    </div>
-
-    {/* TABLA DE LA CÁMARA — queda al lado, para copiar de un toque */}
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase" }}>Tabla · {(CAC_COMP[comp] || CAC_COMP.mo).nom}</div>
-          {ref && ref.ts && <div style={{ fontSize: 9.5, color: T.muted, marginTop: 2 }}>Traída el {new Date(ref.ts).toLocaleDateString("es-AR")}</div>}
-        </div>
-        <button onClick={buscarEnInternet} disabled={buscando} style={{ background: buscando ? T.border : T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "9px 13px", fontSize: 11.5, fontWeight: 800, cursor: buscando ? "default" : "pointer", whiteSpace: "nowrap" }}>
-          {buscando ? "Buscando…" : ref ? "↻ Actualizar" : "🌐 Traer la tabla"}
-        </button>
-      </div>
-      {errBusq && <div style={{ background: "rgba(220,38,38,.08)", border: "1px solid rgba(220,38,38,.3)", borderRadius: 8, padding: "9px 11px", marginBottom: 9, fontSize: 11.5, color: "#DC2626", lineHeight: 1.5 }}>{errBusq}</div>}
-
-      {!ref && !buscando && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.55, padding: "6px 0" }}>Tocá <b>Traer la tabla</b> y te dejo acá al costado los valores publicados por la Cámara, para que los cargues de un toque sin salir de la app.</div>}
-
-      {ref && (ref.meses || []).length > 0 && <>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-          {(ref.meses || []).map(x => {
-            const puesto = cac[x.mes] != null && Number(cac[x.mes]) === Number(x.variacion);
-            const distinto = cac[x.mes] != null && Number(cac[x.mes]) !== Number(x.variacion);
-            return <button key={x.mes} onClick={() => usarRef(x.mes, x.variacion)}
-              style={{ background: puesto ? "rgba(22,163,74,.10)" : distinto ? "rgba(220,38,38,.08)" : T.al, border: `1px solid ${puesto ? "rgba(22,163,74,.4)" : distinto ? "rgba(220,38,38,.35)" : T.border}`, borderRadius: 9, padding: "9px 6px", cursor: "pointer", textAlign: "center" }}>
-              <div style={{ fontSize: 9.5, color: T.muted, fontWeight: 700, textTransform: "uppercase" }}>{nomMes(x.mes)}</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: puesto ? "#16A34A" : T.text, marginTop: 1 }}>{Number(x.variacion).toFixed(2)}%</div>
-              <div style={{ fontSize: 8.5, color: puesto ? "#16A34A" : distinto ? "#DC2626" : BRASS, fontWeight: 700, marginTop: 2 }}>{puesto ? "✓ cargado" : distinto ? "≠ " + cac[x.mes] + "%" : "tocá para usar"}</div>
-            </button>;
-          })}
-        </div>
-        <button onClick={cargarTodosRef} style={{ width: "100%", marginTop: 9, background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "12px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>Cargar todos de una vez</button>
-        {ref.comp && ref.comp !== comp && <div style={{ background: "rgba(220,38,38,.10)", border: "1px solid rgba(220,38,38,.35)", borderRadius: 8, padding: "9px 11px", marginTop: 8, fontSize: 11, color: "#DC2626", lineHeight: 1.5 }}>
-          ⚠ Esta tabla es de <b>{(CAC_COMP[ref.comp] || {}).nom}</b>, pero elegiste <b>{(CAC_COMP[comp] || {}).nom}</b>. Volvé a traerla.
-        </div>}
-        {ref.capitulo && <div style={{ fontSize: 10.5, color: T.sub, marginTop: 8 }}>Capítulo: <b>{ref.capitulo}</b></div>}
-        {ref.fuente && <a href={ref.fuente} target="_blank" rel="noreferrer" style={{ display: "block", fontSize: 10, color: T.accent, marginTop: 4, wordBreak: "break-all", textDecoration: "none" }}>Fuente: {ref.fuente}</a>}
-        {ref.nota && <div style={{ fontSize: 10.5, color: T.sub, marginTop: 5, lineHeight: 1.45 }}>{ref.nota}</div>}
-        <div style={{ background: "rgba(240,165,0,.10)", borderRadius: 7, padding: "8px 10px", marginTop: 8, fontSize: 10, color: "#8A6100", lineHeight: 1.5 }}>
-          Estos valores los trajo la IA de internet. Contrastalos con el informe de la Cámara antes de certificar.
-        </div>
-      </>}
-    </div>
-
-    {/* 4 · LA CUENTA MES POR MES */}
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Cómo se arma, mes por mes</div>
-      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Cada ajuste va <b>sobre el monto ya ajustado</b>. Cargá el % CAC de cada mes.</div>
-      <div style={{ display: "grid", gridTemplateColumns: "52px 62px 54px 1fr", gap: 5, fontSize: 9, color: T.muted, fontWeight: 700, textTransform: "uppercase", paddingBottom: 6, borderBottom: `1px solid ${T.border}` }}>
-        <div>Mes</div><div>Tu %</div><div style={{ color: BRASS }}>{comp === "mo" ? "M. obra" : comp === "mat" ? "Materi." : "General"}</div><div style={{ textAlign: "right" }}>Precio /m²</div>
-      </div>
-      {filas.map((f, i) => { const rf = refDe(f.mes);
-        return <div key={f.mes} style={{ display: "grid", gridTemplateColumns: "52px 62px 54px 1fr", gap: 5, alignItems: "center", padding: "7px 0", borderBottom: i < filas.length - 1 ? `1px solid ${T.border}` : "none" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: f.primero ? T.muted : T.text }}>{nomMes(f.mes)}</div>
-        <div>{f.primero ? <span style={{ fontSize: 10, color: T.muted }}>base</span>
-          : <input value={cac[f.mes] != null ? cac[f.mes] : ""} onChange={e => setIndice(f.mes, e.target.value)} inputMode="decimal" placeholder="—"
-            style={{ width: "100%", background: f.provisorio ? "rgba(240,165,0,.10)" : T.bg, border: `1px solid ${f.provisorio ? "rgba(240,165,0,.5)" : T.border}`, borderRadius: 7, padding: "7px 4px", fontSize: 13, color: T.text, textAlign: "center", boxSizing: "border-box" }} />}</div>
-        {/* EL VALOR DE LA CÁMARA, AL LADO: un toque y se carga */}
-        <div>{f.primero ? <span style={{ fontSize: 9.5, color: T.muted }}>—</span>
-          : rf ? <button onClick={() => usarRef(f.mes, rf.variacion)}
-              style={{ width: "100%", background: cac[f.mes] != null && Number(cac[f.mes]) === Number(rf.variacion) ? "rgba(22,163,74,.12)" : "rgba(176,137,79,.14)", border: `1px solid ${cac[f.mes] != null && Number(cac[f.mes]) === Number(rf.variacion) ? "rgba(22,163,74,.4)" : BRASS}`, color: cac[f.mes] != null && Number(cac[f.mes]) === Number(rf.variacion) ? "#16A34A" : BRASS, borderRadius: 6, padding: "7px 2px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>
-              {Number(rf.variacion).toFixed(1)}
-            </button>
-            : <span style={{ fontSize: 9.5, color: T.muted, display: "block", textAlign: "center" }}>—</span>}</div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800 }}>{money(f.precio)}</div>
-          {!f.primero && <div style={{ fontSize: 9.5, color: "#16A34A", fontWeight: 600 }}>+{money(f.ajuste)}</div>}
-        </div>
-      </div>; })}
-      {filas.length > 2 && <div style={{ background: T.al, borderRadius: 8, padding: "9px 10px", marginTop: 10, fontSize: 11, color: T.sub, lineHeight: 1.55 }}>
-        Si sumaras los % ({sumaSimple.toFixed(2)}%) te daría <b>{money(base * (1 + sumaSimple / 100))}</b>. El acumulativo real da <b style={{ color: BRASS }}>{money(precioRedet)}</b> — <b>{money(precioRedet - base * (1 + sumaSimple / 100))}</b> más por m².
-      </div>}
-    </div>
-  </div>;
-}
 
 function AgendaTab({ obras, certs, certsDe, indices, data, save }) {
   const contactos = data.contactos || [];
@@ -1475,9 +1045,8 @@ export default function App() {
     </div>
     <div style={{ background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
       {[
-        [["ia", "✨ IA"], ["precios", "Precios"], ["redet", "Redeterm."]],
-        [["presupuesto", "Presup."], ["costo", "Cert.", "costo"], ["cliente", "Cert.", "cliente"]],
-        [["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]],
+        [["ia", "✨ IA"], ["precios", "Precios"], ["presupuesto", "Presup."], ["costo", "Cert.", "costo"]],
+        [["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]],
       ].map((fila, fi) => (
         <div key={fi} style={{ display: "flex", borderTop: fi > 0 ? `1px solid ${T.border}` : "none" }}>
           {fila.map(([k, l1, l2]) => (
@@ -1488,7 +1057,6 @@ export default function App() {
     </div>
     <div className="vv-body">
       {tab === "precios" && <TablaPreciosTab data={data} save={save} />}
-      {tab === "redet" && <RedeterminacionTab obras={obras} data={data} save={save} />}
       {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
       {tab === "costo" && <div>
         <div style={{ display: "flex", gap: 7, padding: "14px 16px 0" }}>
@@ -1621,6 +1189,13 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
         <div style={{ flex: 1 }}><Field label="Metros² totales"><input value={form.m2} onChange={e => setForm({ ...form, m2: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="795" style={inp} /></Field></div>
         <div style={{ flex: 1 }}><Field label="Precio cliente $/m²" hint={data.precioBase && data.precioBase.mes ? `Sale solo de la Tabla de Precios a la fecha de Inicio. Editalo acá solo si este contrato es distinto.` : undefined}><input value={form.precioCliente} onChange={e => setForm({ ...form, precioCliente: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="453.000" style={inp} /></Field></div>
       </div>
+      {form.id && data.precioBase && data.precioBase.mes && <button type="button" onClick={() => {
+        if (!window.confirm(`Redeterminar el precio de esta obra a hoy (${nomMesCorto(mesDe(hoyISO()))}).\n\nEl precio se actualiza y el mes base pasa a ser el de hoy, para que los certificados siguientes no vuelvan a aplicar este mismo ajuste.\n¿Confirmás?`)) return;
+        const mesHoy = mesDe(hoyISO());
+        const { factor } = indiceAcumulado(data.precioBase.mes, mesHoy, data.cacMensual || {});
+        const precio = Math.round(numMoney(data.precioBase.valor) * factor);
+        setForm({ ...form, precioCliente: fmtMiles(precio), mesBase: mesHoy });
+      }} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: -6, marginBottom: 12 }}>🔄 Redeterminar esta obra a hoy</button>}
       <Field label="Costo interno $/m²" hint="Tu costo por m² (ej: 260.000). Presupuesto costo = m² × este valor."><input value={form.costoM2} onChange={e => setForm({ ...form, costoM2: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="260.000" style={inp} /></Field>
       {(pCli > 0 || pCos > 0) && <div style={{ background: T.al, borderRadius: 9, padding: 10, marginBottom: 12, display: "flex", justifyContent: "space-around" }}><span style={{ fontSize: 12, color: T.sub }}>Cliente: <Money v={pCli} c={T.accent} /></span><span style={{ fontSize: 12, color: T.sub }}>Costo: <Money v={pCos} c={T.warn} /></span></div>}
 
