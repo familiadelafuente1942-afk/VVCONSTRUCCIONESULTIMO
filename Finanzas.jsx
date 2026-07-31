@@ -1945,7 +1945,7 @@ function RetiroAdder({ socios, onAdd }) {
     </div>
   </div>;
 }
-function GeneralPanel({ data, obras, certs, certsDe, indices }) {
+function GeneralPanel({ data, save, obras, certs, certsDe, indices }) {
   const [desde, setDesde] = useState(""); const [hasta, setHasta] = useState(""); const [pdfHtml, setPdfHtml] = useState(null);
   const enR = (f) => { if (!f) return false; if (desde && f < desde) return false; if (hasta && f > hasta) return false; return true; };
   const fechaDe = (ts) => ts ? new Date(ts).toISOString().slice(0, 10) : "";
@@ -2994,7 +2994,13 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   // proyecta con inflación porque los subcontratistas están a precio cerrado, sin ajuste.
   const cac = indices || {};
   const mesesCacCargados = Object.keys(cac).filter(m => cac[m] != null && String(cac[m]).trim() !== "").sort();
-  const ipcProm = mesesCacCargados.length ? mesesCacCargados.slice(-3).reduce((s, m) => s + num(cac[m]), 0) / Math.min(3, mesesCacCargados.length) / 100 : 0;
+  const ipcAuto = mesesCacCargados.length ? mesesCacCargados.slice(-8).reduce((s, m) => s + num(cac[m]), 0) / Math.min(8, mesesCacCargados.length) / 100 : 0;
+  const ipcManualStr = data.config?.ipcProyManual;
+  const usaManual = ipcManualStr != null && String(ipcManualStr).trim() !== "";
+  const ipcProm = usaManual ? num(String(ipcManualStr).replace(",", ".")) / 100 : ipcAuto;
+  const [ipcInput, setIpcInput] = useState(ipcManualStr != null ? String(ipcManualStr) : "");
+  useEffect(() => { setIpcInput(ipcManualStr != null ? String(ipcManualStr) : ""); }, [data.config?.ipcProyManual]);
+  const guardarIpcManual = (v) => save({ ...data, config: { ...(data.config || {}), ipcProyManual: v } });
   const hoyMesG = mesDe(hoyISO());
   const mesesEntre = (m1, m2) => { const [y1, mo1] = m1.split("-").map(Number), [y2, mo2] = m2.split("-").map(Number); return (y2 - y1) * 12 + (mo2 - mo1); };
   let totalAjusteProyectado = 0;
@@ -3075,7 +3081,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
         {/* ── LAS 4 LÍNEAS DEL RESULTADO ── */}
         {(() => {
           const filas = [
-            { n: 1, lbl: "Utilidad bruta esperada", val: utilEsperada, sub: ventaEsperada > 0 ? `Margen ${margenEsperado.toFixed(1)}%` : "", desc: `Lo que le cobrás menos lo que te cuesta. Incluye ${money(totalAjusteProyectado)} de inflación proyectada (IPC prom. ${(ipcProm * 100).toFixed(1)}%/mes sobre el saldo pendiente de cada obra, según meses de plazo que le quedan). El costo no se proyecta: los subcontratistas están a precio cerrado. Todavía no pagó la estructura.`, col: utilEsperada >= 0 ? "#7DE0A6" : "#FCA5A5", big: true },
+            { n: 1, lbl: "Utilidad bruta esperada", val: utilEsperada, sub: ventaEsperada > 0 ? `Margen ${margenEsperado.toFixed(1)}%` : "", desc: `Lo que le cobrás menos lo que te cuesta. Incluye ${money(totalAjusteProyectado)} de inflación proyectada (IPC ${(ipcProm * 100).toFixed(1)}%/mes ${usaManual ? "puesto a mano" : "promedio automático de los últimos meses cargados"}, sobre el saldo pendiente de cada obra, según meses de plazo que le quedan). El costo no se proyecta: los subcontratistas están a precio cerrado. Todavía no pagó la estructura.`, col: utilEsperada >= 0 ? "#7DE0A6" : "#FCA5A5", big: true },
             { n: 2, lbl: "Utilidad neta esperada", val: utilNeta, sub: ventaEsperada > 0 ? `Margen ${margenNeto.toFixed(1)}%` : "", desc: "La bruta menos el costo fijo de estructura. Es lo que esperás quedarte.", col: utilNeta >= 0 ? "#7DE0A6" : "#FCA5A5", resta: "Costo fijo de estructura" },
             { n: 3, lbl: "Utilidad a cobrar", val: utilidadACobrar, sub: "", desc: "Lo que todavía falta ganar de la neta. Lo cobrado ya es tuyo; esto es lo que queda por delante.", col: "#F2C879", resta: "Resultado operativo · lo que ya realizaste (ver 4)" },
             { n: 4, lbl: "Resultado operativo", val: resultadoOperativo, sub: hayCerts ? "" : "Sin certificados todavía", desc: "Lo que ya realizaste con los certificados emitidos, descontado todo (costos, impuestos, imprevistos y estructura).", col: resultadoOperativo >= 0 ? "rgba(255,255,255,.92)" : "#FCA5A5", noBorder: true },
@@ -3105,6 +3111,17 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
             </div>);
           });
         })()}
+
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.14)" }}>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.06em", marginBottom: 6 }}>% IPC mensual proyectado (línea 1)</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input value={ipcInput} onChange={e => setIpcInput(e.target.value)} onBlur={e => guardarIpcManual(e.target.value)} inputMode="decimal" placeholder={`auto: ${(ipcAuto * 100).toFixed(1)}`}
+              style={{ width: 90, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.25)", borderRadius: 8, padding: "9px 8px", fontSize: 14, color: "#fff", textAlign: "center" }} />
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,.7)" }}>% por mes</span>
+            {usaManual && <button onClick={() => { setIpcInput(""); guardarIpcManual(""); }} style={{ marginLeft: "auto", background: "none", border: "1px solid rgba(255,255,255,.3)", color: "rgba(255,255,255,.75)", borderRadius: 8, padding: "8px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Volver a automático</button>}
+          </div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", marginTop: 6, lineHeight: 1.4 }}>Vacío = automático (promedio de los últimos meses cargados en Precios, hoy {(ipcAuto * 100).toFixed(1)}%). Poné 0 para ver la utilidad SIN inflación proyectada (el valor real de contrato). Poné cualquier otro número para probar escenarios sin tener que cargar meses en Precios.</div>
+        </div>
 
         <div style={{ marginTop: 16, paddingTop: 13, borderTop: "1px solid rgba(255,255,255,.14)", display: "flex", gap: 18 }}>
           <div style={{ flex: 1 }}>
@@ -3416,7 +3433,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
     {subtab === "iva" && <IvaPanel data={data} save={save} />}
     {subtab === "sociedad" && <SociedadWrap data={data} save={save} />}
     {subtab === "edificios" && <EdificiosPanel data={data} save={save} />}
-    {subtab === "general" && <GeneralPanel data={data} obras={obras} certs={certs} certsDe={certsDe} indices={indices} />}
+    {subtab === "general" && <GeneralPanel data={data} save={save} obras={obras} certs={certs} certsDe={certsDe} indices={indices} />}
     <button onClick={() => { const n = prompt("Nueva clave (números):", ""); if (n && n.trim()) { try { localStorage.setItem("finanzas_pin", n.trim()); } catch { } alert("Clave actualizada."); } }} style={{ display: "block", margin: "8px auto 0", background: "none", border: "none", color: T.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>Cambiar clave</button>
   </div>);
 }
