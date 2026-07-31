@@ -261,6 +261,69 @@ function parsePlanillaRedet(XLSX, ab) {
   return { ipc, obras };
 }
 
+// ============ ÍNDICE ACUMULADO (mismo criterio para cotizador y tabla de precios) ============
+// factor en el mes base = 1. Cada mes siguiente: factor *= (1 + IPC completo de ese mes).
+function indiceAcumulado(mesBase, mesHasta, cacMensual) {
+  const meses = [];
+  let factor = 1, ym = mesBase, guard = 0;
+  const tope = mesHasta < mesBase ? mesBase : mesHasta;
+  while (ym <= tope && guard++ < 240) {
+    if (ym === mesBase) { meses.push({ mes: ym, rate: 0, provisorio: false, factor: 1 }); }
+    else { const r = cacMes(ym, cacMensual); factor *= (1 + r.rate); meses.push({ mes: ym, rate: r.rate, provisorio: r.provisorio, factor }); }
+    ym = addMonthYM(ym, 1);
+  }
+  return { factor, meses };
+}
+function nomMesCorto(mm) { if (!mm) return ""; const [y, m] = String(mm).split("-"); return ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][+m - 1] + " " + y.slice(2); }
+
+// ============ TABLA DE PRECIOS DE REFERENCIA ============
+// Precio base a un mes dado + índice de la Cámara acumulado = precio de referencia a cualquier
+// mes posterior. Sirve para que "Presupuesto" traiga el precio ya actualizado a la fecha del presupuesto.
+function TablaPreciosTab({ data, save }) {
+  const cac = data.cacMensual || {};
+  const pb = data.precioBase || {};
+  const hoyMes = mesDe(hoyISO());
+  const [form, setForm] = useState({ valor: pb.valor ? fmtMiles(pb.valor) : "409.000", mes: pb.mes || "2025-11" });
+  useEffect(() => { setForm({ valor: pb.valor ? fmtMiles(pb.valor) : "409.000", mes: pb.mes || "2025-11" }); }, [data.precioBase]);
+  const guardarBase = () => save({ ...data, precioBase: { valor: numMoney(form.valor), mes: form.mes } });
+
+  const mesBase = pb.mes || "2025-11";
+  const valorBase = numMoney(pb.valor != null ? pb.valor : 409000);
+  const { factor, meses } = indiceAcumulado(mesBase, hoyMes, cac);
+  const precioHoy = valorBase * factor;
+  const faltan = meses.filter(m => m.provisorio).length;
+  const inp2 = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 9, padding: "12px", fontSize: 16, color: T.text, width: "100%", boxSizing: "border-box" };
+  const lb = { fontSize: 10.5, color: T.sub, fontWeight: 700, display: "block", marginBottom: 4 };
+
+  return <div style={{ padding: "14px 16px 40px" }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Precio base</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>El precio que sabías que era correcto en un mes determinado. Desde ahí, la tabla lo va actualizando solo con el IPC de la Cámara, mes a mes, hasta hoy.</div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}><label style={lb}>Precio $/m²</label><input value={form.valor} onChange={e => setForm({ ...form, valor: fmtMiles(e.target.value) })} inputMode="numeric" style={inp2} /></div>
+        <div style={{ flex: 1 }}><label style={lb}>Mes de ese precio</label><input type="month" value={form.mes} onChange={e => setForm({ ...form, mes: e.target.value })} style={inp2} /></div>
+      </div>
+      <button onClick={guardarBase} style={{ marginTop: 10, width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Guardar precio base</button>
+    </div>
+
+    <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 12, textAlign: "center", boxShadow: SHD }}>
+      <div style={{ fontSize: 10, opacity: .7, textTransform: "uppercase", letterSpacing: "0.08em" }}>Precio hoy ({nomMesCorto(hoyMes)})</div>
+      <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>{money(precioHoy)}</div>
+      <div style={{ fontSize: 11, opacity: .75, marginTop: 4 }}>Base {money(valorBase)} en {nomMesCorto(mesBase)} · acumulado {(factor * 100 - 100).toFixed(2)}%</div>
+      {faltan > 0 && <div style={{ fontSize: 10.5, color: "#FCA5A5", marginTop: 6 }}>⚠ Faltan {faltan} mes(es) de IPC en Redeterminación — precio incompleto</div>}
+    </div>
+
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Mes a mes</div>
+      {meses.map(m => (<div key={m.mes} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
+        <span style={{ fontSize: 12.5, color: T.sub, width: 62 }}>{nomMesCorto(m.mes)}{m.mes === mesBase ? " ·base" : ""}</span>
+        <span style={{ fontSize: 11, color: m.provisorio ? "#B45309" : T.muted, width: 70, textAlign: "center" }}>{m.mes === mesBase ? "—" : (m.provisorio ? "sin IPC" : (m.rate * 100).toFixed(1) + "%")}</span>
+        <b style={{ fontSize: 13 }}>{money(valorBase * m.factor)}</b>
+      </div>))}
+    </div>
+  </div>;
+}
+
 function redetReplay(cert, obra, certsDeObra, cac) {
   const base = obra?.mesBase || mesDe(cert?.fecha); const cm = mesDe(cert?.fecha);
   const sorted = (certsDeObra || []).some(c => c.id === cert.id) ? [...(certsDeObra || [])] : [...(certsDeObra || []), cert];
@@ -1403,10 +1466,11 @@ export default function App() {
     </div>
     <div style={{ background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
       {[
-        [["ia", "✨ IA"], ["redet", "Redeterm."], ["presupuesto", "Presup."], ["costo", "Cert.", "costo"]],
-        [["cliente", "Cert.", "cliente"], ["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]],
+        [["ia", "✨ IA"], ["precios", "Precios"], ["redet", "Redeterm."]],
+        [["presupuesto", "Presup."], ["costo", "Cert.", "costo"], ["cliente", "Cert.", "cliente"]],
+        [["caja", "Gastos"], ["resultado", "Resultados"], ["agenda", "Agenda"]],
       ].map((fila, fi) => (
-        <div key={fi} style={{ display: "flex", borderTop: fi === 1 ? `1px solid ${T.border}` : "none" }}>
+        <div key={fi} style={{ display: "flex", borderTop: fi > 0 ? `1px solid ${T.border}` : "none" }}>
           {fila.map(([k, l1, l2]) => (
             <button key={k} onClick={() => setTab(k)} style={{ flex: 1, background: "none", border: "none", color: tab === k ? T.text : T.muted, padding: "9px 1px 8px", fontSize: 11, fontWeight: tab === k ? 700 : 600, cursor: "pointer", position: "relative", letterSpacing: "-0.01em", lineHeight: 1.2 }}>{l1}{l2 ? <><br />{l2}</> : ""}{tab === k && <span style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2.5, background: BRASS, borderRadius: "2px 2px 0 0" }} />}</button>
           ))}
@@ -1414,6 +1478,7 @@ export default function App() {
       ))}
     </div>
     <div className="vv-body">
+      {tab === "precios" && <TablaPreciosTab data={data} save={save} />}
       {tab === "redet" && <RedeterminacionTab obras={obras} data={data} save={save} />}
       {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
       {tab === "costo" && <div>
@@ -1534,6 +1599,12 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
         <div style={{ flex: 1 }}><Field label="Metros² totales"><input value={form.m2} onChange={e => setForm({ ...form, m2: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="795" style={inp} /></Field></div>
         <div style={{ flex: 1 }}><Field label="Precio cliente $/m²"><input value={form.precioCliente} onChange={e => setForm({ ...form, precioCliente: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="453.000" style={inp} /></Field></div>
       </div>
+      {data.precioBase && data.precioBase.mes && <button type="button" onClick={() => {
+        const mesIni = mesDe(form.inicio || hoyISO());
+        const { factor } = indiceAcumulado(data.precioBase.mes, mesIni, data.cacMensual || {});
+        const precio = Math.round(numMoney(data.precioBase.valor) * factor);
+        setForm({ ...form, precioCliente: fmtMiles(precio) });
+      }} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: -6, marginBottom: 12 }}>↺ Traer precio de la tabla (a la fecha de Inicio)</button>}
       <Field label="Costo interno $/m²" hint="Tu costo por m² (ej: 260.000). Presupuesto costo = m² × este valor."><input value={form.costoM2} onChange={e => setForm({ ...form, costoM2: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="260.000" style={inp} /></Field>
       {(pCli > 0 || pCos > 0) && <div style={{ background: T.al, borderRadius: 9, padding: 10, marginBottom: 12, display: "flex", justifyContent: "space-around" }}><span style={{ fontSize: 12, color: T.sub }}>Cliente: <Money v={pCli} c={T.accent} /></span><span style={{ fontSize: 12, color: T.sub }}>Costo: <Money v={pCos} c={T.warn} /></span></div>}
       <div style={{ display: "flex", gap: 10 }}>
