@@ -708,7 +708,7 @@ function useAvisos(clave, mapaIds) {
 // ══════════════════════════════════════════════════════════════════
 // ─── Avance de obra (espejo de V+V) ───
 const fFechaCorta = (iso) => { if (!iso) return ""; const p = String(iso).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0].slice(2)}` : String(iso); };
-function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {} }) {
+function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, envios = {}, setEnvios }) {
   // Certificado semanal abierto (los emite V+V; acá se ven en modo lectura).
   const [certAbierto, setCertAbierto] = React.useState(null);
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
@@ -760,6 +760,14 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {} }) {
     </div></body></html>`;
   }
   const pdfUno = (h) => { setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
+  // Copia el PDF ya armado por Belfast a Informes, para que lo vea el propietario.
+  const enviarAInformes = (h) => {
+    if (!setEnvios || !obraId) return;
+    const reg = { id: h.id, tipo: "av", fecha: h.fecha, titulo: `Informe de avance ${h.fecha}`, html: buildPdfAvance([h]), ts: Date.now() };
+    setEnvios(p => { const lista = ((p || {})[obraId] || []).filter(x => x.id !== reg.id); return { ...(p || {}), [obraId]: [reg, ...lista] }; });
+    alert("Listo: ya está en Informes y el propietario lo puede ver.");
+  };
+  const yaEnviado = (h) => ((envios || {})[obraId] || []).some(x => x.id === h.id);
   const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
   const [pdfEntries, setPdfEntries] = React.useState([]);
   async function mergeSaveAvance(oid, transform) {
@@ -904,6 +912,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {} }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+              <button onClick={() => enviarAInformes(h)} title="Copiar a Informes para el propietario" style={{ background: yaEnviado(h) ? "#DCFCE7" : BRASS, border: "none", color: yaEnviado(h) ? "#166534" : "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{yaEnviado(h) ? "✓ En Informes" : "→ Informes"}</button>
             </div>
           </div>
           {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}><Ico n="chart" /> Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
@@ -2569,7 +2578,7 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-docpro</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-avinf</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -3175,9 +3184,56 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
     </div>}
   </div>);
 }
-function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {} }) {
+// Documento con la marca de BELFAST (no la de V+V). Es el que ve el
+// propietario: él es cliente de Belfast, no de V+V.
+function docBelfast(cfg, obraNombre, titulo, subtitulo, bloques, fotos) {
+  const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const marca = (cfg?.nombre || "Belfast Construction Management").toUpperCase();
+  const logo = cfg?.logo || "";
+  const secs = bloques.filter(([, t]) => t).map(([lbl, t]) =>
+    `<div class="bloque"><div class="lbl">${esc(lbl)}</div><div class="txt">${esc(t).replace(/\n/g, "<br/>")}</div></div>`).join("");
+  const fots = (fotos || []).length ? `<div class="fotos">${fotos.map(u => `<img src="${esc(u)}" />`).join("")}</div>` : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+    @page { margin: 15mm; }
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #16202e; margin: 0; padding: 22px; }
+    .head { text-align: center; border-bottom: 2px solid #B0894F; padding-bottom: 12px; margin-bottom: 18px; }
+    .head img { max-height: 54px; margin-bottom: 8px; }
+    .marca { font-size: 15px; font-weight: 800; letter-spacing: .06em; color: #0F1B2D; }
+    .tipo { font-size: 9px; font-weight: 800; letter-spacing: .12em; color: #B0894F; text-transform: uppercase; margin-top: 5px; }
+    h1 { font-size: 17px; margin: 12px 0 4px; }
+    .sub { font-size: 11.5px; color: #5B6B7F; }
+    .bloque { margin-bottom: 14px; }
+    .lbl { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #1B3A5B; margin-bottom: 4px; }
+    .txt { font-size: 12.5px; line-height: 1.6; }
+    .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+    .fotos img { width: 100%; border-radius: 6px; border: 1px solid #E3E8EF; }
+    .pie { margin-top: 24px; padding-top: 10px; border-top: 1px solid #E3E8EF; font-size: 9.5px; color: #94A3B8; text-align: center; }
+  </style></head><body>
+    <div class="head">${logo ? `<img src="${esc(logo)}" />` : ""}<div class="marca">${esc(marca)}</div><div class="tipo">${esc(subtitulo)}</div></div>
+    <h1>${esc(titulo)}</h1><div class="sub">Obra: ${esc(obraNombre)}</div>
+    <div style="margin-top:18px">${secs}${fots}</div>
+    <div class="pie">${esc(marca)} · Documento emitido para el propietario</div>
+  </body></html>`;
+}
+
+function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, cfg = {}, envios = {}, setEnvios }) {
   const [avAbierto, setAvAbierto] = React.useState(null);
   const [docAbierto, setDocAbierto] = React.useState(null);   // el informe armado, con logos
+  // Arma el documento con la marca de Belfast y lo deja disponible para el
+  // propietario en SU panel.
+  function mandarAlPropietario(obraId, obraNombre, item, tipo) {
+    if (!setEnvios) return;
+    const html = tipo === "cert"
+      ? docBelfast(cfg, obraNombre, `Certificado semanal ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`, "Certificado de avance",
+          [["Desarrollo", item.desarrollo], ["Recepciones", item.recepciones], ["Limpieza y seguridad", item.limpieza], ["Alertas", item.alertas]],
+          (item.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])))
+      : docBelfast(cfg, obraNombre, `Informe de avance ${item.fecha}`, "Informe de avance",
+          [["Avance alcanzado", item.avance], ["Estado de obra", item.descripcion]],
+          (item.fotos && item.fotos.length) ? item.fotos : (item.fotoUrl ? [item.fotoUrl] : []));
+    const reg = { id: item.id, tipo, fecha: item.fecha || item.desde, titulo: tipo === "cert" ? `Certificado ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}` : `Informe de avance ${item.fecha}`, html, ts: Date.now() };
+    setEnvios(p => { const lista = ((p || {})[obraId] || []).filter(x => x.id !== reg.id); return { ...(p || {}), [obraId]: [reg, ...lista] }; });
+    alert("Listo: el propietario ya lo puede ver en su panel.");
+  }
   const [certAbierto, setCertAbierto] = React.useState(null);
   const [filtro, setFiltro] = useState("");
   const [open, setOpen] = useState(null);
@@ -3191,8 +3247,10 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {} }
     .filter(c => !filtro || c._obraId === filtro)
     .sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
   // Informes de avance: cada carga de fotos con su lectura de la IA.
+  // Solo los que tienen el informe ya armado (el PDF con logos que emite V+V).
+  // Es lo único que le llega al cliente; el texto suelto queda para uso interno.
   const avTodos = obras.flatMap(o => ((avance || {})[o.id] || []).map(a => ({ ...a, _obra: o.nombre, _obraId: o.id })))
-    .filter(a => !filtro || a._obraId === filtro)
+    .filter(a => a.html && (!filtro || a._obraId === filtro))
     .sort((a, b) => (b.ts || 0) - (a.ts || 0));
   if (docAbierto) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(10px + env(safe-area-inset-top)) 12px 10px" }}>
@@ -3220,9 +3278,8 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {} }
               <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{c._obra} · {(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
-            {c.html
-              ? <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>
-              : <div style={{ fontSize: 12, color: T.muted, flexShrink: 0 }}>{certAbierto?.id === c.id ? "▲" : "▼"}</div>}
+              {c.html && <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>}
+              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(c._obraId, c._obra, c, "cert"); }} style={{ background: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#DCFCE7" : BRASS, border: "none", color: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "✓ Enviado" : "→ Propietario"}</button>
           </div>
           {certAbierto?.id === c.id && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
             {[["Desarrollo", c.desarrollo], ["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
@@ -3245,13 +3302,14 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {} }
       {avTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Informes de avance</div>
         {avTodos.map(a => { const fs = (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : []); return (
-          <div key={a.id} onClick={() => setAvAbierto(avAbierto?.id === a.id ? null : a)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+          <div key={a.id} onClick={() => setDocAbierto({ html: a.html, titulo: `Informe de avance ${a.fecha}` })} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
                 <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{a._obra}{fs.length ? ` · ${fs.length} foto${fs.length > 1 ? "s" : ""}` : ""}</div>
               </div>
-              <div style={{ fontSize: 12, color: T.muted, flexShrink: 0 }}>{avAbierto?.id === a.id ? "▲" : "▼"}</div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>
+              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(a._obraId, a._obra, a, "av"); }} style={{ background: ((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "#DCFCE7" : BRASS, border: "none", color: ((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "✓ Enviado" : "→ Propietario"}</button>
             </div>
             {avAbierto?.id === a.id && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
               {a.descripcion && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: fs.length ? 9 : 0 }}>{a.descripcion}</div>}
@@ -4179,7 +4237,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-docpro</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-avinf</span>
     </div>
   </div>);
 }
@@ -4429,7 +4487,7 @@ function ClienteApp() {
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
-          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} />}
+          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}

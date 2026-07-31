@@ -222,13 +222,11 @@ function SeccionCronograma({ obra, tareas, onBack }) {
     </div>
   </div>);
 }
-function SeccionInformes({ obra, certif, avance, onBack }) {
-  const [doc, setDoc] = useState(null);   // el informe armado, con logos
-  // Lo mismo que ve Belfast en su pantalla de Informes: certificados
-  // semanales, informes de avance, y los informes cargados a la obra.
-  const certs = ((certif || {})[obra.id] || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
-  const avs = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  const items = (obra.informes || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+function SeccionInformes({ obra, envios, onBack }) {
+  const [doc, setDoc] = useState(null);
+  // Lo que Belfast le mandó al propietario, con la marca de Belfast.
+  const items = ((envios || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
   if (doc) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(10px + env(safe-area-inset-top)) 12px 10px" }}>
       <button onClick={() => setDoc(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>← Volver</button>
@@ -241,48 +239,14 @@ function SeccionInformes({ obra, certif, avance, onBack }) {
   return (<div>
     <SubHead titulo="Informes" onBack={onBack} />
     <div style={{ padding: 18 }}>
-      {certs.length === 0 && avs.length === 0 && items.length === 0 && <EmptyMsg>Todavía no hay informes cargados para esta obra.</EmptyMsg>}
-
-      {certs.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 9 }}>Certificados semanales de avance</div>}
-      {certs.map(c => c.html ? (
-        <button key={c.id} onClick={() => setDoc({ html: c.html, titulo: `Certificado ${fFecha(c.desde)} al ${fFecha(c.hasta)}` })} style={{ width: "100%", textAlign: "left", background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Semana {fFecha(c.desde)} al {fFecha(c.hasta)}</div>
-            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Emitido {c.emitido}</div>
-          </div>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.brass, flexShrink: 0 }}>Ver informe →</div>
-        </button>
-      ) : (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: T.brass, marginBottom: 5 }}>Semana {fFecha(c.desde)} al {fFecha(c.hasta)}</div>
-        {c.desarrollo && <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 8 }}>{c.desarrollo}</div>}
-        {[["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
-          <div key={lbl} style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 9.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 2 }}>{lbl}</div>
-            <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{txt}</div>
-          </div>) : null)}
-        {(c.av || []).some(a => (a.fotos || []).length || a.fotoUrl) && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginTop: 10 }}>
-          {(c.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])).map((u, i) => (
-            <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>))}
-        </div>}
-      </div>))}
-
-      {avs.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 9px" }}>Informes de avance</div>}
-      {avs.map(a => { const fs = (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : []); return (
-        <div key={a.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 3 }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
-          {a.descripcion && <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{a.descripcion}</div>}
-          {fs.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginTop: 9 }}>
-            {fs.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>)}
-          </div>}
-        </div>); })}
-
-      {items.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 9px" }}>Otros informes</div>}
-      {items.map((it, i) => (<div key={it.id || i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 14, marginBottom: 10 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 4 }}>{it.titulo || `Informe del ${fFecha(it.fecha)}`}</div>
-        <div style={{ fontSize: 11, color: T.muted, marginBottom: 6 }}>{fFecha(it.fecha)}</div>
-        {it.texto && <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{it.texto}</div>}
-        {it.url && <a href={it.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, fontSize: 12, fontWeight: 700, color: T.brass }}>Ver documento →</a>}
-      </div>))}
+      {items.length === 0 && <EmptyMsg>Todavía no hay informes disponibles para esta obra.</EmptyMsg>}
+      {items.map(it => (<button key={it.id} onClick={() => setDoc(it)} style={{ width: "100%", textAlign: "left", background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>{it.titulo}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo === "cert" ? "Certificado semanal" : "Informe de avance"}</div>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.brass, flexShrink: 0 }}>Ver →</div>
+      </button>))}
     </div>
   </div>);
 }
@@ -346,7 +310,7 @@ function SeccionMensajes({ onBack }) {
 }
 
 // ─── Panel principal ───
-function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif }) {
+function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, envios }) {
   const [seccion, setSeccion] = useState(null);
   const [idx, setIdx] = useState(0);
   // En el banner van los RENDERS (cómo va a quedar), no las fotos de obra.
@@ -360,7 +324,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
   if (seccion === "renders") return <SeccionRenders obra={obra} renders={renders} onBack={() => setSeccion(null)} />;
   if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} />;
   if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} />;
-  if (seccion === "informes") return <SeccionInformes obra={obra} certif={certif} avance={avance} onBack={() => setSeccion(null)} />;
+  if (seccion === "informes") return <SeccionInformes obra={obra} envios={envios} onBack={() => setSeccion(null)} />;
   if (seccion === "planos") return <SeccionPlanos obra={obra} onBack={() => setSeccion(null)} />;
 
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
@@ -391,12 +355,12 @@ export default function ClientePropietarioApp() {
   const [estado, setEstado] = useState("cargando"); // cargando | entrada | panel | error
   const [obra, setObra] = useState(null);
   const [nombreCliente, setNombreCliente] = useState("");
-  const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {}, renders: {}, certif: {} });
+  const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {}, renders: {}, certif: {}, envios: {} });
 
   async function cargarObra(codigo, nombre) {
     try {
-      const [ro, rt, ra, rf, rav, rr, rc] = await Promise.all([
-        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"), storage.get("vv_renders"), storage.get("vv_certif_sem"),
+      const [ro, rt, ra, rf, rav, rr, rc, re] = await Promise.all([
+        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"), storage.get("vv_renders"), storage.get("vv_certif_sem"), storage.get("cliente_envios_prop"),
       ]);
       const obras = ro?.value ? JSON.parse(ro.value) : [];
       const encontrada = obras.find(o => (o.codigoCliente || "").toUpperCase() === codigo.toUpperCase());
@@ -410,6 +374,7 @@ export default function ClientePropietarioApp() {
         avance: rav?.value ? JSON.parse(rav.value) : {},
         renders: rr?.value ? JSON.parse(rr.value) : {},
         certif: rc?.value ? JSON.parse(rc.value) : {},
+        envios: re?.value ? JSON.parse(re.value) : {},
       });
       setEstado("panel");
     } catch { setEstado("entrada"); }
@@ -423,5 +388,5 @@ export default function ClientePropietarioApp() {
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
   if (estado === "entrada") return <Entrada onEntrar={cargarObra} />;
-  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} />;
+  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} envios={extra.envios} />;
 }
