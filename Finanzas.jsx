@@ -197,6 +197,70 @@ function ajusteInflacionSaldo(obra, movimientos, cacMensual) {
   return { ajuste: Math.round(ajusteAcum), saldo: Math.round(saldo), cobrado: cobradoAcum, sinDatos: false, mesesSinIPC, meses: nMeses };
 }
 
+// ============ IMPORTAR PLANILLA (.xlsx) DE COBROS + IPC ============
+// Lee las hojas "Inflación" (fecha, % IPC) y "Cobros y Pagos" (una fila por semana,
+// bloques de columnas Cobro/Pago por obra) y devuelve los datos listos para cargar
+// como movimientos + cacMensual. No escribe nada solo; el llamador decide qué guardar.
+// (usa cargarXLSX(), definida más abajo, para traer la librería SheetJS por CDN)
+function parsePlanillaRedet(XLSX, ab) {
+  const wb = XLSX.read(ab, { type: "array", cellDates: true });
+  const ymOf = (d) => { const dt = (d instanceof Date) ? d : new Date(d); if (isNaN(dt)) return null; return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; };
+  const isoOf = (d) => { const dt = (d instanceof Date) ? d : new Date(d); if (isNaN(dt)) return null; return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`; };
+
+  const ipc = {};
+  const hojaInfl = wb.SheetNames.find(n => /inflac/i.test(n));
+  if (hojaInfl) {
+    const ws = wb.Sheets[hojaInfl];
+    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      const cA = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+      const cB = ws[XLSX.utils.encode_cell({ r, c: 1 })];
+      if (cA && cA.v instanceof Date && cB && typeof cB.v === "number") {
+        const ym = ymOf(cA.v);
+        if (ym) ipc[ym] = Math.round(cB.v * 100 * 1000) / 1000; // guardado como %, ej 2.9
+      }
+    }
+  }
+
+  const obras = {};
+  const hojaCob = wb.SheetNames.find(n => /cobro/i.test(n)) || wb.SheetNames.find(n => /pago/i.test(n));
+  if (hojaCob) {
+    const ws = wb.Sheets[hojaCob];
+    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+    let headerRow = -1, colFecha = -1;
+    const bloques = [];
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      let tieneCobro = false;
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        const v = cell ? String(cell.v || "").trim().toLowerCase() : "";
+        if (v === "fecha") colFecha = c;
+        if (v === "cobro") { tieneCobro = true; bloques.push({ colCobro: c, colPago: c + 1, rowNombre: r - 1 }); }
+      }
+      if (tieneCobro) { headerRow = r; break; }
+    }
+    if (headerRow >= 0 && colFecha >= 0 && bloques.length) {
+      bloques.forEach(b => {
+        const cNom = ws[XLSX.utils.encode_cell({ r: b.rowNombre, c: b.colCobro })];
+        const nombre = cNom ? String(cNom.v || "").trim() : "";
+        if (!nombre) return;
+        const filas = [];
+        for (let r = headerRow + 1; r <= range.e.r; r++) {
+          const cF = ws[XLSX.utils.encode_cell({ r, c: colFecha })];
+          if (!cF || !(cF.v instanceof Date)) continue;
+          const cC = ws[XLSX.utils.encode_cell({ r, c: b.colCobro })];
+          const cP = ws[XLSX.utils.encode_cell({ r, c: b.colPago })];
+          const cobro = cC && typeof cC.v === "number" ? cC.v : 0;
+          const pago = cP && typeof cP.v === "number" ? cP.v : 0;
+          if (cobro > 0 || pago > 0) filas.push({ fecha: isoOf(cF.v), cobro, pago });
+        }
+        obras[nombre] = filas;
+      });
+    }
+  }
+  return { ipc, obras };
+}
+
 function redetReplay(cert, obra, certsDeObra, cac) {
   const base = obra?.mesBase || mesDe(cert?.fecha); const cm = mesDe(cert?.fecha);
   const sorted = (certsDeObra || []).some(c => c.id === cert.id) ? [...(certsDeObra || [])] : [...(certsDeObra || []), cert];
@@ -513,6 +577,49 @@ function RedeterminacionTab({ obras, data, save }) {
   const sinMarcar = hayCargados && !data.cacComp;         // cargados antes de que existiera el selector
   const [buscando, setBuscando] = useState(false);
   const [errBusq, setErrBusq] = useState("");
+  const [importando, setImportando] = useState(false);
+  const fileImportRef = useRef(null);
+  async function importarPlanilla(e) {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    setImportando(true);
+    try {
+      const XLSX = await cargarXLSX();
+      const ab = await file.arrayBuffer();
+      const { ipc, obras: obrasXls } = parsePlanillaRedet(XLSX, ab);
+      const nMesesIpc = Object.keys(ipc).length;
+      const nombresXls = Object.keys(obrasXls);
+      if (!nMesesIpc && !nombresXls.length) { alert("No pude encontrar la hoja \"Inflación\" ni \"Cobros y Pagos\" en ese archivo."); setImportando(false); return; }
+      const norm = (s) => sinTildes(s);
+      const matches = nombresXls.map(nom => ({ nom, obra: (obras || []).find(o => norm(o.nombre) === norm(nom)) }));
+      const sinMatch = matches.filter(m => !m.obra).map(m => m.nom);
+      const nFilas = matches.reduce((a, m) => a + (m.obra ? (obrasXls[m.nom] || []).length : 0), 0);
+      const detalle = `Encontré en la planilla:\n· ${nMesesIpc} mes(es) de IPC\n· ${matches.filter(m => m.obra).length} obra(s) que coinciden con las tuyas (${nFilas} filas de cobro/pago)` +
+        (sinMatch.length ? `\n\nNO encontré en tu app estas obras de la planilla (no se importan): ${sinMatch.join(", ")}` : "") +
+        `\n\n¿Importar?`;
+      if (!window.confirm(detalle)) { setImportando(false); return; }
+
+      const cacNext = { ...(data.cacMensual || {}), ...ipc };
+      const movsPrev = data.movimientos || [];
+      const existentes = new Set(movsPrev.map(m => m.impId).filter(Boolean));
+      const nuevos = [];
+      matches.forEach(m => {
+        if (!m.obra) return;
+        (obrasXls[m.nom] || []).forEach(fila => {
+          [["cobro", fila.cobro], ["pago", fila.pago]].forEach(([tipo, monto]) => {
+            if (!monto) return;
+            const impId = `imp_${m.obra.id}_${fila.fecha}_${tipo}_${monto}`;
+            if (existentes.has(impId)) return; // ya importado antes, no duplicar
+            existentes.add(impId);
+            nuevos.push({ id: uid() + Math.random().toString(36).slice(2, 6), obraId: m.obra.id, monto, fecha: fila.fecha, nota: "Importado de planilla", ts: Date.now(), tipo, impId });
+          });
+        });
+      });
+      save(logH({ ...data, cacMensual: cacNext, movimientos: [...movsPrev, ...nuevos] }, `Importó planilla: ${nMesesIpc} mes(es) IPC, ${nuevos.length} movimiento(s)`));
+      alert(`✓ Importado.\n· IPC: ${nMesesIpc} mes(es)\n· Movimientos nuevos: ${nuevos.length}${nuevos.length < nFilas ? ` (${nFilas - nuevos.length} ya estaban cargados, no se duplicaron)` : ""}`);
+    } catch (err) { alert(err.message || "No se pudo leer el archivo."); }
+    setImportando(false);
+  }
   const cot = data.redet || {};
   const setCot = (k, v) => save({ ...data, redet: { ...cot, [k]: v } });
   const setIndice = (mes, valor) => {
@@ -666,6 +773,14 @@ function RedeterminacionTab({ obras, data, save }) {
   };
 
   return <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 30px" }}>
+
+    {/* 0 · IMPORTAR PLANILLA */}
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>0 · Importar planilla (.xlsx)</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Si venís cargando cobros e IPC en Excel, subí el archivo acá y te carga el IPC mensual y los cobros/pagos por obra en Gastos, todo de una. No pisa nada de lo que ya tenés cargado, solo agrega lo que falte.</div>
+      <input ref={fileImportRef} type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={importando} onChange={importarPlanilla} style={{ display: "none" }} />
+      <button onClick={() => fileImportRef.current && fileImportRef.current.click()} disabled={importando} style={{ width: "100%", background: importando ? T.al : T.navy, color: importando ? T.sub : "#fff", border: `1px solid ${BRASS}`, borderRadius: 10, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: importando ? "default" : "pointer" }}>{importando ? "Leyendo…" : "＋ Elegir archivo Excel"}</button>
+    </div>
 
     {/* 1 · DE DÓNDE SALE EL PRECIO */}
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
