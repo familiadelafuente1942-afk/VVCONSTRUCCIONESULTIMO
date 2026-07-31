@@ -2988,7 +2988,29 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   // Lo que le cobrás (m² × precio cliente) menos lo que te cuesta (m² × costo/m²),
   // sumado en TODAS las obras cargadas. Es la utilidad del contrato completo, no la
   // de lo ya certificado: por eso no depende de cuánto avanzó la obra.
-  const ventaEsperada = obras.reduce((s, o) => s + presupCliente(o), 0);
+  // A esto se le suma una PROYECCIÓN del ajuste por inflación que todavía falta cobrar:
+  // se toma el IPC promedio de los últimos meses cargados y se aplica, compuesto, sobre
+  // el saldo pendiente de cada obra, por los meses de plazo que le quedan. El costo NO se
+  // proyecta con inflación porque los subcontratistas están a precio cerrado, sin ajuste.
+  const cac = indices || {};
+  const mesesCacCargados = Object.keys(cac).filter(m => cac[m] != null && String(cac[m]).trim() !== "").sort();
+  const ipcProm = mesesCacCargados.length ? mesesCacCargados.slice(-3).reduce((s, m) => s + num(cac[m]), 0) / Math.min(3, mesesCacCargados.length) / 100 : 0;
+  const hoyMesG = mesDe(hoyISO());
+  const mesesEntre = (m1, m2) => { const [y1, mo1] = m1.split("-").map(Number), [y2, mo2] = m2.split("-").map(Number); return (y2 - y1) * 12 + (mo2 - mo1); };
+  let totalAjusteProyectado = 0;
+  obras.forEach(o => {
+    const pm = num(o.plazoMeses);
+    if (pm <= 0) return;
+    const mesIni = mesDe(o.inicio || hoyISO());
+    const mesesTranscurridos = Math.max(0, mesesEntre(mesIni, hoyMesG));
+    const mesesRestantes = Math.max(0, pm - mesesTranscurridos);
+    if (mesesRestantes <= 0) return;
+    const cs = certsDe(o.id); const ult = cs[cs.length - 1];
+    const yaCert = ult ? clienteAcumDe(ult.cantidades, o) : 0;
+    const saldoPend = Math.max(0, presupCliente(o) - yaCert);
+    totalAjusteProyectado += saldoPend * (Math.pow(1 + ipcProm, mesesRestantes) - 1);
+  });
+  const ventaEsperada = obras.reduce((s, o) => s + presupCliente(o), 0) + totalAjusteProyectado;
   const costoEsperado = obras.reduce((s, o) => s + presupCosto(o), 0);
   const utilEsperada = ventaEsperada - costoEsperado;   // BRUTA: todavía no pagó la estructura
 
@@ -3053,7 +3075,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
         {/* ── LAS 4 LÍNEAS DEL RESULTADO ── */}
         {(() => {
           const filas = [
-            { n: 1, lbl: "Utilidad bruta esperada", val: utilEsperada, sub: ventaEsperada > 0 ? `Margen ${margenEsperado.toFixed(1)}%` : "", desc: "Lo que le cobrás menos lo que te cuesta. Todavía no pagó la estructura.", col: utilEsperada >= 0 ? "#7DE0A6" : "#FCA5A5", big: true },
+            { n: 1, lbl: "Utilidad bruta esperada", val: utilEsperada, sub: ventaEsperada > 0 ? `Margen ${margenEsperado.toFixed(1)}%` : "", desc: `Lo que le cobrás menos lo que te cuesta. Incluye ${money(totalAjusteProyectado)} de inflación proyectada (IPC prom. ${(ipcProm * 100).toFixed(1)}%/mes sobre el saldo pendiente de cada obra, según meses de plazo que le quedan). El costo no se proyecta: los subcontratistas están a precio cerrado. Todavía no pagó la estructura.`, col: utilEsperada >= 0 ? "#7DE0A6" : "#FCA5A5", big: true },
             { n: 2, lbl: "Utilidad neta esperada", val: utilNeta, sub: ventaEsperada > 0 ? `Margen ${margenNeto.toFixed(1)}%` : "", desc: "La bruta menos el costo fijo de estructura. Es lo que esperás quedarte.", col: utilNeta >= 0 ? "#7DE0A6" : "#FCA5A5", resta: "Costo fijo de estructura" },
             { n: 3, lbl: "Utilidad a cobrar", val: utilidadACobrar, sub: "", desc: "Lo que todavía falta ganar de la neta. Lo cobrado ya es tuyo; esto es lo que queda por delante.", col: "#F2C879", resta: "Resultado operativo · lo que ya realizaste (ver 4)" },
             { n: 4, lbl: "Resultado operativo", val: resultadoOperativo, sub: hayCerts ? "" : "Sin certificados todavía", desc: "Lo que ya realizaste con los certificados emitidos, descontado todo (costos, impuestos, imprevistos y estructura).", col: resultadoOperativo >= 0 ? "rgba(255,255,255,.92)" : "#FCA5A5", noBorder: true },
