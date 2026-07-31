@@ -401,6 +401,8 @@ function redetReplay(cert, obra, certsDeObra, cac) {
     const bruto = Math.max(0, acum - prevAcum);
     prevAcum = acum;
     const mesCC = mesDe(cc.fecha);
+    // CAC del mismo mes que se está cerrando (como tu planilla de Mayling: "CAC M.O. Julio 0%" si todavía
+    // no salió, provisorio hasta que lo cargues). Sin atraso de un mes.
     const { factor, meses } = indiceAcumulado(mesRef, mesCC, cac);
     const provisorio = meses.some(m => m.provisorio);
     const saldoBase = saldo;                    // lo que quedaba pendiente antes de este certificado
