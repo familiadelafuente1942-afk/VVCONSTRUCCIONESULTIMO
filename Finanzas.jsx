@@ -333,7 +333,7 @@ function redetReplay(cert, obra, certsDeObra, cac) {
   const sameMonth = sorted.filter(c => mesDe(c.fecha) === cm);
   const k = Math.max(1, sameMonth.findIndex(c => c.id === cert.id) + 1);
   let factor = 1, provisorio = false, ym = addMonthYM(base, 1);
-  while (ym < cm) { const rr = cacRate(ym, cac); if (rr.provisorio) provisorio = true; factor *= (1 + rr.rate); ym = addMonthYM(ym, 1); }
+  while (ym < cm) { const rr = cacMes(ym, cac); if (rr.provisorio) provisorio = true; factor *= (1 + rr.rate); ym = addMonthYM(ym, 1); }
   const rrc = cacRate(cm, cac); if (rrc.provisorio) provisorio = true; factor *= Math.pow(1 + rrc.rate, Math.min(k, 2));
   return { ajuste: bruto * (factor - 1), provisorio, rate: rrc.rate, factor };
 }
@@ -701,16 +701,17 @@ function RedeterminacionTab({ obras, data, save }) {
   let ym = mesBase, guard = 0;
   while (ym <= mesHasta && guard++ < 240) { meses.push(ym); ym = addMonthYM(ym, 1); }
 
-  // ---- ACUMULACIÓN COMPUESTA ----
-  let factor = 1, faltan = 0;
-  const filas = meses.map((mm, i) => {
-    if (i === 0) return { mes: mm, primero: true, precio: base, factor: 1 };
-    const r = cacMes(mm, cac);
-    if (r.provisorio) faltan++;
-    const antes = base * factor;
-    factor *= (1 + r.rate);
-    return { mes: mm, rate: r.rate, provisorio: r.provisorio, factor, precio: base * factor, ajuste: base * factor - antes };
+  // ---- ACUMULACIÓN COMPUESTA (misma función que usa la Tabla de Precios) ----
+  const { meses: idxMeses } = indiceAcumulado(mesBase, mesHasta, cac);
+  let prevPrecio = base, faltan = 0;
+  const filas = idxMeses.map((m, i) => {
+    const precio = base * m.factor;
+    const row = { mes: m.mes, primero: i === 0, precio, factor: m.factor, rate: m.rate, provisorio: m.provisorio };
+    if (i > 0) { row.ajuste = precio - prevPrecio; if (m.provisorio) faltan++; }
+    prevPrecio = precio;
+    return row;
   });
+  const factor = filas.length ? filas[filas.length - 1].factor : 1;
   const precioRedet = base * factor;
   const costoRedet = costoBase * factor;
   const acumPct = (factor - 1) * 100;
@@ -3442,7 +3443,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
 
   return (<div style={{ padding: "14px 16px 40px" }}>
     <div style={{ background: T.card, borderRadius: 12, padding: 4, marginBottom: 14, boxShadow: SHDsm }}>
-      {[[["general", "General"], ["cliente", "Cliente"], ["particulares", "Particul."], ["diferencia", "Dif. cert."]], [["iva", "IVA"], ["sociedad", "Sociedad"], ["edificios", "Edificios"]]].map((fila, fi) => (
+      {[[["general", "General"], ["cliente", "Cliente"], ["particulares", "Particul."], ["diferencia", "Dif. cert."]], [["iva", "IVA"], ["sociedad", "Sociedad"]]].map((fila, fi) => (
         <div key={fi} style={{ display: "flex", gap: 3, marginTop: fi === 0 ? 0 : 3 }}>
           {fila.map(([k, l]) => <button key={k} onClick={() => setSubtab(k)} style={{ flex: 1, background: subtab === k ? T.navy : "transparent", color: subtab === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 2px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em" }}>{l}</button>)}
         </div>
