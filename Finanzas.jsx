@@ -379,7 +379,7 @@ function TablaPreciosTab({ data, save }) {
         <span style={{ fontSize: 12.5, color: m.mes > hoyMes ? T.muted : T.sub, width: 54 }}>{nomMesCorto(m.mes)}{m.mes === mesBase ? " ·base" : ""}</span>
         {m.mes === mesBase
           ? <span style={{ fontSize: 11, color: T.muted, width: 84, textAlign: "center" }}>—</span>
-          : <input value={cac[m.mes] != null ? cac[m.mes] : ""} onChange={e => setIndice(m.mes, e.target.value)} inputMode="decimal" placeholder="% CAC"
+          : <input key={m.mes + ":" + (cac[m.mes] ?? "")} defaultValue={cac[m.mes] != null ? cac[m.mes] : ""} onBlur={e => setIndice(m.mes, e.target.value)} inputMode="decimal" placeholder="% CAC"
               style={{ width: 84, background: m.provisorio ? "rgba(240,165,0,.10)" : T.bg, border: `1px solid ${m.provisorio ? "rgba(240,165,0,.5)" : T.border}`, borderRadius: 7, padding: "6px 4px", fontSize: 13, color: T.text, textAlign: "center", boxSizing: "border-box" }} />}
         <b style={{ fontSize: 13, color: m.mes > hoyMes ? T.muted : T.text }}>{money(valorBase * m.factor)}</b>
       </div>))}
