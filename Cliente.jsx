@@ -708,7 +708,7 @@ function useAvisos(clave, mapaIds) {
 // ══════════════════════════════════════════════════════════════════
 // ─── Avance de obra (espejo de V+V) ───
 const fFechaCorta = (iso) => { if (!iso) return ""; const p = String(iso).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0].slice(2)}` : String(iso); };
-function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, envios = {}, setEnvios }) {
+function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {} }) {
   // Certificado semanal abierto (los emite V+V; acá se ven en modo lectura).
   const [certAbierto, setCertAbierto] = React.useState(null);
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
@@ -760,14 +760,6 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, env
     </div></body></html>`;
   }
   const pdfUno = (h) => { setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
-  // Copia el PDF ya armado por Belfast a Informes, para que lo vea el propietario.
-  const enviarAInformes = (h) => {
-    if (!setEnvios || !obraId) return;
-    const reg = { id: h.id, tipo: "av", fecha: h.fecha, titulo: `Informe de avance ${h.fecha}`, html: buildPdfAvance([h]), ts: Date.now() };
-    setEnvios(p => { const lista = ((p || {})[obraId] || []).filter(x => x.id !== reg.id); return { ...(p || {}), [obraId]: [reg, ...lista] }; });
-    alert("Listo: ya está en Informes y el propietario lo puede ver.");
-  };
-  const yaEnviado = (h) => ((envios || {})[obraId] || []).some(x => x.id === h.id);
   const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
   const [pdfEntries, setPdfEntries] = React.useState([]);
   async function mergeSaveAvance(oid, transform) {
@@ -912,7 +904,6 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, env
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
-              <button onClick={() => enviarAInformes(h)} title="Copiar a Informes para el propietario" style={{ background: yaEnviado(h) ? "#DCFCE7" : BRASS, border: "none", color: yaEnviado(h) ? "#166534" : "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{yaEnviado(h) ? "✓ En Informes" : "→ Informes"}</button>
             </div>
           </div>
           {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}><Ico n="chart" /> Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
@@ -2578,7 +2569,7 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-avinf</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-belfastpdf</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -4237,7 +4228,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-avinf</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-belfastpdf</span>
     </div>
   </div>);
 }
@@ -4487,7 +4478,7 @@ function ClienteApp() {
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
-          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} envios={enviosProp} setEnvios={setEnviosProp} />}
+          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} />}
           {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
