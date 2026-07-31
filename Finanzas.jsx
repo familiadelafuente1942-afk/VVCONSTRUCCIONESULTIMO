@@ -285,7 +285,8 @@ function TablaPreciosTab({ data, save }) {
   const guardarBase = () => save({ ...data, precioBase: { valor: numMoney(form.valor), mes: form.mes } });
   const setIndice = (mes, valor) => {
     const next = { ...(data.cacMensual || {}) };
-    if (String(valor).trim() === "") delete next[mes]; else next[mes] = num(valor);
+    const v = String(valor).trim();
+    if (v === "") delete next[mes]; else next[mes] = num(v.replace(",", "."));
     save({ ...data, cacMensual: next });
   };
 
@@ -1598,7 +1599,7 @@ function IndicesPanel({ data, save, obra, fecha, indices }) {
   const mesCert = mesDe(fecha);
   const rr = cacMes(mesCert, indices);
   const pctMes = (indices || {})[mesCert];
-  const setIndice = (mes, valor) => { const next = { ...(data.cacMensual || {}) }; if (String(valor).trim() === "") delete next[mes]; else next[mes] = num(valor); save({ ...data, cacMensual: next }); };
+  const setIndice = (mes, valor) => { const next = { ...(data.cacMensual || {}) }; const v = String(valor).trim(); if (v === "") delete next[mes]; else next[mes] = num(v.replace(",", ".")); save({ ...data, cacMensual: next }); };
   const meses = Array.from(new Set([...Object.keys(indices || {}), obra?.mesBase, mesCert].filter(Boolean))).sort();
   return (<div style={{ background: T.al, borderRadius: 11, padding: 12, marginBottom: 12 }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
