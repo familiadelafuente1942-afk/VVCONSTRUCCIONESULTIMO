@@ -225,7 +225,8 @@ function SeccionCronograma({ obra, tareas, onBack }) {
 function SeccionInformes({ obra, envios, onBack }) {
   const [doc, setDoc] = useState(null);
   // Lo que Belfast le mandó al propietario, con la marca de Belfast.
-  const items = ((envios || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Solo lo que Belfast marcó para el propietario.
+  const items = ((envios || {})[obra.id] || []).filter(x => x.prop).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
   if (doc) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(10px + env(safe-area-inset-top)) 12px 10px" }}>
