@@ -2916,6 +2916,8 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const [pin, setPin] = useState(""); const [ok, setOk] = useState(() => { try { return sessionStorage.getItem("finanzas_unlocked") === "1"; } catch { return false; } }); const [subtab, setSubtab] = useState("cliente");
   const desbloquear = () => { setOk(true); try { sessionStorage.setItem("finanzas_unlocked", "1"); } catch { } };
   const [estimPct, setEstimPct] = useState("");
+  const [ipcInput, setIpcInput] = useState(data.config?.ipcProyManual != null ? String(data.config.ipcProyManual) : "");
+  useEffect(() => { setIpcInput(data.config?.ipcProyManual != null ? String(data.config.ipcProyManual) : ""); }, [data.config?.ipcProyManual]);
   const PIN = (() => { try { return localStorage.getItem("finanzas_pin") || "1234"; } catch { return "1234"; } })();
   if (!ok) return (<div style={{ padding: "40px 24px", textAlign: "center" }}>
     <div style={{ fontSize: 40, marginBottom: 10 }}>🔒</div><div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Resultado — privado</div>
@@ -2998,8 +3000,6 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   const ipcManualStr = data.config?.ipcProyManual;
   const usaManual = ipcManualStr != null && String(ipcManualStr).trim() !== "";
   const ipcProm = usaManual ? num(String(ipcManualStr).replace(",", ".")) / 100 : ipcAuto;
-  const [ipcInput, setIpcInput] = useState(ipcManualStr != null ? String(ipcManualStr) : "");
-  useEffect(() => { setIpcInput(ipcManualStr != null ? String(ipcManualStr) : ""); }, [data.config?.ipcProyManual]);
   const guardarIpcManual = (v) => save({ ...data, config: { ...(data.config || {}), ipcProyManual: v } });
   const hoyMesG = mesDe(hoyISO());
   const mesesEntre = (m1, m2) => { const [y1, mo1] = m1.split("-").map(Number), [y2, mo2] = m2.split("-").map(Number); return (y2 - y1) * 12 + (mo2 - mo1); };
