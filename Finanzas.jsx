@@ -162,10 +162,7 @@ const esImprev = (cat) => IMPREV_CATS.includes(cat);
 function logH(d, accion) { const h = d.historial || []; return { ...d, historial: [...h, { id: Math.random().toString(36).slice(2, 9), accion, t: new Date().toLocaleString("es-AR"), ts: Date.now() }].slice(-250) }; }
 const mesDe = (iso) => String(iso || "").slice(0, 7);
 const mesLabel = (m) => { if (!m) return "—"; const [y, mm] = m.split("-"); const N = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]; return `${N[Number(mm) - 1] || mm}/${y.slice(2)}`; };
-// cacRate() devuelve el ajuste de QUINCENA (raíz del mensual, porque se aplica 2 veces al mes).
-// Para el cotizador hace falta el ajuste MENSUAL completo:
 function cacMes(mes, cac) { const p = (cac || {})[mes]; if (p == null || String(p).trim() === "") return { rate: 0, provisorio: true }; return { rate: num(p) / 100, provisorio: false }; }
-function cacRate(mes, cac) { const p = (cac || {})[mes]; if (p == null || String(p).trim() === "") return { rate: 0, provisorio: true }; return { rate: Math.sqrt(1 + num(p) / 100) - 1, provisorio: false }; }
 function addMonthYM(ym, n) { const [y, m] = String(ym).split("-").map(Number); const d = new Date(y, (m - 1) + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; }
 
 // ============ AJUSTE POR INFLACIÓN SOBRE SALDO PENDIENTE ============
@@ -325,17 +322,25 @@ function TablaPreciosTab({ data, save }) {
 }
 
 function redetReplay(cert, obra, certsDeObra, cac) {
-  const base = obra?.mesBase || mesDe(cert?.fecha); const cm = mesDe(cert?.fecha);
   const sorted = (certsDeObra || []).some(c => c.id === cert.id) ? [...(certsDeObra || [])] : [...(certsDeObra || []), cert];
   sorted.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
-  let prevAcum = 0, bruto = 0;
-  for (const cc of sorted) { const acum = clienteAcumDe(cc.cantidades, obra); if (cc.id === cert.id) { bruto = Math.max(0, acum - prevAcum); break; } prevAcum = acum; }
-  const sameMonth = sorted.filter(c => mesDe(c.fecha) === cm);
-  const k = Math.max(1, sameMonth.findIndex(c => c.id === cert.id) + 1);
-  let factor = 1, provisorio = false, ym = addMonthYM(base, 1);
-  while (ym < cm) { const rr = cacMes(ym, cac); if (rr.provisorio) provisorio = true; factor *= (1 + rr.rate); ym = addMonthYM(ym, 1); }
-  const rrc = cacRate(cm, cac); if (rrc.provisorio) provisorio = true; factor *= Math.pow(1 + rrc.rate, Math.min(k, 2));
-  return { ajuste: bruto * (factor - 1), provisorio, rate: rrc.rate, factor };
+  let saldo = presupCliente(obra), mesRef = obra?.mesBase || mesDe(sorted[0]?.fecha), prevAcum = 0;
+  let out = { ajuste: 0, provisorio: false, rate: 0, factor: 1, saldoBase: saldo };
+  for (const cc of sorted) {
+    const acum = clienteAcumDe(cc.cantidades, obra);
+    const bruto = Math.max(0, acum - prevAcum);
+    prevAcum = acum;
+    const mesCC = mesDe(cc.fecha);
+    const { factor, meses } = indiceAcumulado(mesRef, mesCC, cac);
+    const provisorio = meses.some(m => m.provisorio);
+    const saldoBase = saldo;                    // lo que quedaba pendiente antes de este certificado
+    const base = saldoBase - bruto;              // pendiente después de restar lo que se certifica ahora
+    const ajuste = base * (factor - 1);
+    saldo = base + ajuste;                       // saldo que le queda al PRÓXIMO certificado
+    mesRef = mesCC;
+    if (cc.id === cert.id) { out = { ajuste, provisorio, rate: factor - 1, factor, saldoBase }; break; }
+  }
+  return out;
 }
 
 const lastWrite = { t: 0 };
@@ -2004,7 +2009,7 @@ function AddMesIndice({ onAdd }) {
 function IndicesPanel({ data, save, obra, fecha, indices }) {
   const [open, setOpen] = useState(false);
   const mesCert = mesDe(fecha);
-  const rr = cacRate(mesCert, indices);
+  const rr = cacMes(mesCert, indices);
   const pctMes = (indices || {})[mesCert];
   const setIndice = (mes, valor) => { const next = { ...(data.cacMensual || {}) }; if (String(valor).trim() === "") delete next[mes]; else next[mes] = num(valor); save({ ...data, cacMensual: next }); };
   const meses = Array.from(new Set([...Object.keys(indices || {}), obra?.mesBase, mesCert].filter(Boolean))).sort();
@@ -2013,14 +2018,14 @@ function IndicesPanel({ data, save, obra, fecha, indices }) {
       <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em" }}>Redeterminación CAC</div>
         {rr.provisorio
           ? <div style={{ fontSize: 11.5, color: T.warn, marginTop: 3, fontWeight: 600 }}>Falta el CAC de {mesLabel(mesCert)} · provisorio (0%). Cargalo cuando salga.</div>
-          : <div style={{ fontSize: 12.5, marginTop: 3 }}>CAC {mesLabel(mesCert)}: <b>{num(pctMes).toFixed(2)}%</b> · por quincena <b style={{ color: T.ok }}>{(rr.rate * 100).toFixed(4)}%</b></div>}
+          : <div style={{ fontSize: 12.5, marginTop: 3 }}>CAC {mesLabel(mesCert)}: <b>{num(pctMes).toFixed(2)}%</b></div>}
       </div>
       <button onClick={() => setOpen(o => !o)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, cursor: "pointer", flexShrink: 0 }}>{open ? "Cerrar" : "CAC %"}</button>
     </div>
     {open && <div style={{ marginTop: 10 }}>
-      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Cargá el % del CAC de cada mes cuando sale (ej: 3). Se aplica dividido en las dos quincenas (√ compuesto) sobre el saldo pendiente. Si falta el mes actual, va provisorio en 0% y recalcula al cargarlo.</div>
-      {meses.map(m => { const r2 = cacRate(m, indices); return <div key={m} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{mesLabel(m)}{m === mesCert ? " · este cert" : ""}{!r2.provisorio ? <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 400 }}> · quinc. {(r2.rate * 100).toFixed(3)}%</span> : ""}</span>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Cargá el % del CAC de cada mes cuando sale (ej: 3). El ajuste de cada certificado se calcula sobre el saldo que quedó pendiente después del certificado anterior (no sobre el presupuesto total), con el IPC acumulado entre uno y otro. Si falta un mes, va provisorio en 0% y recalcula solo al cargarlo.</div>
+      {meses.map(m => { const r2 = cacMes(m, indices); return <div key={m} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{mesLabel(m)}{m === mesCert ? " · este cert" : ""}</span>
         <input defaultValue={indices[m] ?? ""} onBlur={e => setIndice(m, e.target.value)} inputMode="decimal" placeholder="% CAC" style={{ ...inp, marginTop: 0, width: 92, textAlign: "right" }} /><span style={{ fontSize: 12, color: T.sub }}>%</span>{indices[m] != null && <button onClick={() => setIndice(m, "")} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, padding: "6px 8px", fontSize: 11, cursor: "pointer" }}>✕</button>}
       </div>; })}
       <AddMesIndice onAdd={setIndice} />
