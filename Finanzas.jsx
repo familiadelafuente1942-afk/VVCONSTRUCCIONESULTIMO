@@ -697,8 +697,9 @@ function RedeterminacionTab({ obras, data, save }) {
   };
 
   const hoyMes = mesDe(hoyISO());
-  const base = numMoney(cot.base != null ? cot.base : 409000);
-  const mesBase = cot.mesBase || hoyMes;
+  const pb = data.precioBase || {};
+  const base = numMoney(cot.base != null ? cot.base : (pb.valor != null ? pb.valor : 409000));
+  const mesBase = cot.mesBase || pb.mes || hoyMes;
   const mesHasta = cot.mesHasta || hoyMes;
   const costoBase = numMoney(cot.costoBase);
 
@@ -854,6 +855,7 @@ function RedeterminacionTab({ obras, data, save }) {
     {/* 1 · DE DÓNDE SALE EL PRECIO */}
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>1 · Precio de partida</div>
+      {pb.mes && <button type="button" onClick={() => save({ ...data, redet: { ...cot, base: pb.valor, mesBase: pb.mes } })} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>↺ Usar precio base de la Tabla de Precios ({money(numMoney(pb.valor))} en {nomMes(pb.mes)})</button>}
       {(obras || []).length > 0 && <div style={{ marginBottom: 10 }}>
         <label style={lb}>Traerlo de una obra que ya tenés</label>
         <select value="" onChange={e => e.target.value && traerDeObra(e.target.value)} style={{ ...inp2, fontSize: 14 }}>
