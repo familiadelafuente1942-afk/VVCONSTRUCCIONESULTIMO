@@ -336,9 +336,13 @@ function TablaPreciosTab({ data, save }) {
 
   const mesBase = pb.mes || "2025-11";
   const valorBase = numMoney(pb.valor != null ? pb.valor : 409000);
-  const { factor, meses } = indiceAcumulado(mesBase, hoyMes, cac);
-  const precioHoy = valorBase * factor;
-  const faltan = meses.filter(m => m.provisorio).length;
+  const mesHasta = (pb.hasta && pb.hasta > hoyMes) ? pb.hasta : hoyMes;
+  const { factor: factorHoy } = indiceAcumulado(mesBase, hoyMes, cac);
+  const { meses } = indiceAcumulado(mesBase, mesHasta, cac);
+  const precioHoy = valorBase * factorHoy;
+  const faltan = meses.filter(m => m.provisorio && m.mes <= hoyMes).length;
+  const agregarMes = () => save({ ...data, precioBase: { ...pb, hasta: addMonthYM(mesHasta, 1) } });
+  const quitarMes = () => save({ ...data, precioBase: { ...pb, hasta: addMonthYM(mesHasta, -1) } });
   const inp2 = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 9, padding: "12px", fontSize: 16, color: T.text, width: "100%", boxSizing: "border-box" };
   const lb = { fontSize: 10.5, color: T.sub, fontWeight: 700, display: "block", marginBottom: 4 };
 
@@ -363,21 +367,25 @@ function TablaPreciosTab({ data, save }) {
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 12, textAlign: "center", boxShadow: SHD }}>
       <div style={{ fontSize: 10, opacity: .7, textTransform: "uppercase", letterSpacing: "0.08em" }}>Precio hoy ({nomMesCorto(hoyMes)})</div>
       <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>{money(precioHoy)}</div>
-      <div style={{ fontSize: 11, opacity: .75, marginTop: 4 }}>Base {money(valorBase)} en {nomMesCorto(mesBase)} · acumulado {(factor * 100 - 100).toFixed(2)}%</div>
+      <div style={{ fontSize: 11, opacity: .75, marginTop: 4 }}>Base {money(valorBase)} en {nomMesCorto(mesBase)} · acumulado {(factorHoy * 100 - 100).toFixed(2)}%</div>
       {faltan > 0 && <div style={{ fontSize: 10.5, color: "#FCA5A5", marginTop: 6 }}>⚠ Faltan {faltan} mes(es) de IPC — precio incompleto</div>}
     </div>
 
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Mes a mes</div>
-      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Cargá acá el % de la Cámara de cada mes cuando salga. Este es el único lugar de la app donde se carga — todo lo demás (obras nuevas, certificados) lo toma de acá solo.</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Cargá acá el % de la Cámara de cada mes cuando salga. Este es el único lugar de la app donde se carga — todo lo demás (obras nuevas, certificados) lo toma de acá solo. Podés agregar meses futuros para dejarlos cargados de antemano.</div>
       {meses.map(m => (<div key={m.mes} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
-        <span style={{ fontSize: 12.5, color: T.sub, width: 54 }}>{nomMesCorto(m.mes)}{m.mes === mesBase ? " ·base" : ""}</span>
+        <span style={{ fontSize: 12.5, color: m.mes > hoyMes ? T.muted : T.sub, width: 54 }}>{nomMesCorto(m.mes)}{m.mes === mesBase ? " ·base" : ""}</span>
         {m.mes === mesBase
           ? <span style={{ fontSize: 11, color: T.muted, width: 84, textAlign: "center" }}>—</span>
           : <input value={cac[m.mes] != null ? cac[m.mes] : ""} onChange={e => setIndice(m.mes, e.target.value)} inputMode="decimal" placeholder="% CAC"
               style={{ width: 84, background: m.provisorio ? "rgba(240,165,0,.10)" : T.bg, border: `1px solid ${m.provisorio ? "rgba(240,165,0,.5)" : T.border}`, borderRadius: 7, padding: "6px 4px", fontSize: 13, color: T.text, textAlign: "center", boxSizing: "border-box" }} />}
-        <b style={{ fontSize: 13 }}>{money(valorBase * m.factor)}</b>
+        <b style={{ fontSize: 13, color: m.mes > hoyMes ? T.muted : T.text }}>{money(valorBase * m.factor)}</b>
       </div>))}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        {meses.length > 1 && mesHasta > hoyMes && <button onClick={quitarMes} style={{ flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>− Quitar {nomMesCorto(mesHasta)}</button>}
+        <button onClick={agregarMes} style={{ flex: 1, background: "none", border: `1px dashed ${BRASS}`, color: BRASS, borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>＋ Agregar {nomMesCorto(addMonthYM(mesHasta, 1))}</button>
+      </div>
     </div>
   </div>;
 }
