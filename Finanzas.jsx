@@ -1605,22 +1605,24 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
       <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>{form.id ? "Editar obra" : "Nueva obra"}</div>
       <Field label="Nombre de la obra"><input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Castores 475" style={inp} /></Field>
       <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}><Field label="Metros² totales"><input value={form.m2} onChange={e => setForm({ ...form, m2: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="795" style={inp} /></Field></div>
-        <div style={{ flex: 1 }}><Field label="Precio cliente $/m²"><input value={form.precioCliente} onChange={e => setForm({ ...form, precioCliente: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="453.000" style={inp} /></Field></div>
-      </div>
-      {data.precioBase && data.precioBase.mes && <button type="button" onClick={() => {
-        const mesIni = mesDe(form.inicio || hoyISO());
-        const { factor } = indiceAcumulado(data.precioBase.mes, mesIni, data.cacMensual || {});
-        const precio = Math.round(numMoney(data.precioBase.valor) * factor);
-        setForm({ ...form, precioCliente: fmtMiles(precio), mesBase: mesIni });
-      }} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: -6, marginBottom: 4 }}>↺ Traer precio de la tabla (a la fecha de Inicio)</button>}
-      {data.precioBase && data.precioBase.mes && <div style={{ fontSize: 10, color: T.muted, marginBottom: 8, lineHeight: 1.4 }}>Al traerlo, también fija "Mes base redeterminación (CAC)" más abajo al mes de Inicio — para que certificados y precio queden atados al mismo mes.</div>}
-      <Field label="Costo interno $/m²" hint="Tu costo por m² (ej: 260.000). Presupuesto costo = m² × este valor."><input value={form.costoM2} onChange={e => setForm({ ...form, costoM2: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="260.000" style={inp} /></Field>
-      {(pCli > 0 || pCos > 0) && <div style={{ background: T.al, borderRadius: 9, padding: 10, marginBottom: 12, display: "flex", justifyContent: "space-around" }}><span style={{ fontSize: 12, color: T.sub }}>Cliente: <Money v={pCli} c={T.accent} /></span><span style={{ fontSize: 12, color: T.sub }}>Costo: <Money v={pCos} c={T.warn} /></span></div>}
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}><Field label="Inicio"><input type="date" value={form.inicio} onChange={e => setForm({ ...form, inicio: e.target.value })} style={inp} /></Field></div>
+        <div style={{ flex: 1 }}><Field label="Inicio" hint="El precio y el mes de redeterminación salen solos de acá."><input type="date" value={form.inicio} onChange={e => {
+          const nuevoInicio = e.target.value;
+          const mesIni = mesDe(nuevoInicio || hoyISO());
+          const patch = { inicio: nuevoInicio, mesBase: mesIni };
+          if (data.precioBase && data.precioBase.mes) {
+            const { factor } = indiceAcumulado(data.precioBase.mes, mesIni, data.cacMensual || {});
+            patch.precioCliente = fmtMiles(Math.round(numMoney(data.precioBase.valor) * factor));
+          }
+          setForm({ ...form, ...patch });
+        }} style={inp} /></Field></div>
         <div style={{ flex: 1 }}><Field label="Plazo (meses)"><input value={form.plazoMeses} onChange={e => setForm({ ...form, plazoMeses: e.target.value })} inputMode="numeric" placeholder="8" style={inp} /></Field></div>
       </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}><Field label="Metros² totales"><input value={form.m2} onChange={e => setForm({ ...form, m2: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="795" style={inp} /></Field></div>
+        <div style={{ flex: 1 }}><Field label="Precio cliente $/m²" hint={data.precioBase && data.precioBase.mes ? `Sale solo de la Tabla de Precios a la fecha de Inicio. Editalo acá solo si este contrato es distinto.` : undefined}><input value={form.precioCliente} onChange={e => setForm({ ...form, precioCliente: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="453.000" style={inp} /></Field></div>
+      </div>
+      <Field label="Costo interno $/m²" hint="Tu costo por m² (ej: 260.000). Presupuesto costo = m² × este valor."><input value={form.costoM2} onChange={e => setForm({ ...form, costoM2: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="260.000" style={inp} /></Field>
+      {(pCli > 0 || pCos > 0) && <div style={{ background: T.al, borderRadius: 9, padding: 10, marginBottom: 12, display: "flex", justifyContent: "space-around" }}><span style={{ fontSize: 12, color: T.sub }}>Cliente: <Money v={pCli} c={T.accent} /></span><span style={{ fontSize: 12, color: T.sub }}>Costo: <Money v={pCos} c={T.warn} /></span></div>}
 
       {/* Histórico: para obras ya cobradas sin certificados en la app */}
       {(() => {
@@ -1667,7 +1669,6 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
             : <input value={form.anticipoPct} onChange={e => setForm({ ...form, anticipoPct: e.target.value })} inputMode="decimal" placeholder="20 (%)" style={{ ...inp, marginTop: 0, flex: 1 }} />}
         </div>
       </Field>
-      <Field label="Mes base redeterminación (CAC)" hint="Mes del índice de la oferta."><input type="month" value={form.mesBase || ""} onChange={e => setForm({ ...form, mesBase: e.target.value })} style={inp} /></Field>
 
       <div style={{ borderTop: `1px solid ${T.border}`, margin: "4px 0 10px", paddingTop: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 3 }}>Tipo de obra</div>
