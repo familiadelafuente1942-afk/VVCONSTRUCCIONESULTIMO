@@ -436,7 +436,7 @@ function useFinanzas() {
 
 // ── Modelo: obra = { m2, precioCliente, costoM2, rubros:[{id,nombre,pct}] }
 //    Rubros = solo % de incidencia (sin monto). El monto lo calcula el certificado.
-function presupCliente(o) { return num(o?.m2) * num(o?.precioCliente); }
+function presupCliente(o) { return numMoney(o?.m2) * numMoney(o?.precioCliente); }
 function quincenasObra(o) { const pm = num(o?.plazoMeses); return pm > 0 ? Math.round(pm * 26 / 12) : 0; }
 function anticipoDe(o) { return o?.anticipoTipo === "monto" ? num(o?.anticipoMontoFijo) : presupCliente(o) * num(o?.anticipoPct) / 100; }
 function resumenFinanciero(data) {
@@ -980,7 +980,7 @@ function BarrasMes({ titulo, series, meses }) {
     {series.length > 1 && <div style={{ display: "flex", gap: 14, marginTop: 4, fontSize: 11 }}>{series.map((se, i) => <span key={i} style={{ color: T.sub }}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: se.color, marginRight: 5 }} />{se.nombre}</span>)}</div>}
   </div>);
 }
-function presupCosto(o) { return num(o?.m2) * num(o?.costoM2); }
+function presupCosto(o) { return numMoney(o?.m2) * numMoney(o?.costoM2); }
 function incidencia(o, r) { return num(r?.pct) / 100; }
 function sumaIncid(o) { return (o?.rubros || []).reduce((s, r) => s + num(r.pct), 0); }
 function clienteAcumDe(cant, o) { const pc = presupCliente(o); return (o?.rubros || []).reduce((s, r) => s + (num((cant || {})[r.id]) / 100) * (num(r.pct) / 100) * pc, 0); }
