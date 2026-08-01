@@ -20,10 +20,22 @@ const storage = {
     } catch { }
     try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; }
   },
+  set: async (key, value) => { try { localStorage.setItem(key, value); } catch { } try { await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); } catch { } return { value }; },
 };
+async function subirArchivo(file) {
+  try {
+    const ext = (file.name || "img").split(".").pop();
+    const path = `propietario/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const r = await fetch(`${SUPA_URL}/storage/v1/object/bco-media/${path}`, { method: "POST", headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": file.type || "application/octet-stream", "x-upsert": "true" }, body: file });
+    if (r.ok) return `${SUPA_URL}/storage/v1/object/public/bco-media/${path}`;
+  } catch { }
+  return null;
+}
 const fFecha = (iso) => { if (!iso) return ""; const [a, m, d] = String(iso).split("-"); return a && d ? `${d}/${m}/${a.slice(2)}` : String(iso); };
 
-const T = { navy: "#0F1B2D", brass: "#B0894F", bg: "#F5F7FA", card: "#FFFFFF", border: "#E3E8EF", text: "#0F1B2D", sub: "#5B6B7F", muted: "#94A3B8", r: 14, rsm: 12, shadow: "0 1px 3px rgba(15,27,45,.06)" };
+const TBASE = { navy: "#0F1B2D", brass: "#B0894F", bg: "#F5F7FA", card: "#FFFFFF", border: "#E3E8EF", text: "#0F1B2D", sub: "#5B6B7F", muted: "#94A3B8", r: 14, rsm: 12, shadow: "0 1px 3px rgba(15,27,45,.06)" };
+function temaDe(cfg) { return { ...TBASE, navy: (cfg && cfg.colorPrincipal) || TBASE.navy, brass: (cfg && cfg.colorAcento) || TBASE.brass, bg: (cfg && cfg.colorFondo) || TBASE.bg }; }
+const T = TBASE;
 
 function Ico({ n, s = 18, c = "currentColor", st = 1.7 }) {
   const P = {
@@ -54,12 +66,77 @@ const SECCIONES = [
   { id: "planos", label: "Planos", icon: "plans" },
 ];
 
-// ─── Pantalla de entrada: código + nombre, como el perfil de Mis Viajes ───
-function Entrada({ onEntrar }) {
-  const [codigo, setCodigo] = useState("");
+// ─── Personalización: logo y nombre de la app (queda guardado para todos los que entren) ───
+function ConfigModalProp({ config, onSave, onClose }) {
+  const T = temaDe(config);
+  const [nombre, setNombre] = useState(config.nombre || "");
+  const [subtitulo, setSubtitulo] = useState(config.subtitulo || "");
+  const [colorPrincipal, setColorPrincipal] = useState(config.colorPrincipal || TBASE.navy);
+  const [colorAcento, setColorAcento] = useState(config.colorAcento || TBASE.brass);
+  const [colorFondo, setColorFondo] = useState(config.colorFondo || TBASE.bg);
+  const [logo, setLogo] = useState(config.logo || "");
+  const [subiendo, setSubiendo] = useState(false);
+  async function subirLogo(e) {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    setSubiendo(true); const url = await subirArchivo(f);
+    if (url) setLogo(url); else alert("No se pudo subir. Revisá la conexión.");
+    setSubiendo(false); e.target.value = "";
+  }
+  function guardar() { onSave({ nombre: nombre.trim(), subtitulo: subtitulo.trim(), logo, colorPrincipal, colorAcento, colorFondo }); onClose(); }
+  return (<div style={{ position: "fixed", inset: 0, background: "rgba(11,22,34,.55)", zIndex: 450, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+    <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", padding: 20, paddingBottom: "calc(20px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto", boxSizing: "border-box" }}>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 3, letterSpacing: "-0.01em" }}>Personalizar app</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 18 }}>Cambia el logo y el nombre para todos los que entren acá.</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".04em" }}>Logo</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <div style={{ width: 60, height: 60, borderRadius: "50%", background: logo ? "#fff" : T.navy, border: `1.5px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+          {logo ? <img src={logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={26} c={T.brass} />}
+        </div>
+        <label style={{ background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : logo ? "Cambiar logo" : "Subir logo"}<input type="file" accept="image/*" onChange={subirLogo} style={{ display: "none" }} /></label>
+        {logo && <button onClick={() => setLogo("")} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 9, padding: "10px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Quitar</button>}
+      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".04em" }}>Nombre</div>
+      <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="BELFAST" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px", fontSize: 15, fontWeight: 700, color: T.text, boxSizing: "border-box", marginBottom: 14 }} />
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".04em" }}>Subtítulo</div>
+      <input value={subtitulo} onChange={e => setSubtitulo(e.target.value)} placeholder="Panel del propietario" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px", fontSize: 14, color: T.text, boxSizing: "border-box", marginBottom: 20 }} />
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".04em" }}>Diseño</div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 5 }}>Color principal (fondo)</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 10px" }}>
+            <input type="color" value={colorPrincipal} onChange={e => setColorPrincipal(e.target.value)} style={{ width: 32, height: 32, border: "none", background: "none", padding: 0, cursor: "pointer" }} />
+            <span style={{ fontSize: 12, color: T.sub, fontFamily: "monospace" }}>{colorPrincipal}</span>
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 5 }}>Color de acento</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 10px" }}>
+            <input type="color" value={colorAcento} onChange={e => setColorAcento(e.target.value)} style={{ width: 32, height: 32, border: "none", background: "none", padding: 0, cursor: "pointer" }} />
+            <span style={{ fontSize: 12, color: T.sub, fontFamily: "monospace" }}>{colorAcento}</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 5 }}>Color de fondo (pantallas internas)</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 10px" }}>
+          <input type="color" value={colorFondo} onChange={e => setColorFondo(e.target.value)} style={{ width: 32, height: 32, border: "none", background: "none", padding: 0, cursor: "pointer" }} />
+          <span style={{ fontSize: 12, color: T.sub, fontFamily: "monospace" }}>{colorFondo}</span>
+        </div>
+      </div>
+      {(colorPrincipal !== TBASE.navy || colorAcento !== TBASE.brass || colorFondo !== TBASE.bg) && <button onClick={() => { setColorPrincipal(TBASE.navy); setColorAcento(TBASE.brass); setColorFondo(TBASE.bg); }} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, textDecoration: "underline", cursor: "pointer", marginTop: -12, marginBottom: 20, display: "block" }}>Volver a los colores originales</button>}
+      <button onClick={guardar} style={{ width: "100%", background: colorAcento, border: "none", color: "#1a1205", borderRadius: 12, padding: "14px", fontSize: 14.5, fontWeight: 800, cursor: "pointer" }}>Guardar</button>
+    </div>
+  </div>);
+}
+
+
+function Entrada({ onEntrar, config, onGuardarConfig, codigoInicial }) {
+  const T = temaDe(config);
+  const [codigo, setCodigo] = useState(codigoInicial || "");
   const [nombre, setNombre] = useState("");
   const [buscando, setBuscando] = useState(false);
   const [error, setError] = useState("");
+  const [editando, setEditando] = useState(false);
 
   async function entrar() {
     const cod = codigo.trim().toUpperCase().replace(/\s+/g, "");
@@ -78,11 +155,11 @@ function Entrada({ onEntrar }) {
   }
 
   return (<div style={{ minHeight: "100vh", background: T.navy, display: "flex", flexDirection: "column", justifyContent: "center", padding: "20px 24px", paddingTop: "calc(20px + env(safe-area-inset-top))", paddingBottom: "calc(20px + env(safe-area-inset-bottom))", boxSizing: "border-box" }}>
-    <div style={{ width: 76, height: 76, borderRadius: "50%", border: `2px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 22px" }}>
-      <Ico n="building" s={32} c={T.brass} />
+    <div style={{ width: 76, height: 76, borderRadius: "50%", border: `2px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 22px", overflow: "hidden", background: config?.logo ? "#fff" : "none" }}>
+      {config?.logo ? <img src={config.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={32} c={T.brass} />}
     </div>
-    <div style={{ textAlign: "center", color: "#fff", fontSize: 20, fontWeight: 800, marginBottom: 4 }}>BELFAST</div>
-    <div style={{ textAlign: "center", color: "rgba(255,255,255,.6)", fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 30 }}>Panel del propietario</div>
+    <div style={{ textAlign: "center", color: "#fff", fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{config?.nombre || "BELFAST"}</div>
+    <div style={{ textAlign: "center", color: "rgba(255,255,255,.6)", fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 30 }}>{config?.subtitulo || "Panel del propietario"}</div>
 
     <div style={{ background: "rgba(255,255,255,.06)", borderRadius: T.r, padding: 20, marginBottom: 14 }}>
       <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".05em" }}>Código de tu obra</div>
@@ -94,11 +171,14 @@ function Entrada({ onEntrar }) {
     </div>
     {error && <div style={{ color: "#F87171", fontSize: 12.5, marginBottom: 14, textAlign: "center" }}>{error}</div>}
     <button onClick={entrar} disabled={buscando} style={{ width: "100%", background: T.brass, border: "none", color: "#1a1205", borderRadius: 12, padding: "15px", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>{buscando ? "Buscando…" : "Entrar"}</button>
+    <button onClick={() => setEditando(true)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.4)", fontSize: 11, marginTop: 22, cursor: "pointer" }}>⚙ Personalizar app</button>
+    {editando && <ConfigModalProp config={config || {}} onSave={onGuardarConfig} onClose={() => setEditando(false)} />}
   </div>);
 }
 
 // ─── Fila de sección (lista principal) ───
-function FilaSeccion({ label, icon, onClick }) {
+function FilaSeccion({ label, icon, onClick, config }) {
+  const T = temaDe(config);
   return (<button onClick={onClick} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "16px 16px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left" }}>
     <div style={{ width: 34, height: 34, borderRadius: 9, background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Ico n={icon} s={17} c={T.navy} /></div>
     <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: T.text }}>{label}</div>
@@ -106,7 +186,8 @@ function FilaSeccion({ label, icon, onClick }) {
   </button>);
 }
 
-function SubHead({ titulo, onBack }) {
+function SubHead({ titulo, onBack, config }) {
+  const T = temaDe(config);
   // paddingTop con env(safe-area-inset-top): en el iPhone, con la app
   // instalada en la pantalla de inicio, el contenido arranca DEBAJO del
   // reloj y la señal. Sin esto, el título queda encimado con la hora.
@@ -181,11 +262,12 @@ function SeccionRenders({ obra, renders, onBack }) {
 
 // Las fotos son las del AVANCE DE OBRA (lo que se va viendo en el tiempo),
 // no los renders. Vienen agrupadas por fecha.
-function SeccionFotos({ obra, avance, onBack }) {
+function SeccionFotos({ obra, avance, onBack, config }) {
+  const T = temaDe(config);
   const historial = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const conFotos = historial.map(h => ({ ...h, fotos: (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []) })).filter(h => h.fotos.length);
-  return (<div>
-    <SubHead titulo="Fotos de avance" onBack={onBack} />
+  return (<div style={{ minHeight: "100vh", background: T.bg }}>
+    <SubHead titulo="Fotos de avance" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
       {conFotos.length === 0 && <EmptyMsg>Todavía no hay fotos de avance cargadas.</EmptyMsg>}
       {conFotos.map((h, i) => (<div key={h.id || i} style={{ marginBottom: 20 }}>
@@ -200,10 +282,11 @@ function SeccionFotos({ obra, avance, onBack }) {
     </div>
   </div>);
 }
-function SeccionCronograma({ obra, tareas, onBack }) {
+function SeccionCronograma({ obra, tareas, onBack, config }) {
+  const T = temaDe(config);
   const propias = (tareas || []).filter(t => t.obra_id === obra.id);
-  return (<div>
-    <SubHead titulo="Cronograma" onBack={onBack} />
+  return (<div style={{ minHeight: "100vh", background: T.bg }}>
+    <SubHead titulo="Cronograma" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
@@ -222,10 +305,12 @@ function SeccionCronograma({ obra, tareas, onBack }) {
     </div>
   </div>);
 }
-function SeccionInformes({ obra, envios, onBack }) {
+function SeccionInformes({ obra, envios, onBack, config }) {
+  const T = temaDe(config);
   const [doc, setDoc] = useState(null);
   // Lo que Belfast le mandó al propietario, con la marca de Belfast.
-  const items = ((envios || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Solo lo que Belfast marcó para el propietario.
+  const items = ((envios || {})[obra.id] || []).filter(x => x.prop).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
   if (doc) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(10px + env(safe-area-inset-top)) 12px 10px" }}>
@@ -236,8 +321,8 @@ function SeccionInformes({ obra, envios, onBack }) {
     <iframe id="doc-prop" srcDoc={doc.html} title={doc.titulo} style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
   </div>);
 
-  return (<div>
-    <SubHead titulo="Informes" onBack={onBack} />
+  return (<div style={{ minHeight: "100vh", background: T.bg }}>
+    <SubHead titulo="Informes" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
       {items.length === 0 && <EmptyMsg>Todavía no hay informes disponibles para esta obra.</EmptyMsg>}
       {items.map(it => (<button key={it.id} onClick={() => setDoc(it)} style={{ width: "100%", textAlign: "left", background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
@@ -284,10 +369,11 @@ function SeccionChecklist({ obra, formularios, onBack }) {
     </div>
   </div>);
 }
-function SeccionPlanos({ obra, onBack }) {
+function SeccionPlanos({ obra, onBack, config }) {
+  const T = temaDe(config);
   const items = obra.planos || [];
-  return (<div>
-    <SubHead titulo="Planos" onBack={onBack} />
+  return (<div style={{ minHeight: "100vh", background: T.bg }}>
+    <SubHead titulo="Planos" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
       {items.length === 0 && <EmptyMsg>Todavía no hay planos cargados.</EmptyMsg>}
       {items.map((it, i) => (<a key={it.id || i} href={it.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 11, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 9, textDecoration: "none" }}>
@@ -310,9 +396,11 @@ function SeccionMensajes({ onBack }) {
 }
 
 // ─── Panel principal ───
-function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, envios }) {
+function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, envios, config, onGuardarConfig }) {
+  const T = temaDe(config);
   const [seccion, setSeccion] = useState(null);
   const [idx, setIdx] = useState(0);
+  const [editando, setEditando] = useState(false);
   // En el banner van los RENDERS (cómo va a quedar), no las fotos de obra.
   const fotos = rendersDe(obra, renders);   // lo que rota en el banner
   useEffect(() => {
@@ -322,18 +410,18 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
   }, [fotos.length]);
 
   if (seccion === "renders") return <SeccionRenders obra={obra} renders={renders} onBack={() => setSeccion(null)} />;
-  if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} />;
-  if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} />;
-  if (seccion === "informes") return <SeccionInformes obra={obra} envios={envios} onBack={() => setSeccion(null)} />;
-  if (seccion === "planos") return <SeccionPlanos obra={obra} onBack={() => setSeccion(null)} />;
+  if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} config={config} />;
+  if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} config={config} />;
+  if (seccion === "informes") return <SeccionInformes obra={obra} envios={envios} onBack={() => setSeccion(null)} config={config} />;
+  if (seccion === "planos") return <SeccionPlanos obra={obra} onBack={() => setSeccion(null)} config={config} />;
 
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
     <div style={{ position: "relative", height: "calc(280px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", boxSizing: "border-box", background: T.navy, overflow: "hidden" }}>
       {fotos.map((f, i) => <div key={f.id || i} style={{ position: "absolute", inset: 0, backgroundImage: `url(${f.url})`, backgroundSize: "cover", backgroundPosition: "center", opacity: i === idx ? 1 : 0, transition: "opacity 1.4s ease" }} />)}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(15,27,45,.55) 0%, rgba(15,27,45,.25) 40%, rgba(15,27,45,.92) 100%)" }} />
       <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 20px", textAlign: "center" }}>
-        <div style={{ width: 52, height: 52, borderRadius: "50%", border: `1.5px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-          <Ico n="building" s={22} c={T.brass} />
+        <div style={{ width: 52, height: 52, borderRadius: "50%", border: `1.5px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, overflow: "hidden", background: config?.logo ? "#fff" : "none" }}>
+          {config?.logo ? <img src={config.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={22} c={T.brass} />}
         </div>
         <div style={{ color: "rgba(255,255,255,.7)", fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 3 }}>Tu proyecto</div>
         <div style={{ color: "#fff", fontSize: 22, fontWeight: 800, lineHeight: 1.15 }}>{obra.nombre}</div>
@@ -345,9 +433,11 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
     </div>
     <div style={{ padding: "20px 18px 40px" }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Secciones</div>
-      {SECCIONES.map(s => <FilaSeccion key={s.id} label={s.label} icon={s.icon} onClick={() => setSeccion(s.id)} />)}
+      {SECCIONES.map(s => <FilaSeccion key={s.id} label={s.label} icon={s.icon} onClick={() => setSeccion(s.id)} config={config} />)}
       <div style={{ textAlign: "center", fontSize: 11, color: T.muted, marginTop: 20 }}>Hola, {nombreCliente} · <button onClick={() => { try { localStorage.removeItem("propietario_codigo"); localStorage.removeItem("propietario_nombre"); } catch { } window.location.reload(); }} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>Salir</button></div>
+      <div style={{ textAlign: "center", marginTop: 10 }}><button onClick={() => setEditando(true)} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, cursor: "pointer" }}>⚙ Personalizar app</button></div>
     </div>
+    {editando && <ConfigModalProp config={config || {}} onSave={onGuardarConfig} onClose={() => setEditando(false)} />}
   </div>);
 }
 
@@ -355,7 +445,14 @@ export default function ClientePropietarioApp() {
   const [estado, setEstado] = useState("cargando"); // cargando | entrada | panel | error
   const [obra, setObra] = useState(null);
   const [nombreCliente, setNombreCliente] = useState("");
+  const [config, setConfig] = useState({});
+  const [codigoInicial, setCodigoInicial] = useState("");
   const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {}, renders: {}, certif: {}, envios: {} });
+
+  async function guardarConfig(next) {
+    setConfig(next);
+    await storage.set("vv_propietario_config", JSON.stringify(next));
+  }
 
   async function cargarObra(codigo, nombre) {
     try {
@@ -381,12 +478,45 @@ export default function ClientePropietarioApp() {
   }
 
   useEffect(() => {
+    storage.get("vv_propietario_config").then(r => { if (r?.value) { try { setConfig(JSON.parse(r.value)); } catch { } } });
+    let params = null;
+    try { params = new URLSearchParams(window.location.search); } catch { }
+    const proyecto = params ? params.get("p") : null;
+    if (proyecto) {
+      try {
+        document.title = proyecto;
+        let m = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (!m) { m = document.createElement("meta"); m.setAttribute("name", "apple-mobile-web-app-title"); document.head.appendChild(m); }
+        m.setAttribute("content", proyecto);
+      } catch { }
+      // Ícono con el número de lote, uno por proyecto (mismo logo, distinto badge).
+      try {
+        const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+        const ICONOS_PROP = {
+          "golf293": "golf293",
+          "lospuentes246": "puentes246", "puentes246": "puentes246",
+          "castores475": "castores475",
+          "maylinga37": "mayling37", "mayling37": "mayling37", "maylinga37obra": "mayling37",
+          "lospuentes132": "puentes132", "puentes132": "puentes132",
+        };
+        const slug = ICONOS_PROP[norm(proyecto)];
+        if (slug) {
+          let li = document.querySelector('link[rel="apple-touch-icon"]');
+          if (!li) { li = document.createElement("link"); li.setAttribute("rel", "apple-touch-icon"); document.head.appendChild(li); }
+          li.setAttribute("href", `/icon-prop-${slug}-180.png`);
+          let lf = document.querySelector('link[rel="icon"]');
+          if (lf) lf.setAttribute("href", `/icon-prop-${slug}-192.png`);
+        }
+      } catch { }
+    }
+    const codigoUrl = params ? params.get("c") : null;
+    if (codigoUrl) setCodigoInicial(codigoUrl.toUpperCase());
     let cod = null, nom = null;
     try { cod = localStorage.getItem("propietario_codigo"); nom = localStorage.getItem("propietario_nombre"); } catch { }
     if (cod && nom) cargarObra(cod, nom); else setEstado("entrada");
   }, []);
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
-  if (estado === "entrada") return <Entrada onEntrar={cargarObra} />;
-  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} envios={extra.envios} />;
+  if (estado === "entrada") return <Entrada onEntrar={cargarObra} config={config} onGuardarConfig={guardarConfig} codigoInicial={codigoInicial} />;
+  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} envios={extra.envios} config={config} onGuardarConfig={guardarConfig} />;
 }
