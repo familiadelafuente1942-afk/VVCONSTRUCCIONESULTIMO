@@ -4382,7 +4382,10 @@ function ClienteApp() {
   const [cfg, setCfg] = useStored("cliente_cfg", DEFAULT_CFG);
   const T = theme(cfg.accent);
   const [screen, setScreen] = useState("asistente");
-  const [obras, setObras] = useStored("vv_obras", []);
+  const [obrasRaw, setObras] = useStored("vv_obras", []);
+  // Obras marcadas como "privada" en V+V no existen para Belfast: se filtran acá,
+  // en el único lugar donde Cliente.jsx lee la lista completa.
+  const obras = (obrasRaw || []).filter(o => !o.privada);
   const [avance, setAvance] = useStored("vv_avance", {});
   const [definiciones, setDefiniciones] = useStored("vv_definiciones", []);
   const [docrecepcion, setDocrecepcion] = useStored("vv_docrecepcion", []);
