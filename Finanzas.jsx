@@ -174,24 +174,27 @@ function ajusteInflacionSaldo(obra, movimientos, cacMensual) {
   const mesBase = obra?.mesBase || mesDe(obra?.inicio || hoyISO());
   const hoyMes = mesDe(hoyISO());
   const cobrosObra = (movimientos || []).filter(m => m.tipo === "cobro" && m.obraId === obra?.id);
-  if (!cobrosObra.length) return { ajuste: 0, saldo: presupCliente(obra), cobrado: 0, sinDatos: true, mesesSinIPC: 0, meses: 0 };
+  if (!cobrosObra.length) return { ajuste: 0, saldo: presupCliente(obra), cobrado: 0, sinDatos: true, mesesSinIPC: 0, meses: 0, detalle: [] };
   const ultimoMesCobro = cobrosObra.reduce((mx, m) => (mesDe(m.fecha) > mx ? mesDe(m.fecha) : mx), mesBase);
   const mesTope = ultimoMesCobro > hoyMes ? ultimoMesCobro : hoyMes;
   let saldo = presupCliente(obra), ajusteAcum = 0, cobradoAcum = 0, mesesSinIPC = 0, nMeses = 0;
   let ym = mesBase, guard = 0;
+  const detalle = [];
   while (ym <= mesTope && guard++ < 240) {
     const cobroMes = cobrosObra.filter(m => mesDe(m.fecha) === ym).reduce((s, m) => s + num(m.monto), 0);
     const ipcRaw = (cacMensual || {})[ym];
     const hayIPC = ipcRaw != null && String(ipcRaw).trim() !== "";
     const ipc = hayIPC ? num(ipcRaw) / 100 : 0;
     if (!hayIPC) mesesSinIPC++;
+    const saldoAntes = saldo;
     const base = saldo - cobroMes;
     const ajusteMes = base * ipc;
     saldo = base + ajusteMes;
+    detalle.push({ mes: ym, saldoAntes: Math.round(saldoAntes), cobroMes: Math.round(cobroMes), ipcPct: hayIPC ? num(ipcRaw) : null, base: Math.round(base), ajusteMes: Math.round(ajusteMes), saldoDespues: Math.round(saldo) });
     ajusteAcum += ajusteMes; cobradoAcum += cobroMes; nMeses++;
     ym = addMonthYM(ym, 1);
   }
-  return { ajuste: Math.round(ajusteAcum), saldo: Math.round(saldo), cobrado: cobradoAcum, sinDatos: false, mesesSinIPC, meses: nMeses };
+  return { ajuste: Math.round(ajusteAcum), saldo: Math.round(saldo), cobrado: cobradoAcum, sinDatos: false, mesesSinIPC, meses: nMeses, detalle };
 }
 
 // ============ IMPORTAR PLANILLA (.xlsx) DE COBROS + IPC ============
@@ -1233,6 +1236,17 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
               {calc.sinDatos
                 ? <div style={{ fontSize: 10, color: T.muted, marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>No hay cobros con fecha cargados para esta obra en "Caja". Cargalos ahí (Cobro), o importá el Excel desde Redeterminación.</div>
                 : calc.mesesSinIPC > 0 && <div style={{ fontSize: 10, color: "#B45309", marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>⚠ Faltan {calc.mesesSinIPC} mes(es) de IPC cargado en Redeterminación → el ajuste está incompleto.</div>}
+              {!calc.sinDatos && calc.detalle && calc.detalle.length > 0 && <div style={{ marginBottom: 8 }}>
+                <button type="button" onClick={() => setForm({ ...form, _verDetalleHist: !form._verDetalleHist })} style={{ background: "none", border: "none", color: T.accent, fontSize: 10.5, fontWeight: 700, cursor: "pointer", padding: 0 }}>{form._verDetalleHist ? "▾ Ocultar detalle mes a mes" : "▸ Ver detalle mes a mes"}</button>
+                {form._verDetalleHist && <div style={{ background: T.bg, borderRadius: 8, padding: 8, marginTop: 6, fontSize: 10, fontFamily: "monospace" }}>
+                  <div style={{ display: "flex", fontWeight: 700, color: T.sub, borderBottom: `1px solid ${T.border}`, paddingBottom: 3, marginBottom: 3 }}>
+                    <span style={{ width: 52 }}>Mes</span><span style={{ width: 78, textAlign: "right" }}>Saldo antes</span><span style={{ width: 78, textAlign: "right" }}>Cobro</span><span style={{ width: 42, textAlign: "right" }}>IPC</span><span style={{ width: 78, textAlign: "right" }}>Ajuste</span><span style={{ width: 78, textAlign: "right" }}>Saldo desp.</span>
+                  </div>
+                  {calc.detalle.map(d => (<div key={d.mes} style={{ display: "flex", padding: "2px 0", color: d.saldoAntes < 0 || d.saldoDespues < 0 ? "#DC2626" : T.text }}>
+                    <span style={{ width: 52 }}>{d.mes}</span><span style={{ width: 78, textAlign: "right" }}>{d.saldoAntes.toLocaleString("es-AR")}</span><span style={{ width: 78, textAlign: "right" }}>{d.cobroMes.toLocaleString("es-AR")}</span><span style={{ width: 42, textAlign: "right" }}>{d.ipcPct == null ? "—" : d.ipcPct}</span><span style={{ width: 78, textAlign: "right" }}>{d.ajusteMes.toLocaleString("es-AR")}</span><span style={{ width: 78, textAlign: "right" }}>{d.saldoDespues.toLocaleString("es-AR")}</span>
+                  </div>))}
+                </div>}
+              </div>}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>Pagado (costo) <span style={{ color: T.muted, fontWeight: 400 }}>(a mano)</span></span>
                 <input value={form.histPagado || ""} onChange={e => setForm({ ...form, histPagado: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 140, textAlign: "right" }} />
