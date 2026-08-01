@@ -341,12 +341,17 @@ function TablaPreciosTab({ data, save }) {
   const mesBase = pb.mes || "2025-11";
   const valorBase = numMoney(pb.valor != null ? pb.valor : 409000);
   const mesHasta = (pb.hasta && pb.hasta > hoyMes) ? pb.hasta : hoyMes;
+  const mesDesde = (pb.desde && pb.desde < mesBase) ? pb.desde : mesBase;
   const { factor: factorHoy } = indiceAcumulado(mesBase, hoyMes, cac);
-  const { meses } = indiceAcumulado(mesBase, mesHasta, cac);
+  const { meses: mesesRaw } = indiceAcumulado(mesDesde, mesHasta, cac);
+  const factorEnBase = (mesesRaw.find(m => m.mes === mesBase) || {}).factor || 1;
+  const meses = mesesRaw.map(m => ({ ...m, precio: valorBase * m.factor / factorEnBase }));
   const precioHoy = valorBase * factorHoy;
   const faltan = meses.filter(m => m.provisorio && m.mes <= hoyMes).length;
   const agregarMes = () => save({ ...data, precioBase: { ...pb, hasta: addMonthYM(mesHasta, 1) } });
   const quitarMes = () => save({ ...data, precioBase: { ...pb, hasta: addMonthYM(mesHasta, -1) } });
+  const agregarMesAntes = () => save({ ...data, precioBase: { ...pb, desde: addMonthYM(mesDesde, -1) } });
+  const quitarMesAntes = () => save({ ...data, precioBase: { ...pb, desde: addMonthYM(mesDesde, 1) } });
   const inp2 = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 9, padding: "12px", fontSize: 16, color: T.text, width: "100%", boxSizing: "border-box" };
   const lb = { fontSize: 10.5, color: T.sub, fontWeight: 700, display: "block", marginBottom: 4 };
 
@@ -384,9 +389,13 @@ function TablaPreciosTab({ data, save }) {
           ? <span style={{ fontSize: 11, color: T.muted, width: 84, textAlign: "center" }}>—</span>
           : <input key={m.mes + ":" + (cac[m.mes] ?? "")} defaultValue={cac[m.mes] != null ? cac[m.mes] : ""} onBlur={e => setIndice(m.mes, e.target.value)} inputMode="decimal" placeholder="% CAC"
               style={{ width: 84, background: m.provisorio ? "rgba(240,165,0,.10)" : T.bg, border: `1px solid ${m.provisorio ? "rgba(240,165,0,.5)" : T.border}`, borderRadius: 7, padding: "6px 4px", fontSize: 13, color: T.text, textAlign: "center", boxSizing: "border-box" }} />}
-        <b style={{ fontSize: 13, color: m.mes > hoyMes ? T.muted : T.text }}>{money(valorBase * m.factor)}</b>
+        <b style={{ fontSize: 13, color: m.mes > hoyMes ? T.muted : T.text }}>{money(m.precio)}</b>
       </div>))}
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        {meses.length > 1 && mesDesde < mesBase && <button onClick={quitarMesAntes} style={{ flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>− Quitar {nomMesCorto(mesDesde)}</button>}
+        <button onClick={agregarMesAntes} style={{ flex: 1, background: "none", border: `1px dashed ${T.border}`, color: T.sub, borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>＋ Agregar {nomMesCorto(addMonthYM(mesDesde, -1))} (antes)</button>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         {meses.length > 1 && mesHasta > hoyMes && <button onClick={quitarMes} style={{ flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>− Quitar {nomMesCorto(mesHasta)}</button>}
         <button onClick={agregarMes} style={{ flex: 1, background: "none", border: `1px dashed ${BRASS}`, color: BRASS, borderRadius: 9, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>＋ Agregar {nomMesCorto(addMonthYM(mesHasta, 1))}</button>
       </div>
