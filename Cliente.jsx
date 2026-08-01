@@ -2841,13 +2841,14 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       else if (!cs.length) { res = `${target.nombre} todavía no tiene certificados semanales cargados.`; docs = []; }
       else {
         res = `Acá tenés ${match.length === 1 ? "el certificado semanal" : `los últimos ${match.length} certificados semanales`} de ${target.nombre}:`;
-        docs = match.map(item => {
+        docs = await Promise.all(match.map(async item => {
           const html = docBelfast(cfg, target.nombre, `Certificado semanal ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`, "Certificado de avance",
             [["Desarrollo", item.desarrollo], ["Recepciones", item.recepciones], ["Limpieza y seguridad", item.limpieza], ["Alertas", item.alertas]],
             (item.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])));
-          const url = "data:text/html;base64," + btoa(unescape(encodeURIComponent(html)));
+          const dataUrl = "data:text/html;base64," + btoa(unescape(encodeURIComponent(html)));
+          const url = await uploadArchivo(dataUrl, "certificados-ia", `cert_${item.id || uid()}.html`);
           return { nombre: `Certificado ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`, url };
-        });
+        }));
       }
       extra = { accionDone: true, accionResultado: res, docs };
     } else if (accion && accion.tipo === "traer_fotos") {
