@@ -500,14 +500,15 @@ export default function ClientePropietarioApp() {
           "castores475": "castores475",
           "maylinga37": "mayling37", "mayling37": "mayling37", "maylinga37obra": "mayling37",
           "lospuentes132": "puentes132", "puentes132": "puentes132",
+          "terralagos815": "terralagos815", "lote815": "terralagos815",
         };
         const slug = ICONOS_PROP[norm(proyecto)];
         if (slug) {
           let li = document.querySelector('link[rel="apple-touch-icon"]');
           if (!li) { li = document.createElement("link"); li.setAttribute("rel", "apple-touch-icon"); document.head.appendChild(li); }
-          li.setAttribute("href", `/icon-prop-${slug}-180.png`);
+          li.setAttribute("href", `/icon-prop-${slug}-180.png?v=2`);
           let lf = document.querySelector('link[rel="icon"]');
-          if (lf) lf.setAttribute("href", `/icon-prop-${slug}-192.png`);
+          if (lf) lf.setAttribute("href", `/icon-prop-${slug}-192.png?v=2`);
         }
       } catch { }
     }
