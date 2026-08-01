@@ -434,7 +434,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
     <div style={{ padding: "20px 18px 40px" }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Secciones</div>
       {SECCIONES.map(s => <FilaSeccion key={s.id} label={s.label} icon={s.icon} onClick={() => setSeccion(s.id)} config={config} />)}
-      <div style={{ textAlign: "center", fontSize: 11, color: T.muted, marginTop: 20 }}>Hola, {nombreCliente} · <button onClick={() => { try { localStorage.removeItem("propietario_codigo"); localStorage.removeItem("propietario_nombre"); } catch { } window.location.reload(); }} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>Salir</button></div>
+      <div style={{ textAlign: "center", fontSize: 11, color: T.muted, marginTop: 20 }}>Hola, {nombreCliente} · <button onClick={() => window.location.reload()} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>🔄 Actualizar</button> · <button onClick={() => { try { localStorage.removeItem("propietario_codigo"); localStorage.removeItem("propietario_nombre"); } catch { } window.location.reload(); }} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>Salir</button></div>
       <div style={{ textAlign: "center", marginTop: 10 }}><button onClick={() => setEditando(true)} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, cursor: "pointer" }}>⚙ Personalizar app</button></div>
     </div>
     {editando && <ConfigModalProp config={config || {}} onSave={onGuardarConfig} onClose={() => setEditando(false)} />}
@@ -518,6 +518,20 @@ export default function ClientePropietarioApp() {
     try { cod = localStorage.getItem("propietario_codigo"); nom = localStorage.getItem("propietario_nombre"); } catch { }
     if (cod && nom) cargarObra(cod, nom); else setEstado("entrada");
   }, []);
+
+  // Actualiza sola: cada 20s, y también apenas volvés a la app (sin tener que cerrarla y
+  // abrirla de nuevo). Así ves los informes/fotos/certificados que V+V va cargando en vivo.
+  useEffect(() => {
+    let cod = null, nom = null;
+    try { cod = localStorage.getItem("propietario_codigo"); nom = localStorage.getItem("propietario_nombre"); } catch { }
+    if (!cod || !nom) return;
+    const refrescar = () => cargarObra(cod, nom);
+    const iv = setInterval(refrescar, 20000);
+    const onVis = () => { if (document.visibilityState === "visible") refrescar(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", refrescar);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", refrescar); };
+  }, [estado]);
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
   if (estado === "entrada") return <Entrada onEntrar={cargarObra} config={config} onGuardarConfig={guardarConfig} codigoInicial={codigoInicial} proyectoUrl={proyectoUrl} />;
