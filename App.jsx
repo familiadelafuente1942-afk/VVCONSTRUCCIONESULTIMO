@@ -1873,6 +1873,22 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
                             {OBRA_ESTADOS.map(e => (<button key={e.id} onClick={() => upd(detail.id, { estado: e.id })} style={{ padding: "9px", borderRadius: T.rsm, border: `1.5px solid ${detail.estado === e.id ? e.color : T.border}`, background: detail.estado === e.id ? e.bg : T.card, color: e.color, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{e.label}</button>))}
                         </div>
+                        <div style={{ background: detail.privada ? "#FEF3E2" : T.bg, border: `1.5px solid ${detail.privada ? BRASS : T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 14 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <div>
+                                    <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>🔒 Obra privada</div>
+                                    <div style={{ fontSize: 10, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>No aparece en la app de Belfast (Cliente). Solo la ves acá en V+V y en la app de Propietario con su código.</div>
+                                </div>
+                                <button onClick={() => upd(detail.id, { privada: !detail.privada })} style={{ width: 46, height: 26, borderRadius: 20, border: "none", background: detail.privada ? BRASS : T.border, position: "relative", cursor: "pointer", flexShrink: 0, marginLeft: 10 }}>
+                                    <span style={{ position: "absolute", top: 3, left: detail.privada ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+                                </button>
+                            </div>
+                            {detail.privada && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Código para la app Propietario</div>
+                                <input value={detail.codigoCliente || ""} onChange={e => upd(detail.id, { codigoCliente: e.target.value.toUpperCase().trim() })} placeholder="ej: LOTE815" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13, fontWeight: 800, color: T.accent, letterSpacing: "0.04em" }} />
+                                <div style={{ fontSize: 9.5, color: T.muted, marginTop: 5 }}>Con este código entrás en la app de Propietario, sin pasar por Belfast.</div>
+                            </div>}
+                        </div>
                         <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "#FEF2F2", border: "1.5px solid #FECACA", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
                     </div>)}
                     {tab === "obs" && (<div>
