@@ -34,7 +34,7 @@ async function subirArchivo(file) {
 const fFecha = (iso) => { if (!iso) return ""; const [a, m, d] = String(iso).split("-"); return a && d ? `${d}/${m}/${a.slice(2)}` : String(iso); };
 
 const TBASE = { navy: "#0F1B2D", brass: "#B0894F", bg: "#F5F7FA", card: "#FFFFFF", border: "#E3E8EF", text: "#0F1B2D", sub: "#5B6B7F", muted: "#94A3B8", r: 14, rsm: 12, shadow: "0 1px 3px rgba(15,27,45,.06)" };
-function temaDe(cfg) { return { ...TBASE, navy: (cfg && cfg.colorPrincipal) || TBASE.navy, brass: (cfg && cfg.colorAcento) || TBASE.brass }; }
+function temaDe(cfg) { return { ...TBASE, navy: (cfg && cfg.colorPrincipal) || TBASE.navy, brass: (cfg && cfg.colorAcento) || TBASE.brass, bg: (cfg && cfg.colorFondo) || TBASE.bg }; }
 const T = TBASE;
 
 function Ico({ n, s = 18, c = "currentColor", st = 1.7 }) {
@@ -73,6 +73,7 @@ function ConfigModalProp({ config, onSave, onClose }) {
   const [subtitulo, setSubtitulo] = useState(config.subtitulo || "");
   const [colorPrincipal, setColorPrincipal] = useState(config.colorPrincipal || TBASE.navy);
   const [colorAcento, setColorAcento] = useState(config.colorAcento || TBASE.brass);
+  const [colorFondo, setColorFondo] = useState(config.colorFondo || TBASE.bg);
   const [logo, setLogo] = useState(config.logo || "");
   const [subiendo, setSubiendo] = useState(false);
   async function subirLogo(e) {
@@ -81,7 +82,7 @@ function ConfigModalProp({ config, onSave, onClose }) {
     if (url) setLogo(url); else alert("No se pudo subir. Revisá la conexión.");
     setSubiendo(false); e.target.value = "";
   }
-  function guardar() { onSave({ nombre: nombre.trim(), subtitulo: subtitulo.trim(), logo, colorPrincipal, colorAcento }); onClose(); }
+  function guardar() { onSave({ nombre: nombre.trim(), subtitulo: subtitulo.trim(), logo, colorPrincipal, colorAcento, colorFondo }); onClose(); }
   return (<div style={{ position: "fixed", inset: 0, background: "rgba(11,22,34,.55)", zIndex: 450, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
     <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", padding: 20, paddingBottom: "calc(20px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto", boxSizing: "border-box" }}>
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 3, letterSpacing: "-0.01em" }}>Personalizar app</div>
@@ -115,7 +116,14 @@ function ConfigModalProp({ config, onSave, onClose }) {
           </div>
         </div>
       </div>
-      {(colorPrincipal !== TBASE.navy || colorAcento !== TBASE.brass) && <button onClick={() => { setColorPrincipal(TBASE.navy); setColorAcento(TBASE.brass); }} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, textDecoration: "underline", cursor: "pointer", marginTop: -12, marginBottom: 20, display: "block" }}>Volver a los colores originales</button>}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 5 }}>Color de fondo (pantallas internas)</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 10px" }}>
+          <input type="color" value={colorFondo} onChange={e => setColorFondo(e.target.value)} style={{ width: 32, height: 32, border: "none", background: "none", padding: 0, cursor: "pointer" }} />
+          <span style={{ fontSize: 12, color: T.sub, fontFamily: "monospace" }}>{colorFondo}</span>
+        </div>
+      </div>
+      {(colorPrincipal !== TBASE.navy || colorAcento !== TBASE.brass || colorFondo !== TBASE.bg) && <button onClick={() => { setColorPrincipal(TBASE.navy); setColorAcento(TBASE.brass); setColorFondo(TBASE.bg); }} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, textDecoration: "underline", cursor: "pointer", marginTop: -12, marginBottom: 20, display: "block" }}>Volver a los colores originales</button>}
       <button onClick={guardar} style={{ width: "100%", background: colorAcento, border: "none", color: "#1a1205", borderRadius: 12, padding: "14px", fontSize: 14.5, fontWeight: 800, cursor: "pointer" }}>Guardar</button>
     </div>
   </div>);
@@ -178,7 +186,8 @@ function FilaSeccion({ label, icon, onClick, config }) {
   </button>);
 }
 
-function SubHead({ titulo, onBack }) {
+function SubHead({ titulo, onBack, config }) {
+  const T = temaDe(config);
   // paddingTop con env(safe-area-inset-top): en el iPhone, con la app
   // instalada en la pantalla de inicio, el contenido arranca DEBAJO del
   // reloj y la señal. Sin esto, el título queda encimado con la hora.
@@ -257,8 +266,8 @@ function SeccionFotos({ obra, avance, onBack, config }) {
   const T = temaDe(config);
   const historial = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const conFotos = historial.map(h => ({ ...h, fotos: (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []) })).filter(h => h.fotos.length);
-  return (<div>
-    <SubHead titulo="Fotos de avance" onBack={onBack} />
+  return (<div style={{ minHeight: "100vh", background: T.bg }}>
+    <SubHead titulo="Fotos de avance" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
       {conFotos.length === 0 && <EmptyMsg>Todavía no hay fotos de avance cargadas.</EmptyMsg>}
       {conFotos.map((h, i) => (<div key={h.id || i} style={{ marginBottom: 20 }}>
@@ -276,8 +285,8 @@ function SeccionFotos({ obra, avance, onBack, config }) {
 function SeccionCronograma({ obra, tareas, onBack, config }) {
   const T = temaDe(config);
   const propias = (tareas || []).filter(t => t.obra_id === obra.id);
-  return (<div>
-    <SubHead titulo="Cronograma" onBack={onBack} />
+  return (<div style={{ minHeight: "100vh", background: T.bg }}>
+    <SubHead titulo="Cronograma" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
@@ -312,8 +321,8 @@ function SeccionInformes({ obra, envios, onBack, config }) {
     <iframe id="doc-prop" srcDoc={doc.html} title={doc.titulo} style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
   </div>);
 
-  return (<div>
-    <SubHead titulo="Informes" onBack={onBack} />
+  return (<div style={{ minHeight: "100vh", background: T.bg }}>
+    <SubHead titulo="Informes" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
       {items.length === 0 && <EmptyMsg>Todavía no hay informes disponibles para esta obra.</EmptyMsg>}
       {items.map(it => (<button key={it.id} onClick={() => setDoc(it)} style={{ width: "100%", textAlign: "left", background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
@@ -363,8 +372,8 @@ function SeccionChecklist({ obra, formularios, onBack }) {
 function SeccionPlanos({ obra, onBack, config }) {
   const T = temaDe(config);
   const items = obra.planos || [];
-  return (<div>
-    <SubHead titulo="Planos" onBack={onBack} />
+  return (<div style={{ minHeight: "100vh", background: T.bg }}>
+    <SubHead titulo="Planos" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
       {items.length === 0 && <EmptyMsg>Todavía no hay planos cargados.</EmptyMsg>}
       {items.map((it, i) => (<a key={it.id || i} href={it.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 11, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 9, textDecoration: "none" }}>
