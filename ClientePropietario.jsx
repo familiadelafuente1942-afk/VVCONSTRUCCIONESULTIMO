@@ -386,6 +386,57 @@ function SeccionPlanos({ obra, onBack, config }) {
     </div>
   </div>);
 }
+function moneyAR(n) { return "$" + Math.round(Number(n) || 0).toLocaleString("es-AR"); }
+function SeccionCostos({ costos, onBack, config }) {
+  const T = temaDe(config);
+  const lista = (costos?.costos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const invArs = lista.reduce((s, c) => s + (Number(c.montoArs) || (c.moneda !== "usd" ? Number(c.monto) || 0 : 0)), 0);
+  const invUsd = lista.reduce((s, c) => s + (Number(c.montoUsd) || (c.moneda === "usd" ? Number(c.monto) || 0 : 0)), 0);
+  const ventaUsd = Number(costos?.ventaUsd) || 0, ventaArs = Number(costos?.ventaArs) || 0;
+  return (<div style={{ minHeight: "100vh", background: T.bg }}>
+    <SubHead titulo="Costos" onBack={onBack} config={config} />
+    <div style={{ padding: 18 }}>
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16 }}>
+        <div style={{ fontSize: 10.5, color: T.muted, textTransform: "uppercase", marginBottom: 4 }}>Invertido hasta ahora</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{moneyAR(invArs)}{invUsd > 0 ? ` + USD ${Math.round(invUsd).toLocaleString("es-AR")}` : ""}</div>
+        {(ventaUsd > 0 || ventaArs > 0) && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 8 }}>Valor de venta estimado: {ventaArs > 0 ? moneyAR(ventaArs) : ""}{ventaArs > 0 && ventaUsd > 0 ? " / " : ""}{ventaUsd > 0 ? `USD ${Math.round(ventaUsd).toLocaleString("es-AR")}` : ""}</div>}
+        {costos?.m2 > 0 && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{costos.m2} m²</div>}
+      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Detalle de gastos</div>
+      {lista.length === 0 && <EmptyMsg>Todavía no hay gastos cargados.</EmptyMsg>}
+      {lista.map((c, i) => (<div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 12, marginBottom: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{c.cat || "Gasto"}</div>
+          {c.nota && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{c.nota}</div>}
+          {c.ts && <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{fFecha(new Date(c.ts).toISOString().slice(0, 10))}</div>}
+        </div>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: T.text, flexShrink: 0 }}>{c.moneda === "usd" ? `USD ${Math.round(Number(c.montoUsd || c.monto) || 0).toLocaleString("es-AR")}` : moneyAR(c.montoArs || c.monto)}</div>
+      </div>))}
+      {costos?.facturasIva && costos.facturasIva.length > 0 && (() => {
+        const fs = costos.facturasIva;
+        const ivaDe = (fx) => Number(fx.montoIva != null ? fx.montoIva : fx.total) || 0;
+        const cobradoDe = (fx) => (fx.cobros || []).reduce((s, c) => s + (Number(c.monto) || 0), 0);
+        const totIva = fs.reduce((s, fx) => s + ivaDe(fx), 0);
+        const totCobrado = fs.reduce((s, fx) => s + cobradoDe(fx), 0);
+        return (<>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", margin: "20px 0 9px" }}>IVA — facturación</div>
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: T.sub }}>Total IVA facturado</span><b style={{ fontSize: 13 }}>{moneyAR(totIva)}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: T.sub }}>Cobrado</span><b style={{ fontSize: 13, color: "#16A34A" }}>{moneyAR(totCobrado)}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 12, color: T.sub }}>Saldo pendiente</span><b style={{ fontSize: 13, color: totIva - totCobrado > 0 ? "#D97706" : T.text }}>{moneyAR(totIva - totCobrado)}</b></div>
+          </div>
+          {fs.map((fx, i) => (<div key={fx.id || i} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 12, marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{fx.nroFactura ? `Fact. ${fx.nroFactura}` : "Factura"}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{moneyAR(ivaDe(fx))}</div>
+            </div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFecha(fx.fecha)}{fx.cliente ? ` · ${fx.cliente}` : ""}</div>
+          </div>))}
+        </>);
+      })()}
+    </div>
+  </div>);
+}
 function SeccionMensajes({ onBack }) {
   return (<div>
     <SubHead titulo="Mensajes" onBack={onBack} />
@@ -396,7 +447,7 @@ function SeccionMensajes({ onBack }) {
 }
 
 // ─── Panel principal ───
-function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, envios, config, onGuardarConfig }) {
+function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, envios, costos, config, onGuardarConfig }) {
   const T = temaDe(config);
   const [seccion, setSeccion] = useState(null);
   const [idx, setIdx] = useState(0);
@@ -414,6 +465,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
   if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} config={config} />;
   if (seccion === "informes") return <SeccionInformes obra={obra} envios={envios} onBack={() => setSeccion(null)} config={config} />;
   if (seccion === "planos") return <SeccionPlanos obra={obra} onBack={() => setSeccion(null)} config={config} />;
+  if (seccion === "costos") return <SeccionCostos costos={costos} onBack={() => setSeccion(null)} config={config} />;
 
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
     <div style={{ position: "relative", height: "calc(280px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", boxSizing: "border-box", background: T.navy, overflow: "hidden" }}>
@@ -434,6 +486,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
     <div style={{ padding: "20px 18px 40px" }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Secciones</div>
       {SECCIONES.map(s => <FilaSeccion key={s.id} label={s.label} icon={s.icon} onClick={() => setSeccion(s.id)} config={config} />)}
+      {costos && <FilaSeccion label="Costos" icon="doc" onClick={() => setSeccion("costos")} config={config} />}
       <div style={{ textAlign: "center", fontSize: 11, color: T.muted, marginTop: 20 }}>Hola, {nombreCliente} · <button onClick={() => window.location.reload()} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>🔄 Actualizar</button> · <button onClick={() => { try { localStorage.removeItem("propietario_codigo"); localStorage.removeItem("propietario_nombre"); } catch { } window.location.reload(); }} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>Salir</button></div>
       <div style={{ textAlign: "center", marginTop: 10 }}><button onClick={() => setEditando(true)} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, cursor: "pointer" }}>⚙ Personalizar app</button></div>
     </div>
@@ -457,14 +510,32 @@ export default function ClientePropietarioApp() {
 
   async function cargarObra(codigo, nombre) {
     try {
-      const [ro, rt, ra, rf, rav, rr, rc, re] = await Promise.all([
-        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"), storage.get("vv_renders"), storage.get("vv_certif_sem"), storage.get("cliente_envios_prop"),
+      const [ro, rt, ra, rf, rav, rr, rc, re, rfin] = await Promise.all([
+        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"), storage.get("vv_renders"), storage.get("vv_certif_sem"), storage.get("cliente_envios_prop"), storage.get("vv_finanzas"),
       ]);
       const obras = ro?.value ? JSON.parse(ro.value) : [];
       const encontrada = obras.find(o => (o.codigoCliente || "").toUpperCase() === codigo.toUpperCase());
       if (!encontrada) { setEstado("entrada"); return; }
       setObra(encontrada);
       setNombreCliente(nombre);
+      // Obra particular en Finanzas: se busca por nombre (no hay un id compartido entre
+      // las dos apps), comparando sin mayúsculas/acentos, por si no coincide 100% literal.
+      let costos = null;
+      try {
+        const fin = rfin?.value ? JSON.parse(rfin.value) : null;
+        const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        const propia = (fin?.propias || []).find(p => {
+          const np = norm(p.nombre), nn = norm(encontrada.nombre), ns = norm(encontrada.sector);
+          return np === nn || np.includes(nn) || nn.includes(np) || (ns && (np.includes(ns) || ns.includes(np)));
+        });
+        if (propia) {
+          const facturasIva = (fin?.ivaFacturas || []).filter(f => {
+            const nf = norm(f.obra), nn = norm(encontrada.nombre), ns = norm(encontrada.sector);
+            return nf && (nf.includes(nn) || nn.includes(nf) || (ns && (nf.includes(ns) || ns.includes(nf))));
+          });
+          costos = { ...propia, facturasIva };
+        }
+      } catch { }
       setExtra({
         tareas: rt?.value ? JSON.parse(rt.value) : [],
         auditoria: ra?.value ? JSON.parse(ra.value) : [],
@@ -473,6 +544,7 @@ export default function ClientePropietarioApp() {
         renders: rr?.value ? JSON.parse(rr.value) : {},
         certif: rc?.value ? JSON.parse(rc.value) : {},
         envios: re?.value ? JSON.parse(re.value) : {},
+        costos,
       });
       setEstado("panel");
     } catch { setEstado("entrada"); }
@@ -535,5 +607,5 @@ export default function ClientePropietarioApp() {
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
   if (estado === "entrada") return <Entrada onEntrar={cargarObra} config={config} onGuardarConfig={guardarConfig} codigoInicial={codigoInicial} proyectoUrl={proyectoUrl} />;
-  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} envios={extra.envios} config={config} onGuardarConfig={guardarConfig} proyectoUrl={proyectoUrl} />;
+  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} envios={extra.envios} costos={extra.costos} config={config} onGuardarConfig={guardarConfig} proyectoUrl={proyectoUrl} />;
 }
