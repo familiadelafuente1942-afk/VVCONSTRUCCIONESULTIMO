@@ -2601,7 +2601,7 @@ function Toast({ T, toast }) {
 const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "drone", label: "Drone IA", icon: "M12 8a2 2 0 100 4 2 2 0 000-4zM4 4a2 2 0 100 4 2 2 0 000-4zM20 4a2 2 0 100 4 2 2 0 000-4zM4 16a2 2 0 100 4 2 2 0 000-4zM20 16a2 2 0 100 4 2 2 0 000-4zM6 6l4 4M18 6l-4 4M6 18l4-4M18 18l-4-4" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
-function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos, onMinutas }) {
+function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], certif = {}, onPedidos, onMinutas }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
@@ -2754,6 +2754,12 @@ INFORMES TÉCNICOS POR OBRA (del más nuevo al más viejo):\n${obras.map(o => {
       return `· ${o.nombre}:\n${infs.map(i => `  - "${i.titulo || i.nombre || "Informe"}" [${i.tipo || "—"}] ${i.fecha || ""}${i.notas ? ` — ${i.notas}` : ""}`).join("\n")}`;
     }).filter(Boolean).join("\n") || "(sin informes cargados en ninguna obra)"}
 
+CERTIFICADOS SEMANALES POR OBRA (del más nuevo al más viejo — resumen de avance de cada semana):\n${obras.map(o => {
+      const cs = ((certif || {})[o.id] || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
+      if (!cs.length) return null;
+      return `· ${o.nombre}:\n${cs.map(c => `  - Semana ${c.desde || "?"} al ${c.hasta || "?"}${c.desarrollo ? ` — ${String(c.desarrollo).slice(0, 100)}` : ""}`).join("\n")}`;
+    }).filter(Boolean).join("\n") || "(sin certificados semanales cargados)"}
+
 PLANOS POR OBRA:\n${obras.map(o => (o.planos || []).length ? `· ${o.nombre}: ${(o.planos || []).map(p => p.nombre).join(", ")}` : null).filter(Boolean).join("\n") || "(sin planos cargados)"}
 
 TAREAS / CRONOGRAMA:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find(o => o.id === t.obra_id)?.nombre || "—"} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}
@@ -2773,9 +2779,11 @@ PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave (ej: replanteo platea)"}
 {"tipo":"traer_informe","obra":"nombre de la obra","cantidad":1,"buscar":"palabras clave opcional (ej: hormigón, seguridad)"}
+{"tipo":"traer_certificado","obra":"nombre de la obra","cantidad":1}
 REGLA fotos: si te piden VER/MANDAR/PASAR fotos o videos de una obra (ej: "mandame la última foto de Castores"), usá "traer_fotos" con la obra y cantidad (1 = la última). videos:true si piden videos. Aparecen directo en el chat.
 REGLA planos: si te piden un PLANO (PDF/CAD) de una obra (ej: "necesito el plano de replanteo de platea de Castores 475"), usá "traer_plano" con la obra y "buscar" (palabras clave). El plano aparece en el chat para abrir/descargar.
 REGLA informes: si te piden el/los INFORME(S), o el "PDF de informes", o "lo último cargado" de una obra (ej: "mandame el último informe de Golf 293", "pasame el pdf del informe de seguridad de Castores"), usá "traer_informe" con la obra, cantidad (1 = el último) y "buscar" si dieron palabras clave (tipo, tema). Aparece directo en el chat para abrir/descargar — NUNCA digas que no podés mandarlo, siempre está ahí para traer.
+REGLA certificados semanales: si te piden el/los CERTIFICADO(S) SEMANAL(ES) o "certificado de avance" de una obra (ej: "el último certificado semanal de Castores"), usá "traer_certificado" con la obra y cantidad. Se arma el documento y aparece en el chat para abrir/descargar — NUNCA digas que no tenés acceso, siempre está ahí para traer.
 REGLA WhatsApp: si te piden MANDAR UN WHATSAPP a un jefe de obra o contacto, usá "whatsapp". Uso tu agenda (Personal → Contactos) y el personal de la obra. Te dejo el botón de WhatsApp listo para enviar.
 REGLA CLAVE — elegí bien la acción:
 - CANAL IA↔IA ("preguntar_ia"): SIEMPRE que involucre a la IA / el asistente de V+V o esperes que te devuelvan un DATO. Ejemplos: "preguntale a la IA de V+V…", "pedile a la IA de V+V…", "pedícelo/pedíselo a la IA…", "consultale al asistente de V+V…", "que la IA de V+V te pase/averigüe…". OJO: "pedile/pedícelo A LA IA" es SIEMPRE este canal (preguntar_ia), NO un crear_pedido. Va directo a la otra IA, que responde sola. ESTE es el canal entre las dos IA.
@@ -2822,6 +2830,25 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       else if (!infs.length) { res = `${target.nombre} todavía no tiene informes cargados.`; docs = []; }
       else if (!match.length) { res = `No encontré un informe que coincida con "${accion.buscar}" en ${target.nombre}. Te dejo el último cargado:`; docs = infs.slice(0, 1).map(i => ({ nombre: i.titulo || i.nombre || "Informe", url: i.url })); }
       else { res = `Acá tenés ${match.length === 1 ? "el informe" : `los últimos ${match.length} informes`} de ${target.nombre}${accion.buscar ? ` (${accion.buscar})` : ""}:`; docs = match.map(i => ({ nombre: `${i.titulo || i.nombre || "Informe"}${i.fecha ? ` — ${i.fecha}` : ""}`, url: i.url })); }
+      extra = { accionDone: true, accionResultado: res, docs };
+    } else if (accion && accion.tipo === "traer_certificado") {
+      const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
+      const cs = (((certif || {})[target?.id]) || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
+      const cant = Math.max(1, Math.min(accion.cantidad || 1, 12));
+      const match = cs.slice(0, cant);
+      let res, docs;
+      if (!target) { res = "No encontré esa obra."; docs = []; }
+      else if (!cs.length) { res = `${target.nombre} todavía no tiene certificados semanales cargados.`; docs = []; }
+      else {
+        res = `Acá tenés ${match.length === 1 ? "el certificado semanal" : `los últimos ${match.length} certificados semanales`} de ${target.nombre}:`;
+        docs = match.map(item => {
+          const html = docBelfast(cfg, target.nombre, `Certificado semanal ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`, "Certificado de avance",
+            [["Desarrollo", item.desarrollo], ["Recepciones", item.recepciones], ["Limpieza y seguridad", item.limpieza], ["Alertas", item.alertas]],
+            (item.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])));
+          const url = "data:text/html;base64," + btoa(unescape(encodeURIComponent(html)));
+          return { nombre: `Certificado ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`, url };
+        });
+      }
       extra = { accionDone: true, accionResultado: res, docs };
     } else if (accion && accion.tipo === "traer_fotos") {
       const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
@@ -4365,6 +4392,10 @@ function ClienteApp() {
   const { aviso, marcarVisto } = useAvisos("cliente_avisos", idsAviso);
   // al abrir una pantalla, se apaga su punto rojo
   const irA = (id) => { setScreen(id); marcarVisto(id); };
+  // Si los datos de la pantalla activa siguen llegando de la nube (sync), se re-marca como
+  // visto cada vez que cambian MIENTRAS el usuario sigue parado ahí — así el globito no
+  // "revive" solo por datos que terminaron de sincronizar un segundo después del toque.
+  useEffect(() => { if (screen) marcarVisto(screen); }, [screen, JSON.stringify(idsAviso[screen] || [])]);
   useEffect(() => { try { if (!localStorage.getItem("cliente_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, formularios: now, materiales: now, ia: now }; localStorage.setItem("cliente_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("cliente_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("cliente_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
   useEffect(() => { initPush("belfast"); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
@@ -4537,7 +4568,7 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
+          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
