@@ -172,21 +172,22 @@ const storage = {
 const SUPA_BUCKET = "bco-media";
 const SUPA_STORAGE_URL = SUPA_URL + "/storage/v1";
 const mediaStorage = {
-  upload: async (path, dataUrl) => {
+  upload: async (path, dataUrl, forceType) => {
     try {
       const res = await fetch(dataUrl); const blob = await res.blob();
-      const ext = (blob.type.split('/')[1] || 'bin');
+      const tipo = forceType || blob.type || "application/octet-stream";
+      const ext = (tipo.split('/')[1] || 'bin');
       const filePath = `${path}.${ext}`;
-      const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${filePath}`, { method: "POST", headers: { "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY, "Content-Type": blob.type, "x-upsert": "true" }, body: blob });
+      const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${filePath}`, { method: "POST", headers: { "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY, "Content-Type": tipo, "x-upsert": "true" }, body: blob });
       if (!r.ok) return null;
       return `${SUPA_STORAGE_URL}/object/public/${SUPA_BUCKET}/${filePath}`;
     } catch { return null; }
   },
 };
-async function uploadArchivo(dataUrl, carpeta, nombre) {
+async function uploadArchivo(dataUrl, carpeta, nombre, forceType) {
   if (!dataUrl) return null;
   if (dataUrl.startsWith('http')) return dataUrl;
-  const url = await mediaStorage.upload(`${carpeta}/${nombre || uid()}`, dataUrl);
+  const url = await mediaStorage.upload(`${carpeta}/${nombre || uid()}`, dataUrl, forceType);
   return url || dataUrl;
 }
 
@@ -2846,7 +2847,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
             [["Desarrollo", item.desarrollo], ["Recepciones", item.recepciones], ["Limpieza y seguridad", item.limpieza], ["Alertas", item.alertas]],
             (item.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])));
           const dataUrl = "data:text/html;base64," + btoa(unescape(encodeURIComponent(html)));
-          const url = await uploadArchivo(dataUrl, "certificados-ia", `cert_${item.id || uid()}.html`);
+          const url = await uploadArchivo(dataUrl, "certificados-ia", `cert_${item.id || uid()}`, "text/html");
           return { nombre: `Certificado ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`, url };
         }));
       }
