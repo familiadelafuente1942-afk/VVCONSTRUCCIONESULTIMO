@@ -7150,7 +7150,11 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
   const prepararTodos = () => {
     const sin = historial.filter(h => !h.html);
     if (!sin.length) { alert("Ya están todos disponibles para el cliente."); return; }
-    if (!confirm(`Se van a preparar ${sin.length} informe${sin.length > 1 ? "s" : ""} para que los vean Belfast y el propietario.\n\n¿Seguimos?`)) return;
+    const esPrivada = (obras || []).find(o => o.id === obraId)?.privada;
+    const msg = esPrivada
+      ? `Se van a preparar ${sin.length} informe${sin.length > 1 ? "s" : ""} para que los veas vos y el propietario (obra privada: Belfast no la ve).\n\n¿Seguimos?`
+      : `Se van a preparar ${sin.length} informe${sin.length > 1 ? "s" : ""} para que los vean Belfast y el propietario.\n\n¿Seguimos?`;
+    if (!confirm(msg)) return;
     mergeSaveAvance(obraId, list => list.map(x => x.html ? x : { ...x, html: buildPdfAvance([x]) }));
     alert(`Listo: ${sin.length} informe${sin.length > 1 ? "s quedaron disponibles" : " quedó disponible"} para el cliente.`);
   };
@@ -7592,7 +7596,11 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       </div>
       {(certif[obraId] || []).some(c => !c.html) && <button onClick={() => {
         const sin = (certif[obraId] || []).filter(c => !c.html);
-        if (!confirm(`Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los vean Belfast y el propietario.\n\n¿Seguimos?`)) return;
+        const esPrivada = (obras || []).find(o => o.id === obraId)?.privada;
+        const msg = esPrivada
+          ? `Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los veas vos y el propietario (obra privada: Belfast no la ve).\n\n¿Seguimos?`
+          : `Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los vean Belfast y el propietario.\n\n¿Seguimos?`;
+        if (!confirm(msg)) return;
         setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(c => c.html ? c : { ...c, html: buildPdfSemanal(c) }) }));
         alert(`Listo: ${sin.length} certificado${sin.length > 1 ? "s quedaron disponibles" : " quedó disponible"} para el cliente.`);
       }} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {(certif[obraId] || []).filter(c => !c.html).length} certificado{(certif[obraId] || []).filter(c => !c.html).length > 1 ? "s" : ""} para el cliente</button>}
