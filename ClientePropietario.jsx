@@ -387,31 +387,81 @@ function SeccionPlanos({ obra, onBack, config }) {
   </div>);
 }
 function moneyAR(n) { return "$" + Math.round(Number(n) || 0).toLocaleString("es-AR"); }
+function arsUnif(c, cotU) { const n = Number(c.monto) || 0; if (c.moneda === "ars") return n; if (c.moneda === "usd") return cotU > 0 ? n * cotU : (Number(c.montoArs) || 0); return Number(c.montoArs) || 0; }
+function usdUnif(c, cotU) { const n = Number(c.monto) || 0; if (c.moneda === "usd") return n; if (c.moneda === "ars") return cotU > 0 ? n / cotU : (Number(c.montoUsd) || 0); return Number(c.montoUsd) || 0; }
+function usdFmt(n) { return "USD " + Math.round(Number(n) || 0).toLocaleString("es-AR"); }
 function SeccionCostos({ costos, onBack, config }) {
   const T = temaDe(config);
   const lista = (costos?.costos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  const invArs = lista.reduce((s, c) => s + (Number(c.montoArs) || (c.moneda !== "usd" ? Number(c.monto) || 0 : 0)), 0);
-  const invUsd = lista.reduce((s, c) => s + (Number(c.montoUsd) || (c.moneda === "usd" ? Number(c.monto) || 0 : 0)), 0);
-  const ventaUsd = Number(costos?.ventaUsd) || 0, ventaArs = Number(costos?.ventaArs) || 0;
+  const cotU = Number(costos?.cotizUnif) || 0;
+  const sup = Number(costos?.m2) || 0;
+  const totArs = lista.reduce((s, c) => s + arsUnif(c, cotU), 0);
+  const totUsd = lista.reduce((s, c) => s + usdUnif(c, cotU), 0);
+  const vU = Number(costos?.ventaUsd) || 0, vA = Number(costos?.ventaArs) || 0;
+  const resU = vU - totUsd, resA = vA - totArs, mgU = vU > 0 ? resU / vU * 100 : 0;
+  // costos agrupados por rubro, de mayor a menor
+  const porRubro = {};
+  lista.forEach(c => { const k = c.cat || "Otros"; porRubro[k] = (porRubro[k] || 0) + arsUnif(c, cotU); });
+  const rubros = Object.entries(porRubro).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
     <SubHead titulo="Costos" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
-      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16 }}>
-        <div style={{ fontSize: 10.5, color: T.muted, textTransform: "uppercase", marginBottom: 4 }}>Invertido hasta ahora</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{moneyAR(invArs)}{invUsd > 0 ? ` + USD ${Math.round(invUsd).toLocaleString("es-AR")}` : ""}</div>
-        {(ventaUsd > 0 || ventaArs > 0) && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 8 }}>Valor de venta estimado: {ventaArs > 0 ? moneyAR(ventaArs) : ""}{ventaArs > 0 && ventaUsd > 0 ? " / " : ""}{ventaUsd > 0 ? `USD ${Math.round(ventaUsd).toLocaleString("es-AR")}` : ""}</div>}
-        {costos?.m2 > 0 && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{costos.m2} m²</div>}
+      {(costos?.inicio || sup > 0) && <div style={{ marginBottom: 14 }}>
+        {sup > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 12.5 }}><span style={{ color: T.sub }}>Superficie</span><b style={{ color: T.text }}>{sup} m²</b></div>}
+        {costos?.inicio && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 12.5, borderTop: `1px solid ${T.border}` }}><span style={{ color: T.sub }}>Fecha de inicio</span><b style={{ color: T.text }}>{fFecha(costos.inicio)}</b></div>}
+      </div>}
+
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Inversión total</div>
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `4px solid ${T.brass}`, borderRadius: T.r, padding: "14px 16px", marginBottom: 4 }}>
+        <div style={{ fontSize: 30, fontWeight: 800, color: T.brass, lineHeight: 1.1 }}>{usdFmt(totUsd)}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginTop: 2 }}>{moneyAR(totArs)}</div>
       </div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Detalle de gastos</div>
+      {sup > 0 && totArs > 0 && <div style={{ fontSize: 11, color: T.muted, textAlign: "right", marginBottom: 16 }}>{usdFmt(totUsd / sup)} / {moneyAR(totArs / sup)} por m²</div>}
+
+      {rubros.length > 0 && <>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Costos por rubro</div>
+        {rubros.map(([cat, v]) => (<div key={cat} style={{ marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}><span style={{ color: T.sub, fontWeight: 600 }}>{cat}</span><span style={{ fontWeight: 700 }}>{moneyAR(v)}</span></div>
+          <div style={{ height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${Math.min(100, v / rubros[0][1] * 100)}%`, background: T.brass, borderRadius: 4 }} /></div>
+        </div>))}
+      </>}
+
+      {(vU > 0 || vA > 0) && <div style={{ marginTop: 18 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Venta esperada</div>
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: "13px 15px", marginBottom: 10 }}>
+          {vU > 0 && <div style={{ fontSize: 19, fontWeight: 800, color: T.text }}>{usdFmt(vU)}</div>}
+          {vA > 0 && <div style={{ fontSize: vU > 0 ? 12 : 19, fontWeight: vU > 0 ? 600 : 800, color: vU > 0 ? T.muted : T.text, marginTop: 2 }}>{moneyAR(vA)}</div>}
+        </div>
+        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.r, padding: "13px 15px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>Resultado esperado{vU > 0 ? ` · ${mgU.toFixed(0)}%` : ""}</span>
+            <span>
+              {vU > 0 && <span style={{ fontSize: 14, fontWeight: 800, color: resU >= 0 ? "#16A34A" : "#DC2626" }}>{usdFmt(resU)}</span>}
+              {vA > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: resA >= 0 ? "#16A34A" : "#DC2626", marginLeft: 8 }}>{moneyAR(resA)}</span>}
+            </span>
+          </div>
+          {sup > 0 && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "right", marginTop: 5 }}>{vU > 0 ? usdFmt(vU / sup) : moneyAR(vA / sup)}/m² venta · {vU > 0 ? usdFmt(resU / sup) : moneyAR(resA / sup)}/m² resultado</div>}
+        </div>
+      </div>}
+
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", margin: "20px 0 9px" }}>Detalle de gastos</div>
       {lista.length === 0 && <EmptyMsg>Todavía no hay gastos cargados.</EmptyMsg>}
       {lista.map((c, i) => (<div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 12, marginBottom: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{c.cat || "Gasto"}</div>
           {c.nota && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{c.nota}</div>}
-          {c.ts && <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{fFecha(new Date(c.ts).toISOString().slice(0, 10))}</div>}
+          {(c.fecha || c.ts) && <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{fFecha(c.fecha || new Date(c.ts).toISOString().slice(0, 10))}</div>}
         </div>
-        <div style={{ fontSize: 13.5, fontWeight: 800, color: T.text, flexShrink: 0 }}>{c.moneda === "usd" ? `USD ${Math.round(Number(c.montoUsd || c.monto) || 0).toLocaleString("es-AR")}` : moneyAR(c.montoArs || c.monto)}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: T.text, flexShrink: 0 }}>{c.moneda === "usd" ? usdFmt(c.montoUsd || c.monto) : moneyAR(c.montoArs || c.monto)}</div>
       </div>))}
+
+      {(costos?.adjuntos || []).length > 0 && <>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", margin: "20px 0 9px" }}>Fotos y videos</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {costos.adjuntos.map((m, i) => <a key={i} href={m.url} target="_blank" rel="noreferrer">{m.tipo === "video" ? <video src={m.url} style={{ width: 76, height: 76, borderRadius: 9, objectFit: "cover", background: "#000" }} /> : <img src={m.url} style={{ width: 76, height: 76, borderRadius: 9, objectFit: "cover" }} />}</a>)}
+        </div>
+      </>}
+
       {costos?.facturasIva && costos.facturasIva.length > 0 && (() => {
         const fs = costos.facturasIva;
         const ivaDe = (fx) => Number(fx.montoIva != null ? fx.montoIva : fx.total) || 0;
