@@ -2784,7 +2784,7 @@ PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ
 REGLA fotos: si te piden VER/MANDAR/PASAR fotos o videos de una obra (ej: "mandame la última foto de Castores"), usá "traer_fotos" con la obra y cantidad (1 = la última). videos:true si piden videos. Aparecen directo en el chat.
 REGLA planos: si te piden un PLANO (PDF/CAD) de una obra (ej: "necesito el plano de replanteo de platea de Castores 475"), usá "traer_plano" con la obra y "buscar" (palabras clave). El plano aparece en el chat para abrir/descargar.
 REGLA informes: si te piden el/los INFORME(S), o el "PDF de informes", o "lo último cargado" de una obra (ej: "mandame el último informe de Golf 293", "pasame el pdf del informe de seguridad de Castores"), usá "traer_informe" con la obra, cantidad (1 = el último) y "buscar" si dieron palabras clave (tipo, tema). Aparece directo en el chat para abrir/descargar — NUNCA digas que no podés mandarlo, siempre está ahí para traer.
-REGLA certificados semanales: si te piden el/los CERTIFICADO(S) SEMANAL(ES) o "certificado de avance" de una obra (ej: "el último certificado semanal de Castores"), usá "traer_certificado" con la obra y cantidad. Se arma el documento y aparece en el chat para abrir/descargar — NUNCA digas que no tenés acceso, siempre está ahí para traer.
+REGLA certificados semanales: si te piden el/los CERTIFICADO(S) SEMANAL(ES) o "certificado de avance" de una obra (ej: "el último certificado semanal de Castores"), usá "traer_certificado" con la obra y cantidad. El contenido completo (desarrollo, recepciones, limpieza, alertas y fotos) se pega directo en el chat, no como archivo aparte — NUNCA digas que no tenés acceso ni que no podés generar un PDF, siempre está ahí para traer.
 REGLA WhatsApp: si te piden MANDAR UN WHATSAPP a un jefe de obra o contacto, usá "whatsapp". Uso tu agenda (Personal → Contactos) y el personal de la obra. Te dejo el botón de WhatsApp listo para enviar.
 REGLA CLAVE — elegí bien la acción:
 - CANAL IA↔IA ("preguntar_ia"): SIEMPRE que involucre a la IA / el asistente de V+V o esperes que te devuelvan un DATO. Ejemplos: "preguntale a la IA de V+V…", "pedile a la IA de V+V…", "pedícelo/pedíselo a la IA…", "consultale al asistente de V+V…", "que la IA de V+V te pase/averigüe…". OJO: "pedile/pedícelo A LA IA" es SIEMPRE este canal (preguntar_ia), NO un crear_pedido. Va directo a la otra IA, que responde sola. ESTE es el canal entre las dos IA.
@@ -2837,21 +2837,22 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       const cs = (((certif || {})[target?.id]) || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
       const cant = Math.max(1, Math.min(accion.cantidad || 1, 12));
       const match = cs.slice(0, cant);
-      let res, docs;
-      if (!target) { res = "No encontré esa obra."; docs = []; }
-      else if (!cs.length) { res = `${target.nombre} todavía no tiene certificados semanales cargados.`; docs = []; }
+      let res, media = [], texto = "";
+      if (!target) { res = "No encontré esa obra."; }
+      else if (!cs.length) { res = `${target.nombre} todavía no tiene certificados semanales cargados.`; }
       else {
         res = `Acá tenés ${match.length === 1 ? "el certificado semanal" : `los últimos ${match.length} certificados semanales`} de ${target.nombre}:`;
-        docs = await Promise.all(match.map(async item => {
-          const html = docBelfast(cfg, target.nombre, `Certificado semanal ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`, "Certificado de avance",
-            [["Desarrollo", item.desarrollo], ["Recepciones", item.recepciones], ["Limpieza y seguridad", item.limpieza], ["Alertas", item.alertas]],
-            (item.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])));
-          const dataUrl = "data:text/html;base64," + btoa(unescape(encodeURIComponent(html)));
-          const url = await uploadArchivo(dataUrl, "certificados-ia", `cert_${item.id || uid()}`, "text/html");
-          return { nombre: `Certificado ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`, url };
-        }));
+        texto = match.map(item => {
+          const partes = [`📋 CERTIFICADO SEMANAL — ${target.nombre}\nSemana ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`];
+          if (item.desarrollo) partes.push(`Desarrollo:\n${item.desarrollo}`);
+          if (item.recepciones) partes.push(`Recepciones:\n${item.recepciones}`);
+          if (item.limpieza) partes.push(`Limpieza y seguridad:\n${item.limpieza}`);
+          if (item.alertas) partes.push(`Alertas:\n${item.alertas}`);
+          media.push(...(item.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])));
+          return partes.join("\n\n");
+        }).join("\n\n———\n\n");
       }
-      extra = { accionDone: true, accionResultado: res, docs };
+      extra = { accionDone: true, accionResultado: res, contentExtra: texto, media: media.length ? media : undefined, mediaTipo: media.length ? "fotos" : undefined };
     } else if (accion && accion.tipo === "traer_fotos") {
       const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
       const tipoMedia = accion.videos ? "videos" : "fotos";
@@ -2875,7 +2876,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       else { url = `https://wa.me/?text=${t}`; label = "Abrir WhatsApp"; res = per ? `${per.nombre} no tiene teléfono cargado. Abrí WhatsApp y elegí el contacto.` : "No encontré a esa persona con teléfono. Cargala en Personal → Contactos, o elegí el contacto."; }
       extra = { accionDone: true, accionResultado: res, waLink: url, waLabel: label };
     } else if (accion) { const res = await ejecutarAccion(accion, "cliente", { setPedidos, personal, setPersonal, obras }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
-    setMsgs([...next, { role: "assistant", content: limpio, ...extra }]); setLoading(false);
+    setMsgs([...next, { role: "assistant", content: limpio + (extra.contentExtra ? "\n\n" + extra.contentExtra : ""), ...extra }]); setLoading(false);
   }
   async function confirmAccion(idx) { const m = msgs[idx]; if (!m?.accion) return; const res = await ejecutarAccion(m.accion, "cliente", { setPedidos, personal, setPersonal, obras }); setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accionDone: true, accionResultado: res || "Acción ejecutada." } : x)); }
   function descartarAccion(idx) { setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accion: null, accionDescartada: true } : x)); }
