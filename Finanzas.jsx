@@ -1508,6 +1508,8 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
   const [fechaPago, setFechaPago] = useState(() => proxViernes());
   const [firmando, setFirmando] = useState(null);
   const [pdfHtml, setPdfHtml] = useState(null);
+  const [periodoDesde, setPeriodoDesde] = useState("");
+  const [periodoHasta, setPeriodoHasta] = useState("");
   const obra = obras.find(o => o.id === obraId);
   const cs = obraId ? certsDe(obraId) : [];
   const ultimo = cs[cs.length - 1];
@@ -1592,6 +1594,30 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
     </div>
     {cs.length > 0 && <div>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", margin: "4px 0 8px" }}>Certificados de {obra?.nombre}</div>
+      {cs.length > 0 && (() => {
+        const enPeriodo = cs.filter(c => (!periodoDesde || c.fecha >= periodoDesde) && (!periodoHasta || c.fecha <= periodoHasta));
+        const totalGeneral = cs.reduce((s, c) => s + (esCosto ? detalleRubros(c, obra, cs).reduce((s2, d) => s2 + d.costoPeriodo, 0) : calcCert(c, obra, cs, indices).neto), 0);
+        const totalPeriodo = enPeriodo.reduce((s, c) => s + (esCosto ? detalleRubros(c, obra, cs).reduce((s2, d) => s2 + d.costoPeriodo, 0) : calcCert(c, obra, cs, indices).neto), 0);
+        const hayFiltro = periodoDesde || periodoHasta;
+        return (<div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 14, marginBottom: 12, boxShadow: SHDsm }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: T.sub }}>Certificado general · {cs.length} cert.</span>
+            <b style={{ fontSize: 18, color: esCosto ? T.warn : T.accent }}>{money(totalGeneral)}</b>
+          </div>
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 6 }}>Buscar por período (opcional)</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input type="date" value={periodoDesde} onChange={e => setPeriodoDesde(e.target.value)} style={{ ...inp, marginTop: 0, flex: 1, fontSize: 13 }} />
+              <input type="date" value={periodoHasta} onChange={e => setPeriodoHasta(e.target.value)} style={{ ...inp, marginTop: 0, flex: 1, fontSize: 13 }} />
+              {hayFiltro && <button onClick={() => { setPeriodoDesde(""); setPeriodoHasta(""); }} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 9, padding: "0 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>}
+            </div>
+            {hayFiltro && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+              <span style={{ fontSize: 11.5, color: T.sub }}>{enPeriodo.length} cert. en el período</span>
+              <b style={{ fontSize: 14 }}>{money(totalPeriodo)}</b>
+            </div>}
+          </div>
+        </div>);
+      })()}
       {cs.slice().reverse().map(c => { const r = calcCert(c, obra, cs, indices); const cP = detalleRubros(c, obra, cs).reduce((s, d) => s + d.costoPeriodo, 0); return (
         <div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "12px 14px", marginBottom: 9, boxShadow: SHDsm }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
