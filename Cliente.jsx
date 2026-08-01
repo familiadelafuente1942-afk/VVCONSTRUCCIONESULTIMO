@@ -2609,6 +2609,50 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
   const [escuchando, setEscuchando] = useState(false);
   const recRef = useRef(null);
   const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const ttsOk = typeof window !== "undefined" && "speechSynthesis" in window;
+  const [narrarAuto, setNarrarAuto] = useState(() => { try { return localStorage.getItem("cliente_narrar_auto") === "1"; } catch { return false; } });
+  const [hablando, setHablando] = useState(false);
+  const ultimoNarrado = useRef(null);
+  function limpiarParaVoz(texto) {
+    return String(texto || "")
+      .replace(/```accion[\s\S]*?```/g, "")
+      .replace(/[*_#`]/g, "")
+      .replace(/https?:\/\/\S+/g, "un link")
+      .replace(/\n{2,}/g, ". ")
+      .replace(/\n/g, ". ")
+      .trim();
+  }
+  function hablar(texto) {
+    if (!ttsOk) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(limpiarParaVoz(texto));
+      u.lang = "es-AR";
+      u.rate = 1.02;
+      const voces = window.speechSynthesis.getVoices();
+      const voz = voces.find(v => v.lang === "es-AR") || voces.find(v => (v.lang || "").startsWith("es"));
+      if (voz) u.voice = voz;
+      u.onstart = () => setHablando(true);
+      u.onend = () => setHablando(false);
+      u.onerror = () => setHablando(false);
+      window.speechSynthesis.speak(u);
+    } catch { }
+  }
+  function pararVoz() { try { window.speechSynthesis.cancel(); } catch { } setHablando(false); }
+  function toggleNarrarAuto() {
+    setNarrarAuto(v => { const nv = !v; try { localStorage.setItem("cliente_narrar_auto", nv ? "1" : "0"); } catch { } if (!nv) pararVoz(); return nv; });
+  }
+  // narra sola la última respuesta de la IA, si el modo automático está prendido
+  useEffect(() => {
+    if (!narrarAuto || !ttsOk) return;
+    const ult = msgs[msgs.length - 1];
+    if (!ult || ult.role !== "assistant" || loading) return;
+    const clave = ult.id || ult.ts || msgs.length;
+    if (ultimoNarrado.current === clave) return;
+    ultimoNarrado.current = clave;
+    const texto = (Array.isArray(ult.content) ? (ult.content.find(b => b.type === "text")?.text || "") : ult.content) + (ult.accionResultado ? ". " + ult.accionResultado : "");
+    hablar(texto);
+  }, [msgs, loading, narrarAuto]);
   const [adj, setAdj] = useState([]);
   const [subiendoAdj, setSubiendoAdj] = useState(false);
   const fileRef = useRef(null);
@@ -2992,6 +3036,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
           <div style={{ maxWidth: "84%", background: m.role === "user" ? T.accent : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{Array.isArray(m.content) ? (m.content.find(b => b.type === "text")?.text || "") : m.content}</div>
+          {m.role !== "user" && ttsOk && !narrarAuto && <button onClick={() => hablar((Array.isArray(m.content) ? (m.content.find(b => b.type === "text")?.text || "") : m.content) + (m.accionResultado ? ". " + m.accionResultado : ""))} style={{ marginTop: 5, background: "none", border: "none", color: T.muted, fontSize: 10.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>🔊 Escuchar</button>}
           {m.role !== "user" && /MINUTA DE REUNI[OÓ]N/i.test(String(m.content || "")) && <button onClick={() => descargarMinuta(m.content)} style={{ marginTop: 7, background: "#2B579A", color: "#fff", border: "none", borderRadius: 9, padding: "9px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Ico n="word" /> Descargar minuta (Word)</button>}
           {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}><Ico n="send" /> {m.waLabel || "Enviar por WhatsApp"}</a>}
           {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}><Ico n="ruler" /> </span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
@@ -3019,6 +3064,8 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 760, margin: "0 auto 8px" }}>
         {debateActive ? <button onClick={stopDebate} style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Frenar debate</button>
           : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.accent : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="mic" /> Debate IA</button>}
+        {ttsOk && <button onClick={toggleNarrarAuto} title="Narrar las respuestas en voz alta" style={{ background: narrarAuto ? "#16A34A" : T.bg, color: narrarAuto ? "#fff" : T.sub, border: `1px solid ${narrarAuto ? "#16A34A" : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🔊 {narrarAuto ? "Narrando ON" : "Narrar"}</button>}
+        {hablando && <button onClick={pararVoz} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Callar</button>}
         {msgs.length > 0 && <button onClick={() => setMsgs([])} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginLeft: "auto" }}>Limpiar</button>}
       </div>
       {debateOpen && !debateActive && <div style={{ maxWidth: 760, margin: "0 auto 8px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px" }}>
