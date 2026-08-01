@@ -7055,6 +7055,15 @@ async function extraerCuadros(file, n = 6) {
 
 function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, docrecepcion = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  const [enviosProp, setEnviosProp] = useStoredState("cliente_envios_prop", {});
+  // Manda un informe (avance o certificado) directo al propietario, sin pasar por
+  // Belfast — imprescindible para obras privadas, que Belfast nunca ve.
+  function mandarAlPropietarioVV(obId, item, tipo) {
+    if (!item.html) { alert("Primero armá el documento (botón PDF / Generar certificado)."); return; }
+    const reg = { id: item.id, tipo, prop: true, fecha: item.fecha || item.desde, titulo: tipo === "cert" ? `Certificado ${item.desde || ""} al ${item.hasta || ""}` : `Informe de avance ${item.fecha || ""}`, html: item.html, ts: Date.now() };
+    setEnviosProp(p => { const lista = ((p || {})[obId] || []).filter(x => x.id !== reg.id); return { ...(p || {}), [obId]: [reg, ...lista] }; });
+    alert("Listo: ya lo puede ver el propietario en su panel.");
+  }
   // "Visto" por obra, guardado aparte — pero comparando QUÉ FOTOS son
   // nuevas (por su id), no por fecha. La fecha de cada foto es el día de
   // obra que eligieron al cargarla, no el momento real en que se subió —
@@ -7613,6 +7622,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
             <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); const h = buildPdfSemanal(c); setPdfHtml(h); if (!c.html && setCertif) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(x => x.id === c.id ? { ...x, html: h } : x) })); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+            <button onClick={() => mandarAlPropietarioVV(obraId, c, "cert")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
             <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
           </div>
         ))}
@@ -7643,6 +7653,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
               <button onClick={() => analizarEntry(h)} disabled={busy} title="Analizar con IA" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: busy ? "default" : "pointer", flexShrink: 0 }}><Ico n="search" /> IA</button>
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+              <button onClick={() => mandarAlPropietarioVV(obraId, h, "avance")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
               <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> Borrar</button>
             </div>
           </div>
