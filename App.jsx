@@ -7966,6 +7966,19 @@ function App() {
       <div style={{ width:"100%", height:"100dvh", background:"transparent", display:"flex", flexDirection:"column", position:"relative", color:"var(--text,#131C2B)", fontFamily:"var(--font,'Inter'),sans-serif", overflow:"hidden" }}>
         <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />
         {view==="dashboard" && <WebHero cfg={cfg} obras={obras} personal={personal} />}
+        {view==="dashboard" && (() => {
+          const LABELS = { chat: "consulta nueva en el chat IA", mensajes: "mensaje nuevo", pedidos: "pedido nuevo", materiales: "pedido de materiales", informes: "informe nuevo", formularios: "formulario nuevo", obras: "obra nueva", personal: "novedad de personal" };
+          const ORDEN = ["mensajes", "pedidos", "materiales", "informes", "formularios", "obras", "personal", "chat"];
+          const items = ORDEN.map(k => ({ k, n: navBadgesNuevo[k] || 0 })).filter(x => x.n > 0);
+          if (!items.length) return null;
+          return (<div style={{ margin: "10px 16px 0", background: "rgba(176,137,79,0.10)", border: "1px solid rgba(176,137,79,0.35)", borderRadius: 12, padding: "10px 14px", display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#B0894F", textTransform: "uppercase", letterSpacing: "0.04em" }}>Novedades:</span>
+            {items.map(({ k, n }) => (<span key={k} onClick={() => { setView(k === "mensajes" || k === "pedidos" || k === "materiales" || k === "informes" || k === "formularios" ? "mas" : k); if (k === "pedidos") setMasSub("pedidos"); if (k === "materiales") setMasSub("materiales"); if (k === "informes") setMasSub("informes"); if (k === "formularios") setMasSub("formularios"); if (k === "mensajes") setMasSub("mensajes"); marcarVisto(k); }}
+              style={{ fontSize: 12.5, color: "var(--text,#131C2B)", cursor: "pointer", fontWeight: 600 }}>
+              <b style={{ color: "#B0894F" }}>{n}</b> {LABELS[k]}{n > 1 ? (k === "obras" ? "s" : "s") : ""} →
+            </span>))}
+          </div>);
+        })()}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
             {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
