@@ -2772,8 +2772,10 @@ PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ
 {"tipo":"whatsapp","persona":"nombre o rol del jefe de obra/contacto","obra":"opcional","texto":"el mensaje a enviar por WhatsApp"}
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave (ej: replanteo platea)"}
+{"tipo":"traer_informe","obra":"nombre de la obra","cantidad":1,"buscar":"palabras clave opcional (ej: hormigón, seguridad)"}
 REGLA fotos: si te piden VER/MANDAR/PASAR fotos o videos de una obra (ej: "mandame la última foto de Castores"), usá "traer_fotos" con la obra y cantidad (1 = la última). videos:true si piden videos. Aparecen directo en el chat.
 REGLA planos: si te piden un PLANO (PDF/CAD) de una obra (ej: "necesito el plano de replanteo de platea de Castores 475"), usá "traer_plano" con la obra y "buscar" (palabras clave). El plano aparece en el chat para abrir/descargar.
+REGLA informes: si te piden el/los INFORME(S), o el "PDF de informes", o "lo último cargado" de una obra (ej: "mandame el último informe de Golf 293", "pasame el pdf del informe de seguridad de Castores"), usá "traer_informe" con la obra, cantidad (1 = el último) y "buscar" si dieron palabras clave (tipo, tema). Aparece directo en el chat para abrir/descargar — NUNCA digas que no podés mandarlo, siempre está ahí para traer.
 REGLA WhatsApp: si te piden MANDAR UN WHATSAPP a un jefe de obra o contacto, usá "whatsapp". Uso tu agenda (Personal → Contactos) y el personal de la obra. Te dejo el botón de WhatsApp listo para enviar.
 REGLA CLAVE — elegí bien la acción:
 - CANAL IA↔IA ("preguntar_ia"): SIEMPRE que involucre a la IA / el asistente de V+V o esperes que te devuelvan un DATO. Ejemplos: "preguntale a la IA de V+V…", "pedile a la IA de V+V…", "pedícelo/pedíselo a la IA…", "consultale al asistente de V+V…", "que la IA de V+V te pase/averigüe…". OJO: "pedile/pedícelo A LA IA" es SIEMPRE este canal (preguntar_ia), NO un crear_pedido. Va directo a la otra IA, que responde sola. ESTE es el canal entre las dos IA.
@@ -2807,6 +2809,19 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       else if (!planos.length) { res = `${target.nombre} no tiene planos cargados. Subilos en la obra → Ver detalle → Planos.`; docs = []; }
       else if (!match.length) { res = `No encontré un plano que coincida con "${accion.buscar}" en ${target.nombre}. Te dejo todos:`; docs = planos.map(p => ({ nombre: p.nombre, url: p.url })); }
       else { res = `Acá tenés ${match.length === 1 ? "el plano" : "los planos"} de ${target.nombre}${accion.buscar ? ` (${accion.buscar})` : ""}:`; docs = match.map(p => ({ nombre: p.nombre, url: p.url })); }
+      extra = { accionDone: true, accionResultado: res, docs };
+    } else if (accion && accion.tipo === "traer_informe") {
+      const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
+      const infs = ((target && target.informes) || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      const kw = String(accion.buscar || "").toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      let match = kw.length ? infs.filter(i => kw.some(w => `${i.titulo || ""} ${i.tipo || ""} ${i.notas || ""}`.toLowerCase().includes(w))) : infs;
+      const cant = Math.max(1, Math.min(accion.cantidad || 1, 12));
+      match = match.slice(0, cant);
+      let res, docs;
+      if (!target) { res = "No encontré esa obra."; docs = []; }
+      else if (!infs.length) { res = `${target.nombre} todavía no tiene informes cargados.`; docs = []; }
+      else if (!match.length) { res = `No encontré un informe que coincida con "${accion.buscar}" en ${target.nombre}. Te dejo el último cargado:`; docs = infs.slice(0, 1).map(i => ({ nombre: i.titulo || i.nombre || "Informe", url: i.url })); }
+      else { res = `Acá tenés ${match.length === 1 ? "el informe" : `los últimos ${match.length} informes`} de ${target.nombre}${accion.buscar ? ` (${accion.buscar})` : ""}:`; docs = match.map(i => ({ nombre: `${i.titulo || i.nombre || "Informe"}${i.fecha ? ` — ${i.fecha}` : ""}`, url: i.url })); }
       extra = { accionDone: true, accionResultado: res, docs };
     } else if (accion && accion.tipo === "traer_fotos") {
       const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
