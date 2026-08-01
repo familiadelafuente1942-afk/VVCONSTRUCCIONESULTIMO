@@ -130,9 +130,9 @@ function ConfigModalProp({ config, onSave, onClose }) {
 }
 
 
-function Entrada({ onEntrar, config, onGuardarConfig }) {
+function Entrada({ onEntrar, config, onGuardarConfig, codigoInicial, proyectoUrl }) {
   const T = temaDe(config);
-  const [codigo, setCodigo] = useState("");
+  const [codigo, setCodigo] = useState(codigoInicial || "");
   const [nombre, setNombre] = useState("");
   const [buscando, setBuscando] = useState(false);
   const [error, setError] = useState("");
@@ -158,7 +158,7 @@ function Entrada({ onEntrar, config, onGuardarConfig }) {
     <div style={{ width: 76, height: 76, borderRadius: "50%", border: `2px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 22px", overflow: "hidden", background: config?.logo ? "#fff" : "none" }}>
       {config?.logo ? <img src={config.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={32} c={T.brass} />}
     </div>
-    <div style={{ textAlign: "center", color: "#fff", fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{config?.nombre || "BELFAST"}</div>
+    <div style={{ textAlign: "center", color: "#fff", fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{proyectoUrl || config?.nombre || "BELFAST"}</div>
     <div style={{ textAlign: "center", color: "rgba(255,255,255,.6)", fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 30 }}>{config?.subtitulo || "Panel del propietario"}</div>
 
     <div style={{ background: "rgba(255,255,255,.06)", borderRadius: T.r, padding: 20, marginBottom: 14 }}>
@@ -446,6 +446,8 @@ export default function ClientePropietarioApp() {
   const [obra, setObra] = useState(null);
   const [nombreCliente, setNombreCliente] = useState("");
   const [config, setConfig] = useState({});
+  const [proyectoUrl, setProyectoUrl] = useState("");
+  const [codigoInicial, setCodigoInicial] = useState("");
   const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {}, renders: {}, certif: {}, envios: {} });
 
   async function guardarConfig(next) {
@@ -478,12 +480,45 @@ export default function ClientePropietarioApp() {
 
   useEffect(() => {
     storage.get("vv_propietario_config").then(r => { if (r?.value) { try { setConfig(JSON.parse(r.value)); } catch { } } });
+    let params = null;
+    try { params = new URLSearchParams(window.location.search); } catch { }
+    const proyecto = params ? params.get("p") : null;
+    if (proyecto) {
+      setProyectoUrl(proyecto);
+      try {
+        document.title = proyecto;
+        let m = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (!m) { m = document.createElement("meta"); m.setAttribute("name", "apple-mobile-web-app-title"); document.head.appendChild(m); }
+        m.setAttribute("content", proyecto);
+      } catch { }
+      // Ícono con el número de lote, uno por proyecto (mismo logo, distinto badge).
+      try {
+        const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+        const ICONOS_PROP = {
+          "golf293": "golf293",
+          "lospuentes246": "puentes246", "puentes246": "puentes246",
+          "castores475": "castores475",
+          "maylinga37": "mayling37", "mayling37": "mayling37", "maylinga37obra": "mayling37",
+          "lospuentes132": "puentes132", "puentes132": "puentes132",
+        };
+        const slug = ICONOS_PROP[norm(proyecto)];
+        if (slug) {
+          let li = document.querySelector('link[rel="apple-touch-icon"]');
+          if (!li) { li = document.createElement("link"); li.setAttribute("rel", "apple-touch-icon"); document.head.appendChild(li); }
+          li.setAttribute("href", `/icon-prop-${slug}-180.png`);
+          let lf = document.querySelector('link[rel="icon"]');
+          if (lf) lf.setAttribute("href", `/icon-prop-${slug}-192.png`);
+        }
+      } catch { }
+    }
+    const codigoUrl = params ? params.get("c") : null;
+    if (codigoUrl) setCodigoInicial(codigoUrl.toUpperCase());
     let cod = null, nom = null;
     try { cod = localStorage.getItem("propietario_codigo"); nom = localStorage.getItem("propietario_nombre"); } catch { }
     if (cod && nom) cargarObra(cod, nom); else setEstado("entrada");
   }, []);
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
-  if (estado === "entrada") return <Entrada onEntrar={cargarObra} config={config} onGuardarConfig={guardarConfig} />;
-  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} envios={extra.envios} config={config} onGuardarConfig={guardarConfig} />;
+  if (estado === "entrada") return <Entrada onEntrar={cargarObra} config={config} onGuardarConfig={guardarConfig} codigoInicial={codigoInicial} proyectoUrl={proyectoUrl} />;
+  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} envios={extra.envios} config={config} onGuardarConfig={guardarConfig} proyectoUrl={proyectoUrl} />;
 }
