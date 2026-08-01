@@ -1427,16 +1427,17 @@ function CertGeneral({ obras, data, certsDe, indices, modo }) {
 
   // meses que tienen al menos un certificado, del más nuevo al más viejo
   const meses = [...new Set(certs.map(c => mesDe(c.fecha)).filter(Boolean))].sort().reverse();
-  const [mes, setMes] = useState(meses[0] || "");
-  const mesSel = meses.includes(mes) ? mes : (meses[0] || "");
+  const [mes, setMes] = useState("");   // "" = todos los períodos juntos
+  const mesSel = mes === "" || meses.includes(mes) ? mes : "";
+  const todosPeriodos = mesSel === "";
 
-  // cada renglón = un certificado del mes elegido.
+  // cada renglón = un certificado (del mes elegido, o de todos si no hay filtro).
   // cliente → neto (lo que Belfast paga); costo → costo directo del período (lo que gastás).
   const filas = [];
   obras.forEach(o => {
     const cs = certsDe(o.id);
     cs.forEach((c, i) => {
-      if (mesDe(c.fecha) !== mesSel) return;
+      if (!todosPeriodos && mesDe(c.fecha) !== mesSel) return;
       const r = calcCert(c, o, cs, indices);
       const monto = esCosto ? r.costoDirPeriodo : r.neto;
       filas.push({ obra: o.nombre, certN: i + 1, totQ: quincenasObra(o), fecha: c.fecha, monto, cert: c });
@@ -1452,15 +1453,16 @@ function CertGeneral({ obras, data, certsDe, indices, modo }) {
     const brandHtml = cfg.logo
       ? `<div class="brand" style="display:flex;align-items:center;gap:10px"><img src="${cfg.logo}" style="height:40px;width:40px;object-fit:contain;background:#fff;border-radius:7px;padding:2px"/><div>${brandName}<small>CONSTRUCTORA</small></div></div>`
       : `<div class="brand">${brandName}<small>CONSTRUCTORA</small></div>`;
+    const periodoTxt = todosPeriodos ? "Todos los períodos" : mesLabel(mesSel);
     const rows = filas.map(f => `<tr><td>${f.obra}</td><td class="ctr">N° ${f.certN}${f.totQ ? ` de ${f.totQ}` : ""}</td><td class="ctr">${fmtISO(f.fecha)}</td><td class="rgt"><b>${money(f.monto)}</b></td></tr>`).join("");
     const tituloDoc = esCosto ? "CERTIFICACIÓN GENERAL · COSTO" : "CERTIFICACIÓN GENERAL";
     const introTxt = esCosto
-      ? `Detalle consolidado del costo de obra de los certificados emitidos en el período <b>${mesLabel(mesSel)}</b>, para las obras ejecutadas por <b>${cfg.nombre || "V+V Construcciones"}</b>. Es el costo directo interno del período; no representa un importe a facturar al comitente.`
-      : `Detalle consolidado de los certificados de obra emitidos en el período <b>${mesLabel(mesSel)}</b>, correspondientes a las obras ejecutadas por <b>${cfg.nombre || "V+V Construcciones"}</b> para <b>${comitente}</b>. El importe total resulta de la suma de los certificados individuales que se detallan a continuación.`;
+      ? `Detalle consolidado del costo de obra de los certificados emitidos${todosPeriodos ? "" : ` en el período <b>${periodoTxt}</b>`}, para las obras ejecutadas por <b>${cfg.nombre || "V+V Construcciones"}</b>. Es el costo directo interno del período; no representa un importe a facturar al comitente.`
+      : `Detalle consolidado de los certificados de obra emitidos${todosPeriodos ? "" : ` en el período <b>${periodoTxt}</b>`}, correspondientes a las obras ejecutadas por <b>${cfg.nombre || "V+V Construcciones"}</b> para <b>${comitente}</b>. El importe total resulta de la suma de los certificados individuales que se detallan a continuación.`;
     const colMonto = esCosto ? "Costo del período" : "Monto a pagar";
     const totalLbl = esCosto ? "TOTAL COSTO DEL PERÍODO" : "TOTAL GENERAL A PAGAR";
     const metaDer = esCosto ? `<div><span>Certificados:</span> <b>${filas.length}</b></div>` : `<div><span>Certificados:</span> <b>${filas.length}</b></div>`;
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${tituloDoc} ${mesLabel(mesSel)}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 34px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 40px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:10px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{text-align:right;font-size:11px;color:#cdd5e0}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 40px}.meta{display:flex;justify-content:space-between;margin:22px 0 6px;font-size:12.5px}.meta span{color:#5B6B7F}h2{font-size:12px;color:#5B6B7F;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px;border-bottom:1px solid #E3E8EF;padding-bottom:5px}p{font-size:12.5px;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#EAF0F7;color:#1B3A5B;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase}td{padding:9px 10px;border-bottom:1px solid #EEF1F5}.ctr{text-align:center}.rgt{text-align:right}.big td{border-top:2px solid #0F1B2D;font-size:17px;font-weight:800;color:#1B3A5B;padding-top:11px;background:#F4F6F9}.foot{display:flex;justify-content:space-between;font-size:11px;color:#5B6B7F;margin-top:54px}.sign{width:240px;text-align:center}.sign .ln{border-top:1px solid #0F1B2D;padding-top:5px}</style></head><body><div class="head">${brandHtml}<div class="doc"><b>${tituloDoc}</b>Período: ${mesLabel(mesSel)}<br>Fecha: ${fmtISO(hoyISO())}</div></div><div class="wrap"><div class="meta"><div><span>Comitente:</span> <b>${comitente}</b></div>${metaDer}</div><p>${introTxt}</p><h2>Certificados del período</h2><table><thead><tr><th>Obra</th><th class="ctr">Certificado</th><th class="ctr">Fecha</th><th class="rgt">${colMonto}</th></tr></thead><tbody>${rows}<tr class="big"><td colspan="3" class="rgt">${totalLbl}</td><td class="rgt">${money(total)}</td></tr></tbody></table>${esCosto ? "" : `<div class="foot"><div class="sign"><div style="height:44px"></div><div class="ln">${cfg.nombre || "V+V Construcciones"}</div></div><div class="sign"><div style="height:44px"></div><div class="ln">${comitente} — Conforme</div></div></div>`}</div></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${tituloDoc} ${periodoTxt}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 34px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 40px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:10px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{text-align:right;font-size:11px;color:#cdd5e0}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 40px}.meta{display:flex;justify-content:space-between;margin:22px 0 6px;font-size:12.5px}.meta span{color:#5B6B7F}h2{font-size:12px;color:#5B6B7F;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px;border-bottom:1px solid #E3E8EF;padding-bottom:5px}p{font-size:12.5px;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#EAF0F7;color:#1B3A5B;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase}td{padding:9px 10px;border-bottom:1px solid #EEF1F5}.ctr{text-align:center}.rgt{text-align:right}.big td{border-top:2px solid #0F1B2D;font-size:17px;font-weight:800;color:#1B3A5B;padding-top:11px;background:#F4F6F9}.foot{display:flex;justify-content:space-between;font-size:11px;color:#5B6B7F;margin-top:54px}.sign{width:240px;text-align:center}.sign .ln{border-top:1px solid #0F1B2D;padding-top:5px}</style></head><body><div class="head">${brandHtml}<div class="doc"><b>${tituloDoc}</b>Período: ${periodoTxt}<br>Fecha: ${fmtISO(hoyISO())}</div></div><div class="wrap"><div class="meta"><div><span>Comitente:</span> <b>${comitente}</b></div>${metaDer}</div><p>${introTxt}</p><h2>Certificados${todosPeriodos ? "" : ` del período`}</h2><table><thead><tr><th>Obra</th><th class="ctr">Certificado</th><th class="ctr">Fecha</th><th class="rgt">${colMonto}</th></tr></thead><tbody>${rows}<tr class="big"><td colspan="3" class="rgt">${totalLbl}</td><td class="rgt">${money(total)}</td></tr></tbody></table>${esCosto ? "" : `<div class="foot"><div class="sign"><div style="height:44px"></div><div class="ln">${cfg.nombre || "V+V Construcciones"}</div></div><div class="sign"><div style="height:44px"></div><div class="ln">${comitente} — Conforme</div></div></div>`}</div></body></html>`;
     setPdfHtml(html);
   }
 
@@ -1474,12 +1476,13 @@ function CertGeneral({ obras, data, certsDe, indices, modo }) {
 
       <Field label="Período">
         <select value={mesSel} onChange={e => setMes(e.target.value)} style={inp}>
+          <option value="">Todos los períodos</option>
           {meses.map(m => <option key={m} value={m}>{mesLabel(m)}</option>)}
         </select>
       </Field>
 
       <div style={{ marginTop: 6 }}>
-        {filas.length === 0 && <div style={{ fontSize: 12.5, color: T.muted, padding: "16px 0", textAlign: "center" }}>No hay certificados en {mesLabel(mesSel)}.</div>}
+        {filas.length === 0 && <div style={{ fontSize: 12.5, color: T.muted, padding: "16px 0", textAlign: "center" }}>{todosPeriodos ? "Todavía no hay certificados." : `No hay certificados en ${mesLabel(mesSel)}.`}</div>}
         {filas.map((f, i) => (<div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "11px 0", borderBottom: `1px solid ${T.border}` }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.obra}</div>
