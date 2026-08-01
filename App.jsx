@@ -927,11 +927,23 @@ function useAvisos(clave, mapaIds) {
     });
     const guardar = (v) => { try { localStorage.setItem(clave, JSON.stringify(v)); } catch { } };
     // La primera vez doy todo por visto: si no, al instalar quedaría todo en rojo.
+    // Lo mismo si se agrega una categoría NUEVA más adelante (ej: "personal") y el
+    // dispositivo ya tenía vistos guardados de antes sin esa clave: sin esto, todo lo
+    // viejo de esa categoría aparecería de golpe como "nuevo".
     useEffect(() => {
         if (vistos === null) {
             const init = {};
             for (const k in mapaIds) init[k] = mapaIds[k];
             setVistos(init); guardar(init);
+            return;
+        }
+        const faltantes = Object.keys(mapaIds).filter(k => vistos[k] === undefined);
+        if (faltantes.length) {
+            setVistos(prev => {
+                const n = { ...(prev || {}) };
+                for (const k of faltantes) n[k] = mapaIds[k];
+                guardar(n); return n;
+            });
         }
     });
     const aviso = (cat) => {
@@ -7967,7 +7979,16 @@ function App() {
         <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />
         {view==="dashboard" && <WebHero cfg={cfg} obras={obras} personal={personal} />}
         {view==="dashboard" && (() => {
-          const LABELS = { chat: "consulta nueva en el chat IA", mensajes: "mensaje nuevo", pedidos: "pedido nuevo", materiales: "pedido de materiales", informes: "informe nuevo", formularios: "formulario nuevo", obras: "obra nueva", personal: "novedad de personal" };
+          const LABELS = {
+            chat: ["consulta nueva en el chat IA", "consultas nuevas en el chat IA"],
+            mensajes: ["mensaje nuevo", "mensajes nuevos"],
+            pedidos: ["pedido nuevo", "pedidos nuevos"],
+            materiales: ["pedido de materiales nuevo", "pedidos de materiales nuevos"],
+            informes: ["informe nuevo", "informes nuevos"],
+            formularios: ["formulario nuevo", "formularios nuevos"],
+            obras: ["obra nueva", "obras nuevas"],
+            personal: ["novedad de personal", "novedades de personal"],
+          };
           const ORDEN = ["mensajes", "pedidos", "materiales", "informes", "formularios", "obras", "personal", "chat"];
           const items = ORDEN.map(k => ({ k, n: navBadgesNuevo[k] || 0 })).filter(x => x.n > 0);
           if (!items.length) return null;
@@ -7975,7 +7996,7 @@ function App() {
             <span style={{ fontSize: 11, fontWeight: 800, color: "#B0894F", textTransform: "uppercase", letterSpacing: "0.04em" }}>Novedades:</span>
             {items.map(({ k, n }) => (<span key={k} onClick={() => { setView(k === "mensajes" || k === "pedidos" || k === "materiales" || k === "informes" || k === "formularios" ? "mas" : k); if (k === "pedidos") setMasSub("pedidos"); if (k === "materiales") setMasSub("materiales"); if (k === "informes") setMasSub("informes"); if (k === "formularios") setMasSub("formularios"); if (k === "mensajes") setMasSub("mensajes"); marcarVisto(k); }}
               style={{ fontSize: 12.5, color: "var(--text,#131C2B)", cursor: "pointer", fontWeight: 600 }}>
-              <b style={{ color: "#B0894F" }}>{n}</b> {LABELS[k]}{n > 1 ? (k === "obras" ? "s" : "s") : ""} →
+              <b style={{ color: "#B0894F" }}>{n}</b> {LABELS[k][n > 1 ? 1 : 0]} →
             </span>))}
           </div>);
         })()}
