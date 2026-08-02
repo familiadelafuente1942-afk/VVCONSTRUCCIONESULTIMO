@@ -462,15 +462,7 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
       </div>
       {sup > 0 && totArs > 0 && <div style={{ fontSize: 11, color: T.muted, textAlign: "right", marginBottom: 16 }}>{usdFmt(totUsd / sup)} / {moneyAR(totArs / sup)} por m²</div>}
 
-      {rubros.length > 0 && <>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Costos por rubro</div>
-        {rubros.map(([cat, v]) => (<div key={cat} style={{ marginBottom: 8 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}><span style={{ color: T.sub, fontWeight: 600 }}>{cat}</span><span style={{ fontWeight: 700 }}>{moneyAR(v)}</span></div>
-          <div style={{ height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${Math.min(100, v / rubros[0][1] * 100)}%`, background: T.brass, borderRadius: 4 }} /></div>
-        </div>))}
-      </>}
-
-      <div style={{ marginTop: 18 }}>
+      <div style={{ marginTop: 4 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Venta esperada</div>
         <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.muted, marginBottom: 4 }}>US$</div><input value={vUTxt} onChange={e => setVUTxt(fmtMiles(e.target.value))} onBlur={e => onGuardarPropia(p => ({ ...p, ventaUsd: numMiles(e.target.value) }))} inputMode="numeric" placeholder="USD" style={{ ...inpEd, textAlign: "right" }} /></div>
@@ -487,6 +479,14 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
           {sup > 0 && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "right", marginTop: 5 }}>{vU > 0 ? usdFmt(vU / sup) : moneyAR(vA / sup)}/m² venta · {vU > 0 ? usdFmt(resU / sup) : moneyAR(resA / sup)}/m² resultado</div>}
         </div>}
       </div>
+
+      {rubros.length > 0 && <div style={{ marginTop: 18 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Costos por rubro</div>
+        {rubros.map(([cat, v]) => (<div key={cat} style={{ marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}><span style={{ color: T.sub, fontWeight: 600 }}>{cat}</span><span style={{ fontWeight: 700 }}>{moneyAR(v)}</span></div>
+          <div style={{ height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${Math.min(100, v / rubros[0][1] * 100)}%`, background: T.brass, borderRadius: 4 }} /></div>
+        </div>))}
+      </div>}
 
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", margin: "20px 0 9px" }}>Detalle de gastos</div>
       {lista.length === 0 && <EmptyMsg>Todavía no hay gastos cargados.</EmptyMsg>}
