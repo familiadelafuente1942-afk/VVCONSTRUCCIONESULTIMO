@@ -390,26 +390,54 @@ function moneyAR(n) { return "$" + Math.round(Number(n) || 0).toLocaleString("es
 function arsUnif(c, cotU) { const n = Number(c.monto) || 0; if (c.moneda === "ars") return n; if (c.moneda === "usd") return cotU > 0 ? n * cotU : (Number(c.montoArs) || 0); return Number(c.montoArs) || 0; }
 function usdUnif(c, cotU) { const n = Number(c.monto) || 0; if (c.moneda === "usd") return n; if (c.moneda === "ars") return cotU > 0 ? n / cotU : (Number(c.montoUsd) || 0); return Number(c.montoUsd) || 0; }
 function usdFmt(n) { return "USD " + Math.round(Number(n) || 0).toLocaleString("es-AR"); }
-function SeccionCostos({ costos, onBack, config }) {
+function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config }) {
   const T = temaDe(config);
-  const lista = (costos?.costos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  const cotU = Number(costos?.cotizUnif) || 0;
-  const sup = Number(costos?.m2) || 0;
+  const [creando, setCreando] = useState(false);
+  const [nuevo, setNuevo] = useState({ cat: "", monto: "", moneda: "ars", nota: "" });
+  const [guardando, setGuardando] = useState(false);
+
+  if (!costos) {
+    return (<div style={{ minHeight: "100vh", background: T.bg }}>
+      <SubHead titulo="Costos" onBack={onBack} config={config} />
+      <div style={{ padding: 40, textAlign: "center" }}>
+        <div style={{ fontSize: 13, color: T.muted, marginBottom: 18, lineHeight: 1.5 }}>Todavía no hay una obra particular vinculada en Finanzas para cargar costos acá.</div>
+        <button disabled={creando} onClick={async () => { setCreando(true); await onCrearPropia?.(); setCreando(false); }} style={{ background: T.brass, border: "none", color: "#fff", borderRadius: 12, padding: "13px 22px", fontSize: 13.5, fontWeight: 800, cursor: "pointer" }}>{creando ? "Creando…" : "+ Empezar a cargar costos"}</button>
+      </div>
+    </div>);
+  }
+
+  const lista = (costos.costos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const cotU = Number(costos.cotizUnif) || 0;
+  const sup = Number(costos.m2) || 0;
   const totArs = lista.reduce((s, c) => s + arsUnif(c, cotU), 0);
   const totUsd = lista.reduce((s, c) => s + usdUnif(c, cotU), 0);
-  const vU = Number(costos?.ventaUsd) || 0, vA = Number(costos?.ventaArs) || 0;
+  const vU = Number(costos.ventaUsd) || 0, vA = Number(costos.ventaArs) || 0;
   const resU = vU - totUsd, resA = vA - totArs, mgU = vU > 0 ? resU / vU * 100 : 0;
-  // costos agrupados por rubro, de mayor a menor
   const porRubro = {};
   lista.forEach(c => { const k = c.cat || "Otros"; porRubro[k] = (porRubro[k] || 0) + arsUnif(c, cotU); });
   const rubros = Object.entries(porRubro).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+
+  const inpEd = { width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" };
+  function agregarGasto() {
+    const monto = Number(nuevo.monto) || 0;
+    if (!nuevo.cat.trim() || monto <= 0) return;
+    setGuardando(true);
+    const item = { id: (Date.now().toString(36)), ts: Date.now(), cat: nuevo.cat.trim(), moneda: nuevo.moneda, monto, montoArs: nuevo.moneda === "ars" ? monto : 0, montoUsd: nuevo.moneda === "usd" ? monto : 0, nota: nuevo.nota.trim(), fecha: new Date().toISOString().slice(0, 10) };
+    onGuardarPropia(p => ({ ...p, costos: [...(p.costos || []), item] })).finally(() => setGuardando(false));
+    setNuevo({ cat: "", monto: "", moneda: "ars", nota: "" });
+  }
+  function borrarGasto(id) {
+    if (!window.confirm("¿Borrar este gasto?")) return;
+    onGuardarPropia(p => ({ ...p, costos: (p.costos || []).filter(c => c.id !== id) }));
+  }
+
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
     <SubHead titulo="Costos" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
-      {(costos?.inicio || sup > 0) && <div style={{ marginBottom: 14 }}>
-        {sup > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 12.5 }}><span style={{ color: T.sub }}>Superficie</span><b style={{ color: T.text }}>{sup} m²</b></div>}
-        {costos?.inicio && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 12.5, borderTop: `1px solid ${T.border}` }}><span style={{ color: T.sub }}>Fecha de inicio</span><b style={{ color: T.text }}>{fFecha(costos.inicio)}</b></div>}
-      </div>}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}><span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Superficie</span><input defaultValue={sup || ""} onBlur={e => onGuardarPropia(p => ({ ...p, m2: Number(e.target.value) || 0 }))} inputMode="numeric" placeholder="m²" style={{ ...inpEd, width: 100, textAlign: "right" }} /></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Fecha de inicio</span><input type="date" defaultValue={costos.inicio || ""} onBlur={e => onGuardarPropia(p => ({ ...p, inicio: e.target.value }))} style={{ ...inpEd, width: 150, textAlign: "right" }} /></div>
+      </div>
 
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Inversión total</div>
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `4px solid ${T.brass}`, borderRadius: T.r, padding: "14px 16px", marginBottom: 4 }}>
@@ -426,13 +454,13 @@ function SeccionCostos({ costos, onBack, config }) {
         </div>))}
       </>}
 
-      {(vU > 0 || vA > 0) && <div style={{ marginTop: 18 }}>
+      <div style={{ marginTop: 18 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Venta esperada</div>
-        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: "13px 15px", marginBottom: 10 }}>
-          {vU > 0 && <div style={{ fontSize: 19, fontWeight: 800, color: T.text }}>{usdFmt(vU)}</div>}
-          {vA > 0 && <div style={{ fontSize: vU > 0 ? 12 : 19, fontWeight: vU > 0 ? 600 : 800, color: vU > 0 ? T.muted : T.text, marginTop: 2 }}>{moneyAR(vA)}</div>}
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.muted, marginBottom: 4 }}>US$</div><input defaultValue={vU || ""} onBlur={e => onGuardarPropia(p => ({ ...p, ventaUsd: Number(e.target.value) || 0 }))} inputMode="numeric" placeholder="USD" style={{ ...inpEd, textAlign: "right" }} /></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.muted, marginBottom: 4 }}>$</div><input defaultValue={vA || ""} onBlur={e => onGuardarPropia(p => ({ ...p, ventaArs: Number(e.target.value) || 0 }))} inputMode="numeric" placeholder="$" style={{ ...inpEd, textAlign: "right" }} /></div>
         </div>
-        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.r, padding: "13px 15px" }}>
+        {(vU > 0 || vA > 0) && <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.r, padding: "13px 15px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>Resultado esperado{vU > 0 ? ` · ${mgU.toFixed(0)}%` : ""}</span>
             <span>
@@ -441,28 +469,42 @@ function SeccionCostos({ costos, onBack, config }) {
             </span>
           </div>
           {sup > 0 && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "right", marginTop: 5 }}>{vU > 0 ? usdFmt(vU / sup) : moneyAR(vA / sup)}/m² venta · {vU > 0 ? usdFmt(resU / sup) : moneyAR(resA / sup)}/m² resultado</div>}
-        </div>
-      </div>}
+        </div>}
+      </div>
 
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", margin: "20px 0 9px" }}>Detalle de gastos</div>
       {lista.length === 0 && <EmptyMsg>Todavía no hay gastos cargados.</EmptyMsg>}
-      {lista.map((c, i) => (<div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 12, marginBottom: 8 }}>
+      {lista.map((c, i) => (<div key={c.id || i} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 12, marginBottom: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{c.cat || "Gasto"}</div>
           {c.nota && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{c.nota}</div>}
           {(c.fecha || c.ts) && <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{fFecha(c.fecha || new Date(c.ts).toISOString().slice(0, 10))}</div>}
         </div>
         <div style={{ fontSize: 13.5, fontWeight: 800, color: T.text, flexShrink: 0 }}>{c.moneda === "usd" ? usdFmt(c.montoUsd || c.monto) : moneyAR(c.montoArs || c.monto)}</div>
+        {c.id && <button onClick={() => borrarGasto(c.id)} style={{ background: "none", border: "none", color: "#DC2626", fontSize: 16, cursor: "pointer", padding: "0 0 0 4px", flexShrink: 0 }}>✕</button>}
       </div>))}
 
-      {(costos?.adjuntos || []).length > 0 && <>
+      <div style={{ background: T.card, border: `1px dashed ${T.border}`, borderRadius: T.r, padding: 14, marginTop: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>+ Agregar gasto</div>
+        <input value={nuevo.cat} onChange={e => setNuevo(n => ({ ...n, cat: e.target.value }))} placeholder="Categoría (ej: Materiales, Mano de obra…)" style={{ ...inpEd, marginBottom: 8 }} />
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <input value={nuevo.monto} onChange={e => setNuevo(n => ({ ...n, monto: e.target.value }))} inputMode="numeric" placeholder="Monto" style={{ ...inpEd, flex: 1 }} />
+          <div style={{ display: "flex", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden" }}>
+            {[["ars", "$"], ["usd", "US$"]].map(([v, l]) => <button key={v} onClick={() => setNuevo(n => ({ ...n, moneda: v }))} style={{ background: nuevo.moneda === v ? T.brass : "transparent", color: nuevo.moneda === v ? "#fff" : T.sub, border: "none", padding: "0 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+          </div>
+        </div>
+        <input value={nuevo.nota} onChange={e => setNuevo(n => ({ ...n, nota: e.target.value }))} placeholder="Nota (opcional)" style={{ ...inpEd, marginBottom: 10 }} />
+        <button disabled={guardando} onClick={agregarGasto} style={{ width: "100%", background: T.brass, border: "none", color: "#fff", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{guardando ? "Guardando…" : "Agregar"}</button>
+      </div>
+
+      {(costos.adjuntos || []).length > 0 && <>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", margin: "20px 0 9px" }}>Fotos y videos</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {costos.adjuntos.map((m, i) => <a key={i} href={m.url} target="_blank" rel="noreferrer">{m.tipo === "video" ? <video src={m.url} style={{ width: 76, height: 76, borderRadius: 9, objectFit: "cover", background: "#000" }} /> : <img src={m.url} style={{ width: 76, height: 76, borderRadius: 9, objectFit: "cover" }} />}</a>)}
         </div>
       </>}
 
-      {costos?.facturasIva && costos.facturasIva.length > 0 && (() => {
+      {costos.facturasIva && costos.facturasIva.length > 0 && (() => {
         const fs = costos.facturasIva;
         const ivaDe = (fx) => Number(fx.montoIva != null ? fx.montoIva : fx.total) || 0;
         const cobradoDe = (fx) => (fx.cobros || []).reduce((s, c) => s + (Number(c.monto) || 0), 0);
@@ -497,7 +539,7 @@ function SeccionMensajes({ onBack }) {
 }
 
 // ─── Panel principal ───
-function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, envios, costos, config, onGuardarConfig }) {
+function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, envios, costos, onGuardarPropia, onCrearPropia, config, onGuardarConfig }) {
   const T = temaDe(config);
   const [seccion, setSeccion] = useState(null);
   const [idx, setIdx] = useState(0);
@@ -515,7 +557,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
   if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} config={config} />;
   if (seccion === "informes") return <SeccionInformes obra={obra} envios={envios} onBack={() => setSeccion(null)} config={config} />;
   if (seccion === "planos") return <SeccionPlanos obra={obra} onBack={() => setSeccion(null)} config={config} />;
-  if (seccion === "costos") return <SeccionCostos costos={costos} onBack={() => setSeccion(null)} config={config} />;
+  if (seccion === "costos") return <SeccionCostos costos={costos} onGuardarPropia={onGuardarPropia} onCrearPropia={onCrearPropia} onBack={() => setSeccion(null)} config={config} />;
 
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
     <div style={{ position: "relative", height: "calc(280px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", boxSizing: "border-box", background: T.navy, overflow: "hidden" }}>
@@ -536,7 +578,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
     <div style={{ padding: "20px 18px 40px" }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Secciones</div>
       {SECCIONES.map(s => <FilaSeccion key={s.id} label={s.label} icon={s.icon} onClick={() => setSeccion(s.id)} config={config} />)}
-      {costos && <FilaSeccion label="Costos" icon="doc" onClick={() => setSeccion("costos")} config={config} />}
+      <FilaSeccion label="Costos" icon="doc" onClick={() => setSeccion("costos")} config={config} />
       <div style={{ textAlign: "center", fontSize: 11, color: T.muted, marginTop: 20 }}>Hola, {nombreCliente} · <button onClick={() => window.location.reload()} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>🔄 Actualizar</button> · <button onClick={() => { try { localStorage.removeItem("propietario_codigo"); localStorage.removeItem("propietario_nombre"); } catch { } window.location.reload(); }} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>Salir</button></div>
       <div style={{ textAlign: "center", marginTop: 10 }}><button onClick={() => setEditando(true)} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, cursor: "pointer" }}>⚙ Personalizar app</button></div>
     </div>
@@ -556,6 +598,34 @@ export default function ClientePropietarioApp() {
   async function guardarConfig(next) {
     setConfig(next);
     await storage.set("vv_propietario_config", JSON.stringify(next));
+  }
+
+  // Edita la obra particular en Finanzas desde Propietario. Siempre trae la versión
+  // más nueva justo antes de guardar (no la que quedó cacheada al entrar), para no
+  // pisar cambios que Finanzas haya hecho mientras tanto — y toca solo esta obra,
+  // el resto del archivo de Finanzas queda intacto.
+  async function guardarPropia(patchFn) {
+    const propiaId = extra.costos?.id;
+    if (!propiaId) return;
+    try {
+      const r = await storage.get("vv_finanzas");
+      const fin = r?.value ? JSON.parse(r.value) : {};
+      const propias = (fin.propias || []).map(p => p.id === propiaId ? patchFn(p) : p);
+      await storage.set("vv_finanzas", JSON.stringify({ ...fin, propias }));
+      const actualizada = propias.find(p => p.id === propiaId);
+      setExtra(ex => ({ ...ex, costos: actualizada ? { ...actualizada, facturasIva: ex.costos?.facturasIva } : ex.costos }));
+    } catch { alert("No se pudo guardar. Revisá la conexión e intentá de nuevo."); }
+  }
+
+  async function crearPropia() {
+    try {
+      const r = await storage.get("vv_finanzas");
+      const fin = r?.value ? JSON.parse(r.value) : {};
+      const nueva = { id: (Date.now().toString(36) + Math.random().toString(36).slice(2, 7)), nombre: obra?.nombre || "Obra", m2: 0, ventaUsd: 0, ventaArs: 0, costos: [], adjuntos: [], ts: Date.now() };
+      const propias = [...(fin.propias || []), nueva];
+      await storage.set("vv_finanzas", JSON.stringify({ ...fin, propias }));
+      setExtra(ex => ({ ...ex, costos: { ...nueva, facturasIva: [] } }));
+    } catch { alert("No se pudo crear. Revisá la conexión e intentá de nuevo."); }
   }
 
   async function cargarObra(codigo, nombre) {
@@ -657,5 +727,5 @@ export default function ClientePropietarioApp() {
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
   if (estado === "entrada") return <Entrada onEntrar={cargarObra} config={config} onGuardarConfig={guardarConfig} codigoInicial={codigoInicial} proyectoUrl={proyectoUrl} />;
-  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} envios={extra.envios} costos={extra.costos} config={config} onGuardarConfig={guardarConfig} proyectoUrl={proyectoUrl} />;
+  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} envios={extra.envios} costos={extra.costos} onGuardarPropia={guardarPropia} onCrearPropia={crearPropia} config={config} onGuardarConfig={guardarConfig} proyectoUrl={proyectoUrl} />;
 }
