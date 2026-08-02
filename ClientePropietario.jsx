@@ -468,15 +468,13 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
           <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.muted, marginBottom: 4 }}>US$</div><input value={vUTxt} onChange={e => setVUTxt(fmtMiles(e.target.value))} onBlur={e => onGuardarPropia(p => ({ ...p, ventaUsd: numMiles(e.target.value) }))} inputMode="numeric" placeholder="USD" style={{ ...inpEd, textAlign: "right" }} /></div>
           <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.muted, marginBottom: 4 }}>$</div><input value={vATxt} onChange={e => setVATxt(fmtMiles(e.target.value))} onBlur={e => onGuardarPropia(p => ({ ...p, ventaArs: numMiles(e.target.value) }))} inputMode="numeric" placeholder="$" style={{ ...inpEd, textAlign: "right" }} /></div>
         </div>
-        {(vU > 0 || vA > 0) && <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.r, padding: "13px 15px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>Resultado esperado{vU > 0 ? ` · ${mgU.toFixed(0)}%` : ""}</span>
-            <span>
-              {vU > 0 && <span style={{ fontSize: 14, fontWeight: 800, color: resU >= 0 ? "#16A34A" : "#DC2626" }}>{usdFmt(resU)}</span>}
-              {vA > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: resA >= 0 ? "#16A34A" : "#DC2626", marginLeft: 8 }}>{moneyAR(resA)}</span>}
-            </span>
+        {(vU > 0 || vA > 0) && <div style={{ marginTop: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Resultado esperado{vU > 0 ? ` · ${mgU.toFixed(0)}%` : ""}</div>
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `4px solid ${resU >= 0 || resA >= 0 ? "#16A34A" : "#DC2626"}`, borderRadius: T.r, padding: "14px 16px", marginBottom: 4 }}>
+            {vU > 0 && <div style={{ fontSize: 30, fontWeight: 800, color: resU >= 0 ? "#16A34A" : "#DC2626", lineHeight: 1.1 }}>{usdFmt(resU)}</div>}
+            {vA > 0 && <div style={{ fontSize: vU > 0 ? 16 : 30, fontWeight: vU > 0 ? 700 : 800, color: vU > 0 ? T.text : (resA >= 0 ? "#16A34A" : "#DC2626"), marginTop: vU > 0 ? 2 : 0, lineHeight: 1.1 }}>{moneyAR(resA)}</div>}
           </div>
-          {sup > 0 && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "right", marginTop: 5 }}>{vU > 0 ? usdFmt(vU / sup) : moneyAR(vA / sup)}/m² venta · {vU > 0 ? usdFmt(resU / sup) : moneyAR(resA / sup)}/m² resultado</div>}
+          {sup > 0 && <div style={{ fontSize: 11, color: T.muted, textAlign: "right", marginBottom: 16 }}>{vU > 0 ? usdFmt(vU / sup) : moneyAR(vA / sup)}/m² venta · {vU > 0 ? usdFmt(resU / sup) : moneyAR(resA / sup)}/m² resultado</div>}
         </div>}
       </div>
 
