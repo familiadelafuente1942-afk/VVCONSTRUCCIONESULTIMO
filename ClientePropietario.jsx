@@ -387,6 +387,8 @@ function SeccionPlanos({ obra, onBack, config }) {
   </div>);
 }
 function moneyAR(n) { return "$" + Math.round(Number(n) || 0).toLocaleString("es-AR"); }
+const fmtMiles = (v) => { const s = String(v == null ? "" : v).replace(/\D/g, ""); return s ? Number(s).toLocaleString("es-AR") : ""; };
+const numMiles = (v) => { const s = String(v == null ? "" : v).replace(/\D/g, ""); return s ? Number(s) : 0; };
 function arsUnif(c, cotU) { const n = Number(c.monto) || 0; if (c.moneda === "ars") return n; if (c.moneda === "usd") return cotU > 0 ? n * cotU : (Number(c.montoArs) || 0); return Number(c.montoArs) || 0; }
 function usdUnif(c, cotU) { const n = Number(c.monto) || 0; if (c.moneda === "usd") return n; if (c.moneda === "ars") return cotU > 0 ? n / cotU : (Number(c.montoUsd) || 0); return Number(c.montoUsd) || 0; }
 function usdFmt(n) { return "USD " + Math.round(Number(n) || 0).toLocaleString("es-AR"); }
@@ -395,6 +397,15 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
   const [creando, setCreando] = useState(false);
   const [nuevo, setNuevo] = useState({ cat: "", monto: "", moneda: "ars", nota: "" });
   const [guardando, setGuardando] = useState(false);
+  const sup0 = Number(costos?.m2) || 0;
+  const vU0 = Number(costos?.ventaUsd) || 0;
+  const vA0 = Number(costos?.ventaArs) || 0;
+  const [supTxt, setSupTxt] = useState(sup0 ? fmtMiles(sup0) : "");
+  const [vUTxt, setVUTxt] = useState(vU0 ? fmtMiles(vU0) : "");
+  const [vATxt, setVATxt] = useState(vA0 ? fmtMiles(vA0) : "");
+  useEffect(() => { setSupTxt(sup0 ? fmtMiles(sup0) : ""); }, [sup0]);
+  useEffect(() => { setVUTxt(vU0 ? fmtMiles(vU0) : ""); }, [vU0]);
+  useEffect(() => { setVATxt(vA0 ? fmtMiles(vA0) : ""); }, [vA0]);
 
   if (!costos) {
     return (<div style={{ minHeight: "100vh", background: T.bg }}>
@@ -408,10 +419,10 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
 
   const lista = (costos.costos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const cotU = Number(costos.cotizUnif) || 0;
-  const sup = Number(costos.m2) || 0;
+  const sup = sup0;
   const totArs = lista.reduce((s, c) => s + arsUnif(c, cotU), 0);
   const totUsd = lista.reduce((s, c) => s + usdUnif(c, cotU), 0);
-  const vU = Number(costos.ventaUsd) || 0, vA = Number(costos.ventaArs) || 0;
+  const vU = vU0, vA = vA0;
   const resU = vU - totUsd, resA = vA - totArs, mgU = vU > 0 ? resU / vU * 100 : 0;
   const porRubro = {};
   lista.forEach(c => { const k = c.cat || "Otros"; porRubro[k] = (porRubro[k] || 0) + arsUnif(c, cotU); });
@@ -435,7 +446,7 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
     <SubHead titulo="Costos" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
       <div style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}><span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Superficie</span><input defaultValue={sup || ""} onBlur={e => onGuardarPropia(p => ({ ...p, m2: Number(e.target.value) || 0 }))} inputMode="numeric" placeholder="m²" style={{ ...inpEd, width: 100, textAlign: "right" }} /></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}><span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Superficie</span><input value={supTxt} onChange={e => setSupTxt(fmtMiles(e.target.value))} onBlur={e => onGuardarPropia(p => ({ ...p, m2: numMiles(e.target.value) }))} inputMode="numeric" placeholder="m²" style={{ ...inpEd, width: 100, textAlign: "right" }} /></div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Fecha de inicio</span><input type="date" defaultValue={costos.inicio || ""} onBlur={e => onGuardarPropia(p => ({ ...p, inicio: e.target.value }))} style={{ ...inpEd, width: 150, textAlign: "right" }} /></div>
       </div>
 
@@ -457,8 +468,8 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
       <div style={{ marginTop: 18 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Venta esperada</div>
         <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.muted, marginBottom: 4 }}>US$</div><input defaultValue={vU || ""} onBlur={e => onGuardarPropia(p => ({ ...p, ventaUsd: Number(e.target.value) || 0 }))} inputMode="numeric" placeholder="USD" style={{ ...inpEd, textAlign: "right" }} /></div>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.muted, marginBottom: 4 }}>$</div><input defaultValue={vA || ""} onBlur={e => onGuardarPropia(p => ({ ...p, ventaArs: Number(e.target.value) || 0 }))} inputMode="numeric" placeholder="$" style={{ ...inpEd, textAlign: "right" }} /></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.muted, marginBottom: 4 }}>US$</div><input value={vUTxt} onChange={e => setVUTxt(fmtMiles(e.target.value))} onBlur={e => onGuardarPropia(p => ({ ...p, ventaUsd: numMiles(e.target.value) }))} inputMode="numeric" placeholder="USD" style={{ ...inpEd, textAlign: "right" }} /></div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, color: T.muted, marginBottom: 4 }}>$</div><input value={vATxt} onChange={e => setVATxt(fmtMiles(e.target.value))} onBlur={e => onGuardarPropia(p => ({ ...p, ventaArs: numMiles(e.target.value) }))} inputMode="numeric" placeholder="$" style={{ ...inpEd, textAlign: "right" }} /></div>
         </div>
         {(vU > 0 || vA > 0) && <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.r, padding: "13px 15px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -488,7 +499,7 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>+ Agregar gasto</div>
         <input value={nuevo.cat} onChange={e => setNuevo(n => ({ ...n, cat: e.target.value }))} placeholder="Categoría (ej: Materiales, Mano de obra…)" style={{ ...inpEd, marginBottom: 8 }} />
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input value={nuevo.monto} onChange={e => setNuevo(n => ({ ...n, monto: e.target.value }))} inputMode="numeric" placeholder="Monto" style={{ ...inpEd, flex: 1 }} />
+          <input value={fmtMiles(nuevo.monto)} onChange={e => setNuevo(n => ({ ...n, monto: numMiles(e.target.value) }))} inputMode="numeric" placeholder="Monto" style={{ ...inpEd, flex: 1 }} />
           <div style={{ display: "flex", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden" }}>
             {[["ars", "$"], ["usd", "US$"]].map(([v, l]) => <button key={v} onClick={() => setNuevo(n => ({ ...n, moneda: v }))} style={{ background: nuevo.moneda === v ? T.brass : "transparent", color: nuevo.moneda === v ? "#fff" : T.sub, border: "none", padding: "0 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
           </div>
