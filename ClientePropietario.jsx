@@ -400,12 +400,15 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
   const sup0 = Number(costos?.m2) || 0;
   const vU0 = Number(costos?.ventaUsd) || 0;
   const vA0 = Number(costos?.ventaArs) || 0;
+  const cot0 = Number(costos?.cotizUnif) || 0;
   const [supTxt, setSupTxt] = useState(sup0 ? fmtMiles(sup0) : "");
   const [vUTxt, setVUTxt] = useState(vU0 ? fmtMiles(vU0) : "");
   const [vATxt, setVATxt] = useState(vA0 ? fmtMiles(vA0) : "");
+  const [cotTxt, setCotTxt] = useState(cot0 ? fmtMiles(cot0) : "");
   useEffect(() => { setSupTxt(sup0 ? fmtMiles(sup0) : ""); }, [sup0]);
   useEffect(() => { setVUTxt(vU0 ? fmtMiles(vU0) : ""); }, [vU0]);
   useEffect(() => { setVATxt(vA0 ? fmtMiles(vA0) : ""); }, [vA0]);
+  useEffect(() => { setCotTxt(cot0 ? fmtMiles(cot0) : ""); }, [cot0]);
 
   if (!costos) {
     return (<div style={{ minHeight: "100vh", background: T.bg }}>
@@ -448,6 +451,8 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
       <div style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}><span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Superficie</span><input value={supTxt} onChange={e => setSupTxt(fmtMiles(e.target.value))} onBlur={e => onGuardarPropia(p => ({ ...p, m2: numMiles(e.target.value) }))} inputMode="numeric" placeholder="m²" style={{ ...inpEd, width: 100, textAlign: "right" }} /></div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Fecha de inicio</span><input type="date" defaultValue={costos.inicio || ""} onBlur={e => onGuardarPropia(p => ({ ...p, inicio: e.target.value }))} style={{ ...inpEd, width: 150, textAlign: "right" }} /></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>Cotización p/ unificar</span><input value={cotTxt} onChange={e => setCotTxt(fmtMiles(e.target.value))} onBlur={e => onGuardarPropia(p => ({ ...p, cotizUnif: numMiles(e.target.value) }))} inputMode="numeric" placeholder="ej: 1450" style={{ ...inpEd, width: 110, textAlign: "right" }} /></div>
+        {cotU <= 0 && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>Sin esto, los gastos en pesos y en dólares no se pueden sumar juntos — la inversión y el resultado esperado van a quedar incompletos. Poné acá el dólar del momento (ej: 1450) para unificar todo.</div>}
       </div>
 
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Inversión total</div>
