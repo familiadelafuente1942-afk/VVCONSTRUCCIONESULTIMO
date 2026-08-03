@@ -1509,7 +1509,7 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
       : `Detalle consolidado de los certificados de obra emitidos${todosPeriodos ? "" : ` en el período <b>${periodoTxt}</b>`}, correspondientes a las obras ejecutadas por <b>${cfg.nombre || "V+V Construcciones"}</b> para <b>${comitente}</b>. El importe total resulta de la suma de los certificados individuales que se detallan a continuación.`;
     const colMonto = esCosto ? "Costo del período" : "Monto a pagar";
     const totalLbl = esCosto ? "TOTAL COSTO DEL PERÍODO" : "TOTAL CERTIFICADOS";
-    const metaDer = esCosto ? `<div><span>Certificados:</span> <b>${filas.length}</b></div>` : `<div><span>Certificados:</span> <b>${filas.length}</b></div>`;
+    const metaDer = esCosto ? `<div><span>Resumen de certificación:</span> <b>${filas.length}</b></div>` : `<div><span>Resumen de certificación:</span> <b>${filas.length}</b></div>`;
 
     // Ajustes a mano (adelantos + cobrado sin certificado): solo en el modo "cliente".
     let adelantoHtml = "";
