@@ -3200,12 +3200,11 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
     p.fact += fact; p.cobro += fact; p.costoDir += hp; p.costo += hp; p.util += (fact - hp); p.res += (fact - hp); p.histAjuste = ha; p.esHist = true;
   });
   const totCosto = totCostoDir;
-  const totRes = totUtil - totImpuestos - totImprev - totFijo - totGastos;
 
   // Cobrado/pagado real por obra — igual para TODAS las obras, tengan certificados,
-  // estén en modo histórico, o solo tengan movimientos sueltos en Caja. Esto es lo que
-  // se muestra en "Cuánto deja cada obra", y también lo que suma el total de
-  // "Resultado operativo" (así las dos pantallas siempre coinciden).
+  // estén en modo histórico, o solo tengan movimientos sueltos en Caja. Esto reemplaza
+  // a totUtil (que antes solo miraba certificados+histórico) para que "Resultado
+  // operativo" y "Cuánto deja cada obra" siempre den el mismo número.
   const movsResGlobal = data.movimientos || [];
   const filasPorObra = obras.map(o => {
     const p = porObra[o.id] || {};
@@ -3232,6 +3231,8 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   });
   const totBrutoTodo = filasPorObra.reduce((s, f) => s + f.cobrado, 0);
   const totCostoTodo = filasPorObra.reduce((s, f) => s + f.pagado, 0);
+  totUtil = totBrutoTodo - totCostoTodo;
+  const totRes = totUtil - totImpuestos - totImprev - totFijo - totGastos;
   const movs = data.movimientos || [];
   const cobroReal = movs.filter(m => m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
   const pagoReal = movs.filter(m => m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
