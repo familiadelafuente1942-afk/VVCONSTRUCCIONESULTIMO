@@ -1426,10 +1426,22 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
   const [pdfHtml, setPdfHtml] = useState(null);
   const extra = data.certGeneralExtra || {};
   const [adelantoTxt, setAdelantoTxt] = useState(extra.adelanto ? fmtMiles(extra.adelanto) : "");
-  const [saldoSinCertTxt, setSaldoSinCertTxt] = useState(extra.saldoSinCert ? fmtMiles(extra.saldoSinCert) : "");
+  const cobrosSinCert = extra.cobrosSinCert || [];
+  const [nuevoCobroObra, setNuevoCobroObra] = useState("");
+  const [nuevoCobroMonto, setNuevoCobroMonto] = useState("");
   function guardarExtra(campo, valorTxt) {
     const v = numMoney(valorTxt);
-    save(logH({ ...data, certGeneralExtra: { ...(data.certGeneralExtra || {}), [campo]: v } }, `Certificación general · ${campo === "adelanto" ? "adelanto" : "cobrado sin certificado"} · ${money(v)}`));
+    save(logH({ ...data, certGeneralExtra: { ...(data.certGeneralExtra || {}), [campo]: v } }, `Certificación general · ${campo === "adelanto" ? "adelanto" : campo} · ${money(v)}`));
+  }
+  function agregarCobroSinCert() {
+    const v = numMoney(nuevoCobroMonto);
+    if (!nuevoCobroObra || !v) { alert("Elegí la obra y el monto."); return; }
+    const item = { id: uid(), obraId: nuevoCobroObra, monto: v, ts: Date.now() };
+    save(logH({ ...data, certGeneralExtra: { ...(data.certGeneralExtra || {}), cobrosSinCert: [...cobrosSinCert, item] } }, `Certificación general · cobro sin cert. · ${obras.find(o => o.id === nuevoCobroObra)?.nombre || ""} · ${money(v)}`));
+    setNuevoCobroObra(""); setNuevoCobroMonto("");
+  }
+  function borrarCobroSinCert(id) {
+    save(logH({ ...data, certGeneralExtra: { ...(data.certGeneralExtra || {}), cobrosSinCert: cobrosSinCert.filter(c => c.id !== id) } }, "Certificación general · borró cobro sin cert."));
   }
 
   // meses que tienen al menos un certificado, del más nuevo al más viejo
@@ -1505,19 +1517,36 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
       </div>}
 
       {!esCosto && filas.length > 0 && (() => {
-        const adelanto = numMoney(adelantoTxt), saldoSinCert = numMoney(saldoSinCertTxt);
-        const granTotal = total + adelanto + saldoSinCert;
+        const adelanto = numMoney(adelantoTxt);
+        const totCobrosSinCert = cobrosSinCert.reduce((s, c) => s + (Number(c.monto) || 0), 0);
+        const granTotal = total - adelanto + totCobrosSinCert;
+        const nomObraExtra = (id) => obras.find(o => o.id === id)?.nombre || "—";
         return (<div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px dashed ${T.border}` }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Sumar a mano</div>
-          <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Plata que ya está cobrada o comprometida pero que todavía no está en ningún certificado cargado arriba.</div>
-          <Field label="Adelanto de certificados">
+          <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>El adelanto RESTA del total (ya está cobrado por anticipado). El cobrado sin certificado SUMA (plata real que entró y todavía no tiene certificado cargado).</div>
+          <Field label="Adelanto de certificados (resta)">
             <input value={adelantoTxt} onChange={e => setAdelantoTxt(fmtMiles(e.target.value))} onBlur={e => guardarExtra("adelanto", e.target.value)} inputMode="numeric" placeholder="0" style={inp} />
           </Field>
-          <Field label="Saldo de cobros sin certificado">
-            <input value={saldoSinCertTxt} onChange={e => setSaldoSinCertTxt(fmtMiles(e.target.value))} onBlur={e => guardarExtra("saldoSinCert", e.target.value)} inputMode="numeric" placeholder="0" style={inp} />
-          </Field>
-          {(adelanto > 0 || saldoSinCert > 0) && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 13, marginTop: 8, borderTop: `2px solid ${T.accent}` }}>
-            <span style={{ fontSize: 14.5, fontWeight: 800 }}>GRAN TOTAL<span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}> · certificados + adelanto + sin cert.</span></span>
+
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, marginTop: 14, marginBottom: 8 }}>Cobrado sin certificado (suma) — por obra</div>
+          {cobrosSinCert.length > 0 && cobrosSinCert.map(c => (<div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{nomObraExtra(c.obraId)}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{money(c.monto)}</span>
+              <button onClick={() => borrarCobroSinCert(c.id)} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, padding: "3px 7px", fontSize: 10, cursor: "pointer" }}>✕</button>
+            </span>
+          </div>))}
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <select value={nuevoCobroObra} onChange={e => setNuevoCobroObra(e.target.value)} style={{ ...inp, flex: 1.3 }}>
+              <option value="">Obra…</option>
+              {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+            </select>
+            <input value={nuevoCobroMonto} onChange={e => setNuevoCobroMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Monto" style={{ ...inp, flex: 1 }} />
+            <button onClick={agregarCobroSinCert} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 16px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
+          </div>
+
+          {(adelanto > 0 || totCobrosSinCert > 0) && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 13, marginTop: 16, borderTop: `2px solid ${T.accent}` }}>
+            <span style={{ fontSize: 14.5, fontWeight: 800 }}>GRAN TOTAL<span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}> · certificados − adelanto + sin cert.</span></span>
             <span style={{ fontSize: 21, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{money(granTotal)}</span>
           </div>}
         </div>);
