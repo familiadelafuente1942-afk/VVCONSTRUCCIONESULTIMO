@@ -1530,7 +1530,7 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
       if (adelantos.length > 0 || totCobrosSinCertTodo !== 0) {
         ajustesHtml = `<h2>Ajustes</h2><table><thead><tr><th>Obra</th><th class="rgt">Monto</th></tr></thead><tbody>
           ${adelantos.length > 0 ? `<tr><td colspan="2" style="font-weight:700;background:#F8FAFC;color:#5B6B7F;font-size:10.5px;text-transform:uppercase">Adelanto de certificados (resta)</td></tr>${filasAdelanto}<tr><td style="font-weight:700">Subtotal adelantos</td><td class="rgt" style="font-weight:700">− ${money(totAdelantos)}</td></tr>` : ""}
-          ${filasCobrado ? `<tr><td colspan="2" style="font-weight:700;background:#F8FAFC;color:#5B6B7F;font-size:10.5px;text-transform:uppercase">Cobrado sin certificado (suma)</td></tr>${filasCobrado}<tr><td style="font-weight:700">Saldo ajustes sin certificado</td><td class="rgt" style="font-weight:700">${money(totCobrosSinCertTodo)}</td></tr>` : ""}
+          ${filasCobrado ? `<tr><td colspan="2" style="font-weight:700;background:#F8FAFC;color:#5B6B7F;font-size:10.5px;text-transform:uppercase">Cobrado sin certificado (suma)</td></tr>${filasCobrado}<tr><td style="font-weight:700">Saldo sin certificado</td><td class="rgt" style="font-weight:700">${money(totCobrosSinCertTodo)}</td></tr>` : ""}
         </tbody></table>`;
       }
     }
