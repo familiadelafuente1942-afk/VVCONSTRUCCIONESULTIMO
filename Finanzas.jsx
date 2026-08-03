@@ -3396,6 +3396,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
         const p = porObra[o.id] || {};
         let cobrado = p.fact || 0;        // facturado real: certificados (con ajuste) + histórico
         let pagado = p.costoDir || 0;     // costo de obra
+        let debug = "";
         if (!p.nCert) {
           // Sin certificados: no hay de dónde sacar "facturado/costo directo" por cert,
           // así que usamos lo que sí hay cargado — el histórico, o si no, Caja directo.
@@ -3403,12 +3404,17 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
             const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual);
             cobrado = calc.cobrado + calc.ajuste;
             pagado = num(o.histPagado);
+            debug = "histórico";
           } else {
-            cobrado = movsRes.filter(m => m.obraId === o.id && m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
-            pagado = movsRes.filter(m => m.obraId === o.id && m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
+            const movsObra = movsRes.filter(m => m.obraId === o.id);
+            cobrado = movsObra.filter(m => m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
+            pagado = movsObra.filter(m => m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
+            debug = `id:${String(o.id).slice(-6)} · movs totales:${movsRes.length} · de esta obra:${movsObra.length}`;
           }
+        } else {
+          debug = `${p.nCert} cert.`;
         }
-        return { nombre: o.nombre, presup: presupCliente(o), cobrado, pagado, util: cobrado - pagado };
+        return { nombre: o.nombre, presup: presupCliente(o), cobrado, pagado, util: cobrado - pagado, debug };
       });
       const tCob = filas.reduce((s, f) => s + f.cobrado, 0);
       const tPag = filas.reduce((s, f) => s + f.pagado, 0);
@@ -3433,6 +3439,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
             <div style={{ flex: 1.4, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</div>
               <div style={{ fontSize: 9.5, color: T.muted }}>Presup. {money(f.presup)}</div>
+              {f.debug && <div style={{ fontSize: 8.5, color: "#B45309" }}>🔧 {f.debug}</div>}
             </div>
             <span style={{ flex: 1, textAlign: "right", fontSize: 12, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: T.sub }}>{sinMov ? "—" : money(f.cobrado)}</span>
             <span style={{ flex: 1, textAlign: "right", fontSize: 12, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: T.sub }}>{sinMov ? "—" : money(f.pagado)}</span>
