@@ -3528,8 +3528,8 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
 
     {arr.length > 0 && <>
       <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-        <KPI t="Facturado" v={money(totFact)} c={T.accent} />
-        <KPI t="Costo obra" v={money(totCostoDir)} c={T.warn} />
+        <KPI t="Facturado" v={money(totBrutoTodo)} c={T.accent} />
+        <KPI t="Costo obra" v={money(totCostoTodo)} c={T.warn} />
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <KPI t="Resultado" v={money(totRes)} c={totRes >= 0 ? T.ok : "#EF4444"} />
