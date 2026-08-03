@@ -324,8 +324,7 @@ export default function MiAsistente() {
       let arr = []; try { const r = await storage.get("sebastian_agenda"); if (r?.value) arr = JSON.parse(r.value); } catch { }
       const paraAvisar = arr.filter(e => { const fe = parseFecha(e.fecha); return fe && fe.getFullYear() === man.getFullYear() && fe.getMonth() === man.getMonth() && fe.getDate() === man.getDate() && !e.recordado; });
       if (!paraAvisar.length) return;
-      setMsgs(prev => [...prev, ...paraAvisar.map(e => ({ role: "assistant", content: `🔔 Recordatorio: MAÑANA (${e.fecha}${e.hora ? " " + e.hora : ""}) tenés → ${e.titulo}${e.nota ? `\n${e.nota}` : ""}` }))]);
-      try { if ("setAppBadge" in navigator) navigator.setAppBadge(paraAvisar.length); } catch { }
+      setMsgs(prev => [...prev, ...paraAvisar.map(e => ({ role: "assistant", content: e.tipo === "pago" ? `🔔💰 Recordatorio: MAÑANA (${e.fecha}) tenés que pagarle a → ${e.titulo}${e.monto ? ` — $${e.monto.toLocaleString("es-AR")}` : ""}${e.nota ? `\n${e.nota}` : ""}` : `🔔 Recordatorio: MAÑANA (${e.fecha}${e.hora ? " " + e.hora : ""}) tenés → ${e.titulo}${e.nota ? `\n${e.nota}` : ""}` }))]);
       const next = arr.map(e => paraAvisar.some(x => x.id === e.id) ? { ...e, recordado: true } : e);
       setAgenda(next); try { localStorage.setItem("sebastian_agenda", JSON.stringify(next)); } catch { } await storage.set("sebastian_agenda", JSON.stringify(next)).catch(() => { });
     }
@@ -333,22 +332,55 @@ export default function MiAsistente() {
     return () => { clearTimeout(t); clearInterval(iv); };
   }, [pinOk]);
 
-  // Mensaje motivador del entrenamiento: una vez por día, al abrir el chat.
+  // Recordatorios del día: una vez por día, al abrir el chat — junta entrenamiento,
+  // suplementos pendientes de hoy y la agenda (eventos y pagos) de hoy en un solo mensaje.
   useEffect(() => {
     if (!pinOk) return;
     const hoyKey = new Date().toDateString();
     let visto = null; try { visto = localStorage.getItem("sebastian_motiv_visto"); } catch { }
     if (visto === hoyKey) return;
     const t = setTimeout(() => {
+      const partes = [];
+      // Entrenamiento
       const sesiones = entrenoInicio ? generarCalendarioPlan(entrenoInicio) : [];
       const hechasCount = sesiones.filter(s => entrenoHechas[s.id]).length;
       const proxima = sesiones.find(s => !entrenoHechas[s.id]);
       const frase = entrenoInicio ? fraseDelDia(hechasCount, sesiones.length, proxima) : "Todavía no arrancaste el plan de entrenamiento — andá a la solapa Entrenamiento y elegí una fecha de inicio, aunque sea hoy mismo.";
-      setMsgs(prev => [...prev, { role: "assistant", content: `💪 ${frase}` }]);
+      partes.push(`💪 ${frase}`);
+      // Suplementos pendientes de hoy
+      const nombresPorId = { d3: "Vitamina D3", magnesio: "Magnesio", omega3: "Omega 3", colageno: "Colágeno + Vitamina C", proteina: "Proteína", creatina: "Creatina" };
+      const tomadosHoy = suplTomados[hoyKey] || [];
+      const suplFaltan = (suplSel || []).filter(id => !tomadosHoy.includes(id)).map(id => nombresPorId[id]).filter(Boolean);
+      if (suplFaltan.length) partes.push(`💊 Suplementos de hoy: ${suplFaltan.join(", ")}.`);
+      // Agenda de hoy (eventos y pagos)
+      const hoyStr0 = hoyStr();
+      const agendaHoy = (agenda || []).filter(e => e.fecha === hoyStr0);
+      if (agendaHoy.length) {
+        const linea = agendaHoy.map(e => e.tipo === "pago" ? `💰 pagarle a ${e.titulo}${e.monto ? ` ($${e.monto.toLocaleString("es-AR")})` : ""}` : `📅 ${e.titulo}${e.hora ? ` (${e.hora})` : ""}`).join(" · ");
+        partes.push(`Para hoy en la agenda: ${linea}.`);
+      }
+      setMsgs(prev => [...prev, { role: "assistant", content: partes.join("\n\n") }]);
       try { localStorage.setItem("sebastian_motiv_visto", hoyKey); } catch { }
-    }, 1200);
+    }, 1500);
     return () => clearTimeout(t);
-  }, [pinOk, entrenoInicio, entrenoHechas]);
+  }, [pinOk, entrenoInicio, entrenoHechas, suplSel, suplTomados, agenda]);
+
+  // Globito único en el ícono de la app: suma agenda de mañana sin avisar todavía +
+  // sesión de entrenamiento de hoy pendiente + suplementos de hoy sin tomar.
+  useEffect(() => {
+    if (!pinOk) return;
+    function parseFecha2(f) { const p = String(f || "").split("/"); if (p.length < 3) return null; let [d, m, y] = p.map(n => parseInt(n, 10)); if (y < 100) y += 2000; if (!d || !m || !y) return null; return new Date(y, m - 1, d); }
+    const man = new Date(); man.setDate(man.getDate() + 1); man.setHours(0, 0, 0, 0);
+    const agendaPend = (agenda || []).filter(e => { const fe = parseFecha2(e.fecha); return fe && fe.getTime() === man.getTime() && !e.recordado; }).length;
+    const sesiones = entrenoInicio ? generarCalendarioPlan(entrenoInicio) : [];
+    const hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
+    const sesionHoyPend = sesiones.some(s => new Date(s.fecha + "T00:00:00").getTime() === hoy0.getTime() && !entrenoHechas[s.id]) ? 1 : 0;
+    const hoyKeyBadge = new Date().toDateString();
+    const tomadosHoyBadge = suplTomados[hoyKeyBadge] || [];
+    const suplPend = (suplSel || []).filter(id => !tomadosHoyBadge.includes(id)).length;
+    const total = agendaPend + sesionHoyPend + suplPend;
+    try { if ("setAppBadge" in navigator) { if (total > 0) navigator.setAppBadge(total); else navigator.clearAppBadge && navigator.clearAppBadge(); } } catch { }
+  }, [pinOk, agenda, entrenoInicio, entrenoHechas, suplSel, suplTomados]);
 
   function entrar() {
     try { localStorage.setItem("miasistente_trust", trust ? "1" : "0"); } catch { }
@@ -396,7 +428,7 @@ export default function MiAsistente() {
     const totDia = (gastos || []).filter(g => g.fecha === hoyG).reduce((a, g) => a + (g.monto || 0), 0);
     const totMes = (gastos || []).filter(g => (g.fecha || "").slice(3) === mesG).reduce((a, g) => a + (g.monto || 0), 0);
     const totalPend = (pagos || []).filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
-    const ag = (agenda || []).slice(0, 30).map(e => `· ${e.fecha}${e.hora ? " " + e.hora : ""} — ${e.titulo}${e.nota ? " (" + e.nota + ")" : ""}`).join("\n") || "(agenda vacía)";
+    const ag = (agenda || []).slice(0, 30).map(e => `· ${e.fecha}${e.hora ? " " + e.hora : ""} — ${e.tipo === "pago" ? `💰 PAGO a ${e.titulo}${e.monto ? ` ($${e.monto.toLocaleString("es-AR")})` : ""}` : e.titulo}${e.nota ? " (" + e.nota + ")" : ""}`).join("\n") || "(agenda vacía)";
     const arch = (archivos || []).slice(0, 40).map(f => `· [${f.categoria}] ${f.nombre}`).join("\n") || "(sin archivos)";
     const con = (contactos || []).slice(0, 60).map(c => `· ${c.nombre}${c.telefono ? ` · WhatsApp ${c.telefono}` : ""}${c.email ? ` · ${c.email}` : ""}${c.alias ? ` · alias ${c.alias}` : ""}${c.nota ? ` (${c.nota})` : ""}`).join("\n") || "(sin contactos favoritos)";
     return `Sos el asistente personal y privado de Sebastián (Presidente de V+V Construcciones). Hablás en español rioplatense (vos), claro y directo. Tenés memoria: recordás lo que Sebastián te contó (está en "SOBRE SEBASTIÁN") y el historial de esta conversación. Tratalo con cercanía y empatía, como alguien que lo conoce.
@@ -459,6 +491,7 @@ Acciones:
 {"tipo":"crear_obra","nombre":"Nombre de la obra","direccion":"opcional","estado":"En curso","avance":0}
 {"tipo":"recordar","dato":"lo que hay que recordar de Sebastián (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
+{"tipo":"agendar","tipoAgenda":"pago","titulo":"Nombre a quién pagarle","fecha":"DD/MM/AA","monto":50000,"nota":"opcional"}
 {"tipo":"cargar_gasto","gastos":[{"concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"},{"concepto":"Comida","monto":8000},{"concepto":"Ferretería","monto":5000}]}
 {"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
@@ -472,7 +505,7 @@ Reglas:
 - "foto_a_obra" cuando Sebastián sube una o varias fotos por el chat y te dice a qué obra van (ej: "subila a Castores 475", "estas fotos son de Golf 2-93", "mandalas a la obra A 37"). Tomo las últimas fotos que subió y las cargo en las fotos de esa obra (las ve V+V).
 - "crear_obra" cuando dice "cargá una obra nueva", "agregá la obra X", "abrí una obra en tal dirección". Poné el nombre y lo que aclare (dirección, estado).
 - "recordar" SIEMPRE que Sebastián te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
-- "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora.
+- "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora. Si es un PAGO A REALIZAR en el futuro (ej: "el 10 tengo que pagarle a Juan 50000", "recordame pagar el alquiler el día 5"), usá "tipoAgenda":"pago" con titulo (a quién/qué), fecha y monto — le va a llegar como recordatorio igual que los demás eventos, y aparece marcado como pago en la Agenda.
 - "cargar_gasto" cuando dice "cargá un gasto de nafta 15000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto, sin obra). IMPORTANTE: si te da VARIOS gastos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "gastos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una.
 - "cargar_pago" para registrar en la planilla de Pagos cualquier pago que menciona, se lo haya pedido o simplemente esté contando ("pagale a Humberto 50000", "anotá un pago a Juan de 30 lucas", "le pagué a X"). Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método.
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
@@ -577,7 +610,8 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     setSubiendoArch(false);
   }
   function agendarEvento(a) {
-    const ev = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), hora: a.hora || "", titulo: a.titulo || a.texto || "Evento", nota: a.nota || "", ts: Date.now() };
+    const esPago = a.tipoAgenda === "pago" || a.tipo === "pago";
+    const ev = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), hora: a.hora || "", titulo: a.titulo || a.texto || "Evento", nota: a.nota || "", tipo: esPago ? "pago" : "evento", monto: esPago ? (Number(String(a.monto || 0).replace(/[^\d.-]/g, "")) || 0) : undefined, ts: Date.now() };
     persistAgenda([...(agenda || []), ev].sort((x, y) => fechaAOrden(x.fecha, x.hora) - fechaAOrden(y.fecha, y.hora)));
     return ev;
   }
@@ -755,7 +789,10 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     }
     if (accion && accion.tipo === "agendar") {
       const ev = agendarEvento(accion);
-      setMsgs(prev => [...prev, { role: "assistant", content: `📅 Agendado: ${ev.titulo} — ${ev.fecha}${ev.hora ? " " + ev.hora : ""}${ev.nota ? `\n${ev.nota}` : ""}.${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Agenda.` }]);
+      const msg = ev.tipo === "pago"
+        ? `💰 Anotado como pago a realizar: ${ev.titulo}${ev.monto ? ` — $${ev.monto.toLocaleString("es-AR")}` : ""} — ${ev.fecha}${ev.nota ? `\n${ev.nota}` : ""}.`
+        : `📅 Agendado: ${ev.titulo} — ${ev.fecha}${ev.hora ? " " + ev.hora : ""}${ev.nota ? `\n${ev.nota}` : ""}.`;
+      setMsgs(prev => [...prev, { role: "assistant", content: `${msg}${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Agenda.` }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "generar_pdf") {
@@ -959,7 +996,7 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, 
 }
 
 function AgendaBody({ agenda, onAdd, onDel }) {
-  const [f, setF] = useState({ fecha: "", hora: "", titulo: "", nota: "" });
+  const [f, setF] = useState({ fecha: "", hora: "", titulo: "", nota: "", tipo: "evento", monto: "" });
   // Ordena por fecha/hora REALES (no como texto) — así el más próximo va primero
   // sin importar si tiene año, o si un evento lejano en el tiempo pero con
   // números de día/mes más chicos quedaba antes por error.
@@ -968,18 +1005,22 @@ function AgendaBody({ agenda, onAdd, onDel }) {
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo evento</div>
       <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
-        <input value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} placeholder="Fecha (DD/MM/AA)" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />
-        <input value={f.hora} onChange={e => setF({ ...f, hora: e.target.value })} placeholder="Hora" style={{ width: 78, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />
+        {[["evento", "📅 Evento"], ["pago", "💰 Pago a realizar"]].map(([k, l]) => <button key={k} onClick={() => setF({ ...f, tipo: k })} style={{ flex: 1, background: f.tipo === k ? T.navy : T.bg, color: f.tipo === k ? "#fff" : T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
       </div>
-      <input value={f.titulo} onChange={e => setF({ ...f, titulo: e.target.value })} placeholder="Título (ej: Reunión con Belfast)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
+        <input value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} placeholder="Fecha (DD/MM/AA)" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />
+        {f.tipo === "evento" && <input value={f.hora} onChange={e => setF({ ...f, hora: e.target.value })} placeholder="Hora" style={{ width: 78, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />}
+      </div>
+      <input value={f.titulo} onChange={e => setF({ ...f, titulo: e.target.value })} placeholder={f.tipo === "pago" ? "¿A quién le tenés que pagar?" : "Título (ej: Reunión con Belfast)"} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      {f.tipo === "pago" && <input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />}
       <input value={f.nota} onChange={e => setF({ ...f, nota: e.target.value })} placeholder="Nota (opcional)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text, marginBottom: 10, boxSizing: "border-box" }} />
-      <button onClick={() => { if (!f.titulo.trim()) { alert("Poné un título."); return; } onAdd({ ...f, fecha: f.fecha || hoyStr() }); setF({ fecha: "", hora: "", titulo: "", nota: "" }); }} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋ Agendar</button>
+      <button onClick={() => { if (!f.titulo.trim()) { alert(f.tipo === "pago" ? "Poné a quién." : "Poné un título."); return; } onAdd({ ...f, fecha: f.fecha || hoyStr() }); setF({ fecha: "", hora: "", titulo: "", nota: "", tipo: f.tipo, monto: "" }); }} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋ {f.tipo === "pago" ? "Agendar pago" : "Agendar"}</button>
     </div>
     {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px", lineHeight: 1.6 }}>Agenda vacía.<br />Desde el Chat podés decir: <span style={{ color: T.sub }}>"agendá reunión con Belfast el jueves a las 10"</span></div>}
-    {lista.map(e => (<div key={e.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+    {lista.map(e => (<div key={e.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${e.tipo === "pago" ? "#9A6B1E" : BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: BRASS }}>{e.fecha}{e.hora ? ` · ${e.hora}` : ""}</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginTop: 2 }}>{e.titulo}</div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: e.tipo === "pago" ? "#9A6B1E" : BRASS }}>{e.fecha}{e.hora ? ` · ${e.hora}` : ""}{e.tipo === "pago" ? " · PAGO" : ""}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginTop: 2 }}>{e.tipo === "pago" ? `💰 ${e.titulo}${e.monto ? ` — $${Number(e.monto).toLocaleString("es-AR")}` : ""}` : e.titulo}</div>
         {e.nota && <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{e.nota}</div>}
       </div>
       <button onClick={() => onDel(e.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer" }}>✕</button>
