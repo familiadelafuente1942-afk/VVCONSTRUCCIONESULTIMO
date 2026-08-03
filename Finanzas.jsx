@@ -1426,13 +1426,25 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
   const certs = data.certs || [];
   const [pdfHtml, setPdfHtml] = useState(null);
   const extra = data.certGeneralExtra || {};
-  const [adelantoTxt, setAdelantoTxt] = useState(extra.adelanto ? fmtMiles(extra.adelanto) : "");
+  const adelantos = extra.adelantos || [];
+  const [nuevoAdelObra, setNuevoAdelObra] = useState("");
+  const [nuevoAdelMonto, setNuevoAdelMonto] = useState("");
   const cobrosSinCert = extra.cobrosSinCert || [];
   const [nuevoCobroObra, setNuevoCobroObra] = useState("");
   const [nuevoCobroMonto, setNuevoCobroMonto] = useState("");
   function guardarExtra(campo, valorTxt) {
     const v = numMoney(valorTxt);
-    save(logH({ ...data, certGeneralExtra: { ...(data.certGeneralExtra || {}), [campo]: v } }, `Certificación general · ${campo === "adelanto" ? "adelanto" : campo} · ${money(v)}`));
+    save(logH({ ...data, certGeneralExtra: { ...(data.certGeneralExtra || {}), [campo]: v } }, `Certificación general · ${campo} · ${money(v)}`));
+  }
+  function agregarAdelanto() {
+    const v = numMoney(nuevoAdelMonto);
+    if (!nuevoAdelObra || !v) { alert("Elegí la obra y el monto."); return; }
+    const item = { id: uid(), obraId: nuevoAdelObra, monto: v, ts: Date.now() };
+    save(logH({ ...data, certGeneralExtra: { ...(data.certGeneralExtra || {}), adelantos: [...adelantos, item] } }, `Certificación general · adelanto · ${obras.find(o => o.id === nuevoAdelObra)?.nombre || ""} · ${money(v)}`));
+    setNuevoAdelObra(""); setNuevoAdelMonto("");
+  }
+  function borrarAdelanto(id) {
+    save(logH({ ...data, certGeneralExtra: { ...(data.certGeneralExtra || {}), adelantos: adelantos.filter(a => a.id !== id) } }, "Certificación general · borró adelanto"));
   }
   function agregarCobroSinCert() {
     const v = numMoney(nuevoCobroMonto);
@@ -1525,19 +1537,33 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
       </div>}
 
       {!esCosto && filas.length > 0 && (() => {
-        const adelanto = numMoney(adelantoTxt);
+        const totAdelantos = adelantos.reduce((s, a) => s + (Number(a.monto) || 0), 0);
         const totCobrosSinCertManual = cobrosSinCert.reduce((s, c) => s + (Number(c.monto) || 0), 0);
         const totCobrosSinCertAuto = cobrosAutoHist.reduce((s, c) => s + c.saldo, 0);
-        const granTotal = total - adelanto + totCobrosSinCertManual + totCobrosSinCertAuto;
+        const granTotal = total - totAdelantos + totCobrosSinCertManual + totCobrosSinCertAuto;
         const nomObraExtra = (id) => obras.find(o => o.id === id)?.nombre || "—";
         return (<div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px dashed ${T.border}` }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Sumar a mano</div>
           <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>El adelanto RESTA del total (ya está cobrado por anticipado). El cobrado sin certificado SUMA (plata real que entró y todavía no tiene certificado cargado).</div>
-          <Field label="Adelanto de certificados (resta)">
-            <input value={adelantoTxt} onChange={e => setAdelantoTxt(fmtMiles(e.target.value))} onBlur={e => guardarExtra("adelanto", e.target.value)} inputMode="numeric" placeholder="0" style={inp} />
-          </Field>
 
-          <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, marginTop: 14, marginBottom: 8 }}>Cobrado sin certificado (suma) — por obra</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, marginBottom: 8 }}>Adelanto de certificados (resta) — por obra</div>
+          {adelantos.length > 0 && adelantos.map(a => (<div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{nomObraExtra(a.obraId)}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: "#DC2626" }}>− {money(a.monto)}</span>
+              <button onClick={() => borrarAdelanto(a.id)} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, padding: "3px 7px", fontSize: 10, cursor: "pointer" }}>✕</button>
+            </span>
+          </div>))}
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <select value={nuevoAdelObra} onChange={e => setNuevoAdelObra(e.target.value)} style={{ ...inp, flex: 1.3 }}>
+              <option value="">Obra…</option>
+              {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+            </select>
+            <input value={nuevoAdelMonto} onChange={e => setNuevoAdelMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Monto" style={{ ...inp, flex: 1 }} />
+            <button onClick={agregarAdelanto} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "0 16px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
+          </div>
+
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, marginTop: 18, marginBottom: 8 }}>Cobrado sin certificado (suma) — por obra</div>
           {cobrosAutoHist.length > 0 && cobrosAutoHist.map(c => (<div key={c.obraId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
             <span style={{ fontSize: 12.5, fontWeight: 600 }}>{c.nombre} <span style={{ fontSize: 10, color: T.muted, fontWeight: 400 }}>(automático · histórico)</span></span>
             <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{money(c.saldo)}</span>
@@ -1559,7 +1585,7 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
           </div>
           <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>Las marcadas "automático" ya vienen del panel "Ya cobrado sin certificado" de cada obra — no hace falta cargarlas de nuevo acá. Usá el formulario solo para casos sueltos que no estén en ese panel.</div>
 
-          {(adelanto > 0 || totCobrosSinCertManual > 0 || totCobrosSinCertAuto > 0) && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 13, marginTop: 16, borderTop: `2px solid ${T.accent}` }}>
+          {(totAdelantos > 0 || totCobrosSinCertManual > 0 || totCobrosSinCertAuto > 0) && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 13, marginTop: 16, borderTop: `2px solid ${T.accent}` }}>
             <span style={{ fontSize: 14.5, fontWeight: 800 }}>GRAN TOTAL<span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}> · certificados − adelanto + sin cert.</span></span>
             <span style={{ fontSize: 21, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{money(granTotal)}</span>
           </div>}
