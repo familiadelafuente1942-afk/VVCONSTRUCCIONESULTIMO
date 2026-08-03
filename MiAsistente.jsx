@@ -825,7 +825,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
-    {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} />}
+    {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
@@ -888,13 +888,38 @@ function Icono({ n, size = 20 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>{p[n] || null}</svg>;
 }
 
-function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }) {
+function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, onAdd }) {
+  const [form, setForm] = useState(null);
   const lista = (pagos || []).filter(p => !filtroObra || p.obra === filtroObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const obrasUnicas = [...new Set((pagos || []).map(p => p.obra).filter(Boolean))];
   const totalPend = lista.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
   const totalPag = lista.filter(p => p.estado === "pagado").reduce((a, p) => a + (p.monto || 0), 0);
+  function guardar() {
+    if (!form.persona?.trim()) { alert("Poné al menos a quién le pagaste."); return; }
+    onAdd({ persona: form.persona.trim(), monto: form.monto, obra: form.obra || "", estado: form.estado || "pendiente", metodo: form.metodo || "", nota: form.nota || "", fecha: form.fecha || undefined });
+    setForm(null);
+  }
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <a href="https://www.mercadopago.com.ar/" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#009EE3", color: "#fff", borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 700, textDecoration: "none", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,158,227,.3)" }}>💳 Pagar por Mercado Pago</a>
+    {!form && <button onClick={() => setForm({ persona: "", monto: "", obra: "", estado: "pendiente", metodo: "", nota: "" })} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Cargar pago a mano</button>}
+    {form && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo pago</div>
+      <input value={form.persona} onChange={e => setForm({ ...form, persona: e.target.value })} placeholder="¿A quién? (ej: Humberto)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <input value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      {obras && obras.length > 0 ? (<select value={form.obra} onChange={e => setForm({ ...form, obra: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }}>
+        <option value="">Obra (opcional)</option>
+        {obras.map(o => <option key={o.id} value={o.nombre}>{o.nombre}</option>)}
+      </select>) : (<input value={form.obra} onChange={e => setForm({ ...form, obra: e.target.value })} placeholder="Obra (opcional)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />)}
+      <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
+        {[["pendiente", "Pendiente"], ["pagado", "Pagado"]].map(([k, l]) => <button key={k} onClick={() => setForm({ ...form, estado: k })} style={{ flex: 1, background: form.estado === k ? T.navy : T.bg, color: form.estado === k ? "#fff" : T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+      </div>
+      <input value={form.metodo} onChange={e => setForm({ ...form, metodo: e.target.value })} placeholder="Método (ej: efectivo, transferencia)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <input value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} placeholder="Nota (opcional)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 10, boxSizing: "border-box" }} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setForm(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+        <button onClick={guardar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+      </div>
+    </div>}
     <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
       <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 16, color: T.text }}>
         <option value="">Todas las obras</option>
