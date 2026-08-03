@@ -541,6 +541,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     await storage.set("sebastian_entreno", data).catch(() => { });
   }
   function toggleSesion(id) { const next = { ...entrenoHechas, [id]: !entrenoHechas[id] }; persistEntreno(entrenoInicio, next); }
+  function toggleMultiple(updates) { const next = { ...entrenoHechas, ...updates }; persistEntreno(entrenoInicio, next); }
   async function subirArchivos(e) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
     const nuevos = [];
@@ -828,7 +829,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
-    {vista === "entrenamiento" && <EntrenamientoBody inicio={entrenoInicio} hechas={entrenoHechas} onSetInicio={(f) => persistEntreno(f, entrenoHechas)} onToggle={toggleSesion} />}
+    {vista === "entrenamiento" && <EntrenamientoBody inicio={entrenoInicio} hechas={entrenoHechas} onSetInicio={(f) => persistEntreno(f, entrenoHechas)} onToggle={toggleSesion} onToggleMultiple={toggleMultiple} />}
     {vista === "suplementos" && <SuplementosBody />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
@@ -950,7 +951,7 @@ function AgendaBody({ agenda, onAdd, onDel }) {
   </div>);
 }
 
-function EntrenamientoBody({ inicio, hechas, onSetInicio, onToggle }) {
+function EntrenamientoBody({ inicio, hechas, onSetInicio, onToggle, onToggleMultiple }) {
   const [expandida, setExpandida] = useState(null);
   const sesiones = React.useMemo(() => generarCalendarioPlan(inicio), [inicio]);
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
@@ -988,20 +989,38 @@ function EntrenamientoBody({ inicio, hechas, onSetInicio, onToggle }) {
         const fSes = new Date(s.fecha + "T00:00:00");
         const esHoy = fSes.getTime() === hoy.getTime();
         const abierta = expandida === s.id;
+        const exHechos = s.ejercicios.filter((e, i) => hechas[`${s.id}-ex${i}`]).length;
+        function toggleEjercicio(i) {
+          const key = `${s.id}-ex${i}`;
+          const nuevoValor = !hechas[key];
+          const updates = { [key]: nuevoValor };
+          const totalConEste = s.ejercicios.filter((e, j) => j === i ? nuevoValor : hechas[`${s.id}-ex${j}`]).length;
+          updates[s.id] = totalConEste === s.ejercicios.length;
+          onToggleMultiple(updates);
+        }
+        function toggleSesionCompleta() {
+          const nuevoValor = !hecha;
+          const updates = { [s.id]: nuevoValor };
+          s.ejercicios.forEach((e, i) => { updates[`${s.id}-ex${i}`] = nuevoValor; });
+          onToggleMultiple(updates);
+        }
         return (<div key={s.id} style={{ background: T.card, border: `1px solid ${hecha ? T.accent : (esHoy ? BRASS : T.border)}`, borderLeft: `3px solid ${hecha ? T.accent : BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => setExpandida(abierta ? null : s.id)}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: hecha ? T.accent : T.text }}>{fmtFechaCorta(fSes)}{esHoy ? " · HOY" : ""} · Sesión {s.tipo}</div>
-              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{s.ejercicios.length} ejercicios{hecha ? " · ✓ hecha" : ""}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{exHechos}/{s.ejercicios.length} ejercicios{hecha ? " · ✓ hecha" : ""}</div>
             </div>
-            <button onClick={(ev) => { ev.stopPropagation(); onToggle(s.id); }} style={{ flexShrink: 0, width: 30, height: 30, borderRadius: "50%", border: `2px solid ${hecha ? T.accent : T.border}`, background: hecha ? T.accent : "none", color: "#fff", fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{hecha ? "✓" : ""}</button>
+            <button onClick={(ev) => { ev.stopPropagation(); toggleSesionCompleta(); }} style={{ flexShrink: 0, width: 30, height: 30, borderRadius: "50%", border: `2px solid ${hecha ? T.accent : T.border}`, background: hecha ? T.accent : "none", color: "#fff", fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{hecha ? "✓" : ""}</button>
           </div>
           {abierta && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
-            {s.ejercicios.map((e, i) => (<div key={i} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{e.n} {e.series ? <span style={{ color: BRASS, fontWeight: 700 }}>· {e.series}</span> : null}</div>
-              <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2, lineHeight: 1.5 }}>{e.desc}</div>
-              {e.nota && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2, fontStyle: "italic" }}>{e.nota}</div>}
-            </div>))}
+            {s.ejercicios.map((e, i) => { const exKey = `${s.id}-ex${i}`; const exHecho = !!hechas[exKey]; return (<div key={i} style={{ display: "flex", gap: 9, marginBottom: 12 }}>
+              <button onClick={() => toggleEjercicio(i)} style={{ flexShrink: 0, width: 22, height: 22, marginTop: 1, borderRadius: 6, border: `2px solid ${exHecho ? T.accent : T.border}`, background: exHecho ? T.accent : "none", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>{exHecho ? "✓" : ""}</button>
+              <div style={{ opacity: exHecho ? 0.55 : 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, textDecoration: exHecho ? "line-through" : "none" }}>{e.n} {e.series ? <span style={{ color: BRASS, fontWeight: 700 }}>· {e.series}</span> : null}</div>
+                <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2, lineHeight: 1.5 }}>{e.desc}</div>
+                {e.nota && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2, fontStyle: "italic" }}>{e.nota}</div>}
+              </div>
+            </div>); })}
           </div>}
         </div>);
       })}
