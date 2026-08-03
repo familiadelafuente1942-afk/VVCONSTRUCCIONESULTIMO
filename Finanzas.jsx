@@ -1857,7 +1857,12 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
   function borrarMov(id) { if (confirm("¿Eliminar?")) save(logH({ ...data, movimientos: movs.filter(m => m.id !== id) }, "Borró movimiento")); }
   function borrarGasto(id) { if (confirm("¿Eliminar?")) save(logH({ ...data, gastos: gastos.filter(g => g.id !== id) }, "Borró gasto")); }
   function setObraGasto(id, oid) { save(logH({ ...data, gastos: gastos.map(g => g.id === id ? { ...g, obraId: oid } : g) }, `Asignó gasto a ${nombreObra(oid)}`)); }
-  const items = [...movs.map(m => ({ ...m, kind: m.tipo })), ...gastos.map(g => ({ ...g, kind: "gasto" }))].filter(it => !filtroObraCaja || (filtroObraCaja === "__general__" ? !it.obraId : it.obraId === filtroObraCaja)).sort((a, b) => b.ts - a.ts).slice(0, 40);
+  const itemsFiltrados = [...movs.map(m => ({ ...m, kind: m.tipo })), ...gastos.map(g => ({ ...g, kind: "gasto" }))].filter(it => !filtroObraCaja || (filtroObraCaja === "__general__" ? !it.obraId : it.obraId === filtroObraCaja)).sort((a, b) => b.ts - a.ts);
+  const items = itemsFiltrados.slice(0, 40);
+  const totCobradoObra = itemsFiltrados.filter(it => it.kind === "cobro").reduce((s, it) => s + num(it.monto), 0);
+  const totPagadoObra = itemsFiltrados.filter(it => it.kind === "pago").reduce((s, it) => s + num(it.monto), 0);
+  const totGastoObra = itemsFiltrados.filter(it => it.kind === "gasto").reduce((s, it) => s + num(it.monto), 0);
+  const saldoObra = totCobradoObra - totPagadoObra - totGastoObra;
   const hist = (data.historial || []).slice().reverse();
   const colorDe = (k) => k === "cobro" ? T.ok : "#EF4444";
   const signo = (k) => k === "cobro" ? "+ " : "− ";
@@ -1900,6 +1905,14 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
         <option value="__general__">General (sin obra)</option>
       </select>}
     </div>
+    {filtroObraCaja && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: "12px 14px", marginBottom: 12, boxShadow: SHDsm }}>
+      <div style={{ display: "flex", gap: 14 }}>
+        <div><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Cobrado</div><div style={{ fontSize: 14, fontWeight: 800, color: T.ok }}>{money(totCobradoObra)}</div></div>
+        <div><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Pagado</div><div style={{ fontSize: 14, fontWeight: 800, color: "#EF4444" }}>{money(totPagadoObra)}</div></div>
+        <div><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Gastos</div><div style={{ fontSize: 14, fontWeight: 800, color: "#EF4444" }}>{money(totGastoObra)}</div></div>
+      </div>
+      <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 12.5, fontWeight: 700, color: T.sub }}>Saldo de esta obra</span><span style={{ fontSize: 15, fontWeight: 800, color: saldoObra >= 0 ? T.ok : "#EF4444" }}>{money(saldoObra)}</span></div>
+    </div>}
     {items.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "16px" }}>Todavía no cargaste movimientos.</div>}
     {items.map(it => (<div key={it.id} style={{ background: T.card, border: `1px solid ${it.kind === "gasto" && !it.obraId ? "rgba(180,83,9,.45)" : T.border}`, borderRadius: 13, padding: "11px 13px", marginBottom: 8, boxShadow: SHDsm, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
