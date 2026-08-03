@@ -171,11 +171,7 @@ function addMonthYM(ym, n) { const [y, m] = String(ym).split("-").map(Number); c
 // (nunca sobre lo ya cobrado, ni sobre pagos a subcontratistas: esos son a precio cerrado).
 // Necesita movimientos tipo "cobro" cargados con fecha en la obra; si no hay, no puede calcularse solo.
 function ajusteInflacionSaldo(obra, movimientos, cacMensual, obrasTodas) {
-  // Si cargaron el "Cobrado" a mano en la obra, ese valor manda siempre (sin ajuste por inflación).
-  if (obra?.histCobrado != null && obra.histCobrado !== "") {
-    const hcM = numMoney(obra.histCobrado);
-    return { ajuste: 0, saldo: presupCliente(obra) - hcM, cobrado: hcM, sinDatos: false, mesesSinIPC: 0, meses: 0, detalle: [], manual: true };
-  }
+  const hcManual = (obra?.histCobrado != null && obra.histCobrado !== "") ? numMoney(obra.histCobrado) : null;
   const mesBase = obra?.mesBase || mesDe(obra?.inicio || hoyISO());
   const hoyMes = mesDe(hoyISO());
   let cobrosObra = (movimientos || []).filter(m => m.tipo === "cobro" && m.obraId === obra?.id);
@@ -183,7 +179,12 @@ function ajusteInflacionSaldo(obra, movimientos, cacMensual, obrasTodas) {
   if (!cobrosObra.length && obra?.nombre && obrasTodas && obrasTodas.length) {
     cobrosObra = (movimientos || []).filter(m => { if (m.tipo !== "cobro") return false; const oo = obrasTodas.find(y => y.id === m.obraId); return oo && oo.nombre === obra.nombre; });
   }
-  if (!cobrosObra.length) return { ajuste: 0, saldo: presupCliente(obra), cobrado: 0, sinDatos: true, mesesSinIPC: 0, meses: 0, detalle: [] };
+  if (!cobrosObra.length) {
+    // Sin movimientos con fecha para calcular el ajuste mes a mes — si hay un "Cobrado" a
+    // mano, lo devolvemos igual (sin ajuste, porque no hay de dónde calcularlo).
+    if (hcManual != null) return { ajuste: 0, saldo: presupCliente(obra) - hcManual, cobrado: hcManual, sinDatos: false, mesesSinIPC: 0, meses: 0, detalle: [], manual: true, sinAjuste: true };
+    return { ajuste: 0, saldo: presupCliente(obra), cobrado: 0, sinDatos: true, mesesSinIPC: 0, meses: 0, detalle: [] };
+  }
   const ultimoMesCobro = cobrosObra.reduce((mx, m) => (mesDe(m.fecha) > mx ? mesDe(m.fecha) : mx), mesBase);
   const mesTope = ultimoMesCobro > hoyMes ? ultimoMesCobro : hoyMes;
   let saldo = presupCliente(obra), ajusteAcum = 0, cobradoAcum = 0, mesesSinIPC = 0, nMeses = 0;
@@ -203,7 +204,7 @@ function ajusteInflacionSaldo(obra, movimientos, cacMensual, obrasTodas) {
     ajusteAcum += ajusteMes; cobradoAcum += cobroMes; nMeses++;
     ym = addMonthYM(ym, 1);
   }
-  return { ajuste: Math.round(ajusteAcum), saldo: Math.round(saldo), cobrado: cobradoAcum, sinDatos: false, mesesSinIPC, meses: nMeses, detalle };
+  return { ajuste: Math.round(ajusteAcum), saldo: Math.round(hcManual != null ? (presupCliente(obra) - hcManual - ajusteAcum) : saldo), cobrado: hcManual != null ? hcManual : cobradoAcum, sinDatos: false, mesesSinIPC, meses: nMeses, detalle, manual: hcManual != null };
 }
 
 // ============ IMPORTAR PLANILLA (.xlsx) DE COBROS + IPC ============
@@ -1236,28 +1237,30 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
         const abierto = !!form._histAbierto;
         const calc = ajusteInflacionSaldo(form, data.movimientos, data.cacMensual, obras);
         const hcManual = form.histCobrado != null && form.histCobrado !== "" ? numMoney(form.histCobrado) : null;
-        const hc = hcManual != null ? hcManual : calc.cobrado, ha = hcManual != null ? 0 : calc.ajuste, hp = numMoney(form.histPagado);
+        const hc = calc.cobrado, ha = calc.ajuste, hp = numMoney(form.histPagado);
         const fact = hc + ha, util = fact - hp;
         return (<div style={{ background: T.bg, borderRadius: 11, padding: abierto ? 13 : 0, marginBottom: 12, border: abierto ? `1px solid ${T.border}` : "none" }}>
           {!abierto
             ? <button onClick={() => setForm({ ...form, _histAbierto: true })} style={{ width: "100%", background: "none", color: T.accent, border: `1px dashed ${T.border}`, borderRadius: 10, padding: "11px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>＋ Ya se cobró sin certificado (cargar a mano)</button>
             : <>
               <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Ya cobrado sin certificado</div>
-              <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12, lineHeight: 1.45 }}>Para obras viejas que ya cobraste sin cargar certificados acá. Si no ponés nada en "Cobrado", se calcula solo desde los cobros con fecha que cargaste en Caja — pero si eso no te está funcionando bien, cargalo directamente vos ahí abajo.</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12, lineHeight: 1.45 }}>Para obras viejas que ya cobraste sin cargar certificados acá. Si no ponés nada en "Cobrado", se calcula solo desde los cobros con fecha que cargaste en Caja. Si lo cargás a mano, el "Cobrado" se pisa con ese valor, pero el ajuste por inflación se sigue calculando igual con los cobros de Caja (si hay).</div>
               <div style={{ marginBottom: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
                   <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>Cobrado <span style={{ color: T.muted, fontWeight: 400 }}>(a mano)</span></span>
-                  <input value={form.histCobrado != null ? form.histCobrado : ""} onChange={e => setForm({ ...form, histCobrado: fmtMiles(e.target.value) })} inputMode="numeric" placeholder={calc.sinDatos ? "0" : String(calc.cobrado)} style={{ ...inp, marginTop: 0, width: 140, textAlign: "right" }} />
+                  <input value={form.histCobrado != null ? form.histCobrado : ""} onChange={e => setForm({ ...form, histCobrado: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 140, textAlign: "right" }} />
                 </div>
-                {hcManual == null && <div style={{ fontSize: 10, color: T.muted, textAlign: "right" }}>Automático ahora: {money(calc.cobrado)}{calc.sinDatos ? " (no encontró cobros en Caja para esta obra)" : ""}</div>}
+                {hcManual == null && <div style={{ fontSize: 10, color: T.muted, textAlign: "right" }}>{calc.sinDatos ? "No encontró cobros en Caja para esta obra." : `Encontrado en Caja: ${money(calc.cobrado)}`}</div>}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>＋ Ajuste inflación <span style={{ color: T.muted, fontWeight: 400 }}>{hcManual != null ? "(desactivado, cargaste Cobrado a mano)" : "(automático)"}</span></span>
-                <span style={{ width: 140, textAlign: "right", fontSize: 14, fontWeight: 700, color: calc.sinDatos ? T.muted : T.accent }}>{calc.sinDatos ? "—" : money(ha)}</span>
+                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>＋ Ajuste inflación <span style={{ color: T.muted, fontWeight: 400 }}>(automático)</span></span>
+                <span style={{ width: 140, textAlign: "right", fontSize: 14, fontWeight: 700, color: (calc.sinDatos || calc.sinAjuste) ? T.muted : T.accent }}>{(calc.sinDatos || calc.sinAjuste) ? "—" : money(ha)}</span>
               </div>
-              {calc.sinDatos
-                ? <div style={{ fontSize: 10, color: T.muted, marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>No hay cobros con fecha cargados para esta obra en "Caja". Cargalos ahí (Cobro), o importá el Excel desde Redeterminación.</div>
-                : calc.mesesSinIPC > 0 && <div style={{ fontSize: 10, color: "#B45309", marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>⚠ Faltan {calc.mesesSinIPC} mes(es) de IPC cargado en Redeterminación → el ajuste está incompleto.</div>}
+              {calc.sinAjuste
+                ? <div style={{ fontSize: 10, color: "#B45309", marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>No hay cobros con fecha en Caja para calcular el ajuste — se usa solo el Cobrado que cargaste, sin ajuste.</div>
+                : calc.sinDatos
+                  ? <div style={{ fontSize: 10, color: T.muted, marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>No hay cobros con fecha cargados para esta obra en "Caja". Cargalos ahí (Cobro), importá el Excel desde Redeterminación, o poné el Cobrado a mano arriba.</div>
+                  : calc.mesesSinIPC > 0 && <div style={{ fontSize: 10, color: "#B45309", marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>⚠ Faltan {calc.mesesSinIPC} mes(es) de IPC cargado en Redeterminación → el ajuste está incompleto.</div>}
               {!calc.sinDatos && calc.detalle && calc.detalle.length > 0 && <div style={{ marginBottom: 8 }}>
                 <button type="button" onClick={() => setForm({ ...form, _verDetalleHist: !form._verDetalleHist })} style={{ background: "none", border: "none", color: T.accent, fontSize: 10.5, fontWeight: 700, cursor: "pointer", padding: 0 }}>{form._verDetalleHist ? "▾ Ocultar detalle mes a mes" : "▸ Ver detalle mes a mes"}</button>
                 {form._verDetalleHist && <div style={{ background: T.bg, borderRadius: 8, padding: 8, marginTop: 6, fontSize: 10, fontFamily: "monospace" }}>
