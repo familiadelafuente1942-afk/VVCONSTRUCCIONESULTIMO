@@ -212,6 +212,8 @@ export default function MiAsistente() {
   const [contactos, setContactos] = useState([]);
   const [camaras, setCamaras] = useState([]);
   const [entrenoInicio, setEntrenoInicio] = useState("");
+  const [suplSel, setSuplSel] = useState([]);
+  const [suplTomados, setSuplTomados] = useState({});
   const [entrenoHechas, setEntrenoHechas] = useState({});
   const [ultimasFotos, setUltimasFotos] = useState([]);
   const [adjPend, setAdjPend] = useState([]);
@@ -275,8 +277,8 @@ export default function MiAsistente() {
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
       setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
-      const [ra, rag, rg, rcon, rcam, rent] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("sebastian_entreno")]);
-      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); if (rent?.value) { try { const ed = JSON.parse(rent.value); setEntrenoInicio(prev => ed.inicio || prev); setEntrenoHechas(prev => JSON.stringify(ed.hechas || {}) !== JSON.stringify(prev) ? (ed.hechas || {}) : prev); } catch { } } }
+      const [ra, rag, rg, rcon, rcam, rent, rsup] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("sebastian_entreno"), storage.get("sebastian_suplementos")]);
+      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); if (rent?.value) { try { const ed = JSON.parse(rent.value); setEntrenoInicio(prev => ed.inicio || prev); setEntrenoHechas(prev => JSON.stringify(ed.hechas || {}) !== JSON.stringify(prev) ? (ed.hechas || {}) : prev); } catch { } } if (rsup?.value) { try { const sd = JSON.parse(rsup.value); setSuplSel(prev => JSON.stringify(sd.sel || []) !== JSON.stringify(prev) ? (sd.sel || []) : prev); setSuplTomados(prev => JSON.stringify(sd.tomados || {}) !== JSON.stringify(prev) ? (sd.tomados || {}) : prev); } catch { } } }
       if (!modelos.length) { const rmod = await storage.get("sebastian_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
       const rc = await storage.get("sebastian_cfg"); if (alive && rc?.value) { try { const c = JSON.parse(rc.value); setCfg(prev => JSON.stringify({ ...CFG_DEF, ...c }) !== JSON.stringify(prev) ? { ...CFG_DEF, ...c } : prev); } catch { } }
     }
@@ -425,13 +427,22 @@ ${pg}
 GASTOS DIARIOS (generales) — hoy $${totDia.toLocaleString("es-AR")}, este mes $${totMes.toLocaleString("es-AR")}:
 ${gs}
 
+SUPLEMENTACIÓN (info general, no indicación médica — si pregunta, recordale consultar a su médico antes de empezar cualquiera):
+${(() => {
+      const nombresPorId = { d3: "Vitamina D3", magnesio: "Magnesio", omega3: "Omega 3", colageno: "Colágeno + Vitamina C", proteina: "Proteína", creatina: "Creatina" };
+      const hoyKeySup = new Date().toDateString();
+      const elegidos = (suplSel || []).map(id => nombresPorId[id]).filter(Boolean);
+      if (!elegidos.length) return "Todavía no eligió cuáles va a tomar (están las 6 opciones disponibles en la solapa Suplementación, con dosis y detalle de cada una).";
+      const tomadosHoy = (suplTomados[hoyKeySup] || []).map(id => nombresPorId[id]).filter(Boolean);
+      const faltan = elegidos.filter(n => !tomadosHoy.includes(n));
+      return `Eligió tomar: ${elegidos.join(", ")}.\nYa tomó hoy: ${tomadosHoy.length ? tomadosHoy.join(", ") : "ninguno todavía"}.${faltan.length ? `\nLe falta hoy: ${faltan.join(", ")}.` : "\n¡Ya tomó todo lo de hoy!"}`;
+    })()}
+
 MI AGENDA (eventos/citas):
 ${ag}
 
 MI PLAN DE ENTRENAMIENTO (estabilización lumbar, tiene hernia de disco — nunca sugieras abdominales clásicos, flexión de columna cargada ni giros con peso):
 ${entrenoTxt}
-
-SUPLEMENTACIÓN QUE TIENE CARGADA EN LA APP (info general, no indicación médica — si pregunta, recordale consultar a su médico antes de empezar cualquiera): Vitamina D3, Magnesio, Omega 3, Colágeno + Vitamina C, Proteína, Creatina. El detalle completo (dosis, para qué sirve cada uno) está en la solapa Suplementación.
 
 MIS ARCHIVOS GUARDADOS:
 ${arch}
@@ -540,6 +551,19 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
   function toggleSesion(id) { const next = { ...entrenoHechas, [id]: !entrenoHechas[id] }; persistEntreno(entrenoInicio, next); }
   function toggleMultiple(updates) { const next = { ...entrenoHechas, ...updates }; persistEntreno(entrenoInicio, next); }
+  async function persistSupl(sel, tomados) {
+    setSuplSel(sel); setSuplTomados(tomados);
+    const data = JSON.stringify({ sel, tomados });
+    try { localStorage.setItem("sebastian_suplementos", data); } catch { }
+    await storage.set("sebastian_suplementos", data).catch(() => { });
+  }
+  function toggleSuplSel(id) { const next = suplSel.includes(id) ? suplSel.filter(x => x !== id) : [...suplSel, id]; persistSupl(next, suplTomados); }
+  function toggleSuplHoy(id) {
+    const hoyKey = new Date().toDateString();
+    const listaHoy = suplTomados[hoyKey] || [];
+    const nextLista = listaHoy.includes(id) ? listaHoy.filter(x => x !== id) : [...listaHoy, id];
+    persistSupl(suplSel, { ...suplTomados, [hoyKey]: nextLista });
+  }
   async function subirArchivos(e) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
     const nuevos = [];
@@ -819,7 +843,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "entrenamiento" && <EntrenamientoBody inicio={entrenoInicio} hechas={entrenoHechas} onSetInicio={(f) => persistEntreno(f, entrenoHechas)} onToggle={toggleSesion} onToggleMultiple={toggleMultiple} />}
-    {vista === "suplementos" && <SuplementosBody />}
+    {vista === "suplementos" && <SuplementosBody sel={suplSel} tomados={suplTomados} onToggleSel={toggleSuplSel} onToggleHoy={toggleSuplHoy} />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
     <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -1041,24 +1065,42 @@ function EntrenamientoBody({ inicio, hechas, onSetInicio, onToggle, onToggleMult
 }
 
 const SUPLEMENTOS = [
-  { n: "Vitamina D3", para: "Salud ósea y de los discos, absorción de calcio, función muscular.", dosis: "1000-2000 UI/día es un rango habitual — pero esta es la que MÁS conviene pedir por análisis de sangre antes, porque la dosis correcta depende de tu nivel actual (muchos adultos de 51+ están con déficit sin saberlo).", nota: "La más recomendable de pedir a un médico con un análisis primero." },
-  { n: "Magnesio (citrato o glicinato)", para: "Relajación muscular, calambres, calidad de sueño — útil si entrenás y tenés tensión lumbar.", dosis: "300-400 mg/día, tomado a la noche.", nota: "El glicinato se tolera mejor que el óxido (menos efecto laxante)." },
-  { n: "Omega 3 (EPA/DHA)", para: "Efecto antiinflamatorio general, salud articular y cardiovascular.", dosis: "1-2 g/día combinados de EPA+DHA, con las comidas.", nota: "Si tomás anticoagulantes, consultá antes — puede potenciarlos." },
-  { n: "Colágeno hidrolizado + Vitamina C", para: "El disco intervertebral y los tendones son en gran parte colágeno — hay estudios que asocian esta combinación con mejor salud del tejido conectivo.", dosis: "10-15 g de colágeno + vitamina C, idealmente 30-60 min antes de entrenar.", nota: "Evidencia todavía moderada, pero es de bajo riesgo." },
-  { n: "Proteína (whey o vegetal)", para: "Mantener masa muscular a los 51 (a partir de esta edad se pierde masa muscular más rápido si no se refuerza), recuperación después de entrenar.", dosis: "20-30 g por toma, 1-2 tomas al día según cuánta proteína ya comés en las comidas.", nota: "No es un reemplazo de comida, es un complemento." },
-  { n: "Creatina monohidratada", para: "Fuerza y rendimiento muscular — uno de los suplementos con más evidencia científica, seguro para adultos sanos.", dosis: "3-5 g/día, cualquier momento del día (no hace falta 'carga').", nota: "Tomar con buena hidratación." },
+  { id: "d3", n: "Vitamina D3", para: "Salud ósea y de los discos, absorción de calcio, función muscular.", dosis: "1000-2000 UI/día es un rango habitual — pero esta es la que MÁS conviene pedir por análisis de sangre antes, porque la dosis correcta depende de tu nivel actual (muchos adultos de 51+ están con déficit sin saberlo).", nota: "La más recomendable de pedir a un médico con un análisis primero." },
+  { id: "magnesio", n: "Magnesio (citrato o glicinato)", para: "Relajación muscular, calambres, calidad de sueño — útil si entrenás y tenés tensión lumbar.", dosis: "300-400 mg/día, tomado a la noche.", nota: "El glicinato se tolera mejor que el óxido (menos efecto laxante)." },
+  { id: "omega3", n: "Omega 3 (EPA/DHA)", para: "Efecto antiinflamatorio general, salud articular y cardiovascular.", dosis: "1-2 g/día combinados de EPA+DHA, con las comidas.", nota: "Si tomás anticoagulantes, consultá antes — puede potenciarlos." },
+  { id: "colageno", n: "Colágeno hidrolizado + Vitamina C", para: "El disco intervertebral y los tendones son en gran parte colágeno — hay estudios que asocian esta combinación con mejor salud del tejido conectivo.", dosis: "10-15 g de colágeno + vitamina C, idealmente 30-60 min antes de entrenar.", nota: "Evidencia todavía moderada, pero es de bajo riesgo." },
+  { id: "proteina", n: "Proteína (whey o vegetal)", para: "Mantener masa muscular a los 51 (a partir de esta edad se pierde masa muscular más rápido si no se refuerza), recuperación después de entrenar.", dosis: "20-30 g por toma, 1-2 tomas al día según cuánta proteína ya comés en las comidas.", nota: "No es un reemplazo de comida, es un complemento." },
+  { id: "creatina", n: "Creatina monohidratada", para: "Fuerza y rendimiento muscular — uno de los suplementos con más evidencia científica, seguro para adultos sanos.", dosis: "3-5 g/día, cualquier momento del día (no hace falta 'carga').", nota: "Tomar con buena hidratación." },
 ];
-function SuplementosBody() {
+function SuplementosBody({ sel, tomados, onToggleSel, onToggleHoy }) {
+  const hoyKey = new Date().toDateString();
+  const listaHoy = tomados[hoyKey] || [];
+  const seleccionados = SUPLEMENTOS.filter(s => sel.includes(s.id));
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <div style={{ background: "rgba(180,80,40,.08)", border: "1px solid rgba(180,80,40,.35)", borderRadius: 12, padding: 13, marginBottom: 14, fontSize: 12, lineHeight: 1.6, color: T.text }}>
       ⚠️ Esto es información general, no una indicación médica. Antes de empezar cualquier suplemento, sobre todo si tomás alguna medicación, consultá con tu médico o un nutricionista — algunos (como el Omega 3) pueden interactuar con otros tratamientos.
     </div>
-    {SUPLEMENTOS.map((s, i) => (<div key={i} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "13px 14px", marginBottom: 10 }}>
-      <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text, marginBottom: 4 }}>{s.n}</div>
+
+    {seleccionados.length > 0 && <div style={{ background: T.navy, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Hoy tenés que tomar</div>
+      {seleccionados.map(s => { const tomado = listaHoy.includes(s.id); return (<div key={s.id} onClick={() => onToggleHoy(s.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: `1px solid rgba(255,255,255,.1)`, cursor: "pointer" }}>
+        <div style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 6, border: `2px solid ${tomado ? BRASS : "rgba(255,255,255,.3)"}`, background: tomado ? BRASS : "none", color: "#1B1A16", fontSize: 13, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{tomado ? "✓" : ""}</div>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#fff", textDecoration: tomado ? "line-through" : "none", opacity: tomado ? 0.55 : 1 }}>{s.n}</span>
+      </div>); })}
+      {listaHoy.length === seleccionados.length && <div style={{ fontSize: 12, color: BRASS, fontWeight: 700, marginTop: 10 }}>✓ Ya tomaste todo lo de hoy.</div>}
+    </div>}
+    {seleccionados.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "10px 4px 20px", lineHeight: 1.6 }}>Todavía no elegiste cuáles vas a tomar. Tocá "＋ Lo voy a tomar" en los que decidas, y te van a aparecer acá arriba como recordatorio diario.</div>}
+
+    <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Todos los suplementos</div>
+    {SUPLEMENTOS.map((s) => { const elegido = sel.includes(s.id); return (<div key={s.id} style={{ background: T.card, border: `1px solid ${elegido ? BRASS : T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "13px 14px", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{s.n}</div>
+        <button onClick={() => onToggleSel(s.id)} style={{ flexShrink: 0, background: elegido ? BRASS : "none", color: elegido ? "#1B1A16" : T.sub, border: `1px solid ${elegido ? BRASS : T.border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>{elegido ? "✓ Lo tomo" : "＋ Lo voy a tomar"}</button>
+      </div>
       <div style={{ fontSize: 12, color: T.sub, marginBottom: 6, lineHeight: 1.5 }}>{s.para}</div>
       <div style={{ fontSize: 12, color: T.text, marginBottom: 4 }}><b style={{ color: BRASS }}>Dosis orientativa:</b> {s.dosis}</div>
       <div style={{ fontSize: 11, color: T.muted, fontStyle: "italic" }}>{s.nota}</div>
-    </div>))}
+    </div>); })}
   </div>);
 }
 
