@@ -1530,7 +1530,7 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
       ].join("");
       // 1) Cobrado sin certificado: sección propia, con la MISMA jerarquía visual que "Certificados".
       if (filasCobrado) {
-        cobradoSinCertHtml = `<h2>Cobrado sin certificado</h2><table><thead><tr><th>Obra</th><th class="rgt">Monto</th></tr></thead><tbody>${filasCobrado}<tr class="big"><td class="rgt">SALDO SIN CERTIFICADO</td><td class="rgt">${money(totCobrosSinCertTodo)}</td></tr></tbody></table>`;
+        cobradoSinCertHtml = `<h2>Ajuste sin certificación</h2><table><thead><tr><th>Obra</th><th class="rgt">Monto</th></tr></thead><tbody>${filasCobrado}<tr class="big"><td class="rgt">SALDO SIN CERTIFICACIÓN</td><td class="rgt">${money(totCobrosSinCertTodo)}</td></tr></tbody></table>`;
       }
       // 2) Ajustes (adelanto de certificados): va después.
       if (adelantos.length > 0) {
@@ -1607,7 +1607,7 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
             <button onClick={agregarAdelanto} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "0 16px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
           </div>
 
-          <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, marginTop: 18, marginBottom: 8 }}>Cobrado sin certificado (suma) — por obra</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, marginTop: 18, marginBottom: 8 }}>Ajuste sin certificación — por obra</div>
           {cobrosAutoHist.length > 0 && cobrosAutoHist.map(c => (<div key={c.obraId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
             <span style={{ fontSize: 12.5, fontWeight: 600 }}>{c.nombre} <span style={{ fontSize: 10, color: T.muted, fontWeight: 400 }}>(automático · histórico)</span></span>
             <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{money(c.saldo)}</span>
