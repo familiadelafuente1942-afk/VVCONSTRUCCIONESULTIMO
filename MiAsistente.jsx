@@ -536,6 +536,26 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   async function persistArch(next) { setArchivos(next); await storage.set("sebastian_archivos", JSON.stringify(next)).catch(() => { }); }
   async function persistGastos(next) { setGastos(next); try { localStorage.setItem("sebastian_gastos", JSON.stringify(next)); } catch { } await storage.set("sebastian_gastos", JSON.stringify(next)).catch(() => { }); }
   function cargarGasto(a) { const g = { id: uid() + Date.now(), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }; persistGastos([g, ...(gastos || [])]); return g; }
+  const [leyendoTicket, setLeyendoTicket] = useState(false);
+  async function analizarTicket(file) {
+    setLeyendoTicket(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const b64 = String(dataUrl).split(",")[1];
+      const mediaType = (dataUrl.match(/data:(.*?);/) || [])[1] || "image/jpeg";
+      const sys = `Sos un lector de tickets/facturas argentinos. Te mando la foto de un ticket. Respondé ÚNICAMENTE con un JSON así, sin texto extra, sin backticks: {"concepto":"nombre del comercio o qué se compró, corto","monto":numero_total_sin_puntos_ni_signo,"fecha":"DD/MM/AA si se lee la fecha en el ticket, si no dejar null"}. Si hay varios ítems, "concepto" es el nombre del comercio (ej: "Supermercado Coto", "YPF", "Farmacia"). El monto es el TOTAL final pagado, no un ítem suelto. Si no podés leer el ticket con confianza, respondé {"error":"no se puede leer"}.`;
+      const resp = await callAI([{ role: "user", content: [{ type: "text", text: "Leé este ticket." }, { type: "image", source: { type: "base64", media_type: mediaType, data: b64 } }] }], sys, apiKey, false);
+      let datos = null;
+      try { const m = resp.match(/\{[\s\S]*\}/); datos = m ? JSON.parse(m[0]) : null; } catch { }
+      if (!datos || datos.error || !datos.monto) {
+        setMsgs(prev => [...prev, { role: "assistant", content: `No pude leer bien ese ticket para cargarlo solo en Gastos. Probá con más luz/enfocado, o cargalo a mano.` }]);
+        setLeyendoTicket(false); return;
+      }
+      const g = cargarGasto({ concepto: datos.concepto || "Ticket", monto: datos.monto, fecha: datos.fecha || hoyStr() });
+      setMsgs(prev => [...prev, { role: "assistant", content: `📷 Leí el ticket y cargué en Gastos: "${g.concepto}" — $${g.monto.toLocaleString("es-AR")} (${g.fecha}). Revisalo en la solapa Gastos por si hay que corregir algo.` }]);
+    } catch { setMsgs(prev => [...prev, { role: "assistant", content: "No pude procesar la foto del ticket. Probá de nuevo." }]); }
+    setLeyendoTicket(false);
+  }
   async function exportarGastosExcel() {
     const lista = (gastos || []); if (!lista.length) { alert("No hay gastos para exportar."); return; }
     const filas = lista.map(g => ({ Fecha: g.fecha, Concepto: g.concepto, Monto: g.monto }));
@@ -876,7 +896,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} />}
-    {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} />}
+    {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "entrenamiento" && <EntrenamientoBody inicio={entrenoInicio} hechas={entrenoHechas} onSetInicio={(f) => persistEntreno(f, entrenoHechas)} onToggle={toggleSesion} onToggleMultiple={toggleMultiple} />}
@@ -1312,15 +1332,18 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
   </div>);
 }
 
-function GastosBody({ gastos, onAdd, exportar, borrar }) {
+function GastosBody({ gastos, onAdd, exportar, borrar, onFotoTicket, leyendo }) {
   const [f, setF] = React.useState({ concepto: "", monto: "" });
+  const ticketRef = React.useRef(null);
   const lista = (gastos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const hoy = hoyStr(); const mes = hoy.slice(3);
   const totDia = lista.filter(g => g.fecha === hoy).reduce((a, g) => a + (g.monto || 0), 0);
   const totMes = lista.filter(g => (g.fecha || "").slice(3) === mes).reduce((a, g) => a + (g.monto || 0), 0);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <input ref={ticketRef} type="file" accept="image/*" capture="environment" onChange={e => { const file = e.target.files && e.target.files[0]; e.target.value = ""; if (file && onFotoTicket) onFotoTicket(file); }} style={{ display: "none" }} />
+    <button onClick={() => ticketRef.current && ticketRef.current.click()} disabled={leyendo} style={{ width: "100%", background: leyendo ? T.border : BRASS, color: leyendo ? T.sub : "#1B1A16", border: "none", borderRadius: 12, padding: "14px", fontSize: 14.5, fontWeight: 700, cursor: "pointer", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{leyendo ? "Leyendo el ticket…" : "📷 Sacar foto a un ticket"}</button>
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo gasto</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo gasto (a mano)</div>
       <input value={f.concepto} onChange={e => setF({ ...f, concepto: e.target.value })} placeholder="Concepto (nafta, comida, ferretería…)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
       <div style={{ display: "flex", gap: 7 }}>
         <input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
