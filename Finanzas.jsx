@@ -1837,6 +1837,7 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
   const [cat, setCat] = useState(CAT_GASTO[0]);
   const [nota, setNota] = useState("");
   const [verHist, setVerHist] = useState(false);
+  const [filtroObraCaja, setFiltroObraCaja] = useState("");
   const movs = data.movimientos || [], gastos = data.gastos || [];
   const nombreObra = (id) => obras.find(o => o.id === id)?.nombre || "General";
   const cobros = movs.filter(m => m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
@@ -1856,7 +1857,7 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
   function borrarMov(id) { if (confirm("¿Eliminar?")) save(logH({ ...data, movimientos: movs.filter(m => m.id !== id) }, "Borró movimiento")); }
   function borrarGasto(id) { if (confirm("¿Eliminar?")) save(logH({ ...data, gastos: gastos.filter(g => g.id !== id) }, "Borró gasto")); }
   function setObraGasto(id, oid) { save(logH({ ...data, gastos: gastos.map(g => g.id === id ? { ...g, obraId: oid } : g) }, `Asignó gasto a ${nombreObra(oid)}`)); }
-  const items = [...movs.map(m => ({ ...m, kind: m.tipo })), ...gastos.map(g => ({ ...g, kind: "gasto" }))].sort((a, b) => b.ts - a.ts).slice(0, 40);
+  const items = [...movs.map(m => ({ ...m, kind: m.tipo })), ...gastos.map(g => ({ ...g, kind: "gasto" }))].filter(it => !filtroObraCaja || (filtroObraCaja === "__general__" ? !it.obraId : it.obraId === filtroObraCaja)).sort((a, b) => b.ts - a.ts).slice(0, 40);
   const hist = (data.historial || []).slice().reverse();
   const colorDe = (k) => k === "cobro" ? T.ok : "#EF4444";
   const signo = (k) => k === "cobro" ? "+ " : "− ";
@@ -1891,7 +1892,14 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
       <Field label="Nota (opcional)"><input value={nota} onChange={e => setNota(e.target.value)} placeholder={tipo === "pago" ? "Proveedor / personal…" : "Detalle…"} style={inp} /></Field>
       <button onClick={registrar} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 6 }}>Registrar</button>
     </div>
-    <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Últimos movimientos</div>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Últimos movimientos</div>
+      {obras.length > 0 && <select value={filtroObraCaja} onChange={e => setFiltroObraCaja(e.target.value)} style={{ ...inpSm, width: "auto", maxWidth: 180 }}>
+        <option value="">Todas las obras</option>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        <option value="__general__">General (sin obra)</option>
+      </select>}
+    </div>
     {items.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "16px" }}>Todavía no cargaste movimientos.</div>}
     {items.map(it => (<div key={it.id} style={{ background: T.card, border: `1px solid ${it.kind === "gasto" && !it.obraId ? "rgba(180,83,9,.45)" : T.border}`, borderRadius: 13, padding: "11px 13px", marginBottom: 8, boxShadow: SHDsm, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
