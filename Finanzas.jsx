@@ -1530,7 +1530,7 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
       if (adelantos.length > 0 || totCobrosSinCertTodo !== 0) {
         ajustesHtml = `<h2>Ajustes</h2><table><thead><tr><th>Obra</th><th class="rgt">Monto</th></tr></thead><tbody>
           ${adelantos.length > 0 ? `<tr><td colspan="2" style="font-weight:700;background:#F8FAFC;color:#5B6B7F;font-size:10.5px;text-transform:uppercase">Adelanto de certificados (resta)</td></tr>${filasAdelanto}<tr><td style="font-weight:700">Subtotal adelantos</td><td class="rgt" style="font-weight:700">− ${money(totAdelantos)}</td></tr>` : ""}
-          ${filasCobrado ? `<tr><td colspan="2" style="font-weight:700;background:#F8FAFC;color:#5B6B7F;font-size:10.5px;text-transform:uppercase">Cobrado sin certificado (suma)</td></tr>${filasCobrado}<tr><td style="font-weight:700">Saldo ajuste sin certificado</td><td class="rgt" style="font-weight:700">+ ${money(totCobrosSinCertTodo)}</td></tr>` : ""}
+          ${filasCobrado ? `<tr><td colspan="2" style="font-weight:700;background:#F8FAFC;color:#5B6B7F;font-size:10.5px;text-transform:uppercase">Cobrado sin certificado (suma)</td></tr>${filasCobrado}<tr><td style="font-weight:700">Saldo ajustes sin certificado</td><td class="rgt" style="font-weight:700">${money(totCobrosSinCertTodo)}</td></tr>` : ""}
         </tbody></table>`;
       }
     }
@@ -1590,8 +1590,8 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
             </span>
           </div>))}
           {adelantos.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", marginTop: 4, borderTop: `1px solid ${T.border}` }}>
-            <span style={{ fontSize: 13, fontWeight: 800 }}>Subtotal certificado <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}>(total − adelanto)</span></span>
-            <span style={{ fontSize: 20, fontWeight: 800, color: esCosto ? T.warn : T.accent, fontVariantNumeric: "tabular-nums" }}>− {money(total - totAdelantos)}</span>
+            <span style={{ fontSize: 13, fontWeight: 800 }}>Saldo de certificado <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}>(total − adelanto)</span></span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: esCosto ? T.warn : T.accent, fontVariantNumeric: "tabular-nums" }}>{money(total - totAdelantos)}</span>
           </div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <select value={nuevoAdelObra} onChange={e => setNuevoAdelObra(e.target.value)} style={{ ...inp, flex: 1.3 }}>
@@ -1619,8 +1619,8 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
             </span>
           </div>))}
           {(cobrosAutoHist.length > 0 || cobrosAutoCaja.length > 0 || cobrosSinCert.length > 0) && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", marginTop: 4, borderTop: `1px solid ${T.border}` }}>
-            <span style={{ fontSize: 13, fontWeight: 800 }}>Saldo ajuste sin certificado</span>
-            <span style={{ fontSize: 20, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums" }}>+ {money(totCobrosSinCertManual + totCobrosSinCertAuto)}</span>
+            <span style={{ fontSize: 13, fontWeight: 800 }}>Saldo ajustes sin certificado</span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{money(totCobrosSinCertManual + totCobrosSinCertAuto)}</span>
           </div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <select value={nuevoCobroObra} onChange={e => setNuevoCobroObra(e.target.value)} style={{ ...inp, flex: 1.3 }}>
