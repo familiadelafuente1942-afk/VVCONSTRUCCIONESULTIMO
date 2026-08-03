@@ -79,6 +79,77 @@ const FONTS = {
 };
 const ESQUINAS = [{ n: "Rectas", v: 4 }, { n: "Suaves", v: 10 }, { n: "Redondeadas", v: 18 }];
 
+// ════════════════════════════════════════════════════════════════════
+// PLAN DE ENTRENAMIENTO — estabilización lumbar / core / glúteos.
+// Pensado para hernia de disco: nada de flexión de columna cargada,
+// nada de abdominales clásicos ni giros con peso. Progresión de 6 semanas,
+// 3 sesiones por semana (día por medio), con series/tiempos crecientes.
+// IMPORTANTE: esto es un plan general, no reemplaza la indicación de un
+// traumatólogo o kinesiólogo que conozca el caso puntual.
+// ════════════════════════════════════════════════════════════════════
+const EJ = {
+  respiracion: { n: "Respiración diafragmática 90/90", desc: "Acostado, piernas apoyadas en una silla a 90°. Inhalá por la nariz llevando el aire a las costillas (no al pecho), exhalá largo activando el abdomen bajo. Sin arquear la espalda.", nota: "Es la base de todo: activa el core sin cargar la columna." },
+  catcow: { n: "Gato-camello (movilidad)", desc: "En cuatro apoyos, alterná arquear y redondear la espalda suave y lento, siguiendo la respiración.", nota: "Movilidad, no fuerza. Rango cómodo, sin dolor." },
+  birddog: { n: "Bird-dog (perro de caza)", desc: "En cuatro apoyos, extendé brazo y pierna opuestos manteniendo la columna neutra (sin hundir la zona lumbar). Sostené 2-3 segundos y volvé.", nota: "El ejercicio más recomendado en rehabilitación lumbar (McGill)." },
+  deadbug: { n: "Dead bug", desc: "Acostado boca arriba, rodillas a 90°. Bajá un brazo y la pierna opuesta hacia el piso sin despegar la zona lumbar del suelo, volvé y alterná.", nota: "Si se despega la lumbar del piso, reducí el rango." },
+  puentegluteo: { n: "Puente de glúteos", desc: "Acostado, rodillas flexionadas, pies apoyados. Elevá la cadera apretando glúteos (no empujando con la zona lumbar), sostené arriba y bajá controlado.", nota: "Clave para vos: fortalece glúteos, que sostienen la zona lumbar." },
+  puenteunilateral: { n: "Puente de glúteos a una pierna", desc: "Igual que el puente, pero con una pierna extendida en el aire.", nota: "Progresión del anterior, más exigente." },
+  almeja: { n: "Almeja (clamshell)", desc: "De costado, rodillas flexionadas y juntas. Abrí la rodilla de arriba como una almeja, sin rotar la cadera hacia atrás, y volvé.", nota: "Glúteo medio — estabiliza cadera y pelvis." },
+  plancha: { n: "Plancha frontal (rodillas o pies)", desc: "Apoyo en antebrazos, cuerpo en línea recta, abdomen y glúteos apretados. Empezá apoyado en rodillas si hace falta.", nota: "Sin hundir ni levantar la cadera. Cortá si aparece dolor lumbar." },
+  planchalateral: { n: "Plancha lateral (rodillas o pies)", desc: "Apoyo en un antebrazo, cuerpo alineado, cadera elevada. Sostené el tiempo indicado y cambiá de lado.", nota: "Oblicuos y glúteo medio, sin flexionar la columna." },
+  mcgillcurl: { n: "McGill curl-up", desc: "Acostado, una pierna flexionada y otra extendida, manos bajo la zona lumbar. Levantá apenas los hombros del piso (no la espalda completa), como una foto, sostené y bajá.", nota: "Reemplaza a la abdominal clásica — mucho más seguro para hernia." },
+  sentadillapared: { n: "Sentadilla isométrica en pared", desc: "Espalda apoyada en la pared, bajá hasta rodillas a 90° (o el ángulo cómodo) y sostené.", nota: "Fortalece piernas y glúteos sin cargar la columna." },
+  hipthrust: { n: "Hip thrust (banco o piso)", desc: "Espalda apoyada en un banco/sillón, pies firmes en el piso. Empujá la cadera hacia arriba apretando glúteos.", nota: "El ejercicio de glúteo más efectivo, muy seguro para la espalda." },
+  caminata: { n: "Caminata", desc: "Caminar a paso firme, postura erguida.", nota: "El mejor ejercicio de base para la espalda — hacelo todos los días que puedas, no solo los días de sesión." },
+  estiramientocadera: { n: "Estiramiento de flexores de cadera", desc: "En posición de estocada baja, empujá la cadera suave hacia adelante sin arquear la zona lumbar.", nota: "Cadera tensa sobrecarga la zona lumbar — este estiramiento es clave." },
+  estiramientopiriforme: { n: "Estiramiento de piriforme/glúteo", desc: "Acostado, cruzá un tobillo sobre la rodilla opuesta y llevá la pierna hacia el pecho.", nota: "Alivia si tenés dolor irradiado a la pierna." },
+};
+function semanaPlan(sem) {
+  // sem: 1-6. Devuelve la sesión A y B de esa semana con los "tiempos" (seg/reps) según progresión.
+  const prog = Math.min(sem, 6);
+  const holdCore = [15, 18, 20, 25, 30, 35][prog - 1];      // seg de plancha/lateral
+  const repsBird = [6, 8, 8, 10, 10, 12][prog - 1];          // reps por lado bird-dog/deadbug
+  const repsPuente = [10, 12, 12, 15, 15, 15][prog - 1];
+  const unilateral = sem >= 3;                                 // puente a una pierna desde semana 3
+  return {
+    A: [
+      { ...EJ.respiracion, series: "2 min" },
+      { ...EJ.catcow, series: "10 reps" },
+      { ...EJ.birddog, series: `3 series x ${repsBird} por lado` },
+      { ...EJ.puentegluteo, series: unilateral ? undefined : `3 series x ${repsPuente}` },
+      ...(unilateral ? [{ ...EJ.puenteunilateral, series: `3 series x ${Math.max(6, repsPuente - 4)} por lado` }] : []),
+      { ...EJ.plancha, series: `3 series x ${holdCore}s` },
+      { ...EJ.estiramientocadera, series: "30s por lado" },
+    ].filter(x => x.series !== undefined),
+    B: [
+      { ...EJ.respiracion, series: "2 min" },
+      { ...EJ.deadbug, series: `3 series x ${repsBird} por lado` },
+      { ...EJ.almeja, series: `3 series x ${repsPuente} por lado` },
+      { ...EJ.planchalateral, series: `2 series x ${holdCore}s por lado` },
+      { ...EJ.mcgillcurl, series: "2 series x 8 por lado" },
+      { ...(sem >= 4 ? EJ.hipthrust : EJ.sentadillapared), series: sem >= 4 ? "3 series x 12" : `3 series x ${holdCore}s` },
+      { ...EJ.estiramientopiriforme, series: "30s por lado" },
+    ],
+  };
+}
+function fmtFechaCorta(d) { const dias = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]; const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]; return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}`; }
+function generarCalendarioPlan(inicioISO) {
+  // 3 sesiones por semana (lun/mié/vie), alternando sesión A y B, durante 6 semanas = 18 sesiones.
+  const inicio = inicioISO ? new Date(inicioISO + "T00:00:00") : new Date();
+  // arranca el próximo lunes (o hoy si ya es lunes)
+  const d0 = new Date(inicio); const dow = d0.getDay(); const offset = dow === 0 ? 1 : dow === 1 ? 0 : 8 - dow; d0.setDate(d0.getDate() + offset);
+  const dias = [0, 2, 4]; // lun, mié, vie relativo a la semana
+  const sesiones = [];
+  for (let sem = 1; sem <= 6; sem++) {
+    const pl = semanaPlan(sem);
+    dias.forEach((offDia, i) => {
+      const f = new Date(d0); f.setDate(f.getDate() + (sem - 1) * 7 + offDia);
+      sesiones.push({ id: `s${sem}-${i}`, semana: sem, fecha: f.toISOString().slice(0, 10), tipo: i % 2 === 0 ? "A" : "B", ejercicios: i % 2 === 0 ? pl.A : pl.B });
+    });
+  }
+  return sesiones;
+}
+
 function obraNom(obras, id) { return (obras || []).find(o => o.id === id)?.nombre || "—"; }
 
 export default function MiAsistente() {
@@ -95,6 +166,8 @@ export default function MiAsistente() {
   const [archivos, setArchivos] = useState([]);
   const [contactos, setContactos] = useState([]);
   const [camaras, setCamaras] = useState([]);
+  const [entrenoInicio, setEntrenoInicio] = useState("");
+  const [entrenoHechas, setEntrenoHechas] = useState({});
   const [ultimasFotos, setUltimasFotos] = useState([]);
   const [adjPend, setAdjPend] = useState([]);
   const [agenda, setAgenda] = useState([]);
@@ -157,8 +230,8 @@ export default function MiAsistente() {
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
       setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
-      const [ra, rag, rg, rcon, rcam] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras")]);
-      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); }
+      const [ra, rag, rg, rcon, rcam, rent] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("sebastian_entreno")]);
+      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); if (rent?.value) { try { const ed = JSON.parse(rent.value); setEntrenoInicio(prev => ed.inicio || prev); setEntrenoHechas(prev => JSON.stringify(ed.hechas || {}) !== JSON.stringify(prev) ? (ed.hechas || {}) : prev); } catch { } } }
       if (!modelos.length) { const rmod = await storage.get("sebastian_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
       const rc = await storage.get("sebastian_cfg"); if (alive && rc?.value) { try { const c = JSON.parse(rc.value); setCfg(prev => JSON.stringify({ ...CFG_DEF, ...c }) !== JSON.stringify(prev) ? { ...CFG_DEF, ...c } : prev); } catch { } }
     }
@@ -251,6 +324,10 @@ export default function MiAsistente() {
     const mats = (db.matpedidos || []).map(p => `· ${obraNom(o, p.obra_id)} (${p.de === "vv" ? "V+V" : p.de === "cliente" ? "Belfast" : p.empresa || "contratista"}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}${p.leido ? " ✓levantado" : " ●pendiente"}`).join("\n") || "(sin pedidos de materiales)";
     const pg = (pagos || []).slice(0, 40).map(p => `· ${p.fecha} — ${p.persona} $${(p.monto || 0).toLocaleString("es-AR")} (${p.obra || "sin obra"}) [${p.estado}${p.metodo ? ", " + p.metodo : ""}]`).join("\n") || "(sin pagos cargados)";
     const hoyG = hoyStr(); const mesG = hoyG.slice(3);
+    const sesionesPlan = entrenoInicio ? generarCalendarioPlan(entrenoInicio) : [];
+    const proximaSesion = sesionesPlan.find(s => !entrenoHechas[s.id]);
+    const hechasCount = sesionesPlan.filter(s => entrenoHechas[s.id]).length;
+    const entrenoTxt = !entrenoInicio ? "(todavía no arrancó el plan de entrenamiento)" : `Plan de estabilización lumbar/glúteos/core, 6 semanas, 3 sesiones por semana (lun/mié/vie). Llevás ${hechasCount}/18 sesiones hechas.${proximaSesion ? `\nPróxima sesión: ${proximaSesion.fecha} (semana ${proximaSesion.semana}, tipo ${proximaSesion.tipo}) — ejercicios: ${proximaSesion.ejercicios.map(e => e.n).join(", ")}.` : "\n¡Plan completo!"}`;
     const gs = (gastos || []).slice(0, 40).map(g => `· ${g.fecha} — ${g.concepto} $${(g.monto || 0).toLocaleString("es-AR")}`).join("\n") || "(sin gastos)";
     const totDia = (gastos || []).filter(g => g.fecha === hoyG).reduce((a, g) => a + (g.monto || 0), 0);
     const totMes = (gastos || []).filter(g => (g.fecha || "").slice(3) === mesG).reduce((a, g) => a + (g.monto || 0), 0);
@@ -288,6 +365,11 @@ ${gs}
 
 MI AGENDA (eventos/citas):
 ${ag}
+
+MI PLAN DE ENTRENAMIENTO (estabilización lumbar, tiene hernia de disco — nunca sugieras abdominales clásicos, flexión de columna cargada ni giros con peso):
+${entrenoTxt}
+
+SUPLEMENTACIÓN QUE TIENE CARGADA EN LA APP (info general, no indicación médica — si pregunta, recordale consultar a su médico antes de empezar cualquiera): Vitamina D3, Magnesio, Omega 3, Colágeno + Vitamina C, Proteína, Creatina. El detalle completo (dosis, para qué sirve cada uno) está en la solapa Suplementación.
 
 MIS ARCHIVOS GUARDADOS:
 ${arch}
@@ -390,6 +472,13 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   async function persistAgenda(next) { setAgenda(next); await storage.set("sebastian_agenda", JSON.stringify(next)).catch(() => { }); }
   async function persistContactos(next) { setContactos(next); try { localStorage.setItem("sebastian_contactos", JSON.stringify(next)); } catch { } await storage.set("sebastian_contactos", JSON.stringify(next)).catch(() => { }); }
   async function persistCamaras(next) { setCamaras(next); try { localStorage.setItem("vv_camaras", JSON.stringify(next)); } catch { } await storage.set("vv_camaras", JSON.stringify(next)).catch(() => { }); }
+  async function persistEntreno(inicio, hechas) {
+    setEntrenoInicio(inicio); setEntrenoHechas(hechas);
+    const data = JSON.stringify({ inicio, hechas });
+    try { localStorage.setItem("sebastian_entreno", data); } catch { }
+    await storage.set("sebastian_entreno", data).catch(() => { });
+  }
+  function toggleSesion(id) { const next = { ...entrenoHechas, [id]: !entrenoHechas[id] }; persistEntreno(entrenoInicio, next); }
   async function subirArchivos(e) {
     const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
     const nuevos = [];
@@ -669,18 +758,16 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["gastos", "Gastos"], ["agenda", "Agenda"], ["archivos", "Archivos"], ["modelos", "Modelos"], ["obras", "Obras"], ["contactos", "Contactos"], ["camaras", "Cámaras"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const cnt = id === "pagos" ? (pagos || []).length : id === "gastos" ? (gastos || []).length : id === "archivos" ? (archivos || []).length : id === "agenda" ? (agenda || []).length : id === "modelos" ? (modelos || []).length : id === "contactos" ? (contactos || []).length : id === "camaras" ? (camaras || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["gastos", "Gastos"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const cnt = id === "pagos" ? (pagos || []).length : id === "gastos" ? (gastos || []).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
-    {vista === "camaras" && <CamarasBody camaras={camaras} onSave={persistCamaras} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
-    {vista === "archivos" && <ArchivosBody archivos={archivos} cat={catArch} setCat={setCatArch} archRef={archRef} subir={subirArchivos} subiendo={subiendoArch} borrar={(id) => persistArch((archivos || []).filter(a => a.id !== id))} />}
-    {vista === "modelos" && <ModelosBody modelos={modelos} sel={modeloSel} setSel={setModeloSel} subir={() => modeloRef.current && modeloRef.current.click()} borrar={(id) => { const next = (modelos || []).filter(m => m.id !== id); setModelos(next); if (modeloSel === id) setModeloSel(next[0]?.id || ""); storage.set("sebastian_modelos", JSON.stringify(next)).catch(() => { }); }} />}
-    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "" })} />}
+    {vista === "entrenamiento" && <EntrenamientoBody inicio={entrenoInicio} hechas={entrenoHechas} onSetInicio={(f) => persistEntreno(f, entrenoHechas)} onToggle={toggleSesion} />}
+    {vista === "suplementos" && <SuplementosBody />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
     <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -797,6 +884,84 @@ function AgendaBody({ agenda, onAdd, onDel }) {
         {e.nota && <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{e.nota}</div>}
       </div>
       <button onClick={() => onDel(e.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer" }}>✕</button>
+    </div>))}
+  </div>);
+}
+
+function EntrenamientoBody({ inicio, hechas, onSetInicio, onToggle }) {
+  const [expandida, setExpandida] = useState(null);
+  const sesiones = React.useMemo(() => generarCalendarioPlan(inicio), [inicio]);
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const totalHechas = sesiones.filter(s => hechas[s.id]).length;
+  const proxima = sesiones.find(s => !hechas[s.id]);
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <div style={{ background: "rgba(180,80,40,.08)", border: "1px solid rgba(180,80,40,.35)", borderRadius: 12, padding: 13, marginBottom: 14, fontSize: 12, lineHeight: 1.6, color: T.text }}>
+      ⚠️ <b>Antes de arrancar:</b> este plan es general (estabilización de core, glúteos y columna, sin flexión de espalda cargada), pensado para hernia de disco típica. No reemplaza a tu traumatólogo o kinesiólogo, que conoce tu caso puntual. Si algún ejercicio te genera dolor (no solo cansancio), paralo y consultá.
+    </div>
+
+    <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}>
+        <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Progreso</div>
+        <div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: T.accent, marginTop: 3 }}>{totalHechas}/18</div>
+      </div>
+      <div style={{ flex: 1.6, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}>
+        <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Próxima sesión</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginTop: 3 }}>{proxima ? `${fmtFechaCorta(new Date(proxima.fecha + "T00:00:00"))} · Semana ${proxima.semana} · Sesión ${proxima.tipo}` : "¡Plan completo! 🎉"}</div>
+      </div>
+    </div>
+
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Empezar el plan</div>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 8, lineHeight: 1.5 }}>3 sesiones por semana (lunes / miércoles / viernes), alternando A y B, durante 6 semanas. Elegí desde cuándo arrancar:</div>
+      <input type="date" value={inicio || ""} onChange={e => onSetInicio(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text, boxSizing: "border-box" }} />
+    </div>
+
+    {[1, 2, 3, 4, 5, 6].map(sem => (<div key={sem} style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Semana {sem}</div>
+      {sesiones.filter(s => s.semana === sem).map(s => {
+        const hecha = !!hechas[s.id];
+        const fSes = new Date(s.fecha + "T00:00:00");
+        const esHoy = fSes.getTime() === hoy.getTime();
+        const abierta = expandida === s.id;
+        return (<div key={s.id} style={{ background: T.card, border: `1px solid ${hecha ? T.accent : (esHoy ? BRASS : T.border)}`, borderLeft: `3px solid ${hecha ? T.accent : BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => setExpandida(abierta ? null : s.id)}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: hecha ? T.accent : T.text }}>{fmtFechaCorta(fSes)}{esHoy ? " · HOY" : ""} · Sesión {s.tipo}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{s.ejercicios.length} ejercicios{hecha ? " · ✓ hecha" : ""}</div>
+            </div>
+            <button onClick={(ev) => { ev.stopPropagation(); onToggle(s.id); }} style={{ flexShrink: 0, width: 30, height: 30, borderRadius: "50%", border: `2px solid ${hecha ? T.accent : T.border}`, background: hecha ? T.accent : "none", color: "#fff", fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{hecha ? "✓" : ""}</button>
+          </div>
+          {abierta && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+            {s.ejercicios.map((e, i) => (<div key={i} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{e.n} {e.series ? <span style={{ color: BRASS, fontWeight: 700 }}>· {e.series}</span> : null}</div>
+              <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2, lineHeight: 1.5 }}>{e.desc}</div>
+              {e.nota && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2, fontStyle: "italic" }}>{e.nota}</div>}
+            </div>))}
+          </div>}
+        </div>);
+      })}
+    </div>))}
+  </div>);
+}
+
+const SUPLEMENTOS = [
+  { n: "Vitamina D3", para: "Salud ósea y de los discos, absorción de calcio, función muscular.", dosis: "1000-2000 UI/día es un rango habitual — pero esta es la que MÁS conviene pedir por análisis de sangre antes, porque la dosis correcta depende de tu nivel actual (muchos adultos de 51+ están con déficit sin saberlo).", nota: "La más recomendable de pedir a un médico con un análisis primero." },
+  { n: "Magnesio (citrato o glicinato)", para: "Relajación muscular, calambres, calidad de sueño — útil si entrenás y tenés tensión lumbar.", dosis: "300-400 mg/día, tomado a la noche.", nota: "El glicinato se tolera mejor que el óxido (menos efecto laxante)." },
+  { n: "Omega 3 (EPA/DHA)", para: "Efecto antiinflamatorio general, salud articular y cardiovascular.", dosis: "1-2 g/día combinados de EPA+DHA, con las comidas.", nota: "Si tomás anticoagulantes, consultá antes — puede potenciarlos." },
+  { n: "Colágeno hidrolizado + Vitamina C", para: "El disco intervertebral y los tendones son en gran parte colágeno — hay estudios que asocian esta combinación con mejor salud del tejido conectivo.", dosis: "10-15 g de colágeno + vitamina C, idealmente 30-60 min antes de entrenar.", nota: "Evidencia todavía moderada, pero es de bajo riesgo." },
+  { n: "Proteína (whey o vegetal)", para: "Mantener masa muscular a los 51 (a partir de esta edad se pierde masa muscular más rápido si no se refuerza), recuperación después de entrenar.", dosis: "20-30 g por toma, 1-2 tomas al día según cuánta proteína ya comés en las comidas.", nota: "No es un reemplazo de comida, es un complemento." },
+  { n: "Creatina monohidratada", para: "Fuerza y rendimiento muscular — uno de los suplementos con más evidencia científica, seguro para adultos sanos.", dosis: "3-5 g/día, cualquier momento del día (no hace falta 'carga').", nota: "Tomar con buena hidratación." },
+];
+function SuplementosBody() {
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <div style={{ background: "rgba(180,80,40,.08)", border: "1px solid rgba(180,80,40,.35)", borderRadius: 12, padding: 13, marginBottom: 14, fontSize: 12, lineHeight: 1.6, color: T.text }}>
+      ⚠️ Esto es información general, no una indicación médica. Antes de empezar cualquier suplemento, sobre todo si tomás alguna medicación, consultá con tu médico o un nutricionista — algunos (como el Omega 3) pueden interactuar con otros tratamientos.
+    </div>
+    {SUPLEMENTOS.map((s, i) => (<div key={i} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "13px 14px", marginBottom: 10 }}>
+      <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text, marginBottom: 4 }}>{s.n}</div>
+      <div style={{ fontSize: 12, color: T.sub, marginBottom: 6, lineHeight: 1.5 }}>{s.para}</div>
+      <div style={{ fontSize: 12, color: T.text, marginBottom: 4 }}><b style={{ color: BRASS }}>Dosis orientativa:</b> {s.dosis}</div>
+      <div style={{ fontSize: 11, color: T.muted, fontStyle: "italic" }}>{s.nota}</div>
     </div>))}
   </div>);
 }
