@@ -3201,6 +3201,37 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   });
   const totCosto = totCostoDir;
   const totRes = totUtil - totImpuestos - totImprev - totFijo - totGastos;
+
+  // Cobrado/pagado real por obra — igual para TODAS las obras, tengan certificados,
+  // estén en modo histórico, o solo tengan movimientos sueltos en Caja. Esto es lo que
+  // se muestra en "Cuánto deja cada obra", y también lo que suma el total de
+  // "Resultado operativo" (así las dos pantallas siempre coinciden).
+  const movsResGlobal = data.movimientos || [];
+  const filasPorObra = obras.map(o => {
+    const p = porObra[o.id] || {};
+    let cobrado = (p.nCert ? p.bruto : p.fact) || 0;  // certificados: bruto SIN ajuste por IPC
+    let pagado = p.costoDir || 0;     // costo de obra
+    let debug = "";
+    if (!p.nCert) {
+      const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual, obras);
+      if (!calc.sinDatos) {
+        cobrado = calc.cobrado;
+        pagado = o.esHistorico ? num(o.histPagado) : 0;
+        debug = `histórico · ${calc.meses} mes(es)`;
+      }
+      if (calc.sinDatos || !o.esHistorico) {
+        const movsObra = movsResGlobal.filter(m => m.obraId === o.id);
+        const cobradoDirecto = movsObra.filter(m => m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
+        const pagadoDirecto = movsObra.filter(m => m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
+        if (calc.sinDatos) { cobrado = cobradoDirecto; pagado = pagadoDirecto; debug = `id:${String(o.id).slice(-6)} · movs:${movsObra.length}`; }
+      }
+    } else {
+      debug = `${p.nCert} cert.`;
+    }
+    return { nombre: o.nombre, presup: presupCliente(o), cobrado, pagado, util: cobrado - pagado, debug };
+  });
+  const totBrutoTodo = filasPorObra.reduce((s, f) => s + f.cobrado, 0);
+  const totCostoTodo = filasPorObra.reduce((s, f) => s + f.pagado, 0);
   const movs = data.movimientos || [];
   const cobroReal = movs.filter(m => m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
   const pagoReal = movs.filter(m => m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
@@ -3407,33 +3438,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
 
     {/* ── PLANILLA POR OBRA: cuánto deja cada una (sin estructura) ── */}
     {obras.length > 0 && (() => {
-      const movsRes = data.movimientos || [];
-      const filas = obras.map(o => {
-        const p = porObra[o.id] || {};
-        let cobrado = (p.nCert ? p.bruto : p.fact) || 0;  // certificados: bruto SIN ajuste por IPC
-        let pagado = p.costoDir || 0;     // costo de obra
-        let debug = "";
-        if (!p.nCert) {
-          // Sin certificados: no hay de dónde sacar "facturado/costo directo" por cert,
-          // así que usamos lo que sí hay cargado — el histórico (SIN ajuste por inflación,
-          // y con respaldo por nombre si el id no coincide), o si no, Caja directo.
-          const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual, obras);
-          if (!calc.sinDatos) {
-            cobrado = calc.cobrado;
-            pagado = o.esHistorico ? num(o.histPagado) : 0;
-            debug = `histórico · ${calc.meses} mes(es)`;
-          }
-          if (calc.sinDatos || !o.esHistorico) {
-            const movsObra = movsRes.filter(m => m.obraId === o.id);
-            const cobradoDirecto = movsObra.filter(m => m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
-            const pagadoDirecto = movsObra.filter(m => m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
-            if (calc.sinDatos) { cobrado = cobradoDirecto; pagado = pagadoDirecto; debug = `id:${String(o.id).slice(-6)} · movs:${movsObra.length}`; }
-          }
-        } else {
-          debug = `${p.nCert} cert.`;
-        }
-        return { nombre: o.nombre, presup: presupCliente(o), cobrado, pagado, util: cobrado - pagado, debug };
-      });
+      const filas = filasPorObra;
       const tCob = filas.reduce((s, f) => s + f.cobrado, 0);
       const tPag = filas.reduce((s, f) => s + f.pagado, 0);
       const tUtil = tCob - tPag;
@@ -3482,7 +3487,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
       <div style={{ fontSize: 30, fontWeight: 800, margin: "6px 0 4px", color: totRes >= 0 ? "#7DE0A6" : "#FCA5A5" }}>{money(totRes)}</div>
       <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>Lo que podés guardar sin comprometer nada. Descontado TODO: costos de obra, impuestos, imprevistos y el costo fijo de estructura.</div>
       <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.12)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0" }}><span style={{ color: "rgba(255,255,255,.7)" }}>Certificado (facturado)</span><span style={{ fontWeight: 700 }}>{money(totBruto)}</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0" }}><span style={{ color: "rgba(255,255,255,.7)" }}>Certificado (facturado)</span><span style={{ fontWeight: 700 }}>{money(totBrutoTodo)}</span></div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0" }}><span style={{ color: "rgba(255,255,255,.7)" }}>− Costo de obra</span><span style={{ fontWeight: 700, color: "#FCA5A5" }}>− {money(totCostoDir)}</span></div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0", borderTop: "1px solid rgba(255,255,255,.1)", marginTop: 3, paddingTop: 5 }}><span style={{ color: "rgba(255,255,255,.85)", fontWeight: 700 }}>= Utilidad de obra</span><span style={{ fontWeight: 800 }}>{money(totUtil)}</span></div>
         {totImpuestos > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0" }}><span style={{ color: "rgba(255,255,255,.7)" }}>− Impuestos / IIBB</span><span style={{ fontWeight: 700, color: "#FCA5A5" }}>− {money(totImpuestos)}</span></div>}
@@ -3491,8 +3496,8 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
         {totGastos > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "2px 0" }}><span style={{ color: "rgba(255,255,255,.7)" }}>− Gastos de obra</span><span style={{ fontWeight: 700, color: "#FCA5A5" }}>− {money(totGastos)}</span></div>}
       </div>
       <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.12)" }}>
-        <div><div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase" }}>Cobrado</div><div style={{ fontSize: 15, fontWeight: 800 }}>{money(totCobroBruto)}</div></div>
-        <div><div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase" }}>Costo obra</div><div style={{ fontSize: 15, fontWeight: 800, color: "#FCA5A5" }}>{money(totCosto)}</div></div>
+        <div><div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase" }}>Cobrado</div><div style={{ fontSize: 15, fontWeight: 800 }}>{money(totBrutoTodo)}</div></div>
+        <div><div style={{ fontSize: 10, color: "rgba(255,255,255,.6)", textTransform: "uppercase" }}>Costo obra</div><div style={{ fontSize: 15, fontWeight: 800, color: "#FCA5A5" }}>{money(totCostoTodo)}</div></div>
       </div>
     </div>
 
