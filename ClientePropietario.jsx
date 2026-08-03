@@ -407,6 +407,7 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
   const [cotTxt, setCotTxt] = useState(cot0 ? fmtMiles(cot0) : "");
   const [editandoId, setEditandoId] = useState(null);
   const [editForm, setEditForm] = useState({ cat: "", monto: "", moneda: "ars", nota: "" });
+  const [catNuevaModo, setCatNuevaModo] = useState(false);
   useEffect(() => { setSupTxt(sup0 ? fmtMiles(sup0) : ""); }, [sup0]);
   useEffect(() => { setVUTxt(vU0 ? fmtMiles(vU0) : ""); }, [vU0]);
   useEffect(() => { setVATxt(vA0 ? fmtMiles(vA0) : ""); }, [vA0]);
@@ -447,6 +448,7 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
       onGuardarPropia(p => ({ ...p, costos: [...(p.costos || []), item] })).finally(() => setGuardando(false));
     }
     setNuevo({ cat: "", monto: "", moneda: "ars", nota: "" });
+    setCatNuevaModo(false);
   }
   function borrarGasto(id) {
     if (!window.confirm("¿Borrar este gasto?")) return;
@@ -534,7 +536,17 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
       <div style={{ background: T.card, border: `1px dashed ${T.border}`, borderRadius: T.r, padding: 14, marginTop: 10 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>+ Agregar gasto</div>
         <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Si ponés el mismo nombre de una categoría que ya existe (ej: "Materiales generales"), se suma a esa — no crea una nueva. Tocá cualquier gasto de la lista para editarlo.</div>
-        <input value={nuevo.cat} onChange={e => setNuevo(n => ({ ...n, cat: e.target.value }))} placeholder="Categoría (ej: Materiales, Mano de obra…)" style={{ ...inpEd, marginBottom: 8 }} />
+        {(() => {
+          const catsExistentes = [...new Set((costos.costos || []).map(c => (c.cat || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+          return (<>
+            <select value={catNuevaModo ? "__nueva__" : (catsExistentes.includes(nuevo.cat) ? nuevo.cat : "")} onChange={e => { if (e.target.value === "__nueva__") { setCatNuevaModo(true); setNuevo(n => ({ ...n, cat: "" })); } else { setCatNuevaModo(false); setNuevo(n => ({ ...n, cat: e.target.value })); } }} style={{ ...inpEd, marginBottom: 8 }}>
+              <option value="" disabled>{catsExistentes.length ? "Elegí una sección…" : "Todavía no hay secciones creadas"}</option>
+              {catsExistentes.map(c => <option key={c} value={c}>{c}</option>)}
+              <option value="__nueva__">＋ Nueva sección…</option>
+            </select>
+            {catNuevaModo && <input value={nuevo.cat} onChange={e => setNuevo(n => ({ ...n, cat: e.target.value }))} placeholder="Nombre de la sección nueva" autoFocus style={{ ...inpEd, marginBottom: 8 }} />}
+          </>);
+        })()}
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <input value={fmtMiles(nuevo.monto)} onChange={e => setNuevo(n => ({ ...n, monto: numMiles(e.target.value) }))} inputMode="numeric" placeholder="Monto" style={{ ...inpEd, flex: 1 }} />
           <div style={{ display: "flex", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden" }}>
