@@ -170,10 +170,14 @@ function addMonthYM(ym, n) { const [y, m] = String(ym).split("-").map(Number); c
 // Mes cero = obra.mesBase. Se aplica SOLO sobre el saldo pendiente de cobrar al cliente
 // (nunca sobre lo ya cobrado, ni sobre pagos a subcontratistas: esos son a precio cerrado).
 // Necesita movimientos tipo "cobro" cargados con fecha en la obra; si no hay, no puede calcularse solo.
-function ajusteInflacionSaldo(obra, movimientos, cacMensual) {
+function ajusteInflacionSaldo(obra, movimientos, cacMensual, obrasTodas) {
   const mesBase = obra?.mesBase || mesDe(obra?.inicio || hoyISO());
   const hoyMes = mesDe(hoyISO());
-  const cobrosObra = (movimientos || []).filter(m => m.tipo === "cobro" && m.obraId === obra?.id);
+  let cobrosObra = (movimientos || []).filter(m => m.tipo === "cobro" && m.obraId === obra?.id);
+  // Respaldo: si por id no aparece nada (datos viejos/desincronizados), probamos por nombre.
+  if (!cobrosObra.length && obra?.nombre && obrasTodas && obrasTodas.length) {
+    cobrosObra = (movimientos || []).filter(m => { if (m.tipo !== "cobro") return false; const oo = obrasTodas.find(y => y.id === m.obraId); return oo && oo.nombre === obra.nombre; });
+  }
   if (!cobrosObra.length) return { ajuste: 0, saldo: presupCliente(obra), cobrado: 0, sinDatos: true, mesesSinIPC: 0, meses: 0, detalle: [] };
   const ultimoMesCobro = cobrosObra.reduce((mx, m) => (mesDe(m.fecha) > mx ? mesDe(m.fecha) : mx), mesBase);
   const mesTope = ultimoMesCobro > hoyMes ? ultimoMesCobro : hoyMes;
@@ -1225,7 +1229,7 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
       {/* Histórico: para obras ya cobradas sin certificados en la app */}
       {(() => {
         const abierto = !!form._histAbierto;
-        const calc = ajusteInflacionSaldo(form, data.movimientos, data.cacMensual);
+        const calc = ajusteInflacionSaldo(form, data.movimientos, data.cacMensual, obras);
         const hc = calc.cobrado, ha = calc.ajuste, hp = numMoney(form.histPagado);
         const fact = hc + ha, util = fact - hp;
         return (<div style={{ background: T.bg, borderRadius: 11, padding: abierto ? 13 : 0, marginBottom: 12, border: abierto ? `1px solid ${T.border}` : "none" }}>
@@ -1459,7 +1463,7 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
   // Obras que usan el panel "Ya cobrado sin certificado" (histórico): su saldo a cobrar
   // (facturado − cobrado) se suma solo acá, sin tener que cargarlo dos veces a mano.
   const cobrosAutoHist = (obras || []).filter(o => o.esHistorico).map(o => {
-    const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual);
+    const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual, obras);
     const hc = calc.cobrado, ha = calc.ajuste, fact = hc + ha;
     return { obraId: o.id, nombre: o.nombre, saldo: fact - hc };
   }).filter(x => x.saldo !== 0);
@@ -3175,7 +3179,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   let totHistAjuste = 0;
   obras.forEach(o => {
     if (!o.esHistorico) return;                        // solo obras que vos marcaste como histórico
-    const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual);
+    const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual, obras);
     const hc = calc.cobrado, ha = calc.ajuste, hp = num(o.histPagado);
     const fact = hc + ha;             // facturado real = cobrado + ajuste
     totFact += fact; totCobro += fact; totCostoDir += hp; totUtil += (fact - hp); totHistAjuste += ha;
@@ -3399,17 +3403,19 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
         let debug = "";
         if (!p.nCert) {
           // Sin certificados: no hay de dónde sacar "facturado/costo directo" por cert,
-          // así que usamos lo que sí hay cargado — el histórico, o si no, Caja directo.
-          if (o.esHistorico) {
-            const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual);
+          // así que usamos lo que sí hay cargado — el histórico (con ajuste por inflación
+          // incluido, y con respaldo por nombre si el id no coincide), o si no, Caja directo.
+          const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual, obras);
+          if (!calc.sinDatos) {
             cobrado = calc.cobrado + calc.ajuste;
-            pagado = num(o.histPagado);
-            debug = "histórico";
-          } else {
+            pagado = o.esHistorico ? num(o.histPagado) : 0;
+            debug = `histórico · ${calc.meses} mes(es)`;
+          }
+          if (calc.sinDatos || !o.esHistorico) {
             const movsObra = movsRes.filter(m => m.obraId === o.id);
-            cobrado = movsObra.filter(m => m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
-            pagado = movsObra.filter(m => m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
-            debug = `id:${String(o.id).slice(-6)} · movs totales:${movsRes.length} · de esta obra:${movsObra.length}`;
+            const cobradoDirecto = movsObra.filter(m => m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
+            const pagadoDirecto = movsObra.filter(m => m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
+            if (calc.sinDatos) { cobrado = cobradoDirecto; pagado = pagadoDirecto; debug = `id:${String(o.id).slice(-6)} · movs:${movsObra.length}`; }
           }
         } else {
           debug = `${p.nCert} cert.`;
