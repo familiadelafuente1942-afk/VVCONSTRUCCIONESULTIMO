@@ -3391,10 +3391,23 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
 
     {/* ── PLANILLA POR OBRA: cuánto deja cada una (sin estructura) ── */}
     {obras.length > 0 && (() => {
+      const movsRes = data.movimientos || [];
       const filas = obras.map(o => {
         const p = porObra[o.id] || {};
-        const cobrado = p.fact || 0;        // facturado real: certificados (con ajuste) + histórico
-        const pagado = p.costoDir || 0;     // costo de obra
+        let cobrado = p.fact || 0;        // facturado real: certificados (con ajuste) + histórico
+        let pagado = p.costoDir || 0;     // costo de obra
+        if (!p.nCert) {
+          // Sin certificados: no hay de dónde sacar "facturado/costo directo" por cert,
+          // así que usamos lo que sí hay cargado — el histórico, o si no, Caja directo.
+          if (o.esHistorico) {
+            const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual);
+            cobrado = calc.cobrado + calc.ajuste;
+            pagado = num(o.histPagado);
+          } else {
+            cobrado = movsRes.filter(m => m.obraId === o.id && m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
+            pagado = movsRes.filter(m => m.obraId === o.id && m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
+          }
+        }
         return { nombre: o.nombre, presup: presupCliente(o), cobrado, pagado, util: cobrado - pagado };
       });
       const tCob = filas.reduce((s, f) => s + f.cobrado, 0);
