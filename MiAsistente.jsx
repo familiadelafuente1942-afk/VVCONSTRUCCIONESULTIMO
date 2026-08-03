@@ -101,11 +101,19 @@ const EJ = {
   sentadillapared: { n: "Sentadilla isométrica en pared", desc: "Espalda apoyada en la pared, bajá hasta rodillas a 90° (o el ángulo cómodo) y sostené.", nota: "Fortalece piernas y glúteos sin cargar la columna." },
   hipthrust: { n: "Hip thrust (banco o piso)", desc: "Espalda apoyada en un banco/sillón, pies firmes en el piso. Empujá la cadera hacia arriba apretando glúteos.", nota: "El ejercicio de glúteo más efectivo, muy seguro para la espalda." },
   caminata: { n: "Caminata", desc: "Caminar a paso firme, postura erguida.", nota: "El mejor ejercicio de base para la espalda — hacelo todos los días que puedas, no solo los días de sesión." },
-  estiramientocadera: { n: "Estiramiento de flexores de cadera", desc: "En posición de estocada baja, empujá la cadera suave hacia adelante sin arquear la zona lumbar.", nota: "Cadera tensa sobrecarga la zona lumbar — este estiramiento es clave." },
+  estiramientocadera: { n: "Estiramiento de flexores de cadera (psoas)", desc: "En posición de estocada baja, empujá la cadera suave hacia adelante sin arquear la zona lumbar.", nota: "Indicado por tu traumatólogo — cadera tensa sobrecarga la zona lumbar." },
   estiramientopiriforme: { n: "Estiramiento de piriforme/glúteo", desc: "Acostado, cruzá un tobillo sobre la rodilla opuesta y llevá la pierna hacia el pecho.", nota: "Alivia si tenés dolor irradiado a la pierna." },
+  movilidadcadera90: { n: "Movilidad de cadera 90/90", desc: "Sentado en el piso, una pierna flexionada 90° adelante y la otra 90° al costado. Rotá de un lado al otro despacio, sin forzar.", nota: "Indicado por tu traumatólogo — moviliza la cadera sin cargar la columna." },
+  movilidadcaderacirculos: { n: "Círculos de cadera en cuadrupedia", desc: "En cuatro apoyos, llevá una rodilla en círculos amplios (como marcando el número 10 con la rodilla), ambos sentidos.", nota: "Moviliza sin cargar la zona lumbar." },
+  estiramientoisquios: { n: "Elongación de isquiotibiales", desc: "Acostado boca arriba, levantá una pierna estirada sujetándola con una toalla o banda detrás del muslo, sin despegar la zona lumbar del piso.", nota: "Indicado por tu traumatólogo — isquios tensos tironean de la pelvis y sobrecargan la lumbar." },
+  estiramientogemelos: { n: "Elongación de gemelos", desc: "Parado frente a una pared, un pie atrás con el talón apoyado y la pierna estirada, inclinate hacia la pared.", nota: "Indicado por tu traumatólogo." },
 };
 function semanaPlan(sem) {
   // sem: 1-6. Devuelve la sesión A y B de esa semana con los "tiempos" (seg/reps) según progresión.
+  // Sigue al pie la indicación del traumatólogo (Dr. Miranda, Fund. Favaloro):
+  // 1) Fortalecimiento isométrico del core y glúteos, 2) Movilidad de caderas,
+  // 3) Elongación de psoas, isquiotibiales y gemelos. Las dos sesiones (A y B)
+  // cubren los 3 puntos siempre, alternando qué ejercicio de fuerza usan.
   const prog = Math.min(sem, 6);
   const holdCore = [15, 18, 20, 25, 30, 35][prog - 1];      // seg de plancha/lateral
   const repsBird = [6, 8, 8, 10, 10, 12][prog - 1];          // reps por lado bird-dog/deadbug
@@ -115,24 +123,61 @@ function semanaPlan(sem) {
     A: [
       { ...EJ.respiracion, series: "2 min" },
       { ...EJ.catcow, series: "10 reps" },
+      // 1) Fortalecimiento isométrico core + glúteos
       { ...EJ.birddog, series: `3 series x ${repsBird} por lado` },
       { ...EJ.puentegluteo, series: unilateral ? undefined : `3 series x ${repsPuente}` },
       ...(unilateral ? [{ ...EJ.puenteunilateral, series: `3 series x ${Math.max(6, repsPuente - 4)} por lado` }] : []),
       { ...EJ.plancha, series: `3 series x ${holdCore}s` },
+      // 2) Movilidad de caderas
+      { ...EJ.movilidadcadera90, series: "8 rotaciones por lado" },
+      // 3) Elongación psoas / isquios / gemelos
       { ...EJ.estiramientocadera, series: "30s por lado" },
+      { ...EJ.estiramientoisquios, series: "30s por lado" },
     ].filter(x => x.series !== undefined),
     B: [
       { ...EJ.respiracion, series: "2 min" },
+      // 1) Fortalecimiento isométrico core + glúteos
       { ...EJ.deadbug, series: `3 series x ${repsBird} por lado` },
       { ...EJ.almeja, series: `3 series x ${repsPuente} por lado` },
       { ...EJ.planchalateral, series: `2 series x ${holdCore}s por lado` },
       { ...EJ.mcgillcurl, series: "2 series x 8 por lado" },
       { ...(sem >= 4 ? EJ.hipthrust : EJ.sentadillapared), series: sem >= 4 ? "3 series x 12" : `3 series x ${holdCore}s` },
+      // 2) Movilidad de caderas
+      { ...EJ.movilidadcaderacirculos, series: "8 círculos por lado, cada sentido" },
+      // 3) Elongación psoas / isquios / gemelos
       { ...EJ.estiramientopiriforme, series: "30s por lado" },
+      { ...EJ.estiramientogemelos, series: "30s por lado" },
     ],
   };
 }
 function fmtFechaCorta(d) { const dias = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]; const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]; return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}`; }
+
+// ── Frase motivadora del día ──────────────────────────────────────────
+// Cambia una vez por día (siempre la misma en el mismo día, calculada por
+// la fecha, no al azar en cada apertura). Algunas son fijas, otras toman
+// el progreso real del plan para que se sientan personales.
+const FRASES_FIJAS = [
+  "Cada sesión de hoy es una vértebra menos preocupada mañana. Vamos.",
+  "No es sobre entrenar duro, es sobre entrenar todos los días que puedas. La constancia le gana a la intensidad.",
+  "Tu espalda no necesita un héroe un día — necesita a alguien confiable 3 veces por semana.",
+  "51 años con la disciplina de cuidarte es más fuerte que 25 sin ella.",
+  "El core fuerte de hoy es la espalda sin dolor de dentro de 5 años.",
+  "No tenés que sentir ganas. Solo tenés que aparecer 15 minutos.",
+  "Cada bird-dog que hacés bien es una neurona más que le enseña a tu cuerpo a proteger la columna.",
+  "Los glúteos fuertes son el mejor seguro que le podés dar a tu zona lumbar.",
+  "Progreso, no perfección. Una sesión hecha vale más que la sesión perfecta que nunca hacés.",
+  "Hoy elegís entre 15 minutos de ejercicio o el riesgo de perder mucho más tiempo después. Fácil.",
+  "No estás entrenando para verte mejor. Estás entrenando para poder jugar con quien quieras, sin miedo, por muchos años más.",
+  "Tu yo de 60 años te va a agradecer lo que hagas hoy a los 51.",
+];
+function fraseDelDia(hechasCount, totalCount, proxima) {
+  const hoyN = Math.floor(Date.now() / 86400000); // día "juliano" simple, cambia una vez cada 24hs
+  if (totalCount > 0 && hechasCount === totalCount) return "🎉 Completaste las 18 sesiones del plan. Sos vos quien decidió cuidarse — y se nota. Hablale a tu asistente para armar la siguiente etapa.";
+  if (hechasCount === 0) return "Arranca hoy. La primera sesión siempre es la más difícil de las 18 — después el hábito tira solo.";
+  const racha = hechasCount;
+  if (racha >= 3 && racha % 6 === 0) return `Van ${racha} sesiones hechas. Eso no es suerte, es disciplina — seguí así.`;
+  return FRASES_FIJAS[hoyN % FRASES_FIJAS.length];
+}
 function generarCalendarioPlan(inicioISO) {
   // 3 sesiones por semana (lun/mié/vie), alternando sesión A y B, durante 6 semanas = 18 sesiones.
   const inicio = inicioISO ? new Date(inicioISO + "T00:00:00") : new Date();
@@ -285,6 +330,23 @@ export default function MiAsistente() {
     const t = setTimeout(chequear, 3000); const iv = setInterval(chequear, 60 * 60 * 1000);
     return () => { clearTimeout(t); clearInterval(iv); };
   }, [pinOk]);
+
+  // Mensaje motivador del entrenamiento: una vez por día, al abrir el chat.
+  useEffect(() => {
+    if (!pinOk) return;
+    const hoyKey = new Date().toDateString();
+    let visto = null; try { visto = localStorage.getItem("sebastian_motiv_visto"); } catch { }
+    if (visto === hoyKey) return;
+    const t = setTimeout(() => {
+      const sesiones = entrenoInicio ? generarCalendarioPlan(entrenoInicio) : [];
+      const hechasCount = sesiones.filter(s => entrenoHechas[s.id]).length;
+      const proxima = sesiones.find(s => !entrenoHechas[s.id]);
+      const frase = entrenoInicio ? fraseDelDia(hechasCount, sesiones.length, proxima) : "Todavía no arrancaste el plan de entrenamiento — andá a la solapa Entrenamiento y elegí una fecha de inicio, aunque sea hoy mismo.";
+      setMsgs(prev => [...prev, { role: "assistant", content: `💪 ${frase}` }]);
+      try { localStorage.setItem("sebastian_motiv_visto", hoyKey); } catch { }
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [pinOk, entrenoInicio, entrenoHechas]);
 
   function entrar() {
     try { localStorage.setItem("miasistente_trust", trust ? "1" : "0"); } catch { }
@@ -895,8 +957,11 @@ function EntrenamientoBody({ inicio, hechas, onSetInicio, onToggle }) {
   const totalHechas = sesiones.filter(s => hechas[s.id]).length;
   const proxima = sesiones.find(s => !hechas[s.id]);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <div style={{ background: T.navy, borderRadius: 12, padding: "14px 16px", marginBottom: 12, fontFamily: T.serif, fontSize: 14.5, fontWeight: 600, color: "#fff", lineHeight: 1.5 }}>
+      💪 {fraseDelDia(totalHechas, sesiones.length, proxima)}
+    </div>
     <div style={{ background: "rgba(180,80,40,.08)", border: "1px solid rgba(180,80,40,.35)", borderRadius: 12, padding: 13, marginBottom: 14, fontSize: 12, lineHeight: 1.6, color: T.text }}>
-      ⚠️ <b>Antes de arrancar:</b> este plan es general (estabilización de core, glúteos y columna, sin flexión de espalda cargada), pensado para hernia de disco típica. No reemplaza a tu traumatólogo o kinesiólogo, que conoce tu caso puntual. Si algún ejercicio te genera dolor (no solo cansancio), paralo y consultá.
+      ⚠️ <b>Antes de arrancar:</b> plan armado siguiendo tu indicación de Ortopedia (Dr. Miranda, Fund. Favaloro): fortalecimiento isométrico de core y glúteos, movilidad de caderas, y elongación de psoas/isquiotibiales/gemelos. No reemplaza el seguimiento en persona. Si algún ejercicio te genera dolor (no solo cansancio), paralo y consultá.
     </div>
 
     <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
