@@ -1563,6 +1563,10 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
               <button onClick={() => borrarAdelanto(a.id)} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, padding: "3px 7px", fontSize: 10, cursor: "pointer" }}>✕</button>
             </span>
           </div>))}
+          {adelantos.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 12 }}>
+            <span style={{ color: T.sub, fontWeight: 700 }}>Subtotal adelantos</span>
+            <span style={{ fontWeight: 800, color: "#DC2626" }}>− {money(totAdelantos)}</span>
+          </div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <select value={nuevoAdelObra} onChange={e => setNuevoAdelObra(e.target.value)} style={{ ...inp, flex: 1.3 }}>
               <option value="">Obra…</option>
@@ -1588,6 +1592,10 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
               <button onClick={() => borrarCobroSinCert(c.id)} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, padding: "3px 7px", fontSize: 10, cursor: "pointer" }}>✕</button>
             </span>
           </div>))}
+          {(cobrosAutoHist.length > 0 || cobrosAutoCaja.length > 0 || cobrosSinCert.length > 0) && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 12 }}>
+            <span style={{ color: T.sub, fontWeight: 700 }}>Subtotal cobrado sin certificado</span>
+            <span style={{ fontWeight: 800, color: T.accent }}>+ {money(totCobrosSinCertManual + totCobrosSinCertAuto)}</span>
+          </div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <select value={nuevoCobroObra} onChange={e => setNuevoCobroObra(e.target.value)} style={{ ...inp, flex: 1.3 }}>
               <option value="">Obra…</option>
