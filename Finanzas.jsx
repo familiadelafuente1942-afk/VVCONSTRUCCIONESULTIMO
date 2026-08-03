@@ -1263,6 +1263,7 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
               {(fact > 0 || hp > 0) && <div style={{ background: T.card, borderRadius: 9, padding: 10, marginTop: 4, fontSize: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: T.sub }}>Facturado (cobrado + ajuste)</span><b>{money(fact)}</b></div>
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: T.sub }}>Utilidad histórica</span><b style={{ color: util >= 0 ? T.ok : "#EF4444" }}>{money(util)}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: T.sub }}>Saldo a cobrar <span style={{ color: T.muted, fontWeight: 400 }}>(facturado − cobrado)</span></span><b style={{ color: BRASS }}>{money(fact - hc)}</b></div>
               </div>}
               <button onClick={() => setForm({ ...form, _histAbierto: false, histPagado: "" })} style={{ marginTop: 10, background: "none", border: "none", color: T.muted, fontSize: 11, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>Quitar histórico</button>
             </>}
@@ -1443,6 +1444,13 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
   function borrarCobroSinCert(id) {
     save(logH({ ...data, certGeneralExtra: { ...(data.certGeneralExtra || {}), cobrosSinCert: cobrosSinCert.filter(c => c.id !== id) } }, "Certificación general · borró cobro sin cert."));
   }
+  // Obras que usan el panel "Ya cobrado sin certificado" (histórico): su saldo a cobrar
+  // (facturado − cobrado) se suma solo acá, sin tener que cargarlo dos veces a mano.
+  const cobrosAutoHist = (obras || []).filter(o => o.esHistorico).map(o => {
+    const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual);
+    const hc = calc.cobrado, ha = calc.ajuste, fact = hc + ha;
+    return { obraId: o.id, nombre: o.nombre, saldo: fact - hc };
+  }).filter(x => x.saldo !== 0);
 
   // meses que tienen al menos un certificado, del más nuevo al más viejo
   const meses = [...new Set(certs.map(c => mesDe(c.fecha)).filter(Boolean))].sort().reverse();
@@ -1518,8 +1526,9 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
 
       {!esCosto && filas.length > 0 && (() => {
         const adelanto = numMoney(adelantoTxt);
-        const totCobrosSinCert = cobrosSinCert.reduce((s, c) => s + (Number(c.monto) || 0), 0);
-        const granTotal = total - adelanto + totCobrosSinCert;
+        const totCobrosSinCertManual = cobrosSinCert.reduce((s, c) => s + (Number(c.monto) || 0), 0);
+        const totCobrosSinCertAuto = cobrosAutoHist.reduce((s, c) => s + c.saldo, 0);
+        const granTotal = total - adelanto + totCobrosSinCertManual + totCobrosSinCertAuto;
         const nomObraExtra = (id) => obras.find(o => o.id === id)?.nombre || "—";
         return (<div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px dashed ${T.border}` }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Sumar a mano</div>
@@ -1529,6 +1538,10 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
           </Field>
 
           <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, marginTop: 14, marginBottom: 8 }}>Cobrado sin certificado (suma) — por obra</div>
+          {cobrosAutoHist.length > 0 && cobrosAutoHist.map(c => (<div key={c.obraId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{c.nombre} <span style={{ fontSize: 10, color: T.muted, fontWeight: 400 }}>(automático · histórico)</span></span>
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{money(c.saldo)}</span>
+          </div>))}
           {cobrosSinCert.length > 0 && cobrosSinCert.map(c => (<div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
             <span style={{ fontSize: 12.5, fontWeight: 600 }}>{nomObraExtra(c.obraId)}</span>
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1544,8 +1557,9 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
             <input value={nuevoCobroMonto} onChange={e => setNuevoCobroMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Monto" style={{ ...inp, flex: 1 }} />
             <button onClick={agregarCobroSinCert} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 16px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
           </div>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>Las marcadas "automático" ya vienen del panel "Ya cobrado sin certificado" de cada obra — no hace falta cargarlas de nuevo acá. Usá el formulario solo para casos sueltos que no estén en ese panel.</div>
 
-          {(adelanto > 0 || totCobrosSinCert > 0) && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 13, marginTop: 16, borderTop: `2px solid ${T.accent}` }}>
+          {(adelanto > 0 || totCobrosSinCertManual > 0 || totCobrosSinCertAuto > 0) && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 13, marginTop: 16, borderTop: `2px solid ${T.accent}` }}>
             <span style={{ fontSize: 14.5, fontWeight: 800 }}>GRAN TOTAL<span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}> · certificados − adelanto + sin cert.</span></span>
             <span style={{ fontSize: 21, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{money(granTotal)}</span>
           </div>}
