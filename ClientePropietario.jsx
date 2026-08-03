@@ -405,6 +405,8 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
   const [vUTxt, setVUTxt] = useState(vU0 ? fmtMiles(vU0) : "");
   const [vATxt, setVATxt] = useState(vA0 ? fmtMiles(vA0) : "");
   const [cotTxt, setCotTxt] = useState(cot0 ? fmtMiles(cot0) : "");
+  const [editandoId, setEditandoId] = useState(null);
+  const [editForm, setEditForm] = useState({ cat: "", monto: "", moneda: "ars", nota: "" });
   useEffect(() => { setSupTxt(sup0 ? fmtMiles(sup0) : ""); }, [sup0]);
   useEffect(() => { setVUTxt(vU0 ? fmtMiles(vU0) : ""); }, [vU0]);
   useEffect(() => { setVATxt(vA0 ? fmtMiles(vA0) : ""); }, [vA0]);
@@ -436,8 +438,14 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
     const monto = Number(nuevo.monto) || 0;
     if (!nuevo.cat.trim() || monto <= 0) return;
     setGuardando(true);
-    const item = { id: (Date.now().toString(36)), ts: Date.now(), cat: nuevo.cat.trim(), moneda: nuevo.moneda, monto, montoArs: nuevo.moneda === "ars" ? monto : 0, montoUsd: nuevo.moneda === "usd" ? monto : 0, nota: nuevo.nota.trim(), fecha: new Date().toISOString().slice(0, 10) };
-    onGuardarPropia(p => ({ ...p, costos: [...(p.costos || []), item] })).finally(() => setGuardando(false));
+    const catNorm = nuevo.cat.trim().toLowerCase();
+    const existente = (costos.costos || []).find(c => (c.cat || "").trim().toLowerCase() === catNorm && (c.moneda === "usd") === (nuevo.moneda === "usd"));
+    if (existente) {
+      onGuardarPropia(p => ({ ...p, costos: (p.costos || []).map(x => x.id === existente.id ? { ...x, monto: (Number(x.monto) || 0) + monto, montoArs: nuevo.moneda === "ars" ? (Number(x.montoArs) || 0) + monto : x.montoArs, montoUsd: nuevo.moneda === "usd" ? (Number(x.montoUsd) || 0) + monto : x.montoUsd, nota: nuevo.nota.trim() || x.nota } : x) })).finally(() => setGuardando(false));
+    } else {
+      const item = { id: (Date.now().toString(36)), ts: Date.now(), cat: nuevo.cat.trim(), moneda: nuevo.moneda, monto, montoArs: nuevo.moneda === "ars" ? monto : 0, montoUsd: nuevo.moneda === "usd" ? monto : 0, nota: nuevo.nota.trim(), fecha: new Date().toISOString().slice(0, 10) };
+      onGuardarPropia(p => ({ ...p, costos: [...(p.costos || []), item] })).finally(() => setGuardando(false));
+    }
     setNuevo({ cat: "", monto: "", moneda: "ars", nota: "" });
   }
   function borrarGasto(id) {
@@ -445,6 +453,18 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
     onGuardarPropia(p => ({ ...p, costos: (p.costos || []).filter(c => c.id !== id) }));
   }
 
+  function abrirEdicion(c) {
+    setEditandoId(c.id);
+    setEditForm({ cat: c.cat || "", monto: fmtMiles(c.moneda === "usd" ? (c.montoUsd || c.monto) : (c.montoArs || c.monto)), moneda: c.moneda === "usd" ? "usd" : "ars", nota: c.nota || "" });
+  }
+  function guardarEdicion() {
+    const monto = numMiles(editForm.monto);
+    if (!editForm.cat.trim() || monto <= 0) return;
+    onGuardarPropia(p => ({ ...p, costos: (p.costos || []).map(x => x.id === editandoId ? { ...x, cat: editForm.cat.trim(), moneda: editForm.moneda, monto, montoArs: editForm.moneda === "ars" ? monto : 0, montoUsd: editForm.moneda === "usd" ? monto : 0, nota: editForm.nota.trim() } : x) }));
+    setEditandoId(null);
+  }
+
+  const inpEdMini = { ...inpEd, fontSize: 12.5, padding: "7px 9px" };
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
     <SubHead titulo="Costos" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
@@ -488,18 +508,32 @@ function SeccionCostos({ costos, onGuardarPropia, onCrearPropia, onBack, config 
 
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", margin: "20px 0 9px" }}>Detalle de gastos</div>
       {lista.length === 0 && <EmptyMsg>Todavía no hay gastos cargados.</EmptyMsg>}
-      {lista.map((c, i) => (<div key={c.id || i} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 12, marginBottom: 8 }}>
+      {lista.map((c, i) => (editandoId === c.id ? (<div key={c.id || i} style={{ background: T.card, border: `1px solid ${T.brass}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 12, marginBottom: 8 }}>
+        <input value={editForm.cat} onChange={e => setEditForm(f => ({ ...f, cat: e.target.value }))} placeholder="Categoría" style={{ ...inpEdMini, marginBottom: 7 }} />
+        <div style={{ display: "flex", gap: 7, marginBottom: 7 }}>
+          <input value={editForm.monto} onChange={e => setEditForm(f => ({ ...f, monto: fmtMiles(e.target.value) }))} inputMode="numeric" placeholder="Monto" style={{ ...inpEdMini, flex: 1 }} />
+          <div style={{ display: "flex", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden" }}>
+            {[["ars", "$"], ["usd", "US$"]].map(([v, l]) => <button key={v} onClick={() => setEditForm(f => ({ ...f, moneda: v }))} style={{ background: editForm.moneda === v ? T.brass : "transparent", color: editForm.moneda === v ? "#fff" : T.sub, border: "none", padding: "0 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+          </div>
+        </div>
+        <input value={editForm.nota} onChange={e => setEditForm(f => ({ ...f, nota: e.target.value }))} placeholder="Nota (opcional)" style={{ ...inpEdMini, marginBottom: 9 }} />
+        <div style={{ display: "flex", gap: 7 }}>
+          <button onClick={() => setEditandoId(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={guardarEdicion} style={{ flex: 1.5, background: T.brass, color: "#fff", border: "none", borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+        </div>
+      </div>) : (<div key={c.id || i} onClick={() => c.id && abrirEdicion(c)} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 12, marginBottom: 8, cursor: c.id ? "pointer" : "default" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{c.cat || "Gasto"}</div>
           {c.nota && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{c.nota}</div>}
           {(c.fecha || c.ts) && <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{fFecha(c.fecha || new Date(c.ts).toISOString().slice(0, 10))}</div>}
         </div>
         <div style={{ fontSize: 13.5, fontWeight: 800, color: T.text, flexShrink: 0 }}>{c.moneda === "usd" ? usdFmt(c.montoUsd || c.monto) : moneyAR(c.montoArs || c.monto)}</div>
-        {c.id && <button onClick={() => borrarGasto(c.id)} style={{ background: "none", border: "none", color: "#DC2626", fontSize: 16, cursor: "pointer", padding: "0 0 0 4px", flexShrink: 0 }}>✕</button>}
-      </div>))}
+        {c.id && <button onClick={(ev) => { ev.stopPropagation(); borrarGasto(c.id); }} style={{ background: "none", border: "none", color: "#DC2626", fontSize: 16, cursor: "pointer", padding: "0 0 0 4px", flexShrink: 0 }}>✕</button>}
+      </div>)))}
 
       <div style={{ background: T.card, border: `1px dashed ${T.border}`, borderRadius: T.r, padding: 14, marginTop: 10 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>+ Agregar gasto</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>+ Agregar gasto</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Si ponés el mismo nombre de una categoría que ya existe (ej: "Materiales generales"), se suma a esa — no crea una nueva. Tocá cualquier gasto de la lista para editarlo.</div>
         <input value={nuevo.cat} onChange={e => setNuevo(n => ({ ...n, cat: e.target.value }))} placeholder="Categoría (ej: Materiales, Mano de obra…)" style={{ ...inpEd, marginBottom: 8 }} />
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <input value={fmtMiles(nuevo.monto)} onChange={e => setNuevo(n => ({ ...n, monto: numMiles(e.target.value) }))} inputMode="numeric" placeholder="Monto" style={{ ...inpEd, flex: 1 }} />
