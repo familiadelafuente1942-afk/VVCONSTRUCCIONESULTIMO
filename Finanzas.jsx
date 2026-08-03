@@ -1463,6 +1463,15 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
     const hc = calc.cobrado, ha = calc.ajuste, fact = hc + ha;
     return { obraId: o.id, nombre: o.nombre, saldo: fact - hc };
   }).filter(x => x.saldo !== 0);
+  // Obras SIN certificados y que tampoco usan el panel histórico, pero que ya tienen
+  // cobros/pagos cargados en Caja (ej: una obra nueva sin certs todavía) — se suma
+  // el neto (cobrado − pagado) para que esa plata no quede afuera de ningún lado.
+  const movs = data.movimientos || [];
+  const cobrosAutoCaja = (obras || []).filter(o => !o.esHistorico && certsDe(o.id).length === 0).map(o => {
+    const cobrado = movs.filter(m => m.obraId === o.id && m.tipo === "cobro").reduce((s, m) => s + num(m.monto), 0);
+    const pagado = movs.filter(m => m.obraId === o.id && m.tipo === "pago").reduce((s, m) => s + num(m.monto), 0);
+    return { obraId: o.id, nombre: o.nombre, saldo: cobrado - pagado };
+  }).filter(x => x.saldo !== 0);
 
   // meses que tienen al menos un certificado, del más nuevo al más viejo
   const meses = [...new Set(certs.map(c => mesDe(c.fecha)).filter(Boolean))].sort().reverse();
@@ -1539,7 +1548,7 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
       {!esCosto && filas.length > 0 && (() => {
         const totAdelantos = adelantos.reduce((s, a) => s + (Number(a.monto) || 0), 0);
         const totCobrosSinCertManual = cobrosSinCert.reduce((s, c) => s + (Number(c.monto) || 0), 0);
-        const totCobrosSinCertAuto = cobrosAutoHist.reduce((s, c) => s + c.saldo, 0);
+        const totCobrosSinCertAuto = cobrosAutoHist.reduce((s, c) => s + c.saldo, 0) + cobrosAutoCaja.reduce((s, c) => s + c.saldo, 0);
         const granTotal = total - totAdelantos + totCobrosSinCertManual + totCobrosSinCertAuto;
         const nomObraExtra = (id) => obras.find(o => o.id === id)?.nombre || "—";
         return (<div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px dashed ${T.border}` }}>
@@ -1566,6 +1575,10 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
           <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, marginTop: 18, marginBottom: 8 }}>Cobrado sin certificado (suma) — por obra</div>
           {cobrosAutoHist.length > 0 && cobrosAutoHist.map(c => (<div key={c.obraId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
             <span style={{ fontSize: 12.5, fontWeight: 600 }}>{c.nombre} <span style={{ fontSize: 10, color: T.muted, fontWeight: 400 }}>(automático · histórico)</span></span>
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{money(c.saldo)}</span>
+          </div>))}
+          {cobrosAutoCaja.length > 0 && cobrosAutoCaja.map(c => (<div key={c.obraId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{c.nombre} <span style={{ fontSize: 10, color: T.muted, fontWeight: 400 }}>(automático · Caja, sin certs)</span></span>
             <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{money(c.saldo)}</span>
           </div>))}
           {cobrosSinCert.length > 0 && cobrosSinCert.map(c => (<div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
