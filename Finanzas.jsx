@@ -1089,7 +1089,7 @@ export default function App() {
         </div>
         {certcostoModo === "obra"
           ? <CertTab modo="costo" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />
-          : <CertGeneral obras={obras} data={data} certsDe={certsDe} indices={indices} modo="costo" />}
+          : <CertGeneral obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} modo="costo" />}
       </div>}
       {tab === "cliente" && <div>
         <div style={{ display: "flex", gap: 7, padding: "14px 16px 0" }}>
@@ -1099,7 +1099,7 @@ export default function App() {
         </div>
         {certcliModo === "obra"
           ? <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />
-          : <CertGeneral obras={obras} data={data} certsDe={certsDe} indices={indices} modo="cliente" />}
+          : <CertGeneral obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} modo="cliente" />}
       </div>}
       {tab === "caja" && <CajaTab obras={obras} data={data} save={save} certs={certs} certsDe={certsDe} indices={indices} />}
       {tab === "resultado" && <ResultadoTab obras={obras} certs={certs} certsDe={certsDe} indices={indices} data={data} save={save} />}
@@ -1420,10 +1420,17 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
    Un solo cuadro con TODAS las obras juntas para un período (mes).
    Lista cada certificado emitido a Belfast (obra, N°, fecha, monto) y suma el total.
    Sirve para mandarle a Belfast un PDF con todo junto, además del certificado por obra. */
-function CertGeneral({ obras, data, certsDe, indices, modo }) {
+function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
   const esCosto = modo === "costo";
   const certs = data.certs || [];
   const [pdfHtml, setPdfHtml] = useState(null);
+  const extra = data.certGeneralExtra || {};
+  const [adelantoTxt, setAdelantoTxt] = useState(extra.adelanto ? fmtMiles(extra.adelanto) : "");
+  const [saldoSinCertTxt, setSaldoSinCertTxt] = useState(extra.saldoSinCert ? fmtMiles(extra.saldoSinCert) : "");
+  function guardarExtra(campo, valorTxt) {
+    const v = numMoney(valorTxt);
+    save(logH({ ...data, certGeneralExtra: { ...(data.certGeneralExtra || {}), [campo]: v } }, `Certificación general · ${campo === "adelanto" ? "adelanto" : "cobrado sin certificado"} · ${money(v)}`));
+  }
 
   // meses que tienen al menos un certificado, del más nuevo al más viejo
   const meses = [...new Set(certs.map(c => mesDe(c.fecha)).filter(Boolean))].sort().reverse();
@@ -1496,6 +1503,25 @@ function CertGeneral({ obras, data, certsDe, indices, modo }) {
         <span style={{ fontSize: 14, fontWeight: 800 }}>{esCosto ? "TOTAL COSTO" : "TOTAL GENERAL"}<span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}> · {filas.length} certificado{filas.length === 1 ? "" : "s"}</span></span>
         <span style={{ fontSize: 20, fontWeight: 800, color: esCosto ? T.warn : T.accent, fontVariantNumeric: "tabular-nums" }}>{money(total)}</span>
       </div>}
+
+      {!esCosto && filas.length > 0 && (() => {
+        const adelanto = numMoney(adelantoTxt), saldoSinCert = numMoney(saldoSinCertTxt);
+        const granTotal = total + adelanto + saldoSinCert;
+        return (<div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px dashed ${T.border}` }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Sumar a mano</div>
+          <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>Plata que ya está cobrada o comprometida pero que todavía no está en ningún certificado cargado arriba.</div>
+          <Field label="Adelanto de certificados">
+            <input value={adelantoTxt} onChange={e => setAdelantoTxt(fmtMiles(e.target.value))} onBlur={e => guardarExtra("adelanto", e.target.value)} inputMode="numeric" placeholder="0" style={inp} />
+          </Field>
+          <Field label="Saldo de cobros sin certificado">
+            <input value={saldoSinCertTxt} onChange={e => setSaldoSinCertTxt(fmtMiles(e.target.value))} onBlur={e => guardarExtra("saldoSinCert", e.target.value)} inputMode="numeric" placeholder="0" style={inp} />
+          </Field>
+          {(adelanto > 0 || saldoSinCert > 0) && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 13, marginTop: 8, borderTop: `2px solid ${T.accent}` }}>
+            <span style={{ fontSize: 14.5, fontWeight: 800 }}>GRAN TOTAL<span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}> · certificados + adelanto + sin cert.</span></span>
+            <span style={{ fontSize: 21, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{money(granTotal)}</span>
+          </div>}
+        </div>);
+      })()}
 
       {filas.length > 0 && <button onClick={imprimir} style={{ width: "100%", marginTop: 16, background: T.navy, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>📄 PDF {esCosto ? "del costo general" : "de la certificación general"}</button>}
     </div>
