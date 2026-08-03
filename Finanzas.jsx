@@ -1522,7 +1522,7 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
       const totCobrosSinCertTodo = totCobrosSinCertAutoTot + totCobrosSinCertManualTot;
       granTotalFinal = total - totAdelantos + totCobrosSinCertTodo;
       const nomObraPdf = (id) => obras.find(o => o.id === id)?.nombre || "—";
-      const filasAdelanto = adelantos.map(a => `<tr><td>${nomObraPdf(a.obraId)}</td><td class="rgt">− ${money(a.monto)}</td></tr>`).join("");
+      const filasAdelanto = adelantos.map(a => `<tr><td>${nomObraPdf(a.obraId)}</td><td class="rgt" style="color:#DC2626">− ${money(a.monto)}</td></tr>`).join("");
       const filasCobrado = [
         ...cobrosAutoHist.map(c => `<tr><td>${c.nombre} <span style="color:#8A94A6;font-size:10px">(histórico)</span></td><td class="rgt">${money(c.saldo)}</td></tr>`),
         ...cobrosAutoCaja.map(c => `<tr><td>${c.nombre} <span style="color:#8A94A6;font-size:10px">(Caja, sin certs)</span></td><td class="rgt">${money(c.saldo)}</td></tr>`),
@@ -1535,7 +1535,7 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
       // 2) Ajustes (adelanto de certificados): va después.
       if (adelantos.length > 0) {
         ajustesHtml = `<h2>Ajustes</h2><table><thead><tr><th>Obra</th><th class="rgt">Monto</th></tr></thead><tbody>
-          <tr><td colspan="2" style="font-weight:700;background:#F8FAFC;color:#5B6B7F;font-size:10.5px;text-transform:uppercase">Adelanto de certificados (resta)</td></tr>${filasAdelanto}<tr><td style="font-weight:700">Subtotal adelantos</td><td class="rgt" style="font-weight:700">− ${money(totAdelantos)}</td></tr>
+          <tr><td colspan="2" style="font-weight:700;background:#F8FAFC;color:#5B6B7F;font-size:10.5px;text-transform:uppercase">Adelanto de certificados (resta)</td></tr>${filasAdelanto}<tr><td style="font-weight:700">Subtotal adelantos</td><td class="rgt" style="font-weight:700;color:#DC2626">− ${money(totAdelantos)}</td></tr>
         </tbody></table>`;
       }
     }
