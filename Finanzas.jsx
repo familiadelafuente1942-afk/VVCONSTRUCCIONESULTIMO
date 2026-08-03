@@ -3180,7 +3180,7 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
   // (antes, una obra sin certs no aparecía en Resultados y sus gastos se perdían).
   const obrasConGastoSinCert = new Set((data.gastos || []).map(g => g.obraId).filter(Boolean));
   (obras || []).forEach(o => { if (obrasConGastoSinCert.has(o.id)) porObra[o.id] = { nombre: o.nombre, fact: 0, cobro: 0, costoDir: 0, impuestos: 0, imprev: 0, util: 0, nCert: 0, gastos: 0, imprevAcum: 0, imprevUsado: 0, anticipo: anticipoDe(o), amort: 0, presupCli: presupCliente(o), presupCos: presupCosto(o) }; });
-  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); const imp = r.extraMontoPeriodo + r.extraPctPeriodo; totFact += r.ajustado; totCobro += r.neto; totCostoDir += r.costoDirPeriodo; totImpuestos += imp; totImprev += r.imprevPeriodo; totUtil += (r.ajustado - r.costoDirPeriodo); if (r.provisorio) { provisCount++; provisMonto += r.ajustado; provisMeses.add(mesDe(c.fecha)); } if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, fact: 0, cobro: 0, costoDir: 0, impuestos: 0, imprev: 0, util: 0, nCert: 0, gastos: 0, imprevAcum: 0, imprevUsado: 0, anticipo: anticipoDe(o), amort: 0, presupCli: presupCliente(o), presupCos: presupCosto(o) }; const p = porObra[o.id]; p.fact += r.ajustado; p.cobro += r.neto; p.costoDir += r.costoDirPeriodo; p.impuestos += imp; p.imprev += r.imprevPeriodo; p.util += (r.ajustado - r.costoDirPeriodo); p.nCert += 1; p.imprevAcum += r.imprevPeriodo; p.amort += r.amort; });
+  certs.forEach(c => { const o = obras.find(x => x.id === c.obraId); if (!o) return; const r = calcCert(c, o, certsDe(c.obraId), indices); const imp = r.extraMontoPeriodo + r.extraPctPeriodo; totFact += r.ajustado; totCobro += r.neto; totCostoDir += r.costoDirPeriodo; totImpuestos += imp; totImprev += r.imprevPeriodo; totUtil += (r.ajustado - r.costoDirPeriodo); if (r.provisorio) { provisCount++; provisMonto += r.ajustado; provisMeses.add(mesDe(c.fecha)); } if (!porObra[o.id]) porObra[o.id] = { nombre: o.nombre, fact: 0, cobro: 0, costoDir: 0, impuestos: 0, imprev: 0, util: 0, nCert: 0, gastos: 0, imprevAcum: 0, imprevUsado: 0, anticipo: anticipoDe(o), amort: 0, presupCli: presupCliente(o), presupCos: presupCosto(o), bruto: 0 }; const p = porObra[o.id]; p.fact += r.ajustado; p.cobro += r.neto; p.costoDir += r.costoDirPeriodo; p.impuestos += imp; p.imprev += r.imprevPeriodo; p.util += (r.ajustado - r.costoDirPeriodo); p.nCert += 1; p.imprevAcum += r.imprevPeriodo; p.amort += r.amort; p.bruto = (p.bruto || 0) + r.bruto; });
   const gastosArr = data.gastos || []; let totGastos = 0, usadoImprev = 0; const imprevPorCat = {};
   gastosArr.forEach(g => { if (esImprev(g.cat)) { const mm = num(g.monto); usadoImprev += mm; imprevPorCat[g.cat] = (imprevPorCat[g.cat] || 0) + mm; if (g.obraId && porObra[g.obraId]) porObra[g.obraId].imprevUsado += mm; return; } totGastos += num(g.monto); if (g.obraId && porObra[g.obraId]) porObra[g.obraId].gastos += num(g.monto); });
   const saldoImprev = totImprev - usadoImprev;
@@ -3410,16 +3410,16 @@ function ResultadoTab({ obras, certs, certsDe, indices, data, save }) {
       const movsRes = data.movimientos || [];
       const filas = obras.map(o => {
         const p = porObra[o.id] || {};
-        let cobrado = p.fact || 0;        // facturado real: certificados (con ajuste) + histórico
+        let cobrado = (p.nCert ? p.bruto : p.fact) || 0;  // certificados: bruto SIN ajuste por IPC
         let pagado = p.costoDir || 0;     // costo de obra
         let debug = "";
         if (!p.nCert) {
           // Sin certificados: no hay de dónde sacar "facturado/costo directo" por cert,
-          // así que usamos lo que sí hay cargado — el histórico (con ajuste por inflación
-          // incluido, y con respaldo por nombre si el id no coincide), o si no, Caja directo.
+          // así que usamos lo que sí hay cargado — el histórico (SIN ajuste por inflación,
+          // y con respaldo por nombre si el id no coincide), o si no, Caja directo.
           const calc = ajusteInflacionSaldo(o, data.movimientos, data.cacMensual, obras);
           if (!calc.sinDatos) {
-            cobrado = calc.cobrado + calc.ajuste;
+            cobrado = calc.cobrado;
             pagado = o.esHistorico ? num(o.histPagado) : 0;
             debug = `histórico · ${calc.meses} mes(es)`;
           }
