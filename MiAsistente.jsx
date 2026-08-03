@@ -1,58 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 
-// Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
-const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
-
-// ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
-function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
-  const P = {
-    doc: "M7 3h7l5 5v13H7z M14 3v5h5",
-    mic: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3",
-    building: "M3 21h18 M5 21V8l7-5 7 5v13 M9 21v-5h6v5 M9 11h1 M14 11h1",
-    robot: "M12 3v3 M6 6h12v12H6z M9.5 11v1.5 M14.5 11v1.5 M4 10v4 M20 10v4",
-    video: "M3 6h12v12H3z M15 10l6-3v10l-6-3",
-    list: "M8 6h13 M8 12h13 M8 18h13 M3.5 6h.01 M3.5 12h.01 M3.5 18h.01",
-    download: "M12 3v12 M7 11l5 5 5-5 M4 20h16",
-    upload: "M12 21V9 M7 13l5-5 5 5 M4 4h16",
-    card: "M3 6h18v12H3z M3 10h18 M7 15h4",
-    user: "M12 12a4 4 0 100-8 4 4 0 000 8z M4 21c0-4 3.6-6 8-6s8 2 8 6",
-    link: "M10 13a5 5 0 007.5.5l2-2a5 5 0 00-7-7l-1 1 M14 11a5 5 0 00-7.5-.5l-2 2a5 5 0 007 7l1-1",
-    globe: "M12 21a9 9 0 100-18 9 9 0 000 18z M3 12h18 M12 3a14 14 0 000 18 M12 3a14 14 0 010 18",
-    cal2: "M4 6h16v15H4z M4 10h16 M8 3v4 M16 3v4",
-    money: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 7v10 M9.5 9.5h4a1.8 1.8 0 010 3.6h-3a1.8 1.8 0 000 3.6h4",
-    bell: "M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z M10.5 20a2 2 0 003 0",
-    sound: "M4 9h4l5-4v14l-5-4H4z M16.5 9.5a4 4 0 010 5",
-    contact: "M4 5h16v14H4z M9 11a2 2 0 100-4 2 2 0 000 4z M6.5 16c.6-1.6 1.9-2.4 2.5-2.4s1.9.8 2.5 2.4 M14 9h4 M14 13h4",
-    chart: "M4 20V10 M10 20V4 M16 20v-7 M3 20h18",
-    pin: "M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z M12 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
-    car: "M5 16h14 M6.5 16l1.2-5h8.6l1.2 5 M4 16h16v3H4z M7.5 19v1.5 M16.5 19v1.5",
-    wave: "M12 3v6 M8 6l8 0 M5 13a7 7 0 0014 0 M12 20v1",
-    tools: "M14.5 6.5a3.5 3.5 0 004.8 4.8l-9 9a2.1 2.1 0 01-3-3l9-9z M4 6l3-3 4 4-3 3z",
-    moon: "M20 14A8.5 8.5 0 019.9 4 8.5 8.5 0 1020 14z",
-    thumb: "M7 21V10l5-7 1.2.8a2 2 0 01.8 2.2L13 10h5.5a2 2 0 012 2.4l-1.3 6a2 2 0 01-2 1.6H7z M3 10h4v11H3z",
-
-    word: "M7 3h7l5 5v13H7z M14 3v5h5 M10 12l1.5 5 1.5-4 1.5 4L16 12",
-    excel: "M7 3h7l5 5v13H7z M14 3v5h5 M10 12l5 6 M15 12l-5 6",
-    box: "M3 7l9-4 9 4v10l-9 4-9-4z M3 7l9 4 9-4 M12 11v10",
-    ruler: "M3 15L15 3l6 6L9 21z M8 10l2 2 M11 7l2 2 M14 4l2 2",
-    plans: "M3 5h8l2 2h8v12H3z M8 12h8 M8 16h5",
-    camera: "M3 8h4l2-2h6l2 2h4v11H3z M12 16a3.2 3.2 0 100-6.4 3.2 3.2 0 000 6.4z",
-    clip: "M20 11l-8.5 8.5a4.5 4.5 0 01-6.4-6.4L14 4.3a3 3 0 014.2 4.2L9.7 17a1.5 1.5 0 01-2.1-2.1l8-8",
-    trash: "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6",
-    chat: "M4 5h16v11H9l-5 4z",
-    lock: "M6 10V7a6 6 0 1112 0v3 M4 10h16v11H4z M12 15v2",
-    save: "M5 3h11l3 3v15H5z M8 3v6h7V3 M8 14h8v7H8z",
-    calendar: "M4 6h16v15H4z M4 10h16 M8 3v4 M16 3v4",
-    search: "M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.3-4.3",
-    sparkle: "M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z",
-    check: "M4 12.5l5 5L20 6.5",
-    image: "M3 5h18v14H3z M8.5 11a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 16l-5-5-9 8",
-    life: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M5.6 5.6l3.9 3.9 M18.4 5.6l-3.9 3.9 M5.6 18.4l3.9-3.9 M18.4 18.4l-3.9-3.9",
-    send: "M21 3L10.5 13.5 M21 3l-6.8 18-3.7-7.5L3 9.8z",
-  }[n] || "M12 21a9 9 0 100-18 9 9 0 000 18z";
-  return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={st} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, verticalAlign: "-2px", display: "inline-block" }}>{P.split(" M").map((d, i) => <path key={i} d={(i ? "M" : "") + d} />)}</svg>;
-}
-
 // ════════════════════════════════════════════════════════════════════
 // MI ASISTENTE — Asistente personal privado de Sebastián.
 // Protegido con PIN. Lee TODOS los datos de V+V y puede consultar a la IA de V+V.
@@ -67,38 +14,23 @@ const storage = {
   get: async (key) => { try { const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { headers: SH(), mode: "cors" }); if (r.ok) { const d = await r.json(); if (d && d.length) return { value: d[0].value }; } } catch { } try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; } },
 };
 const uid = () => Math.random().toString(36).slice(2, 9);
-// Las fechas se guardan como texto "DD/MM/AA". Ordenarlas como texto ordena POR EL DÍA
-// ("01/12/26" < "02/01/26" => diciembre antes que enero). Hay que convertirlas a fecha real.
-const fechaMs = (f, hora) => {
-  const t = String(f || "").trim();
-  if (!t) return 8.64e15;                                  // sin fecha: al final
-  let d, mth, y;
-  let m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);   // DD/MM/AA o DD/MM/AAAA
-  if (m) { d = +m[1]; mth = +m[2]; y = +m[3]; }
-  else {
-    m = t.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);       // AAAA-MM-DD
-    if (m) { y = +m[1]; mth = +m[2]; d = +m[3]; }
-    else return 8.64e15;
-  }
-  if (y < 100) y += 2000;
-  const hm = String(hora || "").match(/^(\d{1,2})[:.]?(\d{2})?/);
-  const hh = hm ? +hm[1] : 0, mi = hm && hm[2] ? +hm[2] : 0;
-  const dt = new Date(y, mth - 1, d, hh, mi);
-  return isNaN(dt.getTime()) ? 8.64e15 : dt.getTime();
-};
-const inicioDeHoy = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
-const cuandoEs = (ms) => {
-  if (ms >= 8.6e15) return "";
-  const h0 = inicioDeHoy(), dia = 86400000;
-  const dif = Math.floor((ms - h0) / dia);
-  if (dif < 0) return `hace ${Math.abs(dif)} día${Math.abs(dif) === 1 ? "" : "s"}`;
-  if (dif === 0) return "HOY";
-  if (dif === 1) return "MAÑANA";
-  if (dif < 7) return `en ${dif} días`;
-  if (dif < 30) { const k = Math.round(dif / 7); return `en ${k} semana${k === 1 ? "" : "s"}`; }
-  const k = Math.round(dif / 30); return `en ${k} mes${k === 1 ? "" : "es"}`;
-};
 const hoyStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
+// Convierte "DD/MM", "DD/MM/AA" o "DD/MM/AAAA" a un timestamp real para poder
+// ordenar cronológicamente. Si falta el año, asume el año actual (o el que
+// viene si esa fecha ya pasó este año — ej: cargás "3/1" en diciembre, es de enero que viene).
+function fechaAOrden(fecha, hora) {
+  const p = String(fecha || "").split("/").map(s => parseInt(s, 10));
+  if (!p[0] || !p[1] || isNaN(p[0]) || isNaN(p[1])) return Number.MAX_SAFE_INTEGER;
+  let [d, m, y] = p;
+  const hoy = new Date();
+  if (y == null || isNaN(y)) {
+    y = hoy.getFullYear();
+    const prueba = new Date(y, m - 1, d);
+    if (prueba < new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())) y += 1;
+  } else if (y < 100) y += 2000;
+  const [hh, mm] = String(hora || "00:00").split(":").map(n => parseInt(n, 10) || 0);
+  return new Date(y, (m || 1) - 1, d || 1, hh || 0, mm || 0).getTime();
+}
 const BUCKET = "bco-media";
 async function subirBucket(dataUrl, nombre) {
   if (!dataUrl) return null;
@@ -114,103 +46,6 @@ async function subirBucket(dataUrl, nombre) {
   return null;
 }
 function fileToDataUrl(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); }); }
-
-
-// ── NOTIFICACIONES PROPIAS (sin servicios externos) ──
-const VAPID_PUBLIC = "BBCSBq5_m-TcF45KMJ_-B7LHaIvfFHbnHiHQnPyxJKxjE8zH0nxusjpQJWHl4cO3Zr1DWLc_wO7L_PhqrLsGJtE";
-function b64ToU8(b64) {
-  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
-  const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(s); const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
-// Estado: "activo" | "bloqueado" | "no-soportado" | "inactivo"
-async function pushEstado() {
-  try {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "no-soportado";
-    if (Notification.permission === "denied") return "bloqueado";
-    const reg = await navigator.serviceWorker.getRegistration("/sw-push.js");
-    const sub = reg ? await reg.pushManager.getSubscription() : null;
-    return sub ? "activo" : "inactivo";
-  } catch (e) { return "no-soportado"; }
-}
-async function activarPush(appTag) {
-  try {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return { ok: false, msg: "Este dispositivo no soporta notificaciones. En iPhone hay que agregar la app a la pantalla de inicio." };
-    const permiso = await Notification.requestPermission();
-    if (permiso !== "granted") return { ok: false, msg: "No diste permiso para las notificaciones." };
-    const reg = await navigator.serviceWorker.register("/sw-push.js");
-    await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUBLIC) });
-    const r = await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), app: appTag }) });
-    const d = await r.json().catch(() => ({}));
-    return d && d.ok ? { ok: true, msg: "Listo, ya vas a recibir los avisos en este dispositivo." } : { ok: false, msg: "No pude registrar el dispositivo. Probá de nuevo." };
-  } catch (e) { return { ok: false, msg: "No pude activar las notificaciones: " + ((e && e.message) || "") }; }
-}
-async function desactivarPush() {
-  try {
-    const reg = await navigator.serviceWorker.getRegistration("/sw-push.js");
-    const sub = reg ? await reg.pushManager.getSubscription() : null;
-    if (sub) { await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), quitar: true }) }); await sub.unsubscribe(); }
-    return true;
-  } catch (e) { return false; }
-}
-// Reengancha en silencio si ya estaba activado en este dispositivo.
-async function initPush(appTag) {
-  try {
-    if (!("serviceWorker" in navigator) || Notification.permission !== "granted") return;
-    const reg = await navigator.serviceWorker.register("/sw-push.js");
-    await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUBLIC) });
-    await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), app: appTag }) });
-  } catch (e) { }
-}
-// sendAfter (ISO) = aviso programado; sin sendAfter = inmediato.
-async function pushNotify(title, message, app, url, sendAfter) {
-  try { await fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "", sendAfter: sendAfter || "" }) }); } catch (e) { }
-}
-// Convierte "dd/mm/aa" + "HH:MM" a fecha real; devuelve null si ya pasó.
-// ── Globito rojo en el ícono de la app (como Mensajes de iOS) ──────
-// setAppBadge pinta el número en el ícono del escritorio. El número queda
-// puesto al cerrar la app; se actualiza al abrirla o al volver a primer plano.
-// Requiere iOS 16.4+, app instalada en pantalla de inicio y notificaciones permitidas.
-function GlobitoPermiso() {
-  const [estado, setEstado] = React.useState(() => {
-    try {
-      if (!("Notification" in window) || !("setAppBadge" in navigator)) return "no";
-      if (localStorage.getItem("globito_off") === "1") return "no";
-      return Notification.permission;   // "default" | "granted" | "denied"
-    } catch { return "no"; }
-  });
-  if (estado !== "default") return null;
-  return (<div style={{ display: "flex", alignItems: "center", gap: 9, background: "#0F1B2D", borderRadius: 12, padding: "10px 12px", margin: "0 0 10px", border: "1px solid #B08D3E" }}>
-    <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: "#fff", lineHeight: 1.45 }}>Activá los avisos para ver el <b>número rojo en el ícono</b> cuando haya alertas, sin abrir la app.</div>
-    <button onClick={async () => { try { const p = await Notification.requestPermission(); setEstado(p); if (p === "granted") { try { await navigator.setAppBadge(1); setTimeout(() => navigator.clearAppBadge().catch(() => { }), 1500); } catch { } } } catch { setEstado("denied"); } }}
-      style={{ background: "#B08D3E", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 11.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>Activar</button>
-    <button onClick={() => { try { localStorage.setItem("globito_off", "1"); } catch { } setEstado("no"); }}
-      style={{ background: "none", border: "none", color: "rgba(255,255,255,.55)", fontSize: 15, cursor: "pointer", padding: "0 2px", flexShrink: 0 }}>×</button>
-  </div>);
-}
-async function ponerGlobito(n) {
-  try {
-    if (!("setAppBadge" in navigator)) return;
-    if (n > 0) await navigator.setAppBadge(Math.min(99, Math.round(n)));
-    else await navigator.clearAppBadge();
-  } catch { }
-}
-function fechaEvento(fecha, hora) {
-  try {
-    const m = String(fecha || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-    if (!m) return null;
-    const aa = m[3].length === 2 ? "20" + m[3] : m[3];
-    const [h, mi] = String(hora || "09:00").split(":");
-    const d = new Date(Number(aa), Number(m[2]) - 1, Number(m[1]), Number(h || 9), Number(mi || 0), 0);
-    return isNaN(d.getTime()) ? null : d;
-  } catch (e) { return null; }
-}
 
 async function callAI(msgs, sys, apiKey, useSearch) {
   msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
@@ -246,21 +81,6 @@ const ESQUINAS = [{ n: "Rectas", v: 4 }, { n: "Suaves", v: 10 }, { n: "Redondead
 
 function obraNom(obras, id) { return (obras || []).find(o => o.id === id)?.nombre || "—"; }
 
-function finTextoDesde(raw) {
-  if (!raw) return "";
-  const obras = raw.obras || [], certs = raw.certs || [], gastos = raw.gastos || [], movs = raw.movimientos || [];
-  if (!obras.length && !certs.length && !gastos.length) return "";
-  const nu = (v) => { const n = parseFloat(String(v == null ? 0 : v).replace(/[^\d.-]/g, "")); return isNaN(n) ? 0 : n; };
-  const mo = (n) => "$" + Math.round(n || 0).toLocaleString("es-AR");
-  const cob = movs.filter(m => m.tipo === "cobro").reduce((s, m) => s + nu(m.monto), 0);
-  const pag = movs.filter(m => m.tipo === "pago").reduce((s, m) => s + nu(m.monto), 0);
-  const gas = gastos.reduce((s, g) => s + nu(g.monto), 0);
-  const L = ["RESUMEN FINANCIERO (básico, calculado desde los datos de la app Finanzas):"];
-  obras.forEach(o => { const pc = nu(o.m2) * nu(o.precioCliente), pco = nu(o.m2) * nu(o.costoM2); const nc = certs.filter(c => c.obraId === o.id).length; const ant = o.anticipoTipo === "monto" ? nu(o.anticipoMontoFijo) : pc * nu(o.anticipoPct) / 100; L.push(`· ${o.nombre}: presupuesto cliente ${mo(pc)}, presupuesto costo ${mo(pco)}, utilidad teórica ${mo(pc - pco)}, anticipo ${mo(ant)}, ${nc} certificados emitidos, plazo ${nu(o.plazoMeses) || "?"} meses.`); });
-  L.push(`Caja: cobrado ${mo(cob)}, pagado ${mo(pag)}, gastos ${mo(gas)}, saldo ${mo(cob - pag - gas)}.`);
-  L.push("(Para el resultado operativo y el margen exacto por obra ya con redeterminación CAC, el detalle fino está en la app Finanzas.)");
-  return L.join("\n");
-}
 export default function MiAsistente() {
   const [pinOk, setPinOk] = useState(false);
   const [pinStored, setPinStored] = useState(null);
@@ -269,8 +89,6 @@ export default function MiAsistente() {
   const [trust, setTrust] = useState(true);
   const [db, setDb] = useState({ obras: [], personal: [], pedidos: [], matpedidos: [], mensajes: [], formularios: [], documentacion: [] });
   const [pagos, setPagos] = useState([]);
-  const [avancePart, setAvancePart] = useState({});
-  const [bitacoraPart, setBitacoraPart] = useState([]);
   const [perfil, setPerfil] = useState("");
   const [gastos, setGastos] = useState([]);
   const chatWrite = useRef(0);
@@ -278,8 +96,6 @@ export default function MiAsistente() {
   const [contactos, setContactos] = useState([]);
   const [camaras, setCamaras] = useState([]);
   const [ultimasFotos, setUltimasFotos] = useState([]);
-  const [finResumen, setFinResumen] = useState("");
-  const [finRaw, setFinRaw] = useState(null);
   const [adjPend, setAdjPend] = useState([]);
   const [agenda, setAgenda] = useState([]);
   const [subiendoArch, setSubiendoArch] = useState(false);
@@ -299,7 +115,6 @@ export default function MiAsistente() {
   T.border = cfg.borde || "#E5E1D6"; T.sub = cfg.sub || "#6E695E"; T.rsm = (cfg.rsm != null ? cfg.rsm : 10); BRASS = cfg.brass || "#A17C3E";
   { const F = FONTS[cfg.fontId] || FONTS.inter; T.sans = F.sans; T.serif = F.serif; }
   function saveCfg(next) { setCfg(next); try { localStorage.setItem("sebastian_cfg", JSON.stringify(next)); } catch { } storage.set("sebastian_cfg", JSON.stringify(next)).catch(() => { }); }
-  function subirFotoBoton(file) { if (!file) return; try { const img = new window.Image(); const url = URL.createObjectURL(file); img.onload = () => { let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height; const max = 340; if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); } const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h); const durl = c.toDataURL("image/jpeg", 0.82); URL.revokeObjectURL(url); saveCfg({ ...cfg, iaFoto: durl }); }; img.onerror = () => { URL.revokeObjectURL(url); alert("No pude leer la imagen."); }; img.src = url; } catch { alert("No pude subir la imagen."); } }
   function setC(k, v) { saveCfg({ ...cfg, [k]: v }); }
   useEffect(() => {
     // Ícono en la pantalla de inicio (apple-touch-icon) + favicon, best-effort.
@@ -318,56 +133,32 @@ export default function MiAsistente() {
   const [chatUnread, setChatUnread] = useState(0);
   const [filtroObra, setFiltroObra] = useState("");
   const pagosWrite = useRef(0);
-  const [msgs, setMsgs] = useState([{ role: "assistant", content: "Hola Sebastián Soy tu asistente personal. Tengo acceso a todos los datos de V+V. Preguntame lo que quieras: un DNI, el estado de una obra, la última foto de Castores, un plano, o pedime que le consulte algo a la IA de V+V." }]);
+  const [msgs, setMsgs] = useState([{ role: "assistant", content: "Hola Sebastián 👋 Soy tu asistente personal. Tengo acceso a todos los datos de V+V. Preguntame lo que quieras: un DNI, el estado de una obra, la última foto de Castores, un plano, o pedime que le consulte algo a la IA de V+V." }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [useSearch, setUseSearch] = useState(false);
   const [escuchando, setEscuchando] = useState(false);
   const [vozOn, setVozOn] = useState(false);
   const recRef = useRef(null);
-  const inputRef = useRef(null);
-  const dictRef = useRef({ activo: false, base: "" });   // para poder cortar el dictado al enviar
   const lastSpokeRef = useRef(-1);
-  // Globito del ícono: eventos de HOY que todavía no pasaron + mensajes sin leer.
-  useEffect(() => {
-    const calc = () => {
-      const ahora = Date.now();
-      const hoy = new Date().toISOString().slice(0, 10);
-      const deHoy = (agenda || []).filter(e => e.fecha === hoy && (!e.hora || fechaMs(e.fecha, e.hora) >= ahora)).length;
-      ponerGlobito(deHoy + (chatUnread || 0));
-    };
-    calc();
-    const onVis = () => { if (document.visibilityState === "visible") calc(); };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [agenda, chatUnread]);
-  // ── DICTADO POR VOZ ──────────────────────────────────────────────
-  const silencioRef = useRef(null);   // temporizador: 2 s callado = mando el mensaje
-  const porVozRef = useRef(false);    // la pregunta entró por voz -> la respuesta se lee en voz alta
-  const enviarRef = useRef(null);     // siempre apunta al enviar() del último render (evita mandar texto viejo)
-  enviarRef.current = enviar;
   const apiKey = "";
   const scrollRef = useRef(null);
   const iaWait = useRef(null);
 
-  useEffect(() => { (async () => { initPush("miasistente"); })(); }, []);
   useEffect(() => { (async () => { const r = await storage.get("miasistente_pin"); if (r?.value) { setPinStored(r.value); try { if (localStorage.getItem("miasistente_trust") === "1") { setPinOk(true); return; } } catch { } } else setPinNew(true); })(); }, []);
 
   useEffect(() => {
     if (!pinOk) return;
     let alive = true;
     async function pull() {
-      const keys = ["vv_obras", "vv_personal", "vv_pedidos", "vv_matpedidos", "vv_mensajes", "vv_formularios", "vv_documentacion", "vv_obras_part"];
+      const keys = ["vv_obras", "vv_personal", "vv_pedidos", "vv_matpedidos", "vv_mensajes", "vv_formularios", "vv_documentacion"];
       const res = await Promise.all(keys.map(k => storage.get(k)));
       if (!alive) return;
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
-      const particulares = parse(res[7]).map(o => ({ ...o, particular: true }));
-      try { const ra = await storage.get("sebastian_avance"); if (ra?.value) setAvancePart(JSON.parse(ra.value) || {}); } catch (e) { }
-      try { const rb = await storage.get("sebastian_bitacora"); if (rb?.value) setBitacoraPart(JSON.parse(rb.value) || []); } catch (e) { }
-      setDb({ obras: [...parse(res[0]), ...particulares], personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
+      setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
-      const [ra, rag, rg, rcon, rcam, rfin, rfinraw] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("vv_finanzas_resumen"), storage.get("vv_finanzas")]);
-      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); const fin = rfin?.value || ""; setFinResumen(prev => fin !== prev ? fin : prev); try { const fr = rfinraw?.value ? JSON.parse(rfinraw.value) : null; setFinRaw(prev => JSON.stringify(fr) !== JSON.stringify(prev) ? fr : prev); } catch { } }
+      const [ra, rag, rg, rcon, rcam] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras")]);
+      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); }
       if (!modelos.length) { const rmod = await storage.get("sebastian_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
       const rc = await storage.get("sebastian_cfg"); if (alive && rc?.value) { try { const c = JSON.parse(rc.value); setCfg(prev => JSON.stringify({ ...CFG_DEF, ...c }) !== JSON.stringify(prev) ? { ...CFG_DEF, ...c } : prev); } catch { } }
     }
@@ -385,14 +176,7 @@ export default function MiAsistente() {
   }, []);
   // Voz: leer en voz alta las respuestas nuevas cuando está activado.
   useEffect(() => { if (vozOn) { lastSpokeRef.current = msgs.length - 1; } else { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { } } }, [vozOn]);
-  useEffect(() => {
-    const i = msgs.length - 1; const last = msgs[i];
-    if (!last || last.role !== "assistant" || i <= lastSpokeRef.current) return;
-    // Habla si tenés la voz activada, o si esa pregunta se la hiciste hablando.
-    if (!vozOn && !porVozRef.current) return;
-    lastSpokeRef.current = i; porVozRef.current = false;
-    hablar(last.content);
-  }, [msgs, vozOn]);
+  useEffect(() => { if (!vozOn) return; const i = msgs.length - 1; const last = msgs[i]; if (last && last.role === "assistant" && i > lastSpokeRef.current) { lastSpokeRef.current = i; hablar(last.content); } }, [msgs, vozOn]);
 
   // Memoria persistente: carga el historial del chat y el perfil al abrir.
   useEffect(() => {
@@ -420,7 +204,7 @@ export default function MiAsistente() {
       let arr = []; try { const r = await storage.get("sebastian_agenda"); if (r?.value) arr = JSON.parse(r.value); } catch { }
       const paraAvisar = arr.filter(e => { const fe = parseFecha(e.fecha); return fe && fe.getFullYear() === man.getFullYear() && fe.getMonth() === man.getMonth() && fe.getDate() === man.getDate() && !e.recordado; });
       if (!paraAvisar.length) return;
-      setMsgs(prev => [...prev, ...paraAvisar.map(e => ({ role: "assistant", content: `Recordatorio: MAÑANA (${e.fecha}${e.hora ? " " + e.hora : ""}) tenés → ${e.titulo}${e.nota ? `\n${e.nota}` : ""}` }))]);
+      setMsgs(prev => [...prev, ...paraAvisar.map(e => ({ role: "assistant", content: `🔔 Recordatorio: MAÑANA (${e.fecha}${e.hora ? " " + e.hora : ""}) tenés → ${e.titulo}${e.nota ? `\n${e.nota}` : ""}` }))]);
       try { if ("setAppBadge" in navigator) navigator.setAppBadge(paraAvisar.length); } catch { }
       const next = arr.map(e => paraAvisar.some(x => x.id === e.id) ? { ...e, recordado: true } : e);
       setAgenda(next); try { localStorage.setItem("sebastian_agenda", JSON.stringify(next)); } catch { } await storage.set("sebastian_agenda", JSON.stringify(next)).catch(() => { });
@@ -446,64 +230,17 @@ export default function MiAsistente() {
       synth.speak(u);
     } catch { }
   }
-  // Segundos de silencio antes de mandar solo el mensaje dictado.
-  const PAUSA_ENVIO = 3000;
-
-  function limpiarSilencio() { if (silencioRef.current) { clearTimeout(silencioRef.current); silencioRef.current = null; } }
-
-  // Arranca el micrófono. Con reanudar=true es un reenganche automático
-  // (iOS corta el reconocimiento cada tanto aunque sigas hablando).
-  function arrancarDictado(reanudar) {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let rec; try { rec = new SR(); } catch { setEscuchando(false); return; }
-    rec.lang = "es-AR";
-    rec.interimResults = true;
-    rec.continuous = true;   // ANTES estaba en false: por eso se cortaba en la primera pausa
-    if (!reanudar) dictRef.current = { activo: true, base: input ? input + " " : "" };
-    rec.onresult = (e) => {
-      if (!dictRef.current.activo) return;
-      let fin = "", inter = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else inter += t; }
-      setInput((dictRef.current.base + fin + inter).replace(/\s+/g, " ").trimStart());
-      if (fin) dictRef.current.base += fin;
-      // Cada palabra reinicia la cuenta: recién manda cuando te quedás callado.
-      limpiarSilencio();
-      silencioRef.current = setTimeout(() => pararDictado(true), PAUSA_ENVIO);
-    };
-    rec.onend = () => {
-      recRef.current = null;
-      if (dictRef.current.activo) arrancarDictado(true);   // seguís hablando: lo vuelvo a levantar
-      else setEscuchando(false);
-    };
-    rec.onerror = (e) => {
-      recRef.current = null;
-      const err = e && e.error;
-      // "no-speech" y "aborted" son cortes normales del navegador, no un problema real.
-      if (dictRef.current.activo && (err === "no-speech" || err === "aborted" || err === "network")) { arrancarDictado(true); return; }
-      dictRef.current.activo = false; limpiarSilencio(); setEscuchando(false);
-    };
-    recRef.current = rec;
-    setEscuchando(true);
-    try { rec.start(); } catch { setEscuchando(false); }
-  }
-
-  // Corta el micrófono. Con mandar=true envía lo que dictaste.
-  function pararDictado(mandar) {
-    limpiarSilencio();
-    dictRef.current.activo = false;
-    if (recRef.current) { try { recRef.current.stop(); } catch { } }
-    setEscuchando(false);
-    if (mandar) {
-      porVozRef.current = true;                       // la respuesta se lee en voz alta
-      setTimeout(() => { const f = enviarRef.current; if (f) f(); }, 150);
-    }
-  }
-
   function dictar() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert("Este teléfono no permite dictar desde la app. Tocá el cuadro de texto y usá el micrófono del teclado (dictado del iPhone)."); return; }
-    if (escuchando) { pararDictado(true); return; }   // tocar de nuevo = "ya terminé", lo manda
-    arrancarDictado(false);
+    if (escuchando && recRef.current) { try { recRef.current.stop(); } catch { } return; }
+    let rec; try { rec = new SR(); } catch { alert("No pude activar el micrófono."); return; }
+    rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = false;
+    let base = input ? input + " " : "";
+    rec.onresult = (e) => { let fin = "", inter = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else inter += t; } setInput((base + fin + inter).replace(/\s+/g, " ").trimStart()); if (fin) base += fin; };
+    rec.onend = () => { setEscuchando(false); recRef.current = null; };
+    rec.onerror = () => { setEscuchando(false); recRef.current = null; };
+    recRef.current = rec; setEscuchando(true); try { rec.start(); } catch { setEscuchando(false); }
   }
   function buildSystem() {
     const o = db.obras || [];
@@ -558,9 +295,8 @@ ${arch}
 MIS CONTACTOS FAVORITOS (usá estos para WhatsApp, mail y pagos cuando nombre a alguien de acá):
 ${con}
 
-FINANZAS DE V+V (información financiera privada y confidencial; NO la compartas con nadie que no sea Sebastián). IMPORTANTE: NO necesitás entrar a ninguna página web ni "abrir la app de Finanzas" para esto. Los datos financieros de la empresa YA te los paso acá abajo, en tu contexto. Cuando Sebastián te pregunte por la app de Finanzas, por plata, resultados, márgenes, saldos, anticipos, imprevistos, o cuánto ganó/gastó en una obra o en total, NUNCA respondas que no tenés acceso a páginas externas: simplemente contestá usando estos números que ya tenés acá:\n${finResumen || finTextoDesde(finRaw) || "AVISO: en este momento NO me está llegando la información de Finanzas. Si Sebastián pregunta por plata, decile textualmente: abrí la app Finanzas (/finanzas.html) y guardá o tocá algo para que sincronice a la nube, y verificá que esta app esté actualizada. Apenas sincronice, la voy a ver."}\n\nAdemás podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
+Además podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
 <<ACCION>>{...}<<FIN>>
-REGLA CLAVE: cada vez que Sebastián te pida CARGAR/ANOTAR/REGISTRAR algo (un pago, un gasto, un contacto, etc.), SIEMPRE tenés que terminar con el bloque <<ACCION>>...<<FIN>>. NUNCA digas "listo/lo cargué/lo anoté" sin poner el bloque: la app carga los datos SOLA a partir del bloque y te confirma sola cuántos cargó. Si no ponés el bloque, NO se carga nada. Cuando sean VARIOS ítems (varios pagos, varios gastos, varios contactos), poné TODOS juntos dentro del array correspondiente ("pagos", "gastos" o "contactos") en UN SOLO bloque; no mandes un bloque por cada uno ni cargues de a uno.
 Acciones:
 {"tipo":"pagar_mp","para":"Héctor","monto":300,"alias":"opcional alias/CVU si lo sabés"}
 {"tipo":"mandar_mail","para":"Héctor","email":"opcional si lo sabés","asunto":"...","cuerpo":"texto del mail redactado"}
@@ -570,11 +306,10 @@ Acciones:
 {"tipo":"recordar","dato":"lo que hay que recordar de Sebastián (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
 {"tipo":"cargar_gasto","gastos":[{"concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"},{"concepto":"Comida","monto":8000},{"concepto":"Ferretería","monto":5000}]}
-{"tipo":"guardar_contacto","contactos":[{"nombre":"Enrico Rossi","telefono":"1145678900","email":"","alias":"","nota":"proveedor de hierro"}]}
-{"tipo":"cargar_pago","pagos":[{"persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo"},{"persona":"Juan","monto":30000,"estado":"pendiente"}]}
+{"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
 {"tipo":"whatsapp","persona":"Valeria","texto":"el mensaje a enviar por WhatsApp"}
-{"tipo":"preguntar_ia","texto":"el mensaje o consulta para V+V (equipo/IA de V+V)"}
+{"tipo":"preguntar_ia","texto":"lo que querés consultarle a la IA de V+V"}
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano"}
 Reglas:
@@ -585,41 +320,17 @@ Reglas:
 - "crear_obra" cuando dice "cargá una obra nueva", "agregá la obra X", "abrí una obra en tal dirección". Poné el nombre y lo que aclare (dirección, estado).
 - "recordar" SIEMPRE que Sebastián te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora.
-- "guardar_contacto" cuando te pide guardar/agendar un contacto o te dicta/pega datos de personas: "guardá el contacto de Enrico 1145678900", "agendá a Juan Pérez 11...", o una lista "cargá estos contactos: Juan 11...; María 11...". Poné todos en el array "contactos" (nombre + telefono, y email/alias/nota si los da). Si te pegan varios juntos, cargalos TODOS de una.
 - "cargar_gasto" cuando dice "cargá un gasto de nafta 15000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto, sin obra). IMPORTANTE: si te da VARIOS gastos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "gastos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una.
-- "cargar_pago" SOLO para REGISTRAR/ANOTAR en la planilla de Pagos uno o varios pagos (no mueve plata): "anotá/registrá/cargá un pago a Humberto en Castores 475 de 50000", "anotá que le pagué a Juan 30 lucas". Palabras clave: anotá, registrá, cargá. IMPORTANTE: si te da VARIOS pagos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "pagos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una. Cada pago va con la fecha de hoy salvo que diga otra. Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método. Si el pedido es "pagale/mandale plata a X" (sin decir anotar/registrar), NO uses esto: usá pagar_mp.
+- "cargar_pago" SOLO para REGISTRAR/ANOTAR en la planilla de Pagos un pago (no mueve plata): "anotá/registrá/cargá un pago a Humberto en Castores 475 de 50000", "anotá que le pagué a Juan 30 lucas". Palabras clave: anotá, registrá, cargá. Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método. Si el pedido es "pagale/mandale plata a X" (sin decir anotar/registrar), NO uses esto: usá pagar_mp.
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
 - "whatsapp" cuando dice "mandale un mensaje a X que…" o "escribile a X". Uso los teléfonos de Personal; le dejo el WhatsApp listo para enviar con un toque.
-- "preguntar_ia" es TU ÚNICO canal hacia V+V. Usalo SIEMPRE que te digan "mandale/decile/avisale/pasale/preguntale/consultale a V+V", "que V+V…", "avisá a la oficina/al equipo", o cualquier cosa dirigida a V+V. IMPORTANTE: vos sos DE V+V (de la casa); esto llega al equipo/IA de V+V, NUNCA a Belfast ni al cliente. Belfast es una empresa EXTERNA (el cliente) y NO tenés que mandarle nada salvo que te lo pidan explícitamente por su nombre. Si dudás entre V+V y Belfast, es V+V.
+- "preguntar_ia" solo si pide expresamente consultar a la IA de V+V.
 - "traer_fotos"/"traer_plano" para mostrar fotos, videos o planos en el chat.
 Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
 
-  function parseAccion(txt) {
-    const t = txt || "";
-    const blocks = []; const usados = [];
-    const re = /<<ACCION>>([\s\S]*?)(?:<<FIN>>|$)/g; let mm;
-    while ((mm = re.exec(t)) !== null) { usados.push(mm[0]); const raw = (mm[1] || "").trim(); let a = null; try { a = JSON.parse(raw); } catch { const i = raw.indexOf("{"), j = raw.lastIndexOf("}"); if (i >= 0 && j > i) { try { a = JSON.parse(raw.slice(i, j + 1)); } catch { } } } if (a && a.tipo) blocks.push(a); }
-    let limpio = t; usados.forEach(u => { limpio = limpio.replace(u, ""); }); limpio = limpio.trim();
-    if (blocks.length === 0) return { limpio: txt, accion: null };
-    if (blocks.length === 1) return { limpio, accion: blocks[0] };
-    const mergeField = { cargar_pago: "pagos", cargar_gasto: "gastos", guardar_contacto: "contactos" };
-    const tipos = [...new Set(blocks.map(b => b.tipo))];
-    if (tipos.length === 1 && mergeField[tipos[0]]) { const f = mergeField[tipos[0]]; const items = []; blocks.forEach(b => { if (Array.isArray(b[f])) items.push(...b[f]); else items.push(b); }); return { limpio, accion: { tipo: tipos[0], [f]: items } }; }
-    for (const tp of ["cargar_pago", "cargar_gasto", "guardar_contacto"]) { const grp = blocks.filter(b => b.tipo === tp); if (grp.length) { const f = mergeField[tp]; const items = []; grp.forEach(b => { if (Array.isArray(b[f])) items.push(...b[f]); else items.push(b); }); return { limpio, accion: { tipo: tp, [f]: items } }; } }
-    return { limpio, accion: blocks[0] };
-  }
+  function parseAccion(txt) { const t = txt || ""; let m = t.match(/<<ACCION>>([\s\S]*?)<<FIN>>/) || t.match(/<<ACCION>>([\s\S]*)$/); if (!m) return { limpio: txt, accion: null }; let raw = m[1].trim(); let a = null; try { a = JSON.parse(raw); } catch { const i = raw.indexOf("{"), j = raw.lastIndexOf("}"); if (i >= 0 && j > i) { try { a = JSON.parse(raw.slice(i, j + 1)); } catch { } } } return { limpio: t.replace(m[0], "").trim(), accion: a }; }
 
-  async function persistAvancePart(next) {
-    setAvancePart(next);
-    try { localStorage.setItem("sebastian_avance", JSON.stringify(next)); } catch { }
-    await storage.set("sebastian_avance", JSON.stringify(next)).catch(() => { });
-  }
-  async function persistBitacoraPart(next) {
-    setBitacoraPart(next);
-    try { localStorage.setItem("sebastian_bitacora", JSON.stringify(next)); } catch { }
-    await storage.set("sebastian_bitacora", JSON.stringify(next)).catch(() => { });
-  }
   async function persistPagos(next) {
     pagosWrite.current = Date.now(); setPagos(next);
     try { localStorage.setItem("sebastian_pagos", JSON.stringify(next)); } catch { }
@@ -663,13 +374,13 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         const b64 = String(dataUrl).split(",")[1];
         const mediaType = esImg ? ((dataUrl.match(/data:(.*?);/) || [])[1] || "image/jpeg") : "application/pdf";
         pend.push({ nombre: f.name, kind: esImg ? "image" : "document", data: b64, mediaType });
-        setMsgs(prev => [...prev, { role: "user", content: `${f.name}`, ...(esImg ? { media: [url || dataUrl], mediaTipo: "fotos" } : { docs: [{ nombre: f.name, url: url || "" }] }) }]);
+        setMsgs(prev => [...prev, { role: "user", content: `📎 ${f.name}`, ...(esImg ? { media: [url || dataUrl], mediaTipo: "fotos" } : { docs: [{ nombre: f.name, url: url || "" }] }) }]);
       } else if (esHoja) {
         const XLSX = await cargarSDK(); let texto = "";
         if (XLSX) { try { const buf = await f.arrayBuffer(); const wb = XLSX.read(buf, { type: "array" }); for (const sn of wb.SheetNames) { texto += `\n--- Hoja: ${sn} ---\n` + XLSX.utils.sheet_to_csv(wb.Sheets[sn]); } texto = texto.slice(0, 12000); } catch { texto = ""; } }
         if (!texto.trim()) { setMsgs(prev => [...prev, { role: "assistant", content: `No pude leer la planilla "${f.name}". Probá guardándola como PDF y subila de nuevo.` }]); continue; }
         pend.push({ nombre: f.name, kind: "texto", texto: `Contenido de la planilla "${f.name}" (CSV):\n${texto}` });
-        setMsgs(prev => [...prev, { role: "user", content: `${f.name} (planilla)`, docs: [{ nombre: f.name, url: url || "" }] }]);
+        setMsgs(prev => [...prev, { role: "user", content: `📎 ${f.name} (planilla)`, docs: [{ nombre: f.name, url: url || "" }] }]);
       } else {
         setMsgs(prev => [...prev, { role: "assistant", content: `Guardé "${f.name}" en Archivos, pero para analizarlo necesito foto, PDF o planilla (Excel/CSV).` }]);
       }
@@ -693,85 +404,34 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
   function agendarEvento(a) {
     const ev = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), hora: a.hora || "", titulo: a.titulo || a.texto || "Evento", nota: a.nota || "", ts: Date.now() };
-    persistAgenda([...(agenda || []), ev].sort((x, y) => fechaMs(x.fecha, x.hora) - fechaMs(y.fecha, y.hora)));
-    // Programa el aviso para que llegue al celular aunque la app esté cerrada.
-    try {
-      const d = fechaEvento(ev.fecha, ev.hora);
-      if (d) {
-        const ahora = new Date();
-        const previo = new Date(d.getTime() - 30 * 60000);
-        if (previo > ahora) pushNotify("Agenda — en 30 min", `${ev.titulo}${ev.hora ? " · " + ev.hora : ""}`, "miasistente", "", previo.toISOString());
-        if (d > ahora) pushNotify("Agenda", `${ev.titulo}${ev.nota ? " · " + ev.nota : ""}`, "miasistente", "", d.toISOString());
-      }
-    } catch (e) { }
+    persistAgenda([...(agenda || []), ev].sort((x, y) => fechaAOrden(x.fecha, x.hora) - fechaAOrden(y.fecha, y.hora)));
     return ev;
-  }
-  // Reparte las obras: las compartidas van a vv_obras (Belfast/V+V), las particulares
-  // a vv_obras_part (privado de Mi Asistente, no lo leen las otras apps).
-  async function persistObras(nextAll) {
-    const strip = (o) => { const { particular, ...rest } = o; return rest; };
-    const compartidas = nextAll.filter(o => !o.particular).map(strip);
-    const particulares = nextAll.filter(o => o.particular).map(strip);
-    try { localStorage.setItem("vv_obras", JSON.stringify(compartidas)); localStorage.setItem("vv_obras_part", JSON.stringify(particulares)); } catch { }
-    await storage.set("vv_obras", JSON.stringify(compartidas)).catch(() => { });
-    await storage.set("vv_obras_part", JSON.stringify(particulares)).catch(() => { });
-    setDb(d => ({ ...d, obras: nextAll }));
   }
   function guardarObra() {
     if (!obraEdit) return;
     (async () => {
-      const arr = db.obras || [];
+      let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
       let next;
       if (obraEdit._new) {
         if (!(obraEdit.nombre || "").trim()) { alert("Poné un nombre de obra."); return; }
-        // Obra nueva cargada desde Mi Asistente = PARTICULAR (privada, no va a Belfast).
-        const nueva = { id: uid() + Date.now(), nombre: obraEdit.nombre.trim(), estado: obraEdit.estado || "En curso", avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion || "", obs: obraEdit.obs || [], fotos: [], videos: [], planos: [], informes: [], tareas: [], particular: true };
+        const nueva = { id: uid() + Date.now(), nombre: obraEdit.nombre.trim(), estado: obraEdit.estado || "En curso", avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [] };
         next = [nueva, ...arr];
       } else {
-        next = arr.map(o => o.id === obraEdit.id ? { ...o, nombre: obraEdit.nombre, estado: obraEdit.estado, avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion, obs: obraEdit.obs != null ? obraEdit.obs : (o.obs || []) } : o);
+        next = arr.map(o => o.id === obraEdit.id ? { ...o, nombre: obraEdit.nombre, estado: obraEdit.estado, avance: Number(obraEdit.avance) || 0, direccion: obraEdit.direccion } : o);
       }
-      await persistObras(next);
-      setObraEdit(null);
+      try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
+      await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
+      setDb(d => ({ ...d, obras: next })); setObraEdit(null);
     })();
   }
-  // Actualiza las observaciones de una obra puntual (para el tilde rápido desde la tarjeta).
-  async function actualizarObs(obraId, obs) {
-    const arr = db.obras || [];
-    const next = arr.map(o => o.id === obraId ? { ...o, obs } : o);
-    await persistObras(next);
-  }
-  // Borra una obra. Si es compartida, persistObras la saca de vv_obras → también desaparece en V+V y Belfast.
-  async function borrarObra(obraId) {
-    const arr = db.obras || [];
-    const obra = arr.find(o => o.id === obraId);
-    const compartida = obra && !obra.particular;
-    const msg = compartida
-      ? `¿Borrar la obra "${obra?.nombre || ""}"?\n\nEs una obra compartida: también se va a borrar en V+V y en Belfast. No se puede deshacer.`
-      : `¿Borrar la obra "${obra?.nombre || ""}"? No se puede deshacer.`;
-    if (!confirm(msg)) return;
-    const next = arr.filter(o => o.id !== obraId);
-    await persistObras(next);
-  }
-  async function subirAObra(obraId, e, tipo) {
-    const files = Array.from(e.target.files); if (!files.length) return; e.target.value = ""; setSubiendoArch(true);
-    const arr = db.obras || [];
-    const fotosNew = [], archNew = [];
-    for (const f of files) {
-      const data = await fileToDataUrl(f);
-      const url = await subirBucket(data, f.name);
-      if (!url) { alert(`No pude subir "${f.name}" a la nube. Revisá el bucket 'bco-media' en Supabase.`); continue; }
-      if (tipo === "foto") fotosNew.push({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), url, fecha: hoyStr(), from: "sebastian", nota: "" });
-      else archNew.push({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), nombre: f.name, url, fecha: hoyStr(), from: "sebastian" });
-    }
-    const next = arr.map(o => o.id === obraId ? { ...o, fotos: [...fotosNew, ...(o.fotos || [])], archivos: [...archNew, ...(o.archivos || [])] } : o);
-    await persistObras(next);
-    setSubiendoArch(false);
-  }
   function crearObra(a) {
-    // Obra creada por IA en Mi Asistente = PARTICULAR (privada).
-    const nueva = { id: uid() + Date.now(), nombre: a.nombre || a.obra || "Obra nueva", estado: a.estado || "En curso", avance: Number(a.avance) || 0, direccion: a.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [], particular: true };
+    const nueva = { id: uid() + Date.now(), nombre: a.nombre || a.obra || "Obra nueva", estado: a.estado || "En curso", avance: Number(a.avance) || 0, direccion: a.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [] };
     (async () => {
-      await persistObras([nueva, ...(db.obras || [])]);
+      let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
+      const next = [nueva, ...arr];
+      try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
+      await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
+      setDb(d => ({ ...d, obras: next }));
     })();
     return nueva;
   }
@@ -839,7 +499,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       const next = [nuevo, ...(modelos || [])];
       setModelos(next); setModeloSel(nuevo.id);
       await storage.set("sebastian_modelos", JSON.stringify(next)).catch(() => { });
-      setMsgs(prev => [...prev, { role: "assistant", content: `Guardé el modelo "${f.name}" en tu biblioteca. Quedó seleccionado. Cuando pidas un presupuesto, sigo ese formato. Podés guardar varios y elegir cuál usar en la solapa Modelos.` }]);
+      setMsgs(prev => [...prev, { role: "assistant", content: `📄 Guardé el modelo "${f.name}" en tu biblioteca. Quedó seleccionado. Cuando pidas un presupuesto, sigo ese formato. Podés guardar varios y elegir cuál usar en la solapa Modelos.` }]);
     } catch { alert("No pude leer el Word."); }
   }
   function getGPS() { return new Promise((resolve) => { if (!navigator.geolocation) return resolve(null); navigator.geolocation.getCurrentPosition(p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }), () => resolve(null), { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }); }); }
@@ -852,7 +512,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     let est = "";
     try { est = await callAI([{ role: "user", content: `Estimá el tiempo APROXIMADO de viaje en auto desde las coordenadas ${pos.lat},${pos.lng} hasta "${dest}" (Argentina). Buscá la distancia/ruta en internet si hace falta. Respondé en 1-2 frases: distancia aprox y tiempo aprox en minutos, aclarando que es una estimación sin tráfico en vivo. Nada más.` }], "Sos un asistente que estima tiempos de viaje en Argentina. Breve y claro (vos).", apiKey, true); } catch { }
     if (!est || /error|no puedo|no dispong/i.test(est)) est = `Te dejo la ruta hasta ${dest}. Tocá el botón para ver el tiempo exacto con tráfico.`;
-    setMsgs(prev => [...prev, { role: "assistant", content: `${est}`, mapUrl: mapsUrl, mapLabel: "Ver ruta y tiempo real en Google Maps" }]);
+    setMsgs(prev => [...prev, { role: "assistant", content: `🚗 ${est}`, mapUrl: mapsUrl, mapLabel: "Ver ruta y tiempo real en Google Maps" }]);
   }
   async function preguntarIA(texto) {
     // Publica la consulta en el canal compartido; la IA de V+V la responde sola.
@@ -869,22 +529,11 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     return "La IA de V+V no respondió (puede estar sin crédito, o la respuesta automática apagada). Igual, puedo responderte yo con los datos que tengo.";
   }
 
-  function limpiarCampo() {
-    // Corto el dictado ANTES de limpiar: si sigue abierto, el iPhone vuelve a inyectar el texto.
-    dictRef.current.activo = false;
-    dictRef.current.base = "";
-    limpiarSilencio();
-    if (recRef.current) { try { recRef.current.abort ? recRef.current.abort() : recRef.current.stop(); } catch { } recRef.current = null; }
-    setEscuchando(false);
-    setInput("");
-    const el = inputRef.current;
-    if (el) { try { el.blur(); el.value = ""; } catch { } }   // cierro la sesión de dictado del teclado
-  }
   async function enviar() {
     const t = input.trim(); if ((!t && adjPend.length === 0) || busy) return;
     const adj = adjPend; setAdjPend([]);
     const nm = t ? [...msgs, { role: "user", content: t }] : [...msgs];
-    setMsgs(nm); limpiarCampo(); setBusy(true);
+    setMsgs(nm); setInput(""); setBusy(true);
     const hist = nm.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, content: m.content })).slice(-40);
     if (adj.length) {
       const textos = adj.filter(a => a.kind === "texto").map(a => a.texto).join("\n\n");
@@ -893,16 +542,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (hist.length && hist[hist.length - 1].role === "user") hist[hist.length - 1] = { role: "user", content: blocks }; else hist.push({ role: "user", content: blocks });
     }
     const resp = await callAI(hist, buildSystem(), apiKey, useSearch);
-    if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(resp || ""))) { setMsgs(prev => [...prev, { role: "assistant", content: "⚠ Me quedé sin crédito de IA por ahora. Para que vuelva a funcionar, hay que recargar crédito de la API en console.anthropic.com (Plans & Billing). Avisá a quien maneja la cuenta." }]); setBusy(false); return; }
-    let { limpio, accion } = parseAccion(resp);
-    if (!accion && /(cargá|carga|cargame|cárgame|anot|registr|gast[éeo\s]|gasto|gastos|pagué|pagu[eé]|pago|pagos|remito|factura)/i.test(t) && /\d/.test(t)) {
-      try {
-        const fSys = `Sos un extractor de acciones. Del pedido del usuario devolvé SOLO un bloque <<ACCION>>{...}<<FIN>> (sin nada de texto afuera). Usá tipo "cargar_gasto" con "gastos":[{"concepto","monto","fecha"}] para gastos generales, o "cargar_pago" con "pagos":[{"persona","monto","obra","estado","metodo","fecha"}] para pagos a personas. Poné TODOS los ítems juntos en el array. Montos enteros (15.000 => 15000, "50 lucas" => 50000). Sin fecha usá hoy ${hoyStr()}. Si de verdad no hay nada concreto para cargar, devolvé <<ACCION>>{"tipo":"nada"}<<FIN>>.`;
-        const resp2 = await callAI([{ role: "user", content: t }], fSys, apiKey, false);
-        const p2 = parseAccion(resp2);
-        if (p2.accion && p2.accion.tipo && p2.accion.tipo !== "nada") accion = p2.accion;
-      } catch { }
-    }
+    const { limpio, accion } = parseAccion(resp);
     let extra = {};
     if (accion && accion.tipo === "pagar_mp") {
       const q = String(accion.para || "").toLowerCase();
@@ -910,7 +550,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       const per = fav || (db.personal || []).find(x => (x.nombre || "").toLowerCase().includes(q));
       const monto = Number(String(accion.monto).replace(/[^\d.-]/g, "")) || 0;
       const alias = accion.alias || fav?.alias || per?.aliasmp || per?.alias || "";
-      setMsgs(prev => [...prev, { role: "assistant", content: `Pago preparado: ${accion.para || "—"}${monto ? ` · $${monto.toLocaleString("es-AR")}` : ""}.${alias ? `\nAlias/CVU: ${alias}` : ""}\n\nAbrí Mercado Pago y confirmá el pago vos (por seguridad, ninguna app puede pagar sola con tu plata).` }, { role: "assistant", content: "", mpUrl: "https://www.mercadopago.com.ar/", mpLabel: `Abrir Mercado Pago` }]);
+      setMsgs(prev => [...prev, { role: "assistant", content: `💳 Pago preparado: ${accion.para || "—"}${monto ? ` · $${monto.toLocaleString("es-AR")}` : ""}.${alias ? `\nAlias/CVU: ${alias}` : ""}\n\nAbrí Mercado Pago y confirmá el pago vos (por seguridad, ninguna app puede pagar sola con tu plata).` }, { role: "assistant", content: "", mpUrl: "https://www.mercadopago.com.ar/", mpLabel: `Abrir Mercado Pago` }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "mandar_mail") {
@@ -928,44 +568,35 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       const target = accion.obra ? (db.obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : null;
       const fotos = (ultimasFotos || []).slice(0, accion.cantidad || 12);
       if (!target) { setMsgs(prev => [...prev, { role: "assistant", content: "No encontré esa obra. Decime el nombre exacto." }]); setBusy(false); return; }
-      if (!fotos.length) { setMsgs(prev => [...prev, { role: "assistant", content: "No tengo fotos recién subidas para mandar. Subí la foto con y después decime a qué obra va." }]); setBusy(false); return; }
-      const arr = db.obras || [];
+      if (!fotos.length) { setMsgs(prev => [...prev, { role: "assistant", content: "No tengo fotos recién subidas para mandar. Subí la foto con 📎 y después decime a qué obra va." }]); setBusy(false); return; }
+      let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
       const nuevas = fotos.map(f => ({ id: uid() + Date.now() + Math.random(), url: f.url, fecha: hoyStr(), from: "sebastian", nota: "" }));
       const next = arr.map(o => o.id === target.id ? { ...o, fotos: [...nuevas, ...(o.fotos || [])] } : o);
-      await persistObras(next); setUltimasFotos([]);
-      setMsgs(prev => [...prev, { role: "assistant", content: `Subí ${nuevas.length === 1 ? "la foto" : nuevas.length + " fotos"} a la obra ${target.nombre}. Ya las ve V+V en las fotos de esa obra.${limpio ? "\n\n" + limpio : ""}` }]);
+      try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { } await storage.set("vv_obras", JSON.stringify(next)).catch(() => { });
+      setDb(d => ({ ...d, obras: next })); setUltimasFotos([]);
+      setMsgs(prev => [...prev, { role: "assistant", content: `📸 Subí ${nuevas.length === 1 ? "la foto" : nuevas.length + " fotos"} a la obra ${target.nombre}. Ya las ve V+V en las fotos de esa obra.${limpio ? "\n\n" + limpio : ""}` }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "crear_obra") {
       const o = crearObra(accion);
-      setMsgs(prev => [...prev, { role: "assistant", content: `Obra creada: ${o.nombre}${o.direccion ? ` · ${o.direccion}` : ""} (${o.estado}). Ya la ven V+V y todo el equipo.${limpio ? "\n\n" + limpio : ""}` }]);
+      setMsgs(prev => [...prev, { role: "assistant", content: `🏗 Obra creada: ${o.nombre}${o.direccion ? ` · ${o.direccion}` : ""} (${o.estado}). Ya la ven V+V y todo el equipo.${limpio ? "\n\n" + limpio : ""}` }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "recordar") {
       const nuevoPerfil = (perfil ? perfil + "\n" : "") + "· " + (accion.dato || "").trim();
       setPerfil(nuevoPerfil); try { localStorage.setItem("sebastian_perfil", nuevoPerfil); } catch { } storage.set("sebastian_perfil", nuevoPerfil).catch(() => { });
-      setMsgs(prev => [...prev, { role: "assistant", content: limpio || `Anotado, me lo guardo ` }]);
+      setMsgs(prev => [...prev, { role: "assistant", content: limpio || `Anotado, me lo guardo 👍` }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "agendar") {
       const ev = agendarEvento(accion);
-      setMsgs(prev => [...prev, { role: "assistant", content: `Agendado: ${ev.titulo} — ${ev.fecha}${ev.hora ? " " + ev.hora : ""}${ev.nota ? `\n${ev.nota}` : ""}.${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Agenda.` }]);
+      setMsgs(prev => [...prev, { role: "assistant", content: `📅 Agendado: ${ev.titulo} — ${ev.fecha}${ev.hora ? " " + ev.hora : ""}${ev.nota ? `\n${ev.nota}` : ""}.${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Agenda.` }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "generar_pdf") {
       setMsgs(prev => [...prev, { role: "assistant", content: limpio || `Generando el PDF "${accion.titulo || "documento"}"…` }]);
       const ok = await generarPDF(accion);
-      if (ok) setMsgs(prev => [...prev, { role: "assistant", content: `PDF generado y descargado: "${accion.titulo || "documento"}". Buscalo en tus Descargas.` }]);
-      setBusy(false); return;
-    }
-    if (accion && accion.tipo === "guardar_contacto") {
-      const arr = Array.isArray(accion.contactos) ? accion.contactos : [accion];
-      let cur = contactos || [];
-      try { const r = await storage.get("sebastian_contactos"); if (r?.value) cur = JSON.parse(r.value); } catch { }
-      const existTel = new Set(cur.map(c => String(c.telefono || "").replace(/\D/g, "")).filter(Boolean));
-      const nuevos = arr.filter(x => x && (x.nombre || x.telefono)).map(a => ({ id: uid() + Date.now() + Math.floor(Math.random() * 99999), nombre: a.nombre || "", telefono: String(a.telefono || "").replace(/[^\d+]/g, ""), email: a.email || "", alias: a.alias || "", nota: a.nota || "" })).filter(n => { const t = n.telefono.replace(/\D/g, ""); return !(t && existTel.has(t)); });
-      if (nuevos.length) await persistContactos([...cur, ...nuevos]);
-      setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `Guardé ${nuevos.length} contacto${nuevos.length > 1 ? "s" : ""}:\n${nuevos.map(c => `• ${c.nombre}${c.telefono ? " — " + c.telefono : ""}`).join("\n")}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Contactos.` : "Esos contactos ya estaban cargados." }]);
+      if (ok) setMsgs(prev => [...prev, { role: "assistant", content: `✅ PDF generado y descargado: "${accion.titulo || "documento"}". Buscalo en tus Descargas.` }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "cargar_gasto") {
@@ -974,16 +605,12 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (nuevos.length) persistGastos([...nuevos, ...(gastos || [])]);
       const total = nuevos.reduce((s, g) => s + g.monto, 0);
       const detalle = nuevos.map(g => `• ${g.concepto} — $${g.monto.toLocaleString("es-AR")}`).join("\n");
-      setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `Cargué ${nuevos.length} gasto${nuevos.length > 1 ? "s" : ""} (total $${total.toLocaleString("es-AR")}):\n${detalle}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Gastos.` : "No pude leer los gastos. Decímelos con concepto y monto." }]);
+      setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `💸 Cargué ${nuevos.length} gasto${nuevos.length > 1 ? "s" : ""} (total $${total.toLocaleString("es-AR")}):\n${detalle}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Gastos.` : "No pude leer los gastos. Decímelos con concepto y monto." }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "cargar_pago") {
-      const arr = Array.isArray(accion.pagos) ? accion.pagos : [accion];
-      const nuevos = arr.filter(x => x && (x.persona || x.monto != null)).map(a => { const obra = a.obra ? (db.obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(a.obra).toLowerCase())) : null; return { id: uid() + Date.now() + Math.floor(Math.random() * 9999), persona: a.persona || "", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, obra: (obra && obra.nombre) || a.obra || "", obra_id: (obra && obra.id) || "", estado: (a.estado || "pendiente").toLowerCase().includes("pag") ? "pagado" : "pendiente", metodo: a.metodo || "", nota: a.nota || "", fecha: a.fecha || hoyStr(), ts: Date.now() }; });
-      if (nuevos.length) persistPagos([...nuevos, ...(pagos || [])]);
-      const total = nuevos.reduce((s, p) => s + p.monto, 0);
-      const detalle = nuevos.map(p => `• ${p.persona || "—"} — $${p.monto.toLocaleString("es-AR")}${p.obra ? ` (${p.obra})` : ""} · ${p.estado}`).join("\n");
-      setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `Cargué ${nuevos.length} pago${nuevos.length > 1 ? "s" : ""} (total $${total.toLocaleString("es-AR")}) con fecha ${hoyStr()}:\n${detalle}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Pagos, agrupados por día.` : "No pude leer los pagos. Decime persona y monto de cada uno." }]);
+      const p = cargarPago(accion);
+      setMsgs(prev => [...prev, { role: "assistant", content: `✅ Pago cargado: ${p.persona || "—"}${p.monto ? ` · $${p.monto.toLocaleString("es-AR")}` : ""}${p.obra ? ` · ${p.obra}` : ""} · ${p.estado}${p.metodo ? ` · ${p.metodo}` : ""} (${p.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Pagos y lo podés exportar a Excel.` }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "whatsapp") {
@@ -997,9 +624,9 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setBusy(false); return;
     }
     if (accion && accion.tipo === "preguntar_ia") {
-      setMsgs(prev => [...prev, { role: "assistant", content: (limpio || "Se lo paso a V+V…") }]);
+      setMsgs(prev => [...prev, { role: "assistant", content: (limpio || "Consulto a la IA de V+V…") }]);
       const r = await preguntarIA(accion.texto);
-      setMsgs(prev => [...prev, { role: "assistant", content: `IA de V+V: ${r}` }]);
+      setMsgs(prev => [...prev, { role: "assistant", content: `🔗 IA de V+V: ${r}` }]);
       setBusy(false); return;
     }
     if (accion && (accion.tipo === "traer_fotos" || accion.tipo === "traer_plano")) {
@@ -1038,24 +665,22 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v34 · Finanzas {(finResumen || (finRaw && (finRaw.obras || []).length)) ? "✓" : "—"}</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v27 · agenda-orden</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["gastos", "Gastos"], ["agenda", "Agenda"], ["archivos", "Archivos"], ["modelos", "Modelos"], ["obras", "Obras"], ["avance", "Avance"], ["bitacora", "Bitácora"], ["contactos", "Contactos"], ["camaras", "Cámaras"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const cnt = id === "pagos" ? (pagos || []).length : id === "gastos" ? (gastos || []).length : id === "archivos" ? (archivos || []).length : id === "agenda" ? (agenda || []).length : id === "modelos" ? (modelos || []).length : id === "contactos" ? (contactos || []).length : id === "camaras" ? (camaras || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["gastos", "Gastos"], ["agenda", "Agenda"], ["archivos", "Archivos"], ["modelos", "Modelos"], ["obras", "Obras"], ["contactos", "Contactos"], ["camaras", "Cámaras"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const cnt = id === "pagos" ? (pagos || []).length : id === "gastos" ? (gastos || []).length : id === "archivos" ? (archivos || []).length : id === "agenda" ? (agenda || []).length : id === "modelos" ? (modelos || []).length : id === "contactos" ? (contactos || []).length : id === "camaras" ? (camaras || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
-    {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} />}
+    {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "camaras" && <CamarasBody camaras={camaras} onSave={persistCamaras} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "archivos" && <ArchivosBody archivos={archivos} cat={catArch} setCat={setCatArch} archRef={archRef} subir={subirArchivos} subiendo={subiendoArch} borrar={(id) => persistArch((archivos || []).filter(a => a.id !== id))} />}
     {vista === "modelos" && <ModelosBody modelos={modelos} sel={modeloSel} setSel={setModeloSel} subir={() => modeloRef.current && modeloRef.current.click()} borrar={(id) => { const next = (modelos || []).filter(m => m.id !== id); setModelos(next); if (modeloSel === id) setModeloSel(next[0]?.id || ""); storage.set("sebastian_modelos", JSON.stringify(next)).catch(() => { }); }} />}
-    {vista === "avance" && <AvancePartBody obras={db.obras || []} avance={avancePart} setAvance={persistAvancePart} apiKey={apiKey} />}
-    {vista === "bitacora" && <BitacoraPartBody obras={db.obras || []} bitacora={bitacoraPart} setBitacora={persistBitacoraPart} />}
-    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "", obs: [] })} subirAObra={subirAObra} subiendo={subiendoArch} actualizarObs={actualizarObs} borrar={borrarObra} />}
+    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: "", direccion: "" })} />}
     {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
 
     <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -1063,12 +688,12 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       {msgs.map((m, i) => (<div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 12 }}>
         <div style={{ maxWidth: "88%", minWidth: 0 }}>
           <div style={{ background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: 14, padding: "11px 14px", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "anywhere" }}>{m.content}</div>
-          {m.role === "assistant" && m.content && m.content.length > 8 && <button onClick={() => hablar(m.content)} title="Escuchar" style={{ marginTop: 4, background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: "2px 0" }}><Ico n="sound" /> Escuchar</button>}
-          {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}><Ico n="send" /> {m.waLabel || "Enviar por WhatsApp"}</a>}
+          {m.role === "assistant" && m.content && m.content.length > 8 && <button onClick={() => hablar(m.content)} title="Escuchar" style={{ marginTop: 4, background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: "2px 0" }}>🔊 Escuchar</button>}
+          {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
           {m.mapUrl && <a href={m.mapUrl} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#1A73E8", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>🗺 {m.mapLabel || "Ver en Google Maps"}</a>}
-          {m.mpUrl && <a href={m.mpUrl} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#009EE3", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}><Ico n="card" /> {m.mpLabel || "Abrir Mercado Pago"}</a>}
+          {m.mpUrl && <a href={m.mpUrl} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#009EE3", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>💳 {m.mpLabel || "Abrir Mercado Pago"}</a>}
           {m.mailUrl && <a href={m.mailUrl} style={{ display: "inline-block", marginTop: 8, background: "#EA4335", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>✉️ {m.mailLabel || "Enviar mail"}</a>}
-          {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8 }}>{m.docs.map((d, j) => <a key={j} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.navy, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}><Ico n="ruler" /> </span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: BRASS, fontWeight: 700, fontSize: 11.5 }}>Abrir ↗</span></a>)}</div>}
+          {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8 }}>{m.docs.map((d, j) => <a key={j} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.navy, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: BRASS, fontWeight: 700, fontSize: 11.5 }}>Abrir ↗</span></a>)}</div>}
           {m.media && m.media.length > 0 && <div style={{ marginTop: 8 }}>{m.mediaTipo === "videos" ? m.media.map((u, j) => <video key={j} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000" }} />) : <div style={{ display: "grid", gridTemplateColumns: m.media.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>{m.media.map((u, j) => <a key={j} href={u} target="_blank" rel="noreferrer" download><img src={u} alt="" onLoad={scrollBottom} style={{ width: "100%", borderRadius: 10, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div>}</div>}
         </div>
       </div>))}
@@ -1079,23 +704,16 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.sub, cursor: "pointer" }}><input type="checkbox" checked={useSearch} onChange={e => setUseSearch(e.target.checked)} /> Buscar en internet</label>
         <input ref={chatFileRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.dwg,.dxf" multiple onChange={subirEnChat} style={{ display: "none" }} />
-        <button onClick={() => chatFileRef.current && chatFileRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}><Ico n="clip" /> Foto / archivo</button>
+        <button onClick={() => chatFileRef.current && chatFileRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📎 Foto / archivo</button>
         <input ref={modeloRef} type="file" accept=".docx" onChange={subirModelo} style={{ display: "none" }} />
-        <button onClick={() => modeloRef.current && modeloRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}><Ico n="doc" /> Subir modelo</button>
-        <button onClick={() => setVozOn(v => !v)} style={{ background: vozOn ? T.accent : "none", border: `1px solid ${vozOn ? T.accent : T.border}`, color: vozOn ? "#fff" : T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}><Ico n="sound" /> Voz {vozOn ? "activada" : ""}</button>
+        <button onClick={() => modeloRef.current && modeloRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📄 Subir modelo</button>
+        <button onClick={() => setVozOn(v => !v)} style={{ background: vozOn ? T.accent : "none", border: `1px solid ${vozOn ? T.accent : T.border}`, color: vozOn ? "#fff" : T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>🔊 Voz {vozOn ? "activada" : ""}</button>
         {modelo && <span style={{ fontSize: 10.5, color: T.muted }}>Modelo activo: {modelo.nombre}</span>}
       </div>
-      <GlobitoPermiso />
-      {adjPend.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adjPend.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "" : a.kind === "texto" ? "" : ""} {a.nombre.slice(0, 22)} <span onClick={() => setAdjPend(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
-        <div onClick={dictar} style={{ width: 132, height: 132, background: T.card, border: `2px solid ${escuchando ? "#DC2626" : T.accent}`, borderRadius: 20, boxShadow: "0 4px 14px rgba(0,0,0,.08)", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, position: "relative" }}>
-          {cfg.iaFoto ? <img src={cfg.iaFoto} alt="foto" style={{ width: 74, height: 74, borderRadius: 14, objectFit: "cover" }} /> : <span style={{ fontSize: 42 }}><Ico n="mic" /> </span>}
-          <span style={{ fontSize: 12, fontWeight: 800, color: escuchando ? "#DC2626" : T.accent }}>{escuchando ? "Escuchando…" : "Hablarle a la IA"}</span>
-          <label onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 5, right: 6, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "2px 6px", fontSize: 9, fontWeight: 700, color: T.sub, cursor: "pointer" }}>✎ foto<input type="file" accept="image/*" onChange={e => { subirFotoBoton(e.target.files && e.target.files[0]); e.target.value = ""; }} style={{ display: "none" }} /></label>
-        </div>
-      </div>
+      {adjPend.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adjPend.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "🖼" : a.kind === "texto" ? "📊" : "📄"} {a.nombre.slice(0, 22)} <span onClick={() => setAdjPend(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : adjPend.length ? "Preguntá algo sobre lo que adjuntaste…" : "Escribí o tocá el botón de arriba…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
+        <button onClick={dictar} title="Hablar" style={{ background: escuchando ? "#DC2626" : T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, color: escuchando ? "#fff" : T.accent, borderRadius: 12, padding: "0 15px", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>🎤</button>
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : adjPend.length ? "Preguntá algo sobre lo que adjuntaste…" : "Escribí o tocá el micrófono…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
         <button onClick={enviar} disabled={busy || (!input.trim() && adjPend.length === 0)} style={{ background: (busy || (!input.trim() && adjPend.length === 0)) ? T.border : T.accent, color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", fontSize: 14, fontWeight: 600, letterSpacing: "0.03em", cursor: (busy || (!input.trim() && adjPend.length === 0)) ? "default" : "pointer" }}>Enviar</button>
       </div>
     </div>
@@ -1120,30 +738,13 @@ function Icono({ n, size = 20 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>{p[n] || null}</svg>;
 }
 
-function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, onAdd }) {
+function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar }) {
   const lista = (pagos || []).filter(p => !filtroObra || p.obra === filtroObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const obrasUnicas = [...new Set((pagos || []).map(p => p.obra).filter(Boolean))];
-  const [abrir, setAbrir] = useState(false);
-  const [fPersona, setFPersona] = useState(""); const [fMonto, setFMonto] = useState(""); const [fObra, setFObra] = useState("");
-  const [fEstado, setFEstado] = useState("pendiente"); const [fMetodo, setFMetodo] = useState(""); const [fNota, setFNota] = useState("");
-  const [fFecha, setFFecha] = useState(() => new Date().toISOString().slice(0, 10));
-  const fmtMiles = (v) => { const s = String(v == null ? "" : v).replace(/\D/g, ""); return s ? Number(s).toLocaleString("es-AR") : ""; };
-  const isoADmy = (iso) => { if (!iso) return ""; const [a, m, d] = iso.split("-"); return `${d}/${m}/${a.slice(2)}`; };
-  const limpiar = () => { setFPersona(""); setFMonto(""); setFObra(""); setFEstado("pendiente"); setFMetodo(""); setFNota(""); setFFecha(new Date().toISOString().slice(0, 10)); setAbrir(false); };
-  const guardarPago = () => {
-    const monto = Number(String(fMonto).replace(/\D/g, "")) || 0;
-    if (!fPersona.trim() && !monto) { alert("Poné al menos la persona y el monto."); return; }
-    onAdd({ persona: fPersona.trim(), monto, obra: fObra, estado: fEstado, metodo: fMetodo.trim(), nota: fNota.trim(), fecha: isoADmy(fFecha) });
-    limpiar();
-  };
-  const inpF = { width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px 12px", fontSize: 15, color: T.text, boxSizing: "border-box" };
   const totalPend = lista.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
   const totalPag = lista.filter(p => p.estado === "pagado").reduce((a, p) => a + (p.monto || 0), 0);
-  const mesAA = hoyStr().slice(3);
-  const diasPagados = []; const totPorDia = {};
-  lista.forEach(p => { if (p.estado === "pagado" && String(p.fecha || "").slice(3) === mesAA) { if (totPorDia[p.fecha] == null) { totPorDia[p.fecha] = 0; diasPagados.push(p.fecha); } totPorDia[p.fecha] += (p.monto || 0); } });
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
-    <a href="https://www.mercadopago.com.ar/" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#009EE3", color: "#fff", borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 700, textDecoration: "none", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,158,227,.3)" }}><Ico n="card" /> Pagar por Mercado Pago</a>
+    <a href="https://www.mercadopago.com.ar/" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#009EE3", color: "#fff", borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 700, textDecoration: "none", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,158,227,.3)" }}>💳 Pagar por Mercado Pago</a>
     <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
       <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 16, color: T.text }}>
         <option value="">Todas las obras</option>
@@ -1151,75 +752,32 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, 
       </select>
       <button onClick={exportar} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "0 16px", fontSize: 12.5, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer", whiteSpace: "nowrap" }}>Exportar Excel</button>
     </div>
-
-    {/* cargar pago a mano */}
-    {!abrir && <button onClick={() => setAbrir(true)} style={{ width: "100%", background: T.card, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 12, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>+ Cargar pago a mano</button>}
-    {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
-      <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 10 }}>Nuevo pago</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-        <input value={fPersona} onChange={e => setFPersona(e.target.value)} placeholder="Persona (ej: Humberto)" style={inpF} />
-        <div style={{ display: "flex", gap: 9 }}>
-          <input value={fMonto} onChange={e => setFMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="$ Monto" style={{ ...inpF, flex: 1 }} />
-          <input type="date" value={fFecha} onChange={e => setFFecha(e.target.value)} style={{ ...inpF, flex: 1 }} />
-        </div>
-        <select value={fObra} onChange={e => setFObra(e.target.value)} style={inpF}>
-          <option value="">— Obra (opcional) —</option>
-          {(obras || []).map(o => <option key={o.id} value={o.nombre}>{o.nombre}</option>)}
-        </select>
-        <div style={{ display: "flex", gap: 9 }}>
-          {[["pendiente", "Pendiente"], ["pagado", "Pagado"]].map(([k, l]) => (
-            <button key={k} onClick={() => setFEstado(k)} style={{ flex: 1, background: fEstado === k ? (k === "pagado" ? T.accent : "#B98A2E") : "transparent", color: fEstado === k ? "#fff" : T.sub, border: `1px solid ${fEstado === k ? "transparent" : T.border}`, borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{l}</button>
-          ))}
-        </div>
-        <input value={fMetodo} onChange={e => setFMetodo(e.target.value)} placeholder="Método (efectivo, transferencia, cheque…)" style={inpF} />
-        <input value={fNota} onChange={e => setFNota(e.target.value)} placeholder="Nota (opcional)" style={inpF} />
-        <div style={{ display: "flex", gap: 9, marginTop: 2 }}>
-          <button onClick={limpiar} style={{ flex: 1, background: "transparent", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 9, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
-          <button onClick={guardarPago} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Guardar pago</button>
-        </div>
-      </div>
-    </div>}
     <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pendiente</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: "#9A6B1E", marginTop: 3 }}>${totalPend.toLocaleString("es-AR")}</div></div>
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pagado</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totalPag.toLocaleString("es-AR")}</div></div>
     </div>
-    {diasPagados.length > 0 && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 16 }}>
-      <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 8 }}>Pagado por día · este mes</div>
-      {diasPagados.map((d, i) => <div key={d} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: d === hoyStr() ? T.accent : T.text }}>{d === hoyStr() ? "Hoy · " : ""}{d}</span>
-        <span style={{ fontFamily: T.serif, fontSize: 14.5, fontWeight: 600, color: T.accent }}>${totPorDia[d].toLocaleString("es-AR")}</span>
-      </div>)}
-    </div>}
-    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px", lineHeight: 1.6 }}>Todavía no cargaste pagos.<br />Desde el Chat, decime por ejemplo:<br /><span style={{ color: T.sub }}>"cargá pagos: Humberto 50000 Castores efectivo, Juan 30000 pendiente, Luis 20000 pagado"</span></div>}
-    {(() => { const grupos = []; lista.forEach(p => { const k = p.fecha || "sin fecha"; let g = grupos.find(x => x.fecha === k); if (!g) { g = { fecha: k, items: [] }; grupos.push(g); } g.items.push(p); }); return grupos.map(g => { const esHoy = g.fecha === hoyStr(); const sub = g.items.reduce((a, p) => a + (p.monto || 0), 0); const subPend = g.items.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0); return (<div key={g.fecha} style={{ marginBottom: 6 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "14px 0 8px", paddingBottom: 5, borderBottom: `1px solid ${esHoy ? BRASS : T.border}` }}>
-        <span style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: esHoy ? BRASS : T.sub }}>{esHoy ? "Hoy · " : ""}{g.fecha}</span>
-        <span style={{ fontSize: 11, color: T.muted, fontWeight: 700 }}>{g.items.length} pago{g.items.length > 1 ? "s" : ""} · ${sub.toLocaleString("es-AR")}{subPend > 0 ? ` (pend. $${subPend.toLocaleString("es-AR")})` : ""}</span>
-      </div>
-      {g.items.map(p => (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `2px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 8 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{p.persona || "—"} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(p.monto || 0).toLocaleString("es-AR")}</span></div>
-            <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{p.obra || "sin obra"}{p.metodo ? ` · ${p.metodo}` : ""}{p.nota ? ` · ${p.nota}` : ""}</div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: p.estado === "pagado" ? T.accent : "#B98A2E", border: `1px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: 5, padding: "2px 7px" }}>{p.estado}</span>
-            <button onClick={() => borrar(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer" }}>✕</button>
-          </div>
+    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px", lineHeight: 1.6 }}>Todavía no cargaste pagos.<br />Desde el Chat, decime por ejemplo:<br /><span style={{ color: T.sub }}>"cargá un pago a Humberto en Castores 475 de 50000 en efectivo"</span></div>}
+    {lista.map(p => (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `2px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{p.persona || "—"} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(p.monto || 0).toLocaleString("es-AR")}</span></div>
+          <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{p.obra || "sin obra"} · {p.fecha}{p.metodo ? ` · ${p.metodo}` : ""}{p.nota ? ` · ${p.nota}` : ""}</div>
         </div>
-      </div>))}
-    </div>); }); })()}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: p.estado === "pagado" ? T.accent : "#B98A2E", border: `1px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: 5, padding: "2px 7px" }}>{p.estado}</span>
+          <button onClick={() => borrar(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer" }}>✕</button>
+        </div>
+      </div>
+    </div>))}
   </div>);
 }
 
 function AgendaBody({ agenda, onAdd, onDel }) {
   const [f, setF] = useState({ fecha: "", hora: "", titulo: "", nota: "" });
-  // Lo PRÓXIMO primero (de la fecha más cercana a la más lejana). Lo vencido, aparte y abajo.
-  const h0 = inicioDeHoy();
-  const conMs = (agenda || []).map(e => ({ ...e, _ms: fechaMs(e.fecha, e.hora) }));
-  const proximos = conMs.filter(e => e._ms >= h0).sort((a, b) => a._ms - b._ms);
-  const pasados = conMs.filter(e => e._ms < h0).sort((a, b) => b._ms - a._ms);   // el más reciente arriba
-  const lista = proximos;
+  // Ordena por fecha/hora REALES (no como texto) — así el más próximo va primero
+  // sin importar si tiene año, o si un evento lejano en el tiempo pero con
+  // números de día/mes más chicos quedaba antes por error.
+  const lista = (agenda || []).slice().sort((a, b) => fechaAOrden(a.fecha, a.hora) - fechaAOrden(b.fecha, b.hora));
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo evento</div>
@@ -1232,26 +790,13 @@ function AgendaBody({ agenda, onAdd, onDel }) {
       <button onClick={() => { if (!f.titulo.trim()) { alert("Poné un título."); return; } onAdd({ ...f, fecha: f.fecha || hoyStr() }); setF({ fecha: "", hora: "", titulo: "", nota: "" }); }} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋ Agendar</button>
     </div>
     {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px", lineHeight: 1.6 }}>Agenda vacía.<br />Desde el Chat podés decir: <span style={{ color: T.sub }}>"agendá reunión con Belfast el jueves a las 10"</span></div>}
-    {proximos.length > 0 && <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Próximos ({proximos.length})</div>}
-    {proximos.map(e => { const cu = cuandoEs(e._ms); const hoy = cu === "HOY", man = cu === "MAÑANA";
-      return (<div key={e.id} style={{ background: T.card, border: `1px solid ${hoy ? BRASS : T.border}`, borderLeft: `3px solid ${hoy ? "#DC2626" : man ? BRASS : T.border}`, borderRadius: 11, padding: 12, marginBottom: 8, display: "flex", gap: 10, alignItems: "flex-start", justifyContent: "space-between" }}>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: BRASS }}>{e.fecha}{e.hora ? ` · ${e.hora}` : ""}</span>
-          {cu && <span style={{ fontSize: 9.5, fontWeight: 800, color: hoy ? "#fff" : man ? "#fff" : T.sub, background: hoy ? "#DC2626" : man ? BRASS : T.al, borderRadius: 5, padding: "2px 6px" }}>{cu}</span>}
-        </div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginTop: 3 }}>{e.titulo}</div>
+    {lista.map(e => (<div key={e.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: BRASS }}>{e.fecha}{e.hora ? ` · ${e.hora}` : ""}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginTop: 2 }}>{e.titulo}</div>
         {e.nota && <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{e.nota}</div>}
       </div>
-      <button onClick={() => onDel(e.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: 2 }}><Ico n="trash" /> </button>
-    </div>); })}
-    {pasados.length > 0 && <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", margin: "18px 0 8px" }}>Ya pasaron ({pasados.length})</div>}
-    {pasados.map(e => (<div key={e.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: 11, marginBottom: 7, display: "flex", gap: 10, alignItems: "flex-start", justifyContent: "space-between", opacity: 0.55 }}>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted }}>{e.fecha}{e.hora ? ` · ${e.hora}` : ""} · {cuandoEs(e._ms)}</div>
-        <div style={{ fontSize: 13.5, fontWeight: 600, color: T.sub, marginTop: 2 }}>{e.titulo}</div>
-      </div>
-      <button onClick={() => onDel(e.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: 2 }}><Ico n="trash" /> </button>
+      <button onClick={() => onDel(e.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer" }}>✕</button>
     </div>))}
   </div>);
 }
@@ -1287,294 +832,7 @@ function ArchivosBody({ archivos, cat, setCat, archRef, subir, subiendo, borrar 
   </div>);
 }
 
-/* Editor de "cosas a tener en cuenta" — observaciones numeradas.
-   Recibe la lista y una función para actualizarla. Cada obs: {id, txt, hecho}. */
-function ObsEditor({ lista, onChange, chico }) {
-  const [nuevo, setNuevo] = useState("");
-  const items = lista || [];
-  const agregar = () => {
-    const t = nuevo.trim();
-    if (!t) return;
-    onChange([...items, { id: uid() + Date.now(), txt: t, hecho: false }]);
-    setNuevo("");
-  };
-  const borrar = (id) => onChange(items.filter(x => x.id !== id));
-  const toggle = (id) => onChange(items.map(x => x.id === id ? { ...x, hecho: !x.hecho } : x));
-  const editar = (id, txt) => onChange(items.map(x => x.id === id ? { ...x, txt } : x));
-  const pend = items.filter(x => !x.hecho).length;
-  const pad = chico ? "9px" : "10px";
-  return (<div>
-    <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <span>Cosas a tener en cuenta</span>
-      {items.length > 0 && <span style={{ fontSize: 10, color: T.muted, fontWeight: 700 }}>{pend} pendiente{pend === 1 ? "" : "s"} · {items.length} en total</span>}
-    </div>
-    {items.map((it, i) => (<div key={it.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
-      <button onClick={() => toggle(it.id)} title={it.hecho ? "Marcar como pendiente" : "Marcar como resuelto"} style={{ flexShrink: 0, width: 22, height: 22, marginTop: 2, borderRadius: 6, border: `1.5px solid ${it.hecho ? T.accent : T.border}`, background: it.hecho ? T.accent : "transparent", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>{it.hecho ? "✓" : ""}</button>
-      <span style={{ flexShrink: 0, marginTop: 4, fontSize: 12.5, fontWeight: 800, color: T.muted, minWidth: 16 }}>{i + 1}.</span>
-      <input value={it.txt} onChange={e => editar(it.id, e.target.value)} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: pad, fontSize: 15, color: it.hecho ? T.muted : T.text, textDecoration: it.hecho ? "line-through" : "none", boxSizing: "border-box" }} />
-      <button onClick={() => borrar(it.id)} style={{ flexShrink: 0, background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "4px 2px", marginTop: 2 }}>✕</button>
-    </div>))}
-    <div style={{ display: "flex", gap: 7, marginTop: items.length ? 4 : 0 }}>
-      <input value={nuevo} onChange={e => setNuevo(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} placeholder={items.length ? "Sumar otra observación…" : "Ej: Confirmar cota de piso terminado con Ayala"} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: pad, fontSize: 15, color: T.text, boxSizing: "border-box" }} />
-      <button onClick={agregar} style={{ flexShrink: 0, background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 8, padding: "0 15px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>＋</button>
-    </div>
-  </div>);
-}
-
-
-// ═══ AVANCE Y BITÁCORA PRIVADOS (obras particulares) ═══
-function comprimirImg(dataUrl, maxDim = 1600, calidad = 0.7) {
-  return new Promise((res) => {
-    try {
-      const im = new Image();
-      im.onload = () => {
-        let { width: w, height: h } = im;
-        if (w > maxDim || h > maxDim) { const r = Math.min(maxDim / w, maxDim / h); w = Math.round(w * r); h = Math.round(h * r); }
-        const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
-        cv.getContext("2d").drawImage(im, 0, 0, w, h);
-        res(cv.toDataURL("image/jpeg", calidad));
-      };
-      im.onerror = () => res(dataUrl);
-      im.src = dataUrl;
-    } catch (e) { res(dataUrl); }
-  });
-}
-
-function AvancePartBody({ obras, avance, setAvance, apiKey }) {
-  const [obraId, setObraId] = useState(obras[0]?.id || "");
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("");
-  const [pendientes, setPendientes] = useState([]);
-  const [fechaFoto, setFechaFoto] = useState(() => new Date().toISOString().slice(0, 10));
-  const fileRef = useRef(null);
-  const obra = obras.find(o => o.id === obraId);
-  const historial = ((avance || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
-
-  async function onFoto(e) {
-    const files = Array.from(e.target.files || []); if (!files.length) return; e.target.value = "";
-    if (!obraId) { alert("Elegí una obra primero."); return; }
-    setBusy(true); setStatus("Preparando fotos…");
-    try {
-      const pend = [];
-      for (const f of files.slice(0, 6)) {
-        const dataUrl = await fileToDataUrl(f);
-        const comp = await comprimirImg(dataUrl, 1600, 0.7);
-        pend.push({ comp, b64: String(comp).split(",")[1], mediaType: (String(comp).match(/data:(.*?);/) || [])[1] || "image/jpeg" });
-      }
-      setPendientes(pend); setFechaFoto(new Date().toISOString().slice(0, 10)); setStatus("");
-    } catch (err) { setStatus("No pude leer las fotos."); }
-    setBusy(false);
-  }
-
-  async function analizar() {
-    if (!pendientes.length) return;
-    setBusy(true); setStatus(pendientes.length > 1 ? `Subiendo y analizando ${pendientes.length} fotos…` : "Subiendo y analizando la foto…");
-    try {
-      const urls = [], imgs = [];
-      for (const pf of pendientes) {
-        const url = await subirBucket(pf.comp, `avance-part-${uid()}.jpg`);
-        urls.push(url || pf.comp);
-        imgs.push({ type: "image", source: { type: "base64", media_type: pf.mediaType, data: pf.b64 } });
-      }
-      const prev = historial[0];
-      const [aa, mm, dd] = (fechaFoto || "").split("-");
-      const fechaTxt = aa ? `${dd}/${mm}/${aa.slice(2)}` : hoyStr();
-      const ts = aa ? new Date(fechaFoto + "T12:00:00").getTime() : Date.now();
-      const nF = pendientes.length;
-      const encab = nF > 1 ? `Te paso ${nF} fotos de la obra "${obra?.nombre || ""}" del día ${fechaTxt} (mismo día, distintos sectores — analizalas como CONJUNTO).` : `Foto de la obra "${obra?.nombre || ""}" del día ${fechaTxt}.`;
-      const sys = "Sos un inspector de obra civil en Argentina. Analizás fotos de avance con criterio técnico. El porcentaje es una ESTIMACIÓN visual. Escribí claro y breve, en español rioplatense (vos).";
-      const instruc = prev
-        ? `${encab}\n\nESTADO ANTERIOR (${prev.fecha}):\n${prev.descripcion}\n\nHacé DOS cosas:\n1) ESTADO ACTUAL: describí en 3-5 renglones qué se ve.\n2) AVANCE: compará con el anterior, qué se avanzó, qué falta, % ESTIMADO y ALERTAS.\nFormato EXACTO:\nESTADO ACTUAL: ...\nAVANCE: ...`
-        : `${encab} Es la PRIMERA carga (línea de base). Describí el ESTADO ACTUAL en 3-5 renglones y estimá un % de avance general.\nFormato EXACTO:\nESTADO ACTUAL: ...`;
-      const resp = await callAI([{ role: "user", content: [...imgs, { type: "text", text: instruc }] }], sys, apiKey, false);
-      let descripcion = resp, avanceTxt = "";
-      const mA = resp.match(/AVANCE:\s*([\s\S]*)$/i); const mE = resp.match(/ESTADO ACTUAL:\s*([\s\S]*?)(?:AVANCE:|$)/i);
-      if (mE) descripcion = mE[1].trim(); if (mA) avanceTxt = mA[1].trim();
-      const item = { id: uid() + Date.now(), fecha: fechaTxt, ts, descripcion, avance: avanceTxt, fotos: urls, fotoUrl: urls[0] };
-      setAvance({ ...(avance || {}), [obraId]: [item, ...historial] });
-      setPendientes([]); setStatus("");
-    } catch (e) { setStatus("Hubo un error al analizar. Fijate que tengas crédito de API."); }
-    setBusy(false);
-  }
-
-  const borrarEntrada = (h) => { if (!confirm("¿Borrar este informe de avance?")) return; setAvance({ ...(avance || {}), [obraId]: historial.filter(x => x.id !== h.id) }); };
-  const borrarFoto = (h, i) => {
-    const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
-    if (!confirm("¿Borrar esta foto del informe?")) return;
-    const rest = fs.filter((_, j) => j !== i);
-    setAvance({ ...(avance || {}), [obraId]: historial.map(x => x.id === h.id ? { ...x, fotos: rest, fotoUrl: rest[0] || "" } : x) });
-  };
-
-  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
-  return (<div style={{ padding: "16px 18px 90px" }}>
-    <div style={{ fontSize: 11.5, color: T.sub, lineHeight: 1.5, marginBottom: 12 }}>Avance privado de tus obras. No se comparte con V+V ni con Belfast.</div>
-    <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
-    <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...inp, margin: "5px 0 12px" }}>
-      <option value="">— Elegí una obra —</option>
-      {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}{o.particular ? " (particular)" : ""}</option>)}
-    </select>
-    <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFoto} style={{ display: "none" }} />
-    {pendientes.length === 0
-      ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>{busy ? "Preparando…" : <><Ico n="camera" s={15} c="#fff" /> Elegir foto(s)</>}</button>
-      : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 12, marginBottom: 12 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{pendientes.length === 1 ? "1 foto seleccionada" : `${pendientes.length} fotos seleccionadas`} — poné la fecha y analizá</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
-            {pendientes.map((pf, i) => <div key={i} style={{ position: "relative" }}>
-              <img src={pf.comp} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 7, display: "block", border: `1px solid ${T.border}` }} />
-              <button onClick={() => setPendientes(p => p.filter((_, j) => j !== i))} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 12, cursor: "pointer", lineHeight: 1 }}>✕</button>
-            </div>)}
-          </div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Fecha de la foto</label>
-          <input type="date" value={fechaFoto} onChange={e => setFechaFoto(e.target.value)} style={{ ...inp, margin: "5px 0 10px" }} />
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => { setPendientes([]); setStatus(""); }} disabled={busy} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
-            <button onClick={analizar} disabled={busy} style={{ flex: 2, background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{busy ? "Analizando…" : "✓ Analizar avance"}</button>
-            <button onClick={() => fileRef.current?.click()} disabled={busy} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "0 14px", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>＋</button>
-          </div>
-        </div>}
-    {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
-
-    {historial.length === 0 && obraId && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "24px 16px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
-    {historial.map((h, idx) => {
-      const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
-      return (<div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, overflow: "hidden", marginBottom: 12 }}>
-        {fs.length === 1
-          ? <div style={{ position: "relative" }}><img src={fs[0]} alt="" style={{ width: "100%", maxHeight: 320, objectFit: "contain", background: "#0b0f14", display: "block" }} /><button onClick={() => borrarFoto(h, 0)} style={{ position: "absolute", top: 6, right: 6, background: "rgba(239,68,68,.92)", color: "#fff", border: "none", borderRadius: "50%", width: 24, height: 24, fontSize: 13, cursor: "pointer" }}>✕</button></div>
-          : fs.length > 1 ? <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, padding: 4, background: "#0b0f14" }}>{fs.map((u, i) => <div key={i} style={{ position: "relative" }}><a href={u} target="_blank" rel="noreferrer"><img src={u} alt="" style={{ width: "100%", height: "auto", display: "block", borderRadius: 4 }} /></a><button onClick={() => borrarFoto(h, i)} style={{ position: "absolute", top: 5, right: 5, background: "rgba(239,68,68,.92)", color: "#fff", border: "none", borderRadius: "50%", width: 22, height: 22, fontSize: 12, cursor: "pointer" }}>✕</button></div>)}</div> : null}
-        <div style={{ padding: "11px 13px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 800, color: T.text, flex: 1 }}>{h.fecha}{idx === 0 ? "  ·  última" : ""}</span>
-            {idx === historial.length - 1 && <span style={{ fontSize: 9.5, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
-            <button onClick={() => borrarEntrada(h)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={12} c="#EF4444" /></button>
-          </div>
-          {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "8px 10px", marginBottom: 7 }}><div style={{ fontSize: 9.5, fontWeight: 800, color: T.accent, textTransform: "uppercase", marginBottom: 2 }}>Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
-          <div style={{ fontSize: 9.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 2 }}>Estado</div>
-          <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.descripcion}</div>
-        </div>
-      </div>);
-    })}
-  </div>);
-}
-
-function BitacoraPartBody({ obras, bitacora, setBitacora }) {
-  const [obraId, setObraId] = useState(obras[0]?.id || "");
-  const [abrir, setAbrir] = useState(false);
-  const [edit, setEdit] = useState(null);
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
-  const [titulo, setTitulo] = useState("");
-  const [desc, setDesc] = useState("");
-  const [fotos, setFotos] = useState([]);
-  const [adjuntos, setAdjuntos] = useState([]);
-  const [etapa, setEtapa] = useState("");
-  const [subiendo, setSubiendo] = useState(false);
-  const fotoRef = useRef(null); const adjRef = useRef(null);
-  const lista = (bitacora || []).filter(h => h.obra_id === obraId).slice().sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
-  const icoArch = (n = "") => { const e = (n.split(".").pop() || "").toLowerCase(); if (["doc", "docx"].includes(e)) return "word"; if (e === "pdf") return "doc"; if (["xls", "xlsx", "csv"].includes(e)) return "excel"; if (["png", "jpg", "jpeg"].includes(e)) return "image"; return "clip"; };
-
-  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEtapa(""); setEdit(null); setAbrir(false); };
-  const editar = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setEtapa(h.etapa || ""); setAbrir(true); };
-
-  async function subir(e, tipo) {
-    const files = Array.from(e.target.files || []); if (!files.length) return;
-    if (!obraId) { alert("Elegí una obra primero."); return; }
-    setSubiendo(true);
-    try {
-      const nuevos = [];
-      for (const f of files) {
-        if (f.size > 12 * 1024 * 1024) { alert(`"${f.name}" pesa más de 12 MB.`); continue; }
-        let data = await fileToDataUrl(f);
-        if (tipo === "foto") data = await comprimirImg(data, 1600, 0.7);
-        const url = await subirBucket(data, `bitacora-part-${uid()}-${f.name}`);
-        if (tipo === "foto") nuevos.push({ id: uid(), url: url || data });
-        else nuevos.push({ id: uid(), nombre: f.name, url: url || data, tipo: f.type || "" });
-      }
-      if (tipo === "foto") setFotos(p => [...p, ...nuevos]); else setAdjuntos(p => [...p, ...nuevos]);
-    } catch (err) { alert("No pude subir el archivo."); }
-    setSubiendo(false);
-    if (e.target) e.target.value = "";
-  }
-
-  function guardar() {
-    if (!obraId) { alert("Elegí una obra."); return; }
-    if (!titulo.trim()) { alert("Ponele un título al hecho."); return; }
-    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, etapa, ts: edit?.ts || Date.now() };
-    const otros = (bitacora || []).filter(h => h.id !== hecho.id);
-    setBitacora([...otros, hecho]);
-    limpiar();
-  }
-  const borrar = (id) => { if (confirm("¿Borrar este hecho de la bitácora?")) setBitacora((bitacora || []).filter(h => h.id !== id)); };
-  const fmt = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : iso; };
-
-  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
-  return (<div style={{ padding: "16px 18px 90px" }}>
-    <div style={{ fontSize: 11.5, color: T.sub, lineHeight: 1.5, marginBottom: 12 }}>Bitácora privada: recepción de materiales, documentación y hechos de obra. No se comparte.</div>
-    <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
-    <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...inp, margin: "5px 0 12px" }}>
-      <option value="">— Elegí una obra —</option>
-      {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}{o.particular ? " (particular)" : ""}</option>)}
-    </select>
-
-    {!abrir && <button onClick={() => setAbrir(true)} disabled={!obraId} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>+ Cargar un hecho</button>}
-
-    {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 14 }}>
-      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Fecha</label>
-      <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inp, margin: "5px 0 9px" }} />
-      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Etapa de obra</label>
-      <select value={etapa} onChange={e => setEtapa(e.target.value)} style={{ ...inp, margin: "5px 0 9px" }}>
-        <option value="">— Opcional —</option>
-        {ETAPAS_OBRA.map(x => <option key={x} value={x}>{x}</option>)}
-      </select>
-      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Título</label>
-      <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Recepción de hierro" style={{ ...inp, margin: "5px 0 9px" }} />
-      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Detalle</label>
-      <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3} placeholder="Qué pasó, qué se recibió, en qué condiciones…" style={{ ...inp, resize: "vertical", lineHeight: 1.5, margin: "5px 0 9px" }} />
-      {fotos.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-        {fotos.map(f => <div key={f.id} style={{ position: "relative" }}><img src={f.url} alt="" style={{ width: 68, height: 68, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} /><button onClick={() => setFotos(p => p.filter(x => x.id !== f.id))} style={{ position: "absolute", top: -5, right: -5, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 19, height: 19, fontSize: 11, cursor: "pointer" }}>✕</button></div>)}
-      </div>}
-      {adjuntos.map(a => (
-        <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px", marginBottom: 5 }}>
-          <Ico n={icoArch(a.nombre)} s={14} c={T.accent} />
-          <span style={{ flex: 1, fontSize: 12, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span>
-          <button onClick={() => setAdjuntos(p => p.filter(x => x.id !== a.id))} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer" }}>✕</button>
-        </div>
-      ))}
-      <input ref={fotoRef} type="file" accept="image/*" multiple onChange={e => subir(e, "foto")} style={{ display: "none" }} />
-      <input ref={adjRef} type="file" multiple onChange={e => subir(e, "adj")} style={{ display: "none" }} />
-      <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
-        <button onClick={() => fotoRef.current?.click()} disabled={subiendo} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : <><Ico n="camera" s={13} /> Fotos</>}</button>
-        <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ flex: 1, background: T.bg, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 8, padding: "10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : <><Ico n="clip" s={13} /> Archivo</>}</button>
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={limpiar} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
-        <button onClick={guardar} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{edit ? "Guardar cambios" : "Guardar hecho"}</button>
-      </div>
-    </div>}
-
-    {lista.length === 0 && obraId && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "24px 16px", lineHeight: 1.6 }}>Todavía no cargaste hechos en esta obra.</div>}
-    {lista.map(h => (
-      <div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, marginBottom: 9 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: BRASS }}>{fmt(h.fecha)}</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{h.titulo}</span>
-          {h.etapa && <span style={{ fontSize: 9.5, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{h.etapa}</span>}
-        </div>
-        {h.desc && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.5, whiteSpace: "pre-wrap", marginBottom: (h.fotos || []).length ? 8 : 0 }}>{h.desc}</div>}
-        {(h.fotos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {h.fotos.map(f => <img key={f.id} src={f.url} alt="" style={{ width: 72, height: 72, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />)}
-        </div>}
-        {(h.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 7 }}>
-          {h.adjuntos.map(a => <button key={a.id} onClick={() => window.open(a.url, "_blank")} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer", maxWidth: "100%" }}><Ico n={icoArch(a.nombre)} s={12} /><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span></button>)}
-        </div>}
-        <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
-          <button onClick={() => editar(h)} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "7px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
-          <button onClick={() => borrar(h.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={12} c="#EF4444" /></button>
-        </div>
-      </div>
-    ))}
-  </div>);
-}
-
-function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra, subiendo, actualizarObs, borrar }) {
+function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva }) {
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     {obraEdit && obraEdit._new && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Nueva obra</div>
@@ -1583,9 +841,6 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra,
       <div style={{ display: "flex", gap: 7, marginBottom: 10 }}>
         <input value={obraEdit.estado || ""} onChange={e => setObraEdit({ ...obraEdit, estado: e.target.value })} placeholder="Estado" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
         <input value={obraEdit.avance != null ? obraEdit.avance : ""} onChange={e => setObraEdit({ ...obraEdit, avance: e.target.value })} placeholder="Avance %" type="number" style={{ width: 100, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
-      </div>
-      <div style={{ paddingTop: 10, marginBottom: 12, borderTop: `1px solid ${T.border}` }}>
-        <ObsEditor lista={obraEdit.obs} onChange={obs => setObraEdit({ ...obraEdit, obs })} />
       </div>
       <div style={{ display: "flex", gap: 7 }}>
         <button onClick={() => setObraEdit(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
@@ -1602,9 +857,6 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra,
           <input value={obraEdit.estado || ""} onChange={e => setObraEdit({ ...obraEdit, estado: e.target.value })} placeholder="Estado" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />
           <input value={obraEdit.avance != null ? obraEdit.avance : ""} onChange={e => setObraEdit({ ...obraEdit, avance: e.target.value })} placeholder="Avance %" type="number" style={{ width: 90, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />
         </div>
-        <div style={{ paddingTop: 10, marginBottom: 10, borderTop: `1px solid ${T.border}` }}>
-          <ObsEditor lista={obraEdit.obs} onChange={obs => setObraEdit({ ...obraEdit, obs })} chico />
-        </div>
         <div style={{ display: "flex", gap: 7 }}>
           <button onClick={() => setObraEdit(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
           <button onClick={guardar} style={{ flex: 1, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Guardar</button>
@@ -1613,30 +865,10 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, subirAObra,
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{o.nombre}</div>
           <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{o.estado || "sin estado"}{o.avance != null ? ` · ${o.avance}% avance` : ""}{o.direccion ? ` · ${o.direccion}` : ""}</div>
-          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3 }}>{(o.fotos || []).length} fotos · {(o.planos || []).length} planos · {(o.informes || []).length} informes{(o.obs || []).filter(x => !x.hecho).length > 0 ? ` · ${(o.obs || []).filter(x => !x.hecho).length} pendiente${(o.obs || []).filter(x => !x.hecho).length === 1 ? "" : "s"}` : ""}</div>
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3 }}>{(o.fotos || []).length} fotos · {(o.planos || []).length} planos · {(o.informes || []).length} informes</div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-          <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "", obs: o.obs || [] })} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Editar</button>
-          <button onClick={() => borrar && borrar(o.id)} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Borrar</button>
-        </div>
+        <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "" })} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Editar</button>
       </div>)}
-      {!(obraEdit && obraEdit.id === o.id) && (o.obs || []).length > 0 && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
-        <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>A tener en cuenta</div>
-        {(o.obs || []).map((it, i) => (<div key={it.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 5 }}>
-          <button onClick={() => actualizarObs(o.id, (o.obs || []).map(x => x.id === it.id ? { ...x, hecho: !x.hecho } : x))} style={{ flexShrink: 0, width: 20, height: 20, marginTop: 1, borderRadius: 5, border: `1.5px solid ${it.hecho ? T.accent : T.border}`, background: it.hecho ? T.accent : "transparent", color: "#fff", fontSize: 11, fontWeight: 800, cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>{it.hecho ? "✓" : ""}</button>
-          <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 800, color: T.muted, marginTop: 2 }}>{i + 1}.</span>
-          <span style={{ flex: 1, fontSize: 13, color: it.hecho ? T.muted : T.text, textDecoration: it.hecho ? "line-through" : "none", lineHeight: 1.4 }}>{it.txt}</span>
-        </div>))}
-      </div>}
-      {!(obraEdit && obraEdit.id === o.id) && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
-        <div style={{ display: "flex", gap: 7 }}>
-          <label style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: subiendo ? "default" : "pointer", opacity: subiendo ? .5 : 1 }}><Ico n="camera" /> Foto<input type="file" accept="image/*" multiple disabled={subiendo} onChange={e => subirAObra(o.id, e, "foto")} style={{ display: "none" }} /></label>
-          <label style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: subiendo ? "default" : "pointer", opacity: subiendo ? .5 : 1 }}><Ico n="clip" /> Archivo<input type="file" multiple disabled={subiendo} onChange={e => subirAObra(o.id, e, "archivo")} style={{ display: "none" }} /></label>
-        </div>
-        {subiendo && <div style={{ fontSize: 11, color: T.sub, textAlign: "center", marginTop: 6 }}>Subiendo…</div>}
-        {(o.fotos || []).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 9 }}>{(o.fotos || []).slice(0, 10).map((ft, i) => <a key={i} href={ft.url} target="_blank" rel="noreferrer"><img src={ft.url} alt="" style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 7, display: "block" }} /></a>)}</div>}
-        {(o.archivos || []).length > 0 && <div style={{ marginTop: 8 }}>{(o.archivos || []).map((ar, i) => <a key={i} href={ar.url} target="_blank" rel="noreferrer" download={ar.nombre} style={{ display: "block", fontSize: 12, fontWeight: 600, color: T.accent, textDecoration: "underline", marginTop: 3 }}><Ico n="clip" /> {ar.nombre}</a>)}</div>}
-      </div>}
     </div>))}
     <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>⚠ Los cambios en obras se sincronizan con la app de V+V (los ve tu equipo).</div>
   </div>);
@@ -1648,7 +880,7 @@ function ModelosBody({ modelos, sel, setSel, subir, borrar }) {
     {(modelos || []).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px", lineHeight: 1.6 }}>No tenés modelos guardados.<br />Subí tus modelos de presupuesto (Word) y elegí cuál usar. Cuando pidas un presupuesto, sigo el que esté seleccionado.</div>}
     {(modelos || []).map(m => (<div key={m.id} onClick={() => setSel(m.id)} style={{ background: T.card, border: `1px solid ${sel === m.id ? BRASS : T.border}`, borderLeft: `3px solid ${sel === m.id ? BRASS : T.border}`, borderRadius: 10, padding: "12px 13px", marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}><Ico n="doc" /> {m.nombre}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>📄 {m.nombre}</div>
         <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Guardado {m.fecha}{sel === m.id ? " · ✓ En uso" : ""}</div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -1743,7 +975,7 @@ function GastosBody({ gastos, onAdd, exportar, borrar }) {
   const totDia = lista.filter(g => g.fecha === hoy).reduce((a, g) => a + (g.monto || 0), 0);
   const totMes = lista.filter(g => (g.fecha || "").slice(3) === mes).reduce((a, g) => a + (g.monto || 0), 0);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
-    <a href="https://www.mercadopago.com.ar/" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#009EE3", color: "#fff", borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 700, textDecoration: "none", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,158,227,.3)" }}><Ico n="card" /> Pagar por Mercado Pago</a>
+    <a href="https://www.mercadopago.com.ar/" target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#009EE3", color: "#fff", borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 700, textDecoration: "none", marginBottom: 14, boxShadow: "0 2px 8px rgba(0,158,227,.3)" }}>💳 Pagar por Mercado Pago</a>
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo gasto</div>
       <input value={f.concepto} onChange={e => setF({ ...f, concepto: e.target.value })} placeholder="Concepto (nafta, comida, ferretería…)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
@@ -1767,48 +999,11 @@ function GastosBody({ gastos, onAdd, exportar, borrar }) {
 
 function ContactosBody({ contactos, onSave }) {
   const [form, setForm] = React.useState(null);
-  const vcfRef = React.useRef(null);
   const lista = (contactos || []).slice().sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
   function guardar() { if (!form.nombre?.trim()) { alert("Poné al menos el nombre."); return; } const arr = form.id ? lista.map(c => c.id === form.id ? form : c) : [...lista, { ...form, id: uid() + Date.now() }]; onSave(arr); setForm(null); }
   function borrar(id) { if (confirm("¿Borrar este contacto?")) onSave(lista.filter(c => c.id !== id)); }
-  const limpiaTel = (t) => String(t || "").replace(/[^\d+]/g, "");
-  function agregarImportados(nuevos) {
-    if (!nuevos.length) { alert("No se seleccionó ningún contacto."); return; }
-    const existTel = new Set(lista.map(c => String(c.telefono || "").replace(/\D/g, "")).filter(Boolean));
-    const existNom = new Set(lista.map(c => (c.nombre || "").toLowerCase().trim()).filter(Boolean));
-    const add = nuevos.filter(n => { const t = String(n.telefono || "").replace(/\D/g, ""); const nm = (n.nombre || "").toLowerCase().trim(); if (t && existTel.has(t)) return false; if (!t && nm && existNom.has(nm)) return false; return n.nombre || t; }).map(n => ({ id: uid() + Date.now() + Math.floor(Math.random() * 99999), nombre: n.nombre || "", telefono: limpiaTel(n.telefono), email: n.email || "", alias: "", nota: "" }));
-    if (!add.length) { alert("Esos contactos ya estaban cargados."); return; }
-    onSave([...lista, ...add]);
-    alert(`Importé ${add.length} contacto${add.length > 1 ? "s" : ""} de la agenda.`);
-  }
-  async function importarAgenda() {
-    if (navigator.contacts && navigator.contacts.select) {
-      try {
-        const sel = await navigator.contacts.select(["name", "tel", "email"], { multiple: true });
-        agregarImportados((sel || []).map(c => ({ nombre: (c.name && c.name[0]) || "", telefono: (c.tel && c.tel[0]) || "", email: (c.email && c.email[0]) || "" })));
-      } catch (e) { }
-    } else { vcfRef.current?.click(); }
-  }
-  function parseVCard(text) {
-    const cards = String(text).split(/BEGIN:VCARD/i).slice(1);
-    return cards.map(card => {
-      const fn = (card.match(/\nFN[^:\n]*:(.+)/i) || [])[1] || (card.match(/\nN[^:\n]*:(.+)/i) || [])[1] || "";
-      const tel = (card.match(/\nTEL[^:\n]*:(.+)/i) || [])[1] || "";
-      const email = (card.match(/\nEMAIL[^:\n]*:(.+)/i) || [])[1] || "";
-      return { nombre: fn.replace(/;/g, " ").trim(), telefono: tel.trim(), email: email.trim() };
-    }).filter(c => c.nombre || c.telefono);
-  }
-  async function onVcf(e) {
-    const f = e.target.files?.[0]; if (!f) return; e.target.value = "";
-    try { const text = await f.text(); const nuevos = parseVCard(text); if (!nuevos.length) { alert("No encontré contactos en ese archivo. Tiene que ser un archivo .vcf (tarjeta de contacto)."); return; } agregarImportados(nuevos); }
-    catch { alert("No pude leer el archivo."); }
-  }
   const waLink = (c) => { const clean = String(c.telefono || "").replace(/\D/g, ""); const num = clean.startsWith("54") ? clean : "549" + clean; return `https://wa.me/${num}`; };
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
-    <input ref={vcfRef} type="file" accept=".vcf,text/vcard,text/x-vcard" multiple onChange={onVcf} style={{ display: "none" }} />
-    {!form && <button onClick={() => { try { window.location.href = "contacts://"; } catch { } setTimeout(() => { try { window.location.href = "mobilecontacts://"; } catch { } }, 400); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}>📱 Abrir mi agenda de contactos</button>}
-    {!form && <button onClick={importarAgenda} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}><Ico n="contact" /> Importar contactos (archivo .vcf)</button>}
-    {!form && <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 14, padding: "0 2px" }}>Tocá <b>"Abrir mi agenda"</b> → elegí el contacto → <b>Compartir → Guardar en Archivos</b>. Después volvé y tocá <b>"Importar"</b> para subirlo. (En iPhone la app no puede leer la agenda sola; Apple lo bloquea.)</div>}
     {!form && <button onClick={() => setForm({ nombre: "", telefono: "", email: "", alias: "", nota: "" })} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Nuevo contacto favorito</button>}
     {form && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>{form.id ? "Editar contacto" : "Nuevo contacto"}</div>
@@ -1818,12 +1013,12 @@ function ContactosBody({ contactos, onSave }) {
         <button onClick={guardar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
       </div>
     </div>}
-    {lista.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Sin contactos todavía.<br />Tocá <span style={{ color: T.sub }}>"Importar de la agenda"</span> o cargá uno a mano. Después decime: <span style={{ color: T.sub }}>"pasame el contacto de Enrico"</span> o <span style={{ color: T.sub }}>"mandale un WhatsApp a Enrico"</span>.</div>}
+    {lista.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Sin contactos favoritos.<br />Cargalos y después decime: <span style={{ color: T.sub }}>"mandale un WhatsApp a Enrico"</span>.</div>}
     {lista.map(c => (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{c.nombre}</div>
-          <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2, lineHeight: 1.5 }}>{c.telefono ? `${c.telefono}` : ""}{c.email ? `${c.telefono ? " · " : ""}✉️ ${c.email}` : ""}{c.alias ? ` · ${c.alias}` : ""}{c.nota ? <div style={{ color: T.muted }}>{c.nota}</div> : null}</div>
+          <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2, lineHeight: 1.5 }}>{c.telefono ? `📲 ${c.telefono}` : ""}{c.email ? `${c.telefono ? " · " : ""}✉️ ${c.email}` : ""}{c.alias ? ` · 💳 ${c.alias}` : ""}{c.nota ? <div style={{ color: T.muted }}>{c.nota}</div> : null}</div>
         </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {c.telefono && <a href={waLink(c)} target="_blank" rel="noreferrer" style={{ background: "#25D366", color: "#fff", borderRadius: 8, padding: "6px 9px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>WA</a>}
@@ -1849,7 +1044,7 @@ function CamaraMini({ cam }) {
       {cam.tipo === "iframe" ? <iframe src={cam.url} title={cam.nombre} style={{ width: "100%", height: "100%", border: "none" }} allow="autoplay; fullscreen" />
         : cam.tipo === "hls" ? <video src={cam.url} controls playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", background: "#000" }} onError={() => setErr(true)} />
           : cam.url ? <img src={src} alt={cam.nombre} style={{ width: "100%", height: "100%", objectFit: "cover", display: err ? "none" : "block" }} onError={() => setErr(true)} onLoad={() => setErr(false)} /> : null}
-      {(err || !cam.url) && <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.6)", fontSize: 11.5, textAlign: "center", padding: 16, gap: 6 }}><div style={{ fontSize: 22 }}><Ico n="video" /> </div><div>No se pudo mostrar la cámara acá.<br />Tocá "Abrir ↗" para verla, o revisá la URL en la app de V+V.</div></div>}
+      {(err || !cam.url) && <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.6)", fontSize: 11.5, textAlign: "center", padding: 16, gap: 6 }}><div style={{ fontSize: 22 }}>📹</div><div>No se pudo mostrar la cámara acá.<br />Tocá "Abrir ↗" para verla, o revisá la URL en la app de V+V.</div></div>}
     </div>
   </div>);
 }
