@@ -32,6 +32,22 @@ function fechaAOrden(fecha, hora) {
   return new Date(y, (m || 1) - 1, d || 1, hh || 0, mm || 0).getTime();
 }
 const BUCKET = "bco-media";
+const MESES_LARGOS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+// Agrupa una lista (gastos o pagos) por mes calendario a partir de "fecha" (DD/MM/AA).
+// Devuelve del mes más nuevo al más viejo, con el total de "campoMonto" de cada uno.
+function agruparPorMes(lista, campoMonto) {
+  const grupos = {};
+  (lista || []).forEach(item => {
+    const p = String(item.fecha || "").split("/").map(n => parseInt(n, 10));
+    if (!p[0] || !p[1]) return;
+    let y = p[2]; if (y == null || isNaN(y)) y = new Date().getFullYear() % 100; else if (y >= 100) y = y % 100;
+    const key = `${String(p[1]).padStart(2, "0")}/${String(y).padStart(2, "0")}`;
+    if (!grupos[key]) grupos[key] = { key, mes: p[1], anio: y, total: 0, items: [] };
+    grupos[key].total += Number(item[campoMonto]) || 0;
+    grupos[key].items.push(item);
+  });
+  return Object.values(grupos).sort((a, b) => (b.anio * 100 + b.mes) - (a.anio * 100 + a.mes));
+}
 async function subirBucket(dataUrl, nombre) {
   if (!dataUrl) return null;
   if (String(dataUrl).startsWith("http")) return dataUrl;
@@ -959,10 +975,15 @@ function Icono({ n, size = 20 }) {
 
 function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, onAdd }) {
   const [form, setForm] = useState(null);
-  const lista = (pagos || []).filter(p => !filtroObra || p.obra === filtroObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const mesActual = hoyStr().slice(3);
+  const [mesVer, setMesVer] = useState(mesActual);
+  const listaObra = (pagos || []).filter(p => !filtroObra || p.obra === filtroObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const lista = listaObra.filter(p => (p.fecha || "").slice(3) === mesVer);
   const obrasUnicas = [...new Set((pagos || []).map(p => p.obra).filter(Boolean))];
   const totalPend = lista.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
   const totalPag = lista.filter(p => p.estado === "pagado").reduce((a, p) => a + (p.monto || 0), 0);
+  const meses = agruparPorMes(listaObra, "monto");
+  const grupoVer = meses.find(m => m.key === mesVer);
   function guardar() {
     if (!form.persona?.trim()) { alert("Poné al menos a quién le pagaste."); return; }
     onAdd({ persona: form.persona.trim(), monto: form.monto, obra: form.obra || "", estado: form.estado || "pendiente", metodo: form.metodo || "", nota: form.nota || "", fecha: form.fecha || undefined });
@@ -996,10 +1017,22 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, 
       <button onClick={exportar} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "0 16px", fontSize: 12.5, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer", whiteSpace: "nowrap" }}>Exportar Excel</button>
     </div>
     <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pendiente</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: "#9A6B1E", marginTop: 3 }}>${totalPend.toLocaleString("es-AR")}</div></div>
-      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pagado</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totalPag.toLocaleString("es-AR")}</div></div>
+      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pendiente {mesVer === mesActual ? "(este mes)" : ""}</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: "#9A6B1E", marginTop: 3 }}>${totalPend.toLocaleString("es-AR")}</div></div>
+      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pagado {mesVer === mesActual ? "(este mes)" : ""}</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totalPag.toLocaleString("es-AR")}</div></div>
     </div>
-    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px", lineHeight: 1.6 }}>Todavía no cargaste pagos.<br />Desde el Chat, decime por ejemplo:<br /><span style={{ color: T.sub }}>"cargá un pago a Humberto en Castores 475 de 50000 en efectivo"</span></div>}
+
+    {meses.length > 0 && <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Historial por mes</div>
+      <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 4 }}>
+        {meses.map(m => { const activo = m.key === mesVer; const nombreMes = MESES_LARGOS[m.mes - 1]?.slice(0, 3) || m.mes; return (<button key={m.key} onClick={() => setMesVer(m.key)} style={{ flexShrink: 0, background: activo ? T.navy : T.card, color: activo ? "#fff" : T.text, border: `1px solid ${activo ? T.navy : T.border}`, borderRadius: 10, padding: "9px 12px", cursor: "pointer", textAlign: "left" }}>
+          <div style={{ fontSize: 11, fontWeight: 700 }}>{nombreMes} '{String(m.anio).padStart(2, "0")}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginTop: 2 }}>${m.total.toLocaleString("es-AR")}</div>
+        </button>); })}
+      </div>
+    </div>}
+
+    <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>{mesVer === mesActual ? "Este mes" : `${MESES_LARGOS[(grupoVer?.mes || 1) - 1]} '${String(grupoVer?.anio || 0).padStart(2, "0")}`}{grupoVer ? ` · ${grupoVer.items.length}` : ""}</div>
+    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px", lineHeight: 1.6 }}>{mesVer === mesActual ? <>Todavía no cargaste pagos este mes.<br />Desde el Chat, decime por ejemplo:<br /><span style={{ color: T.sub }}>"cargá un pago a Humberto en Castores 475 de 50000 en efectivo"</span></> : "Sin pagos ese mes."}</div>}
     {lista.map(p => (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `2px solid ${p.estado === "pagado" ? T.accent : "#B98A2E"}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div style={{ minWidth: 0 }}>
@@ -1335,10 +1368,14 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
 function GastosBody({ gastos, onAdd, exportar, borrar, onFotoTicket, leyendo }) {
   const [f, setF] = React.useState({ concepto: "", monto: "" });
   const ticketRef = React.useRef(null);
+  const hoy = hoyStr(); const mesActual = hoy.slice(3);
+  const [mesVer, setMesVer] = React.useState(mesActual);
   const lista = (gastos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  const hoy = hoyStr(); const mes = hoy.slice(3);
   const totDia = lista.filter(g => g.fecha === hoy).reduce((a, g) => a + (g.monto || 0), 0);
-  const totMes = lista.filter(g => (g.fecha || "").slice(3) === mes).reduce((a, g) => a + (g.monto || 0), 0);
+  const totMes = lista.filter(g => (g.fecha || "").slice(3) === mesActual).reduce((a, g) => a + (g.monto || 0), 0);
+  const meses = agruparPorMes(lista, "monto");
+  const listaMesVer = lista.filter(g => (g.fecha || "").slice(3) === mesVer);
+  const grupoVer = meses.find(m => m.key === mesVer);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <input ref={ticketRef} type="file" accept="image/*" capture="environment" onChange={e => { const file = e.target.files && e.target.files[0]; e.target.value = ""; if (file && onFotoTicket) onFotoTicket(file); }} style={{ display: "none" }} />
     <button onClick={() => ticketRef.current && ticketRef.current.click()} disabled={leyendo} style={{ width: "100%", background: leyendo ? T.border : BRASS, color: leyendo ? T.sub : "#1B1A16", border: "none", borderRadius: 12, padding: "14px", fontSize: 14.5, fontWeight: 700, cursor: "pointer", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{leyendo ? "Leyendo el ticket…" : "📷 Sacar foto a un ticket"}</button>
@@ -1355,8 +1392,20 @@ function GastosBody({ gastos, onAdd, exportar, borrar, onFotoTicket, leyendo }) 
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Este mes</div><div style={{ fontFamily: T.serif, fontSize: 20, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totMes.toLocaleString("es-AR")}</div></div>
     </div>
     <button onClick={exportar} style={{ width: "100%", background: "none", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>Exportar Excel</button>
-    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Sin gastos.<br />Desde el Chat: <span style={{ color: T.sub }}>"cargá un gasto de nafta de 15000"</span></div>}
-    {lista.map(g => (<div key={g.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+
+    {meses.length > 0 && <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Historial por mes</div>
+      <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 4 }}>
+        {meses.map(m => { const activo = m.key === mesVer; const nombreMes = MESES_LARGOS[m.mes - 1]?.slice(0, 3) || m.mes; return (<button key={m.key} onClick={() => setMesVer(m.key)} style={{ flexShrink: 0, background: activo ? T.navy : T.card, color: activo ? "#fff" : T.text, border: `1px solid ${activo ? T.navy : T.border}`, borderRadius: 10, padding: "9px 12px", cursor: "pointer", textAlign: "left" }}>
+          <div style={{ fontSize: 11, fontWeight: 700 }}>{nombreMes} '{String(m.anio).padStart(2, "0")}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginTop: 2 }}>${m.total.toLocaleString("es-AR")}</div>
+        </button>); })}
+      </div>
+    </div>}
+
+    <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>{mesVer === mesActual ? "Este mes" : `${MESES_LARGOS[(grupoVer?.mes || 1) - 1]} '${String(grupoVer?.anio || 0).padStart(2, "0")}`}{grupoVer ? ` · ${grupoVer.items.length}` : ""}</div>
+    {listaMesVer.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>{mesVer === mesActual ? <>Sin gastos este mes.<br />Desde el Chat: <span style={{ color: T.sub }}>"cargá un gasto de nafta de 15000"</span></> : "Sin gastos ese mes."}</div>}
+    {listaMesVer.map(g => (<div key={g.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
       <div style={{ minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{g.concepto} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(g.monto || 0).toLocaleString("es-AR")}</span></div><div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{g.fecha}</div></div>
       <button onClick={() => borrar(g.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
     </div>))}
