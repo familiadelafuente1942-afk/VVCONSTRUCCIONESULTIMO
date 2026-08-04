@@ -1933,13 +1933,14 @@ function PdfOverlay({ html, onClose }) {
     setGen(false);
   }
   return (<div style={{ position: "fixed", inset: 0, background: "#0F1B2D", zIndex: 500, display: "flex", flexDirection: "column" }}>
-    <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: T.navy, borderBottom: `1px solid rgba(255,255,255,.1)`, alignItems: "center" }}>
+    <div style={{ display: "flex", gap: 8, padding: "10px 12px", paddingTop: "max(10px, env(safe-area-inset-top))", background: T.navy, borderBottom: `1px solid rgba(255,255,255,.1)`, alignItems: "center", flexWrap: "wrap" }}>
       <button onClick={onClose} style={{ background: "rgba(255,255,255,.14)", color: "#fff", border: "none", borderRadius: 9, padding: "10px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
       <button onClick={imprimir} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Guardar / Imprimir</button>
       <div style={{ flex: 1 }} />
       <button onClick={compartirWA} disabled={gen} style={{ background: gen ? "rgba(37,211,102,.5)" : "#25D366", color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px", fontWeight: 700, fontSize: 13, cursor: gen ? "default" : "pointer" }}>{gen ? "Generando…" : "WhatsApp"}</button>
     </div>
     <iframe ref={ref} srcDoc={html} title="pdf" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    <div style={{ height: "env(safe-area-inset-bottom)", background: "#0F1B2D", flexShrink: 0 }} />
   </div>);
 }
 function AdjuntosCert({ cert, data, save }) {
