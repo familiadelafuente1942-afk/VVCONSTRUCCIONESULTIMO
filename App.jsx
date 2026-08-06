@@ -2469,9 +2469,9 @@ function InformeSemanalView({ db, cfg, onBack }) {
 
 // ═══ AUDITORÍA DE OBRA — supervisiones, revisión de documentación y certificación de etapas ═══
 const AUD_TIPOS = [
-  { id: "supervision", label: "Supervisiones", titulo: "Acta de supervisión de obra", sigla: "SUP", icon: "search" },
-  { id: "revision", label: "Revisión de doc.", titulo: "Informe de revisión de documentación", sigla: "RDO", icon: "doc" },
-  { id: "certificacion", label: "Certificación", titulo: "Certificado de etapa ejecutada", sigla: "CER", icon: "check" },
+  { id: "supervision", label: "Supervisiones", nuevo: "Nueva supervisión", titulo: "Acta de supervisión de obra", sigla: "SUP", icon: "search" },
+  { id: "revision", label: "Revisión de doc.", nuevo: "Nueva revisión", titulo: "Informe de revisión de documentación", sigla: "RDO", icon: "doc" },
+  { id: "certificacion", label: "Certificación", nuevo: "Nueva certificación", titulo: "Certificado de etapa ejecutada", sigla: "CER", icon: "check" },
 ];
 const AUD_RESULT = ["Conforme", "Conforme con observaciones", "No conforme"];
 
@@ -2494,12 +2494,12 @@ function AuditoriaView({ db, cfg, onBack }) {
 
   function nuevo() {
     if (!obraId) { alert("Elegí una obra."); return; }
-    const base = { id: uid() + Date.now(), tipo, obra_id: obraId, nro: nroDe(tipo), fecha: hoyISO(), ts: Date.now(), responsable: cfg?.responsableTecnico || "", obs: [], resultado: AUD_RESULT[0], conclusion: "" };
+    const base = { id: uid() + Date.now(), tipo, obra_id: obraId, nro: nroDe(tipo), fecha: hoyISO(), ts: Date.now(), responsable: cfg?.responsableTecnico || "", obs: [], fotos: [], resultado: AUD_RESULT[0], conclusion: "" };
     if (tipo === "supervision") setForm({ ...base, periodo: "", presentes: "", interferencias: [] });
     if (tipo === "revision") setForm({ ...base, etapa: "", docs: [{ nombre: "", version: "", fechaDoc: "" }] });
     if (tipo === "certificacion") setForm({ ...base, etapa: "", planoRef: "", versionPlano: "", directiva: "", ejecutadoPor: "" });
   }
-  const editar = (it) => setForm({ ...it, obs: it.obs || [], interferencias: it.interferencias || [], docs: it.docs || [] });
+  const editar = (it) => setForm({ ...it, obs: it.obs || [], fotos: it.fotos || [], interferencias: it.interferencias || [], docs: it.docs || [] });
   const borrar = (id) => { if (confirm("¿Borrar este registro de auditoría?")) guardarLista(items.filter(x => x.id !== id)); };
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const addLinea = (k, val) => setForm(f => ({ ...f, [k]: [...(f[k] || []), val] }));
@@ -2617,7 +2617,8 @@ function AuditoriaView({ db, cfg, onBack }) {
       {tipo === "revision" && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Revisión de la documentación según la etapa a ejecutar, con observaciones sobre planos y especificaciones.</div>}
       {tipo === "certificacion" && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Certificado de que la etapa se ejecutó según el plano otorgado y la directiva de la Jefatura de Obra.</div>}
 
-      <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>+ Nuevo {tp.label.toLowerCase()}</button>
+      {tipo === "supervision" && <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, letterSpacing: ".03em", marginBottom: 8 }}>NUEVAS SUPERVISIONES</div>}
+      <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>+ {tp.nuevo}</button>
 
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>Todavía no hay registros de este tipo para la obra elegida.</div>}
       {lista.map(it => (
@@ -2704,6 +2705,32 @@ function AuditoriaView({ db, cfg, onBack }) {
           ))}
           <button onClick={() => addLinea("interferencias", "")} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", margin: "3px 0 12px" }}>+ Agregar interferencia</button>
         </>}
+
+        <label style={lbl}>Fotos</label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "5px 0 8px" }}>
+          {(form.fotos || []).map((f, i) => (
+            <div key={f.id || i} style={{ position: "relative", width: 74, height: 74, borderRadius: 9, overflow: "hidden", border: `1px solid ${T.border}` }}>
+              <img src={f.url} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <button onClick={() => delLinea("fotos", i)} style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,.55)", color: "#fff", border: "none", fontSize: 12, lineHeight: 1, cursor: "pointer" }}>✕</button>
+            </div>
+          ))}
+          <label style={{ width: 74, height: 74, borderRadius: 9, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: T.accent, fontSize: 22, fontWeight: 300 }}>
+            +
+            <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={async e => {
+              const files = Array.from(e.target.files || []);
+              if (!files.length) return;
+              const nuevas = await Promise.all(files.map(async f => {
+                const dataUrl = await toDataUrl(f);
+                const comprimida = await compressImage(dataUrl);
+                const fotoId = uid();
+                const url = await uploadFoto(comprimida, `auditoria/${obraId}`, fotoId);
+                return { id: fotoId, url };
+              }));
+              setF("fotos", [...(form.fotos || []), ...nuevas]);
+              e.target.value = "";
+            }} />
+          </label>
+        </div>
 
         <label style={lbl}>Resultado</label>
         <select value={form.resultado} onChange={e => setF("resultado", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}>
