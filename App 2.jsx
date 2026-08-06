@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
 // Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
-const ETAPAS_OBRA = ["Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
+const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
 
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
@@ -59,24 +59,61 @@ const SAFE_TOP_PX = (() => { try { return (window.navigator.standalone || window
 
 // ── SUPABASE CONFIG ─────────────────────────────────────────────
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
-const ONESIGNAL_APP_ID = ""; // ← Pegá acá tu App ID de OneSignal (después de crear la app en OneSignal)
-function initPush(appTag) {
-  if (!ONESIGNAL_APP_ID || typeof window === "undefined") return;
-  try {
-    if (document.getElementById("onesignal-sdk")) return;
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    const s = document.createElement("script");
-    s.id = "onesignal-sdk"; s.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"; s.defer = true;
-    document.head.appendChild(s);
-    window.OneSignalDeferred.push(async function (OneSignal) {
-      try { await OneSignal.init({ appId: ONESIGNAL_APP_ID, allowLocalhostAsSecureOrigin: true }); } catch (e) {}
-      try { await OneSignal.User.addTag("app", appTag); } catch (e) {}
-      try { OneSignal.Slidedown.promptPush(); } catch (e) {}
-    });
-  } catch (e) {}
+// ── NOTIFICACIONES PROPIAS (sin servicios externos) ──
+const VAPID_PUBLIC = "BBCSBq5_m-TcF45KMJ_-B7LHaIvfFHbnHiHQnPyxJKxjE8zH0nxusjpQJWHl4cO3Zr1DWLc_wO7L_PhqrLsGJtE";
+function b64ToU8(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(s); const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
 }
-async function pushNotify(title, message, app, url) {
-  try { await fetch("/api/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "" }) }); } catch (e) {}
+// Estado: "activo" | "bloqueado" | "no-soportado" | "inactivo"
+async function pushEstado() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "no-soportado";
+    if (Notification.permission === "denied") return "bloqueado";
+    const reg = await navigator.serviceWorker.getRegistration("/sw-push.js");
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    return sub ? "activo" : "inactivo";
+  } catch (e) { return "no-soportado"; }
+}
+async function activarPush(appTag) {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return { ok: false, msg: "Este dispositivo no soporta notificaciones. En iPhone hay que agregar la app a la pantalla de inicio." };
+    const permiso = await Notification.requestPermission();
+    if (permiso !== "granted") return { ok: false, msg: "No diste permiso para las notificaciones." };
+    const reg = await navigator.serviceWorker.register("/sw-push.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUBLIC) });
+    const r = await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), app: appTag }) });
+    const d = await r.json().catch(() => ({}));
+    return d && d.ok ? { ok: true, msg: "Listo, ya vas a recibir los avisos en este dispositivo." } : { ok: false, msg: "No pude registrar el dispositivo. Probá de nuevo." };
+  } catch (e) { return { ok: false, msg: "No pude activar las notificaciones: " + ((e && e.message) || "") }; }
+}
+async function desactivarPush() {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/sw-push.js");
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (sub) { await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), quitar: true }) }); await sub.unsubscribe(); }
+    return true;
+  } catch (e) { return false; }
+}
+// Reengancha en silencio si ya estaba activado en este dispositivo.
+async function initPush(appTag) {
+  try {
+    if (!("serviceWorker" in navigator) || Notification.permission !== "granted") return;
+    const reg = await navigator.serviceWorker.register("/sw-push.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID_PUBLIC) });
+    await fetch("/api/push-sub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sub: sub.toJSON(), app: appTag }) });
+  } catch (e) { }
+}
+// sendAfter (ISO) = aviso programado; sin sendAfter = inmediato.
+async function pushNotify(title, message, app, url, sendAfter) {
+  try { await fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title || "Novedad", message: message || "", app: app || "", url: url || "", sendAfter: sendAfter || "" }) }); } catch (e) { }
 }
 
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
@@ -321,6 +358,17 @@ const FORCE_CLOUD = (() => { try { return new URLSearchParams(window.location.se
 // Marca de última escritura local por clave (para no pisar un cambio recién hecho al sincronizar)
 const lastWrite = {};
 // Carga desde localStorage SINCRÓNICAMENTE (sin flash), persiste en ambos lados
+// Junta obras de dos fuentes (por id) sin duplicar y sin resucitar lo
+// borrado. Si el mismo id está en las dos, gana la de "prioridad"
+// (la que se acaba de tocar en ESTE dispositivo) — y se suma cualquier
+// obra que la nube tenga y acá no (la que cargó otro dispositivo).
+function fusionarObras(prioridad, otras, tumbas) {
+  const mapa = new Map();
+  (otras || []).forEach(o => { if (o?.id) mapa.set(o.id, o); });
+  (prioridad || []).forEach(o => { if (o?.id) mapa.set(o.id, o); });
+  Object.keys(tumbas || {}).forEach(id => mapa.delete(id));
+  return Array.from(mapa.values());
+}
 function useStoredState(key, defaultValue) {
     const [state, setState] = useState(() => {
         const local = storage.getLocal(key);
@@ -328,29 +376,37 @@ function useStoredState(key, defaultValue) {
         return defaultValue;
     });
     const [cloudSynced, setCloudSynced] = useState(false);
+    const esObras = key === "vv_obras";   // las obras se editan desde varios dispositivos: acá hace falta FUSIONAR, no "gana el más nuevo entero" (eso tapaba obras que otro cargó)
 
     // Al montar: sincronizar con Supabase una sola vez
     useEffect(() => {
         (async () => {
             try {
-                const r = await storage.get(key);
-                if (r?.value) {
-                    const cloudData = JSON.parse(r.value);
-                    if (FORCE_CLOUD) {
-                        // Forzar la versión de la nube (lo último cargado por cualquier dispositivo)
-                        setState(cloudData);
-                        try { localStorage.setItem(key, r.value); } catch { }
-                    } else {
-                        // Gana el MÁS RECIENTE, no el más grande.
-                        // (Antes ganaba el más grande: como borrar SIEMPRE achica los datos,
-                        //  la versión con la obra borrada se descartaba y la obra resucitaba.)
-                        const rTs = await storage.get(key + "__ts");
-                        const cloudTs = Number(rTs?.value || 0);
-                        let localTs = 0;
-                        try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
-                        if (cloudTs >= localTs) {
+                if (esObras) {
+                    const [rCloud, rDel] = await Promise.all([storage.get(key), storage.get(key + "_del")]);
+                    const cloud = rCloud?.value ? JSON.parse(rCloud.value) : [];
+                    const tumbas = rDel?.value ? JSON.parse(rDel.value) : {};
+                    setState(prevLocal => fusionarObras(prevLocal, cloud, tumbas));
+                } else {
+                    const r = await storage.get(key);
+                    if (r?.value) {
+                        const cloudData = JSON.parse(r.value);
+                        if (FORCE_CLOUD) {
+                            // Forzar la versión de la nube (lo último cargado por cualquier dispositivo)
                             setState(cloudData);
-                            try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+                            try { localStorage.setItem(key, r.value); } catch { }
+                        } else {
+                            // Gana el MÁS RECIENTE, no el más grande.
+                            // (Antes ganaba el más grande: como borrar SIEMPRE achica los datos,
+                            //  la versión con la obra borrada se descartaba y la obra resucitaba.)
+                            const rTs = await storage.get(key + "__ts");
+                            const cloudTs = Number(rTs?.value || 0);
+                            let localTs = 0;
+                            try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
+                            if (cloudTs >= localTs) {
+                                setState(cloudData);
+                                try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
+                            }
                         }
                     }
                 }
@@ -361,6 +417,41 @@ function useStoredState(key, defaultValue) {
 
     // Persiste cada vez que cambia el estado
     const setAndPersist = useCallback((updater) => {
+        if (esObras) {
+            // Con obras: guardamos el cambio local al toque (para que se vea
+            // ya mismo), y en paralelo lo fusionamos con lo que haya en la
+            // nube — así lo que otro dispositivo cargó mientras tanto no
+            // se pierde. Lo que borraste acá queda con lápida, para que no
+            // "resucite" si otro dispositivo todavía tiene la copia vieja.
+            setState(prev => {
+                const next = typeof updater === 'function' ? updater(prev) : updater;
+                (async () => {
+                    try {
+                        const idsPrev = new Set((prev || []).map(o => o?.id));
+                        const idsNext = new Set((next || []).map(o => o?.id));
+                        const borrados = [...idsPrev].filter(id => id && !idsNext.has(id));
+                        let tumbas = {};
+                        try { const r = await storage.get(key + "_del"); if (r?.value) tumbas = JSON.parse(r.value) || {}; } catch { }
+                        if (borrados.length) {
+                            borrados.forEach(id => { tumbas[id] = Date.now(); });
+                            try { await storage.set(key + "_del", JSON.stringify(tumbas)); } catch { }
+                        }
+                        let cloud = [];
+                        try { const r = await storage.get(key); if (r?.value) cloud = JSON.parse(r.value) || []; } catch { }
+                        const fusionado = fusionarObras(next, cloud, tumbas);
+                        const json = JSON.stringify(fusionado);
+                        const ts = Date.now();
+                        lastWrite[key] = ts;
+                        try { localStorage.setItem(key, json); localStorage.setItem(key + "__ts", String(ts)); } catch { }
+                        storage.set(key, json).catch(() => { });
+                        storage.set(key + "__ts", String(ts)).catch(() => { });
+                        setState(fusionado);
+                    } catch { }
+                })();
+                return next;
+            });
+            return;
+        }
         setState(prev => {
             const next = typeof updater === 'function' ? updater(prev) : updater;
             // Guardar inmediatamente en ambos lados
@@ -421,7 +512,7 @@ const DEFAULT_COLORS = { accent: "#1D4ED8", al: "#EFF6FF", bg: "#F1F5F9", card: 
 const DEFAULT_UBICACIONES = [{ id: "norte", code: "NORTE", name: "Zona Norte" }, { id: "sur", code: "SUR", name: "Zona Sur" }, { id: "oeste", code: "OESTE", name: "Zona Oeste" }, { id: "caba", code: "CABA", name: "Ciudad de Buenos Aires" }];
 
 const DEFAULT_TEXTOS = {
-    nav_ia: "IA", nav_inicio: "Inicio", nav_obras: "Obras", nav_personal: "Personal", nav_cargar: "Cargar", nav_mas: "Más", nav_privado: "Privado",
+    nav_ia: "IA", nav_inicio: "Inicio", nav_obras: "Obras", nav_personal: "Personal", nav_cargar: "Cargar", nav_mas: "Más", nav_privado: "Privado", nav_drone: "Drone IA", nav_minutas: "Reunión",
     dash_titulo: "Panel operativo", dash_subtitulo: "V+V Construcciones",
     dash_proyectoes: "Proyectos", dash_obras_activas: "Obras activas", dash_alertas: "Alertas", dash_personal: "Personal",
     dash_obras_curso: "Obras en curso", dash_ver_todas: "Ver todas →", dash_acciones: "Acciones rápidas",
@@ -456,6 +547,96 @@ function getUbics(cfg) { return (cfg?.ubicaciones?.length ? cfg.ubicaciones : DE
 function getLabelUbic(cfg) { return cfg?.labelUbicacion || "Zona/Barrio"; }
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
+// Lee las coordenadas GPS que el drone graba DENTRO del archivo de la foto
+// (datos EXIF). Hay que leerlas del archivo original: cuando la app reduce
+// la foto para guardarla, esos datos se pierden. Así el punto en el mapa es
+// donde estaba el drone de verdad, no donde está el teléfono ahora.
+function leerGpsDeFoto(file) {
+  return new Promise((res) => {
+    const reader = new FileReader();
+    reader.onerror = () => res(null);
+    reader.onload = (e) => {
+      try {
+        const dv = new DataView(e.target.result);
+        if (dv.byteLength < 4 || dv.getUint16(0) !== 0xFFD8) { res(null); return; }   // no es JPEG
+        let off = 2, exifIni = -1;
+        while (off < dv.byteLength - 4) {
+          if (dv.getUint16(off) === 0xFFE1) { exifIni = off + 4; break; }             // segmento APP1 = donde vive el EXIF
+          if ((dv.getUint16(off) & 0xFF00) !== 0xFF00) break;
+          off += 2 + dv.getUint16(off + 2);
+        }
+        if (exifIni < 0) { res(null); return; }
+        let s = ""; for (let i = 0; i < 4; i++) s += String.fromCharCode(dv.getUint8(exifIni + i));
+        if (s !== "Exif") { res(null); return; }
+        const tiff = exifIni + 6;
+        const le = dv.getUint16(tiff) === 0x4949;                                     // orden de bytes del archivo
+        const u16 = (p) => dv.getUint16(p, le), u32 = (p) => dv.getUint32(p, le);
+        const ifd0 = tiff + u32(tiff + 4);
+        let gpsOff = 0;
+        const n0 = u16(ifd0);
+        for (let i = 0; i < n0; i++) { const ent = ifd0 + 2 + i * 12; if (u16(ent) === 0x8825) { gpsOff = u32(ent + 8); break; } }
+        if (!gpsOff) { res(null); return; }
+        const gps = tiff + gpsOff, ng = u16(gps);
+        let lat = null, lon = null, latRef = "N", lonRef = "E";
+        const gradosDe = (p) => {   // EXIF guarda grados/minutos/segundos como 3 fracciones
+          const val = [];
+          for (let k = 0; k < 3; k++) { const num = u32(p + k * 8), den = u32(p + k * 8 + 4); val.push(den ? num / den : 0); }
+          return val[0] + val[1] / 60 + val[2] / 3600;
+        };
+        for (let i = 0; i < ng; i++) {
+          const ent = gps + 2 + i * 12, tag = u16(ent), cnt = u32(ent + 4), valOff = u32(ent + 8);
+          if (tag === 0x0001) latRef = String.fromCharCode(dv.getUint8(ent + 8));
+          if (tag === 0x0003) lonRef = String.fromCharCode(dv.getUint8(ent + 8));
+          if (tag === 0x0002 && cnt === 3) lat = gradosDe(tiff + valOff);
+          if (tag === 0x0004 && cnt === 3) lon = gradosDe(tiff + valOff);
+        }
+        if (lat == null || lon == null) { res(null); return; }
+        res({ lat: latRef === "S" ? -lat : lat, lon: lonRef === "W" ? -lon : lon });
+      } catch { res(null); }
+    };
+    reader.readAsArrayBuffer(file.slice(0, 128 * 1024));   // el EXIF está al principio: no hace falta leer todo
+  });
+}
+// La IA NO puede mirar videos — solo imágenes. Así que de cada video
+// sacamos varios fotogramas repartidos a lo largo de la filmación, y ESOS
+// se analizan y se guardan. El video original queda en tu teléfono: pesa
+// demasiado para guardarlo acá adentro (uno de drone son cientos de MB).
+function extraerFotogramas(file, cantidad = 6) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    v.preload = "metadata"; v.muted = true; v.playsInline = true; v.src = url;
+    const limpiar = () => { try { URL.revokeObjectURL(url); } catch { } };
+    v.onerror = () => { limpiar(); rej(new Error("No pude leer este video. Puede estar en un formato que el navegador no abre.")); };
+    v.onloadedmetadata = async () => {
+      const dur = v.duration;
+      if (!dur || !isFinite(dur) || dur <= 0) { limpiar(); rej(new Error("No pude leer la duración del video.")); return; }
+      const c = document.createElement("canvas");
+      const maxW = 1200, ratio = v.videoWidth > maxW ? maxW / v.videoWidth : 1;
+      c.width = Math.round((v.videoWidth || 1200) * ratio);
+      c.height = Math.round((v.videoHeight || 675) * ratio);
+      const ctx = c.getContext("2d");
+      const salida = [];
+      for (let i = 0; i < cantidad; i++) {
+        const t = (dur * (i + 0.5)) / cantidad;
+        try {
+          await new Promise((ok) => {
+            let listo = false;
+            const onSeek = () => { if (listo) return; listo = true; v.removeEventListener("seeked", onSeek); ok(); };
+            v.addEventListener("seeked", onSeek);
+            v.currentTime = t;
+            setTimeout(onSeek, 4000);   // si el navegador no avisa, seguimos igual
+          });
+          ctx.drawImage(v, 0, 0, c.width, c.height);
+          salida.push({ url: c.toDataURL("image/jpeg", 0.75), segundo: Math.round(t) });
+        } catch { }
+      }
+      limpiar();
+      if (!salida.length) { rej(new Error("No pude sacar ningún fotograma de este video.")); return; }
+      res(salida);
+    };
+  });
+}
 function toDataUrl(f, maxW = 1400) {
     return new Promise((res, rej) => {
         const reader = new FileReader();
@@ -610,6 +791,34 @@ function AppBrand({ cfg }) {
 }
 
 function Card({ children, style = {}, onClick }) { return <div onClick={onClick} style={{ background: T.card, borderRadius: T.r, border: `1px solid ${T.border}`, boxShadow: T.shadow, ...style }}>{children}</div>; }
+// ── Globito rojo en el ícono de la app (como Mensajes de iOS) ──────
+// setAppBadge pinta el número en el ícono del escritorio. El número queda
+// puesto al cerrar la app; se actualiza al abrirla o al volver a primer plano.
+// Requiere iOS 16.4+, app instalada en pantalla de inicio y notificaciones permitidas.
+function GlobitoPermiso() {
+  const [estado, setEstado] = React.useState(() => {
+    try {
+      if (!("Notification" in window) || !("setAppBadge" in navigator)) return "no";
+      if (localStorage.getItem("globito_off") === "1") return "no";
+      return Notification.permission;   // "default" | "granted" | "denied"
+    } catch { return "no"; }
+  });
+  if (estado !== "default") return null;
+  return (<div style={{ display: "flex", alignItems: "center", gap: 9, background: "#0F1B2D", borderRadius: 12, padding: "10px 12px", margin: "0 0 10px", border: "1px solid #B08D3E" }}>
+    <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: "#fff", lineHeight: 1.45 }}>Activá los avisos para ver el <b>número rojo en el ícono</b> cuando haya alertas, sin abrir la app.</div>
+    <button onClick={async () => { try { const p = await Notification.requestPermission(); setEstado(p); if (p === "granted") { try { await navigator.setAppBadge(1); setTimeout(() => navigator.clearAppBadge().catch(() => { }), 1500); } catch { } } } catch { setEstado("denied"); } }}
+      style={{ background: "#B08D3E", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 11.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>Activar</button>
+    <button onClick={() => { try { localStorage.setItem("globito_off", "1"); } catch { } setEstado("no"); }}
+      style={{ background: "none", border: "none", color: "rgba(255,255,255,.55)", fontSize: 15, cursor: "pointer", padding: "0 2px", flexShrink: 0 }}>×</button>
+  </div>);
+}
+async function ponerGlobito(n) {
+  try {
+    if (!("setAppBadge" in navigator)) return;
+    if (n > 0) await navigator.setAppBadge(Math.min(99, Math.round(n)));
+    else await navigator.clearAppBadge();
+  } catch { }
+}
 function Badge({ color, bg, children, style = {} }) { return <span style={{ display: "inline-flex", alignItems: "center", fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 20, padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em", ...style }}>{children}</span>; }
 function PBtn({ children, onClick, disabled, full, style = {}, variant = "primary" }) {
     const v = { primary: { background: disabled ? "#E2E8F0" : "var(--accent,#1D4ED8)", color: disabled ? "#94A3B8" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "#FEF2F2", border: "1.5px solid #FECACA", color: "#EF4444", boxShadow: "none" } };
@@ -682,6 +891,8 @@ function LoginModal({ titulo, onSuccess, onClose }) {
 // ── NAVEGACIÓN ─────────────────────────────────────────────────────────
 const NAV_DEFS = [
     { id: "chat", tk: "nav_ia", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" /></svg> },
+    { id: "drone", tk: "nav_drone", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="10" width="6" height="4" rx="1" fill="currentColor" stroke="none" /><circle cx="4" cy="5" r="2.2" /><circle cx="20" cy="5" r="2.2" /><circle cx="4" cy="19" r="2.2" /><circle cx="20" cy="19" r="2.2" /><line x1="6" y1="6.5" x2="10" y2="10.5" /><line x1="18" y1="6.5" x2="14" y2="10.5" /><line x1="6" y1="17.5" x2="10" y2="13.5" /><line x1="18" y1="17.5" x2="14" y2="13.5" /></svg> },
+    { id: "minutas", tk: "nav_minutas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z" /><path d="M5 11a7 7 0 0014 0" /><path d="M12 18v3" /></svg> },
     { id: "dashboard", tk: "nav_inicio", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M11.47 3.841a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.061l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 101.061 1.061l8.69-8.69z" /><path d="M12 5.432l8.159 8.159.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198l.091-.086L12 5.432z" /></svg> },
     { id: "obras", tk: "nav_obras", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.5 2.25a.75.75 0 000 1.5v16.5h-.75a.75.75 0 000 1.5h16.5a.75.75 0 000-1.5h-.75V3.75a.75.75 0 000-1.5h-15zM9 6a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm-.75 3.75A.75.75 0 019 9h1.5a.75.75 0 010 1.5H9a.75.75 0 01-.75-.75zM9 12a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm3.75-5.25A.75.75 0 0113.5 6H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 9a.75.75 0 000 1.5H15A.75.75 0 0015 9h-1.5zm-.75 3.75a.75.75 0 01.75-.75H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM9 19.5v-2.25a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75V19.5H9z" /></svg> },
     { id: "personal", tk: "nav_personal", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg> },
@@ -716,11 +927,23 @@ function useAvisos(clave, mapaIds) {
     });
     const guardar = (v) => { try { localStorage.setItem(clave, JSON.stringify(v)); } catch { } };
     // La primera vez doy todo por visto: si no, al instalar quedaría todo en rojo.
+    // Lo mismo si se agrega una categoría NUEVA más adelante (ej: "personal") y el
+    // dispositivo ya tenía vistos guardados de antes sin esa clave: sin esto, todo lo
+    // viejo de esa categoría aparecería de golpe como "nuevo".
     useEffect(() => {
         if (vistos === null) {
             const init = {};
             for (const k in mapaIds) init[k] = mapaIds[k];
             setVistos(init); guardar(init);
+            return;
+        }
+        const faltantes = Object.keys(mapaIds).filter(k => vistos[k] === undefined);
+        if (faltantes.length) {
+            setVistos(prev => {
+                const n = { ...(prev || {}) };
+                for (const k of faltantes) n[k] = mapaIds[k];
+                guardar(n); return n;
+            });
         }
     });
     const aviso = (cat) => {
@@ -1272,7 +1495,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
         {fotos.length === 0
             ? <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_fotos')}</div>
             : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: informe ? 14 : 0 }}>
-                {fotos.map(f => {
+                {fotos.slice().reverse().map(f => {
                     const sel = selFotos.includes(f.id);
                     return (<div key={f.id} onClick={() => modoSel && toggleSel(f.id)} style={{ borderRadius: T.rsm, overflow: "hidden", border: `2px solid ${sel ? "#10B981" : T.border}`, cursor: modoSel ? "pointer" : "default", position: "relative" }}>
                         {sel && <div style={{ position: "absolute", top: 5, right: 5, width: 20, height: 20, borderRadius: "50%", background: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</div>}
@@ -1616,6 +1839,33 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
                             <input value={detail.nombre || ''} onChange={e => upd(detail.id, { nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: T.text, padding: 0 }} />
                         </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>En ejecución (para el propietario)</div>
+                                <input value={detail.etapaActual || ''} onChange={e => upd(detail.id, { etapaActual: e.target.value })} placeholder="Ej: Estructura y mampostería" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12.5, fontWeight: 700, color: T.text, padding: 0 }} />
+                            </div>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Próxima etapa</div>
+                                <input value={detail.proximaEtapa || ''} onChange={e => upd(detail.id, { proximaEtapa: e.target.value })} placeholder="Ej: Instalaciones" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12.5, fontWeight: 700, color: T.text, padding: 0 }} />
+                            </div>
+                        </div>
+                        <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 14, border: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 10, color: T.muted, marginBottom: 8, textTransform: "uppercase" }}>Línea de tiempo (propietario) — tocá el hito en curso</div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                                {["Inicio", "Estructura", "Instalaciones", "Terminaciones"].map((h, i) => {
+                                    const actual = detail.hitoActual ?? 0;
+                                    const estado = i < actual ? "done" : i === actual ? "current" : "pend";
+                                    return (
+                                        <button key={h} onClick={() => upd(detail.id, { hitoActual: i })} style={{
+                                            flex: 1, padding: "8px 4px", borderRadius: 8, cursor: "pointer", fontSize: 10, fontWeight: 700, textAlign: "center",
+                                            border: `1.5px solid ${estado === "current" ? "var(--accent,#1D4ED8)" : T.border}`,
+                                            background: estado === "done" ? T.card : estado === "current" ? "var(--accent,#1D4ED8)" : T.card,
+                                            color: estado === "current" ? "#fff" : estado === "done" ? T.text : T.muted,
+                                        }}>{h}</button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{getLabelUbic(cfg)}</div>
@@ -1649,6 +1899,22 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                         <Lbl>{t(cfg, 'obras_estado')}</Lbl>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
                             {OBRA_ESTADOS.map(e => (<button key={e.id} onClick={() => upd(detail.id, { estado: e.id })} style={{ padding: "9px", borderRadius: T.rsm, border: `1.5px solid ${detail.estado === e.id ? e.color : T.border}`, background: detail.estado === e.id ? e.bg : T.card, color: e.color, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{e.label}</button>))}
+                        </div>
+                        <div style={{ background: detail.privada ? "#FEF3E2" : T.bg, border: `1.5px solid ${detail.privada ? BRASS : T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 14 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <div>
+                                    <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>🔒 Obra privada</div>
+                                    <div style={{ fontSize: 10, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>No aparece en la app de Belfast (Cliente). Solo la ves acá en V+V y en la app de Propietario con su código.</div>
+                                </div>
+                                <button onClick={() => upd(detail.id, { privada: !detail.privada })} style={{ width: 46, height: 26, borderRadius: 20, border: "none", background: detail.privada ? BRASS : T.border, position: "relative", cursor: "pointer", flexShrink: 0, marginLeft: 10 }}>
+                                    <span style={{ position: "absolute", top: 3, left: detail.privada ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+                                </button>
+                            </div>
+                            {detail.privada && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Código para la app Propietario</div>
+                                <input value={detail.codigoCliente || ""} onChange={e => upd(detail.id, { codigoCliente: e.target.value.toUpperCase().trim() })} placeholder="ej: LOTE815" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13, fontWeight: 800, color: T.accent, letterSpacing: "0.04em" }} />
+                                <div style={{ fontSize: 9.5, color: T.muted, marginTop: 5 }}>Con este código entrás en la app de Propietario, sin pasar por Belfast.</div>
+                            </div>}
                         </div>
                         <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "#FEF2F2", border: "1.5px solid #FECACA", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
                     </div>)}
@@ -1885,11 +2151,13 @@ function MIcon({ id }){
 }
 
 const MAS_TILES = [
+  { id:"mensajes", label:"Mensajes" },
   { id:"personal", label:"Personal" },
   { id:"formularios", label:"Formularios" },
   { id:"documentacion", label:"Documentación" },
   { id:"informes", label:"Informes" },
   { id:"auditoria", label:"Auditoría de obra" },
+  { id:"drone", label:"🚁 Drone IA", go:"drone" },
   { id:"plantillas", label:"Plantillas de documentos" },
   { id:"internos", label:"Chat privado" },
   { id:"infsemanal", label:"Informe semanal de obra" },
@@ -2468,7 +2736,62 @@ function BitacoraView({ db, cfg, onBack }) {
   const obras = db.obras || [];
   const bitacora = db.bitacora || [];
   const [obraId, setObraId] = useState(obras[0]?.id || "");
+  // Mismo criterio que en Avance: comparar por identidad (qué entradas son
+  // nuevas), no por fecha — más seguro, no depende de qué fecha le hayan
+  // puesto a la entrada.
+  const [seenBitacora, setSeenBitacora] = useState(() => {
+    try {
+      const guardado = localStorage.getItem("vv_bitacora_seen_ids");
+      if (guardado) return JSON.parse(guardado);
+      const base = {}; obras.forEach(o => { base[o.id] = bitacora.filter(h => h.obra_id === o.id).map(h => h.id); });
+      try { localStorage.setItem("vv_bitacora_seen_ids", JSON.stringify(base)); } catch { }
+      return base;
+    } catch { return {}; }
+  });
+  function bitacoraNuevas(oid) {
+    const vistos = new Set(seenBitacora[oid] || []);
+    return bitacora.filter(h => h.obra_id === oid && h.id && !vistos.has(h.id)).length;
+  }
+  useEffect(() => {
+    if (!obraId) return;
+    const t = setTimeout(() => {
+      setSeenBitacora(prev => {
+        const idsActuales = bitacora.filter(h => h.obra_id === obraId).map(h => h.id);
+        const next = { ...prev, [obraId]: idsActuales };
+        try { localStorage.setItem("vv_bitacora_seen_ids", JSON.stringify(next)); } catch { }
+        return next;
+      });
+    }, 900);
+    return () => clearTimeout(t);
+  }, [obraId, bitacora]);
   const [abrir, setAbrir] = useState(false);
+  // Importar hechos en lote (por ejemplo, los sacados de un chat de obra).
+  // Se pega un JSON con {fecha, titulo, desc, etapa} y se cargan todos de
+  // una a la obra elegida arriba.
+  const [impAbierto, setImpAbierto] = useState(false);
+  const [impTexto, setImpTexto] = useState("");
+  function importarHechos() {
+    if (!obraId) { alert("Elegí primero la obra."); return; }
+    let arr = null;
+    try { arr = JSON.parse(impTexto); } catch { alert("Eso no es un JSON válido. Copiá y pegá el archivo completo, desde el [ hasta el ]."); return; }
+    if (!Array.isArray(arr) || !arr.length) { alert("El JSON tiene que ser una lista de hechos."); return; }
+    const yaHay = new Set((db.bitacora || []).filter(h => h.obra_id === obraId).map(h => `${h.fecha}|${(h.titulo || "").trim()}`));
+    const nuevos = [];
+    for (const it of arr) {
+      const fecha = String(it.fecha || "").slice(0, 10);
+      const titulo = String(it.titulo || "").trim();
+      if (!fecha || !titulo) continue;
+      if (yaHay.has(`${fecha}|${titulo}`)) continue;   // no duplico si ya está
+      let ts = Date.now();
+      try { ts = new Date(fecha + "T12:00:00").getTime() || ts; } catch { }
+      nuevos.push({ id: uid(), obra_id: obraId, fecha, titulo, desc: String(it.desc || "").trim(), etapa: String(it.etapa || "").trim(), fotos: [], adjuntos: [], ts });
+    }
+    if (!nuevos.length) { alert("No había hechos nuevos para cargar (puede que ya estuvieran todos)."); return; }
+    if (!confirm(`Se van a cargar ${nuevos.length} hecho${nuevos.length > 1 ? "s" : ""} en ${obraNom(obras, obraId)}.\n\n¿Confirmás?`)) return;
+    db.setBitacora(prev => [...(prev || []), ...nuevos]);
+    setImpTexto(""); setImpAbierto(false);
+    alert(`Listo: se cargaron ${nuevos.length} hechos.`);
+  }
   const [edit, setEdit] = useState(null); // hecho en edición
   const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
   const [titulo, setTitulo] = useState("");
@@ -2585,14 +2908,46 @@ function BitacoraView({ db, cfg, onBack }) {
 
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
 
+  // ── Lo del día, de TODAS las obras juntas ──────────────────────────
+  // Al entrar, lo primero que se ve es qué se cargó hoy y en qué obra,
+  // con la hora. Así no hay que ir obra por obra adivinando dónde hay algo
+  // nuevo. Al otro día esto se vacía solo y cada hecho queda en su obra.
+  const hoyISO = new Date().toISOString().slice(0, 10);
+  const mismaFecha = (h) => {
+    if (h.fecha === hoyISO) return true;
+    if (h.ts) { try { return new Date(h.ts).toISOString().slice(0, 10) === hoyISO; } catch { } }
+    return false;
+  };
+  const delDia = (bitacora || []).filter(mismaFecha).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Horario de 24 h (16:45, no "04:45 p. m.") — es como se usa en obra.
+  const horaDe = (h) => { try { return new Date(h.ts).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }); } catch { return ""; } };
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="documentacion" label="Bitácora de obra" sub="Cargá lo que va pasando para justificar adicionales" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
+      {/* Lo cargado hoy, de todas las obras */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: delDia.length ? 10 : 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
+        </div>
+        {delDia.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, marginTop: 8 }}>Todavía no se cargó nada hoy.</div>
+          : delDia.map(h => (<div key={h.id} onClick={() => setObraId(h.obra_id)} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: `1px solid ${T.border}`, cursor: "pointer" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: BRASS, flexShrink: 0, minWidth: 42, fontVariantNumeric: "tabular-nums" }}>{horaDe(h)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{h.titulo || h.desc?.slice(0, 60) || "(sin título)"}</div>
+              <div style={{ fontSize: 11, color: T.sub, marginTop: 1 }}>{obraNom(obras, h.obra_id) || "Sin obra"}{h.etapa ? ` · ${h.etapa}` : ""}</div>
+            </div>
+            {(h.fotos || []).length > 0 && <div style={{ fontSize: 10.5, color: T.muted, flexShrink: 0 }}>📷 {(h.fotos || []).length}</div>}
+          </div>))}
+      </div>
+
       {/* selector de obra */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
         <select value={obraId} onChange={e => { setObraId(e.target.value); limpiar(); }} style={{ ...inp, flex: 1 }}>
           <option value="">— Elegí una obra —</option>
-          {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+          {obras.map(o => { const n = bitacoraNuevas(o.id); return <option key={o.id} value={o.id}>{o.nombre}{n > 0 ? ` 🔴 ${n} nueva${n > 1 ? "s" : ""}` : ""}</option>; })}
         </select>
         {obraId && hechos.length > 0 && <button onClick={exportarPDF} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>PDF</button>}
       </div>
@@ -2600,6 +2955,16 @@ function BitacoraView({ db, cfg, onBack }) {
       {obraId && <>
         {/* botón nuevo / formulario */}
         {!abrir && <button onClick={() => setAbrir(true)} style={{ width: "100%", background: T.al, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 10, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>+ Cargar un hecho</button>}
+        {!abrir && !impAbierto && <button onClick={() => setImpAbierto(true)} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 10, padding: "11px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", marginBottom: 14 }}>⬇ Importar varios hechos de una vez</button>}
+        {impAbierto && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 4 }}>Importar hechos a {obraNom(obras, obraId) || "esta obra"}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginBottom: 9, lineHeight: 1.5 }}>Pegá acá el archivo de hechos completo (desde el [ hasta el ]). Los que ya estén cargados no se duplican.</div>
+          <textarea value={impTexto} onChange={e => setImpTexto(e.target.value)} placeholder='[ { "fecha": "2026-03-27", "titulo": "…", "desc": "…", "etapa": "…" } ]' style={{ width: "100%", minHeight: 130, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 11.5, color: T.text, boxSizing: "border-box", fontFamily: "monospace" }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button onClick={importarHechos} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Cargar los hechos</button>
+            <button onClick={() => { setImpAbierto(false); setImpTexto(""); }} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "11px 16px", fontSize: 12.5, cursor: "pointer" }}>Cancelar</button>
+          </div>
+        </div>}
 
         {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
@@ -2753,16 +3118,34 @@ const tipoDe = (id) => TIPOS_PEDIDO.find(t => t.id === id) || TIPOS_PEDIDO[0];
 
 // Documentación inicial básica de obra (para el remito de recepción).
 const DOCS_BASE = [
-  "Niveles",
-  "Eje de replanteo en platea",
-  "Planos de platea",
-  "Planos de estructura",
-  "Plano de replanteo de mampostería",
-  "Plano de mampostería",
-  "Plano de hogar",
-  "Plano de parrilla",
-  "Plano de vainas",
+  { n: "Niveles", c: "Documentación técnica" },
+  { n: "Eje de replanteo en platea", c: "Documentación técnica" },
+  { n: "Planos de platea", c: "Documentación técnica" },
+  { n: "Planos de estructura", c: "Documentación técnica" },
+  { n: "Plano de replanteo de mampostería", c: "Documentación técnica" },
+  { n: "Plano de mampostería", c: "Documentación técnica" },
+  { n: "Plano de hogar", c: "Documentación técnica" },
+  { n: "Plano de parrilla", c: "Documentación técnica" },
+  { n: "Plano de vainas", c: "Documentación técnica" },
+  { n: "Cascos", c: "Elementos de protección" },
+  { n: "Chalecos reflectivos", c: "Elementos de protección" },
+  { n: "Calzado de seguridad", c: "Elementos de protección" },
+  { n: "Guantes", c: "Elementos de protección" },
+  { n: "Antiparras / protección ocular", c: "Elementos de protección" },
+  { n: "Protección auditiva", c: "Elementos de protección" },
+  { n: "Arnés y cabo de vida", c: "Elementos de protección" },
+  { n: "Barbijos / protección respiratoria", c: "Elementos de protección" },
+  { n: "Matafuegos", c: "Elementos de protección" },
+  { n: "Botiquín de primeros auxilios", c: "Elementos de protección" },
+  { n: "Vallado y señalización", c: "Elementos de protección" },
+  { n: "Póliza ART del personal", c: "Otros ítems" },
+  { n: "Alta temprana / F931", c: "Otros ítems" },
+  { n: "Seguro de responsabilidad civil", c: "Otros ítems" },
+  { n: "Llaves / acceso a la obra", c: "Otros ítems" },
+  { n: "Conexión de agua y luz de obra", c: "Otros ítems" },
+  { n: "Baño químico / obrador", c: "Otros ítems" },
 ];
+const DOC_CATS = ["Documentación técnica", "Elementos de protección", "Otros ítems"];
 
 
 // ═══ DEFINICIONES — misma pantalla que la app de Contratistas ═══
@@ -3046,6 +3429,543 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
 }
 
 
+// ── Drone IA: misiones de vuelo, galería georreferenciada, comparación
+// antes/ahora, lectura asistida por IA (NO medición automática oficial),
+// informe PDF, e integración con Tareas. ─────────────────────────────
+function DroneIAView({ db, cfg, apiKey, onBack }) {
+  const { obras = [], dronevuelos = [], setDronevuelos, setTareas } = db;
+  const [tab, setTab] = useState("vuelos");
+  const [nuevo, setNuevo] = useState(null);
+  const [detalle, setDetalle] = useState(null);
+  const [fObra, setFObra] = useState("");
+  const [analizando, setAnalizando] = useState(false);
+  const [genPdf, setGenPdf] = useState(false);
+  const [reenviando, setReenviando] = useState(false);
+  const [procesandoVideo, setProcesandoVideo] = useState(false);
+  const camRef = useRef(null), galRef = useRef(null), vidRef = useRef(null);
+  const [compObra, setCompObra] = useState(obras[0]?.id || "");
+  const [compA, setCompA] = useState(null);
+  const [compB, setCompB] = useState(null);
+
+  function guardarVuelos(fn) { setDronevuelos(prev => fn(prev || [])); }
+  const obraNombre = (id) => obras.find(o => o.id === id)?.nombre || "—";
+
+  function crearVuelo() {
+    if (!nuevo?.obra_id) { alert("Elegí una obra."); return; }
+    const v = { id: uid(), obra_id: nuevo.obra_id, fecha: nuevo.fecha || hoyStr(), piloto: (nuevo.piloto || "").trim(), dronModelo: (nuevo.dronModelo || "").trim(), duracionMin: nuevo.duracionMin || "", notas: (nuevo.notas || "").trim(), ts: Date.now(), fotos: [], analisisIA: null, analisisFecha: "" };
+    guardarVuelos(p => [v, ...p]);
+    setNuevo(null);
+    setDetalle(v);
+  }
+  function borrarVuelo(id) {
+    if (!confirm("¿Eliminar este vuelo y sus fotos? No se puede deshacer.")) return;
+    guardarVuelos(p => p.filter(x => x.id !== id));
+    setDetalle(null);
+  }
+  async function agregarFotos(vueloId, files) {
+    // Leo el GPS del archivo ORIGINAL (antes de reducirlo) y además guardo
+    // de dónde salió cada coordenada, para no mezclar la del drone con una
+    // marcada a mano desde el teléfono.
+    const nuevas = await Promise.all(Array.from(files).map(async f => {
+      const geo = await leerGpsDeFoto(f);
+      return { id: uid(), url: await toDataUrl(f), lat: geo?.lat ?? null, lon: geo?.lon ?? null, geoOrigen: geo ? "foto" : null, ts: Date.now() };
+    }));
+    guardarVuelos(p => p.map(v => v.id === vueloId ? { ...v, fotos: [...(v.fotos || []), ...nuevas] } : v));
+    setDetalle(d => d && d.id === vueloId ? { ...d, fotos: [...(d.fotos || []), ...nuevas] } : d);
+    const conGps = nuevas.filter(n => n.lat != null).length;
+    if (nuevas.length && !conGps) alert("Estas fotos no traen coordenadas guardadas adentro. Puede pasar si el drone tenía el GPS apagado, o si la foto ya venía recortada/reenviada (por ejemplo, mandada por WhatsApp, que borra esos datos). Podés marcar la ubicación a mano en cada una.");
+  }
+  async function agregarVideo(vueloId, files) {
+    const archivos = Array.from(files);
+    if (!archivos.length) return;
+    setProcesandoVideo(true);
+    try {
+      let total = 0;
+      for (const f of archivos) {
+        const frames = await extraerFotogramas(f, 6);
+        const nuevas = frames.map(fr => ({ id: uid(), url: fr.url, lat: null, lon: null, geoOrigen: null, deVideo: f.name || "video", segundo: fr.segundo, ts: Date.now() }));
+        total += nuevas.length;
+        guardarVuelos(p => p.map(v => v.id === vueloId ? { ...v, fotos: [...(v.fotos || []), ...nuevas] } : v));
+        setDetalle(d => d && d.id === vueloId ? { ...d, fotos: [...(d.fotos || []), ...nuevas] } : d);
+      }
+      alert(`Saqué ${total} fotogramas del video y quedaron cargados acá, listos para analizar. El video original NO se guarda en la app (pesa demasiado) — tenelo aparte en el teléfono si lo necesitás.`);
+    } catch (e) {
+      alert(e?.message || "No pude procesar el video.");
+    }
+    setProcesandoVideo(false);
+  }
+  function marcarUbicacion(vueloId, fotoId) {
+    if (!navigator.geolocation) { alert("Este dispositivo no tiene GPS disponible."); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const upd = v => v.id === vueloId ? { ...v, fotos: (v.fotos || []).map(f => f.id === fotoId ? { ...f, lat: pos.coords.latitude, lon: pos.coords.longitude, geoOrigen: "telefono" } : f) } : v;
+        guardarVuelos(p => p.map(upd));
+        setDetalle(d => d ? upd(d) : d);
+      },
+      () => alert("No pude obtener la ubicación — revisá los permisos de GPS del navegador."),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+  function borrarFoto(vueloId, fotoId) {
+    const upd = v => v.id === vueloId ? { ...v, fotos: (v.fotos || []).filter(f => f.id !== fotoId) } : v;
+    guardarVuelos(p => p.map(upd));
+    setDetalle(d => d ? upd(d) : d);
+  }
+
+  async function analizarVuelo(vuelo) {
+    if (!vuelo.fotos?.length) { alert("Agregá al menos una foto para analizar."); return; }
+    setAnalizando(true);
+    try {
+      const obra = obras.find(o => o.id === vuelo.obra_id);
+      const content = [];
+      const usadas = vuelo.fotos.slice(-8);
+      const deVideo = usadas.filter(f => f.deVideo).length;
+      usadas.forEach(f => { try { content.push({ type: 'image', source: { type: 'base64', media_type: getMediaType(f.url), data: getBase64(f.url) } }); } catch { } });
+      content.push({ type: 'text', text: `Analizá estas ${usadas.length} imágenes aéreas (de drone) de la obra "${obra?.nombre || ''}" (${obra?.sector || '—'}, avance registrado en el sistema: ${obra?.avance || 0}%), tomadas el ${vuelo.fecha}.${deVideo ? ` ATENCIÓN: ${deVideo} de estas imágenes son fotogramas sacados de un video del mismo vuelo, en distintos momentos — o sea que pueden mostrar el mismo sector desde ángulos o alturas diferentes, no necesariamente lugares distintos. Tenelo en cuenta para no contar dos veces lo mismo.` : ""} Redactá una lectura en español rioplatense con: 1) qué se ve avanzado o distinto desde la vista aérea, 2) cualquier cosa puntual que convenga revisar en persona (sin afirmar que sea un problema, solo señalarlo), 3) una conclusión breve. Aclará al final que es una lectura orientativa de IA sobre imágenes, no una medición oficial de avance.` });
+      const r = await callAI([{ role: 'user', content }], "Sos un asistente que ayuda a leer fotos aéreas de obra para V+V Construcciones. Das lecturas orientativas y siempre aclarás que hace falta confirmación humana antes de tomarlas como oficiales. Español rioplatense, tono técnico y directo.", apiKey, false);
+      guardarVuelos(p => p.map(v => v.id === vuelo.id ? { ...v, analisisIA: r, analisisFecha: hoyStr() } : v));
+      setDetalle(d => d && d.id === vuelo.id ? { ...d, analisisIA: r, analisisFecha: hoyStr() } : d);
+    } catch { alert("No pude generar la lectura de IA. Probá de nuevo."); }
+    setAnalizando(false);
+  }
+
+  function crearTareaDesde(vuelo) {
+    if (!vuelo.analisisIA) return;
+    setTareas(p => [...p, { id: uid(), obra_id: vuelo.obra_id, nombre: `Revisar — vuelo drone ${vuelo.fecha}`, detalle: vuelo.analisisIA.slice(0, 500), avance: 0 }]);
+    alert(`Tarea creada en "${obraNombre(vuelo.obra_id)}".`);
+  }
+
+  async function cargarJsPDFDrone() {
+    if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+    const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+    for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; } catch { } }
+    throw new Error("No se pudo cargar la librería PDF");
+  }
+  async function generarInformePDF(vuelo) {
+    setGenPdf(true);
+    try {
+      const jsPDF = await cargarJsPDFDrone();
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+      const M = 40; let y = M;
+      const nom = obraNombre(vuelo.obra_id);
+      const loadImg = async (url) => { const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 800, h: im.naturalHeight || 600 }); im.onerror = () => res({ w: 800, h: 600 }); im.src = url; }); let fmt = "JPEG"; try { fmt = url.substring(5, url.indexOf(";")).split("/")[1].toUpperCase(); if (fmt === "JPG") fmt = "JPEG"; } catch { } return { data: url, w: dim.w, h: dim.h, fmt }; };
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text((cfg?.empresa || "V+V Construcciones").toUpperCase(), W / 2, y, { align: "center" }); y += 15;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("INFORME DE VUELO DRONE", W / 2, y, { align: "center" }); y += 15;
+      doc.setFontSize(12); doc.setTextColor(15, 27, 45); doc.text(nom, W / 2, y, { align: "center" }); y += 13;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(91, 107, 127); doc.text(`Fecha: ${vuelo.fecha}   ·   Piloto: ${vuelo.piloto || "—"}   ·   Emitido: ${hoyStr()}`, W / 2, y, { align: "center" }); y += 12;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 20;
+      const block = (label, txt) => { if (!txt) return; ensure(24); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(27, 58, 91); doc.text(label, M, y); y += 12; doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(26, 36, 51); const lines = doc.splitTextToSize(String(txt), W - 2 * M); for (const ln of lines) { ensure(14); doc.text(ln, M, y); y += 13; } y += 6; };
+      block("DRON / DURACIÓN", `${vuelo.dronModelo || "—"}${vuelo.duracionMin ? ` · ${vuelo.duracionMin} min` : ""}`);
+      block("NOTAS DEL VUELO", vuelo.notas);
+      for (const f of (vuelo.fotos || [])) { try { const im = await loadImg(f.url); const maxW = W - 2 * M; let iw = maxW, ih = iw * im.h / im.w; if (ih > 300) { ih = 300; iw = ih * im.w / im.h; } const libre = H - M - y; if (ih + 8 > libre) { if (libre > 150) { ih = libre - 10; iw = ih * im.w / im.h; if (iw > maxW) { iw = maxW; ih = iw * im.h / im.w; } } else { doc.addPage(); y = M; } } doc.addImage(im.data, im.fmt, M + (maxW - iw) / 2, y, iw, ih); y += ih + 4; if (f.lat && f.lon) { doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(148, 163, 184); doc.text(`📍 ${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}`, M + (maxW - iw) / 2, y); y += 12; } else y += 6; } catch { } }
+      if (vuelo.analisisIA) { ensure(24); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(27, 58, 91); doc.text("LECTURA ORIENTATIVA DE IA (no es una medición oficial)", M, y); y += 12; doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(26, 36, 51); const lines = doc.splitTextToSize(vuelo.analisisIA, W - 2 * M); for (const ln of lines) { ensure(14); doc.text(ln, M, y); y += 13; } }
+      // En vez de compartir y salir de la app, subimos el PDF a un lugar
+      // persistente (el mismo que usan las fotos y los planos) y lo dejamos
+      // guardado EN el vuelo — así queda ahí siempre, y se puede reenviar
+      // las veces que haga falta sin volver a generarlo.
+      const nombreArchivo = `Vuelo dron ${nom} ${vuelo.fecha}.pdf`;
+      const dataUrl = doc.output("datauristring");
+      const url = await uploadFoto(dataUrl, `informes-drone/${vuelo.obra_id || "sin-obra"}`, `${vuelo.id}.pdf`);
+      guardarVuelos(p => p.map(v => v.id === vuelo.id ? { ...v, informePdfUrl: url, informePdfNombre: nombreArchivo } : v));
+      setDetalle(d => d && d.id === vuelo.id ? { ...d, informePdfUrl: url, informePdfNombre: nombreArchivo } : d);
+    } catch { alert("No pude generar el PDF. Probá de nuevo."); }
+    setGenPdf(false);
+  }
+  async function reenviarABelfast(vuelo) {
+    if (!vuelo.informePdfUrl) return;
+    const { mensajes = [], setMensajes } = db;
+    if (!setMensajes) { alert("No encuentro el chat de mensajes con Belfast."); return; }
+    setReenviando(true);
+    try {
+      const nom = obraNombre(vuelo.obra_id);
+      const msg = { id: uid() + Date.now(), from: "vv", texto: `Informe del vuelo de drone — ${nom}, ${vuelo.fecha}.`, fecha: hoyStr(), ts: Date.now(), archivos: [{ nombre: vuelo.informePdfNombre || "informe.pdf", url: vuelo.informePdfUrl }] };
+      const r = await storage.get("vv_mensajes"); let actual = mensajes;
+      if (r?.value) { try { actual = JSON.parse(r.value); } catch { } }
+      const next = [...actual, msg];
+      setMensajes(next);
+      alert("Enviado — Belfast lo va a ver en Mensajes.");
+    } catch { alert("No pude reenviarlo ahora. Probá de nuevo."); }
+    setReenviando(false);
+  }
+
+  const vuelosFiltrados = (dronevuelos || []).filter(v => !fObra || v.obra_id === fObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Vuelos de HOY, de todas las obras juntas — lo primero que se ve al
+  // entrar. Al otro día esto se vacía solo y cada vuelo queda en su obra.
+  const hoyISOd = new Date().toISOString().slice(0, 10);
+  const esDeHoy = (v) => { try { return new Date(v.ts).toISOString().slice(0, 10) === hoyISOd; } catch { return false; } };
+  const vuelosHoy = (dronevuelos || []).filter(esDeHoy).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const horaVuelo = (v) => { try { return new Date(v.ts).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }); } catch { return ""; } };
+  const fotosCompObra = (dronevuelos || []).filter(v => v.obra_id === compObra).flatMap(v => (v.fotos || []).map(f => ({ ...f, vueloFecha: v.fecha })));
+
+  // ── Detalle de un vuelo ──
+  if (detalle) {
+    const vuelo = (dronevuelos || []).find(v => v.id === detalle.id) || detalle;
+    return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
+      <PageHead eyebrow={obraNombre(vuelo.obra_id)} title={`Vuelo — ${vuelo.fecha}`} sub={`${vuelo.piloto ? "Piloto: " + vuelo.piloto : ""}${vuelo.dronModelo ? " · " + vuelo.dronModelo : ""}`} back onBack={() => setDetalle(null)} />
+      <div style={{ padding: "16px 20px" }}>
+        {vuelo.notas && <Card style={{ padding: 13, marginBottom: 14 }}><Lbl>Notas del vuelo</Lbl><div style={{ fontSize: 13, color: T.text }}>{vuelo.notas}</div></Card>}
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <Lbl>Fotos ({(vuelo.fotos || []).length})</Lbl>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => camRef.current?.click()} style={{ background: T.accentLight, border: "none", color: T.accent, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>📷 Cámara</button>
+            <button onClick={() => galRef.current?.click()} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🖼 Galería</button>
+            <button onClick={() => vidRef.current?.click()} disabled={procesandoVideo} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", opacity: procesandoVideo ? 0.6 : 1 }}>{procesandoVideo ? "Procesando…" : "🎬 Video"}</button>
+          </div>
+        </div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8, lineHeight: 1.45 }}>De un video saco 6 fotogramas repartidos y los cargo como fotos — la IA no puede mirar video, pero sí esos cuadros. El video en sí no se guarda acá.</div>
+        <input ref={camRef} type="file" accept="image/*" capture="environment" multiple onChange={e => { agregarFotos(vuelo.id, e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+        <input ref={galRef} type="file" accept="image/*" multiple onChange={e => { agregarFotos(vuelo.id, e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+        <input ref={vidRef} type="file" accept="video/*" multiple onChange={e => { agregarVideo(vuelo.id, e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+
+        {(vuelo.fotos || []).length === 0 && <EmptyMsg>Todavía no hay fotos en este vuelo.</EmptyMsg>}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
+          {(vuelo.fotos || []).map(f => (<div key={f.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
+            <img src={f.url} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
+            {f.deVideo && <div style={{ position: "absolute", top: 5, left: 5, background: "rgba(124,58,237,.88)", color: "#fff", fontSize: 8.5, fontWeight: 700, borderRadius: 5, padding: "2px 5px" }}>🎬 video · {f.segundo}s</div>}
+            <button onClick={() => borrarFoto(vuelo.id, f.id)} style={{ position: "absolute", top: 5, right: 5, background: "rgba(15,23,42,.6)", border: "none", color: "#fff", borderRadius: 14, width: 22, height: 22, fontSize: 12, cursor: "pointer" }}>✕</button>
+            {f.lat ? <div style={{ position: "absolute", bottom: 5, left: 5, background: f.geoOrigen === "foto" ? "rgba(22,163,74,.88)" : "rgba(15,23,42,.65)", color: "#fff", fontSize: 9, borderRadius: 6, padding: "2px 6px" }}>📍 {f.lat.toFixed(4)}, {f.lon.toFixed(4)}{f.geoOrigen === "foto" ? " · del drone" : " · a mano"}</div>
+              : <button onClick={() => marcarUbicacion(vuelo.id, f.id)} style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(255,255,255,.92)", border: "none", color: T.accent, fontSize: 9, fontWeight: 700, borderRadius: 6, padding: "3px 6px", cursor: "pointer" }}>📍 Marcar a mano</button>}
+          </div>))}
+        </div>
+
+        <PBtn full onClick={() => analizarVuelo(vuelo)} disabled={analizando} style={{ marginBottom: 10 }}>{analizando ? "Analizando…" : "✨ Analizar con IA (lectura orientativa)"}</PBtn>
+        {vuelo.analisisIA && <Card style={{ padding: 13, marginBottom: 14, background: T.accentLight }}>
+          <Lbl>Lectura de IA — {vuelo.analisisFecha} <span style={{ textTransform: "none", fontWeight: 500 }}>(orientativa, no es medición oficial)</span></Lbl>
+          <div style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{vuelo.analisisIA}</div>
+          <button onClick={() => crearTareaDesde(vuelo)} style={{ marginTop: 10, background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>+ Crear tarea desde esta lectura</button>
+        </Card>}
+
+        <PBtn full variant="ghost" onClick={() => generarInformePDF(vuelo)} disabled={genPdf} style={{ marginBottom: 10 }}>{genPdf ? "Generando…" : vuelo.informePdfUrl ? "🔄 Volver a generar el informe" : "📄 Generar informe PDF"}</PBtn>
+        {vuelo.informePdfUrl && <>
+          <a href={vuelo.informePdfUrl} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginBottom: 10 }}>👁 Ver el informe (queda guardado acá)</a>
+          <PBtn full onClick={() => reenviarABelfast(vuelo)} disabled={reenviando} style={{ marginBottom: 10 }}>{reenviando ? "Enviando…" : "✉ Reenviar a Belfast"}</PBtn>
+        </>}
+        <PBtn full variant="danger" onClick={() => borrarVuelo(vuelo.id)}>Eliminar vuelo</PBtn>
+      </div>
+    </div>);
+  }
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
+    <PageHead eyebrow="Relevamiento aéreo" title="🚁 Drone IA" sub="Misiones, historial, comparación y lectura asistida por IA" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+        <button onClick={() => setTab("vuelos")} style={{ flex: 1, background: tab === "vuelos" ? T.accent : T.card, color: tab === "vuelos" ? "#fff" : T.sub, border: `1px solid ${tab === "vuelos" ? T.accent : T.border}`, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Vuelos</button>
+        <button onClick={() => setTab("comparar")} style={{ flex: 1, background: tab === "comparar" ? T.accent : T.card, color: tab === "comparar" ? "#fff" : T.sub, border: `1px solid ${tab === "comparar" ? T.accent : T.border}`, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Comparar antes/ahora</button>
+      </div>
+
+      {tab === "vuelos" && <>
+        {/* Los vuelos de hoy, de todas las obras */}
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: vuelosHoy.length ? 10 : 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+            <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
+          </div>
+          {vuelosHoy.length === 0
+            ? <div style={{ fontSize: 12.5, color: T.muted, marginTop: 8 }}>Todavía no se cargó ningún vuelo hoy.</div>
+            : vuelosHoy.map(v => (<div key={v.id} onClick={() => setDetalle(v)} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: `1px solid ${T.border}`, cursor: "pointer" }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: BRASS, flexShrink: 0, minWidth: 42, fontVariantNumeric: "tabular-nums" }}>{horaVuelo(v)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{obraNombre(v.obra_id)}</div>
+                <div style={{ fontSize: 11, color: T.sub, marginTop: 1 }}>{v.piloto ? `Piloto: ${v.piloto}` : "Sin piloto"}{v.analisisIA ? " · con lectura IA" : ""}{v.informePdfUrl ? " · informe listo" : ""}</div>
+              </div>
+              {(v.fotos || []).length > 0 && <div style={{ fontSize: 10.5, color: T.muted, flexShrink: 0 }}>📷 {(v.fotos || []).length}</div>}
+            </div>))}
+        </div>
+        <PBtn full onClick={() => setNuevo({ obra_id: obras[0]?.id || "", fecha: hoyStr() })} style={{ marginBottom: 14 }}>+ Nuevo vuelo</PBtn>
+        {obras.length > 1 && <Sel value={fObra} onChange={e => setFObra(e.target.value)}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel>}
+        <div style={{ height: 12 }} />
+        {vuelosFiltrados.length === 0 && <EmptyMsg>Todavía no hay vuelos cargados. Tocá "+ Nuevo vuelo" para empezar.</EmptyMsg>}
+        {vuelosFiltrados.map(v => (<RowItem key={v.id} onClick={() => setDetalle(v)}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{obraNombre(v.obra_id)} — {v.fecha}</div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{v.piloto ? `Piloto: ${v.piloto}` : "Sin piloto cargado"} · {(v.fotos || []).length} foto{(v.fotos || []).length !== 1 ? "s" : ""}{v.analisisIA ? " · con lectura IA" : ""}</div>
+            </div>
+          </div>
+        </RowItem>))}
+      </>}
+
+      {tab === "comparar" && <>
+        <Field label="Obra"><Sel value={compObra} onChange={e => { setCompObra(e.target.value); setCompA(null); setCompB(null); }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        {fotosCompObra.length < 2 && <EmptyMsg>Hacen falta al menos 2 fotos cargadas en vuelos de esta obra para comparar.</EmptyMsg>}
+        {fotosCompObra.length >= 2 && <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+            {[["ANTES", compA, setCompA], ["AHORA", compB, setCompB]].map(([label, sel, setSel]) => (<div key={label}>
+              <Lbl>{label}</Lbl>
+              {sel ? <div style={{ position: "relative" }}><img src={sel.url} style={{ width: "100%", height: 150, objectFit: "cover", borderRadius: 10, border: `1px solid ${T.border}` }} /><div style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>{sel.vueloFecha}</div></div>
+                : <div style={{ height: 150, borderRadius: 10, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: T.muted }}>Elegí abajo</div>}
+            </div>))}
+          </div>
+          <Lbl>Tocá una foto para asignarla</Lbl>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6 }}>
+            {fotosCompObra.map(f => (<img key={f.id} src={f.url} onClick={() => (!compA ? setCompA(f) : setCompB(f))} style={{ width: "100%", height: 60, objectFit: "cover", borderRadius: 6, cursor: "pointer", border: `1px solid ${T.border}` }} />))}
+          </div>
+        </>}
+      </>}
+    </div>
+
+    {nuevo && <Sheet title="Nuevo vuelo" onClose={() => setNuevo(null)}>
+      <Field label="Obra"><Sel value={nuevo.obra_id} onChange={e => setNuevo({ ...nuevo, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      <Field label="Fecha"><TInput type="date" value={nuevo.fecha} onChange={e => setNuevo({ ...nuevo, fecha: e.target.value })} /></Field>
+      <Field label="Piloto"><TInput value={nuevo.piloto || ""} onChange={e => setNuevo({ ...nuevo, piloto: e.target.value })} placeholder="Quién voló" /></Field>
+      <Field label="Modelo de dron"><TInput value={nuevo.dronModelo || ""} onChange={e => setNuevo({ ...nuevo, dronModelo: e.target.value })} placeholder="Ej: DJI Mini 4 Pro" /></Field>
+      <Field label="Duración (minutos)"><TInput type="number" value={nuevo.duracionMin || ""} onChange={e => setNuevo({ ...nuevo, duracionMin: e.target.value })} /></Field>
+      <Field label="Notas"><TInput value={nuevo.notas || ""} onChange={e => setNuevo({ ...nuevo, notas: e.target.value })} placeholder="Condiciones, zona relevada, etc." /></Field>
+      <PBtn full onClick={crearVuelo}>Crear vuelo</PBtn>
+    </Sheet>}
+  </div>);
+}
+
+// ── Grabar reunión: graba sin cortes (reinicia el reconocimiento de voz
+// solo, sin que se note), y al terminar arma la minuta y la manda por PDF
+// — con el share nativo del teléfono, para Mail, WhatsApp, lo que sea. ──
+function GrabarReunion({ db, cfg, apiKey, onBack }) {
+  const { obras = [], minutas = [], setMinutas } = db;
+  const [paso, setPaso] = useState("form"); // form | grabando | armando | lista
+  const [titulo, setTitulo] = useState("");
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [obraId, setObraId] = useState("");
+  const [transcripcion, setTranscripcion] = useState("");
+  const [segundos, setSegundos] = useState(0);
+  const [minutaTexto, setMinutaTexto] = useState("");
+  const [generandoPdf, setGenerandoPdf] = useState(false);
+  const recRef = useRef(null);
+  const activoRef = useRef(false);   // true mientras el usuario quiere seguir grabando
+  const baseRef = useRef("");        // todo lo ya confirmado antes del reinicio actual
+  const timerRef = useRef(null);
+  // Qué minuta está abierta y si ya tiene el PDF generado y guardado.
+  const [minutaId, setMinutaId] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  function fFechaLarga(iso) {
+    try { return new Date(iso + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" }); } catch { return iso; }
+  }
+
+  function arrancarReco() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    rec.lang = "es-AR"; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = (e) => {
+      let finales = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) finales += e.results[i][0].transcript + " ";
+      if (finales) { baseRef.current = (baseRef.current + " " + finales).trim(); setTranscripcion(baseRef.current); }
+    };
+    rec.onend = () => {
+      // Los navegadores cortan el reconocimiento solo cada tanto (por
+      // silencio, o por un límite de tiempo interno). Si el usuario
+      // todavía quiere seguir grabando, lo reiniciamos al toque — así la
+      // reunión sigue grabándose de corrido, sin que se note el corte.
+      if (activoRef.current) { try { rec.start(); } catch { setTimeout(() => { if (activoRef.current) try { rec.start(); } catch { } }, 300); } }
+    };
+    rec.onerror = (e) => {
+      if (e.error === "no-speech" || e.error === "aborted") return;   // normal, sigue solo
+      if (activoRef.current && e.error !== "not-allowed") { try { rec.start(); } catch { } }
+    };
+    recRef.current = rec;
+    rec.start();
+  }
+
+  function empezar() {
+    if (!titulo.trim()) { alert("Ponele un título a la reunión."); return; }
+    if (!sttOk) { alert("Este navegador no permite grabar con reconocimiento de voz. Probá desde Chrome o Safari en el celular."); return; }
+    baseRef.current = ""; setTranscripcion(""); setSegundos(0);
+    activoRef.current = true;
+    arrancarReco();
+    timerRef.current = setInterval(() => setSegundos(s => s + 1), 1000);
+    setPaso("grabando");
+  }
+
+  async function terminar() {
+    activoRef.current = false;
+    try { recRef.current?.stop(); } catch { }
+    clearInterval(timerRef.current);
+    const texto = transcripcion.trim();
+    if (!texto) { alert("No capté nada de audio. Probá de nuevo, más cerca del micrófono."); setPaso("form"); return; }
+    setPaso("armando");
+    try {
+      const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
+      const sys = `Recibís la transcripción de voz de una reunión grabada. Puede tener errores de dictado, cortes, muletillas, o gente hablando encima. Tu trabajo es UNO SOLO: pasarla en limpio y ordenarla, armando un texto con hilo lógico y fácil de leer.
+
+REGLAS INNEGOCIABLES:
+- NUNCA comentes, juzgues ni aclares de qué trata la conversación. No digas si es de obra o no, si es relevante, si es informal, ni si te parece adecuada. No opines sobre el contenido.
+- NUNCA te niegues ni pidas más contexto. Sea cual sea el tema, escribí lo que se escuchó.
+- No agregues advertencias, disclaimers, ni notas del tipo "esta conversación no parece de trabajo". Nada de eso.
+- Escribí SOLO lo que se dijo, ordenado y con sentido. No inventes nada que no esté en la transcripción.
+- Si se distingue quién habla, marcalo. Si no, escribilo de corrido pero ordenado por temas, respetando el orden en que se hablaron.
+- Español rioplatense, claro y natural.
+
+FORMATO: empezá siempre con este encabezado exacto:
+MINUTA DE REUNIÓN
+${obraNombre ? `Obra: ${obraNombre} · ` : ""}Fecha: ${fFechaLarga(fecha)} · Tema: ${titulo}
+
+Después el desarrollo de lo hablado, ordenado y legible.
+Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISIONES" y/o "PENDIENTES" (numerados). Si no hubo acuerdos ni pendientes, no pongas esas secciones — no las fuerces.`;
+      const resp = await callAI([{ role: "user", content: `Transcripción de la reunión:\n\n${texto}` }], sys, apiKey, false);
+      setMinutaTexto(resp || "");
+      const registro = { id: uid(), titulo: titulo.trim(), fecha, obra_id: obraId || null, transcripcion: texto, minutaTexto: resp || "", ts: Date.now() };
+      if (setMinutas) setMinutas(p => [registro, ...(p || [])]);
+      setMinutaId(registro.id); setPdfUrl(null);
+      setPaso("lista");
+    } catch {
+      alert("No pude generar la minuta ahora. La transcripción completa sigue abajo, la podés copiar a mano.");
+      setPaso("lista");
+    }
+  }
+
+  function cancelar() {
+    activoRef.current = false;
+    try { recRef.current?.stop(); } catch { }
+    clearInterval(timerRef.current);
+    setPaso("form");
+  }
+
+  // Manda el PDF ya guardado: abre el menú del teléfono para elegir
+  // WhatsApp, Mail, o lo que sea. El PDF sigue guardado acá igual.
+  // Descarta la grabación que se acaba de hacer, sin tener que ir a
+  // buscarla a la lista de minutas anteriores.
+  function borrarEstaGrabacion() {
+    if (!confirm("¿Borrar esta grabación?\n\nSe borra el audio transcripto y la minuta. No se puede deshacer.")) return;
+    if (minutaId && setMinutas) setMinutas(p => (p || []).filter(x => x.id !== minutaId));
+    setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null);
+  }
+  async function mandarPdf() {
+    if (!pdfUrl) return;
+    const nombreArchivo = `Minuta - ${titulo} - ${fecha}.pdf`;
+    try {
+      let blob;
+      if (pdfUrl.startsWith("data:")) {
+        // PDF incrustado: lo paso a archivo sin salir a la red.
+        const b64 = pdfUrl.split(",")[1] || "";
+        const bin = atob(b64); const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        blob = new Blob([arr], { type: "application/pdf" });
+      } else {
+        const r = await fetch(pdfUrl);
+        blob = await r.blob();
+      }
+      const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: nombreArchivo, text: `Minuta de reunión — ${titulo}` });
+        return;
+      }
+      const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = nombreArchivo; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      window.open(pdfUrl, "_blank");   // último recurso: abrirlo para compartir a mano
+    }
+  }
+  async function generarPdf() {
+    setGenerandoPdf(true);
+    try {
+      let jsPDF;
+      if (window.jspdf && window.jspdf.jsPDF) jsPDF = window.jspdf.jsPDF;
+      else {
+        const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+        for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) { jsPDF = window.jspdf.jsPDF; break; } } catch { } }
+        if (!jsPDF) throw new Error("No se pudo cargar la librería de PDF");
+      }
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+      const M = 40; let y = M;
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text((cfg?.empresa || "V+V Construcciones").toUpperCase(), W / 2, y, { align: "center" }); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("MINUTA DE REUNIÓN", W / 2, y, { align: "center" }); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(15, 27, 45); doc.text(titulo, W / 2, y, { align: "center" }); y += 14;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(91, 107, 127);
+      doc.text(`${fFechaLarga(fecha)}${obraNombre ? "   ·   Obra: " + obraNombre : ""}`, W / 2, y, { align: "center" }); y += 14;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 22;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51);
+      const cuerpo = minutaTexto.split("\n").filter((ln, i) => {
+        const t = ln.trim();
+        if (i < 3 && /^MINUTA DE REUNI[OÓ]N$/i.test(t)) return false;
+        if (i < 3 && /^(Obra|Fecha|Tema)\s*:/i.test(t)) return false;
+        return true;
+      }).join("\n").trim();
+      const lineas = doc.splitTextToSize(cuerpo || minutaTexto, W - 2 * M);
+      for (const ln of lineas) {
+        const esTitulo = /^(TEMAS TRATADOS|ACUERDOS|PENDIENTES)/i.test(ln.trim());
+        ensure(esTitulo ? 22 : 15);
+        if (esTitulo) { y += 6; doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(27, 58, 91); doc.text(ln, M, y); y += 15; doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); }
+        else { doc.text(ln, M, y); y += 14; }
+      }
+      const blob = doc.output("blob");
+      // El PDF NO se va de la app: se sube y queda guardado EN la minuta.
+      // Desde ahí se puede abrir o mandar por WhatsApp/Mail las veces que
+      // haga falta, sin volver a generarlo.
+      const dataUrl = doc.output("datauristring");
+      const url = await uploadFoto(dataUrl, "minutas", `${minutaId || uid()}.pdf`);
+      setPdfUrl(url);
+      if (minutaId && setMinutas) setMinutas(p => (p || []).map(m => m.id === minutaId ? { ...m, pdfUrl: url } : m));
+    } catch { alert("No pude generar el PDF. Probá de nuevo."); }
+    setGenerandoPdf(false);
+  }
+
+  const mm = String(Math.floor(segundos / 60)).padStart(2, "0"), ss = String(segundos % 60).padStart(2, "0");
+
+  if (paso === "grabando") return (<div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <PageHead eyebrow="Grabando" title={titulo} back onBack={cancelar} />
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px 20px" }}>
+      <div style={{ width: 90, height: 90, borderRadius: "50%", background: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, animation: "pulse 1.4s infinite", flexShrink: 0 }}>
+        <Ico n="mic" s={36} c="#fff" />
+      </div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: T.text, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{mm}:{ss}</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 18, flexShrink: 0 }}>Grabando — se reinicia solo, no hace falta que hagas nada</div>
+      {/* Este cuadro es el ÚNICO que scrollea — así, por más larga que se
+          ponga la reunión, el botón de terminar queda siempre fijo abajo,
+          visible, sin que haga falta scrollear la pantalla para tocarlo. */}
+      <div style={{ width: "100%", maxWidth: 480, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, flex: 1, minHeight: 0, overflowY: "auto", fontSize: 13, color: T.sub, lineHeight: 1.6, marginBottom: 16 }}>
+        {transcripcion || "Escuchando… empezá a hablar."}
+      </div>
+      <PBtn full onClick={terminar} style={{ maxWidth: 480, background: "#DC2626", flexShrink: 0 }}>⏹ Terminar y armar la minuta</PBtn>
+    </div>
+  </div>);
+
+  if (paso === "armando") return (<div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 30 }}>
+    <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 6 }}>Armando la minuta…</div>
+    <div style={{ fontSize: 12, color: T.muted }}>Un momento, esto no tarda.</div>
+  </div>);
+
+  if (paso === "lista") return (<div style={{ minHeight: "100vh" }}>
+    <PageHead eyebrow="Lista" title="Minuta de reunión" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16, whiteSpace: "pre-wrap", fontSize: 13, color: T.text, lineHeight: 1.6 }}>{minutaTexto || "No pude armar la minuta con IA — acá tenés la transcripción completa para copiar a mano:\n\n" + transcripcion}</div>
+      <PBtn full onClick={generarPdf} disabled={generandoPdf} style={{ marginBottom: 10 }}>{generandoPdf ? "Generando…" : pdfUrl ? "🔄 Volver a generar el PDF" : "📄 Generar el PDF de la minuta"}</PBtn>
+      {pdfUrl && <>
+        <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginBottom: 10 }}>👁 Ver el PDF (queda guardado acá)</a>
+        <PBtn full onClick={() => mandarPdf()} style={{ marginBottom: 10 }}>📤 Mandar por WhatsApp o Mail</PBtn>
+      </>}
+      <PBtn full variant="ghost" onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null); }} style={{ marginBottom: 10 }}>Grabar otra reunión</PBtn>
+      <PBtn full variant="danger" onClick={borrarEstaGrabacion}>🗑 Borrar esta grabación</PBtn>
+    </div>
+  </div>);
+
+  return (<div style={{ minHeight: "100vh" }}>
+    <PageHead eyebrow="Reuniones" title="🎙 Grabar reunión" sub="Grabá la reunión de corrido — se arma la minuta sola al terminar" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      {!sttOk && <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
+      <Field label="Título de la reunión"><TInput value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Reunión de avance semanal" /></Field>
+      <Field label="Fecha"><TInput type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></Field>
+      {obras.length > 0 && <Field label="Obra (opcional)"><Sel value={obraId} onChange={e => setObraId(e.target.value)}><option value="">— Sin asignar —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
+      <PBtn full onClick={empezar} disabled={!sttOk} style={{ marginTop: 8 }}>🔴 Empezar a grabar</PBtn>
+      {minutas.length > 0 && <>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", margin: "22px 0 10px" }}>Minutas anteriores</div>
+        {minutas.slice(0, 15).map(m => (<div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8 }}>
+          <div onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setMinutaId(m.id); setPdfUrl(m.pdfUrl || null); setPaso("lista"); }} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
+          </div>
+          <button onClick={() => { if (confirm(`¿Borrar "${m.titulo}"?`)) setMinutas(p => (p || []).filter(x => x.id !== m.id)); }} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", padding: 6, flexShrink: 0 }}><Ico n="tacho" s={16} /></button>
+        </div>))}
+      </>}
+    </div>
+  </div>);
+}
+
 function MatPedidosView({ db, cfg, onBack }) {
   const { obras, matpedidos = [], setMatpedidos, personal = [] } = db;
   const [vista, setVista] = useState("pedidos"); // "pedidos" | "recepcion"
@@ -3225,17 +4145,18 @@ function RecepcionDocs({ db, cfg }) {
   const { obras, docrecepcion = [], setDocrecepcion } = db;
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   const [nuevoItem, setNuevoItem] = useState("");
+  const [catNuevo, setCatNuevo] = useState(DOC_CATS[0]);
   const cn = cfg?.clienteSigla || cfg?.clienteNombre || "Belfast";
 
   const reg = (docrecepcion || []).find(r => r.obra_id === obraId);
-  const items = reg ? reg.items : DOCS_BASE.map((n, i) => ({ id: "base" + i, nombre: n, recibido: false, fecha: "" }));
+  const items = reg ? reg.items : DOCS_BASE.map((d, i) => ({ id: "base" + i, nombre: d.n, cat: d.c, recibido: false, fecha: "" }));
 
   const guardarItems = (nextItems) => {
     const otros = (docrecepcion || []).filter(r => r.obra_id !== obraId);
     setDocrecepcion([...otros, { obra_id: obraId, items: nextItems, upd: Date.now() }]);
   };
   const toggle = (id) => guardarItems(items.map(it => it.id === id ? { ...it, recibido: !it.recibido, fecha: !it.recibido ? hoyStr() : "" } : it));
-  const agregar = () => { const n = nuevoItem.trim(); if (!n) return; guardarItems([...items, { id: uid() + Date.now(), nombre: n, recibido: false, fecha: "" }]); setNuevoItem(""); };
+  const agregar = () => { const n = nuevoItem.trim(); if (!n) return; guardarItems([...items, { id: uid() + Date.now(), nombre: n, cat: catNuevo, recibido: false, fecha: "" }]); setNuevoItem(""); };
   const quitar = (id) => guardarItems(items.filter(it => it.id !== id));
 
   const recibidos = items.filter(it => it.recibido).length;
@@ -3258,17 +4179,31 @@ function RecepcionDocs({ db, cfg }) {
         <span style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Documentación inicial</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: recibidos === items.length && items.length > 0 ? "#16A34A" : T.muted }}>{recibidos} de {items.length} recibidos</span>
       </div>
-      {items.map(it => (<div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
+      {DOC_CATS.concat(["Otros"]).map(cat => {
+        const delGrupo = items.filter(it => (it.cat || "Documentación técnica") === cat || (cat === "Otros" && it.cat && !DOC_CATS.includes(it.cat)));
+        if (!delGrupo.length) return null;
+        const okG = delGrupo.filter(it => it.recibido).length;
+        return (<div key={cat} style={{ marginTop: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>{cat}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: okG === delGrupo.length ? "#16A34A" : T.muted }}>{okG}/{delGrupo.length}</span>
+          </div>
+          {delGrupo.map(it => (<div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
         <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.recibido ? "#16A34A" : T.border}`, background: it.recibido ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.recibido ? "✓" : ""}</button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: it.recibido ? T.text : T.sub }}>{it.nombre}</div>
           {it.recibido && it.fecha && <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 700 }}>Recibido {it.fecha}</div>}
         </div>
-        {!DOCS_BASE.includes(it.nombre) && <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
+        {!DOCS_BASE.some(d => d.n === it.nombre) && <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
       </div>))}
+        </div>);
+      })}
 
       <div style={{ display: "flex", gap: 7, marginTop: 12 }}>
-        <input value={nuevoItem} onChange={e => setNuevoItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} placeholder="Agregar otra definición o plano…" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} />
+        <select value={catNuevo} onChange={e => setCatNuevo(e.target.value)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 12, color: T.text, maxWidth: 130 }}>
+          {DOC_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input value={nuevoItem} onChange={e => setNuevoItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} placeholder="Agregar ítem…" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} />
         <button onClick={agregar} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "0 15px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>＋</button>
       </div>
     </Card>
@@ -3375,6 +4310,48 @@ function LogoSlot({ label, value, onSet, onClear }) {
   </div>);
 }
 
+function PushConfig({ T }) {
+  const [estado, setEstado] = useState("...");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { (async () => setEstado(await pushEstado()))(); }, []);
+  const activar = async () => {
+    setBusy(true); setMsg("");
+    const r = await activarPush("vv");
+    setMsg(r.msg); setEstado(await pushEstado()); setBusy(false);
+    setTimeout(() => setMsg(""), 8000);
+  };
+  const desactivar = async () => {
+    setBusy(true); await desactivarPush(); setEstado(await pushEstado());
+    setMsg("Notificaciones desactivadas en este dispositivo."); setBusy(false);
+    setTimeout(() => setMsg(""), 6000);
+  };
+  const probar = async () => {
+    setMsg("Enviando aviso de prueba…");
+    try {
+      const r = await fetch("/api/push-send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "Prueba V+V", message: "Si ves esto, las notificaciones andan." }) });
+      const d = await r.json().catch(() => ({}));
+      setMsg(d && d.ok ? `Enviado a ${d.enviados || 0} dispositivo(s). Debería llegarte en unos segundos.` : ("No se envió: " + (d.reason || d.error || "revisá las claves en Vercel")));
+    } catch (e) { setMsg("No pude enviar la prueba."); }
+    setTimeout(() => setMsg(""), 10000);
+  };
+  const info = { activo: ["#16A34A", "Activadas en este dispositivo"], inactivo: ["#94A3B8", "Sin activar en este dispositivo"], bloqueado: ["#B91C1C", "Bloqueadas — habilitalas en Ajustes del teléfono"], "no-soportado": ["#B45309", "Agregá la app a la pantalla de inicio para poder activarlas"], "...": ["#94A3B8", "Verificando…"] }[estado] || ["#94A3B8", estado];
+  return (<div>
+    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 9 }}>
+      <span style={{ width: 8, height: 8, borderRadius: "50%", background: info[0], flexShrink: 0 }} />
+      <span style={{ fontSize: 11.5, fontWeight: 700, color: info[0] }}>{info[1]}</span>
+    </div>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {estado !== "activo" && <button onClick={activar} disabled={busy || estado === "bloqueado"} style={{ flex: 1, minWidth: 130, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{busy ? "Activando…" : "Activar notificaciones"}</button>}
+      {estado === "activo" && <>
+        <button onClick={probar} style={{ flex: 1, minWidth: 110, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Probar aviso</button>
+        <button onClick={desactivar} disabled={busy} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Desactivar</button>
+      </>}
+    </div>
+    {msg && <div style={{ fontSize: 11.5, color: T.sub, marginTop: 9, lineHeight: 1.45 }}>{msg}</div>}
+  </div>);
+}
+
 function MasConfig({ cfg, setCfg, onBack }) {
   const c = cfg.colors || DEFAULT_COLORS;
   function aplicarPreset(p){ setCfg(prev=>({ ...prev, themeId:p.id, colors:{ accent:p.accent, al:p.al, bg:p.bg, card:p.card, border:p.border, text:p.text, sub:p.sub, muted:p.muted, navy:p.navy } })); }
@@ -3383,6 +4360,10 @@ function MasConfig({ cfg, setCfg, onBack }) {
   return (<div style={{ flex:1, overflowY:"auto", paddingBottom:80 }}>
     <PageHead eyebrow="Sistema" title="Configuración" sub="Identidad visual de la app" back onBack={onBack} />
     <div style={{ padding:"16px 20px" }}>
+      <Eyebrow>Notificaciones al celular</Eyebrow>
+      <div style={{ fontSize:11.5, color:T.muted, marginBottom:9, lineHeight:1.5 }}>Activá los avisos en este dispositivo para que te lleguen con la app cerrada. Hay que activarlo una vez en cada teléfono.</div>
+      <PushConfig T={T} />
+      <div style={{ marginTop:20 }} />
       <Eyebrow>Logotipos</Eyebrow>
       <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Sin logo se muestra el texto “V+V Construcciones”.</div>
       <div style={{ display:"flex", gap:10 }}>
@@ -3417,7 +4398,7 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <input value={cfg.apiKey||""} onChange={e=>setCfg(p=>({...p,apiKey:e.target.value}))} placeholder="sk-ant-..." style={{ width:"100%", background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", fontSize:13, color:T.text }} />
       <div style={{ marginTop:20 }}><Eyebrow>Actualizaciones</Eyebrow></div>
       <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"13px 14px" }}>
-        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 01-07-IA</b></div>
+        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-fixavance</b></div>
         <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Trae la última versión y todo lo último cargado (fotos, archivos, pedidos y cambios de cualquier dispositivo). Limpia la caché.</div>
         <button onClick={()=>{ try{ if(window.caches) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))); }catch(e){} location.replace(location.pathname+"?sync="+Date.now()); }} style={{ width:"100%", background:T.accent, color:"#fff", border:"none", borderRadius:T.rsm, padding:"12px", fontSize:13.5, fontWeight:700, cursor:"pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -3460,7 +4441,7 @@ function PreviewStub({ titulo }) {
 }
 
 const NAV = [
-  { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" }, { id:"obras", label:"Obras" },
+  { id:"chat", label:"IA" }, { id:"drone", label:"Drone IA" }, { id:"dashboard", label:"Inicio" }, { id:"obras", label:"Obras" },
   { id:"personal", label:"Personal" }, { id:"cargar", label:"Cargar", fab:true }, { id:"mas", label:"Más" },
 ];
 
@@ -3732,6 +4713,14 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     const msgs = (mensajes || []).slice(-8).map(m => `· ${m.from === "vv" ? "Nosotros (V+V)" : cn}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de V+V Construcciones (subcontratista de obra, Argentina). Ayudás a los jefes de obra y a la dirección con LO QUE NECESITEN. Hablás en español rioplatense (vos), claro y profesional.
 
+MINUTAS DE REUNIÓN: si te piden armar, redactar o pasar en limpio una minuta de reunión (por texto o dictada), pedí — solo si no te lo dieron — obra, fecha y quiénes participaron, y con eso redactá la minuta directo, con esta estructura fija:
+MINUTA DE REUNIÓN
+Obra: · Fecha: · Participantes:
+TEMAS TRATADOS (numerados, un renglón por tema con lo relevante)
+ACUERDOS / DECISIONES (numerados)
+PENDIENTES (numerados, con quién queda a cargo si se dijo)
+Sé fiel a lo que te contaron — no inventes acuerdos ni asistentes que no se mencionaron. Si dictan la reunión de corrido y desordenada, ordenala vos en esa estructura sin agregar nada que no se haya dicho.
+
 IMPORTANTE — QUIÉN ES QUIÉN (no los confundas NUNCA):
 · V+V Construcciones = tu empresa, la casa. Sebastián es el Presidente; Nicolás Arcussi es el CEO / Director de Operaciones.
 · ${cn} = el CLIENTE, una empresa EXTERNA (el comitente/mandante). Cuando decís "el cliente" o "${cn}" te referís a esta empresa de afuera.
@@ -3963,6 +4952,18 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     }, 6000);
     return () => clearInterval(iv);
   }, []);
+  async function descargarMinuta(texto) {
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const filas = esc(texto).split("\n").map(l => l.trim() ? `<p style="margin:0 0 6px">${l}</p>` : "").join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Minuta de reunión</title></head><body style="font-family:Calibri,Arial,sans-serif;color:#0F1B2D;padding:20px;line-height:1.5">${filas}</body></html>`;
+    const nombre = `Minuta_${hoyStr().replace(/\//g, "-")}.doc`;
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+    try {
+      const file = new File([blob], nombre, { type: "application/msword" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nombre }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
   function toggleVoz() {
     if (!sttOk) return;
     if (escuchando) { recRef.current?.stop(); setEscuchando(false); return; }
@@ -3973,7 +4974,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     rec.onerror = () => setEscuchando(false);
     recRef.current = rec; rec.start(); setEscuchando(true);
   }
-  const QUICK = ["Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
+  const QUICK = ["📝 Redactá una minuta de la reunión que te voy a contar", "Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
     <div style={{ flexShrink: 0 }}><PageHead eyebrow="Inteligencia · v23 limpia-canning" title={cfg?.tituloAsistente || "IA"} sub={cfg?.subtituloAsistente || "Lee todos los datos de la app"} /></div>
@@ -4019,6 +5020,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           </div>
         </div>}
         {m.accionDone && <div style={{ maxWidth: "84%", marginTop: 6, fontSize: 11.5, color: "#16A34A", fontWeight: 700 }}>✓ {m.accionResultado}</div>}
+        {m.role !== "user" && /MINUTA DE REUNI[OÓ]N/i.test(String(m.content || "")) && <button onClick={() => descargarMinuta(m.content)} style={{ marginTop: 7, background: "#2B579A", color: "#fff", border: "none", borderRadius: 9, padding: "9px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Ico n="word" /> Descargar minuta (Word)</button>}
       </div>))}
       {loading && <div style={{ display: "flex", gap: 5, padding: "6px 4px" }}>{[0, 1, 2].map(i => <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: T.muted, animation: "pulse 1s infinite", animationDelay: `${i * .15}s` }} />)}</div>}
       <div ref={bottomRef} />
@@ -4586,27 +5588,94 @@ function CotizacionView({ db, apiKey, onBack }) {
 function HerramientasView({ db, onBack }) {
   const { obras, herramientas, setHerramientas } = db;
   const [form, setForm] = useState(null);
+  const [fObra, setFObra] = useState("");
+  const [busca, setBusca] = useState("");
   const est = [{ id: "ok", c: "#16A34A", b: "#ECFDF5" }, { id: "reparación", c: "#F59E0B", b: "#FFFBEB" }, { id: "baja", c: "#EF4444", b: "#FEF2F2" }];
   function guardar() { if (!form.nombre?.trim()) return; if (form.id) setHerramientas(p => p.map(x => x.id === form.id ? form : x)); else setHerramientas(p => [...p, { ...form, id: uid() }]); setForm(null); }
+
+  const valorDe = (h) => (parseMontoNum(h.precio) || 0) * (Number(h.cantidad) || 1);
+  const lista = (herramientas || []).filter(h =>
+    (!fObra || (fObra === "_dep" ? !h.obra_id : h.obra_id === fObra)) &&
+    (!busca.trim() || `${h.nombre || ""} ${h.marca || ""} ${h.serie || ""}`.toLowerCase().includes(busca.trim().toLowerCase()))
+  );
+  const totalGral = (herramientas || []).reduce((a, h) => a + valorDe(h), 0);
+  // Agrupado por dónde está cada herramienta
+  const ubic = [{ id: "_dep", nombre: "Depósito" }, ...(obras || []).map(o => ({ id: o.id, nombre: o.nombre }))];
+  const porUbic = ubic.map(u => {
+    const items = (herramientas || []).filter(h => (u.id === "_dep" ? !h.obra_id : h.obra_id === u.id));
+    return { ...u, items, total: items.reduce((a, h) => a + valorDe(h), 0), unidades: items.reduce((a, h) => a + (Number(h.cantidad) || 1), 0) };
+  }).filter(u => u.items.length);
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
-    <SubHead id="herramientas" label="Herramientas" sub="Inventario y ubicación" onBack={onBack} />
+    <SubHead id="herramientas" label="Herramientas" sub="Inventario, valor y dónde está cada una" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
-      {herramientas.length === 0 && <EmptyMsg>Sin herramientas en el inventario.</EmptyMsg>}
-      {herramientas.map(h => { const e = est.find(x => x.id === h.estado) || est[0]; return (<RowItem key={h.id} onClick={() => setForm(h)} onDelete={() => setHerramientas(p => p.filter(x => x.id !== h.id))}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <div><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{h.nombre} {h.cantidad ? `×${h.cantidad}` : ""}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{obraNom(obras, h.obra_id)}</div></div>
+      {(herramientas || []).length > 0 && <>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <div style={{ flex: 1, background: T.navy, borderRadius: T.rsm, padding: "11px 13px" }}>
+            <div style={{ fontSize: 9.5, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Invertido en herramientas</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginTop: 2 }}>{money(totalGral)}</div>
+          </div>
+          <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px" }}>
+            <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Unidades</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.navy, marginTop: 2 }}>{(herramientas || []).reduce((a, h) => a + (Number(h.cantidad) || 1), 0)}</div>
+          </div>
+        </div>
+
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 11, marginBottom: 12 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: T.navy, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 7 }}>Dónde está</div>
+          {porUbic.map(u => (
+            <div key={u.id} onClick={() => setFObra(fObra === u.id ? "" : u.id)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: fObra === u.id ? T.al : "transparent" }}>
+              <Ico n={u.id === "_dep" ? "box" : "building"} s={14} c={T.accent} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.nombre}</span>
+              <span style={{ fontSize: 10.5, color: T.muted, whiteSpace: "nowrap" }}>{u.unidades} u.</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: T.navy, whiteSpace: "nowrap" }}>{money(u.total)}</span>
+            </div>
+          ))}
+          {fObra && <button onClick={() => setFObra("")} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: "4px 0 0" }}>Ver todas</button>}
+        </div>
+
+        <TInput value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nombre, marca o número de serie…" />
+        <div style={{ height: 12 }} />
+      </>}
+
+      {lista.length === 0 && <EmptyMsg>{(herramientas || []).length ? "No hay herramientas que coincidan." : "Sin herramientas en el inventario."}</EmptyMsg>}
+      {lista.map(h => { const e = est.find(x => x.id === h.estado) || est[0]; return (<RowItem key={h.id} onClick={() => setForm(h)} onDelete={() => setHerramientas(p => p.filter(x => x.id !== h.id))}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{h.nombre} {h.cantidad && Number(h.cantidad) > 1 ? `×${h.cantidad}` : ""}</div>
+            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{h.marca ? h.marca + " · " : ""}{h.obra_id ? obraNom(obras, h.obra_id) : "Depósito"}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+              {h.precio && <span style={{ fontSize: 10.5, fontWeight: 800, color: T.navy, background: T.al, borderRadius: 6, padding: "2px 7px" }}>{money(parseMontoNum(h.precio))}{Number(h.cantidad) > 1 ? " c/u" : ""}</span>}
+              {h.fechaCompra && <span style={{ fontSize: 10.5, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 7px" }}>Compra {h.fechaCompra}</span>}
+              {h.serie && <span style={{ fontSize: 10.5, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 7px" }}>N° {h.serie}</span>}
+              {h.responsable && <span style={{ fontSize: 10.5, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 7px" }}>{h.responsable}</span>}
+            </div>
+          </div>
           <Badge color={e.c} bg={e.b}>{h.estado}</Badge>
         </div>
       </RowItem>); })}
     </div>
-    <AddFab onClick={() => setForm({ nombre: "", cantidad: "1", obra_id: obras[0]?.id || "", estado: "ok" })} label="Herramienta" />
+    <AddFab onClick={() => setForm({ nombre: "", cantidad: "1", obra_id: "", estado: "ok", precio: "", fechaCompra: hoyStr(), marca: "", serie: "", proveedor: "", responsable: "" })} label="Herramienta" />
     {form && <Sheet title={form.id ? "Editar herramienta" : "Nueva herramienta"} onClose={() => setForm(null)}>
-      <Field label="Herramienta / equipo"><TInput value={form.nombre || ""} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Amoladora Bosch" /></Field>
+      <Field label="Herramienta / equipo"><TInput value={form.nombre || ""} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Amoladora angular" /></Field>
+      <FieldRow>
+        <Field label="Marca / modelo"><TInput value={form.marca || ""} onChange={e => setForm({ ...form, marca: e.target.value })} placeholder="Bosch GWS 850" /></Field>
+        <Field label="N° de serie"><TInput value={form.serie || ""} onChange={e => setForm({ ...form, serie: e.target.value })} placeholder="Opcional" /></Field>
+      </FieldRow>
       <FieldRow>
         <Field label="Cantidad"><TInput type="number" value={form.cantidad || ""} onChange={e => setForm({ ...form, cantidad: e.target.value })} /></Field>
+        <Field label="Precio pagado (c/u)"><MontoInput value={form.precio || ""} onChange={v => setForm({ ...form, precio: v })} placeholder="0" /></Field>
+      </FieldRow>
+      <FieldRow>
+        <Field label="Fecha de compra"><TInput value={form.fechaCompra || ""} onChange={e => setForm({ ...form, fechaCompra: e.target.value })} placeholder="dd/mm/aa" /></Field>
+        <Field label="Proveedor"><TInput value={form.proveedor || ""} onChange={e => setForm({ ...form, proveedor: e.target.value })} placeholder="Dónde se compró" /></Field>
+      </FieldRow>
+      <Field label="Dónde está"><Sel value={form.obra_id || ""} onChange={e => setForm({ ...form, obra_id: e.target.value })}><option value="">Depósito</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      <FieldRow>
+        <Field label="A cargo de"><TInput value={form.responsable || ""} onChange={e => setForm({ ...form, responsable: e.target.value })} placeholder="Quién la tiene" /></Field>
         <Field label="Estado"><Sel value={form.estado || ""} onChange={e => setForm({ ...form, estado: e.target.value })}>{est.map(x => <option key={x.id} value={x.id}>{x.id}</option>)}</Sel></Field>
       </FieldRow>
-      <Field label="Obra / ubicación"><Sel value={form.obra_id || ""} onChange={e => setForm({ ...form, obra_id: e.target.value })}><option value="">Depósito</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      {form.precio && Number(form.cantidad) > 1 && <div style={{ fontSize: 11.5, color: T.sub, marginTop: -4, marginBottom: 8 }}>Total de este ítem: <b style={{ color: T.navy }}>{money((parseMontoNum(form.precio) || 0) * (Number(form.cantidad) || 1))}</b></div>}
       <Adjuntos items={form.adjuntos} onChange={next => setForm({ ...form, adjuntos: next })} />
       <PBtn full onClick={guardar} style={{ marginTop: 10 }}>{form.id ? "Guardar" : "Agregar"}</PBtn>
     </Sheet>}
@@ -5467,7 +6536,20 @@ function FormulariosView({ db, cfg, onBack }) {
 }
 
 // ── PLAN DE GESTIÓN OPERATIVO ────────────────────────────────────────
-function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6) n++; } return n; }
+// Feriados nacionales argentinos. Un día feriado NO es hábil: no corre plazo
+// ni se programa trabajo. Si el gobierno agrega puentes turísticos, se suman acá.
+const FERIADOS = new Set([
+  // 2026
+  "2026-01-01", "2026-02-16", "2026-02-17", "2026-03-24", "2026-04-02", "2026-04-03",
+  "2026-05-01", "2026-05-25", "2026-06-17", "2026-06-20", "2026-07-09", "2026-08-17",
+  "2026-10-12", "2026-11-20", "2026-12-08", "2026-12-25",
+  // 2027 (trasladables sujetos a confirmación oficial)
+  "2027-01-01", "2027-02-08", "2027-02-09", "2027-03-24", "2027-03-26", "2027-04-02",
+  "2027-05-01", "2027-05-25", "2027-06-17", "2027-06-20", "2027-07-09", "2027-08-16",
+  "2027-10-11", "2027-11-22", "2027-12-08", "2027-12-25",
+]);
+const _isoDe = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(cur))) n++; } return n; }
 function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaReal || new Date(); const dias = diasHabiles(fechaSolic, fin); const desvio = dias - plazo; let estado; if (fechaReal || cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo"; else estado = desvio <= 0 ? "En plazo" : "Vencido"; return { dias, desvio, estado, retraso: Math.max(0, desvio) }; }
 const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "#ECFDF5" }, "En plazo": { c: "#3B82F6", b: "#EFF6FF" }, "Fuera de plazo": { c: "#F59E0B", b: "#FFFBEB" }, "Vencido": { c: "#EF4444", b: "#FEF2F2" } };
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
@@ -5475,69 +6557,189 @@ const isoHoy = () => new Date().toISOString().slice(0, 10);
 
 function GestionView({ db, cfg, onBack }) {
   const { pedidos, obras, gestion, setGestion, matpedidos } = db;
-  const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], ...(gestion || {}) };
+  const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
   const [mForm, setMForm] = useState(null);
   const [rForm, setRForm] = useState(null);
+  const [pForm, setPForm] = useState(null);      // decisión sobre un vencido
+  const [pdfPunit, setPdfPunit] = useState(null); // PDF de un punitorio confirmado
   const upd = (patch) => setGestion({ ...g, ...patch });
   const cli = cfg?.clienteNombre || "Belfast";
 
-  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; const m = gMetricas(solic, real, g.plazo, p.estado === "resuelto"); return { id: p.id, auto: true, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, plazo: g.plazo, ...m }; });
-  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; const m = gMetricas(solic, real, it.plazo || g.plazo, !!real); return { ...it, auto: false, fechaSolic: solic, fechaReal: real, plazo: it.plazo || g.plazo, ...m }; });
-  // Definiciones y planos pedidos a la Dirección de Obra: se miden igual que los pedidos
-  // de información. La "recepción registrada" (cumplido) es la fecha real de respuesta.
+  // ── Ítems medidos ──────────────────────────────────────────────────
+  // La decisión (punitorio sí/no/prórroga) vive en g.punit[id]; la prórroga
+  // acordada extiende el plazo de ESE ítem, así el reloj refleja lo pactado.
+  const conDecision = (base) => {
+    const d = g.punit[base.id];
+    const plazoEf = (base.plazoBase || g.plazo) + (d?.decision === "prorroga" ? (d.prorrogaDias || 0) : 0);
+    const m = gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
+    return { ...base, plazo: plazoEf, ...m, dec: d || null };
+  };
+  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; return conDecision({ id: p.id, auto: true, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: p.estado === "resuelto" }); });
+  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, auto: false, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const parseDmy = (f) => { const m = String(f || "").match(/^(\d{2})\/(\d{2})\/(\d{2})$/); return m ? new Date(`20${m[3]}-${m[2]}-${m[1]}T12:00:00`) : null; };
   const itemsMat = (matpedidos || []).filter(p => p.tipo === "definicion" || p.tipo === "plano").map(p => {
     const solic = p.ts ? new Date(p.ts) : null;
     const real = p.cumplido ? (parseDmy(p.cumplidoFecha) || new Date()) : null;
-    const m = gMetricas(solic, real, g.plazo, !!p.cumplido);
     const desc = (p.items || []).map(it => it.nombre).filter(Boolean).join(", ") || (p.tipo === "plano" ? "Plano" : "Definición");
-    return { id: p.id, auto: true, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, plazo: g.plazo, ...m };
+    return conDecision({ id: p.id, auto: true, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: !!p.cumplido });
   });
   const items = [...itemsPedidos, ...itemsMat, ...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
-  const perItem = (it) => (it.estado === "Vencido" || it.estado === "Fuera de plazo") ? it.retraso * (it.dotacion || g.dotacion) * g.costoPersona : 0;
+
+  // ── El corazón del cambio: el perjuicio SOLO nace de una confirmación ──
+  // Un ítem vencido es un CANDIDATO. Recién cuando se confirma (qué tarea
+  // frenó, cuánta gente real, a qué costo) empieza a valer plata, y el
+  // cálculo usa esos datos, no los genéricos.
+  const perItem = (it) => {
+    if (!it.dec || it.dec.decision !== "confirmado") return 0;
+    return it.retraso * (Number(it.dec.personas) || g.dotacion) * (Number(it.dec.costoDia) || g.costoPersona);
+  };
+  const esVencido = it => it.estado === "Vencido" || it.estado === "Fuera de plazo";
+  const enEval = items.filter(it => esVencido(it) && !it.dec);
+  const confirmados = items.filter(it => it.dec?.decision === "confirmado");
+  const sinPerj = items.filter(it => it.dec?.decision === "sin_perjuicio");
+  const prorrogas = items.filter(it => it.dec?.decision === "prorroga");
+
   const total = items.length;
   const cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
   const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
-  const grp = (n) => items.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
+  const grp = (n) => confirmados.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
   const perjBelfast = grp(cli), perjVV = grp("V+V"), perjEstudio = grp("Estudio"), perjTotal = perjBelfast + perjVV + perjEstudio;
   const cnt = (e) => items.filter(i => i.estado === e).length;
-  const perjDia = g.dotacion * g.costoPersona;
 
+  function decidir(id, decision, datos = {}) { upd({ punit: { ...g.punit, [id]: { decision, ...datos, ts: Date.now() } } }); setPForm(null); }
+  function quitarDecision(id) { const p = { ...g.punit }; delete p[id]; upd({ punit: p }); }
   function guardarManual() { if (!mForm.descripcion?.trim()) return; const it = { ...mForm, id: mForm.id || uid() }; const exists = (g.manual || []).some(x => x.id === it.id); upd({ manual: exists ? g.manual.map(x => x.id === it.id ? it : x) : [...(g.manual || []), it] }); setMForm(null); }
   function guardarReunion() { const it = { ...rForm, id: rForm.id || uid() }; const exists = (g.reuniones || []).some(x => x.id === it.id); upd({ reuniones: exists ? g.reuniones.map(x => x.id === it.id ? it : x) : [it, ...(g.reuniones || [])] }); setRForm(null); }
 
-  const TABS = [["registro", "Registro"], ["panel", "Panel"], ["punitorios", "Punitorios"], ["plan", "Plan"], ["reunion", "Reunión"]];
+  // ── PDF de reclamo individual (un documento por punitorio) ─────────
+  const _e = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  function htmlPunit(it) {
+    const d = it.dec || {}; const pj = perItem(it);
+    const personas = Number(d.personas) || g.dotacion, costo = Number(d.costoDia) || g.costoPersona;
+    return `<!doctype html><html><head><meta charset="utf-8"><style>
+      @page{size:A4;margin:22mm 18mm}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0}
+      .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:22px}
+      .marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
+      .tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
+      h1{font-size:15px;color:#0F1B2D;margin:18px 0 4px}
+      .meta{font-size:11px;color:#64748B}
+      table{width:100%;border-collapse:collapse;margin:14px 0}
+      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top}
+      th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9.5px;letter-spacing:1px}
+      .calc{background:#F8FAFC;border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
+      .tot{font-size:16px;font-weight:bold;color:#B91C1C;margin-top:6px}
+      .firmas{display:flex;justify-content:space-between;margin-top:70px}
+      .firma{width:44%;border-top:1px solid #1a202c;padding-top:6px;font-size:10.5px;text-align:center;color:#475569}
+      .nota{font-size:10px;color:#94A3B8;margin-top:26px;border-top:1px solid #E2E8F0;padding-top:8px}
+    </style></head><body>
+      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Registro de perjuicio por demora imputable</div></div>
+      <h1>${_e(it.tipo)}: ${_e(it.descripcion)}</h1>
+      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(it.imputable)} · Emitido: ${hoyStr()}</div>
+      <table>
+        <tr><th>Concepto</th><th>Detalle</th></tr>
+        <tr><td>Fecha de solicitud</td><td>${fmtD(it.fechaSolic)}</td></tr>
+        <tr><td>Plazo comprometido</td><td>${it.plazo} días hábiles${it.dec && it.plazo !== it.plazoBase ? ` (incluye prórroga acordada)` : ""}</td></tr>
+        <tr><td>Respuesta / entrega</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Sin respuesta a la fecha de emisión"}</td></tr>
+        <tr><td>Días hábiles transcurridos</td><td>${it.dias}</td></tr>
+        <tr><td><b>Días de retraso</b></td><td><b>${it.retraso}</b></td></tr>
+        <tr><td>Tarea detenida</td><td>${_e(d.tarea || "—")}</td></tr>
+        <tr><td>Dotación afectada</td><td>${personas} persona${personas === 1 ? "" : "s"}</td></tr>
+        ${d.nota ? `<tr><td>Observaciones</td><td>${_e(d.nota)}</td></tr>` : ""}
+      </table>
+      <div class="calc">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Cálculo del perjuicio</div>
+        <div style="margin-top:6px">${it.retraso} día${it.retraso === 1 ? "" : "s"} de retraso × ${personas} persona${personas === 1 ? "" : "s"} × ${money(costo)} por persona/día</div>
+        <div class="tot">Perjuicio: ${money(pj)}</div>
+        ${!it.fechaReal ? `<div style="font-size:10.5px;color:#B91C1C;margin-top:5px">El ítem continúa sin respuesta: el perjuicio sigue devengándose por cada día hábil adicional (${money(personas * costo)}/día).</div>` : ""}
+      </div>
+      <div style="font-size:11.5px">El presente registro se emite conforme a la política de gestión acordada entre las partes: por cada día de retraso imputable que detenga una tarea en condiciones de avanzar, se computa un perjuicio equivalente a los días de retraso por la dotación afectada por su costo diario. La cronología surge del registro contemporáneo de la aplicación de gestión de obra.</div>
+      <div class="firmas"><div class="firma">${_e(cfg?.firmante || "Sebastián De la Fuente")}<br/>V+V Construcciones</div><div class="firma">${_e(cli)}<br/>Recibido / Conforme</div></div>
+      <div class="nota">Documento generado por el sistema de gestión V+V Construcciones. ID ${_e(it.id)}.</div>
+    </body></html>`;
+  }
+
+  const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
+  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "#FEF2F2" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "#F1F5F9" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "#EFF6FF" } };
+
+  // Tarjeta compartida por Registro y Punitorios
+  const ItemCard = ({ it, conAcciones }) => {
+    const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
+    return (<Card style={{ padding: 13, marginBottom: 9 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 10.5, color: T.muted }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · plazo {it.plazo} d</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</span>
+            {!it.auto && <button onClick={() => setMForm({ ...g.manual.find(x => x.id === it.id) })} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>editar</button>}
+            {!it.auto && <button onClick={() => { quitarDecision(it.id); upd({ manual: g.manual.filter(x => x.id !== it.id), punit: Object.fromEntries(Object.entries(g.punit).filter(([k]) => k !== it.id)) }); }} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>✕</button>}
+          </div>
+          {it.dec?.decision === "confirmado" && <div style={{ fontSize: 11, marginTop: 6, color: T.sub, lineHeight: 1.5 }}><b style={{ color: "#B91C1C" }}>Perjuicio: {money(pj)}</b> — {it.retraso} d × {Number(it.dec.personas) || g.dotacion} pers. × {money(Number(it.dec.costoDia) || g.costoPersona)}{it.dec.tarea ? <><br />Frenó: {it.dec.tarea}</> : null}</div>}
+          {it.dec?.decision === "prorroga" && <div style={{ fontSize: 11, marginTop: 6, color: "#2563EB" }}>Prórroga acordada: +{it.dec.prorrogaDias} días háb.{it.dec.nota ? ` — ${it.dec.nota}` : ""}</div>}
+          {it.dec?.decision === "sin_perjuicio" && it.dec.nota && <div style={{ fontSize: 11, marginTop: 6, color: T.muted }}>{it.dec.nota}</div>}
+          {conAcciones && <div style={{ display: "flex", gap: 7, marginTop: 9, flexWrap: "wrap" }}>
+            {!it.dec && esVencido(it) && <button onClick={() => setPForm({ it, personas: g.dotacion, costoDia: g.costoPersona, tarea: "", nota: "", modo: "confirmar", prorrogaDias: g.plazo })} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "8px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Evaluar</button>}
+            {it.dec?.decision === "confirmado" && <button onClick={() => setPdfPunit(it)} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>PDF reclamo</button>}
+            {it.dec && <button onClick={() => quitarDecision(it.id)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 8, padding: "8px 12px", fontSize: 11.5, cursor: "pointer" }}>Rever</button>}
+          </div>}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end", flexShrink: 0 }}>
+          <Badge color={e.c} bg={e.b}>{it.estado}</Badge>
+          {db2 && <Badge color={db2.c} bg={db2.b}>{db2.t}</Badge>}
+          {!it.dec && esVencido(it) && <Badge color="#B45309" bg="#FFFBEB">En evaluación</Badge>}
+        </div>
+      </div>
+    </Card>);
+  };
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="gestion" label="Plan de gestión" sub="Desempeño, desvíos y perjuicio económico" onBack={onBack} />
     <div style={{ padding: "14px 20px 0" }}>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>
-        {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? T.al : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+        {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? T.al : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer", position: "relative" }}>{l}{k === "punitorios" && enEval.length > 0 && <span style={{ position: "absolute", top: -5, right: -5, background: "#EF4444", color: "#fff", borderRadius: 10, minWidth: 17, height: 17, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{enEval.length}</span>}</button>)}
       </div>
     </div>
 
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
-      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Los pedidos de la app se miden solos (plazo {g.plazo} días háb.). Sumá manualmente certificados u otros con el botón ＋.</div>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Los pedidos de la app se miden solos (plazo {g.plazo} días háb.). Acá se ve TODO; los vencidos se evalúan en la pestaña Punitorios. Sumá certificados u otros con ＋.</div>
       {items.length === 0 && <EmptyMsg>Sin ítems. Cargá pedidos o agregá un registro manual.</EmptyMsg>}
-      {items.map(it => { const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); return (<Card key={it.id} style={{ padding: 13, marginBottom: 9 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
-              <span style={{ fontSize: 10.5, color: T.muted }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · {it.dias} d háb.</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</span>
-              {!it.auto && <button onClick={() => setMForm({ ...g.manual.find(x => x.id === it.id) })} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>editar</button>}
-              {!it.auto && <button onClick={() => upd({ manual: g.manual.filter(x => x.id !== it.id) })} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>✕</button>}
-            </div>
-            {pj > 0 && <div style={{ fontSize: 11, fontWeight: 700, color: "#EF4444", marginTop: 5 }}>Perjuicio: {money(pj)}</div>}
-          </div>
-          <Badge color={e.c} bg={e.b}>{it.estado}</Badge>
-        </div>
-      </Card>); })}
+      {items.map(it => <ItemCard key={it.id} it={it} conAcciones={false} />)}
       <AddFab onClick={() => setMForm({ tipo: "Certificado", obra_id: obras[0]?.id || "", descripcion: "", imputable: "Estudio", fechaSolic: isoHoy(), plazo: g.plazo, fechaReal: "" })} label="Registro" />
+    </div>}
+
+    {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
+      <div style={{ background: T.al, border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 16, fontSize: 11.5, color: T.sub, lineHeight: 1.55 }}>El sistema detecta los vencidos solo. <b>Ningún vencido vale plata hasta que lo confirmes</b>: al evaluar decidís si frenó trabajo (punitorio, con la dotación y costo reales), si no frenó nada (queda como incumplimiento sin perjuicio) o si hubo prórroga acordada (el plazo se extiende y queda escrito).</div>
+
+      <Eyebrow>En evaluación ({enEval.length})</Eyebrow>
+      {enEval.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Nada pendiente de evaluar.</div>}
+      {enEval.map(it => <ItemCard key={it.id} it={it} conAcciones={true} />)}
+
+      <div style={{ height: 8 }} />
+      <Eyebrow>Punitorios confirmados ({confirmados.length}) — {money(perjTotal)}</Eyebrow>
+      {confirmados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Sin punitorios confirmados.</div>}
+      {confirmados.map(it => <ItemCard key={it.id} it={it} conAcciones={true} />)}
+
+      {(sinPerj.length > 0 || prorrogas.length > 0) && <>
+        <div style={{ height: 8 }} />
+        <Eyebrow>Resueltos sin perjuicio ({sinPerj.length + prorrogas.length})</Eyebrow>
+        {[...prorrogas, ...sinPerj].map(it => <ItemCard key={it.id} it={it} conAcciones={true} />)}
+      </>}
+
+      <div style={{ height: 14 }} />
+      <Card style={{ padding: 15 }}>
+        <Eyebrow>Parámetros por defecto</Eyebrow>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Se precargan al evaluar; en cada punitorio podés ajustar la dotación y el costo reales de ESA parada.</div>
+        <FieldRow>
+          <Field label="Plazo (días háb.)"><TInput type="number" value={g.plazo} onChange={e => upd({ plazo: +e.target.value || 0 })} /></Field>
+          <Field label="Dotación típica"><TInput type="number" value={g.dotacion} onChange={e => upd({ dotacion: +e.target.value || 0 })} /></Field>
+        </FieldRow>
+        <Field label="Costo diario por persona ($)"><TInput type="number" value={g.costoPersona} onChange={e => upd({ costoPersona: +e.target.value || 0 })} /></Field>
+        <Eyebrow>Costo diario por oficio (referencia)</Eyebrow>
+        {(g.oficios || []).map((o, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{o.oficio}</span><input type="number" value={o.costo} onChange={e => upd({ oficios: g.oficios.map((x, j) => j === i ? { ...x, costo: +e.target.value || 0 } : x) })} style={{ width: 110, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 9px", fontSize: 12.5, color: T.text, textAlign: "right" }} /></div>))}
+      </Card>
     </div>}
 
     {tab === "panel" && <div style={{ padding: "16px 20px" }}>
@@ -5545,45 +6747,26 @@ function GestionView({ db, cfg, onBack }) {
         <MiniStat label="Ítems" value={total} color={T.accent} />
         <MiniStat label="% Cumplimiento" value={pctCumpl + "%"} color="#16A34A" />
         <MiniStat label="Días háb. prom." value={diasProm} color="#3B82F6" />
-        <MiniStat label="Perjuicio total" value={money(perjTotal)} color="#EF4444" />
+        <MiniStat label="Perjuicio confirmado" value={money(perjTotal)} color="#EF4444" />
       </div>
+      {enEval.length > 0 && <div onClick={() => setTab("punitorios")} style={{ background: "#FFFBEB", border: "1px solid #F59E0B", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 14, fontSize: 12, color: "#92400E", cursor: "pointer", fontWeight: 600 }}>⚠ {enEval.length} vencido{enEval.length > 1 ? "s" : ""} sin evaluar — tocá para revisarlos</div>}
       <Eyebrow>Por estado</Eyebrow>
       <Card style={{ padding: 13, marginBottom: 14 }}>
         {["Cumplido", "En plazo", "Fuera de plazo", "Vencido"].map(s => { const e = GEST_ESTADOS[s]; return (<div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.bg}` }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: e.c }} /><span style={{ fontSize: 12.5, color: T.text }}>{s}</span></div><span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{cnt(s)}</span></div>); })}
       </Card>
-      <Eyebrow>Perjuicio imputable</Eyebrow>
+      <Eyebrow>Perjuicio confirmado por responsable</Eyebrow>
       <Card style={{ padding: 13 }}>
         {[[cli, perjBelfast], ["Estudio", perjEstudio], ["V+V (interno)", perjVV]].map(([n, v]) => (<div key={n} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${T.bg}` }}><span style={{ fontSize: 12.5, color: T.text }}>{n}</span><span style={{ fontSize: 13, fontWeight: 800, color: v > 0 ? "#EF4444" : T.muted }}>{money(v)}</span></div>))}
         <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 9 }}><span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>TOTAL</span><span style={{ fontSize: 14, fontWeight: 800, color: "#EF4444" }}>{money(perjTotal)}</span></div>
       </Card>
     </div>}
 
-    {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
-      <Card style={{ padding: 15, marginBottom: 14 }}>
-        <Eyebrow>Parámetros (editables)</Eyebrow>
-        <FieldRow>
-          <Field label="Plazo (días háb.)"><TInput type="number" value={g.plazo} onChange={e => upd({ plazo: +e.target.value || 0 })} /></Field>
-          <Field label="Dotación parada"><TInput type="number" value={g.dotacion} onChange={e => upd({ dotacion: +e.target.value || 0 })} /></Field>
-        </FieldRow>
-        <Field label="Costo diario por persona ($)"><TInput type="number" value={g.costoPersona} onChange={e => upd({ costoPersona: +e.target.value || 0 })} /></Field>
-        <div style={{ background: T.al, borderRadius: T.rsm, padding: "11px 13px", marginTop: 6 }}><div style={{ fontSize: 11.5, color: T.sub }}>Perjuicio por día de retraso</div><div style={{ fontSize: 18, fontWeight: 800, color: "#EF4444" }}>{money(perjDia)}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{g.dotacion} pers. × {money(g.costoPersona)}</div></div>
-      </Card>
-      <Eyebrow>Costo diario por oficio</Eyebrow>
-      <Card style={{ padding: 13, marginBottom: 14 }}>
-        {(g.oficios || []).map((o, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{o.oficio}</span><input type="number" value={o.costo} onChange={e => upd({ oficios: g.oficios.map((x, j) => j === i ? { ...x, costo: +e.target.value || 0 } : x) })} style={{ width: 110, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 9px", fontSize: 12.5, color: T.text, textAlign: "right" }} /></div>))}
-      </Card>
-      <Eyebrow>Simulador acumulado</Eyebrow>
-      <Card style={{ padding: 13 }}>
-        {[1, 2, 3, 4, 5, 7, 10, 15].map(d => (<div key={d} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.bg}` }}><span style={{ fontSize: 12.5, color: T.sub }}>{d} día{d > 1 ? "s" : ""} de retraso</span><span style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{money(d * perjDia)}</span></div>))}
-      </Card>
-    </div>}
-
     {tab === "plan" && <div style={{ padding: "16px 20px" }}>
       {[["1. Objetivo", ["Medir tiempos de definición y certificación, detectar desvíos y valorizar el perjuicio económico de los retrasos para tomar decisiones y reclamar lo que corresponda."]],
       ["2. Estándares (SLA)", [`Pedidos de información (${cli}/Estudio): respuesta en máx. ${g.plazo} días hábiles desde la solicitud.`, `Certificados de obra (Héctor Ayala): entrega en máx. ${g.plazo} días hábiles desde la visita.`, "Toda solicitud y certificado se carga el mismo día en el Registro."]],
-      ["3. Qué mejorar", ["Anticipación: pedir definiciones y materiales durante la tarea previa, no al terminarla.", "Seguimiento: revisar el Panel semanalmente y escalar los vencidos.", "Trazabilidad: fechar solicitud, respuesta y entrega sin excepción.", "Responsabilidad: asignar a cada desvío su causa (V+V / " + cli + " / Estudio)."]],
-      ["4. Política de punitorios", ["Por cada día de retraso imputable a " + cli + " o al Estudio que detenga una tarea en condiciones de avanzar, se computa un perjuicio = Días de retraso × Dotación parada × Costo diario. Se presenta en la reunión mensual como perjuicio económico medible."]],
-      ["5. Responsables", ["V+V: carga del registro, certificaciones en plazo (Héctor Ayala), seguimiento.", cli + " / Estudio: respuesta a pedidos y provisión de definiciones en plazo."]]
+      ["3. Circuito de imputación", ["El sistema detecta el vencimiento en forma automática (candidato).", "V+V evalúa cada candidato: se confirma como punitorio SOLO si el retraso detuvo una tarea en condiciones de avanzar, identificando la tarea y la dotación real afectada.", "Los retrasos que no frenaron trabajo quedan registrados como incumplimiento de plazo, sin perjuicio económico.", "Las prórrogas acordadas entre las partes extienden el plazo del ítem y quedan documentadas."]],
+      ["4. Política de punitorios", ["Por cada día de retraso imputable a " + cli + " o al Estudio que detenga una tarea en condiciones de avanzar: perjuicio = días de retraso × dotación afectada × costo diario por persona.", "Cada punitorio confirmado se documenta con su cronología, la tarea detenida y el cálculo abierto, y se presenta en la reunión mensual."]],
+      ["5. Responsables", ["V+V: carga del registro, certificaciones en plazo (Héctor Ayala), evaluación de candidatos y emisión de reclamos.", cli + " / Estudio: respuesta a pedidos y provisión de definiciones en plazo."]]
       ].map(([titulo, puntos], i) => (<Card key={i} style={{ padding: 15, marginBottom: 11 }}>
         <div style={{ fontSize: 13.5, fontWeight: 800, color: T.accent, marginBottom: 8 }}>{titulo}</div>
         {puntos.map((p, j) => <div key={j} style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6, marginBottom: 5, paddingLeft: 12, position: "relative" }}><span style={{ position: "absolute", left: 0, color: BRASS }}>·</span>{p}</div>)}
@@ -5633,6 +6816,47 @@ function GestionView({ db, cfg, onBack }) {
       <Field label="Acciones acordadas"><textarea value={rForm.acciones} onChange={e => setRForm({ ...rForm, acciones: e.target.value })} rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>
       <PBtn full onClick={guardarReunion} style={{ marginTop: 6 }}>Guardar</PBtn>
     </Sheet>}
+
+    {pForm && <Sheet title="Evaluar retraso" onClose={() => setPForm(null)}>
+      <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55, marginBottom: 12 }}><b style={{ color: T.text }}>{pForm.it.descripcion}</b><br />{pForm.it.retraso} día{pForm.it.retraso === 1 ? "" : "s"} de retraso sobre el plazo de {pForm.it.plazo} días hábiles.</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[["confirmar", "Frenó trabajo"], ["sin", "No frenó nada"], ["prorroga", "Prórroga acordada"]].map(([m, l]) => <button key={m} onClick={() => setPForm({ ...pForm, modo: m })} style={{ flex: 1, padding: "10px 6px", borderRadius: 9, border: `1.5px solid ${pForm.modo === m ? T.accent : T.border}`, background: pForm.modo === m ? T.al : T.card, color: pForm.modo === m ? T.accent : T.sub, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+      </div>
+      {pForm.modo === "confirmar" && <>
+        <Field label="¿Qué tarea quedó detenida?"><TInput value={pForm.tarea} onChange={e => setPForm({ ...pForm, tarea: e.target.value })} placeholder="Ej: Mampostería sector norte, PB" /></Field>
+        <FieldRow>
+          <Field label="Personas paradas (reales)"><TInput type="number" value={pForm.personas} onChange={e => setPForm({ ...pForm, personas: e.target.value })} /></Field>
+          <Field label="Costo por persona/día ($)"><TInput type="number" value={pForm.costoDia} onChange={e => setPForm({ ...pForm, costoDia: e.target.value })} /></Field>
+        </FieldRow>
+        <Field label="Observaciones (opcional)"><TInput value={pForm.nota} onChange={e => setPForm({ ...pForm, nota: e.target.value })} placeholder="Contexto, referencia a bitácora…" /></Field>
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: "#991B1B" }}>{pForm.it.retraso} d × {Number(pForm.personas) || 0} pers. × {money(Number(pForm.costoDia) || 0)}</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "#B91C1C" }}>{money(pForm.it.retraso * (Number(pForm.personas) || 0) * (Number(pForm.costoDia) || 0))}</div>
+          {!pForm.it.fechaReal && <div style={{ fontSize: 10.5, color: "#991B1B", marginTop: 3 }}>Sigue sin respuesta: el monto crece {money((Number(pForm.personas) || 0) * (Number(pForm.costoDia) || 0))} por día hábil.</div>}
+        </div>
+        <PBtn full disabled={!pForm.tarea.trim()} onClick={() => decidir(pForm.it.id, "confirmado", { tarea: pForm.tarea.trim(), personas: Number(pForm.personas) || g.dotacion, costoDia: Number(pForm.costoDia) || g.costoPersona, nota: pForm.nota.trim() })}>Confirmar punitorio</PBtn>
+      </>}
+      {pForm.modo === "sin" && <>
+        <Field label="Por qué no generó perjuicio (opcional)"><TInput value={pForm.nota} onChange={e => setPForm({ ...pForm, nota: e.target.value })} placeholder="Ej: la cuadrilla siguió con otro frente" /></Field>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Queda registrado como incumplimiento de plazo (baja el % de cumplimiento de {cli}) pero sin monto.</div>
+        <PBtn full onClick={() => decidir(pForm.it.id, "sin_perjuicio", { nota: pForm.nota.trim() })}>Registrar sin perjuicio</PBtn>
+      </>}
+      {pForm.modo === "prorroga" && <>
+        <Field label="Días hábiles adicionales acordados"><TInput type="number" value={pForm.prorrogaDias} onChange={e => setPForm({ ...pForm, prorrogaDias: e.target.value })} /></Field>
+        <Field label="Con quién se acordó / referencia"><TInput value={pForm.nota} onChange={e => setPForm({ ...pForm, nota: e.target.value })} placeholder="Ej: acordado con Enrico por mensaje del 20/07" /></Field>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>El plazo del ítem pasa a {pForm.it.plazoBase} + {Number(pForm.prorrogaDias) || 0} días hábiles y la extensión queda documentada. Si aun así vence, vuelve a evaluación.</div>
+        <PBtn full disabled={!(Number(pForm.prorrogaDias) > 0)} onClick={() => decidir(pForm.it.id, "prorroga", { prorrogaDias: Number(pForm.prorrogaDias), nota: pForm.nota.trim() })}>Registrar prórroga</PBtn>
+      </>}
+    </Sheet>}
+
+    {pdfPunit && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
+      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={() => setPdfPunit(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
+        <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Reclamo — {pdfPunit.descripcion}</div>
+        <button onClick={() => { const f = document.getElementById("punit-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="punit-pdf" srcDoc={htmlPunit(pdfPunit)} title="Reclamo punitorio" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
   </div>);
 }
 
@@ -5816,13 +7040,96 @@ function ClientePanel({ db, cfg, onBack }) {
 // ── SHELL WEB INSTITUCIONAL (V+V) ────────────────────────────────────
 const LUXE_BG = "radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px) 0 0/22px 22px, radial-gradient(1100px 520px at 50% -8%, rgba(176,137,79,0.13), transparent 62%), linear-gradient(180deg,#0b141f 0%,#0a1019 100%)";
 const LUXE_HERO = "radial-gradient(620px 220px at 86% 0%, rgba(176,137,79,0.20), transparent 60%), linear-gradient(135deg,#101C2C 0%,#17283c 100%)";
-function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif }) {
+// La IA no puede "mirar" un video: analiza imágenes. Así que del video sacamos
+// cuadros repartidos a lo largo del recorrido y ESOS son los que analiza.
+// Resultado: un video recorriendo la obra rinde mucho más que dos fotos sueltas.
+async function extraerCuadros(file, n = 6) {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file);
+      const v = document.createElement("video");
+      v.preload = "metadata"; v.muted = true; v.playsInline = true; v.src = url;
+      v.onloadedmetadata = async () => {
+        const dur = v.duration || 0;
+        if (!isFinite(dur) || dur <= 0) { URL.revokeObjectURL(url); resolve([]); return; }
+        const cv = document.createElement("canvas");
+        const anchoMax = 1280;
+        const esc = Math.min(1, anchoMax / (v.videoWidth || anchoMax));
+        cv.width = Math.round((v.videoWidth || anchoMax) * esc);
+        cv.height = Math.round((v.videoHeight || 720) * esc);
+        const ctx = cv.getContext("2d");
+        const cuadros = [];
+        for (let i = 0; i < n; i++) {
+          const t = Math.min(dur * (i + 0.5) / n, Math.max(0, dur - 0.1));
+          const ok = await new Promise(res => {
+            let listo = false;
+            const fin = (val) => { if (!listo) { listo = true; res(val); } };
+            v.onseeked = () => fin(true);
+            v.onerror = () => fin(false);
+            try { v.currentTime = t; } catch { fin(false); }
+            setTimeout(() => fin(false), 5000);   // si el celular se traba, sigo con el resto
+          });
+          if (!ok) continue;
+          try { ctx.drawImage(v, 0, 0, cv.width, cv.height); cuadros.push(cv.toDataURL("image/jpeg", 0.72)); } catch { }
+        }
+        URL.revokeObjectURL(url);
+        resolve(cuadros);
+      };
+      v.onerror = () => { URL.revokeObjectURL(url); resolve([]); };
+    } catch { resolve([]); }
+  });
+}
+
+function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, docrecepcion = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  const [enviosProp, setEnviosProp] = useStoredState("cliente_envios_prop", {});
+  // Manda un informe (avance o certificado) directo al propietario, sin pasar por
+  // Belfast — imprescindible para obras privadas, que Belfast nunca ve.
+  function mandarAlPropietarioVV(obId, item, tipo) {
+    if (!item.html) { alert("Primero armá el documento (botón PDF / Generar certificado)."); return; }
+    const reg = { id: item.id, tipo, prop: true, fecha: item.fecha || item.desde, titulo: tipo === "cert" ? `Certificado ${item.desde || ""} al ${item.hasta || ""}` : `Informe de avance ${item.fecha || ""}`, html: item.html, ts: Date.now() };
+    setEnviosProp(p => { const lista = ((p || {})[obId] || []).filter(x => x.id !== reg.id); return { ...(p || {}), [obId]: [reg, ...lista] }; });
+    alert("Listo: ya lo puede ver el propietario en su panel.");
+  }
+  // "Visto" por obra, guardado aparte — pero comparando QUÉ FOTOS son
+  // nuevas (por su id), no por fecha. La fecha de cada foto es el día de
+  // obra que eligieron al cargarla, no el momento real en que se subió —
+  // si suben hoy una foto con fecha de ayer, comparar por fecha la
+  // dejaba afuera. Comparando por id, no importa qué fecha le pusieron.
+  const [seenAvance, setSeenAvance] = React.useState(() => {
+    try {
+      const guardado = localStorage.getItem("vv_avance_seen_ids");
+      if (guardado) return JSON.parse(guardado);
+      // Primera vez que se activa esto: lo que ya existe hoy cuenta como
+      // visto — si no, todas las fotos viejas saldrían como "nuevas".
+      const base = {}; obras.forEach(o => { base[o.id] = ((avance || {})[o.id] || []).map(x => x.id); });
+      try { localStorage.setItem("vv_avance_seen_ids", JSON.stringify(base)); } catch { }
+      return base;
+    } catch { return {}; }
+  });
+  function avanceNuevos(oid) {
+    const vistos = new Set(seenAvance[oid] || []);
+    return ((avance || {})[oid] || []).filter(x => x.id && !vistos.has(x.id)).length;
+  }
+  React.useEffect(() => {
+    if (!obraId) return;
+    const t = setTimeout(() => {
+      setSeenAvance(prev => {
+        const idsActuales = ((avance || {})[obraId] || []).map(x => x.id);
+        const next = { ...prev, [obraId]: idsActuales };
+        try { localStorage.setItem("vv_avance_seen_ids", JSON.stringify(next)); } catch { }
+        return next;
+      });
+    }, 900);   // una pequeña demora, así cuenta como "lo miró de verdad" y no solo pasó por arriba
+    return () => clearTimeout(t);
+  }, [obraId, avance]);   // también re-marca si vos mismo subís una foto mientras estás mirando esta obra
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
   const fileRef = React.useRef(null);
   const [fechaFoto, setFechaFoto] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [pendientes, setPendientes] = React.useState([]);
+  const [vidPend, setVidPend] = React.useState([]);   // videos elegidos + sus cuadros
+  const videoRef = React.useRef(null);
   const obra = obras.find(o => o.id === obraId);
   const historial = ((avance || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const [pdfHtml, setPdfHtml] = React.useState(null);
@@ -5834,7 +7141,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
     const secc = entries.map(h => {
       const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []);
       const fotosH = fs.map(u => `<img src="${u}" />`).join("");
-      return `<div class="ent"><div class="fecha">${_escPdf(h.fecha)}</div>${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}${h.avance ? `<div class="bloque"><div class="lbl">Avance</div><div class="txt">${_escPdf(h.avance)}</div></div>` : ""}<div class="bloque"><div class="lbl">Estado</div><div class="txt">${_escPdf(h.descripcion)}</div></div></div>`;
+      return `<div class="ent"><div class="fecha">${_escPdf(h.fecha)}</div>${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}${(h.videos || []).length ? `<div class="bloque"><div class="lbl">Video del recorrido</div><div class="txt">${h.videos.map(v => _escPdf(v.nombre || "video")).join(" · ")}</div></div>` : ""}${h.avance ? `<div class="bloque"><div class="lbl">Avance</div><div class="txt">${_escPdf(h.avance)}</div></div>` : ""}<div class="bloque"><div class="lbl">Estado</div><div class="txt">${_escPdf(h.descripcion)}</div></div></div>`;
     }).join("");
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       @page { margin: 14mm; }
@@ -5865,7 +7172,28 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       <div class="foot">Generado por ${marca} · Seguimiento visual de avance de obra.</div>
     </div></body></html>`;
   }
-  const pdfUno = (h) => { setSemData(null); setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
+  // Al generar el PDF de un avance, guardo el documento armado (con logos)
+  // en esa entrada: es el que ven Belfast y el propietario en Informes.
+  const pdfUno = (h) => {
+    setSemData(null); setPdfEntries([h]);
+    const html = buildPdfAvance([h]);
+    setPdfHtml(html);
+    if (!h.html) mergeSaveAvance(obraId, list => list.map(x => x.id === h.id ? { ...x, html } : x));
+  };
+  // Deja listos para el cliente todos los informes que todavía no tienen su
+  // documento armado. Sin esto, los informes viejos no le llegan a Belfast
+  // ni al propietario.
+  const prepararTodos = () => {
+    const sin = historial.filter(h => !h.html);
+    if (!sin.length) { alert("Ya están todos disponibles para el cliente."); return; }
+    const esPrivada = (obras || []).find(o => o.id === obraId)?.privada;
+    const msg = esPrivada
+      ? `Se van a preparar ${sin.length} informe${sin.length > 1 ? "s" : ""} para que los veas vos y el propietario (obra privada: Belfast no la ve).\n\n¿Seguimos?`
+      : `Se van a preparar ${sin.length} informe${sin.length > 1 ? "s" : ""} para que los vean Belfast y el propietario.\n\n¿Seguimos?`;
+    if (!confirm(msg)) return;
+    mergeSaveAvance(obraId, list => list.map(x => x.html ? x : { ...x, html: buildPdfAvance([x]) }));
+    alert(`Listo: ${sin.length} informe${sin.length > 1 ? "s quedaron disponibles" : " quedó disponible"} para el cliente.`);
+  };
   const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setSemData(null); setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
 
   // ══ CERTIFICADO SEMANAL — junta los avances de la semana + la bitácora. Cierra los VIERNES ══
@@ -5886,6 +7214,17 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
     try {
       const txtAv = av.length ? av.map(h => `- ${h.fecha}: ${(h.avance || h.descripcion || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros visuales)";
       const txtBt = bt.length ? bt.map(h => `- ${fmtDMY(h.fecha)} · ${h.titulo || ""}: ${(h.desc || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros de bitácora)";
+      // Estado de la recepción de documentación / EPP / otros ítems de esta obra
+      const regDoc = (docrecepcion || []).find(r => r.obra_id === obraId);
+      const itemsDoc = regDoc ? (regDoc.items || []) : [];
+      const cats = ["Documentación técnica", "Elementos de protección", "Otros ítems"];
+      const recepEstado = cats.map(c => {
+        const g = itemsDoc.filter(x => (x.cat || "Documentación técnica") === c);
+        return { cat: c, total: g.length, ok: g.filter(x => x.recibido).length, faltan: g.filter(x => !x.recibido).map(x => x.nombre) };
+      }).filter(g => g.total > 0);
+      const txtDoc = recepEstado.length
+        ? recepEstado.map(g => `- ${g.cat}: ${g.ok} de ${g.total} recibidos.${g.faltan.length ? " Falta: " + g.faltan.join(", ") : " Completo."}`).join("\n")
+        : "(no se cargó el checklist de recepción para esta obra)";
       // Fotos de la semana (hasta 6) para que la IA pueda evaluar orden, limpieza y protecciones.
       const imgs = [];
       try {
@@ -5898,15 +7237,18 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         }
       } catch (e) { }
       const sys = "Sos un jefe de obra civil en Argentina que redacta certificados semanales para la dirección de obra. Escribís profesional, claro y conciso, en español rioplatense neutro-formal. No inventás datos: sintetizás y ordenás lo que te pasan. Los porcentajes son estimaciones visuales. En higiene y seguridad sos objetivo: describís solo lo que se ve en las fotos.";
-      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtDMY(semDesde)} al ${fmtDMY(semHasta)} (cierre viernes).\n\nREGISTROS DE AVANCE (fotos analizadas, pueden ser de días salteados):\n${txtAv}\n\nBITÁCORA DE OBRA (recepción de materiales, documentación, hechos):\n${txtBt}\n\nRedactá el certificado semanal con este formato EXACTO:\nDESARROLLO: (3 a 6 renglones contando cómo evolucionó la obra en la semana, uniendo los distintos días en un relato único, con el % estimado de avance alcanzado)\nRECEPCIONES: \n- (viñetas cortas con materiales recibidos y documentación, según la bitácora; si no hay, poné "Sin registros en la semana")\nLIMPIEZA Y SEGURIDAD: \n- (2 a 4 viñetas evaluando, SEGÚN LAS FOTOS ADJUNTAS: orden y limpieza de la obra —acopio de materiales, escombros, circulaciones libres— y uso de protecciones del personal —casco, chaleco, calzado de seguridad, arnés, guantes—. Si en las fotos no se ve personal, aclarálo. Si no hay fotos, poné "Sin fotos para evaluar")\nALERTAS: \n- (viñetas con pendientes, faltantes o demoras detectadas; si no hay, poné "Sin alertas")`;
+      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtDMY(semDesde)} al ${fmtDMY(semHasta)} (cierre viernes).\n\nREGISTROS DE AVANCE (fotos analizadas, pueden ser de días salteados):\n${txtAv}\n\nBITÁCORA DE OBRA (recepción de materiales, documentación, hechos):\n${txtBt}\n\nCHECKLIST DE RECEPCIÓN (documentación técnica, elementos de protección y otros ítems):\n${txtDoc}\n\nRedactá el certificado semanal con este formato EXACTO:\nDESARROLLO: (3 a 6 renglones contando cómo evolucionó la obra en la semana, uniendo los distintos días en un relato único, con el % estimado de avance alcanzado)\nRECEPCIONES: \n- (viñetas cortas con materiales recibidos y documentación, según la bitácora; si no hay, poné "Sin registros en la semana")\nLIMPIEZA Y SEGURIDAD: \n- (2 a 4 viñetas evaluando, SEGÚN LAS FOTOS ADJUNTAS: orden y limpieza de la obra —acopio de materiales, escombros, circulaciones libres— y uso de protecciones del personal —casco, chaleco, calzado de seguridad, arnés, guantes—. Si en las fotos no se ve personal, aclarálo. Si no hay fotos, poné "Sin fotos para evaluar")\nALERTAS: \n- (viñetas con pendientes, faltantes o demoras detectadas; incluí lo que falte del CHECKLIST DE RECEPCIÓN, sobre todo elementos de protección; si no hay, poné "Sin alertas")`;
       const resp = await callAI([{ role: "user", content: imgs.length ? [...imgs, { type: "text", text: instruc }] : instruc }], sys, apiKey, false);
       const cortar = (re) => { const m = resp.match(re); return m ? m[1].trim() : ""; };
       const desarrollo = cortar(/DESARROLLO:\s*([\s\S]*?)(?:RECEPCIONES:|ALERTAS:|$)/i) || resp;
       const recepciones = cortar(/RECEPCIONES:\s*([\s\S]*?)(?:LIMPIEZA Y SEGURIDAD:|ALERTAS:|$)/i);
       const limpieza = cortar(/LIMPIEZA Y SEGURIDAD:\s*([\s\S]*?)(?:ALERTAS:|$)/i);
       const alertas = cortar(/ALERTAS:\s*([\s\S]*)$/i);
-      const data = { desde: semDesde, hasta: semHasta, desarrollo, recepciones, limpieza, alertas, av, bt, emitido: hoyStr() };
-      const rec = { ...data, id: uid() + Date.now(), ts: Date.now() };
+      const data = { desde: semDesde, hasta: semHasta, desarrollo, recepciones, limpieza, alertas, av, bt, recepEstado, emitido: hoyStr() };
+      // Guardo el documento ya armado (el mismo que se imprime, con logos y
+      // formato) para que Belfast y el propietario vean EXACTAMENTE eso.
+      let htmlDoc = ""; try { htmlDoc = buildPdfSemanal(data); } catch { }
+      const rec = { ...data, html: htmlDoc, id: uid() + Date.now(), ts: Date.now() };
       if (setCertif) setCertif(prev => { const p = prev || {}; const otros = (p[obraId] || []).filter(x => !(x.desde === rec.desde && x.hasta === rec.hasta)); return { ...p, [obraId]: [rec, ...otros] }; });
       setSemData(data); setPdfEntries(av); setPdfHtml(buildPdfSemanal(data));
       setStatus("");
@@ -5956,6 +7298,10 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       <h2>Desarrollo de la semana</h2><div class="parr">${_escPdf(d.desarrollo)}</div>
       <h2>Recepción de materiales y documentación</h2>${lista(d.recepciones, "Sin registros en la semana")}
       <h2>Orden, limpieza y protección del personal</h2>${lista(d.limpieza, "Sin fotos para evaluar en la semana")}
+      <h2>Recepción de documentación y elementos de protección</h2>
+      ${(d.recepEstado || []).length ? `<table><tr><th>Rubro</th><th style="width:74px">Recibido</th><th>Pendiente</th></tr>
+        ${(d.recepEstado || []).map(g => `<tr><td>${_escPdf(g.cat)}</td><td style="text-align:center;font-weight:700;color:${g.ok === g.total ? "#15803D" : "#B45309"}">${g.ok}/${g.total}</td><td>${g.faltan.length ? _escPdf(g.faltan.join(", ")) : "—"}</td></tr>`).join("")}</table>`
+        : `<div class="vacio">No se cargó el checklist de recepción para esta obra.</div>`}
       <h2>Pendientes y alertas</h2>${lista(d.alertas, "Sin alertas")}
       <h2>Registro visual del avance</h2>${visual}
       <h2>Bitácora de la semana</h2>${bita}
@@ -6081,6 +7427,15 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       titulo("Desarrollo de la semana"); parrafo(d.desarrollo);
       titulo("Recepción de materiales y documentación"); vinetas(d.recepciones, "Sin registros en la semana");
       titulo("Orden, limpieza y protección del personal"); vinetas(d.limpieza, "Sin fotos para evaluar en la semana");
+      titulo("Recepción de documentación y elementos de protección");
+      if ((d.recepEstado || []).length) {
+        for (const g of d.recepEstado) {
+          ensure(18); doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(g.ok === g.total ? 21 : 180, g.ok === g.total ? 128 : 83, g.ok === g.total ? 61 : 9);
+          doc.text(`${g.cat}: ${g.ok} de ${g.total} recibidos`, M + 6, y); y += 13;
+          if (g.faltan.length) { doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90, 100, 115); for (const ln of doc.splitTextToSize("Pendiente: " + g.faltan.join(", "), W - 2 * M - 12)) { ensure(13); doc.text(ln, M + 12, y); y += 12; } }
+          y += 4;
+        }
+      } else { doc.setFont("helvetica", "italic"); doc.setFontSize(10); doc.setTextColor(150, 160, 175); ensure(14); doc.text("No se cargó el checklist de recepción para esta obra.", M + 6, y); y += 18; }
       titulo("Pendientes y alertas"); vinetas(d.alertas, "Sin alertas");
       titulo("Registro visual del avance");
       for (const h of d.av) {
@@ -6166,6 +7521,25 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
     } catch (err) { setStatus("No pude leer las fotos. Probá de nuevo."); }
     setBusy(false);
   }
+  async function onVideo(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return; e.target.value = "";
+    if (!obraId) { alert("Elegí una obra primero."); return; }
+    setBusy(true);
+    const nuevos = [];
+    for (const f of files.slice(0, 2)) {
+      if (f.size > 60 * 1024 * 1024) { alert(`El video "${f.name}" pesa ${(f.size / 1048576).toFixed(0)} MB. Grabá uno más corto o en menor calidad (hasta ~60 MB).`); continue; }
+      setStatus(`Mirando el video "${f.name}"…`);
+      const cuadros = await extraerCuadros(f, 6);
+      if (!cuadros.length) { alert(`No pude leer el video "${f.name}". Probá con un MP4.`); continue; }
+      nuevos.push({ file: f, nombre: f.name, cuadros: cuadros.map(c => ({ comp: c, b64: String(c).split(",")[1], mediaType: "image/jpeg", deVideo: f.name })) });
+    }
+    if (nuevos.length) {
+      setVidPend(prev => [...prev, ...nuevos]);
+      setPendientes(prev => [...prev, ...nuevos.flatMap(x => x.cuadros)]);
+      setFechaFoto(new Date().toISOString().slice(0, 10));
+    }
+    setStatus(""); setBusy(false);
+  }
   async function analizar() {
     if (!pendientes.length) return;
     setBusy(true); setStatus(pendientes.length > 1 ? `Subiendo y analizando ${pendientes.length} fotos… (unos segundos)` : "Subiendo y analizando la foto… (unos segundos)");
@@ -6176,27 +7550,39 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         urls.push(url || pf.comp);
         imgs.push({ type: "image", source: { type: "base64", media_type: pf.mediaType, data: pf.b64 } });
       }
+      // Subo los videos enteros: la IA mira los cuadros, pero el video queda guardado para verlo.
+      const vidUrls = [];
+      for (const v of vidPend) {
+        setStatus(`Subiendo el video "${v.nombre}"…`);
+        try {
+          const durl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(v.file); });
+          const u = await uploadFoto(durl, `avance/videos/${obraId}`, uid());
+          if (u && mediaStorage.isRemoteUrl(u)) vidUrls.push({ url: u, nombre: v.nombre });
+        } catch { }
+      }
       const prev = historial[0];
       const _fiso = fechaFoto || new Date().toISOString().slice(0, 10);
       const [_aa, _mm, _dd] = _fiso.split("-");
       const fechaHoy = `${_dd}/${_mm}/${_aa.slice(2)}`;
       const tsFoto = new Date(_fiso + "T12:00:00").getTime();
       const nF = pendientes.length;
+      const nCuadros = pendientes.filter(x => x.deVideo).length;
       const encab = nF > 1 ? `Te paso ${nF} fotos de la obra "${obra?.nombre || ""}" del día ${fechaHoy} (son del MISMO día, de distintos sectores/ángulos — analizalas como un CONJUNTO y dame una sola conclusión).` : `Foto de la obra "${obra?.nombre || ""}" del día ${fechaHoy}.`;
       const sys = "Sos un inspector de obra civil en Argentina. Analizás fotos de avance de obra con criterio técnico. Sos honesto: el porcentaje es una ESTIMACIÓN visual, no una medición exacta. Escribí claro y breve, en español rioplatense (vos).";
       const instruc = prev
         ? `${encab}\n\nESTADO ANTERIOR (${prev.fecha}):\n${prev.descripcion}\n\nHacé DOS cosas:\n1) ESTADO ACTUAL: describí en 3-5 renglones qué se ve (estructura, mampostería, revoques, contrapisos, instalaciones, aberturas, terminaciones — lo que aplique).\n2) AVANCE: compará con el estado anterior. Qué se avanzó, qué falta, un % ESTIMADO de avance de la obra, y ALERTAS si no ves progreso esperable o algo raro.\nFormato EXACTO:\nESTADO ACTUAL: ...\nAVANCE: ...`
         : `${encab} Es la PRIMERA carga (línea de base). Describí el ESTADO ACTUAL en 3-5 renglones (estructura, mampostería, revoques, instalaciones, aberturas, terminaciones — lo que aplique) y estimá un % de avance general.\nFormato EXACTO:\nESTADO ACTUAL: ...`;
-      const content = [...imgs, { type: "text", text: instruc }];
+      const nota = nCuadros ? `\n\nOJO: ${nCuadros} de estas imágenes son CUADROS SACADOS DE UN VIDEO recorriendo la obra, en orden cronológico del recorrido. Aprovechalos para describir sectores que no se ven en una foto suelta.` : "";
+      const content = [...imgs, { type: "text", text: instruc + nota }];
       const resp = await callAI([{ role: "user", content }], sys, apiKey, false);
       let descripcion = resp, avanceTxt = "";
       const mA = resp.match(/AVANCE:\s*([\s\S]*)$/i);
       const mE = resp.match(/ESTADO ACTUAL:\s*([\s\S]*?)(?:AVANCE:|$)/i);
       if (mE) descripcion = mE[1].trim();
       if (mA) avanceTxt = mA[1].trim();
-      const item = { id: uid() + Date.now(), fecha: fechaHoy, ts: tsFoto, descripcion, avance: avanceTxt, fotos: urls, fotoUrl: urls[0] };
+      const item = { id: uid() + Date.now(), fecha: fechaHoy, ts: tsFoto, descripcion, avance: avanceTxt, fotos: urls, fotoUrl: urls[0], videos: vidUrls };
       await mergeSaveAvance(obraId, list => [item, ...list]);
-      setPendientes([]); setStatus("");
+      setPendientes([]); setVidPend([]); setStatus("");
     } catch (err) { setStatus("Hubo un error al analizar la(s) foto(s). Fijate que tengas crédito de API y probá de nuevo."); }
     setBusy(false);
   }
@@ -6206,13 +7592,18 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
       <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, margin: "6px 0 14px" }}>
         {obras.length === 0 && <option value="">No hay obras</option>}
-        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        {obras.map(o => { const n = avanceNuevos(o.id); return <option key={o.id} value={o.id}>{o.nombre}{n > 0 ? ` 🔴 ${n} foto${n > 1 ? "s" : ""} nueva${n > 1 ? "s" : ""}` : ""}</option>; })}
       </select>
       <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFoto} style={{ display: "none" }} />
+      <input ref={videoRef} type="file" accept="video/*" multiple onChange={onVideo} style={{ display: "none" }} />
       {pendientes.length === 0
-        ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Preparando…" : "Elegir foto(s)"}</button>
+        ? <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ flex: 2, background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Preparando…" : "Elegir foto(s)"}</button>
+            <button onClick={() => videoRef.current?.click()} disabled={busy || !obraId} style={{ flex: 1, background: T.card, color: T.navy, border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 14, fontWeight: 700, cursor: busy ? "default" : "pointer" }}><Ico n="video" s={15} /> Video</button>
+          </div>
         : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{pendientes.length === 1 ? "1 foto seleccionada" : `${pendientes.length} fotos seleccionadas`} — poné la fecha y analizá</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{pendientes.length === 1 ? "1 imagen seleccionada" : `${pendientes.length} imágenes seleccionadas`} — poné la fecha y analizá</div>
+            {vidPend.length > 0 && <div style={{ fontSize: 11, color: T.sub, background: T.al, border: `1px solid ${BRASS}`, borderRadius: 8, padding: "7px 9px", marginBottom: 8, lineHeight: 1.45 }}><Ico n="video" s={13} /> {vidPend.length} video{vidPend.length > 1 ? "s" : ""} ({vidPend.map(v => v.nombre).join(", ")}). Saqué {pendientes.filter(x => x.deVideo).length} cuadros del recorrido para que los analice la IA; el video queda guardado para verlo.</div>}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
               {pendientes.map((pf, i) => <div key={i} style={{ position: "relative" }}>
                 <img src={pf.comp} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 7, display: "block", border: `1px solid ${T.border}` }} />
@@ -6222,9 +7613,10 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
             <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Fecha de la foto</label>
             <input type="date" value={fechaFoto} onChange={e => setFechaFoto(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, margin: "6px 0 12px", boxSizing: "border-box" }} />
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => { setPendientes([]); setStatus(""); }} disabled={busy} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+              <button onClick={() => { setPendientes([]); setVidPend([]); setStatus(""); }} disabled={busy} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
               <button onClick={analizar} disabled={busy} style={{ flex: 2, background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Analizando…" : "✓ Analizar avance"}</button>
-              <button onClick={() => fileRef.current?.click()} disabled={busy} title="Agregar más" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "0 14px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
+              <button onClick={() => fileRef.current?.click()} disabled={busy} title="Agregar fotos" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "0 13px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
+              <button onClick={() => videoRef.current?.click()} disabled={busy} title="Agregar video" style={{ background: T.al, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "0 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}><Ico n="video" s={15} /></button>
             </div>
           </div>}
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
@@ -6238,6 +7630,16 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         </div>
         <button onClick={armarSemanal} disabled={busy} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Armando…" : "✓ Generar certificado de la semana"}</button>
       </div>
+      {(certif[obraId] || []).some(c => !c.html) && <button onClick={() => {
+        const sin = (certif[obraId] || []).filter(c => !c.html);
+        const esPrivada = (obras || []).find(o => o.id === obraId)?.privada;
+        const msg = esPrivada
+          ? `Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los veas vos y el propietario (obra privada: Belfast no la ve).\n\n¿Seguimos?`
+          : `Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los vean Belfast y el propietario.\n\n¿Seguimos?`;
+        if (!confirm(msg)) return;
+        setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(c => c.html ? c : { ...c, html: buildPdfSemanal(c) }) }));
+        alert(`Listo: ${sin.length} certificado${sin.length > 1 ? "s quedaron disponibles" : " quedó disponible"} para el cliente.`);
+      }} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {(certif[obraId] || []).filter(c => !c.html).length} certificado{(certif[obraId] || []).filter(c => !c.html).length > 1 ? "s" : ""} para el cliente</button>}
       {(certif[obraId] || []).length > 0 && <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 7 }}>Certificados guardados</div>
         {(certif[obraId] || []).map(c => (
@@ -6246,11 +7648,13 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fmtDMY(c.desde)} al {fmtDMY(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
-            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); setPdfHtml(buildPdfSemanal(c)); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); const h = buildPdfSemanal(c); setPdfHtml(h); if (!c.html && setCertif) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(x => x.id === c.id ? { ...x, html: h } : x) })); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+            <button onClick={() => mandarAlPropietarioVV(obraId, c, "cert")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
             <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
           </div>
         ))}
       </div>}
+      {historial.length > 0 && historial.some(h => !h.html) && <button onClick={prepararTodos} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {historial.filter(h => !h.html).length} informe{historial.filter(h => !h.html).length > 1 ? "s" : ""} para el cliente</button>}
       {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <button onClick={abrirRecuperar} style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="life" /> Recuperar fotos</button>
@@ -6266,6 +7670,9 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
           if (fs.length === 1) return <div style={{ position: "relative" }}><img src={fs[0]} alt="" style={{ width: "100%", maxHeight: 340, objectFit: "contain", background: "#0b0f14", display: "block" }} />{delBtn(0)}</div>;
           return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, alignItems: "start", padding: 4, background: "#0b0f14" }}>{fs.map((u, i) => <div key={i} style={{ position: "relative" }}><a href={u} target="_blank" rel="noreferrer" style={{ display: "block" }}><img src={u} alt="" style={{ width: "100%", height: "auto", display: "block", borderRadius: 4 }} /></a>{delBtn(i)}</div>)}</div>;
         })()}
+        {(h.videos || []).length > 0 && <div style={{ background: "#0b0f14", padding: 4 }}>
+          {h.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", display: "block", borderRadius: 4, marginTop: i ? 4 : 0, background: "#000" }} />)}
+        </div>}
         <div style={{ padding: "12px 14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{h.fecha}{idx === 0 ? "  ·  última" : ""}</div>
@@ -6273,6 +7680,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
               <button onClick={() => analizarEntry(h)} disabled={busy} title="Analizar con IA" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: busy ? "default" : "pointer", flexShrink: 0 }}><Ico n="search" /> IA</button>
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+              <button onClick={() => mandarAlPropietarioVV(obraId, h, "avance")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
               <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> Borrar</button>
             </div>
           </div>
@@ -6323,8 +7731,8 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
   </div>);
 }
 const WEB_NAV = [
-  { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" },
-  { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" }, { id:"mensajes", label:"Mensajes" },
+  { id:"chat", label:"IA" }, { id:"drone", label:"Drone IA" }, { id:"minutas", label:"Grabar reunión" }, { id:"dashboard", label:"Inicio" },
+  { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" },
   { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos enviados" }, { id:"auditoria", label:"Auditoría" },
     { id:"mas", label:"Más" },
 ];
@@ -6385,7 +7793,7 @@ function WebFooter({ cfg }) {
   return (<div style={{ background:T.navy, color:"rgba(255,255,255,.55)", flexShrink:0, borderTop:`2px solid ${BRASS}` }}>
     <div style={{ maxWidth:1180, margin:"0 auto", padding:"11px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, fontSize:11 }}>
       <span style={{ fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,.8)" }}>V+V CONSTRUCCIONES</span>
-      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 01-07-IA</span>
+      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-fixavance</span>
     </div>
   </div>);
 }
@@ -6412,6 +7820,8 @@ function App() {
   const [formularios, setFormularios] = useStoredState("vv_formularios", []);
   const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
   const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
+  const [dronevuelos, setDronevuelos] = useStoredState("vv_drone", []);
+  const [minutas, setMinutas] = useStoredState("vv_minutas", []);
   const [definiciones, setDefiniciones] = useStoredState("vv_definiciones", []);
   const [docrecepcion, setDocrecepcion] = useStoredState("vv_docrecepcion", []);
   const [bitacora, setBitacora] = useStoredState("vv_bitacora", []);
@@ -6463,7 +7873,7 @@ function App() {
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
-    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
+    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_minutas", setMinutas], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
     let alive = true;
     const pullAll = async () => {
       for (const [key, setter] of stores) {
@@ -6492,12 +7902,84 @@ function App() {
   }, []);
   const requireAuth = (fn) => fn();
   useEffect(() => { try { if (!localStorage.getItem("vv_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, materiales: now, ia: now }; localStorage.setItem("vv_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("vv_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("vv_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
-  useEffect(() => { initPush("vv"); }, []);
+  useEffect(() => { (async () => { initPush("vv"); })(); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   const [iaDialogo, setIaDialogo] = useState([]);
   useEffect(() => { if (localStorage.getItem("purge_canning_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_v1", "1"); } catch { } } catch { } })(); }, []);
+  // Limpieza única: obras que quedaron DUPLICADAS con nombre igual pero id
+  // distinto (de antes de que la fusión entre dispositivos anduviera bien).
+  // Se deja UNA sola (la que tenga más datos cargados) y se reparan los
+  // pedidos de materiales / pedidos de información que apuntaban a la que
+  // se saca — así no quedan "huérfanos" sin obra asociada.
+  useEffect(() => { if (localStorage.getItem("purge_dup_obras_v2")) return; (async () => {
+    try {
+      const r = await storage.get("vv_obras");
+      if (!r?.value) { try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { } return; }
+      const arr = JSON.parse(r.value);
+      const grupos = new Map();
+      arr.forEach(o => { const k = (o.nombre || "").trim().toLowerCase(); if (!k) return; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(o); });
+      const remap = {}; const idsABorrar = new Set();
+      grupos.forEach(lista => {
+        if (lista.length < 2) return;
+        const orden = lista.slice().sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length);
+        const sobrevive = orden[0];
+        orden.slice(1).forEach(o => { remap[o.id] = sobrevive.id; idsABorrar.add(o.id); });
+      });
+      if (idsABorrar.size === 0) { try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { } return; }
+
+      const obrasLimpias = arr.filter(o => !idsABorrar.has(o.id));
+      let tumbas = {};
+      try { const rt = await storage.get("vv_obras_del"); if (rt?.value) tumbas = JSON.parse(rt.value) || {}; } catch { }
+      idsABorrar.forEach(id => { tumbas[id] = Date.now(); });
+      lastWrite["vv_obras"] = Date.now();
+      try { localStorage.setItem("vv_obras", JSON.stringify(obrasLimpias)); localStorage.setItem("vv_obras__ts", String(Date.now())); } catch { }
+      await storage.set("vv_obras", JSON.stringify(obrasLimpias)).catch(() => { });
+      await storage.set("vv_obras__ts", String(Date.now())).catch(() => { });
+      await storage.set("vv_obras_del", JSON.stringify(tumbas)).catch(() => { });
+      try { localStorage.setItem("vv_obras_del", JSON.stringify(tumbas)); } catch { }
+      // El mapa de "id viejo -> id que sobrevivió" queda guardado en la nube
+      // también — así Contratista, Cliente, y cualquier otra app pueden
+      // arreglar sus propios pedidos huérfanos, sin depender de que esta
+      // app (V+V) sea la primera que se abre.
+      let remapGuardado = {};
+      try { const rr = await storage.get("vv_obras_remap"); if (rr?.value) remapGuardado = JSON.parse(rr.value) || {}; } catch { }
+      remapGuardado = { ...remapGuardado, ...remap };
+      await storage.set("vv_obras_remap", JSON.stringify(remapGuardado)).catch(() => { });
+      setObras(obrasLimpias);
+
+      try {
+        const rm = await storage.get("vv_matpedidos");
+        if (rm?.value) {
+          const mats = JSON.parse(rm.value);
+          const arreglados = mats.map(p => remap[p.obra_id] ? { ...p, obra_id: remap[p.obra_id], upd: Date.now() } : p);
+          if (arreglados.some((p, i) => p.obra_id !== mats[i].obra_id)) {
+            lastWrite["vv_matpedidos"] = Date.now();
+            try { localStorage.setItem("vv_matpedidos", JSON.stringify(arreglados)); } catch { }
+            await storage.set("vv_matpedidos", JSON.stringify(arreglados)).catch(() => { });
+            setMatpedidos(arreglados);
+          }
+        }
+      } catch { }
+
+      try {
+        const rp = await storage.get("vv_pedidos");
+        if (rp?.value) {
+          const peds = JSON.parse(rp.value);
+          const arreglados = peds.map(p => remap[p.obra_id] ? { ...p, obra_id: remap[p.obra_id] } : p);
+          if (arreglados.some((p, i) => p.obra_id !== peds[i].obra_id)) {
+            lastWrite["vv_pedidos"] = Date.now();
+            try { localStorage.setItem("vv_pedidos", JSON.stringify(arreglados)); } catch { }
+            await storage.set("vv_pedidos", JSON.stringify(arreglados)).catch(() => { });
+            setPedidos(arreglados);
+          }
+        }
+      } catch { }
+
+      try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { }
+    } catch { }
+  })(); }, []);
   useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
@@ -6505,6 +7987,8 @@ function App() {
   const unreadInformes = (obras || []).flatMap(o => o.informes || []).filter(inf => (inf.ts || 0) > (seen.informes || 0)).length;
   const unreadIA = (iaDialogo || []).filter(m => m.from && m.from !== "vv" && m.tipo === "q" && (m.ts || 0) > (seen.ia || 0)).length;
   const pendVV = pedidos.filter(p => p.para === "vv" && p.estado !== "resuelto").length;
+  // Globito del ícono: lo mismo que ves como "nuevo" adentro, pero desde el escritorio.
+  useEffect(() => { ponerGlobito(unreadMensajes + unreadMat + unreadInformes + unreadIA + pendVV); }, [unreadMensajes, unreadMat, unreadInformes, unreadIA, pendVV]);
 
   // ── QUÉ CUENTA COMO "NUEVO" EN CADA ÍCONO ──
   const idsAviso = (() => {
@@ -6547,7 +8031,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
@@ -6556,12 +8040,34 @@ function App() {
       <div style={{ width:"100%", height:"100dvh", background:"transparent", display:"flex", flexDirection:"column", position:"relative", color:"var(--text,#131C2B)", fontFamily:"var(--font,'Inter'),sans-serif", overflow:"hidden" }}>
         <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />
         {view==="dashboard" && <WebHero cfg={cfg} obras={obras} personal={personal} />}
+        {view==="dashboard" && (() => {
+          const LABELS = {
+            chat: ["consulta nueva en el chat IA", "consultas nuevas en el chat IA"],
+            mensajes: ["mensaje nuevo", "mensajes nuevos"],
+            pedidos: ["pedido nuevo", "pedidos nuevos"],
+            materiales: ["pedido de materiales nuevo", "pedidos de materiales nuevos"],
+            informes: ["informe nuevo", "informes nuevos"],
+            formularios: ["formulario nuevo", "formularios nuevos"],
+            obras: ["obra nueva", "obras nuevas"],
+            personal: ["novedad de personal", "novedades de personal"],
+          };
+          const ORDEN = ["mensajes", "pedidos", "materiales", "informes", "formularios", "obras", "personal", "chat"];
+          const items = ORDEN.map(k => ({ k, n: navBadgesNuevo[k] || 0 })).filter(x => x.n > 0);
+          if (!items.length) return null;
+          return (<div style={{ margin: "10px 16px 0", background: "rgba(176,137,79,0.10)", border: "1px solid rgba(176,137,79,0.35)", borderRadius: 12, padding: "10px 14px", display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#B0894F", textTransform: "uppercase", letterSpacing: "0.04em" }}>Novedades:</span>
+            {items.map(({ k, n }) => (<span key={k} onClick={() => { setView(k === "mensajes" || k === "pedidos" || k === "materiales" || k === "informes" || k === "formularios" ? "mas" : k); if (k === "pedidos") setMasSub("pedidos"); if (k === "materiales") setMasSub("materiales"); if (k === "informes") setMasSub("informes"); if (k === "formularios") setMasSub("formularios"); if (k === "mensajes") setMasSub("mensajes"); marcarVisto(k); }}
+              style={{ fontSize: 12.5, color: "var(--text,#131C2B)", cursor: "pointer", fontWeight: 600 }}>
+              <b style={{ color: "#B0894F" }}>{n}</b> {LABELS[k][n > 1 ? 1 : 0]} →
+            </span>))}
+          </div>);
+        })()}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
             {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
-            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} />}
+            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} docrecepcion={docrecepcion} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
             {view==="chat" && <ChatIA db={db} cfg={cfg} apiKey={cfg.apiKey} msgs={chatMsgs} setMsgs={setChatMsgs} />}
@@ -6570,6 +8076,8 @@ function App() {
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
+            {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
+            {view==="minutas" && <GrabarReunion db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="auditoria" && <AuditoriaView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="mensajes" && <MensajesVVView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="internos" && <InternosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
@@ -6578,6 +8086,7 @@ function App() {
         <WebFooter cfg={cfg} />
       </div>
       <SyncBanner />
+      <div style={{ padding: "10px 16px 0" }}><GlobitoPermiso /></div>
     </div>
   );
 }
