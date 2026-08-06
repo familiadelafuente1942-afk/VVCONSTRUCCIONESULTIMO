@@ -61,7 +61,7 @@ function Ico({ n, s = 18, c = "currentColor", st = 1.7 }) {
 const SECCIONES = [
   { id: "novedades", label: "Novedades", icon: "doc" },
   { id: "renders", label: "Renders", icon: "camera" },
-  { id: "fotos", label: "Fotos de avance", icon: "camera" },
+  { id: "fotos", label: "Informe de avance", icon: "camera" },
   { id: "cronograma", label: "Cronograma", icon: "calendar" },
   { id: "informes", label: "Informes", icon: "doc" },
   { id: "planos", label: "Planos", icon: "plans" },
@@ -189,8 +189,8 @@ function FilaSeccion({ label, icon, onClick, config }) {
 // ─── Cuadro de sección (grilla 3 columnas, panel principal) ───
 function CuadroSeccion({ label, onClick, config }) {
   const T = temaDe(config);
-  return (<button onClick={onClick} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 6px", minHeight: 56, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", cursor: "pointer" }}>
-    <span style={{ fontSize: 11.5, fontWeight: 800, color: T.text, lineHeight: 1.25 }}>{label}</span>
+  return (<button onClick={onClick} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 6px", height: 52, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", cursor: "pointer" }}>
+    <span style={{ fontSize: 9.5, fontWeight: 800, color: T.text, lineHeight: 1.2 }}>{label}</span>
   </button>);
 }
 
@@ -253,6 +253,24 @@ function rendersDe(obra, renders) {
   return (obra.planos || []).filter(esRender);
 }
 
+// La galería general: son las fotos de la obra cargadas en la pestaña
+// "Fotos" de Belfast/Constructora (obra.fotos) — el mismo álbum que ven
+// ellos, distinto del informe semanal de avance.
+function SeccionGaleria({ obra, onBack, config }) {
+  const T = temaDe(config);
+  const fotos = (obra.fotos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  return (<div style={{ minHeight: "100vh", background: T.bg }}>
+    <SubHead titulo="Galería de obra" onBack={onBack} config={config} />
+    <div style={{ padding: 18 }}>
+      {fotos.length === 0 && <EmptyMsg>Todavía no hay fotos cargadas en la galería de esta obra.</EmptyMsg>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        {fotos.map((f, i) => <a key={f.id || i} href={f.url} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
+          <img src={f.url} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
+        </a>)}
+      </div>
+    </div>
+  </div>);
+}
 function SeccionRenders({ obra, renders, onBack }) {
   const lista = rendersDe(obra, renders);
   return (<div>
@@ -275,7 +293,7 @@ function SeccionFotos({ obra, avance, onBack, config }) {
   const historial = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const conFotos = historial.map(h => ({ ...h, fotos: (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []) })).filter(h => h.fotos.length);
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
-    <SubHead titulo="Fotos de avance" onBack={onBack} config={config} />
+    <SubHead titulo="Informe de avance" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
       {conFotos.length === 0 && <EmptyMsg>Todavía no hay fotos de avance cargadas.</EmptyMsg>}
       {conFotos.map((h, i) => (<div key={h.id || i} style={{ marginBottom: 20 }}>
@@ -620,6 +638,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
     return () => clearInterval(t);
   }, [fotos.length]);
 
+  if (seccion === "galeria") return <SeccionGaleria obra={obra} onBack={() => setSeccion(null)} config={config} />;
   if (seccion === "novedades") return <SeccionNovedades obra={obra} certif={certif} onBack={() => setSeccion(null)} />;
   if (seccion === "renders") return <SeccionRenders obra={obra} renders={renders} onBack={() => setSeccion(null)} />;
   if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} config={config} />;
@@ -629,39 +648,75 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
   if (seccion === "costos") return <SeccionCostos costos={costos} onGuardarPropia={onGuardarPropia} onCrearPropia={onCrearPropia} onBack={() => setSeccion(null)} config={config} />;
 
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
-    <div style={{ position: "relative", height: "calc(280px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", boxSizing: "border-box", background: T.navy, overflow: "hidden" }}>
-      {fotos.map((f, i) => <div key={f.id || i} style={{ position: "absolute", inset: 0, backgroundImage: `url(${f.url})`, backgroundSize: "cover", backgroundPosition: "center", opacity: i === idx ? 1 : 0, transition: "opacity 1.4s ease" }} />)}
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(15,27,45,.55) 0%, rgba(15,27,45,.25) 40%, rgba(15,27,45,.92) 100%)" }} />
-      <div style={{ position: "relative", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 20px", textAlign: "center" }}>
-        <div style={{ width: 52, height: 52, borderRadius: "50%", border: `1.5px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, overflow: "hidden", background: config?.logo ? "#fff" : "none" }}>
-          {config?.logo ? <img src={config.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={22} c={T.brass} />}
-        </div>
-        <div style={{ color: "rgba(255,255,255,.7)", fontSize: 10.5, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 3 }}>Tu proyecto</div>
-        <div style={{ color: "#fff", fontSize: 22, fontWeight: 800, lineHeight: 1.15 }}>{obra.nombre}</div>
-        <div style={{ width: "70%", maxWidth: 260, marginTop: 16 }}>
-          <div style={{ height: 5, background: "rgba(255,255,255,.2)", borderRadius: 4, overflow: "hidden" }}><div style={{ height: 5, width: `${obra.avance || 0}%`, background: T.brass }} /></div>
-          <div style={{ color: "rgba(255,255,255,.75)", fontSize: 11, marginTop: 6 }}>Avance {obra.avance || 0}%</div>
+    <div style={{ padding: "calc(20px + env(safe-area-inset-top)) 18px 40px" }}>
+      <div style={{ fontSize: 19, fontWeight: 800, color: T.brass, marginBottom: 14 }}>Hola, {nombreCliente}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8 }}>{obra.nombre}</div>
+      <div style={{ position: "relative", width: "100%", aspectRatio: "16/10", borderRadius: 14, overflow: "hidden", marginBottom: 22, background: T.navy }}>
+        {fotos.map((f, i) => <div key={f.id || i} style={{ position: "absolute", inset: 0, backgroundImage: `url(${f.url})`, backgroundSize: "cover", backgroundPosition: "center", opacity: i === idx ? 1 : 0, transition: "opacity 1.4s ease" }} />)}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.15) 0%, transparent 40%)" }} />
+        <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", border: `2.5px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#fff", boxShadow: "0 3px 10px rgba(0,0,0,.3)" }}>
+            {config?.logo ? <img src={config.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={22} c={T.navy} />}
+          </div>
         </div>
       </div>
-    </div>
-    <div style={{ padding: "20px 18px 40px" }}>
       {(() => {
+        // Prioriza el álbum general de la obra (Belfast/Constructora → Fotos).
+        // Si esa obra todavía no tiene fotos cargadas ahí, muestra las del
+        // informe de avance para no dejar la galería vacía mientras tanto.
+        const album = obra.fotos || [];
         const historial = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
-        const fotosRecientes = historial.flatMap(h => (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : [])).slice(0, 4);
+        const fotosRecientes = album.length
+          ? album.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 4)
+          : historial.flatMap(h => (h.fotos && h.fotos.length) ? h.fotos.map(u => ({ url: u })) : (h.fotoUrl ? [{ url: h.fotoUrl }] : [])).slice(0, 4);
         if (!fotosRecientes.length) return null;
+        const destino = album.length ? "galeria" : "fotos";
         return (<>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em" }}>Galería de obra</div>
-            <button onClick={() => setSeccion("fotos")} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, fontSize: 11.5, cursor: "pointer", padding: 0 }}>Ver todas</button>
+            <button onClick={() => setSeccion(destino)} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, fontSize: 11.5, cursor: "pointer", padding: 0 }}>Ver todas</button>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, marginBottom: 22 }}>
-            {fotosRecientes.map((u, i) => (
-              <button key={i} onClick={() => setSeccion("fotos")} style={{ padding: 0, border: "none", cursor: "pointer", borderRadius: 8, overflow: "hidden", aspectRatio: "1", background: T.bg }}>
-                <img src={u} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            {fotosRecientes.map((f, i) => (
+              <button key={f.id || i} onClick={() => setSeccion(destino)} style={{ padding: 0, border: "none", cursor: "pointer", borderRadius: 8, overflow: "hidden", aspectRatio: "1", background: T.bg }}>
+                <img src={f.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               </button>
             ))}
           </div>
         </>);
+      })()}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        <div style={{ flex: 1, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 6px", textAlign: "center" }}>
+          <div style={{ fontSize: 8.5, color: T.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", marginBottom: 4 }}>Avance General</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: T.brass }}>{obra.avance || 0}%</div>
+        </div>
+        {obra.etapaActual && <div style={{ flex: 1, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 6px", textAlign: "center" }}>
+          <div style={{ fontSize: 8.5, color: T.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", marginBottom: 4 }}>En Ejecución</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: T.text, lineHeight: 1.25 }}>{obra.etapaActual}</div>
+        </div>}
+        {obra.proximaEtapa && <div style={{ flex: 1, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 6px", textAlign: "center" }}>
+          <div style={{ fontSize: 8.5, color: T.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", marginBottom: 4 }}>Próxima Etapa</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: T.text, lineHeight: 1.25 }}>{obra.proximaEtapa}</div>
+        </div>}
+      </div>
+      {obra.hitoActual != null && (() => {
+        const HITOS = ["Inicio", "Estructura", "Instalaciones", "Terminaciones"];
+        const actual = obra.hitoActual;
+        return (
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Línea de tiempo</div>
+            <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 4px 6px" }}>
+              <div style={{ position: "absolute", left: 0, right: 0, top: "50%", height: 2, background: T.border, zIndex: 0 }} />
+              <div style={{ position: "absolute", left: 0, top: "50%", height: 2, background: T.brass, width: `${(actual / (HITOS.length - 1)) * 100}%`, zIndex: 1 }} />
+              {HITOS.map((h, i) => (
+                <div key={h} style={{ width: 12, height: 12, borderRadius: "50%", position: "relative", zIndex: 2, background: i <= actual ? T.brass : "#fff", border: `2px solid ${i <= actual ? T.brass : T.border}` }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", margin: "0 -6px" }}>
+              {HITOS.map(h => <span key={h} style={{ fontSize: 9, color: T.sub, fontWeight: 600, textAlign: "center", flex: 1 }}>{h}</span>)}
+            </div>
+          </div>
+        );
       })()}
       <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Secciones</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>

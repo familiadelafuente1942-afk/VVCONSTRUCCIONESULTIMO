@@ -2482,7 +2482,9 @@ function AuditoriaView({ db, cfg, onBack }) {
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   const [form, setForm] = useState(null);
   const [pdfHtml, setPdfHtml] = useState(null);
+  const [pdfRep, setPdfRep] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [driveBusy, setDriveBusy] = useState(false);
   const obra = obras.find(o => o.id === obraId);
   const tp = AUD_TIPOS.find(t => t.id === tipo) || AUD_TIPOS[0];
   const lista = items.filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
@@ -2586,7 +2588,18 @@ function AuditoriaView({ db, cfg, onBack }) {
       <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">${_e(t.titulo)}</div></div>
       <div class="barra"><div>Obra: <b>${_e(nomObra)}</b></div><div>N°: <b>${_e(it.nro || "—")}</b></div><div>Fecha: <b>${fmtDMY(it.fecha)}</b></div></div>
       ${cuerpo}
-      ${(it.fotos || []).length ? `<h2>Fotos</h2><div class="fotos">${it.fotos.map(f => `<img src="${f.url}" />`).join("")}</div>` : ""}
+      ${(() => {
+        const fotos = it.fotos || [];
+        if (!fotos.length) return "";
+        // Solo se incrustan fotos ya subidas a la nube (URL http/https, livianas).
+        // Las que quedaron guardadas solo en el celular (por falla de subida) NO se
+        // meten en el PDF, para no romper el documento — se avisa en su lugar.
+        const buenas = fotos.filter(f => f.url && (f.url.startsWith("http://") || f.url.startsWith("https://"))).slice(0, 8);
+        const sinSubir = fotos.length - buenas.length;
+        return `<h2>Fotos</h2>
+          ${buenas.length ? `<div class="fotos">${buenas.map(f => `<img src="${f.url}" />`).join("")}</div>` : ""}
+          ${sinSubir > 0 ? `<div class="vacio">${sinSubir} foto(s) no incluida(s) en el PDF: no se terminaron de subir a la nube desde este dispositivo. Volvé a intentar la carga con buena conexión.</div>` : ""}`;
+      })()}
       <div class="res">Resultado: ${_e(it.resultado || "—")}</div>
       ${it.conclusion ? `<h2>Conclusión</h2><div class="parr">${_e(it.conclusion)}</div>` : ""}
       <div class="firmas">
@@ -2596,7 +2609,25 @@ function AuditoriaView({ db, cfg, onBack }) {
       <div class="foot">Documento emitido por ${marca} · ${_e(t.titulo)} · ${_e(it.nro || "")}</div>
     </div></body></html>`;
   }
-  const verPdf = (it) => setPdfHtml(buildPdf(it));
+  const verPdf = (it) => { setPdfRep(it); setPdfHtml(buildPdf(it)); };
+  const subirCertificadoADrive = async () => {
+    if (!pdfHtml || !pdfRep) return;
+    setDriveBusy(true);
+    try {
+      const base64 = btoa(unescape(encodeURIComponent(pdfHtml)));
+      const r = await fetch("/api/drive-upload", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: `${pdfRep.nro || "auditoria"}.html`, mimeType: "text/html", base64 }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Error subiendo a Drive");
+      alert("✔ Certificado subido a Drive.");
+    } catch (e) {
+      alert("No se pudo subir a Drive: " + e.message);
+    } finally {
+      setDriveBusy(false);
+    }
+  };
 
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 11px", fontSize: 13.5, color: T.text, boxSizing: "border-box" };
   const lbl = { fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em" };
@@ -2731,6 +2762,7 @@ function AuditoriaView({ db, cfg, onBack }) {
               }));
               setF("fotos", [...(form.fotos || []), ...nuevas]);
               e.target.value = "";
+              if (nuevas.some(n => !mediaStorage.isRemoteUrl(n.url))) alert("⚠ Una o más fotos NO se pudieron subir a la nube (revisá tu conexión). Quedan guardadas en este dispositivo pero no van a incluirse en el PDF hasta que se suban bien — volvé a intentar más tarde.");
             }} />
           </label>
         </div>
@@ -2756,6 +2788,7 @@ function AuditoriaView({ db, cfg, onBack }) {
         <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
         <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Certificado</span>
         <button onClick={() => { const f = document.getElementById("aud-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+        <button onClick={subirCertificadoADrive} disabled={driveBusy} style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: driveBusy ? "default" : "pointer", flexShrink: 0, whiteSpace: "nowrap", opacity: driveBusy ? 0.6 : 1 }}>{driveBusy ? "Subiendo…" : "☁ Subir a Drive"}</button>
       </div>
       <iframe id="aud-pdf" srcDoc={pdfHtml} title="Certificado auditoría" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
