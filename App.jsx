@@ -255,19 +255,25 @@ async function cachePut(url, blob) {
 async function abrirArchivo(url, nombre) {
     if (!url) return { ok: false, motivo: "sin-url" };
     if (url.startsWith("data:")) { window.open(url, "_blank"); return { ok: true }; }
+    // Abrimos la pestaña ACÁ, antes de cualquier await: si se abre después de
+    // esperar la descarga, Safari/iOS ya no lo cuenta como un toque directo
+    // del usuario y bloquea la pestaña sin avisar — se ve como que "no pasa
+    // nada" al tocar el botón. Por eso abrimos en blanco primero y recién
+    // después le cargamos el contenido real.
+    const w = window.open("", "_blank");
     let blob = await cacheGet(url);
     let nuevo = false;
     if (!blob) {
-        if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, motivo: "sin-conexion" };
+        if (typeof navigator !== "undefined" && navigator.onLine === false) { if (w) w.close(); return { ok: false, motivo: "sin-conexion" }; }
         try {
             const r = await fetch(url);
             if (!r.ok) throw new Error("no se pudo traer");
             blob = await r.blob();
             nuevo = true;
-        } catch { return { ok: false, motivo: "sin-conexion" }; }
+        } catch { if (w) w.close(); return { ok: false, motivo: "sin-conexion" }; }
     }
     const objUrl = URL.createObjectURL(blob);
-    window.open(objUrl, "_blank");
+    if (w && !w.closed) { w.location = objUrl; } else { window.open(objUrl, "_blank"); }
     if (nuevo) cachePut(url, blob);
     return { ok: true, nuevo };
 }
@@ -1590,17 +1596,17 @@ function TabInformes({ detail, upd }) {
         </button>
         {filtered.length === 0
             ? <div style={{ textAlign: "center", padding: "28px 0", color: T.muted, fontSize: 12 }}>Sin informes {tp?.label?.toLowerCase()}s cargados</div>
-            : filtered.map(inf => (<div key={inf.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8 }}>
+            : filtered.map(inf => (<div key={inf.id} onClick={() => descargarArchivo(inf.url, inf.nombre)} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8, cursor: "pointer" }}>
                 <div style={{ width: 38, height: 38, borderRadius: 9, background: tp?.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <span style={{ fontSize: 9, fontWeight: 800, color: tp?.color }}>{inf.ext}</span>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inf.titulo}</div>
-                    <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{inf.fecha} · {inf.size}</div>
+                    <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{inf.fecha} · {inf.size} · tocá para ver</div>
                 </div>
                 <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                    <button onClick={() => descargarArchivo(inf.url, inf.nombre)} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>↓</button>
-                    <button onClick={() => upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) })} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
+                    <button onClick={(e) => { e.stopPropagation(); descargarArchivo(inf.url, inf.nombre); }} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>👁</button>
+                    <button onClick={(e) => { e.stopPropagation(); upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) }); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
                 </div>
             </div>))}
         {showNew && (<Sheet title={`Subir informe ${tp?.label}`} onClose={() => setShowNew(false)}>
