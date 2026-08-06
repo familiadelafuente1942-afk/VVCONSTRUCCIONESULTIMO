@@ -60,6 +60,7 @@ function Ico({ n, s = 18, c = "currentColor", st = 1.7 }) {
 
 const SECCIONES = [
   { id: "novedades", label: "Novedades", icon: "doc" },
+  { id: "certificados", label: "Certificados", icon: "doc" },
   { id: "renders", label: "Renders", icon: "camera" },
   { id: "fotos", label: "Informe de avance", icon: "camera" },
   { id: "cronograma", label: "Cronograma", icon: "calendar" },
@@ -237,7 +238,26 @@ function SeccionNovedades({ obra, certif, onBack }) {
     </div>
   </div>);
 }
-// Un render es una IMAGEN cargada entre los planos de la obra. Los planos
+// Certificados de conformidad de etapas, firmados por el auditor (Héctor
+// Ayala). Se cargan desde V+V/Belfast; acá es solo lectura.
+function SeccionCertificados({ obra, certConformidad, onBack }) {
+  const certs = (certConformidad || []).filter(c => c.obra_id === obra.id).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  return (<div>
+    <SubHead titulo="Certificados" onBack={onBack} />
+    <div style={{ padding: 18 }}>
+      {certs.length === 0 && <EmptyMsg>Todavía no hay certificados de conformidad cargados para esta obra.</EmptyMsg>}
+      {certs.map(c => (
+        <a key={c.id} href={c.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 12, background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${T.brass}`, borderRadius: T.rsm, padding: 14, marginBottom: 10, textDecoration: "none" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{c.nombre}</div>
+            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{fFecha(c.fecha)}{c.auditor ? ` · Auditor: ${c.auditor}` : ""}</div>
+          </div>
+          <span style={{ color: T.brass, fontWeight: 700, fontSize: 12 }}>Ver →</span>
+        </a>
+      ))}
+    </div>
+  </div>);
+}
 // técnicos (pdf, dwg) no son renders y no van acá.
 const EXT_IMAGEN = ["jpg", "jpeg", "png", "webp", "avif", "heic"];
 function esRender(p) {
@@ -625,7 +645,7 @@ function SeccionMensajes({ onBack }) {
 }
 
 // ─── Panel principal ───
-function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, envios, costos, onGuardarPropia, onCrearPropia, config, onGuardarConfig }) {
+function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, certConformidad, envios, costos, onGuardarPropia, onCrearPropia, config, onGuardarConfig }) {
   const T = temaDe(config);
   const [seccion, setSeccion] = useState(null);
   const [idx, setIdx] = useState(0);
@@ -640,6 +660,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
 
   if (seccion === "galeria") return <SeccionGaleria obra={obra} onBack={() => setSeccion(null)} config={config} />;
   if (seccion === "novedades") return <SeccionNovedades obra={obra} certif={certif} onBack={() => setSeccion(null)} />;
+  if (seccion === "certificados") return <SeccionCertificados obra={obra} certConformidad={certConformidad} onBack={() => setSeccion(null)} />;
   if (seccion === "renders") return <SeccionRenders obra={obra} renders={renders} onBack={() => setSeccion(null)} />;
   if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} config={config} />;
   if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} config={config} />;
@@ -737,7 +758,7 @@ export default function ClientePropietarioApp() {
   const [config, setConfig] = useState({});
   const [proyectoUrl, setProyectoUrl] = useState("");
   const [codigoInicial, setCodigoInicial] = useState("");
-  const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {}, renders: {}, certif: {}, envios: {} });
+  const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {}, renders: {}, certif: {}, certConformidad: [], envios: {} });
 
   async function guardarConfig(next) {
     setConfig(next);
@@ -774,8 +795,8 @@ export default function ClientePropietarioApp() {
 
   async function cargarObra(codigo, nombre) {
     try {
-      const [ro, rt, ra, rf, rav, rr, rc, re, rfin] = await Promise.all([
-        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"), storage.get("vv_renders"), storage.get("vv_certif_sem"), storage.get("cliente_envios_prop"), storage.get("vv_finanzas"),
+      const [ro, rt, ra, rf, rav, rr, rc, re, rfin, rcc] = await Promise.all([
+        storage.get("vv_obras"), storage.get("vv_tareas"), storage.get("vv_auditoria"), storage.get("vv_formularios"), storage.get("vv_avance"), storage.get("vv_renders"), storage.get("vv_certif_sem"), storage.get("cliente_envios_prop"), storage.get("vv_finanzas"), storage.get("vv_cert_conformidad"),
       ]);
       const obras = ro?.value ? JSON.parse(ro.value) : [];
       const encontrada = obras.find(o => (o.codigoCliente || "").toUpperCase() === codigo.toUpperCase());
@@ -807,6 +828,7 @@ export default function ClientePropietarioApp() {
         avance: rav?.value ? JSON.parse(rav.value) : {},
         renders: rr?.value ? JSON.parse(rr.value) : {},
         certif: rc?.value ? JSON.parse(rc.value) : {},
+        certConformidad: rcc?.value ? JSON.parse(rcc.value) : [],
         envios: re?.value ? JSON.parse(re.value) : {},
         costos,
       });
@@ -871,5 +893,5 @@ export default function ClientePropietarioApp() {
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
   if (estado === "entrada") return <Entrada onEntrar={cargarObra} config={config} onGuardarConfig={guardarConfig} codigoInicial={codigoInicial} proyectoUrl={proyectoUrl} />;
-  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} envios={extra.envios} costos={extra.costos} onGuardarPropia={guardarPropia} onCrearPropia={crearPropia} config={config} onGuardarConfig={guardarConfig} proyectoUrl={proyectoUrl} />;
+  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} certConformidad={extra.certConformidad} envios={extra.envios} costos={extra.costos} onGuardarPropia={guardarPropia} onCrearPropia={crearPropia} config={config} onGuardarConfig={guardarConfig} proyectoUrl={proyectoUrl} />;
 }

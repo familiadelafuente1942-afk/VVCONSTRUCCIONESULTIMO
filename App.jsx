@@ -2175,7 +2175,7 @@ function MIcon({ id }){
 const MAS_TILES = [
   { id:"mensajes", label:"Mensajes" },
   { id:"personal", label:"Personal" },
-  { id:"formularios", label:"Formularios" },
+  { id:"formularios", label:"Certificados" },
   { id:"documentacion", label:"Documentación" },
   { id:"informes", label:"Informes" },
   { id:"auditoria", label:"Auditoría de obra" },
@@ -6542,7 +6542,28 @@ function PlantillasView({ db, cfg, onBack }) {
 function FormulariosView({ db, cfg, onBack }) {
   const adjRefForm = useRef(null);
   const [subiendoAdj, setSubiendoAdj] = useState(false);
-  const { obras, formularios, setFormularios, setPedidos } = db;
+  const { obras, formularios, setFormularios, setPedidos, certConformidad, setCertConformidad } = db;
+  // ── Certificados de conformidad de etapas de obra (auditor Héctor) ──
+  const certRef = useRef(null);
+  const [subiendoCert, setSubiendoCert] = useState(false);
+  const [certObraId, setCertObraId] = useState(obras[0]?.id || "");
+  const listaCert = (certConformidad || []).filter(c => c.obra_id === certObraId).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  async function subirCertConformidad(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    if (!certObraId) { alert("Elegí una obra primero."); return; }
+    setSubiendoCert(true);
+    const nuevos = [];
+    for (const f of files) {
+      const data = await toDataUrl(f);
+      const url = await uploadFoto(data, `certconformidad/${certObraId}`, `${Date.now()}_${f.name.replace(/[^\w.\-]+/g, "_")}`);
+      nuevos.push({ id: uid(), obra_id: certObraId, nombre: f.name, url, auditor: "Héctor Ayala", fecha: hoyStr(), ts: Date.now() });
+    }
+    setCertConformidad(p => [...nuevos, ...(p || [])]);
+    setSubiendoCert(false);
+    e.target.value = "";
+    if (nuevos.some(n => !mediaStorage.isRemoteUrl(n.url))) alert("⚠ El archivo quedó guardado en este dispositivo pero no se pudo subir a la nube. Revisá el bucket de fotos en Supabase.");
+  }
+  function borrarCertConformidad(id) { if (confirm("¿Eliminar este certificado de conformidad?")) setCertConformidad(p => (p || []).filter(x => x.id !== id)); }
   const cli = cfg?.clienteNombre || "Belfast Construction Management";
   const [pick, setPick] = useState(false);
   const [obraPick, setObraPick] = useState(obras[0]?.id || "");
@@ -6638,8 +6659,27 @@ function FormulariosView({ db, cfg, onBack }) {
   }
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
-    <SubHead id="formularios" label="Formularios" sub="Plantillas digitales en uso continuo" onBack={onBack} />
+    <SubHead id="formularios" label="Certificados" sub="Conformidad de etapas y plantillas digitales" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
+      <Card style={{ padding: 14, marginBottom: 16, borderLeft: `3px solid ${BRASS}` }}>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 3 }}>Certificados de conformidad de etapas de obra</div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.45 }}>Certificados firmados por el auditor (Héctor Ayala) que dan conformidad a una etapa ejecutada. Subilos acá, por obra.</div>
+        <Field label="Obra"><Sel value={certObraId} onChange={e => setCertObraId(e.target.value)}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        <input ref={certRef} type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={subirCertConformidad} style={{ display: "none" }} />
+        <button onClick={() => certRef.current && certRef.current.click()} disabled={subiendoCert} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}`, marginTop: 4 }}>{subiendoCert ? "Subiendo…" : "＋ Cargar certificado"}</button>
+        {listaCert.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12, padding: "16px 0 4px" }}>Sin certificados de conformidad cargados en esta obra.</div>}
+        {listaCert.map(c => (
+          <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginTop: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{c.nombre}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{c.fecha} · Auditor: {c.auditor}</div>
+            </div>
+            <button onClick={() => descargarArchivo(c.url, c.nombre)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Ver</button>
+            <button onClick={() => borrarCertConformidad(c.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer", flexShrink: 0 }}>✕</button>
+          </div>
+        ))}
+      </Card>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Plantillas digitales</div>
       <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 14 }}>Completá y guardá las planillas por obra; quedan en la app para reusarlas siempre. Plantillas: Certificado de Inicio de Etapa, Informe de Auditoría, Estado de situación y Nota de pedido.</div>
       {list.length === 0 && <EmptyMsg>Sin formularios cargados. Tocá ＋ para empezar uno.</EmptyMsg>}
       {list.map(f => { const tpl = tplOf(f.tplId); return (<Card key={f.id} style={{ padding: 13, marginBottom: 9 }}>
@@ -8101,6 +8141,7 @@ function App() {
   const [gestion, setGestion] = useStoredState("vv_gestion", {});
   const [formularios, setFormularios] = useStoredState("vv_formularios", []);
   const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
+  const [certConformidad, setCertConformidad] = useStoredState("vv_cert_conformidad", []); // certificados de conformidad de etapas de obra (auditor Héctor)
   const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
   const [dronevuelos, setDronevuelos] = useStoredState("vv_drone", []);
   const [minutas, setMinutas] = useStoredState("vv_minutas", []);
@@ -8156,7 +8197,7 @@ function App() {
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
-    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_minutas", setMinutas], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
+    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_cert_conformidad", setCertConformidad], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_minutas", setMinutas], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
     let alive = true;
     const pullAll = async () => {
       for (const [key, setter] of stores) {
@@ -8314,7 +8355,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, certConformidad, setCertConformidad, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
