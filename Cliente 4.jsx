@@ -172,21 +172,22 @@ const storage = {
 const SUPA_BUCKET = "bco-media";
 const SUPA_STORAGE_URL = SUPA_URL + "/storage/v1";
 const mediaStorage = {
-  upload: async (path, dataUrl) => {
+  upload: async (path, dataUrl, forceType) => {
     try {
       const res = await fetch(dataUrl); const blob = await res.blob();
-      const ext = (blob.type.split('/')[1] || 'bin');
+      const tipo = forceType || blob.type || "application/octet-stream";
+      const ext = (tipo.split('/')[1] || 'bin');
       const filePath = `${path}.${ext}`;
-      const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${filePath}`, { method: "POST", headers: { "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY, "Content-Type": blob.type, "x-upsert": "true" }, body: blob });
+      const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${filePath}`, { method: "POST", headers: { "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY, "Content-Type": tipo, "x-upsert": "true" }, body: blob });
       if (!r.ok) return null;
       return `${SUPA_STORAGE_URL}/object/public/${SUPA_BUCKET}/${filePath}`;
     } catch { return null; }
   },
 };
-async function uploadArchivo(dataUrl, carpeta, nombre) {
+async function uploadArchivo(dataUrl, carpeta, nombre, forceType) {
   if (!dataUrl) return null;
   if (dataUrl.startsWith('http')) return dataUrl;
-  const url = await mediaStorage.upload(`${carpeta}/${nombre || uid()}`, dataUrl);
+  const url = await mediaStorage.upload(`${carpeta}/${nombre || uid()}`, dataUrl, forceType);
   return url || dataUrl;
 }
 
@@ -707,7 +708,10 @@ function useAvisos(clave, mapaIds) {
 // ═══ OBRAS (compartido: idéntico a V+V) — inline, sin archivo aparte ═══
 // ══════════════════════════════════════════════════════════════════
 // ─── Avance de obra (espejo de V+V) ───
-function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
+const fFechaCorta = (iso) => { if (!iso) return ""; const p = String(iso).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0].slice(2)}` : String(iso); };
+function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, envios = {}, setEnvios }) {
+  // Certificado semanal abierto (los emite V+V; acá se ven en modo lectura).
+  const [certAbierto, setCertAbierto] = React.useState(null);
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
@@ -757,6 +761,16 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
     </div></body></html>`;
   }
   const pdfUno = (h) => { setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
+  // Copia el PDF ya armado por Belfast a Informes, para que lo vea el propietario.
+  // paraProp = true → lo ve el propietario en su panel.
+  // paraProp = false → queda solo en Informes de Belfast, uso interno.
+  const enviarAInformes = (h, paraProp) => {
+    if (!setEnvios || !obraId) return;
+    const reg = { id: h.id, tipo: "av", fecha: h.fecha, titulo: `Informe de avance ${h.fecha}`, html: buildPdfAvance([h]), prop: !!paraProp, ts: Date.now() };
+    setEnvios(p => { const lista = ((p || {})[obraId] || []).filter(x => x.id !== reg.id); return { ...(p || {}), [obraId]: [reg, ...lista] }; });
+    alert(paraProp ? "Listo: el propietario ya lo puede ver en su panel." : "Listo: quedó en Informes de Belfast (el propietario NO lo ve).");
+  };
+  const estado = (h) => ((envios || {})[obraId] || []).find(x => x.id === h.id);
   const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
   const [pdfEntries, setPdfEntries] = React.useState([]);
   async function mergeSaveAvance(oid, transform) {
@@ -901,6 +915,8 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+              <button onClick={() => enviarAInformes(h, false)} title="Copiar a Informes de Belfast (uso interno)" style={{ background: estado(h) ? "#EFF6FF" : T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 8px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{estado(h) ? "✓ Informes" : "→ Informes"}</button>
+              <button onClick={() => enviarAInformes(h, true)} title="Mandarlo al panel del propietario" style={{ background: estado(h)?.prop ? "#DCFCE7" : BRASS, border: "none", color: estado(h)?.prop ? "#166534" : "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{estado(h)?.prop ? "✓ Propietario" : "→ Propietario"}</button>
             </div>
           </div>
           {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}><Ico n="chart" /> Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
@@ -1206,6 +1222,66 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
   </div>);
 }
 
+// ── AUDITORÍA (lectura) — trae las supervisiones/revisiones/certificaciones que carga V+V ──
+const AUD_TIPOS_CLI = [
+  { id: "supervision", label: "Supervisiones", sigla: "SUP" },
+  { id: "revision", label: "Revisión de doc.", sigla: "RDO" },
+  { id: "certificacion", label: "Certificación", sigla: "CER" },
+];
+function AuditoriaClienteView({ T, obras, auditoria }) {
+  const [tipo, setTipo] = useState("supervision");
+  const [obraId, setObraId] = useState("");
+  const tp = AUD_TIPOS_CLI.find(t => t.id === tipo) || AUD_TIPOS_CLI[0];
+  const fmtDMY = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
+  const nombreObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "—";
+  const lista = (auditoria || []).filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const [abierto, setAbierto] = useState(null);
+  return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <AppHeader title="Auditoría de obra" sub="Supervisiones y controles cargados por V+V" />
+    <div style={{ padding: "14px 18px" }}>
+      <div style={{ display: "flex", gap: 7, marginBottom: 12 }}>
+        {AUD_TIPOS_CLI.map(t => (
+          <button key={t.id} onClick={() => setTipo(t.id)} style={{ flex: 1, background: tipo === t.id ? T.navy : T.card, color: tipo === t.id ? "#fff" : T.sub, border: `1px solid ${tipo === t.id ? T.navy : T.border}`, borderRadius: T.rsm, padding: "9px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{t.label}</button>
+        ))}
+      </div>
+      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, color: T.text, marginBottom: 14 }}>
+        <option value="">Todas las obras</option>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>
+
+      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>Todavía no hay {tp.label.toLowerCase()} cargadas.</div>}
+      {lista.map(it => {
+        const abiertoAqui = abierto === it.id;
+        return (<div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+          <div onClick={() => setAbierto(abiertoAqui ? null : it.id)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.nro}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.navy, flex: 1, minWidth: 0 }}>{nombreObra(it.obra_id)}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D" }}>{it.resultado}</span>
+          </div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{fmtDMY(it.fecha)}{it.periodo ? ` · ${it.periodo}` : ""} · {(it.obs || []).length} observación(es)</div>
+          {abiertoAqui && (<div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+            {it.presentes && <div style={{ fontSize: 12, color: T.sub, marginBottom: 8 }}><b style={{ color: T.text }}>Presentes:</b> {it.presentes}</div>}
+            {(it.obs || []).length > 0 && (<div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginBottom: 4 }}>Observaciones</div>
+              {it.obs.map((o, i) => <div key={i} style={{ fontSize: 12, color: T.sub, marginBottom: 4, lineHeight: 1.4 }}>· {o.txt} {o.sector ? `(${o.sector})` : ""} {o.crit ? `— ${o.crit}` : ""}</div>)}
+            </div>)}
+            {(it.interferencias || []).length > 0 && (<div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginBottom: 4 }}>Interferencias</div>
+              {it.interferencias.map((x, i) => <div key={i} style={{ fontSize: 12, color: T.sub, marginBottom: 4 }}>· {x}</div>)}
+            </div>)}
+            {it.conclusion && <div style={{ fontSize: 12, color: T.sub, marginBottom: 8, lineHeight: 1.4 }}><b style={{ color: T.text }}>Conclusión:</b> {it.conclusion}</div>}
+            {it.responsable && <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 8 }}>Responsable técnico: {it.responsable}</div>}
+            {(it.fotos || []).length > 0 && (<div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {it.fotos.map((f, i) => <a key={f.id || i} href={f.url} target="_blank" rel="noreferrer" style={{ width: 74, height: 74, borderRadius: 9, overflow: "hidden", border: `1px solid ${T.border}` }}>
+                <img src={f.url} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              </a>)}
+            </div>)}
+          </div>)}
+        </div>);
+      })}
+    </div>
+  </div>);
+}
 function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   const [abrir, setAbrir] = useState(false);
@@ -2441,7 +2517,7 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje, vaciar
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <button onClick={() => fileRef.current?.click()} style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0 }}>＋</button>
-        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí un mensaje…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí un mensaje…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, maxHeight: 110, minHeight: 42 }} />
         <button onClick={send} style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.accent, color: "#fff", border: "none", fontSize: 17, flexShrink: 0 }}>↑</button>
       </div>
     </div>
@@ -2449,11 +2525,39 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje, vaciar
 }
 
 // ── PANTALLA: AJUSTES ────────────────────────────────────────────────
-function AjustesScreen({ T, cfg, setCfg, obras = [], setObras }) {
+function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, setRenders }) {
   const logoRef = useRef(null);
   async function setLogo(f) { const d = await fileToDataUrl(f, 600); const url = await uploadArchivo(d, "logos", "cliente_logo"); setCfg(p => ({ ...p, logo: url })); }
   // Le pone (o le cambia) el código de acceso a una obra. Ese código es el
   // que se le pasa al dueño para que entre a ver SU obra, y nada más.
+  // ── Renders del panel del propietario ─────────────────────────────
+  // Se suben acá como imágenes y son las que rotan en el banner y las que
+  // se ven en la sección "Renders" de la app del dueño.
+  const [obraRender, setObraRender] = useState(obras[0]?.id || "");
+  const [subiendoR, setSubiendoR] = useState(false);
+  const renderRef = useRef(null);
+  const rendersDeObra = (renders || {})[obraRender] || [];
+  async function subirRenders(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !obraRender) { if (e.target) e.target.value = ""; return; }
+    setSubiendoR(true);
+    const nuevos = [];
+    for (const f of files) {
+      try {
+        const data = await fileToDataUrl(f, 1600);
+        const url = await uploadArchivo(data, `renders/${obraRender}`, `${Date.now()}_${(f.name || "render").replace(/\W+/g, "_")}`);
+        nuevos.push({ id: uid(), nombre: f.name || "Render", url: url || data, ts: Date.now() });
+      } catch { }
+    }
+    if (nuevos.length && setRenders) setRenders(p => ({ ...(p || {}), [obraRender]: [...((p || {})[obraRender] || []), ...nuevos] }));
+    setSubiendoR(false);
+    if (e.target) e.target.value = "";
+    if (!nuevos.length) alert("No pude subir las imágenes. Probá de nuevo.");
+  }
+  function borrarRender(id) {
+    if (!confirm("¿Sacar este render del panel del propietario?")) return;
+    if (setRenders) setRenders(p => ({ ...(p || {}), [obraRender]: ((p || {})[obraRender] || []).filter(r => r.id !== id) }));
+  }
   const setCodigo = (obraId, valor) => {
     const limpio = String(valor || "").toUpperCase().replace(/\s+/g, "");
     if (setObras) setObras(p => (p || []).map(o => o.id === obraId ? { ...o, codigoCliente: limpio } : o));
@@ -2481,6 +2585,29 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras }) {
             style={{ width: 140, flexShrink: 0, background: T.bg, border: `1px solid ${o.codigoCliente ? BRASS : T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 12.5, fontWeight: 800, color: o.codigoCliente ? T.accent : T.text, textAlign: "center", letterSpacing: "0.04em" }}
           />
         </div>))}
+      </Card>
+
+      <Eyebrow T={T}>Renders del panel del propietario</Eyebrow>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Subí acá las imágenes de renders. Son las que pasan como diapositivas en el banner y las que ve el dueño en la sección "Renders".</div>
+      <Card T={T} style={{ padding: 13, marginBottom: 22 }}>
+        {obras.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, textAlign: "center", padding: 8 }}>Todavía no hay obras cargadas.</div>
+          : <>
+            <select value={obraRender} onChange={e => setObraRender(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: T.text, marginBottom: 10, boxSizing: "border-box" }}>
+              {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+            </select>
+            <input ref={renderRef} type="file" accept="image/*" multiple onChange={subirRenders} style={{ display: "none" }} />
+            <button onClick={() => renderRef.current?.click()} disabled={subiendoR} style={{ width: "100%", background: T.accentLight, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 9, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: rendersDeObra.length ? 11 : 0 }}>{subiendoR ? "Subiendo…" : "＋ Importar renders (imágenes)"}</button>
+            {rendersDeObra.length > 0 && <>
+              <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 7 }}>{rendersDeObra.length} render{rendersDeObra.length > 1 ? "s" : ""} · pasan en este orden</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                {rendersDeObra.map(r => (<div key={r.id} style={{ position: "relative", borderRadius: 8, overflow: "hidden", border: `1px solid ${T.border}` }}>
+                  <img src={r.url} alt={r.nombre} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
+                  <button onClick={() => borrarRender(r.id)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(220,38,38,.92)", border: "none", color: "#fff", borderRadius: 6, width: 22, height: 22, fontSize: 12, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                </div>))}
+              </div>
+            </>}
+          </>}
       </Card>
 
       <Eyebrow T={T}>Identidad del cliente</Eyebrow>
@@ -2515,7 +2642,7 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras }) {
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-borrargrab</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-fixavance</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -2532,16 +2659,76 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "drone", label: "Drone IA", icon: "M12 8a2 2 0 100 4 2 2 0 000-4zM4 4a2 2 0 100 4 2 2 0 000-4zM20 4a2 2 0 100 4 2 2 0 000-4zM4 16a2 2 0 100 4 2 2 0 000-4zM20 16a2 2 0 100 4 2 2 0 000-4zM6 6l4 4M18 6l-4 4M6 18l4-4M18 18l-4-4" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "drone", label: "Drone IA", icon: "M12 8a2 2 0 100 4 2 2 0 000-4zM4 4a2 2 0 100 4 2 2 0 000-4zM20 4a2 2 0 100 4 2 2 0 000-4zM4 16a2 2 0 100 4 2 2 0 000-4zM20 16a2 2 0 100 4 2 2 0 000-4zM6 6l4 4M18 6l-4 4M6 18l4-4M18 18l-4-4" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "auditoria", label: "Auditoría", icon: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z M9.5 12l1.8 1.8L15 10" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
-function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos, onMinutas }) {
+function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], certif = {}, bitacora = [], onPedidos, onMinutas }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
   const [escuchando, setEscuchando] = useState(false);
   const recRef = useRef(null);
   const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const ttsOk = typeof window !== "undefined" && "speechSynthesis" in window;
+  const [narrarAuto, setNarrarAuto] = useState(() => { try { return localStorage.getItem("cliente_narrar_auto") === "1"; } catch { return false; } });
+  const [hablando, setHablando] = useState(false);
+  const ultimoNarrado = useRef(null);
+  function limpiarParaVoz(texto) {
+    return String(texto || "")
+      .replace(/```accion[\s\S]*?```/g, "")
+      .replace(/[*_#`]/g, "")
+      .replace(/https?:\/\/\S+/g, "un link")
+      .replace(/\n{2,}/g, ". ")
+      .replace(/\n/g, ". ")
+      .trim();
+  }
+  function hablar(texto) {
+    if (!ttsOk) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(limpiarParaVoz(texto));
+      u.lang = "es-AR";
+      u.rate = 1.02;
+      const voces = window.speechSynthesis.getVoices();
+      const voz = voces.find(v => v.lang === "es-AR") || voces.find(v => (v.lang || "").startsWith("es"));
+      if (voz) u.voice = voz;
+      u.onstart = () => setHablando(true);
+      u.onend = () => setHablando(false);
+      u.onerror = () => setHablando(false);
+      window.speechSynthesis.speak(u);
+    } catch { }
+  }
+  function pararVoz() { try { window.speechSynthesis.cancel(); } catch { } setHablando(false); }
+  function toggleNarrarAuto() {
+    setNarrarAuto(v => { const nv = !v; try { localStorage.setItem("cliente_narrar_auto", nv ? "1" : "0"); } catch { } if (!nv) pararVoz(); return nv; });
+  }
+  // narra sola la última respuesta de la IA, si el modo automático está prendido
+  useEffect(() => {
+    if (!narrarAuto || !ttsOk) return;
+    const ult = msgs[msgs.length - 1];
+    if (!ult || ult.role !== "assistant" || loading) return;
+    const clave = ult.id || ult.ts || msgs.length;
+    if (ultimoNarrado.current === clave) return;
+    ultimoNarrado.current = clave;
+    const texto = (Array.isArray(ult.content) ? (ult.content.find(b => b.type === "text")?.text || "") : ult.content) + (ult.accionResultado ? ". " + ult.accionResultado : "");
+    hablar(texto);
+  }, [msgs, loading, narrarAuto]);
+  const [adj, setAdj] = useState([]);
+  const [subiendoAdj, setSubiendoAdj] = useState(false);
+  const fileRef = useRef(null);
+  async function addAdj(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setSubiendoAdj(true);
+    const nuevos = [];
+    for (const f of files) {
+      const data = await fileToDataUrl(f);
+      const url = await uploadArchivo(data, "ia-chat", f.name.replace(/\W+/g, "_"));
+      nuevos.push({ nombre: f.name, url, esImagen: (f.type || "").startsWith("image/"), dataUrl: data });
+    }
+    setAdj(p => [...p, ...nuevos]);
+    setSubiendoAdj(false);
+    e.target.value = "";
+  }
   async function descargarMinuta(texto) {
     const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const filas = esc(texto).split("\n").map(l => l.trim() ? `<p style="margin:0 0 6px">${l}</p>` : "").join("");
@@ -2664,7 +2851,25 @@ ARCHIVOS DE OBRA:\n${obras.flatMap(o => (o.archivos || []).map(a => `· ${a.nomb
 
 DOCUMENTACIÓN (modelos):\n${(documentacion || []).map(d => `· ${d.nombre} [${d.cat}]`).join("\n") || "(sin documentación)"}
 
-FOTOS E INFORMES POR OBRA:\n${obras.map(o => `· ${o.nombre}: ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes`).join("\n") || "(sin obras)"}
+FOTOS Y VIDEOS POR OBRA:\n${obras.map(o => `· ${o.nombre}: ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos`).join("\n") || "(sin obras)"}
+
+INFORMES TÉCNICOS POR OBRA (del más nuevo al más viejo):\n${obras.map(o => {
+      const infs = (o.informes || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      if (!infs.length) return null;
+      return `· ${o.nombre}:\n${infs.map(i => `  - "${i.titulo || i.nombre || "Informe"}" [${i.tipo || "—"}] ${i.fecha || ""}${i.notas ? ` — ${i.notas}` : ""}`).join("\n")}`;
+    }).filter(Boolean).join("\n") || "(sin informes cargados en ninguna obra)"}
+
+CERTIFICADOS SEMANALES POR OBRA (del más nuevo al más viejo — resumen de avance de cada semana):\n${obras.map(o => {
+      const cs = ((certif || {})[o.id] || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
+      if (!cs.length) return null;
+      return `· ${o.nombre}:\n${cs.map(c => `  - Semana ${c.desde || "?"} al ${c.hasta || "?"}${c.desarrollo ? ` — ${String(c.desarrollo).slice(0, 100)}` : ""}`).join("\n")}`;
+    }).filter(Boolean).join("\n") || "(sin certificados semanales cargados)"}
+
+BITÁCORA DE OBRA POR OBRA (del más nuevo al más viejo — hechos y novedades del día a día):\n${obras.map(o => {
+      const hs = (bitacora || []).filter(h => h.obra_id === o.id).slice().sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
+      if (!hs.length) return null;
+      return `· ${o.nombre}:\n${hs.map(h => `  - ${h.fecha}: "${h.titulo || "Hecho"}"${h.desc ? ` — ${String(h.desc).slice(0, 160)}` : ""}`).join("\n")}`;
+    }).filter(Boolean).join("\n") || "(sin bitácora cargada en ninguna obra)"}
 
 PLANOS POR OBRA:\n${obras.map(o => (o.planos || []).length ? `· ${o.nombre}: ${(o.planos || []).map(p => p.nombre).join(", ")}` : null).filter(Boolean).join("\n") || "(sin planos cargados)"}
 
@@ -2672,7 +2877,7 @@ TAREAS / CRONOGRAMA:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find
 
 PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(sin pedidos de materiales)"}
 
-Tenés acceso COMPLETO a todos estos datos (obras, avances, montos, fotos, informes, formularios, archivos, documentación, tareas, materiales, personal, contactos, pedidos). Cuando te pidan un DATO PUNTUAL, buscalo y dá el valor EXACTO; no digas "no lo tengo" si está arriba. Las fotos y videos no los "ves", pero sabés cuántos hay y de qué obra.
+Tenés acceso COMPLETO y AL DETALLE de todos estos datos (obras, avances, montos, fotos, informes con título/tipo/fecha, certificados semanales, bitácora de obra, formularios, archivos, documentación, tareas, materiales, personal, contactos, pedidos). Nunca digas "no tengo acceso", "no lo puedo ver" o "no lo tengo en mi base de datos" a algo que está en este contexto — está TODO arriba, con contenido real, no solo cantidades: informes con título y fecha, certificados semanales con su resumen, bitácora con título y descripción de cada hecho. Si te piden "los últimos informes", "la última bitácora", "el certificado semanal" o "qué se cargó últimamente", mirá la lista correspondiente (ya están ordenadas de la más nueva a la más vieja) y respondé con el contenido real, no derives el pedido a nadie. Las fotos y videos no los "ves" uno por uno, pero sabés cuántos hay y de qué obra.
 
 PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ AL FINAL un bloque entre \`\`\`accion y \`\`\` con JSON, una de:
 {"tipo":"crear_pedido","para":"vv","asunto":"...","detalle":"...","prioridad":"alta|media|baja","obra":"nombre de la obra de la que se trata"}
@@ -2684,8 +2889,12 @@ PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ
 {"tipo":"whatsapp","persona":"nombre o rol del jefe de obra/contacto","obra":"opcional","texto":"el mensaje a enviar por WhatsApp"}
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave (ej: replanteo platea)"}
+{"tipo":"traer_informe","obra":"nombre de la obra","cantidad":1,"buscar":"palabras clave opcional (ej: hormigón, seguridad)"}
+{"tipo":"traer_certificado","obra":"nombre de la obra","cantidad":1}
 REGLA fotos: si te piden VER/MANDAR/PASAR fotos o videos de una obra (ej: "mandame la última foto de Castores"), usá "traer_fotos" con la obra y cantidad (1 = la última). videos:true si piden videos. Aparecen directo en el chat.
 REGLA planos: si te piden un PLANO (PDF/CAD) de una obra (ej: "necesito el plano de replanteo de platea de Castores 475"), usá "traer_plano" con la obra y "buscar" (palabras clave). El plano aparece en el chat para abrir/descargar.
+REGLA informes: si te piden el/los INFORME(S), o el "PDF de informes", o "lo último cargado" de una obra (ej: "mandame el último informe de Golf 293", "pasame el pdf del informe de seguridad de Castores"), usá "traer_informe" con la obra, cantidad (1 = el último) y "buscar" si dieron palabras clave (tipo, tema). Aparece directo en el chat para abrir/descargar — NUNCA digas que no podés mandarlo, siempre está ahí para traer.
+REGLA certificados semanales: si te piden el/los CERTIFICADO(S) SEMANAL(ES) o "certificado de avance" de una obra (ej: "el último certificado semanal de Castores"), usá "traer_certificado" con la obra y cantidad. El contenido completo (desarrollo, recepciones, limpieza, alertas y fotos) se pega directo en el chat, no como archivo aparte — NUNCA digas que no tenés acceso ni que no podés generar un PDF, siempre está ahí para traer.
 REGLA WhatsApp: si te piden MANDAR UN WHATSAPP a un jefe de obra o contacto, usá "whatsapp". Uso tu agenda (Personal → Contactos) y el personal de la obra. Te dejo el botón de WhatsApp listo para enviar.
 REGLA CLAVE — elegí bien la acción:
 - CANAL IA↔IA ("preguntar_ia"): SIEMPRE que involucre a la IA / el asistente de V+V o esperes que te devuelvan un DATO. Ejemplos: "preguntale a la IA de V+V…", "pedile a la IA de V+V…", "pedícelo/pedíselo a la IA…", "consultale al asistente de V+V…", "que la IA de V+V te pase/averigüe…". OJO: "pedile/pedícelo A LA IA" es SIEMPRE este canal (preguntar_ia), NO un crear_pedido. Va directo a la otra IA, que responde sola. ESTE es el canal entre las dos IA.
@@ -2695,8 +2904,17 @@ BANCOS DE DATOS CONECTADOS: primero respondé con TUS datos. Usá "preguntar_ia"
 Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   }
   async function send(texto) {
-    const c = (texto ?? input).trim(); if (!c || loading) return;
-    setInput(""); const next = [...msgs, { role: "user", content: c }]; setMsgs(next); setLoading(true);
+    const c = (texto ?? input).trim(); const adjActuales = texto != null ? [] : adj; if (!c && adjActuales.length === 0) return; if (loading) return;
+    setInput(""); if (texto == null) setAdj([]);
+    // Contenido para la IA: texto + imágenes en base64 (las ve de verdad) + links de otros archivos.
+    const imgs = adjActuales.filter(a => a.esImagen && a.dataUrl);
+    const otros = adjActuales.filter(a => !(a.esImagen && a.dataUrl));
+    let contenidoIA = c;
+    if (otros.length) contenidoIA += (contenidoIA ? "\n\n" : "") + otros.map(a => `[Archivo adjunto: ${a.nombre} — ${a.url || "no se pudo subir"}]`).join("\n");
+    const contentBlocks = imgs.length
+      ? [{ type: "text", text: contenidoIA || "Mirá este archivo." }, ...imgs.map(a => ({ type: "image", source: { type: "base64", media_type: (a.dataUrl.match(/^data:(.*?);/) || [, "image/jpeg"])[1], data: a.dataUrl.split(",")[1] } }))]
+      : contenidoIA;
+    const next = [...msgs, { role: "user", content: contentBlocks, docs: adjActuales.length ? adjActuales.map(a => ({ nombre: a.nombre, url: a.url })) : undefined }]; setMsgs(next); setLoading(true);
     const r = await callAI(next, sys(), apiKey, true);
     const { limpio, accion } = parseAccion(r);
     let extra = {};
@@ -2711,6 +2929,40 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       else if (!match.length) { res = `No encontré un plano que coincida con "${accion.buscar}" en ${target.nombre}. Te dejo todos:`; docs = planos.map(p => ({ nombre: p.nombre, url: p.url })); }
       else { res = `Acá tenés ${match.length === 1 ? "el plano" : "los planos"} de ${target.nombre}${accion.buscar ? ` (${accion.buscar})` : ""}:`; docs = match.map(p => ({ nombre: p.nombre, url: p.url })); }
       extra = { accionDone: true, accionResultado: res, docs };
+    } else if (accion && accion.tipo === "traer_informe") {
+      const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
+      const infs = ((target && target.informes) || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      const kw = String(accion.buscar || "").toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      let match = kw.length ? infs.filter(i => kw.some(w => `${i.titulo || ""} ${i.tipo || ""} ${i.notas || ""}`.toLowerCase().includes(w))) : infs;
+      const cant = Math.max(1, Math.min(accion.cantidad || 1, 12));
+      match = match.slice(0, cant);
+      let res, docs;
+      if (!target) { res = "No encontré esa obra."; docs = []; }
+      else if (!infs.length) { res = `${target.nombre} todavía no tiene informes cargados.`; docs = []; }
+      else if (!match.length) { res = `No encontré un informe que coincida con "${accion.buscar}" en ${target.nombre}. Te dejo el último cargado:`; docs = infs.slice(0, 1).map(i => ({ nombre: i.titulo || i.nombre || "Informe", url: i.url })); }
+      else { res = `Acá tenés ${match.length === 1 ? "el informe" : `los últimos ${match.length} informes`} de ${target.nombre}${accion.buscar ? ` (${accion.buscar})` : ""}:`; docs = match.map(i => ({ nombre: `${i.titulo || i.nombre || "Informe"}${i.fecha ? ` — ${i.fecha}` : ""}`, url: i.url })); }
+      extra = { accionDone: true, accionResultado: res, docs };
+    } else if (accion && accion.tipo === "traer_certificado") {
+      const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
+      const cs = (((certif || {})[target?.id]) || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
+      const cant = Math.max(1, Math.min(accion.cantidad || 1, 12));
+      const match = cs.slice(0, cant);
+      let res, media = [], texto = "";
+      if (!target) { res = "No encontré esa obra."; }
+      else if (!cs.length) { res = `${target.nombre} todavía no tiene certificados semanales cargados.`; }
+      else {
+        res = `Acá tenés ${match.length === 1 ? "el certificado semanal" : `los últimos ${match.length} certificados semanales`} de ${target.nombre}:`;
+        texto = match.map(item => {
+          const partes = [`📋 CERTIFICADO SEMANAL — ${target.nombre}\nSemana ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`];
+          if (item.desarrollo) partes.push(`Desarrollo:\n${item.desarrollo}`);
+          if (item.recepciones) partes.push(`Recepciones:\n${item.recepciones}`);
+          if (item.limpieza) partes.push(`Limpieza y seguridad:\n${item.limpieza}`);
+          if (item.alertas) partes.push(`Alertas:\n${item.alertas}`);
+          media.push(...(item.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])));
+          return partes.join("\n\n");
+        }).join("\n\n———\n\n");
+      }
+      extra = { accionDone: true, accionResultado: res, contentExtra: texto, media: media.length ? media : undefined, mediaTipo: media.length ? "fotos" : undefined };
     } else if (accion && accion.tipo === "traer_fotos") {
       const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
       const tipoMedia = accion.videos ? "videos" : "fotos";
@@ -2734,7 +2986,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       else { url = `https://wa.me/?text=${t}`; label = "Abrir WhatsApp"; res = per ? `${per.nombre} no tiene teléfono cargado. Abrí WhatsApp y elegí el contacto.` : "No encontré a esa persona con teléfono. Cargala en Personal → Contactos, o elegí el contacto."; }
       extra = { accionDone: true, accionResultado: res, waLink: url, waLabel: label };
     } else if (accion) { const res = await ejecutarAccion(accion, "cliente", { setPedidos, personal, setPersonal, obras }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
-    setMsgs([...next, { role: "assistant", content: limpio, ...extra }]); setLoading(false);
+    setMsgs([...next, { role: "assistant", content: limpio + (extra.contentExtra ? "\n\n" + extra.contentExtra : ""), ...extra }]); setLoading(false);
   }
   async function confirmAccion(idx) { const m = msgs[idx]; if (!m?.accion) return; const res = await ejecutarAccion(m.accion, "cliente", { setPedidos, personal, setPersonal, obras }); setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accionDone: true, accionResultado: res || "Acción ejecutada." } : x)); }
   function descartarAccion(idx) { setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accion: null, accionDescartada: true } : x)); }
@@ -2843,7 +3095,8 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       </div>}
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
-          <div style={{ maxWidth: "84%", background: m.role === "user" ? T.accent : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{m.content}</div>
+          <div style={{ maxWidth: "84%", background: m.role === "user" ? T.accent : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{Array.isArray(m.content) ? (m.content.find(b => b.type === "text")?.text || "") : m.content}</div>
+          {m.role !== "user" && ttsOk && !narrarAuto && <button onClick={() => hablar((Array.isArray(m.content) ? (m.content.find(b => b.type === "text")?.text || "") : m.content) + (m.accionResultado ? ". " + m.accionResultado : ""))} style={{ marginTop: 5, background: "none", border: "none", color: T.muted, fontSize: 10.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>🔊 Escuchar</button>}
           {m.role !== "user" && /MINUTA DE REUNI[OÓ]N/i.test(String(m.content || "")) && <button onClick={() => descargarMinuta(m.content)} style={{ marginTop: 7, background: "#2B579A", color: "#fff", border: "none", borderRadius: 9, padding: "9px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Ico n="word" /> Descargar minuta (Word)</button>}
           {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}><Ico n="send" /> {m.waLabel || "Enviar por WhatsApp"}</a>}
           {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}><Ico n="ruler" /> </span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
@@ -2871,6 +3124,8 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 760, margin: "0 auto 8px" }}>
         {debateActive ? <button onClick={stopDebate} style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Frenar debate</button>
           : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.accent : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="mic" /> Debate IA</button>}
+        {ttsOk && <button onClick={toggleNarrarAuto} title="Narrar las respuestas en voz alta" style={{ background: narrarAuto ? "#16A34A" : T.bg, color: narrarAuto ? "#fff" : T.sub, border: `1px solid ${narrarAuto ? "#16A34A" : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🔊 {narrarAuto ? "Narrando ON" : "Narrar"}</button>}
+        {hablando && <button onClick={pararVoz} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Callar</button>}
         {msgs.length > 0 && <button onClick={() => setMsgs([])} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginLeft: "auto" }}>Limpiar</button>}
       </div>
       {debateOpen && !debateActive && <div style={{ maxWidth: 760, margin: "0 auto 8px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px" }}>
@@ -2881,10 +3136,13 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
         </div>
       </div>}
       {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}><Ico n="mic" /> Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
+      {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, maxWidth: 760, margin: "0 auto 8px" }}>{adj.map((a, i) => <span key={i} style={{ background: T.bg, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub, display: "inline-flex", alignItems: "center", gap: 5 }}><Ico n="clip" /> {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted, fontWeight: 700 }}>✕</span></span>)}</div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, maxWidth: 760, margin: "0 auto" }}>
-        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí tu consulta…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        <input ref={fileRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" onChange={addAdj} style={{ display: "none" }} />
+        <button onClick={() => fileRef.current?.click()} disabled={subiendoAdj} title="Adjuntar archivo" style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>{subiendoAdj ? "…" : "＋"}</button>
+        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí tu consulta…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, maxHeight: 110, minHeight: 42 }} />
         {sttOk && <button onClick={toggleVoz} title="Dictar por voz" style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#DC2626" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>🎙</button>}
-        <button onClick={() => send()} disabled={loading || !input.trim()} style={{ width: 42, height: 42, borderRadius: T.rsm, background: input.trim() && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, flexShrink: 0 }}>↑</button>
+        <button onClick={() => send()} disabled={loading || (!input.trim() && adj.length === 0)} style={{ width: 42, height: 42, borderRadius: T.rsm, background: (input.trim() || adj.length > 0) && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, flexShrink: 0 }}>↑</button>
       </div>
     </div>
   </div>);
@@ -2977,7 +3235,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
             <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "IA · " : ""}{mine ? cfg.nombre : "V+V"} · {h.fecha}</div>
           </div>
         </div>); })}
-        <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Escribí una respuesta…" rows={3} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, marginTop: 8 }} />
+        <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Escribí una respuesta…" rows={3} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, marginTop: 8 }} />
         {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: "#EAEEF3", borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>{a.img ? "" : ""} {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -3121,17 +3379,142 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
     </div>}
   </div>);
 }
-function InformesScreen({ T, obras, formularios = [] }) {
+// Documento con la marca de BELFAST (no la de V+V). Es el que ve el
+// propietario: él es cliente de Belfast, no de V+V.
+function docBelfast(cfg, obraNombre, titulo, subtitulo, bloques, fotos) {
+  const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const marca = (cfg?.nombre || "Belfast Construction Management").toUpperCase();
+  const logo = cfg?.logo || "";
+  const secs = bloques.filter(([, t]) => t).map(([lbl, t]) =>
+    `<div class="bloque"><div class="lbl">${esc(lbl)}</div><div class="txt">${esc(t).replace(/\n/g, "<br/>")}</div></div>`).join("");
+  const fots = (fotos || []).length ? `<div class="fotos">${fotos.map(u => `<img src="${esc(u)}" />`).join("")}</div>` : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+    @page { margin: 15mm; }
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #16202e; margin: 0; padding: 22px; }
+    .head { text-align: center; border-bottom: 2px solid #B0894F; padding-bottom: 12px; margin-bottom: 18px; }
+    .head img { max-height: 54px; margin-bottom: 8px; }
+    .marca { font-size: 15px; font-weight: 800; letter-spacing: .06em; color: #0F1B2D; }
+    .tipo { font-size: 9px; font-weight: 800; letter-spacing: .12em; color: #B0894F; text-transform: uppercase; margin-top: 5px; }
+    h1 { font-size: 17px; margin: 12px 0 4px; }
+    .sub { font-size: 11.5px; color: #5B6B7F; }
+    .bloque { margin-bottom: 14px; }
+    .lbl { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #1B3A5B; margin-bottom: 4px; }
+    .txt { font-size: 12.5px; line-height: 1.6; }
+    .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+    .fotos img { width: 100%; border-radius: 6px; border: 1px solid #E3E8EF; }
+    .pie { margin-top: 24px; padding-top: 10px; border-top: 1px solid #E3E8EF; font-size: 9.5px; color: #94A3B8; text-align: center; }
+  </style></head><body>
+    <div class="head">${logo ? `<img src="${esc(logo)}" />` : ""}<div class="marca">${esc(marca)}</div><div class="tipo">${esc(subtitulo)}</div></div>
+    <h1>${esc(titulo)}</h1><div class="sub">Obra: ${esc(obraNombre)}</div>
+    <div style="margin-top:18px">${secs}${fots}</div>
+    <div class="pie">${esc(marca)} · Documento emitido para el propietario</div>
+  </body></html>`;
+}
+
+function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, cfg = {}, envios = {}, setEnvios }) {
+  const [avAbierto, setAvAbierto] = React.useState(null);
+  const [docAbierto, setDocAbierto] = React.useState(null);   // el informe armado, con logos
+  // Arma el documento con la marca de Belfast y lo deja disponible para el
+  // propietario en SU panel.
+  function mandarAlPropietario(obraId, obraNombre, item, tipo) {
+    if (!setEnvios) return;
+    const html = tipo === "cert"
+      ? docBelfast(cfg, obraNombre, `Certificado semanal ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`, "Certificado de avance",
+          [["Desarrollo", item.desarrollo], ["Recepciones", item.recepciones], ["Limpieza y seguridad", item.limpieza], ["Alertas", item.alertas]],
+          (item.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])))
+      : docBelfast(cfg, obraNombre, `Informe de avance ${item.fecha}`, "Informe de avance",
+          [["Avance alcanzado", item.avance], ["Estado de obra", item.descripcion]],
+          (item.fotos && item.fotos.length) ? item.fotos : (item.fotoUrl ? [item.fotoUrl] : []));
+    const reg = { id: item.id, tipo, prop: true, fecha: item.fecha || item.desde, titulo: tipo === "cert" ? `Certificado ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}` : `Informe de avance ${item.fecha}`, html, ts: Date.now() };
+    setEnvios(p => { const lista = ((p || {})[obraId] || []).filter(x => x.id !== reg.id); return { ...(p || {}), [obraId]: [reg, ...lista] }; });
+    alert("Listo: el propietario ya lo puede ver en su panel.");
+  }
+  const [certAbierto, setCertAbierto] = React.useState(null);
   const [filtro, setFiltro] = useState("");
   const [open, setOpen] = useState(null);
   const [verForm, setVerForm] = useState(null);
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const forms = (formularios || []).filter(f => f.compartido && (!filtro || f.obra_id === filtro)).sort((a, b) => (b.id > a.id ? 1 : -1));
   const todos = obras.flatMap(o => (o.informes || []).map(inf => ({ ...inf, obra: o.nombre, obra_id: o.id }))).filter(inf => !filtro || inf.obra_id === filtro).sort((a, b) => (b.id > a.id ? 1 : -1));
+  // Todos los certificados semanales, de todas las obras (o de la filtrada),
+  // ordenados del más nuevo al más viejo.
+  const certsTodos = obras.flatMap(o => ((certif || {})[o.id] || []).map(c => ({ ...c, _obra: o.nombre, _obraId: o.id })))
+    .filter(c => !filtro || c._obraId === filtro)
+    .sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
+  // Informes de avance: cada carga de fotos con su lectura de la IA.
+  // Solo los que tienen el informe ya armado (el PDF con logos que emite V+V).
+  // Es lo único que le llega al cliente; el texto suelto queda para uso interno.
+  const avTodos = obras.flatMap(o => ((avance || {})[o.id] || []).map(a => ({ ...a, _obra: o.nombre, _obraId: o.id })))
+    .filter(a => a.html && (!filtro || a._obraId === filtro))
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  if (docAbierto) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(10px + env(safe-area-inset-top)) 12px 10px" }}>
+      <button onClick={() => setDocAbierto(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>← Volver</button>
+      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{docAbierto.titulo}</span>
+      <button onClick={() => { const f = document.getElementById("doc-cliente"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Imprimir / PDF</button>
+    </div>
+    <iframe id="doc-cliente" srcDoc={docAbierto.html} title={docAbierto.titulo} style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+  </div>);
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
+
+      {/* La obra se elige PRIMERO: filtra los certificados, los avances y los informes de abajo. */}
+      <div style={{ padding: "0 18px", marginTop: 14 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Obra</label>
+        <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 2px" }}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+      </div>
+
+      {/* Certificados semanales emitidos por V+V — sólo lectura */}
+      {certsTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Certificados semanales de avance</div>
+        {certsTodos.map(c => (<div key={c.id} onClick={() => c.html ? setDocAbierto({ html: c.html, titulo: `Certificado ${fFechaCorta(c.desde)} al ${fFechaCorta(c.hasta)}` }) : setCertAbierto(certAbierto?.id === c.id ? null : c)} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{c._obra} · {(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
+            </div>
+              {c.html && <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>}
+              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(c._obraId, c._obra, c, "cert"); }} style={{ background: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#DCFCE7" : BRASS, border: "none", color: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "✓ Enviado" : "→ Propietario"}</button>
+          </div>
+          {certAbierto?.id === c.id && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
+            {[["Desarrollo", c.desarrollo], ["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
+              <div key={lbl} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{lbl}</div>
+                <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{txt}</div>
+              </div>) : null)}
+            {(c.av || []).some(a => (a.fotos || []).length || a.fotoUrl) && <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Fotos de la semana</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>
+                {(c.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])).map((u, i) => (
+                  <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>))}
+              </div>
+            </div>}
+          </div>}
+        </div>))}
+      </div>}
+
+      {/* Informes de avance — cada carga de fotos con su lectura */}
+      {avTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Informes de avance</div>
+        {avTodos.map(a => { const fs = (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : []); return (
+          <div key={a.id} onClick={() => setDocAbierto({ html: a.html, titulo: `Informe de avance ${a.fecha}` })} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
+                <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{a._obra}{fs.length ? ` · ${fs.length} foto${fs.length > 1 ? "s" : ""}` : ""}</div>
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>
+              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(a._obraId, a._obra, a, "av"); }} style={{ background: ((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "#DCFCE7" : BRASS, border: "none", color: ((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "✓ Enviado" : "→ Propietario"}</button>
+            </div>
+            {avAbierto?.id === a.id && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
+              {a.descripcion && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: fs.length ? 9 : 0 }}>{a.descripcion}</div>}
+              {fs.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>
+                {fs.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>)}
+              </div>}
+            </div>}
+          </div>); })}
+      </div>}
     <div style={{ padding: "16px 20px" }}>
-      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Obra</label>
-      <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 16px" }}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
       {false && <div style={{ marginBottom: 18 }}>
         <Eyebrow T={T}>Formularios recibidos de V+V</Eyebrow>
         {forms.map(f => { const tpl = FORM_TPLS.find(t => t.id === f.tplId); return (<Card T={T} key={f.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${BRASS}` }}>
@@ -4049,7 +4432,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-borrargrab</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-fixavance</span>
     </div>
   </div>);
 }
@@ -4059,7 +4442,10 @@ function ClienteApp() {
   const [cfg, setCfg] = useStored("cliente_cfg", DEFAULT_CFG);
   const T = theme(cfg.accent);
   const [screen, setScreen] = useState("asistente");
-  const [obras, setObras] = useStored("vv_obras", []);
+  const [obrasRaw, setObras] = useStored("vv_obras", []);
+  // Obras marcadas como "privada" en V+V no existen para Belfast: se filtran acá,
+  // en el único lugar donde Cliente.jsx lee la lista completa.
+  const obras = (obrasRaw || []).filter(o => !o.privada);
   const [avance, setAvance] = useStored("vv_avance", {});
   const [definiciones, setDefiniciones] = useStored("vv_definiciones", []);
   const [docrecepcion, setDocrecepcion] = useStored("vv_docrecepcion", []);
@@ -4081,8 +4467,13 @@ function ClienteApp() {
   // Las reuniones de Belfast son PRIVADAS: van en su propia clave, separada
   // de "vv_minutas" (las de V+V). Ninguna de las dos empresas ve las del otro.
   const [minutas, setMinutas] = useStored("cliente_minutas", []);
+  const [renders, setRenders] = useStored("vv_renders", {});
+  const [certifSem] = useStored("vv_certif_sem", {});
+  // Lo que Belfast le manda al propietario, con la marca de Belfast.
+  const [enviosProp, setEnviosProp] = useStored("cliente_envios_prop", {});
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
+  const [auditoria] = useStored("vv_auditoria", []);
   const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length; // pedidos de V+V sin levantar
   const pendPed = (pedidos || []).filter(p => p.para === "cliente" && p.estado !== "resuelto").length;
   const lastPed = useRef(null);
@@ -4121,6 +4512,10 @@ function ClienteApp() {
   const { aviso, marcarVisto } = useAvisos("cliente_avisos", idsAviso);
   // al abrir una pantalla, se apaga su punto rojo
   const irA = (id) => { setScreen(id); marcarVisto(id); };
+  // Si los datos de la pantalla activa siguen llegando de la nube (sync), se re-marca como
+  // visto cada vez que cambian MIENTRAS el usuario sigue parado ahí — así el globito no
+  // "revive" solo por datos que terminaron de sincronizar un segundo después del toque.
+  useEffect(() => { if (screen) marcarVisto(screen); }, [screen, JSON.stringify(idsAviso[screen] || [])]);
   useEffect(() => { try { if (!localStorage.getItem("cliente_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, formularios: now, materiales: now, ia: now }; localStorage.setItem("cliente_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("cliente_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("cliente_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
   useEffect(() => { initPush("belfast"); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
@@ -4293,22 +4688,23 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
+          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
-          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} />}
+          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
+          {screen === "auditoria" && <AuditoriaClienteView T={T} obras={obras} auditoria={auditoria} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
-          {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} />}
+          {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
-          {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} />}
+          {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} renders={renders} setRenders={setRenders} />}
         </div>
       </div>
       <WebClientFooter T={T} cfg={cfg} />
