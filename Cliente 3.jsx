@@ -1,7 +1,37 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
+const DOCS_BASE = [
+  { n: "Niveles", c: "Documentación técnica" },
+  { n: "Eje de replanteo en platea", c: "Documentación técnica" },
+  { n: "Planos de platea", c: "Documentación técnica" },
+  { n: "Planos de estructura", c: "Documentación técnica" },
+  { n: "Plano de replanteo de mampostería", c: "Documentación técnica" },
+  { n: "Plano de mampostería", c: "Documentación técnica" },
+  { n: "Plano de hogar", c: "Documentación técnica" },
+  { n: "Plano de parrilla", c: "Documentación técnica" },
+  { n: "Plano de vainas", c: "Documentación técnica" },
+  { n: "Cascos", c: "Elementos de protección" },
+  { n: "Chalecos reflectivos", c: "Elementos de protección" },
+  { n: "Calzado de seguridad", c: "Elementos de protección" },
+  { n: "Guantes", c: "Elementos de protección" },
+  { n: "Antiparras / protección ocular", c: "Elementos de protección" },
+  { n: "Protección auditiva", c: "Elementos de protección" },
+  { n: "Arnés y cabo de vida", c: "Elementos de protección" },
+  { n: "Barbijos / protección respiratoria", c: "Elementos de protección" },
+  { n: "Matafuegos", c: "Elementos de protección" },
+  { n: "Botiquín de primeros auxilios", c: "Elementos de protección" },
+  { n: "Vallado y señalización", c: "Elementos de protección" },
+  { n: "Póliza ART del personal", c: "Otros ítems" },
+  { n: "Alta temprana / F931", c: "Otros ítems" },
+  { n: "Seguro de responsabilidad civil", c: "Otros ítems" },
+  { n: "Llaves / acceso a la obra", c: "Otros ítems" },
+  { n: "Conexión de agua y luz de obra", c: "Otros ítems" },
+  { n: "Baño químico / obrador", c: "Otros ítems" },
+];
+const DOC_CATS = ["Documentación técnica", "Elementos de protección", "Otros ítems"];
+
 // Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
-const ETAPAS_OBRA = ["Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
+const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
 
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
@@ -142,21 +172,22 @@ const storage = {
 const SUPA_BUCKET = "bco-media";
 const SUPA_STORAGE_URL = SUPA_URL + "/storage/v1";
 const mediaStorage = {
-  upload: async (path, dataUrl) => {
+  upload: async (path, dataUrl, forceType) => {
     try {
       const res = await fetch(dataUrl); const blob = await res.blob();
-      const ext = (blob.type.split('/')[1] || 'bin');
+      const tipo = forceType || blob.type || "application/octet-stream";
+      const ext = (tipo.split('/')[1] || 'bin');
       const filePath = `${path}.${ext}`;
-      const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${filePath}`, { method: "POST", headers: { "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY, "Content-Type": blob.type, "x-upsert": "true" }, body: blob });
+      const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${filePath}`, { method: "POST", headers: { "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY, "Content-Type": tipo, "x-upsert": "true" }, body: blob });
       if (!r.ok) return null;
       return `${SUPA_STORAGE_URL}/object/public/${SUPA_BUCKET}/${filePath}`;
     } catch { return null; }
   },
 };
-async function uploadArchivo(dataUrl, carpeta, nombre) {
+async function uploadArchivo(dataUrl, carpeta, nombre, forceType) {
   if (!dataUrl) return null;
   if (dataUrl.startsWith('http')) return dataUrl;
-  const url = await mediaStorage.upload(`${carpeta}/${nombre || uid()}`, dataUrl);
+  const url = await mediaStorage.upload(`${carpeta}/${nombre || uid()}`, dataUrl, forceType);
   return url || dataUrl;
 }
 
@@ -677,7 +708,10 @@ function useAvisos(clave, mapaIds) {
 // ═══ OBRAS (compartido: idéntico a V+V) — inline, sin archivo aparte ═══
 // ══════════════════════════════════════════════════════════════════
 // ─── Avance de obra (espejo de V+V) ───
-function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
+const fFechaCorta = (iso) => { if (!iso) return ""; const p = String(iso).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0].slice(2)}` : String(iso); };
+function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, envios = {}, setEnvios }) {
+  // Certificado semanal abierto (los emite V+V; acá se ven en modo lectura).
+  const [certAbierto, setCertAbierto] = React.useState(null);
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState("");
@@ -727,6 +761,16 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
     </div></body></html>`;
   }
   const pdfUno = (h) => { setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
+  // Copia el PDF ya armado por Belfast a Informes, para que lo vea el propietario.
+  // paraProp = true → lo ve el propietario en su panel.
+  // paraProp = false → queda solo en Informes de Belfast, uso interno.
+  const enviarAInformes = (h, paraProp) => {
+    if (!setEnvios || !obraId) return;
+    const reg = { id: h.id, tipo: "av", fecha: h.fecha, titulo: `Informe de avance ${h.fecha}`, html: buildPdfAvance([h]), prop: !!paraProp, ts: Date.now() };
+    setEnvios(p => { const lista = ((p || {})[obraId] || []).filter(x => x.id !== reg.id); return { ...(p || {}), [obraId]: [reg, ...lista] }; });
+    alert(paraProp ? "Listo: el propietario ya lo puede ver en su panel." : "Listo: quedó en Informes de Belfast (el propietario NO lo ve).");
+  };
+  const estado = (h) => ((envios || {})[obraId] || []).find(x => x.id === h.id);
   const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
   const [pdfEntries, setPdfEntries] = React.useState([]);
   async function mergeSaveAvance(oid, transform) {
@@ -871,6 +915,8 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+              <button onClick={() => enviarAInformes(h, false)} title="Copiar a Informes de Belfast (uso interno)" style={{ background: estado(h) ? "#EFF6FF" : T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 8px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{estado(h) ? "✓ Informes" : "→ Informes"}</button>
+              <button onClick={() => enviarAInformes(h, true)} title="Mandarlo al panel del propietario" style={{ background: estado(h)?.prop ? "#DCFCE7" : BRASS, border: "none", color: estado(h)?.prop ? "#166534" : "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{estado(h)?.prop ? "✓ Propietario" : "→ Propietario"}</button>
             </div>
           </div>
           {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}><Ico n="chart" /> Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
@@ -894,6 +940,348 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg }) {
 }
 
 // ─── Bitácora de obra (espejo de V+V) ───
+// Drone IA — solo consulta: el cliente ve los vuelos, fotos y la lectura
+// de IA que ya cargó V+V, pero no puede crear vuelos ni pedir análisis
+// nuevos (eso es una tarea operativa del lado de V+V).
+function DroneIAClienteView({ T, obras, dronevuelos }) {
+  const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  const [detalle, setDetalle] = React.useState(null);
+  const obraNombre = (id) => obras.find(o => o.id === id)?.nombre || "—";
+  const vuelos = (dronevuelos || []).filter(v => v.obra_id === obraId).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Vuelos de HOY, de todas las obras juntas — lo primero que se ve.
+  const hoyISOd = new Date().toISOString().slice(0, 10);
+  const esDeHoy = (v) => { try { return new Date(v.ts).toISOString().slice(0, 10) === hoyISOd; } catch { return false; } };
+  const vuelosHoy = (dronevuelos || []).filter(esDeHoy).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const horaVuelo = (v) => { try { return new Date(v.ts).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }); } catch { return ""; } };
+
+  if (detalle) return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <div style={{ padding: "16px 20px" }}>
+      <button onClick={() => setDetalle(null)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, width: 32, height: 32, fontSize: 15, color: T.sub, cursor: "pointer", marginBottom: 14 }}>←</button>
+      <div style={{ fontSize: 19, fontWeight: 800, color: T.text, marginBottom: 2 }}>Vuelo — {detalle.fecha}</div>
+      <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 16 }}>{detalle.piloto ? `Piloto: ${detalle.piloto}` : ""}{detalle.dronModelo ? ` · ${detalle.dronModelo}` : ""}</div>
+      {detalle.notas && <Card T={T} style={{ padding: 13, marginBottom: 14 }}><Lbl>Notas del vuelo</Lbl><div style={{ fontSize: 13, color: T.text }}>{detalle.notas}</div></Card>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
+        {(detalle.fotos || []).map(f => (<div key={f.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}` }}>
+          <img src={f.url} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
+          {f.lat && <div style={{ position: "absolute", bottom: 5, left: 5, background: "rgba(15,23,42,.65)", color: "#fff", fontSize: 9, borderRadius: 6, padding: "2px 6px" }}>📍 {f.lat.toFixed(4)}, {f.lon.toFixed(4)}</div>}
+        </div>))}
+      </div>
+      {detalle.analisisIA && <Card T={T} style={{ padding: 13, background: T.accentLight || T.bg }}>
+        <Lbl>Lectura de IA — {detalle.analisisFecha} <span style={{ textTransform: "none", fontWeight: 500 }}>(orientativa, no es una medición oficial)</span></Lbl>
+        <div style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{detalle.analisisIA}</div>
+      </Card>}
+    </div>
+  </div>);
+
+  return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 19, fontWeight: 800, color: T.text, marginBottom: 12 }}>🚁 Drone IA</div>
+      {/* Los vuelos de hoy, de todas las obras */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: vuelosHoy.length ? 10 : 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
+        </div>
+        {vuelosHoy.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, marginTop: 8 }}>Todavía no se cargó ningún vuelo hoy.</div>
+          : vuelosHoy.map(v => (<div key={v.id} onClick={() => setDetalle(v)} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: `1px solid ${T.border}`, cursor: "pointer" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: BRASS, flexShrink: 0, minWidth: 42, fontVariantNumeric: "tabular-nums" }}>{horaVuelo(v)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{obraNombre(v.obra_id)}</div>
+              <div style={{ fontSize: 11, color: T.sub, marginTop: 1 }}>{v.piloto ? `Piloto: ${v.piloto}` : "Sin piloto"}{v.analisisIA ? " · con lectura IA" : ""}</div>
+            </div>
+            {(v.fotos || []).length > 0 && <div style={{ fontSize: 10.5, color: T.muted, flexShrink: 0 }}>📷 {(v.fotos || []).length}</div>}
+          </div>))}
+      </div>
+      {obras.length > 1 && <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 15, color: T.text, marginBottom: 14 }}>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>}
+      {vuelos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Todavía no hay vuelos cargados para {obraNombre(obraId)}.</div>}
+      {vuelos.map(v => (<div key={v.id} onClick={() => setDetalle(v)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", marginBottom: 8, cursor: "pointer" }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{v.fecha}</div>
+        <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{v.piloto ? `Piloto: ${v.piloto}` : "Sin piloto cargado"} · {(v.fotos || []).length} foto{(v.fotos || []).length !== 1 ? "s" : ""}{v.analisisIA ? " · con lectura IA" : ""}</div>
+      </div>))}
+    </div>
+  </div>);
+}
+
+function GrabarReunionCliente({ T, cfg, apiKey, obras, minutas = [], setMinutas, onBack }) {
+  const [paso, setPaso] = useState("form");
+  const [titulo, setTitulo] = useState("");
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [obraId, setObraId] = useState("");
+  const [transcripcion, setTranscripcion] = useState("");
+  const [segundos, setSegundos] = useState(0);
+  const [minutaTexto, setMinutaTexto] = useState("");
+  const [generandoPdf, setGenerandoPdf] = useState(false);
+  const recRef = useRef(null);
+  const activoRef = useRef(false);
+  const baseRef = useRef("");
+  const timerRef = useRef(null);
+  // Qué minuta está abierta y si ya tiene el PDF generado y guardado.
+  const [minutaId, setMinutaId] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  function fFechaLarga(iso) { try { return new Date(iso + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" }); } catch { return iso; } }
+
+  function arrancarReco() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    rec.lang = "es-AR"; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = (e) => {
+      let finales = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) finales += e.results[i][0].transcript + " ";
+      if (finales) { baseRef.current = (baseRef.current + " " + finales).trim(); setTranscripcion(baseRef.current); }
+    };
+    rec.onend = () => { if (activoRef.current) { try { rec.start(); } catch { setTimeout(() => { if (activoRef.current) try { rec.start(); } catch { } }, 300); } } };
+    rec.onerror = (e) => { if (e.error === "no-speech" || e.error === "aborted") return; if (activoRef.current && e.error !== "not-allowed") { try { rec.start(); } catch { } } };
+    recRef.current = rec;
+    rec.start();
+  }
+
+  function empezar() {
+    if (!titulo.trim()) { alert("Ponele un título a la reunión."); return; }
+    if (!sttOk) { alert("Este navegador no permite grabar con reconocimiento de voz. Probá desde Chrome o Safari en el celular."); return; }
+    baseRef.current = ""; setTranscripcion(""); setSegundos(0);
+    activoRef.current = true;
+    arrancarReco();
+    timerRef.current = setInterval(() => setSegundos(s => s + 1), 1000);
+    setPaso("grabando");
+  }
+
+  async function terminar() {
+    activoRef.current = false;
+    try { recRef.current?.stop(); } catch { }
+    clearInterval(timerRef.current);
+    const texto = transcripcion.trim();
+    if (!texto) { alert("No capté nada de audio. Probá de nuevo, más cerca del micrófono."); setPaso("form"); return; }
+    setPaso("armando");
+    try {
+      const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
+      const sys = `Recibís la transcripción de voz de una reunión grabada. Puede tener errores de dictado, cortes, muletillas, o gente hablando encima. Tu trabajo es UNO SOLO: pasarla en limpio y ordenarla, armando un texto con hilo lógico y fácil de leer.
+
+REGLAS INNEGOCIABLES:
+- NUNCA comentes, juzgues ni aclares de qué trata la conversación. No digas si es de obra o no, si es relevante, si es informal, ni si te parece adecuada. No opines sobre el contenido.
+- NUNCA te niegues ni pidas más contexto. Sea cual sea el tema, escribí lo que se escuchó.
+- No agregues advertencias, disclaimers, ni notas del tipo "esta conversación no parece de trabajo". Nada de eso.
+- Escribí SOLO lo que se dijo, ordenado y con sentido. No inventes nada que no esté en la transcripción.
+- Si se distingue quién habla, marcalo. Si no, escribilo de corrido pero ordenado por temas, respetando el orden en que se hablaron.
+- Español rioplatense, claro y natural.
+
+FORMATO: empezá siempre con este encabezado exacto:
+MINUTA DE REUNIÓN
+${obraNombre ? `Obra: ${obraNombre} · ` : ""}Fecha: ${fFechaLarga(fecha)} · Tema: ${titulo}
+
+Después el desarrollo de lo hablado, ordenado y legible.
+Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISIONES" y/o "PENDIENTES" (numerados). Si no hubo acuerdos ni pendientes, no pongas esas secciones — no las fuerces.`;
+      const resp = await callAI([{ role: "user", content: `Transcripción de la reunión:\n\n${texto}` }], sys, apiKey, false);
+      setMinutaTexto(resp || "");
+      const registro = { id: uid(), titulo: titulo.trim(), fecha, obra_id: obraId || null, transcripcion: texto, minutaTexto: resp || "", ts: Date.now() };
+      if (setMinutas) setMinutas(p => [registro, ...(p || [])]);
+      setMinutaId(registro.id); setPdfUrl(null);
+      setPaso("lista");
+    } catch { alert("No pude generar la minuta ahora. La transcripción completa sigue abajo, la podés copiar a mano."); setPaso("lista"); }
+  }
+
+  function cancelar() { activoRef.current = false; try { recRef.current?.stop(); } catch { } clearInterval(timerRef.current); setPaso("form"); }
+
+  // Manda el PDF ya guardado: abre el menú del teléfono para elegir
+  // WhatsApp, Mail, o lo que sea. El PDF sigue guardado acá igual.
+  // Descarta la grabación que se acaba de hacer, sin tener que ir a
+  // buscarla a la lista de minutas anteriores.
+  function borrarEstaGrabacion() {
+    if (!confirm("¿Borrar esta grabación?\n\nSe borra el audio transcripto y la minuta. No se puede deshacer.")) return;
+    if (minutaId && setMinutas) setMinutas(p => (p || []).filter(x => x.id !== minutaId));
+    setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null);
+  }
+  async function mandarPdf() {
+    if (!pdfUrl) return;
+    const nombreArchivo = `Minuta - ${titulo} - ${fecha}.pdf`;
+    try {
+      let blob;
+      if (pdfUrl.startsWith("data:")) {
+        // PDF incrustado: lo paso a archivo sin salir a la red.
+        const b64 = pdfUrl.split(",")[1] || "";
+        const bin = atob(b64); const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        blob = new Blob([arr], { type: "application/pdf" });
+      } else {
+        const r = await fetch(pdfUrl);
+        blob = await r.blob();
+      }
+      const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: nombreArchivo, text: `Minuta de reunión — ${titulo}` });
+        return;
+      }
+      const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = nombreArchivo; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      window.open(pdfUrl, "_blank");   // último recurso: abrirlo para compartir a mano
+    }
+  }
+  async function generarPdf() {
+    setGenerandoPdf(true);
+    try {
+      let jsPDF;
+      if (window.jspdf && window.jspdf.jsPDF) jsPDF = window.jspdf.jsPDF;
+      else {
+        const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+        for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) { jsPDF = window.jspdf.jsPDF; break; } } catch { } }
+        if (!jsPDF) throw new Error("No se pudo cargar la librería de PDF");
+      }
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+      const M = 40; let y = M;
+      const ensure = (need) => { if (y + need > H - M) { doc.addPage(); y = M; } };
+      const obraNombre = obras.find(o => o.id === obraId)?.nombre || "";
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text((cfg?.nombre || "Minuta de reunión").toUpperCase(), W / 2, y, { align: "center" }); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("MINUTA DE REUNIÓN", W / 2, y, { align: "center" }); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(15, 27, 45); doc.text(titulo, W / 2, y, { align: "center" }); y += 14;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(91, 107, 127);
+      doc.text(`${fFechaLarga(fecha)}${obraNombre ? "   ·   Obra: " + obraNombre : ""}`, W / 2, y, { align: "center" }); y += 14;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 22;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51);
+      const cuerpo = minutaTexto.split("\n").filter((ln, i) => {
+        const t = ln.trim();
+        if (i < 3 && /^MINUTA DE REUNI[OÓ]N$/i.test(t)) return false;
+        if (i < 3 && /^(Obra|Fecha|Tema)\s*:/i.test(t)) return false;
+        return true;
+      }).join("\n").trim();
+      const lineas = doc.splitTextToSize(cuerpo || minutaTexto, W - 2 * M);
+      for (const ln of lineas) {
+        const esTitulo = /^(TEMAS TRATADOS|ACUERDOS|PENDIENTES)/i.test(ln.trim());
+        ensure(esTitulo ? 22 : 15);
+        if (esTitulo) { y += 6; doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(27, 58, 91); doc.text(ln, M, y); y += 15; doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(26, 36, 51); }
+        else { doc.text(ln, M, y); y += 14; }
+      }
+      const blob = doc.output("blob");
+      // El PDF NO se va de la app: se sube y queda guardado EN la minuta.
+      const dataUrl = doc.output("datauristring");
+      const url = await uploadFoto(dataUrl, "minutas-cliente", `${minutaId || uid()}.pdf`);
+      setPdfUrl(url);
+      if (minutaId && setMinutas) setMinutas(p => (p || []).map(m => m.id === minutaId ? { ...m, pdfUrl: url } : m));
+    } catch { alert("No pude generar el PDF. Probá de nuevo."); }
+    setGenerandoPdf(false);
+  }
+
+  const mm = String(Math.floor(segundos / 60)).padStart(2, "0"), ss = String(segundos % 60).padStart(2, "0");
+
+  if (paso === "grabando") return (<div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <AppHeader T={T} title={titulo} sub="Grabando" back onBack={cancelar} />
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 20px 20px" }}>
+      <div style={{ width: 90, height: 90, borderRadius: "50%", background: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, flexShrink: 0 }}><Ico n="mic" s={36} c="#fff" /></div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: T.text, flexShrink: 0 }}>{mm}:{ss}</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 18, flexShrink: 0 }}>Grabando — se reinicia solo, no hace falta que hagas nada</div>
+      {/* Único cuadro que scrollea — así el botón de terminar queda
+          siempre fijo abajo, visible, sin importar cuánto dure la reunión. */}
+      <div style={{ width: "100%", maxWidth: 480, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, flex: 1, minHeight: 0, overflowY: "auto", fontSize: 13, color: T.sub, lineHeight: 1.6, marginBottom: 16 }}>{transcripcion || "Escuchando… empezá a hablar."}</div>
+      <PBtn T={T} full onClick={terminar} style={{ maxWidth: 480, background: "#DC2626", flexShrink: 0 }}>⏹ Terminar y armar la minuta</PBtn>
+    </div>
+  </div>);
+
+  if (paso === "armando") return (<div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 30 }}>
+    <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 6 }}>Armando la minuta…</div>
+    <div style={{ fontSize: 12, color: T.muted }}>Un momento, esto no tarda.</div>
+  </div>);
+
+  if (paso === "lista") return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <AppHeader T={T} title="Minuta de reunión" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, marginBottom: 16, whiteSpace: "pre-wrap", fontSize: 13, color: T.text, lineHeight: 1.6 }}>{minutaTexto || "No pude armar la minuta con IA — acá tenés la transcripción completa para copiar a mano:\n\n" + transcripcion}</div>
+      <PBtn T={T} full onClick={generarPdf} disabled={generandoPdf} style={{ marginBottom: 10 }}>{generandoPdf ? "Generando…" : pdfUrl ? "🔄 Volver a generar el PDF" : "📄 Generar el PDF de la minuta"}</PBtn>
+      {pdfUrl && <>
+        <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: T.card, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginBottom: 10 }}>👁 Ver el PDF (queda guardado acá)</a>
+        <PBtn T={T} full onClick={() => mandarPdf()} style={{ marginBottom: 10 }}>📤 Mandar por WhatsApp o Mail</PBtn>
+      </>}
+      <button onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null); }} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>Grabar otra reunión</button>
+      <button onClick={borrarEstaGrabacion} style={{ width: "100%", background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🗑 Borrar esta grabación</button>
+    </div>
+  </div>);
+
+  return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <AppHeader T={T} title="🎙 Grabar reunión" sub="Se arma la minuta sola al terminar" back onBack={onBack} />
+    <div style={{ padding: "16px 20px" }}>
+      {!sttOk && <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
+      <Field label="Título de la reunión"><TInput value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Reunión de avance semanal" /></Field>
+      <Field label="Fecha"><TInput type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></Field>
+      {obras.length > 0 && <Field label="Obra (opcional)"><Sel value={obraId} onChange={e => setObraId(e.target.value)}><option value="">— Sin asignar —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
+      <PBtn T={T} full onClick={empezar} disabled={!sttOk} style={{ marginTop: 8 }}>🔴 Empezar a grabar</PBtn>
+      {minutas.length > 0 && <>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", margin: "22px 0 10px" }}>Minutas anteriores</div>
+        {minutas.slice(0, 15).map(m => (<div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 13, marginBottom: 8 }}>
+          <div onClick={() => { setTitulo(m.titulo); setFecha(m.fecha); setObraId(m.obra_id || ""); setMinutaTexto(m.minutaTexto); setTranscripcion(m.transcripcion); setMinutaId(m.id); setPdfUrl(m.pdfUrl || null); setPaso("lista"); }} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{m.titulo}</div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{fFechaLarga(m.fecha)}{obras.find(o => o.id === m.obra_id) ? " · " + obras.find(o => o.id === m.obra_id).nombre : ""}</div>
+          </div>
+          <button onClick={() => { if (confirm(`¿Borrar "${m.titulo}"?\n\nSe borra la grabación y la minuta. No se puede deshacer.`)) setMinutas(p => (p || []).filter(x => x.id !== m.id)); }} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", padding: 6, flexShrink: 0, fontSize: 15 }}>🗑</button>
+        </div>))}
+      </>}
+    </div>
+  </div>);
+}
+
+// ── AUDITORÍA (lectura) — trae las supervisiones/revisiones/certificaciones que carga V+V ──
+const AUD_TIPOS_CLI = [
+  { id: "supervision", label: "Supervisiones", sigla: "SUP" },
+  { id: "revision", label: "Revisión de doc.", sigla: "RDO" },
+  { id: "certificacion", label: "Certificación", sigla: "CER" },
+];
+function AuditoriaClienteView({ T, obras, auditoria }) {
+  const [tipo, setTipo] = useState("supervision");
+  const [obraId, setObraId] = useState("");
+  const tp = AUD_TIPOS_CLI.find(t => t.id === tipo) || AUD_TIPOS_CLI[0];
+  const fmtDMY = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
+  const nombreObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "—";
+  const lista = (auditoria || []).filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const [abierto, setAbierto] = useState(null);
+  return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <AppHeader title="Auditoría de obra" sub="Supervisiones y controles cargados por V+V" />
+    <div style={{ padding: "14px 18px" }}>
+      <div style={{ display: "flex", gap: 7, marginBottom: 12 }}>
+        {AUD_TIPOS_CLI.map(t => (
+          <button key={t.id} onClick={() => setTipo(t.id)} style={{ flex: 1, background: tipo === t.id ? T.navy : T.card, color: tipo === t.id ? "#fff" : T.sub, border: `1px solid ${tipo === t.id ? T.navy : T.border}`, borderRadius: T.rsm, padding: "9px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{t.label}</button>
+        ))}
+      </div>
+      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, color: T.text, marginBottom: 14 }}>
+        <option value="">Todas las obras</option>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>
+
+      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>Todavía no hay {tp.label.toLowerCase()} cargadas.</div>}
+      {lista.map(it => {
+        const abiertoAqui = abierto === it.id;
+        return (<div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+          <div onClick={() => setAbierto(abiertoAqui ? null : it.id)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.nro}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.navy, flex: 1, minWidth: 0 }}>{nombreObra(it.obra_id)}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D" }}>{it.resultado}</span>
+          </div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{fmtDMY(it.fecha)}{it.periodo ? ` · ${it.periodo}` : ""} · {(it.obs || []).length} observación(es)</div>
+          {abiertoAqui && (<div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+            {it.presentes && <div style={{ fontSize: 12, color: T.sub, marginBottom: 8 }}><b style={{ color: T.text }}>Presentes:</b> {it.presentes}</div>}
+            {(it.obs || []).length > 0 && (<div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginBottom: 4 }}>Observaciones</div>
+              {it.obs.map((o, i) => <div key={i} style={{ fontSize: 12, color: T.sub, marginBottom: 4, lineHeight: 1.4 }}>· {o.txt} {o.sector ? `(${o.sector})` : ""} {o.crit ? `— ${o.crit}` : ""}</div>)}
+            </div>)}
+            {(it.interferencias || []).length > 0 && (<div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginBottom: 4 }}>Interferencias</div>
+              {it.interferencias.map((x, i) => <div key={i} style={{ fontSize: 12, color: T.sub, marginBottom: 4 }}>· {x}</div>)}
+            </div>)}
+            {it.conclusion && <div style={{ fontSize: 12, color: T.sub, marginBottom: 8, lineHeight: 1.4 }}><b style={{ color: T.text }}>Conclusión:</b> {it.conclusion}</div>}
+            {it.responsable && <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 8 }}>Responsable técnico: {it.responsable}</div>}
+            {(it.fotos || []).length > 0 && (<div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {it.fotos.map((f, i) => <a key={f.id || i} href={f.url} target="_blank" rel="noreferrer" style={{ width: 74, height: 74, borderRadius: 9, overflow: "hidden", border: `1px solid ${T.border}` }}>
+                <img src={f.url} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              </a>)}
+            </div>)}
+          </div>)}
+        </div>);
+      })}
+    </div>
+  </div>);
+}
 function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   const [abrir, setAbrir] = useState(false);
@@ -1012,9 +1400,41 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
 
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
 
-  return (<div>
+  // ── Lo del día, de TODAS las obras juntas ──────────────────────────
+  // Lo primero que se ve al entrar: qué se cargó hoy, en qué obra y a qué
+  // hora. Así no hay que ir obra por obra buscando qué hay nuevo.
+  const hoyISO = new Date().toISOString().slice(0, 10);
+  const mismaFecha = (h) => {
+    if (h.fecha === hoyISO) return true;
+    if (h.ts) { try { return new Date(h.ts).toISOString().slice(0, 10) === hoyISO; } catch { } }
+    return false;
+  };
+  const delDia = (bitacora || []).filter(mismaFecha).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Horario de 24 h (16:45, no "04:45 p. m.") — es como se usa en obra.
+  const horaDe = (h) => { try { return new Date(h.ts).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false }); } catch { return ""; } };
+  const nombreObra = (id) => obras.find(o => o.id === id)?.nombre || "Sin obra";
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <div style={{ padding: "14px 18px 4px", flexShrink: 0 }}><div style={{ fontSize: 10, fontWeight: 700, color: BRASS, textTransform: "uppercase", letterSpacing: "0.12em" }}>Registro diario</div><div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>Bitácora de obra</div><div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Lo que va pasando en obra, día por día</div></div>
     <div style={{ padding: "16px 20px" }}>
+      {/* Lo cargado hoy, de todas las obras */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: delDia.length ? 10 : 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
+        </div>
+        {delDia.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, marginTop: 8 }}>Todavía no se cargó nada hoy.</div>
+          : delDia.map(h => (<div key={h.id} onClick={() => setObraId(h.obra_id)} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: `1px solid ${T.border}`, cursor: "pointer" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: BRASS, flexShrink: 0, minWidth: 42, fontVariantNumeric: "tabular-nums" }}>{horaDe(h)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{h.titulo || h.desc?.slice(0, 60) || "(sin título)"}</div>
+              <div style={{ fontSize: 11, color: T.sub, marginTop: 1 }}>{nombreObra(h.obra_id)}{h.etapa ? ` · ${h.etapa}` : ""}</div>
+            </div>
+            {(h.fotos || []).length > 0 && <div style={{ fontSize: 10.5, color: T.muted, flexShrink: 0 }}>📷 {(h.fotos || []).length}</div>}
+          </div>))}
+      </div>
+
       {/* selector de obra */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
         <select value={obraId} onChange={e => { setObraId(e.target.value); limpiar(); }} style={{ ...inp, flex: 1 }}>
@@ -1998,7 +2418,7 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
               </div>)}
               <label style={{ display: "block", textAlign: "center", background: T.navy, color: "#fff", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>{subP ? "Subiendo…" : "＋ Subir plano (PDF/CAD)"}<input type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={e => subirPlanos(e, o)} style={{ display: "none" }} /></label>
             </div>
-            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({(o.fotos || []).length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{(o.fotos || []).map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
+            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({(o.fotos || []).length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{(o.fotos || []).slice().reverse().map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
             {(o.videos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Videos ({o.videos.length})</div>{o.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", borderRadius: 6, marginBottom: 8, background: "#000", display: "block" }} />)}</div>}
             {ts.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Cronograma</div>{ts.map(t => <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}><span style={{ flex: 1, fontSize: 12, color: T.text }}>{t.nombre}</span><div style={{ width: 70, height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${t.avance || 0}%`, background: BRASS }} /></div><span style={{ fontSize: 11, fontWeight: 700, color: T.muted, width: 32, textAlign: "right" }}>{t.avance || 0}%</span></div>)}</div>}
             {ult && <div><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Último informe · {ult.fecha}</div><div style={{ background: T.bg, borderRadius: T.rsm, padding: "11px 13px", fontSize: 12, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{ult.texto}</div></div>}
@@ -2097,7 +2517,7 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje, vaciar
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <button onClick={() => fileRef.current?.click()} style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0 }}>＋</button>
-        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí un mensaje…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí un mensaje…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, maxHeight: 110, minHeight: 42 }} />
         <button onClick={send} style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.accent, color: "#fff", border: "none", fontSize: 17, flexShrink: 0 }}>↑</button>
       </div>
     </div>
@@ -2105,11 +2525,91 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje, vaciar
 }
 
 // ── PANTALLA: AJUSTES ────────────────────────────────────────────────
-function AjustesScreen({ T, cfg, setCfg }) {
+function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, setRenders }) {
   const logoRef = useRef(null);
   async function setLogo(f) { const d = await fileToDataUrl(f, 600); const url = await uploadArchivo(d, "logos", "cliente_logo"); setCfg(p => ({ ...p, logo: url })); }
+  // Le pone (o le cambia) el código de acceso a una obra. Ese código es el
+  // que se le pasa al dueño para que entre a ver SU obra, y nada más.
+  // ── Renders del panel del propietario ─────────────────────────────
+  // Se suben acá como imágenes y son las que rotan en el banner y las que
+  // se ven en la sección "Renders" de la app del dueño.
+  const [obraRender, setObraRender] = useState(obras[0]?.id || "");
+  const [subiendoR, setSubiendoR] = useState(false);
+  const renderRef = useRef(null);
+  const rendersDeObra = (renders || {})[obraRender] || [];
+  async function subirRenders(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !obraRender) { if (e.target) e.target.value = ""; return; }
+    setSubiendoR(true);
+    const nuevos = [];
+    for (const f of files) {
+      try {
+        const data = await fileToDataUrl(f, 1600);
+        const url = await uploadArchivo(data, `renders/${obraRender}`, `${Date.now()}_${(f.name || "render").replace(/\W+/g, "_")}`);
+        nuevos.push({ id: uid(), nombre: f.name || "Render", url: url || data, ts: Date.now() });
+      } catch { }
+    }
+    if (nuevos.length && setRenders) setRenders(p => ({ ...(p || {}), [obraRender]: [...((p || {})[obraRender] || []), ...nuevos] }));
+    setSubiendoR(false);
+    if (e.target) e.target.value = "";
+    if (!nuevos.length) alert("No pude subir las imágenes. Probá de nuevo.");
+  }
+  function borrarRender(id) {
+    if (!confirm("¿Sacar este render del panel del propietario?")) return;
+    if (setRenders) setRenders(p => ({ ...(p || {}), [obraRender]: ((p || {})[obraRender] || []).filter(r => r.id !== id) }));
+  }
+  const setCodigo = (obraId, valor) => {
+    const limpio = String(valor || "").toUpperCase().replace(/\s+/g, "");
+    if (setObras) setObras(p => (p || []).map(o => o.id === obraId ? { ...o, codigoCliente: limpio } : o));
+  };
+  const linkPanel = typeof window !== "undefined" ? `${window.location.origin}/propietario.html` : "/propietario.html";
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <div style={{ padding: "16px 20px" }}>
+      <Eyebrow T={T}>Códigos de clientes</Eyebrow>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>
+        Cada obra puede tener un código. Se lo pasás al dueño junto con este link y entra a ver solo su obra:
+        <span style={{ display: "block", marginTop: 4, color: T.accent, fontWeight: 700, wordBreak: "break-all" }}>{linkPanel}</span>
+      </div>
+      <Card T={T} style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
+        {obras.length === 0 && <div style={{ padding: 16, fontSize: 12.5, color: T.muted, textAlign: "center" }}>Todavía no hay obras cargadas.</div>}
+        {obras.map((o, i) => (<div key={o.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 13px", borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.nombre}</div>
+            {o.codigoCliente && <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 700, marginTop: 1 }}>✓ ya tiene código</div>}
+          </div>
+          <input
+            value={o.codigoCliente || ""}
+            onChange={e => setCodigo(o.id, e.target.value)}
+            placeholder="Sin código"
+            style={{ width: 140, flexShrink: 0, background: T.bg, border: `1px solid ${o.codigoCliente ? BRASS : T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 12.5, fontWeight: 800, color: o.codigoCliente ? T.accent : T.text, textAlign: "center", letterSpacing: "0.04em" }}
+          />
+        </div>))}
+      </Card>
+
+      <Eyebrow T={T}>Renders del panel del propietario</Eyebrow>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Subí acá las imágenes de renders. Son las que pasan como diapositivas en el banner y las que ve el dueño en la sección "Renders".</div>
+      <Card T={T} style={{ padding: 13, marginBottom: 22 }}>
+        {obras.length === 0
+          ? <div style={{ fontSize: 12.5, color: T.muted, textAlign: "center", padding: 8 }}>Todavía no hay obras cargadas.</div>
+          : <>
+            <select value={obraRender} onChange={e => setObraRender(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 13, color: T.text, marginBottom: 10, boxSizing: "border-box" }}>
+              {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+            </select>
+            <input ref={renderRef} type="file" accept="image/*" multiple onChange={subirRenders} style={{ display: "none" }} />
+            <button onClick={() => renderRef.current?.click()} disabled={subiendoR} style={{ width: "100%", background: T.accentLight, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 9, padding: "12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: rendersDeObra.length ? 11 : 0 }}>{subiendoR ? "Subiendo…" : "＋ Importar renders (imágenes)"}</button>
+            {rendersDeObra.length > 0 && <>
+              <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 7 }}>{rendersDeObra.length} render{rendersDeObra.length > 1 ? "s" : ""} · pasan en este orden</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                {rendersDeObra.map(r => (<div key={r.id} style={{ position: "relative", borderRadius: 8, overflow: "hidden", border: `1px solid ${T.border}` }}>
+                  <img src={r.url} alt={r.nombre} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }} />
+                  <button onClick={() => borrarRender(r.id)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(220,38,38,.92)", border: "none", color: "#fff", borderRadius: 6, width: 22, height: 22, fontSize: 12, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                </div>))}
+              </div>
+            </>}
+          </>}
+      </Card>
+
       <Eyebrow T={T}>Identidad del cliente</Eyebrow>
       <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>Personalizá el nombre y el logo que ve este cliente.</div>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Nombre del cliente</label>
@@ -2142,7 +2642,7 @@ function AjustesScreen({ T, cfg, setCfg }) {
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 01-07-IA</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-fixavance</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -2159,13 +2659,98 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "drone", label: "Drone IA", icon: "M12 8a2 2 0 100 4 2 2 0 000-4zM4 4a2 2 0 100 4 2 2 0 000-4zM20 4a2 2 0 100 4 2 2 0 000-4zM4 16a2 2 0 100 4 2 2 0 000-4zM20 16a2 2 0 100 4 2 2 0 000-4zM6 6l4 4M18 6l-4 4M6 18l4-4M18 18l-4-4" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "auditoria", label: "Auditoría", icon: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z M9.5 12l1.8 1.8L15 10" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
-function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], onPedidos }) {
+function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], certif = {}, bitacora = [], onPedidos, onMinutas }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+  const [escuchando, setEscuchando] = useState(false);
+  const recRef = useRef(null);
+  const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const ttsOk = typeof window !== "undefined" && "speechSynthesis" in window;
+  const [narrarAuto, setNarrarAuto] = useState(() => { try { return localStorage.getItem("cliente_narrar_auto") === "1"; } catch { return false; } });
+  const [hablando, setHablando] = useState(false);
+  const ultimoNarrado = useRef(null);
+  function limpiarParaVoz(texto) {
+    return String(texto || "")
+      .replace(/```accion[\s\S]*?```/g, "")
+      .replace(/[*_#`]/g, "")
+      .replace(/https?:\/\/\S+/g, "un link")
+      .replace(/\n{2,}/g, ". ")
+      .replace(/\n/g, ". ")
+      .trim();
+  }
+  function hablar(texto) {
+    if (!ttsOk) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(limpiarParaVoz(texto));
+      u.lang = "es-AR";
+      u.rate = 1.02;
+      const voces = window.speechSynthesis.getVoices();
+      const voz = voces.find(v => v.lang === "es-AR") || voces.find(v => (v.lang || "").startsWith("es"));
+      if (voz) u.voice = voz;
+      u.onstart = () => setHablando(true);
+      u.onend = () => setHablando(false);
+      u.onerror = () => setHablando(false);
+      window.speechSynthesis.speak(u);
+    } catch { }
+  }
+  function pararVoz() { try { window.speechSynthesis.cancel(); } catch { } setHablando(false); }
+  function toggleNarrarAuto() {
+    setNarrarAuto(v => { const nv = !v; try { localStorage.setItem("cliente_narrar_auto", nv ? "1" : "0"); } catch { } if (!nv) pararVoz(); return nv; });
+  }
+  // narra sola la última respuesta de la IA, si el modo automático está prendido
+  useEffect(() => {
+    if (!narrarAuto || !ttsOk) return;
+    const ult = msgs[msgs.length - 1];
+    if (!ult || ult.role !== "assistant" || loading) return;
+    const clave = ult.id || ult.ts || msgs.length;
+    if (ultimoNarrado.current === clave) return;
+    ultimoNarrado.current = clave;
+    const texto = (Array.isArray(ult.content) ? (ult.content.find(b => b.type === "text")?.text || "") : ult.content) + (ult.accionResultado ? ". " + ult.accionResultado : "");
+    hablar(texto);
+  }, [msgs, loading, narrarAuto]);
+  const [adj, setAdj] = useState([]);
+  const [subiendoAdj, setSubiendoAdj] = useState(false);
+  const fileRef = useRef(null);
+  async function addAdj(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setSubiendoAdj(true);
+    const nuevos = [];
+    for (const f of files) {
+      const data = await fileToDataUrl(f);
+      const url = await uploadArchivo(data, "ia-chat", f.name.replace(/\W+/g, "_"));
+      nuevos.push({ nombre: f.name, url, esImagen: (f.type || "").startsWith("image/"), dataUrl: data });
+    }
+    setAdj(p => [...p, ...nuevos]);
+    setSubiendoAdj(false);
+    e.target.value = "";
+  }
+  async function descargarMinuta(texto) {
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const filas = esc(texto).split("\n").map(l => l.trim() ? `<p style="margin:0 0 6px">${l}</p>` : "").join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Minuta de reunión</title></head><body style="font-family:Calibri,Arial,sans-serif;color:#0F1B2D;padding:20px;line-height:1.5">${filas}</body></html>`;
+    const nombre = `Minuta_${hoyStr().replace(/\//g, "-")}.doc`;
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+    try {
+      const file = new File([blob], nombre, { type: "application/msword" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nombre }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+  function toggleVoz() {
+    if (!sttOk) return;
+    if (escuchando) { recRef.current?.stop(); setEscuchando(false); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = false; rec.continuous = false;
+    rec.onresult = e => { const txt = e.results[0][0].transcript; setInput(p => (p ? p + " " : "") + txt); };
+    rec.onend = () => setEscuchando(false);
+    rec.onerror = () => setEscuchando(false);
+    recRef.current = rec; rec.start(); setEscuchando(true);
+  }
   const cnDeb = "V+V";
   const DEBATE_MAX = 18;
   const [debateOpen, setDebateOpen] = useState(false);
@@ -2244,6 +2829,14 @@ function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos
     const msj = (mensajes || []).slice(-8).map(m => `· ${m.from === "cliente" ? "Nosotros" : "V+V"}: ${(m.texto || "").slice(0, 110)}`).join("\n");
     return `Sos el ASISTENTE de ${cfg.nombre} (comitente), en contacto con V+V Construcciones (la empresa que ejecuta la obra). Español rioplatense, claro y cordial. Estás CONECTADO a los mismos datos y al asistente de V+V: comparten la base de datos en tiempo real (obras, personal, pedidos, mensajes); ves lo que carga la otra empresa y ellos ven lo que cargás vos. NUNCA digas que no podés comunicarte con V+V ni con su asistente: SÍ podés, mandándoles un mensaje directo (les aparece en su pantalla de Mensajes) y ellos te responden. REGLA CLAVE: si te piden COMUNICARTE, HABLAR, AVISAR, DECIRLE o PREGUNTARLE algo a V+V, usá SIEMPRE la acción "enviar_mensaje" (se envía directo). "crear_pedido" es solo para pedidos formales de definiciones/documentación. También podés: informar sobre el avance de las obras, GESTIONAR PEDIDOS, cargar PERSONAL a los sitios/barrios (vos tramitás el acceso a los barrios privados), MANDAR WHATSAPP a los jefes de obra/contactos (usás la agenda de Personal → Contactos), y BUSCAR EN INTERNET información actual (normativa, código de edificación, proveedores, precios, datos de empresas). Priorizá fuentes argentinas y citá la fuente.
 
+MINUTAS DE REUNIÓN: si te piden armar, redactar o pasar en limpio una minuta de reunión (por texto o dictada), pedí — solo si no te lo dieron — obra, fecha y quiénes participaron, y con eso redactá la minuta directo, con esta estructura fija:
+MINUTA DE REUNIÓN
+Obra: · Fecha: · Participantes:
+TEMAS TRATADOS (numerados, un renglón por tema con lo relevante)
+ACUERDOS / DECISIONES (numerados)
+PENDIENTES (numerados, con quién queda a cargo si se dijo)
+Sé fiel a lo que te contaron — no inventes acuerdos ni asistentes que no se mencionaron. Si dictan la reunión de corrido y desordenada, ordenala vos en esa estructura sin agregar nada que no se haya dicho.
+
 OBRAS:\n${ob || "(sin obras)"}
 
 PERSONAL:\n${per || "(sin personal)"}
@@ -2258,7 +2851,25 @@ ARCHIVOS DE OBRA:\n${obras.flatMap(o => (o.archivos || []).map(a => `· ${a.nomb
 
 DOCUMENTACIÓN (modelos):\n${(documentacion || []).map(d => `· ${d.nombre} [${d.cat}]`).join("\n") || "(sin documentación)"}
 
-FOTOS E INFORMES POR OBRA:\n${obras.map(o => `· ${o.nombre}: ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes`).join("\n") || "(sin obras)"}
+FOTOS Y VIDEOS POR OBRA:\n${obras.map(o => `· ${o.nombre}: ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos`).join("\n") || "(sin obras)"}
+
+INFORMES TÉCNICOS POR OBRA (del más nuevo al más viejo):\n${obras.map(o => {
+      const infs = (o.informes || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      if (!infs.length) return null;
+      return `· ${o.nombre}:\n${infs.map(i => `  - "${i.titulo || i.nombre || "Informe"}" [${i.tipo || "—"}] ${i.fecha || ""}${i.notas ? ` — ${i.notas}` : ""}`).join("\n")}`;
+    }).filter(Boolean).join("\n") || "(sin informes cargados en ninguna obra)"}
+
+CERTIFICADOS SEMANALES POR OBRA (del más nuevo al más viejo — resumen de avance de cada semana):\n${obras.map(o => {
+      const cs = ((certif || {})[o.id] || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
+      if (!cs.length) return null;
+      return `· ${o.nombre}:\n${cs.map(c => `  - Semana ${c.desde || "?"} al ${c.hasta || "?"}${c.desarrollo ? ` — ${String(c.desarrollo).slice(0, 100)}` : ""}`).join("\n")}`;
+    }).filter(Boolean).join("\n") || "(sin certificados semanales cargados)"}
+
+BITÁCORA DE OBRA POR OBRA (del más nuevo al más viejo — hechos y novedades del día a día):\n${obras.map(o => {
+      const hs = (bitacora || []).filter(h => h.obra_id === o.id).slice().sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
+      if (!hs.length) return null;
+      return `· ${o.nombre}:\n${hs.map(h => `  - ${h.fecha}: "${h.titulo || "Hecho"}"${h.desc ? ` — ${String(h.desc).slice(0, 160)}` : ""}`).join("\n")}`;
+    }).filter(Boolean).join("\n") || "(sin bitácora cargada en ninguna obra)"}
 
 PLANOS POR OBRA:\n${obras.map(o => (o.planos || []).length ? `· ${o.nombre}: ${(o.planos || []).map(p => p.nombre).join(", ")}` : null).filter(Boolean).join("\n") || "(sin planos cargados)"}
 
@@ -2266,7 +2877,7 @@ TAREAS / CRONOGRAMA:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find
 
 PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(sin pedidos de materiales)"}
 
-Tenés acceso COMPLETO a todos estos datos (obras, avances, montos, fotos, informes, formularios, archivos, documentación, tareas, materiales, personal, contactos, pedidos). Cuando te pidan un DATO PUNTUAL, buscalo y dá el valor EXACTO; no digas "no lo tengo" si está arriba. Las fotos y videos no los "ves", pero sabés cuántos hay y de qué obra.
+Tenés acceso COMPLETO y AL DETALLE de todos estos datos (obras, avances, montos, fotos, informes con título/tipo/fecha, certificados semanales, bitácora de obra, formularios, archivos, documentación, tareas, materiales, personal, contactos, pedidos). Nunca digas "no tengo acceso", "no lo puedo ver" o "no lo tengo en mi base de datos" a algo que está en este contexto — está TODO arriba, con contenido real, no solo cantidades: informes con título y fecha, certificados semanales con su resumen, bitácora con título y descripción de cada hecho. Si te piden "los últimos informes", "la última bitácora", "el certificado semanal" o "qué se cargó últimamente", mirá la lista correspondiente (ya están ordenadas de la más nueva a la más vieja) y respondé con el contenido real, no derives el pedido a nadie. Las fotos y videos no los "ves" uno por uno, pero sabés cuántos hay y de qué obra.
 
 PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ AL FINAL un bloque entre \`\`\`accion y \`\`\` con JSON, una de:
 {"tipo":"crear_pedido","para":"vv","asunto":"...","detalle":"...","prioridad":"alta|media|baja","obra":"nombre de la obra de la que se trata"}
@@ -2278,8 +2889,12 @@ PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ
 {"tipo":"whatsapp","persona":"nombre o rol del jefe de obra/contacto","obra":"opcional","texto":"el mensaje a enviar por WhatsApp"}
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave (ej: replanteo platea)"}
+{"tipo":"traer_informe","obra":"nombre de la obra","cantidad":1,"buscar":"palabras clave opcional (ej: hormigón, seguridad)"}
+{"tipo":"traer_certificado","obra":"nombre de la obra","cantidad":1}
 REGLA fotos: si te piden VER/MANDAR/PASAR fotos o videos de una obra (ej: "mandame la última foto de Castores"), usá "traer_fotos" con la obra y cantidad (1 = la última). videos:true si piden videos. Aparecen directo en el chat.
 REGLA planos: si te piden un PLANO (PDF/CAD) de una obra (ej: "necesito el plano de replanteo de platea de Castores 475"), usá "traer_plano" con la obra y "buscar" (palabras clave). El plano aparece en el chat para abrir/descargar.
+REGLA informes: si te piden el/los INFORME(S), o el "PDF de informes", o "lo último cargado" de una obra (ej: "mandame el último informe de Golf 293", "pasame el pdf del informe de seguridad de Castores"), usá "traer_informe" con la obra, cantidad (1 = el último) y "buscar" si dieron palabras clave (tipo, tema). Aparece directo en el chat para abrir/descargar — NUNCA digas que no podés mandarlo, siempre está ahí para traer.
+REGLA certificados semanales: si te piden el/los CERTIFICADO(S) SEMANAL(ES) o "certificado de avance" de una obra (ej: "el último certificado semanal de Castores"), usá "traer_certificado" con la obra y cantidad. El contenido completo (desarrollo, recepciones, limpieza, alertas y fotos) se pega directo en el chat, no como archivo aparte — NUNCA digas que no tenés acceso ni que no podés generar un PDF, siempre está ahí para traer.
 REGLA WhatsApp: si te piden MANDAR UN WHATSAPP a un jefe de obra o contacto, usá "whatsapp". Uso tu agenda (Personal → Contactos) y el personal de la obra. Te dejo el botón de WhatsApp listo para enviar.
 REGLA CLAVE — elegí bien la acción:
 - CANAL IA↔IA ("preguntar_ia"): SIEMPRE que involucre a la IA / el asistente de V+V o esperes que te devuelvan un DATO. Ejemplos: "preguntale a la IA de V+V…", "pedile a la IA de V+V…", "pedícelo/pedíselo a la IA…", "consultale al asistente de V+V…", "que la IA de V+V te pase/averigüe…". OJO: "pedile/pedícelo A LA IA" es SIEMPRE este canal (preguntar_ia), NO un crear_pedido. Va directo a la otra IA, que responde sola. ESTE es el canal entre las dos IA.
@@ -2289,8 +2904,17 @@ BANCOS DE DATOS CONECTADOS: primero respondé con TUS datos. Usá "preguntar_ia"
 Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   }
   async function send(texto) {
-    const c = (texto ?? input).trim(); if (!c || loading) return;
-    setInput(""); const next = [...msgs, { role: "user", content: c }]; setMsgs(next); setLoading(true);
+    const c = (texto ?? input).trim(); const adjActuales = texto != null ? [] : adj; if (!c && adjActuales.length === 0) return; if (loading) return;
+    setInput(""); if (texto == null) setAdj([]);
+    // Contenido para la IA: texto + imágenes en base64 (las ve de verdad) + links de otros archivos.
+    const imgs = adjActuales.filter(a => a.esImagen && a.dataUrl);
+    const otros = adjActuales.filter(a => !(a.esImagen && a.dataUrl));
+    let contenidoIA = c;
+    if (otros.length) contenidoIA += (contenidoIA ? "\n\n" : "") + otros.map(a => `[Archivo adjunto: ${a.nombre} — ${a.url || "no se pudo subir"}]`).join("\n");
+    const contentBlocks = imgs.length
+      ? [{ type: "text", text: contenidoIA || "Mirá este archivo." }, ...imgs.map(a => ({ type: "image", source: { type: "base64", media_type: (a.dataUrl.match(/^data:(.*?);/) || [, "image/jpeg"])[1], data: a.dataUrl.split(",")[1] } }))]
+      : contenidoIA;
+    const next = [...msgs, { role: "user", content: contentBlocks, docs: adjActuales.length ? adjActuales.map(a => ({ nombre: a.nombre, url: a.url })) : undefined }]; setMsgs(next); setLoading(true);
     const r = await callAI(next, sys(), apiKey, true);
     const { limpio, accion } = parseAccion(r);
     let extra = {};
@@ -2305,6 +2929,40 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       else if (!match.length) { res = `No encontré un plano que coincida con "${accion.buscar}" en ${target.nombre}. Te dejo todos:`; docs = planos.map(p => ({ nombre: p.nombre, url: p.url })); }
       else { res = `Acá tenés ${match.length === 1 ? "el plano" : "los planos"} de ${target.nombre}${accion.buscar ? ` (${accion.buscar})` : ""}:`; docs = match.map(p => ({ nombre: p.nombre, url: p.url })); }
       extra = { accionDone: true, accionResultado: res, docs };
+    } else if (accion && accion.tipo === "traer_informe") {
+      const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
+      const infs = ((target && target.informes) || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      const kw = String(accion.buscar || "").toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      let match = kw.length ? infs.filter(i => kw.some(w => `${i.titulo || ""} ${i.tipo || ""} ${i.notas || ""}`.toLowerCase().includes(w))) : infs;
+      const cant = Math.max(1, Math.min(accion.cantidad || 1, 12));
+      match = match.slice(0, cant);
+      let res, docs;
+      if (!target) { res = "No encontré esa obra."; docs = []; }
+      else if (!infs.length) { res = `${target.nombre} todavía no tiene informes cargados.`; docs = []; }
+      else if (!match.length) { res = `No encontré un informe que coincida con "${accion.buscar}" en ${target.nombre}. Te dejo el último cargado:`; docs = infs.slice(0, 1).map(i => ({ nombre: i.titulo || i.nombre || "Informe", url: i.url })); }
+      else { res = `Acá tenés ${match.length === 1 ? "el informe" : `los últimos ${match.length} informes`} de ${target.nombre}${accion.buscar ? ` (${accion.buscar})` : ""}:`; docs = match.map(i => ({ nombre: `${i.titulo || i.nombre || "Informe"}${i.fecha ? ` — ${i.fecha}` : ""}`, url: i.url })); }
+      extra = { accionDone: true, accionResultado: res, docs };
+    } else if (accion && accion.tipo === "traer_certificado") {
+      const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
+      const cs = (((certif || {})[target?.id]) || []).slice().sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
+      const cant = Math.max(1, Math.min(accion.cantidad || 1, 12));
+      const match = cs.slice(0, cant);
+      let res, media = [], texto = "";
+      if (!target) { res = "No encontré esa obra."; }
+      else if (!cs.length) { res = `${target.nombre} todavía no tiene certificados semanales cargados.`; }
+      else {
+        res = `Acá tenés ${match.length === 1 ? "el certificado semanal" : `los últimos ${match.length} certificados semanales`} de ${target.nombre}:`;
+        texto = match.map(item => {
+          const partes = [`📋 CERTIFICADO SEMANAL — ${target.nombre}\nSemana ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`];
+          if (item.desarrollo) partes.push(`Desarrollo:\n${item.desarrollo}`);
+          if (item.recepciones) partes.push(`Recepciones:\n${item.recepciones}`);
+          if (item.limpieza) partes.push(`Limpieza y seguridad:\n${item.limpieza}`);
+          if (item.alertas) partes.push(`Alertas:\n${item.alertas}`);
+          media.push(...(item.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])));
+          return partes.join("\n\n");
+        }).join("\n\n———\n\n");
+      }
+      extra = { accionDone: true, accionResultado: res, contentExtra: texto, media: media.length ? media : undefined, mediaTipo: media.length ? "fotos" : undefined };
     } else if (accion && accion.tipo === "traer_fotos") {
       const target = accion.obra ? (obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : (obras || [])[0];
       const tipoMedia = accion.videos ? "videos" : "fotos";
@@ -2328,7 +2986,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       else { url = `https://wa.me/?text=${t}`; label = "Abrir WhatsApp"; res = per ? `${per.nombre} no tiene teléfono cargado. Abrí WhatsApp y elegí el contacto.` : "No encontré a esa persona con teléfono. Cargala en Personal → Contactos, o elegí el contacto."; }
       extra = { accionDone: true, accionResultado: res, waLink: url, waLabel: label };
     } else if (accion) { const res = await ejecutarAccion(accion, "cliente", { setPedidos, personal, setPersonal, obras }); extra = { accion, accionDone: true, accionResultado: res || "Hecho." }; }
-    setMsgs([...next, { role: "assistant", content: limpio, ...extra }]); setLoading(false);
+    setMsgs([...next, { role: "assistant", content: limpio + (extra.contentExtra ? "\n\n" + extra.contentExtra : ""), ...extra }]); setLoading(false);
   }
   async function confirmAccion(idx) { const m = msgs[idx]; if (!m?.accion) return; const res = await ejecutarAccion(m.accion, "cliente", { setPedidos, personal, setPersonal, obras }); setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accionDone: true, accionResultado: res || "Acción ejecutada." } : x)); }
   function descartarAccion(idx) { setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accion: null, accionDescartada: true } : x)); }
@@ -2417,20 +3075,29 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
     window.addEventListener("focus", tick);
     return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", tick); };
   }, []);
-  const QUICK = ["¿Cómo viene el avance de cada obra?", "Cargá al personal de [obra] al barrio…", "¿Hay pedidos sin resolver?"];
+  const QUICK = ["📝 Redactá una minuta de la reunión que te voy a contar", "¿Cómo viene el avance de cada obra?", "Cargá al personal de [obra] al barrio…", "¿Hay pedidos sin resolver?"];
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
     {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", borderBottom: "1px solid #FECACA", padding: "11px 16px", cursor: "pointer", flexShrink: 0 }}>
       <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
       <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de V+V</div><div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{pendObras ? `Obras: ${pendObras}` : "Tocá para ver"} →</div></div>
     </div>}
     <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px" }}>
+      {onMinutas && <button onClick={onMinutas} style={{ width: "100%", maxWidth: 760, margin: "0 auto 16px", display: "flex", alignItems: "center", gap: 12, background: T.navy, border: `1px solid ${BRASS}`, borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}>
+        <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Ico n="mic" s={19} c="#fff" /></div>
+        <div style={{ flex: 1, textAlign: "left" }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>🎙 Grabar reunión</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginTop: 1 }}>Se arma la minuta sola y se manda por PDF</div>
+        </div>
+      </button>}
       {msgs.length === 0 && <div style={{ paddingTop: 4 }}>
         <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6, marginBottom: 14, textAlign: "center" }}>Consultá sobre tus obras o gestioná pedidos con V+V. Puedo crear y responder pedidos por vos.</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 560, margin: "0 auto" }}>{QUICK.map((q, i) => <button key={i} onClick={() => send(q)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", fontSize: 13, color: T.text, textAlign: "left", boxShadow: T.shadow }}>{q}</button>)}</div>
       </div>}
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
-          <div style={{ maxWidth: "84%", background: m.role === "user" ? T.accent : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{m.content}</div>
+          <div style={{ maxWidth: "84%", background: m.role === "user" ? T.accent : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{Array.isArray(m.content) ? (m.content.find(b => b.type === "text")?.text || "") : m.content}</div>
+          {m.role !== "user" && ttsOk && !narrarAuto && <button onClick={() => hablar((Array.isArray(m.content) ? (m.content.find(b => b.type === "text")?.text || "") : m.content) + (m.accionResultado ? ". " + m.accionResultado : ""))} style={{ marginTop: 5, background: "none", border: "none", color: T.muted, fontSize: 10.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>🔊 Escuchar</button>}
+          {m.role !== "user" && /MINUTA DE REUNI[OÓ]N/i.test(String(m.content || "")) && <button onClick={() => descargarMinuta(m.content)} style={{ marginTop: 7, background: "#2B579A", color: "#fff", border: "none", borderRadius: 9, padding: "9px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Ico n="word" /> Descargar minuta (Word)</button>}
           {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}><Ico n="send" /> {m.waLabel || "Enviar por WhatsApp"}</a>}
           {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.docs.map((d, i) => <a key={i} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}><Ico n="ruler" /> </span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>Abrir ↗</span></a>)}</div>}
           {m.media && m.media.length > 0 && <div style={{ marginTop: 8, maxWidth: "84%" }}>{m.mediaTipo === "videos"
@@ -2457,6 +3124,8 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       <div style={{ display: "flex", alignItems: "center", gap: 8, maxWidth: 760, margin: "0 auto 8px" }}>
         {debateActive ? <button onClick={stopDebate} style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Frenar debate</button>
           : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.accent : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="mic" /> Debate IA</button>}
+        {ttsOk && <button onClick={toggleNarrarAuto} title="Narrar las respuestas en voz alta" style={{ background: narrarAuto ? "#16A34A" : T.bg, color: narrarAuto ? "#fff" : T.sub, border: `1px solid ${narrarAuto ? "#16A34A" : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🔊 {narrarAuto ? "Narrando ON" : "Narrar"}</button>}
+        {hablando && <button onClick={pararVoz} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Callar</button>}
         {msgs.length > 0 && <button onClick={() => setMsgs([])} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginLeft: "auto" }}>Limpiar</button>}
       </div>
       {debateOpen && !debateActive && <div style={{ maxWidth: 760, margin: "0 auto 8px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px" }}>
@@ -2467,9 +3136,13 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
         </div>
       </div>}
       {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}><Ico n="mic" /> Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
+      {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, maxWidth: 760, margin: "0 auto 8px" }}>{adj.map((a, i) => <span key={i} style={{ background: T.bg, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub, display: "inline-flex", alignItems: "center", gap: 5 }}><Ico n="clip" /> {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted, fontWeight: 700 }}>✕</span></span>)}</div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, maxWidth: 760, margin: "0 auto" }}>
-        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí tu consulta…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
-        <button onClick={() => send()} disabled={loading || !input.trim()} style={{ width: 42, height: 42, borderRadius: T.rsm, background: input.trim() && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, flexShrink: 0 }}>↑</button>
+        <input ref={fileRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" onChange={addAdj} style={{ display: "none" }} />
+        <button onClick={() => fileRef.current?.click()} disabled={subiendoAdj} title="Adjuntar archivo" style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>{subiendoAdj ? "…" : "＋"}</button>
+        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí tu consulta…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        {sttOk && <button onClick={toggleVoz} title="Dictar por voz" style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#DC2626" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>🎙</button>}
+        <button onClick={() => send()} disabled={loading || (!input.trim() && adj.length === 0)} style={{ width: 42, height: 42, borderRadius: T.rsm, background: (input.trim() || adj.length > 0) && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, flexShrink: 0 }}>↑</button>
       </div>
     </div>
   </div>);
@@ -2562,7 +3235,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
             <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "IA · " : ""}{mine ? cfg.nombre : "V+V"} · {h.fecha}</div>
           </div>
         </div>); })}
-        <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Escribí una respuesta…" rows={3} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, marginTop: 8 }} />
+        <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Escribí una respuesta…" rows={3} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, marginTop: 8 }} />
         {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: "#EAEEF3", borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>{a.img ? "" : ""} {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -2706,17 +3379,142 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
     </div>}
   </div>);
 }
-function InformesScreen({ T, obras, formularios = [] }) {
+// Documento con la marca de BELFAST (no la de V+V). Es el que ve el
+// propietario: él es cliente de Belfast, no de V+V.
+function docBelfast(cfg, obraNombre, titulo, subtitulo, bloques, fotos) {
+  const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const marca = (cfg?.nombre || "Belfast Construction Management").toUpperCase();
+  const logo = cfg?.logo || "";
+  const secs = bloques.filter(([, t]) => t).map(([lbl, t]) =>
+    `<div class="bloque"><div class="lbl">${esc(lbl)}</div><div class="txt">${esc(t).replace(/\n/g, "<br/>")}</div></div>`).join("");
+  const fots = (fotos || []).length ? `<div class="fotos">${fotos.map(u => `<img src="${esc(u)}" />`).join("")}</div>` : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+    @page { margin: 15mm; }
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #16202e; margin: 0; padding: 22px; }
+    .head { text-align: center; border-bottom: 2px solid #B0894F; padding-bottom: 12px; margin-bottom: 18px; }
+    .head img { max-height: 54px; margin-bottom: 8px; }
+    .marca { font-size: 15px; font-weight: 800; letter-spacing: .06em; color: #0F1B2D; }
+    .tipo { font-size: 9px; font-weight: 800; letter-spacing: .12em; color: #B0894F; text-transform: uppercase; margin-top: 5px; }
+    h1 { font-size: 17px; margin: 12px 0 4px; }
+    .sub { font-size: 11.5px; color: #5B6B7F; }
+    .bloque { margin-bottom: 14px; }
+    .lbl { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #1B3A5B; margin-bottom: 4px; }
+    .txt { font-size: 12.5px; line-height: 1.6; }
+    .fotos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+    .fotos img { width: 100%; border-radius: 6px; border: 1px solid #E3E8EF; }
+    .pie { margin-top: 24px; padding-top: 10px; border-top: 1px solid #E3E8EF; font-size: 9.5px; color: #94A3B8; text-align: center; }
+  </style></head><body>
+    <div class="head">${logo ? `<img src="${esc(logo)}" />` : ""}<div class="marca">${esc(marca)}</div><div class="tipo">${esc(subtitulo)}</div></div>
+    <h1>${esc(titulo)}</h1><div class="sub">Obra: ${esc(obraNombre)}</div>
+    <div style="margin-top:18px">${secs}${fots}</div>
+    <div class="pie">${esc(marca)} · Documento emitido para el propietario</div>
+  </body></html>`;
+}
+
+function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, cfg = {}, envios = {}, setEnvios }) {
+  const [avAbierto, setAvAbierto] = React.useState(null);
+  const [docAbierto, setDocAbierto] = React.useState(null);   // el informe armado, con logos
+  // Arma el documento con la marca de Belfast y lo deja disponible para el
+  // propietario en SU panel.
+  function mandarAlPropietario(obraId, obraNombre, item, tipo) {
+    if (!setEnvios) return;
+    const html = tipo === "cert"
+      ? docBelfast(cfg, obraNombre, `Certificado semanal ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}`, "Certificado de avance",
+          [["Desarrollo", item.desarrollo], ["Recepciones", item.recepciones], ["Limpieza y seguridad", item.limpieza], ["Alertas", item.alertas]],
+          (item.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])))
+      : docBelfast(cfg, obraNombre, `Informe de avance ${item.fecha}`, "Informe de avance",
+          [["Avance alcanzado", item.avance], ["Estado de obra", item.descripcion]],
+          (item.fotos && item.fotos.length) ? item.fotos : (item.fotoUrl ? [item.fotoUrl] : []));
+    const reg = { id: item.id, tipo, prop: true, fecha: item.fecha || item.desde, titulo: tipo === "cert" ? `Certificado ${fFechaCorta(item.desde)} al ${fFechaCorta(item.hasta)}` : `Informe de avance ${item.fecha}`, html, ts: Date.now() };
+    setEnvios(p => { const lista = ((p || {})[obraId] || []).filter(x => x.id !== reg.id); return { ...(p || {}), [obraId]: [reg, ...lista] }; });
+    alert("Listo: el propietario ya lo puede ver en su panel.");
+  }
+  const [certAbierto, setCertAbierto] = React.useState(null);
   const [filtro, setFiltro] = useState("");
   const [open, setOpen] = useState(null);
   const [verForm, setVerForm] = useState(null);
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const forms = (formularios || []).filter(f => f.compartido && (!filtro || f.obra_id === filtro)).sort((a, b) => (b.id > a.id ? 1 : -1));
   const todos = obras.flatMap(o => (o.informes || []).map(inf => ({ ...inf, obra: o.nombre, obra_id: o.id }))).filter(inf => !filtro || inf.obra_id === filtro).sort((a, b) => (b.id > a.id ? 1 : -1));
+  // Todos los certificados semanales, de todas las obras (o de la filtrada),
+  // ordenados del más nuevo al más viejo.
+  const certsTodos = obras.flatMap(o => ((certif || {})[o.id] || []).map(c => ({ ...c, _obra: o.nombre, _obraId: o.id })))
+    .filter(c => !filtro || c._obraId === filtro)
+    .sort((a, b) => String(b.desde || "").localeCompare(String(a.desde || "")));
+  // Informes de avance: cada carga de fotos con su lectura de la IA.
+  // Solo los que tienen el informe ya armado (el PDF con logos que emite V+V).
+  // Es lo único que le llega al cliente; el texto suelto queda para uso interno.
+  const avTodos = obras.flatMap(o => ((avance || {})[o.id] || []).map(a => ({ ...a, _obra: o.nombre, _obraId: o.id })))
+    .filter(a => a.html && (!filtro || a._obraId === filtro))
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  if (docAbierto) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(10px + env(safe-area-inset-top)) 12px 10px" }}>
+      <button onClick={() => setDocAbierto(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>← Volver</button>
+      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{docAbierto.titulo}</span>
+      <button onClick={() => { const f = document.getElementById("doc-cliente"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Imprimir / PDF</button>
+    </div>
+    <iframe id="doc-cliente" srcDoc={docAbierto.html} title={docAbierto.titulo} style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+  </div>);
+
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
+
+      {/* La obra se elige PRIMERO: filtra los certificados, los avances y los informes de abajo. */}
+      <div style={{ padding: "0 18px", marginTop: 14 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Obra</label>
+        <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 2px" }}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+      </div>
+
+      {/* Certificados semanales emitidos por V+V — sólo lectura */}
+      {certsTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Certificados semanales de avance</div>
+        {certsTodos.map(c => (<div key={c.id} onClick={() => c.html ? setDocAbierto({ html: c.html, titulo: `Certificado ${fFechaCorta(c.desde)} al ${fFechaCorta(c.hasta)}` }) : setCertAbierto(certAbierto?.id === c.id ? null : c)} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{c._obra} · {(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
+            </div>
+              {c.html && <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>}
+              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(c._obraId, c._obra, c, "cert"); }} style={{ background: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#DCFCE7" : BRASS, border: "none", color: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "✓ Enviado" : "→ Propietario"}</button>
+          </div>
+          {certAbierto?.id === c.id && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
+            {[["Desarrollo", c.desarrollo], ["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
+              <div key={lbl} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{lbl}</div>
+                <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{txt}</div>
+              </div>) : null)}
+            {(c.av || []).some(a => (a.fotos || []).length || a.fotoUrl) && <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Fotos de la semana</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>
+                {(c.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])).map((u, i) => (
+                  <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>))}
+              </div>
+            </div>}
+          </div>}
+        </div>))}
+      </div>}
+
+      {/* Informes de avance — cada carga de fotos con su lectura */}
+      {avTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Informes de avance</div>
+        {avTodos.map(a => { const fs = (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : []); return (
+          <div key={a.id} onClick={() => setDocAbierto({ html: a.html, titulo: `Informe de avance ${a.fecha}` })} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
+                <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{a._obra}{fs.length ? ` · ${fs.length} foto${fs.length > 1 ? "s" : ""}` : ""}</div>
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>
+              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(a._obraId, a._obra, a, "av"); }} style={{ background: ((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "#DCFCE7" : BRASS, border: "none", color: ((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "✓ Enviado" : "→ Propietario"}</button>
+            </div>
+            {avAbierto?.id === a.id && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
+              {a.descripcion && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: fs.length ? 9 : 0 }}>{a.descripcion}</div>}
+              {fs.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>
+                {fs.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>)}
+              </div>}
+            </div>}
+          </div>); })}
+      </div>}
     <div style={{ padding: "16px 20px" }}>
-      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Obra</label>
-      <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 16px" }}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
       {false && <div style={{ marginBottom: 18 }}>
         <Eyebrow T={T}>Formularios recibidos de V+V</Eyebrow>
         {forms.map(f => { const tpl = FORM_TPLS.find(t => t.id === f.tplId); return (<Card T={T} key={f.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${BRASS}` }}>
@@ -3061,17 +3859,18 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
 function RecepcionDocs({ obras, empresa, docrecepcion, persistDoc }) {
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   const [nuevoItem, setNuevoItem] = useState("");
+  const [catNuevo, setCatNuevo] = useState(DOC_CATS[0]);
   const obraNom = id => obras.find(o => o.id === id)?.nombre || "—";
 
   const reg = (docrecepcion || []).find(r => r.obra_id === obraId);
-  const items = reg ? reg.items : DOCS_BASE.map((n, i) => ({ id: "base" + i, nombre: n, recibido: false, fecha: "" }));
+  const items = reg ? reg.items : DOCS_BASE.map((d, i) => ({ id: "base" + i, nombre: d.n, cat: d.c, recibido: false, fecha: "" }));
 
   const guardarItems = (nextItems) => {
     const otros = (docrecepcion || []).filter(r => r.obra_id !== obraId);
     persistDoc([...otros, { obra_id: obraId, items: nextItems, upd: Date.now() }]);
   };
   const toggle = (id) => guardarItems(items.map(it => it.id === id ? { ...it, recibido: !it.recibido, fecha: !it.recibido ? hoyStr() : "" } : it));
-  const agregar = () => { const n = nuevoItem.trim(); if (!n) return; guardarItems([...items, { id: uid() + Date.now(), nombre: n, recibido: false, fecha: "" }]); setNuevoItem(""); };
+  const agregar = () => { const n = nuevoItem.trim(); if (!n) return; guardarItems([...items, { id: uid() + Date.now(), nombre: n, cat: catNuevo, recibido: false, fecha: "" }]); setNuevoItem(""); };
   const quitar = (id) => guardarItems(items.filter(it => it.id !== id));
   const recibidos = items.filter(it => it.recibido).length;
 
@@ -3095,16 +3894,30 @@ function RecepcionDocs({ obras, empresa, docrecepcion, persistDoc }) {
         <span style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Documentación inicial</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: recibidos === items.length && items.length > 0 ? "#16A34A" : T.muted }}>{recibidos} de {items.length} recibidos</span>
       </div>
-      {items.map(it => (<div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
+      {DOC_CATS.concat(["Otros"]).map(cat => {
+        const delGrupo = items.filter(it => (it.cat || "Documentación técnica") === cat || (cat === "Otros" && it.cat && !DOC_CATS.includes(it.cat)));
+        if (!delGrupo.length) return null;
+        const okG = delGrupo.filter(it => it.recibido).length;
+        return (<div key={cat} style={{ marginTop: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>{cat}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: okG === delGrupo.length ? "#16A34A" : T.muted }}>{okG}/{delGrupo.length}</span>
+          </div>
+          {delGrupo.map(it => (<div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
         <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.recibido ? "#16A34A" : T.border}`, background: it.recibido ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.recibido ? "✓" : ""}</button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: it.recibido ? T.text : T.sub }}>{it.nombre}</div>
           {it.recibido && it.fecha && <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 700 }}>Recibido {it.fecha}</div>}
         </div>
-        {!DOCS_BASE.includes(it.nombre) && <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
+        {!DOCS_BASE.some(d => d.n === it.nombre) && <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
       </div>))}
+        </div>);
+      })}
       <div style={{ display: "flex", gap: 7, marginTop: 12 }}>
-        <input value={nuevoItem} onChange={e => setNuevoItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} placeholder="Agregar otra definición o plano…" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} />
+        <select value={catNuevo} onChange={e => setCatNuevo(e.target.value)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 8px", fontSize: 12, color: T.text, maxWidth: 130 }}>
+          {DOC_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input value={nuevoItem} onChange={e => setNuevoItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }} placeholder="Agregar ítem…" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text }} />
         <button onClick={agregar} style={{ background: T.al, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "0 15px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>＋</button>
       </div>
     </div>
@@ -3272,74 +4085,291 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
     </div>}
   </div>);
 }
-function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6) n++; } return n; }
+// Feriados nacionales argentinos. Un día feriado NO es hábil: no corre plazo
+// ni se programa trabajo. Si el gobierno agrega puentes turísticos, se suman acá.
+const FERIADOS = new Set([
+  // 2026
+  "2026-01-01", "2026-02-16", "2026-02-17", "2026-03-24", "2026-04-02", "2026-04-03",
+  "2026-05-01", "2026-05-25", "2026-06-17", "2026-06-20", "2026-07-09", "2026-08-17",
+  "2026-10-12", "2026-11-20", "2026-12-08", "2026-12-25",
+  // 2027 (trasladables sujetos a confirmación oficial)
+  "2027-01-01", "2027-02-08", "2027-02-09", "2027-03-24", "2027-03-26", "2027-04-02",
+  "2027-05-01", "2027-05-25", "2027-06-17", "2027-06-20", "2027-07-09", "2027-08-16",
+  "2027-10-11", "2027-11-22", "2027-12-08", "2027-12-25",
+]);
+const _isoDe = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(cur))) n++; } return n; }
 function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaReal || new Date(); const dias = diasHabiles(fechaSolic, fin); const desvio = dias - plazo; let estado; if (fechaReal || cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo"; else estado = desvio <= 0 ? "En plazo" : "Vencido"; return { dias, desvio, estado, retraso: Math.max(0, desvio) }; }
 const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "#ECFDF5" }, "En plazo": { c: "#3B82F6", b: "#EFF6FF" }, "Fuera de plazo": { c: "#F59E0B", b: "#FFFBEB" }, "Vencido": { c: "#EF4444", b: "#FEF2F2" } };
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 
+/* ═══ CRONOGRAMAS (solo lectura, espejo de la app Cronograma de V+V) ═══
+   Belfast ve el mismo plan que V+V: fechas planificadas, fechas comprometidas,
+   fechas REALES de ejecución y las definiciones que le tocan responder —
+   con su estado en el circuito de Gestión. Mismo motor de cálculo. */
+const crNum = (x) => { const n = Number(String(x ?? "").replace(",", ".")); return isNaN(n) ? 0 : n; };
+const crHoy = () => new Date().toISOString().slice(0, 10);
+function crIsoMas(iso, dias) { if (!iso) return ""; const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + Math.round(crNum(dias))); return d.toISOString().slice(0, 10); }
+function crDiasEntre(a, b) { if (!a || !b) return 0; return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000); }
+function crEsHabil(iso) { if (!iso) return false; if (FERIADOS.has(iso)) return false; const d = new Date(iso + "T12:00:00"); const w = d.getDay(); return w >= 1 && w <= 5; }
+function crPrimerHabil(iso) { let f = iso; for (let i = 0; i < 7; i++) { if (crEsHabil(f)) return f; f = crIsoMas(f, 1); } return iso; }
+function crHabilDesde(inicio, n) { if (!inicio) return ""; let f = crPrimerHabil(inicio); let q = Math.max(0, Math.round(crNum(n))); let g = 0; while (q > 0 && g < 20000) { f = crIsoMas(f, 1); if (crEsHabil(f)) q--; g++; } return f; }
+const CR_MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function crFmt(iso) { if (!iso) return "—"; const d = new Date(iso + "T12:00:00"); return `${d.getDate()} ${CR_MES[d.getMonth()]}`; }
+function crCPM(tareas) {
+  const T2 = (tareas || []).filter(t => t && t.id).map(t => ({ ...t, dias: Math.max(1, crNum(t.dias)), deps: (t.deps || []).filter(d => d && d.cod) }));
+  const porCod = {}; T2.forEach(t => { if (t.cod) porCod[t.cod] = t; });
+  const ES = {}, EF = {}, vis = {}, ok = {};
+  function fES(t) { if (ok[t.id]) return ES[t.id]; if (vis[t.id]) { ES[t.id] = 0; EF[t.id] = t.dias; return 0; } vis[t.id] = true; let es = 0; for (const d of t.deps) { const p = porCod[d.cod]; if (!p || p.id === t.id) continue; fES(p); const c = d.tipo === "CC" ? ES[p.id] + crNum(d.lag) : EF[p.id] + crNum(d.lag); if (c > es) es = c; } es = Math.max(0, es); ES[t.id] = es; EF[t.id] = es + t.dias; vis[t.id] = false; ok[t.id] = true; return es; }
+  T2.forEach(fES);
+  const fin = T2.reduce((m, t) => Math.max(m, EF[t.id] || 0), 0);
+  const suc = {}; T2.forEach(t => { suc[t.id] = []; });
+  T2.forEach(sx => { for (const d of sx.deps) { const p = porCod[d.cod]; if (!p || p.id === sx.id) continue; suc[p.id].push({ s: sx, tipo: d.tipo, lag: crNum(d.lag) }); } });
+  const LS = {}, LF = {}, ok2 = {}, vis2 = {};
+  function fLS(t) { if (ok2[t.id]) return LS[t.id]; if (vis2[t.id]) { LF[t.id] = fin; LS[t.id] = fin - t.dias; return LS[t.id]; } vis2[t.id] = true; let lf = fin; for (const { s: sx, tipo, lag } of suc[t.id] || []) { if (tipo !== "FC") continue; fLS(sx); const c = LS[sx.id] - lag; if (c < lf) lf = c; } let ls = lf - t.dias; for (const { s: sx, tipo, lag } of suc[t.id] || []) { if (tipo !== "CC") continue; fLS(sx); const c = LS[sx.id] - lag; if (c < ls) ls = c; } LF[t.id] = lf; LS[t.id] = ls; vis2[t.id] = false; ok2[t.id] = true; return ls; }
+  T2.forEach(fLS);
+  return T2.map(t => ({ ...t, es: ES[t.id] ?? 0, ef: EF[t.id] ?? 0, critica: Math.round((LS[t.id] ?? 0) - (ES[t.id] ?? 0)) <= 0 }));
+}
+function CronogramaScreen(props) {
+  // Cualquier error acá adentro se muestra en pantalla, nunca deja el panel en blanco.
+  try { return CronogramaScreenInner(props); }
+  catch (e) {
+    const T = props.T || {};
+    return (<div style={{ padding: "20px" }}>
+      <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, padding: 16 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: "#B91C1C" }}>La pantalla de cronogramas tuvo un problema</div>
+        <div style={{ fontSize: 12, color: "#991B1B", marginTop: 6, wordBreak: "break-word" }}>Error: {String(e && e.message || e)}</div>
+        <div style={{ fontSize: 11, color: "#991B1B", marginTop: 6 }}>Sacale una captura a este mensaje y pasásela a Sebastián para corregirlo.</div>
+      </div>
+    </div>);
+  }
+}
+function CronogramaScreenInner({ T, cfg, crono, gestion }) {
+  const g = { punit: {}, manual: [], ...(gestion || {}) };
+  const enManual = new Set((g.manual || []).map(x => x.id));
+  const [ab, setAb] = useState({});
+  const hoy = crHoy();
+  const obras = (crono?.obras || []);
+  const planes = obras.map(o => { try {
+    let tareas;
+    if (o.modoManual) {
+      tareas = (o.tareas || []).map(t => ({ ...t, vvInicio: t.desde || o.inicio || hoy, vvFin: (t.hasta && t.hasta >= (t.desde || "")) ? t.hasta : (t.desde || o.inicio || hoy), critica: false }));
+    } else {
+      tareas = crCPM(o.tareas || []).map(t => ({ ...t, vvInicio: crHabilDesde(o.inicio, t.es), vvFin: crHabilDesde(o.inicio, t.ef - 1) }));
+    }
+    tareas = tareas.map(t => {
+      const desvReal = (t.realFin && t.vvFin) ? crDiasEntre(t.vvFin, t.realFin) : null;
+      const desvRealIni = (t.realInicio && t.vvInicio) ? crDiasEntre(t.vvInicio, t.realInicio) : null;
+      const defs = (t.defs || []).map(d => {
+        const limite = crIsoMas(t.vvInicio, -crNum(d.diasAntes));
+        const faltan = limite ? crDiasEntre(hoy, limite) : null;
+        let estado = "futura";
+        if (d.ok) estado = "ok"; else if (faltan !== null && faltan < 0) estado = "vencida"; else if (faltan !== null && faltan <= 15) estado = "urgente";
+        const gid = "cron_" + d.id;
+        const dec = g.punit[gid];
+        const gest = dec ? (dec.decision === "confirmado" ? "punitorio" : dec.decision === "prorroga" ? "prorroga" : "sin_perjuicio") : (enManual.has(gid) ? "evaluacion" : null);
+        return { ...d, limite, faltan, estado, gest, tarea: t.nombre, critica: t.critica };
+      });
+      return { ...t, desvReal, desvRealIni, defs };
+    });
+    const fin = tareas.reduce((m, t) => (!m || t.vvFin > m) ? t.vvFin : m, "");
+    const defsPend = tareas.flatMap(t => t.defs).filter(d => !d.ok);
+    const venc = defsPend.filter(d => d.estado === "vencida");
+    // corrimiento contra la línea base fijada en el Cronograma de V+V
+    const corr = (o.finBase && fin) ? crDiasEntre(o.finBase, fin) : null;
+    return { o, tareas, fin, defsPend, venc, corr };
+  } catch (e) { return { o, tareas: [], fin: "", defsPend: [], venc: [], corr: null, error: String(e && e.message || e) }; } }).filter(p => p && p.o);
+  const GEST_TAG = { punitorio: ["Punitorio", "#B91C1C", "#FEF2F2"], evaluacion: ["En evaluación", "#B45309", "#FFFBEB"], prorroga: ["Prórroga", "#2563EB", "#EFF6FF"], sin_perjuicio: ["Sin perjuicio", "#64748B", "#F1F5F9"] };
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.55, marginBottom: 14 }}>El plan de cada obra: fechas planificadas, comprometidas y REALES, y las definiciones pendientes de {cfg?.nombre || "Belfast"} con su estado en Gestión. Responder a tiempo evita que un retraso pase a evaluación de punitorio.</div>
+      {planes.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin cronogramas cargados.</div>}
+      {planes.map(({ o, tareas, fin, defsPend, venc, corr }) => {
+        const abierta = ab[o.id] !== undefined ? ab[o.id] : venc.length > 0;
+        return (<Card T={T} key={o.id} style={{ padding: 0, marginBottom: 12, overflow: "hidden", borderLeft: `4px solid ${venc.length ? "#EF4444" : "#16A34A"}` }}>
+          <div onClick={() => setAb(p => ({ ...p, [o.id]: !abierta }))} style={{ padding: "13px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 9 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{o.nombre}</div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Fin estimado: {crFmt(fin)} · {tareas.length} tareas{corr !== null && corr > 0 ? <span style={{ color: "#B91C1C", fontWeight: 800 }}> · corrida +{corr} días</span> : ""}</div>
+            </div>
+            <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+              {venc.length > 0 ? <Badge c="#B91C1C" b="#FEF2F2">{venc.length} vencida{venc.length > 1 ? "s" : ""}</Badge> : defsPend.length > 0 ? <Badge c="#B45309" b="#FFFBEB">{defsPend.length} pendiente{defsPend.length > 1 ? "s" : ""}</Badge> : <Badge c="#16A34A" b="#ECFDF5">al día</Badge>}
+              <span style={{ fontSize: 11, color: T.muted }}>{abierta ? "▲" : "▼"}</span>
+            </div>
+          </div>
+          {abierta && <div style={{ borderTop: `1px solid ${T.border}`, padding: "4px 14px 13px" }}>
+            {planes.find(p => p.o.id === o.id)?.error && <div style={{ fontSize: 11, color: "#B91C1C", marginTop: 10 }}>No pude calcular esta obra: {planes.find(p => p.o.id === o.id).error}</div>}
+            {corr !== null && corr > 0 && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 11px", marginTop: 10, fontSize: 11.5, color: "#991B1B", lineHeight: 1.5 }}>El fin de obra se corrió <b>+{corr} días (~{(corr / 30.44).toFixed(1)} meses)</b> respecto del plan original. Todo corrimiento adicional queda sujeto a redeterminación de precios sobre el saldo del contrato.</div>}
+            {defsPend.length > 0 && <>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: "#B91C1C", textTransform: "uppercase", letterSpacing: ".05em", marginTop: 10 }}>Definiciones a responder</div>
+              {defsPend.map(d => { const tag = d.gest ? GEST_TAG[d.gest] : null; return (<div key={d.id} style={{ background: d.estado === "vencida" ? "#FEF2F2" : d.estado === "urgente" ? "#FFFBEB" : T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 11px", marginTop: 7 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{d.nombre}</div>
+                    <div style={{ fontSize: 10.5, color: T.sub, marginTop: 2 }}>Traba <b>{d.tarea}</b>{d.critica && <span style={{ color: "#B91C1C", fontWeight: 800 }}> · CAMINO CRÍTICO</span>}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 3, color: d.estado === "vencida" ? "#B91C1C" : d.estado === "urgente" ? "#B45309" : T.muted }}>
+                      {d.estado === "vencida" ? `Vencida hace ${Math.abs(d.faltan)} días (límite ${crFmt(d.limite)})` : `Definir antes del ${crFmt(d.limite)} — faltan ${d.faltan} días`}
+                    </div>
+                  </div>
+                  {tag && <Badge c={tag[1]} b={tag[2]}>{tag[0]}</Badge>}
+                </div>
+              </div>); })}
+            </>}
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", marginTop: 13 }}>Tareas</div>
+            {tareas.map(t => (<div key={t.id} style={{ padding: "8px 0", borderBottom: `1px solid ${T.bg}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, minWidth: 0, flex: 1 }}>{t.nombre}{t.critica && <span style={{ fontSize: 9, color: "#B91C1C", fontWeight: 800, marginLeft: 6 }}>CRÍTICA</span>}</div>
+                {crNum(t.avance) > 0 && <Badge c="#16A34A" b="#ECFDF5">{crNum(t.avance)}%</Badge>}
+              </div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Plan: {crFmt(t.vvInicio)} → {crFmt(t.vvFin)}{t.bfInicio && t.bfFin ? ` · Comprometido: ${crFmt(t.bfInicio)} → ${crFmt(t.bfFin)}` : ""}</div>
+              {t.realInicio && <div style={{ fontSize: 10.5, color: T.text, fontWeight: 700, marginTop: 1 }}>Real: {crFmt(t.realInicio)}{t.realFin ? ` → ${crFmt(t.realFin)}` : " → en curso"}{t.desvRealIni > 0 ? <span style={{ color: "#B91C1C" }}> · arrancó +{t.desvRealIni}d</span> : null}{t.desvReal !== null && t.desvReal !== 0 ? <span style={{ color: t.desvReal > 0 ? "#B91C1C" : "#16A34A" }}> · terminó {t.desvReal > 0 ? "+" : ""}{t.desvReal}d</span> : null}</div>}
+            </div>))}
+          </div>}
+        </Card>);
+      })}
+    </div>
+  </div>);
+}
+
+// ── Globito rojo en el ícono de la app (como Mensajes de iOS) ──────
+// setAppBadge pinta el número en el ícono del escritorio. El número queda
+// puesto al cerrar la app; se actualiza al abrirla o al volver a primer plano.
+// Requiere iOS 16.4+, app instalada en pantalla de inicio y notificaciones permitidas.
+function GlobitoPermiso() {
+  const [estado, setEstado] = React.useState(() => {
+    try {
+      if (!("Notification" in window) || !("setAppBadge" in navigator)) return "no";
+      if (localStorage.getItem("globito_off") === "1") return "no";
+      return Notification.permission;   // "default" | "granted" | "denied"
+    } catch { return "no"; }
+  });
+  if (estado !== "default") return null;
+  return (<div style={{ display: "flex", alignItems: "center", gap: 9, background: "#0F1B2D", borderRadius: 12, padding: "10px 12px", margin: "0 0 10px", border: "1px solid #B08D3E" }}>
+    <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: "#fff", lineHeight: 1.45 }}>Activá los avisos para ver el <b>número rojo en el ícono</b> cuando haya alertas, sin abrir la app.</div>
+    <button onClick={async () => { try { const p = await Notification.requestPermission(); setEstado(p); if (p === "granted") { try { await navigator.setAppBadge(1); setTimeout(() => navigator.clearAppBadge().catch(() => { }), 1500); } catch { } } } catch { setEstado("denied"); } }}
+      style={{ background: "#B08D3E", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 11.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>Activar</button>
+    <button onClick={() => { try { localStorage.setItem("globito_off", "1"); } catch { } setEstado("no"); }}
+      style={{ background: "none", border: "none", color: "rgba(255,255,255,.55)", fontSize: 15, cursor: "pointer", padding: "0 2px", flexShrink: 0 }}>×</button>
+  </div>);
+}
+async function ponerGlobito(n) {
+  try {
+    if (!("setAppBadge" in navigator)) return;
+    if (n > 0) await navigator.setAppBadge(Math.min(99, Math.round(n)));
+    else await navigator.clearAppBadge();
+  } catch { }
+}
 function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
-  const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], ...(gestion || {}) };
+  const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, reuniones: [], ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
   const cli = cfg?.nombre || "Belfast";
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
-  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; const m = gMetricas(solic, real, g.plazo, p.estado === "resuelto"); return { id: p.id, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, ...m }; });
-  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; const m = gMetricas(solic, real, it.plazo || g.plazo, !!real); return { ...it, fechaSolic: solic, fechaReal: real, ...m }; });
+  // Misma lectura de decisiones que V+V: acá Belfast VE lo mismo que V+V
+  // decidió, con el cálculo abierto. Transparencia total, sin sorpresas.
+  const conDecision = (base) => {
+    const d = g.punit[base.id];
+    const plazoEf = (base.plazoBase || g.plazo) + (d?.decision === "prorroga" ? (d.prorrogaDias || 0) : 0);
+    const m = gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
+    return { ...base, plazo: plazoEf, ...m, dec: d || null };
+  };
+  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; return conDecision({ id: p.id, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: p.estado === "resuelto" }); });
+  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const parseDmy = (f) => { const m = String(f || "").match(/^(\d{2})\/(\d{2})\/(\d{2})$/); return m ? new Date(`20${m[3]}-${m[2]}-${m[1]}T12:00:00`) : null; };
   const itemsMat = (matpedidos || []).filter(p => p.tipo === "definicion" || p.tipo === "plano").map(p => {
     const solic = p.ts ? new Date(p.ts) : null;
     const real = p.cumplido ? (parseDmy(p.cumplidoFecha) || new Date()) : null;
-    const m = gMetricas(solic, real, g.plazo, !!p.cumplido);
     const desc = (p.items || []).map(it => it.nombre).filter(Boolean).join(", ") || (p.tipo === "plano" ? "Plano" : "Definición");
-    return { id: p.id, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, ...m };
+    return conDecision({ id: p.id, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: !!p.cumplido });
   });
   const items = [...itemsPedidos, ...itemsMat, ...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
-  const perItem = it => (it.estado === "Vencido" || it.estado === "Fuera de plazo") ? it.retraso * (it.dotacion || g.dotacion) * g.costoPersona : 0;
+  const perItem = it => (it.dec?.decision === "confirmado") ? it.retraso * (Number(it.dec.personas) || g.dotacion) * (Number(it.dec.costoDia) || g.costoPersona) : 0;
+  const esVencido = it => it.estado === "Vencido" || it.estado === "Fuera de plazo";
+  const confirmados = items.filter(it => it.dec?.decision === "confirmado");
+  const enEval = items.filter(it => esVencido(it) && !it.dec);
   const total = items.length, cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
   const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
-  const grp = n => items.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
+  const grp = n => confirmados.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
   const perjB = grp(cli), perjVV = grp("V+V"), perjE = grp("Estudio"), perjT = perjB + perjVV + perjE;
   const cnt = e => items.filter(i => i.estado === e).length;
-  const TABS = [["registro", "Registro"], ["panel", "Panel"], ["punitorios", "Punitorios"], ["plan", "Plan"]];
+  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "#FEF2F2" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "#F1F5F9" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "#EFF6FF" } };
+  const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
+
+  const ItemCard = ({ it }) => {
+    const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
+    return (<Card T={T} style={{ padding: 13, marginBottom: 9 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · plazo {it.plazo} d · <b style={{ color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</b></div>
+          {it.dec?.decision === "confirmado" && <div style={{ fontSize: 11, marginTop: 6, color: T.sub, lineHeight: 1.5 }}><b style={{ color: "#B91C1C" }}>Perjuicio: {money(pj)}</b> — {it.retraso} d × {Number(it.dec.personas) || g.dotacion} pers. × {money(Number(it.dec.costoDia) || g.costoPersona)}{it.dec.tarea ? <><br />Tarea detenida: {it.dec.tarea}</> : null}</div>}
+          {it.dec?.decision === "prorroga" && <div style={{ fontSize: 11, marginTop: 6, color: "#2563EB" }}>Prórroga acordada: +{it.dec.prorrogaDias} días háb.{it.dec.nota ? ` — ${it.dec.nota}` : ""}</div>}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end", flexShrink: 0 }}>
+          <Badge c={e.c} b={e.b}>{it.estado}</Badge>
+          {db2 && <Badge c={db2.c} b={db2.b}>{db2.t}</Badge>}
+          {!it.dec && esVencido(it) && <Badge c="#B45309" b="#FFFBEB">En evaluación</Badge>}
+        </div>
+      </div>
+    </Card>);
+  };
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "14px 20px 0" }}>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? "#EAEEF3" : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700 }}>{l}</button>)}</div>
     </div>
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
-      <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Desempeño medido sobre los pedidos (plazo {g.plazo} días háb.). Vista de seguimiento.</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Desempeño medido sobre los pedidos (plazo {g.plazo} días háb.).</div>
       {items.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin ítems.</div>}
-      {items.map(it => { const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); return (<Card T={T} key={it.id} style={{ padding: 13, marginBottom: 9 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-          <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-            <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
-            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · {it.dias} d háb. · <b style={{ color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</b></div>
-            {pj > 0 && <div style={{ fontSize: 11, fontWeight: 700, color: "#EF4444", marginTop: 5 }}>Perjuicio: {money(pj)}</div>}
-          </div>
-          <Badge c={e.c} b={e.b}>{it.estado}</Badge>
-        </div>
-      </Card>); })}
+      {items.map(it => <ItemCard key={it.id} it={it} />)}
+    </div>}
+    {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.55, marginBottom: 14 }}>Solo se imputan los retrasos que detuvieron una tarea en condiciones de avanzar, evaluados caso por caso con la dotación y el costo reales. Los retrasos marcados "en evaluación" no tienen monto asignado.</div>
+      <Eyebrow T={T}>Punitorios confirmados ({confirmados.length}) — {money(perjT)}</Eyebrow>
+      {confirmados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Sin punitorios confirmados.</div>}
+      {confirmados.map(it => <ItemCard key={it.id} it={it} />)}
+      {enEval.length > 0 && <>
+        <div style={{ height: 8 }} />
+        <Eyebrow T={T}>En evaluación ({enEval.length})</Eyebrow>
+        {enEval.map(it => <ItemCard key={it.id} it={it} />)}
+      </>}
+      <div style={{ height: 14 }} />
+      <Card T={T} style={{ padding: 14 }}>
+        <Eyebrow T={T}>Criterio de cálculo</Eyebrow>
+        <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.7 }}>Perjuicio = días de retraso × dotación afectada × costo diario por persona.<br />Referencia: {money(g.costoPersona)} por persona/día. Cada punitorio usa la dotación real de esa parada.</div>
+      </Card>
     </div>}
     {tab === "panel" && <div style={{ padding: "16px 20px" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginBottom: 14 }}>
-        {[["Ítems", total, T.accent], ["% Cumplimiento", pctCumpl + "%", "#16A34A"], ["Días háb. prom.", diasProm, "#3B82F6"], ["Perjuicio total", money(perjT), "#EF4444"]].map(([l, v, c]) => <div key={l} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px" }}><div style={{ fontSize: 17, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{l}</div></div>)}
+        {[["Ítems", total, T.accent], ["% Cumplimiento", pctCumpl + "%", "#16A34A"], ["Días háb. prom.", diasProm, "#3B82F6"], ["Perjuicio confirmado", money(perjT), "#EF4444"]].map(([l, v, c]) => <div key={l} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px" }}><div style={{ fontSize: 17, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{l}</div></div>)}
       </div>
       <Eyebrow T={T}>Por estado</Eyebrow>
       <Card T={T} style={{ padding: 13, marginBottom: 14 }}>{["Cumplido", "En plazo", "Fuera de plazo", "Vencido"].map(s => { const e = GEST_ESTADOS[s]; return (<div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: e.c }} /><span style={{ fontSize: 12.5, color: T.text }}>{s}</span></div><span style={{ fontSize: 13, fontWeight: 800 }}>{cnt(s)}</span></div>); })}</Card>
-      <Eyebrow T={T}>Perjuicio imputable</Eyebrow>
+      <Eyebrow T={T}>Perjuicio confirmado por responsable</Eyebrow>
       <Card T={T} style={{ padding: 13 }}>{[[cli, perjB], ["Estudio", perjE], ["V+V", perjVV]].map(([n, v]) => <div key={n} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{n}</span><span style={{ fontSize: 13, fontWeight: 800, color: v > 0 ? "#EF4444" : T.muted }}>{money(v)}</span></div>)}<div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>TOTAL</span><span style={{ fontSize: 14, fontWeight: 800, color: "#EF4444" }}>{money(perjT)}</span></div></Card>
     </div>}
-    {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
-      <Card T={T} style={{ padding: 14, marginBottom: 14 }}>
-        <Eyebrow T={T}>Parámetros</Eyebrow>
-        <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.8 }}>Plazo estándar: <b>{g.plazo} días hábiles</b><br />Dotación parada: <b>{g.dotacion} personas</b><br />Costo diario por persona: <b>{money(g.costoPersona)}</b></div>
-        <div style={{ background: "#EAEEF3", borderRadius: T.rsm, padding: "11px 13px", marginTop: 10 }}><div style={{ fontSize: 11.5, color: T.sub }}>Perjuicio por día de retraso</div><div style={{ fontSize: 18, fontWeight: 800, color: "#EF4444" }}>{money(g.dotacion * g.costoPersona)}</div></div>
-      </Card>
-      <Eyebrow T={T}>Simulador acumulado</Eyebrow>
-      <Card T={T} style={{ padding: 13 }}>{[1, 2, 3, 5, 7, 10, 15].map(d => <div key={d} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.sub }}>{d} día{d > 1 ? "s" : ""}</span><span style={{ fontSize: 12.5, fontWeight: 700 }}>{money(d * g.dotacion * g.costoPersona)}</span></div>)}</Card>
-    </div>}
     {tab === "plan" && <div style={{ padding: "16px 20px" }}>
-      {[["Objetivo", "Medir tiempos de definición y certificación, detectar desvíos y valorizar el perjuicio económico de los retrasos."], ["SLA", `Pedidos de información: respuesta en máx. ${g.plazo} días hábiles. Certificados: entrega en máx. ${g.plazo} días hábiles.`], ["Política de punitorios", "Por cada día de retraso imputable que detenga una tarea en condiciones de avanzar: perjuicio = días × dotación parada × costo diario. Se presenta en la reunión mensual."]].map(([t, d], i) => <Card T={T} key={i} style={{ padding: 14, marginBottom: 10 }}><div style={{ fontSize: 13, fontWeight: 800, color: T.accent, marginBottom: 6 }}>{t}</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6 }}>{d}</div></Card>)}
+      {[["1. Objetivo", ["Medir tiempos de definición y certificación, detectar desvíos y valorizar el perjuicio económico de los retrasos para tomar decisiones y reclamar lo que corresponda."]],
+      ["2. Estándares (SLA)", [`Pedidos de información (${cli}/Estudio): respuesta en máx. ${g.plazo} días hábiles desde la solicitud.`, `Certificados de obra (Héctor Ayala): entrega en máx. ${g.plazo} días hábiles desde la visita.`, "Toda solicitud y certificado se carga el mismo día en el Registro."]],
+      ["3. Circuito de imputación", ["El sistema detecta el vencimiento en forma automática (candidato).", "V+V evalúa cada candidato: se confirma como punitorio SOLO si el retraso detuvo una tarea en condiciones de avanzar, identificando la tarea y la dotación real afectada.", "Los retrasos que no frenaron trabajo quedan registrados como incumplimiento de plazo, sin perjuicio económico.", "Las prórrogas acordadas entre las partes extienden el plazo del ítem y quedan documentadas."]],
+      ["4. Política de punitorios", ["Por cada día de retraso imputable a " + cli + " o al Estudio que detenga una tarea en condiciones de avanzar: perjuicio = días de retraso × dotación afectada × costo diario por persona.", "Cada punitorio confirmado se documenta con su cronología, la tarea detenida y el cálculo abierto, y se presenta en la reunión mensual."]],
+      ["5. Responsables", ["V+V: carga del registro, certificaciones en plazo (Héctor Ayala), evaluación de candidatos y emisión de reclamos.", cli + " / Estudio: respuesta a pedidos y provisión de definiciones en plazo."]]
+      ].map(([titulo, puntos], i) => (<Card T={T} key={i} style={{ padding: 15, marginBottom: 11 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: T.accent, marginBottom: 8 }}>{titulo}</div>
+        {puntos.map((p, j) => <div key={j} style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6, marginBottom: 5, paddingLeft: 12, position: "relative" }}><span style={{ position: "absolute", left: 0, color: "#B08D3E" }}>·</span>{p}</div>)}
+      </Card>))}
+    </div>}
+    {tab === "reunion" && <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Reuniones empresa a empresa V+V — {cli}. Lo acordado queda a la vista de las dos partes.</div>
+      {(g.reuniones || []).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin reuniones registradas.</div>}
+      {(g.reuniones || []).map(r => (<Card T={T} key={r.id} style={{ padding: 14, marginBottom: 9 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{r.periodo || "Reunión"}{r.fecha ? ` · ${r.fecha}` : ""}</div>
+        {r.participantes && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>Participantes: {r.participantes}</div>}
+        {r.flojo && <div style={{ fontSize: 12, color: T.sub, marginTop: 6 }}><b>Flojo:</b> {r.flojo}</div>}
+        {r.mejorar && <div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}><b>A mejorar:</b> {r.mejorar}</div>}
+        {r.acciones && <div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}><b>Acciones acordadas:</b> {r.acciones}</div>}
+      </Card>))}
     </div>}
   </div>);
 }
@@ -3347,6 +4377,10 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
 // ── SHELL WEB INSTITUCIONAL (Cliente) ────────────────────────────────
 function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
   const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);   // sirve para TODOS los íconos
+  // Globito del ícono de Belfast: la suma de los avisos de todas las secciones.
+  useEffect(() => {
+    try { const tot = ["mensajes", "materiales", "informes", "bitacora", "avance", "chat", "pedidos", "archivos"].reduce((s2, k) => s2 + (badge(k) || 0), 0); ponerGlobito(tot); } catch { }
+  });
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
       <div style={{ background: T.navy, color: "#fff" }}>
@@ -3398,7 +4432,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 01-07-IA</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-fixavance</span>
     </div>
   </div>);
 }
@@ -3408,7 +4442,10 @@ function ClienteApp() {
   const [cfg, setCfg] = useStored("cliente_cfg", DEFAULT_CFG);
   const T = theme(cfg.accent);
   const [screen, setScreen] = useState("asistente");
-  const [obras, setObras] = useStored("vv_obras", []);
+  const [obrasRaw, setObras] = useStored("vv_obras", []);
+  // Obras marcadas como "privada" en V+V no existen para Belfast: se filtran acá,
+  // en el único lugar donde Cliente.jsx lee la lista completa.
+  const obras = (obrasRaw || []).filter(o => !o.privada);
   const [avance, setAvance] = useStored("vv_avance", {});
   const [definiciones, setDefiniciones] = useStored("vv_definiciones", []);
   const [docrecepcion, setDocrecepcion] = useStored("vv_docrecepcion", []);
@@ -3423,10 +4460,20 @@ function ClienteApp() {
   const [pedidos, setPedidos] = useStored("vv_pedidos", []);
   const [personal, setPersonal] = useStored("vv_personal", []);
   const [gestion] = useStored("vv_gestion", {});
+  const [crono] = useStored("vv_cronograma", { obras: [] });
   const [formularios] = useStored("vv_formularios", []);
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
+  const [dronevuelos] = useStored("vv_drone", []);
+  // Las reuniones de Belfast son PRIVADAS: van en su propia clave, separada
+  // de "vv_minutas" (las de V+V). Ninguna de las dos empresas ve las del otro.
+  const [minutas, setMinutas] = useStored("cliente_minutas", []);
+  const [renders, setRenders] = useStored("vv_renders", {});
+  const [certifSem] = useStored("vv_certif_sem", {});
+  // Lo que Belfast le manda al propietario, con la marca de Belfast.
+  const [enviosProp, setEnviosProp] = useStored("cliente_envios_prop", {});
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
+  const [auditoria] = useStored("vv_auditoria", []);
   const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length; // pedidos de V+V sin levantar
   const pendPed = (pedidos || []).filter(p => p.para === "cliente" && p.estado !== "resuelto").length;
   const lastPed = useRef(null);
@@ -3455,6 +4502,9 @@ function ClienteApp() {
     formularios: (formularios || []).filter(f => f.compartido).map(f => "fm:" + f.id),
     archivos:    (archivosVV || []).map(a => "ar:" + (a.id || a.url || a.nombre)),
     obras:       (obras || []).map(o => "ob:" + o.id),              // ← OBRA NUEVA
+    // la bitácora siempre la carga V+V (el cliente no escribe acá), así que
+    // cada hecho nuevo cuenta como aviso — mismo criterio que "obras".
+    bitacora:    (bitacora || []).map(h => "bt:" + h.id),
     personal:    (personal || []).map(p => "pe:" + p.id),
     gestion:     [],
     ajustes:     [],
@@ -3462,6 +4512,10 @@ function ClienteApp() {
   const { aviso, marcarVisto } = useAvisos("cliente_avisos", idsAviso);
   // al abrir una pantalla, se apaga su punto rojo
   const irA = (id) => { setScreen(id); marcarVisto(id); };
+  // Si los datos de la pantalla activa siguen llegando de la nube (sync), se re-marca como
+  // visto cada vez que cambian MIENTRAS el usuario sigue parado ahí — así el globito no
+  // "revive" solo por datos que terminaron de sincronizar un segundo después del toque.
+  useEffect(() => { if (screen) marcarVisto(screen); }, [screen, JSON.stringify(idsAviso[screen] || [])]);
   useEffect(() => { try { if (!localStorage.getItem("cliente_seen")) { const now = Date.now(); const init = { mensajes: now, informes: now, formularios: now, materiales: now, ia: now }; localStorage.setItem("cliente_seen", JSON.stringify(init)); setSeen(init); } else { const s = JSON.parse(localStorage.getItem("cliente_seen") || "{}"); if (s.ia == null) { s.ia = Date.now(); localStorage.setItem("cliente_seen", JSON.stringify(s)); setSeen(s); } } } catch { } }, []);
   useEffect(() => { initPush("belfast"); }, []);
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
@@ -3634,24 +4688,29 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} onPedidos={() => setScreen("pedidos")} />}
+          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
-          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} />}
+          {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
+          {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
+          {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
+          {screen === "auditoria" && <AuditoriaClienteView T={T} obras={obras} auditoria={auditoria} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
-          {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} />}
+          {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
+          {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
-          {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} />}
+          {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} renders={renders} setRenders={setRenders} />}
         </div>
       </div>
       <WebClientFooter T={T} cfg={cfg} />
     </div>
     <SyncBanner />
+    <div style={{ padding: "10px 16px 0" }}><GlobitoPermiso /></div>
   </div>);
 }
 

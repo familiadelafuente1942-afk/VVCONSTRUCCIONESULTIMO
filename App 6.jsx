@@ -927,11 +927,23 @@ function useAvisos(clave, mapaIds) {
     });
     const guardar = (v) => { try { localStorage.setItem(clave, JSON.stringify(v)); } catch { } };
     // La primera vez doy todo por visto: si no, al instalar quedaría todo en rojo.
+    // Lo mismo si se agrega una categoría NUEVA más adelante (ej: "personal") y el
+    // dispositivo ya tenía vistos guardados de antes sin esa clave: sin esto, todo lo
+    // viejo de esa categoría aparecería de golpe como "nuevo".
     useEffect(() => {
         if (vistos === null) {
             const init = {};
             for (const k in mapaIds) init[k] = mapaIds[k];
             setVistos(init); guardar(init);
+            return;
+        }
+        const faltantes = Object.keys(mapaIds).filter(k => vistos[k] === undefined);
+        if (faltantes.length) {
+            setVistos(prev => {
+                const n = { ...(prev || {}) };
+                for (const k of faltantes) n[k] = mapaIds[k];
+                guardar(n); return n;
+            });
         }
     });
     const aviso = (cat) => {
@@ -1827,6 +1839,33 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
                             <input value={detail.nombre || ''} onChange={e => upd(detail.id, { nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: T.text, padding: 0 }} />
                         </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>En ejecución (para el propietario)</div>
+                                <input value={detail.etapaActual || ''} onChange={e => upd(detail.id, { etapaActual: e.target.value })} placeholder="Ej: Estructura y mampostería" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12.5, fontWeight: 700, color: T.text, padding: 0 }} />
+                            </div>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Próxima etapa</div>
+                                <input value={detail.proximaEtapa || ''} onChange={e => upd(detail.id, { proximaEtapa: e.target.value })} placeholder="Ej: Instalaciones" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12.5, fontWeight: 700, color: T.text, padding: 0 }} />
+                            </div>
+                        </div>
+                        <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 14, border: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 10, color: T.muted, marginBottom: 8, textTransform: "uppercase" }}>Línea de tiempo (propietario) — tocá el hito en curso</div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                                {["Inicio", "Estructura", "Instalaciones", "Terminaciones"].map((h, i) => {
+                                    const actual = detail.hitoActual ?? 0;
+                                    const estado = i < actual ? "done" : i === actual ? "current" : "pend";
+                                    return (
+                                        <button key={h} onClick={() => upd(detail.id, { hitoActual: i })} style={{
+                                            flex: 1, padding: "8px 4px", borderRadius: 8, cursor: "pointer", fontSize: 10, fontWeight: 700, textAlign: "center",
+                                            border: `1.5px solid ${estado === "current" ? "var(--accent,#1D4ED8)" : T.border}`,
+                                            background: estado === "done" ? T.card : estado === "current" ? "var(--accent,#1D4ED8)" : T.card,
+                                            color: estado === "current" ? "#fff" : estado === "done" ? T.text : T.muted,
+                                        }}>{h}</button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{getLabelUbic(cfg)}</div>
@@ -1860,6 +1899,22 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                         <Lbl>{t(cfg, 'obras_estado')}</Lbl>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
                             {OBRA_ESTADOS.map(e => (<button key={e.id} onClick={() => upd(detail.id, { estado: e.id })} style={{ padding: "9px", borderRadius: T.rsm, border: `1.5px solid ${detail.estado === e.id ? e.color : T.border}`, background: detail.estado === e.id ? e.bg : T.card, color: e.color, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{e.label}</button>))}
+                        </div>
+                        <div style={{ background: detail.privada ? "#FEF3E2" : T.bg, border: `1.5px solid ${detail.privada ? BRASS : T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 14 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <div>
+                                    <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>🔒 Obra privada</div>
+                                    <div style={{ fontSize: 10, color: T.muted, marginTop: 2, lineHeight: 1.4 }}>No aparece en la app de Belfast (Cliente). Solo la ves acá en V+V y en la app de Propietario con su código.</div>
+                                </div>
+                                <button onClick={() => upd(detail.id, { privada: !detail.privada })} style={{ width: 46, height: 26, borderRadius: 20, border: "none", background: detail.privada ? BRASS : T.border, position: "relative", cursor: "pointer", flexShrink: 0, marginLeft: 10 }}>
+                                    <span style={{ position: "absolute", top: 3, left: detail.privada ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+                                </button>
+                            </div>
+                            {detail.privada && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Código para la app Propietario</div>
+                                <input value={detail.codigoCliente || ""} onChange={e => upd(detail.id, { codigoCliente: e.target.value.toUpperCase().trim() })} placeholder="ej: LOTE815" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13, fontWeight: 800, color: T.accent, letterSpacing: "0.04em" }} />
+                                <div style={{ fontSize: 9.5, color: T.muted, marginTop: 5 }}>Con este código entrás en la app de Propietario, sin pasar por Belfast.</div>
+                            </div>}
                         </div>
                         <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "#FEF2F2", border: "1.5px solid #FECACA", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
                     </div>)}
@@ -2414,9 +2469,9 @@ function InformeSemanalView({ db, cfg, onBack }) {
 
 // ═══ AUDITORÍA DE OBRA — supervisiones, revisión de documentación y certificación de etapas ═══
 const AUD_TIPOS = [
-  { id: "supervision", label: "Supervisiones", titulo: "Acta de supervisión de obra", sigla: "SUP", icon: "search" },
-  { id: "revision", label: "Revisión de doc.", titulo: "Informe de revisión de documentación", sigla: "RDO", icon: "doc" },
-  { id: "certificacion", label: "Certificación", titulo: "Certificado de etapa ejecutada", sigla: "CER", icon: "check" },
+  { id: "supervision", label: "Supervisiones", nuevo: "Nueva supervisión", titulo: "Acta de supervisión de obra", sigla: "SUP", icon: "search" },
+  { id: "revision", label: "Revisión de doc.", nuevo: "Nueva revisión", titulo: "Informe de revisión de documentación", sigla: "RDO", icon: "doc" },
+  { id: "certificacion", label: "Certificación", nuevo: "Nueva certificación", titulo: "Certificado de etapa ejecutada", sigla: "CER", icon: "check" },
 ];
 const AUD_RESULT = ["Conforme", "Conforme con observaciones", "No conforme"];
 
@@ -2439,12 +2494,12 @@ function AuditoriaView({ db, cfg, onBack }) {
 
   function nuevo() {
     if (!obraId) { alert("Elegí una obra."); return; }
-    const base = { id: uid() + Date.now(), tipo, obra_id: obraId, nro: nroDe(tipo), fecha: hoyISO(), ts: Date.now(), responsable: cfg?.responsableTecnico || "", obs: [], resultado: AUD_RESULT[0], conclusion: "" };
+    const base = { id: uid() + Date.now(), tipo, obra_id: obraId, nro: nroDe(tipo), fecha: hoyISO(), ts: Date.now(), responsable: cfg?.responsableTecnico || "", obs: [], fotos: [], resultado: AUD_RESULT[0], conclusion: "" };
     if (tipo === "supervision") setForm({ ...base, periodo: "", presentes: "", interferencias: [] });
     if (tipo === "revision") setForm({ ...base, etapa: "", docs: [{ nombre: "", version: "", fechaDoc: "" }] });
     if (tipo === "certificacion") setForm({ ...base, etapa: "", planoRef: "", versionPlano: "", directiva: "", ejecutadoPor: "" });
   }
-  const editar = (it) => setForm({ ...it, obs: it.obs || [], interferencias: it.interferencias || [], docs: it.docs || [] });
+  const editar = (it) => setForm({ ...it, obs: it.obs || [], fotos: it.fotos || [], interferencias: it.interferencias || [], docs: it.docs || [] });
   const borrar = (id) => { if (confirm("¿Borrar este registro de auditoría?")) guardarLista(items.filter(x => x.id !== id)); };
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const addLinea = (k, val) => setForm(f => ({ ...f, [k]: [...(f[k] || []), val] }));
@@ -2525,10 +2580,13 @@ function AuditoriaView({ db, cfg, onBack }) {
       .linea { border-top: 1px solid #0F1B2D; margin-bottom: 5px; }
       .rol { font-size: 10px; color: #5B6B7F; }
       .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 8px; }
+      .fotos img { width: 130px; height: 130px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
     </style></head><body><div class="sheet">
       <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">${_e(t.titulo)}</div></div>
       <div class="barra"><div>Obra: <b>${_e(nomObra)}</b></div><div>N°: <b>${_e(it.nro || "—")}</b></div><div>Fecha: <b>${fmtDMY(it.fecha)}</b></div></div>
       ${cuerpo}
+      ${(it.fotos || []).length ? `<h2>Fotos</h2><div class="fotos">${it.fotos.map(f => `<img src="${f.url}" />`).join("")}</div>` : ""}
       <div class="res">Resultado: ${_e(it.resultado || "—")}</div>
       ${it.conclusion ? `<h2>Conclusión</h2><div class="parr">${_e(it.conclusion)}</div>` : ""}
       <div class="firmas">
@@ -2562,7 +2620,8 @@ function AuditoriaView({ db, cfg, onBack }) {
       {tipo === "revision" && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Revisión de la documentación según la etapa a ejecutar, con observaciones sobre planos y especificaciones.</div>}
       {tipo === "certificacion" && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Certificado de que la etapa se ejecutó según el plano otorgado y la directiva de la Jefatura de Obra.</div>}
 
-      <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>+ Nuevo {tp.label.toLowerCase()}</button>
+      {tipo === "supervision" && <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, letterSpacing: ".03em", marginBottom: 8 }}>NUEVAS SUPERVISIONES</div>}
+      <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>+ {tp.nuevo}</button>
 
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>Todavía no hay registros de este tipo para la obra elegida.</div>}
       {lista.map(it => (
@@ -2649,6 +2708,32 @@ function AuditoriaView({ db, cfg, onBack }) {
           ))}
           <button onClick={() => addLinea("interferencias", "")} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", margin: "3px 0 12px" }}>+ Agregar interferencia</button>
         </>}
+
+        <label style={lbl}>Fotos</label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "5px 0 8px" }}>
+          {(form.fotos || []).map((f, i) => (
+            <div key={f.id || i} style={{ position: "relative", width: 74, height: 74, borderRadius: 9, overflow: "hidden", border: `1px solid ${T.border}` }}>
+              <img src={f.url} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <button onClick={() => delLinea("fotos", i)} style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,.55)", color: "#fff", border: "none", fontSize: 12, lineHeight: 1, cursor: "pointer" }}>✕</button>
+            </div>
+          ))}
+          <label style={{ width: 74, height: 74, borderRadius: 9, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: T.accent, fontSize: 22, fontWeight: 300 }}>
+            +
+            <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={async e => {
+              const files = Array.from(e.target.files || []);
+              if (!files.length) return;
+              const nuevas = await Promise.all(files.map(async f => {
+                const dataUrl = await toDataUrl(f);
+                const comprimida = await compressImage(dataUrl);
+                const fotoId = uid();
+                const url = await uploadFoto(comprimida, `auditoria/${obraId}`, fotoId);
+                return { id: fotoId, url };
+              }));
+              setF("fotos", [...(form.fotos || []), ...nuevas]);
+              e.target.value = "";
+            }} />
+          </label>
+        </div>
 
         <label style={lbl}>Resultado</label>
         <select value={form.resultado} onChange={e => setF("resultado", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}>
@@ -4343,7 +4428,7 @@ function MasConfig({ cfg, setCfg, onBack }) {
       <input value={cfg.apiKey||""} onChange={e=>setCfg(p=>({...p,apiKey:e.target.value}))} placeholder="sk-ant-..." style={{ width:"100%", background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"12px 14px", fontSize:13, color:T.text }} />
       <div style={{ marginTop:20 }}><Eyebrow>Actualizaciones</Eyebrow></div>
       <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:T.rsm, padding:"13px 14px" }}>
-        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-certif</b></div>
+        <div style={{ fontSize:12.5, color:T.text, marginBottom:4 }}>Versión instalada: <b>build 30-07-fixavance</b></div>
         <div style={{ fontSize:11.5, color:T.muted, marginBottom:11, lineHeight:1.5 }}>Trae la última versión y todo lo último cargado (fotos, archivos, pedidos y cambios de cualquier dispositivo). Limpia la caché.</div>
         <button onClick={()=>{ try{ if(window.caches) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))); }catch(e){} location.replace(location.pathname+"?sync="+Date.now()); }} style={{ width:"100%", background:T.accent, color:"#fff", border:"none", borderRadius:T.rsm, padding:"12px", fontSize:13.5, fontWeight:700, cursor:"pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -7027,6 +7112,15 @@ async function extraerCuadros(file, n = 6) {
 
 function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, docrecepcion = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  const [enviosProp, setEnviosProp] = useStoredState("cliente_envios_prop", {});
+  // Manda un informe (avance o certificado) directo al propietario, sin pasar por
+  // Belfast — imprescindible para obras privadas, que Belfast nunca ve.
+  function mandarAlPropietarioVV(obId, item, tipo) {
+    if (!item.html) { alert("Primero armá el documento (botón PDF / Generar certificado)."); return; }
+    const reg = { id: item.id, tipo, prop: true, fecha: item.fecha || item.desde, titulo: tipo === "cert" ? `Certificado ${item.desde || ""} al ${item.hasta || ""}` : `Informe de avance ${item.fecha || ""}`, html: item.html, ts: Date.now() };
+    setEnviosProp(p => { const lista = ((p || {})[obId] || []).filter(x => x.id !== reg.id); return { ...(p || {}), [obId]: [reg, ...lista] }; });
+    alert("Listo: ya lo puede ver el propietario en su panel.");
+  }
   // "Visto" por obra, guardado aparte — pero comparando QUÉ FOTOS son
   // nuevas (por su id), no por fecha. La fecha de cada foto es el día de
   // obra que eligieron al cargarla, no el momento real en que se subió —
@@ -7108,7 +7202,28 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       <div class="foot">Generado por ${marca} · Seguimiento visual de avance de obra.</div>
     </div></body></html>`;
   }
-  const pdfUno = (h) => { setSemData(null); setPdfEntries([h]); setPdfHtml(buildPdfAvance([h])); };
+  // Al generar el PDF de un avance, guardo el documento armado (con logos)
+  // en esa entrada: es el que ven Belfast y el propietario en Informes.
+  const pdfUno = (h) => {
+    setSemData(null); setPdfEntries([h]);
+    const html = buildPdfAvance([h]);
+    setPdfHtml(html);
+    if (!h.html) mergeSaveAvance(obraId, list => list.map(x => x.id === h.id ? { ...x, html } : x));
+  };
+  // Deja listos para el cliente todos los informes que todavía no tienen su
+  // documento armado. Sin esto, los informes viejos no le llegan a Belfast
+  // ni al propietario.
+  const prepararTodos = () => {
+    const sin = historial.filter(h => !h.html);
+    if (!sin.length) { alert("Ya están todos disponibles para el cliente."); return; }
+    const esPrivada = (obras || []).find(o => o.id === obraId)?.privada;
+    const msg = esPrivada
+      ? `Se van a preparar ${sin.length} informe${sin.length > 1 ? "s" : ""} para que los veas vos y el propietario (obra privada: Belfast no la ve).\n\n¿Seguimos?`
+      : `Se van a preparar ${sin.length} informe${sin.length > 1 ? "s" : ""} para que los vean Belfast y el propietario.\n\n¿Seguimos?`;
+    if (!confirm(msg)) return;
+    mergeSaveAvance(obraId, list => list.map(x => x.html ? x : { ...x, html: buildPdfAvance([x]) }));
+    alert(`Listo: ${sin.length} informe${sin.length > 1 ? "s quedaron disponibles" : " quedó disponible"} para el cliente.`);
+  };
   const pdfTodos = () => { const ord = historial.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)); if (!ord.length) { alert("No hay informes para exportar."); return; } setSemData(null); setPdfEntries(ord); setPdfHtml(buildPdfAvance(ord)); };
 
   // ══ CERTIFICADO SEMANAL — junta los avances de la semana + la bitácora. Cierra los VIERNES ══
@@ -7160,7 +7275,10 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       const limpieza = cortar(/LIMPIEZA Y SEGURIDAD:\s*([\s\S]*?)(?:ALERTAS:|$)/i);
       const alertas = cortar(/ALERTAS:\s*([\s\S]*)$/i);
       const data = { desde: semDesde, hasta: semHasta, desarrollo, recepciones, limpieza, alertas, av, bt, recepEstado, emitido: hoyStr() };
-      const rec = { ...data, id: uid() + Date.now(), ts: Date.now() };
+      // Guardo el documento ya armado (el mismo que se imprime, con logos y
+      // formato) para que Belfast y el propietario vean EXACTAMENTE eso.
+      let htmlDoc = ""; try { htmlDoc = buildPdfSemanal(data); } catch { }
+      const rec = { ...data, html: htmlDoc, id: uid() + Date.now(), ts: Date.now() };
       if (setCertif) setCertif(prev => { const p = prev || {}; const otros = (p[obraId] || []).filter(x => !(x.desde === rec.desde && x.hasta === rec.hasta)); return { ...p, [obraId]: [rec, ...otros] }; });
       setSemData(data); setPdfEntries(av); setPdfHtml(buildPdfSemanal(data));
       setStatus("");
@@ -7542,6 +7660,16 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         </div>
         <button onClick={armarSemanal} disabled={busy} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Armando…" : "✓ Generar certificado de la semana"}</button>
       </div>
+      {(certif[obraId] || []).some(c => !c.html) && <button onClick={() => {
+        const sin = (certif[obraId] || []).filter(c => !c.html);
+        const esPrivada = (obras || []).find(o => o.id === obraId)?.privada;
+        const msg = esPrivada
+          ? `Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los veas vos y el propietario (obra privada: Belfast no la ve).\n\n¿Seguimos?`
+          : `Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los vean Belfast y el propietario.\n\n¿Seguimos?`;
+        if (!confirm(msg)) return;
+        setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(c => c.html ? c : { ...c, html: buildPdfSemanal(c) }) }));
+        alert(`Listo: ${sin.length} certificado${sin.length > 1 ? "s quedaron disponibles" : " quedó disponible"} para el cliente.`);
+      }} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {(certif[obraId] || []).filter(c => !c.html).length} certificado{(certif[obraId] || []).filter(c => !c.html).length > 1 ? "s" : ""} para el cliente</button>}
       {(certif[obraId] || []).length > 0 && <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 7 }}>Certificados guardados</div>
         {(certif[obraId] || []).map(c => (
@@ -7550,11 +7678,13 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fmtDMY(c.desde)} al {fmtDMY(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
-            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); setPdfHtml(buildPdfSemanal(c)); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); const h = buildPdfSemanal(c); setPdfHtml(h); if (!c.html && setCertif) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(x => x.id === c.id ? { ...x, html: h } : x) })); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+            <button onClick={() => mandarAlPropietarioVV(obraId, c, "cert")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
             <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
           </div>
         ))}
       </div>}
+      {historial.length > 0 && historial.some(h => !h.html) && <button onClick={prepararTodos} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {historial.filter(h => !h.html).length} informe{historial.filter(h => !h.html).length > 1 ? "s" : ""} para el cliente</button>}
       {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <button onClick={abrirRecuperar} style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="life" /> Recuperar fotos</button>
@@ -7580,6 +7710,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
               <button onClick={() => analizarEntry(h)} disabled={busy} title="Analizar con IA" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: busy ? "default" : "pointer", flexShrink: 0 }}><Ico n="search" /> IA</button>
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+              <button onClick={() => mandarAlPropietarioVV(obraId, h, "avance")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
               <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> Borrar</button>
             </div>
           </div>
@@ -7692,7 +7823,7 @@ function WebFooter({ cfg }) {
   return (<div style={{ background:T.navy, color:"rgba(255,255,255,.55)", flexShrink:0, borderTop:`2px solid ${BRASS}` }}>
     <div style={{ maxWidth:1180, margin:"0 auto", padding:"11px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, fontSize:11 }}>
       <span style={{ fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,.8)" }}>V+V CONSTRUCCIONES</span>
-      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-certif</span>
+      <span>© {new Date().getFullYear()} · {cfg?.email || "ia.vvcon@gmail.com"} · Buenos Aires, Argentina · build 30-07-fixavance</span>
     </div>
   </div>);
 }
@@ -7939,6 +8070,28 @@ function App() {
       <div style={{ width:"100%", height:"100dvh", background:"transparent", display:"flex", flexDirection:"column", position:"relative", color:"var(--text,#131C2B)", fontFamily:"var(--font,'Inter'),sans-serif", overflow:"hidden" }}>
         <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />
         {view==="dashboard" && <WebHero cfg={cfg} obras={obras} personal={personal} />}
+        {view==="dashboard" && (() => {
+          const LABELS = {
+            chat: ["consulta nueva en el chat IA", "consultas nuevas en el chat IA"],
+            mensajes: ["mensaje nuevo", "mensajes nuevos"],
+            pedidos: ["pedido nuevo", "pedidos nuevos"],
+            materiales: ["pedido de materiales nuevo", "pedidos de materiales nuevos"],
+            informes: ["informe nuevo", "informes nuevos"],
+            formularios: ["formulario nuevo", "formularios nuevos"],
+            obras: ["obra nueva", "obras nuevas"],
+            personal: ["novedad de personal", "novedades de personal"],
+          };
+          const ORDEN = ["mensajes", "pedidos", "materiales", "informes", "formularios", "obras", "personal", "chat"];
+          const items = ORDEN.map(k => ({ k, n: navBadgesNuevo[k] || 0 })).filter(x => x.n > 0);
+          if (!items.length) return null;
+          return (<div style={{ margin: "10px 16px 0", background: "rgba(176,137,79,0.10)", border: "1px solid rgba(176,137,79,0.35)", borderRadius: 12, padding: "10px 14px", display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#B0894F", textTransform: "uppercase", letterSpacing: "0.04em" }}>Novedades:</span>
+            {items.map(({ k, n }) => (<span key={k} onClick={() => { setView(k === "mensajes" || k === "pedidos" || k === "materiales" || k === "informes" || k === "formularios" ? "mas" : k); if (k === "pedidos") setMasSub("pedidos"); if (k === "materiales") setMasSub("materiales"); if (k === "informes") setMasSub("informes"); if (k === "formularios") setMasSub("formularios"); if (k === "mensajes") setMasSub("mensajes"); marcarVisto(k); }}
+              style={{ fontSize: 12.5, color: "var(--text,#131C2B)", cursor: "pointer", fontWeight: 600 }}>
+              <b style={{ color: "#B0894F" }}>{n}</b> {LABELS[k][n > 1 ? 1 : 0]} →
+            </span>))}
+          </div>);
+        })()}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
             {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
