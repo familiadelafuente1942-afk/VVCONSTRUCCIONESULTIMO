@@ -3153,7 +3153,7 @@ function BitacoraView({ db, cfg, onBack }) {
   </div>);
 }
 
-function DocumentacionView({ db, cfg, onBack }) {
+function DocumentacionView({ db, cfg, setCfg, onBack }) {
   const documentacion = db.documentacion || [];
   const setDocumentacion = db.setDocumentacion;
   const CATS = ["Planillas modelo", "Formularios modelo", "Contratos / Legal", "Instructivos", "Certificados modelo", "Planos", "Presupuestos", "Certificaciones", "Notas de pedido", "Actas", "Otros"];
@@ -3165,6 +3165,16 @@ function DocumentacionView({ db, cfg, onBack }) {
   function onCatChange(e) {
     if (e.target.value === "__new__") { const n = prompt("Nombre de la nueva carpeta:"); if (n && n.trim()) setCat(n.trim()); return; }
     setCat(e.target.value);
+  }
+  function editarLinkDrive() {
+    const actual = cfg?.driveEstudio || "";
+    const n = prompt("Pegá el link del Drive donde el estudio comparte la documentación del proyecto:", actual);
+    if (n === null) return; // canceló
+    setCfg(p => ({ ...p, driveEstudio: n.trim() }));
+  }
+  function abrirDriveEstudio() {
+    if (!cfg?.driveEstudio) { editarLinkDrive(); return; }
+    window.open(cfg.driveEstudio, "_blank", "noopener");
   }
   async function subir(e) {
     const files = Array.from(e.target.files);
@@ -3187,6 +3197,16 @@ function DocumentacionView({ db, cfg, onBack }) {
     <div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
       <PageHead title="Documentación" sub="Modelos de planillas y archivos de uso" back onBack={onBack} />
       <div style={{ padding: "0 16px" }}>
+        <div onClick={abrirDriveEstudio} style={{ background: "#0F1B2D", borderRadius: T.r, padding: 16, marginBottom: 14, boxShadow: T.shadow, cursor: "pointer", display: "flex", alignItems: "center", gap: 13, borderBottom: `3px solid ${BRASS}` }}>
+          <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(255,255,255,.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Ico n="link" s={20} c={BRASS} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff" }}>Drive del estudio</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginTop: 2, lineHeight: 1.4 }}>{cfg?.driveEstudio ? "Documentación del proyecto (planos, ingeniería). Bajala acá y subila a la obra que corresponda." : "Todavía no cargaste el link — tocá para pegarlo."}</div>
+          </div>
+          {cfg?.driveEstudio && <button onClick={(e) => { e.stopPropagation(); editarLinkDrive(); }} style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 7, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Editar</button>}
+        </div>
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Subir modelo / archivo</div>
           <label style={{ fontSize: 11, color: T.muted }}>Carpeta</label>
@@ -4343,7 +4363,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "alertas": return <AlertasWaView {...P} />;
       case "cliente": return <ClientePanel {...P} />;
       case "personal": return <PersonalView personal={db.personal} setPersonal={db.setPersonal} obras={db.obras} cfg={cfg} />;
-      case "documentacion": return <DocumentacionView db={db} cfg={cfg} onBack={back} />;
+      case "documentacion": return <DocumentacionView db={db} cfg={cfg} setCfg={setCfg} onBack={back} />;
       case "bitacora": return <BitacoraView db={db} cfg={cfg} onBack={back} />;
       case "auditoria": return <AuditoriaView db={db} cfg={cfg} onBack={back} />;
       case "plantillas": return <PlantillasView db={db} cfg={cfg} onBack={back} />;
