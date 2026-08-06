@@ -1839,6 +1839,33 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
                             <input value={detail.nombre || ''} onChange={e => upd(detail.id, { nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: T.text, padding: 0 }} />
                         </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>En ejecución (para el propietario)</div>
+                                <input value={detail.etapaActual || ''} onChange={e => upd(detail.id, { etapaActual: e.target.value })} placeholder="Ej: Estructura y mampostería" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12.5, fontWeight: 700, color: T.text, padding: 0 }} />
+                            </div>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Próxima etapa</div>
+                                <input value={detail.proximaEtapa || ''} onChange={e => upd(detail.id, { proximaEtapa: e.target.value })} placeholder="Ej: Instalaciones" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12.5, fontWeight: 700, color: T.text, padding: 0 }} />
+                            </div>
+                        </div>
+                        <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 14, border: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 10, color: T.muted, marginBottom: 8, textTransform: "uppercase" }}>Línea de tiempo (propietario) — tocá el hito en curso</div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                                {["Inicio", "Estructura", "Instalaciones", "Terminaciones"].map((h, i) => {
+                                    const actual = detail.hitoActual ?? 0;
+                                    const estado = i < actual ? "done" : i === actual ? "current" : "pend";
+                                    return (
+                                        <button key={h} onClick={() => upd(detail.id, { hitoActual: i })} style={{
+                                            flex: 1, padding: "8px 4px", borderRadius: 8, cursor: "pointer", fontSize: 10, fontWeight: 700, textAlign: "center",
+                                            border: `1.5px solid ${estado === "current" ? "var(--accent,#1D4ED8)" : T.border}`,
+                                            background: estado === "done" ? T.card : estado === "current" ? "var(--accent,#1D4ED8)" : T.card,
+                                            color: estado === "current" ? "#fff" : estado === "done" ? T.text : T.muted,
+                                        }}>{h}</button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{getLabelUbic(cfg)}</div>
