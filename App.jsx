@@ -2580,10 +2580,13 @@ function AuditoriaView({ db, cfg, onBack }) {
       .linea { border-top: 1px solid #0F1B2D; margin-bottom: 5px; }
       .rol { font-size: 10px; color: #5B6B7F; }
       .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 8px; }
+      .fotos img { width: 130px; height: 130px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
     </style></head><body><div class="sheet">
       <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">${_e(t.titulo)}</div></div>
       <div class="barra"><div>Obra: <b>${_e(nomObra)}</b></div><div>N°: <b>${_e(it.nro || "—")}</b></div><div>Fecha: <b>${fmtDMY(it.fecha)}</b></div></div>
       ${cuerpo}
+      ${(it.fotos || []).length ? `<h2>Fotos</h2><div class="fotos">${it.fotos.map(f => `<img src="${f.url}" />`).join("")}</div>` : ""}
       <div class="res">Resultado: ${_e(it.resultado || "—")}</div>
       ${it.conclusion ? `<h2>Conclusión</h2><div class="parr">${_e(it.conclusion)}</div>` : ""}
       <div class="firmas">
