@@ -59,6 +59,7 @@ function Ico({ n, s = 18, c = "currentColor", st = 1.7 }) {
 }
 
 const SECCIONES = [
+  { id: "novedades", label: "Novedades", icon: "doc" },
   { id: "renders", label: "Renders", icon: "camera" },
   { id: "fotos", label: "Fotos de avance", icon: "camera" },
   { id: "cronograma", label: "Cronograma", icon: "calendar" },
@@ -183,6 +184,13 @@ function FilaSeccion({ label, icon, onClick, config }) {
     <div style={{ width: 34, height: 34, borderRadius: 9, background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Ico n={icon} s={17} c={T.navy} /></div>
     <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: T.text }}>{label}</div>
     <Ico n="chevron" s={16} c={T.muted} />
+  </button>);
+}
+// ─── Cuadro de sección (grilla 3 columnas, panel principal) ───
+function CuadroSeccion({ label, onClick, config }) {
+  const T = temaDe(config);
+  return (<button onClick={onClick} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 6px", minHeight: 56, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", cursor: "pointer" }}>
+    <span style={{ fontSize: 11.5, fontWeight: 800, color: T.text, lineHeight: 1.25 }}>{label}</span>
   </button>);
 }
 
@@ -612,6 +620,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
     return () => clearInterval(t);
   }, [fotos.length]);
 
+  if (seccion === "novedades") return <SeccionNovedades obra={obra} certif={certif} onBack={() => setSeccion(null)} />;
   if (seccion === "renders") return <SeccionRenders obra={obra} renders={renders} onBack={() => setSeccion(null)} />;
   if (seccion === "fotos") return <SeccionFotos obra={obra} avance={avance} onBack={() => setSeccion(null)} config={config} />;
   if (seccion === "cronograma") return <SeccionCronograma obra={obra} tareas={tareas} onBack={() => setSeccion(null)} config={config} />;
@@ -636,10 +645,30 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
       </div>
     </div>
     <div style={{ padding: "20px 18px 40px" }}>
+      {(() => {
+        const historial = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+        const fotosRecientes = historial.flatMap(h => (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : [])).slice(0, 4);
+        if (!fotosRecientes.length) return null;
+        return (<>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em" }}>Galería de obra</div>
+            <button onClick={() => setSeccion("fotos")} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, fontSize: 11.5, cursor: "pointer", padding: 0 }}>Ver todas</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, marginBottom: 22 }}>
+            {fotosRecientes.map((u, i) => (
+              <button key={i} onClick={() => setSeccion("fotos")} style={{ padding: 0, border: "none", cursor: "pointer", borderRadius: 8, overflow: "hidden", aspectRatio: "1", background: T.bg }}>
+                <img src={u} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              </button>
+            ))}
+          </div>
+        </>);
+      })()}
       <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Secciones</div>
-      {SECCIONES.map(s => <FilaSeccion key={s.id} label={s.label} icon={s.icon} onClick={() => setSeccion(s.id)} config={config} />)}
-      <FilaSeccion label="Costos" icon="doc" onClick={() => setSeccion("costos")} config={config} />
-      <div style={{ textAlign: "center", fontSize: 11, color: T.muted, marginTop: 20 }}>Hola, {nombreCliente} · <button onClick={() => window.location.reload()} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>🔄 Actualizar</button> · <button onClick={() => { try { localStorage.removeItem("propietario_codigo"); localStorage.removeItem("propietario_nombre"); } catch { } window.location.reload(); }} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>Salir</button></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+        {SECCIONES.map(s => <CuadroSeccion key={s.id} label={s.label} onClick={() => setSeccion(s.id)} config={config} />)}
+        <CuadroSeccion label="Costos" onClick={() => setSeccion("costos")} config={config} />
+      </div>
+      <div style={{ textAlign: "center", fontSize: 11, color: T.muted, marginTop: 24 }}>Hola, {nombreCliente} · <button onClick={() => window.location.reload()} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>🔄 Actualizar</button> · <button onClick={() => { try { localStorage.removeItem("propietario_codigo"); localStorage.removeItem("propietario_nombre"); } catch { } window.location.reload(); }} style={{ background: "none", border: "none", color: T.brass, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 11 }}>Salir</button></div>
       <div style={{ textAlign: "center", marginTop: 10 }}><button onClick={() => setEditando(true)} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, cursor: "pointer" }}>⚙ Personalizar app</button></div>
     </div>
     {editando && <ConfigModalProp config={config || {}} onSave={onGuardarConfig} onClose={() => setEditando(false)} />}
