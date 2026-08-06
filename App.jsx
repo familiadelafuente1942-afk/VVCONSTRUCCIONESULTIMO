@@ -2301,6 +2301,7 @@ function InformeSemanalView({ db, cfg, onBack }) {
   const [busy, setBusy] = useState(false);
   const [pdfHtml, setPdfHtml] = useState(null);
   const [pdfRep, setPdfRep] = useState(null);
+  const [editandoId, setEditandoId] = useState(null); // si no es null, "Guardar" actualiza ese informe en vez de crear uno nuevo
   const lista = ((informes || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
   const fmtFecha = (iso) => { if (!iso) return ""; const [a, m, d] = iso.split("-"); return `${d}/${m}/${a.slice(2)}`; };
@@ -2343,11 +2344,25 @@ function InformeSemanalView({ db, cfg, onBack }) {
   const guardar = () => {
     if (!obraId) { alert("Elegí una obra."); return; }
     if (!hechos.length && !proxima.length) { alert("Cargá al menos un trabajo realizado o previsto."); return; }
+    if (editandoId) {
+      // Actualiza el informe existente en el lugar — no crea uno nuevo ni
+      // pierde el orden del historial.
+      guardarLista(obraId, lista.map(x => x.id === editandoId ? { ...x, desde, hasta, hechos: [...hechos], proxima: [...proxima], obs: obs.trim(), tsEditado: Date.now() } : x));
+      setHechos([]); setProxima([]); setObs(""); setNuevoH(""); setNuevoP(""); setEditandoId(null);
+      alert("Informe semanal actualizado.");
+      return;
+    }
     const item = { id: uid() + Date.now(), desde, hasta, hechos: [...hechos], proxima: [...proxima], obs: obs.trim(), ts: Date.now(), emitido: hoyStr() };
     guardarLista(obraId, [item, ...lista]);
     setHechos([]); setProxima([]); setObs(""); setNuevoH(""); setNuevoP("");
     alert("Informe semanal guardado.");
   };
+  const editarInforme = (rep) => {
+    setDesde(rep.desde); setHasta(rep.hasta); setHechos([...(rep.hechos || [])]); setProxima([...(rep.proxima || [])]); setObs(rep.obs || ""); setEditandoId(rep.id);
+    // Llevar la vista arriba, al formulario, para que se vea que entró en modo edición.
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { }
+  };
+  const cancelarEdicion = () => { setHechos([]); setProxima([]); setObs(""); setNuevoH(""); setNuevoP(""); setEditandoId(null); };
   const borrar = (id) => { if (confirm("¿Borrar este informe semanal?")) guardarLista(obraId, lista.filter(x => x.id !== id)); };
 
   const _esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
@@ -2453,19 +2468,26 @@ function InformeSemanalView({ db, cfg, onBack }) {
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Observaciones (opcional)</label>
       <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} placeholder="Clima, faltantes, pedidos a la dirección de obra, etc." style={{ ...inp, resize: "vertical", lineHeight: 1.5, margin: "6px 0 14px" }} />
 
+      {editandoId && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: "#FFFBEB", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "9px 12px", marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#7A5A24" }}>Editando informe de la semana {fmtFecha(desde)} al {fmtFecha(hasta)}</span>
+          <button onClick={cancelarEdicion} style={{ background: "none", border: "none", color: "#7A5A24", fontWeight: 700, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>Cancelar</button>
+        </div>
+      )}
       <button onClick={redactarIA} disabled={busy} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>{busy ? "Redactando…" : "Mejorar redacción con IA"}</button>
       <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-        <button onClick={guardar} style={{ flex: 1, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+        <button onClick={guardar} style={{ flex: 1, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{editandoId ? "Actualizar informe" : "Guardar"}</button>
         <button onClick={verPdfActual} style={{ flex: 1, background: T.al, color: T.navy, border: `1px solid ${T.border}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" /> Ver PDF</button>
       </div>
 
       {lista.length > 0 && <div style={{ marginTop: 22 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Informes guardados de esta obra</div>
-        {lista.map(rep => <div key={rep.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+        {lista.map(rep => <div key={rep.id} style={{ background: rep.id === editandoId ? "#FFFBEB" : T.card, border: rep.id === editandoId ? `1.5px solid ${BRASS}` : `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div><div style={{ fontSize: 13, fontWeight: 800, color: T.navy }}>Semana {fmtFecha(rep.desde)} al {fmtFecha(rep.hasta)}</div>
-              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{(rep.hechos || []).length} realizados · {(rep.proxima || []).length} previstos</div></div>
+            <div><div style={{ fontSize: 13, fontWeight: 800, color: T.navy }}>Semana {fmtFecha(rep.desde)} al {fmtFecha(rep.hasta)}{rep.id === editandoId ? " · editando" : ""}</div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{(rep.hechos || []).length} realizados · {(rep.proxima || []).length} previstos{rep.tsEditado ? " · editado" : ""}</div></div>
             <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => editarInforme(rep)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✎ Editar</button>
               <button onClick={() => verPdf(rep)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" /> PDF</button>
               <button onClick={() => borrar(rep.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> </button>
             </div>
