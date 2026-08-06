@@ -377,6 +377,17 @@ function useStoredState(key, defaultValue) {
     });
     const [cloudSynced, setCloudSynced] = useState(false);
     const esObras = key === "vv_obras";   // las obras se editan desde varios dispositivos: acá hace falta FUSIONAR, no "gana el más nuevo entero" (eso tapaba obras que otro cargó)
+    // Para obras: la fusión con la nube es asíncrona (va a buscar lo último
+    // subido por otros dispositivos). Si se dispara en cada tecla tipeada
+    // (por ej. al escribir "En ejecución"), esos pedidos de red pueden
+    // resolverse fuera de orden y "pisar" con una versión vieja lo que se
+    // acaba de escribir — se ve como que el campo se borra solo. Por eso:
+    // 1) el guardado LOCAL es instantáneo en cada cambio (nunca se pierde
+    //    lo que se tipeó), y 2) la fusión con la nube se espera una pausa
+    //    de inactividad y se descarta si mientras tanto hubo una edición
+    //    más nueva.
+    const obrasPersistTimer = useRef(null);
+    const obrasPersistSeq = useRef(0);
 
     // Al montar: sincronizar con Supabase una sola vez
     useEffect(() => {
@@ -418,14 +429,18 @@ function useStoredState(key, defaultValue) {
     // Persiste cada vez que cambia el estado
     const setAndPersist = useCallback((updater) => {
         if (esObras) {
-            // Con obras: guardamos el cambio local al toque (para que se vea
-            // ya mismo), y en paralelo lo fusionamos con lo que haya en la
-            // nube — así lo que otro dispositivo cargó mientras tanto no
-            // se pierde. Lo que borraste acá queda con lápida, para que no
-            // "resucite" si otro dispositivo todavía tiene la copia vieja.
             setState(prev => {
                 const next = typeof updater === 'function' ? updater(prev) : updater;
-                (async () => {
+                // 1) Guardado local INSTANTÁNEO — lo que se ve en pantalla y lo
+                //    que queda en este dispositivo nunca depende de la red.
+                try { localStorage.setItem(key, JSON.stringify(next)); localStorage.setItem(key + "__ts", String(Date.now())); } catch { }
+                // 2) Fusión con la nube: se espera una pausa breve de inactividad
+                //    (para no disparar una por cada letra) y se numera cada
+                //    pedido — si al responder ya hay uno más nuevo en camino,
+                //    se descarta el resultado viejo en vez de aplicarlo.
+                const mySeq = ++obrasPersistSeq.current;
+                if (obrasPersistTimer.current) clearTimeout(obrasPersistTimer.current);
+                obrasPersistTimer.current = setTimeout(async () => {
                     try {
                         const idsPrev = new Set((prev || []).map(o => o?.id));
                         const idsNext = new Set((next || []).map(o => o?.id));
@@ -439,6 +454,7 @@ function useStoredState(key, defaultValue) {
                         let cloud = [];
                         try { const r = await storage.get(key); if (r?.value) cloud = JSON.parse(r.value) || []; } catch { }
                         const fusionado = fusionarObras(next, cloud, tumbas);
+                        if (mySeq !== obrasPersistSeq.current) return; // quedó vieja, se descarta
                         const json = JSON.stringify(fusionado);
                         const ts = Date.now();
                         lastWrite[key] = ts;
@@ -447,7 +463,7 @@ function useStoredState(key, defaultValue) {
                         storage.set(key + "__ts", String(ts)).catch(() => { });
                         setState(fusionado);
                     } catch { }
-                })();
+                }, 800);
                 return next;
             });
             return;
