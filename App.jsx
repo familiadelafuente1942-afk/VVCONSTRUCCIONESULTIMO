@@ -7207,8 +7207,156 @@ async function extraerCuadros(file, n = 6) {
   });
 }
 
-function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, docrecepcion = [] }) {
+// ── Certificado por rubro: cada rubro tiene un % de incidencia fijo sobre
+// el total de la obra (ej: Estructura 30%, Instalaciones 20%...). Cada
+// certificado carga el % de avance EJECUTADO de cada rubro a esa fecha, y
+// el avance total de la obra sale ponderado: Σ (incidencia × avance/100).
+function CertifRubroPanel({ obraId, obraNombre, cfg, certifRubro, setCertifRubro, onEnviarPropietario }) {
+  const datos = certifRubro[obraId] || { rubros: [], items: [] };
+  const rubros = datos.rubros || [];
+  const items = (datos.items || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const sumaIncidencia = rubros.reduce((s, r) => s + (Number(r.incidencia) || 0), 0);
+
+  const [nombreRubro, setNombreRubro] = React.useState("");
+  const [incidenciaRubro, setIncidenciaRubro] = React.useState("");
+  const [fecha, setFecha] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [avances, setAvances] = React.useState({}); // { rubroId: pct }
+  const [pdfHtml, setPdfHtml] = React.useState(null);
+
+  const guardarDatos = (next) => setCertifRubro(prev => ({ ...(prev || {}), [obraId]: next }));
+
+  const agregarRubro = () => {
+    if (!nombreRubro.trim()) { alert("Poné el nombre del rubro."); return; }
+    const inc = Number(incidenciaRubro);
+    if (!inc || inc <= 0 || inc > 100) { alert("La incidencia tiene que ser un % entre 1 y 100."); return; }
+    const nuevo = { id: uid(), nombre: nombreRubro.trim(), incidencia: inc };
+    guardarDatos({ ...datos, rubros: [...rubros, nuevo] });
+    setNombreRubro(""); setIncidenciaRubro("");
+  };
+  const borrarRubro = (id) => {
+    if (!confirm("¿Borrar este rubro? Los certificados ya guardados no se modifican.")) return;
+    guardarDatos({ ...datos, rubros: rubros.filter(r => r.id !== id) });
+  };
+
+  const ponderadoActual = rubros.reduce((s, r) => s + ((Number(r.incidencia) || 0) / 100) * ((Number(avances[r.id]) || 0) / 100) * 100, 0);
+
+  const guardarCertificado = () => {
+    if (!rubros.length) { alert("Primero cargá los rubros de la obra y su % de incidencia."); return; }
+    if (Math.round(sumaIncidencia) !== 100) { if (!confirm(`Las incidencias suman ${sumaIncidencia}%, no 100%. ¿Guardar igual?`)) return; }
+    const item = { id: uid() + Date.now(), fecha, avances: { ...avances }, ponderado: Math.round(ponderadoActual * 10) / 10, ts: Date.now() };
+    guardarDatos({ ...datos, items: [item, ...(datos.items || [])] });
+    setAvances({});
+    alert("Certificado por rubro guardado.");
+  };
+  const borrarCertificado = (id) => { if (confirm("¿Borrar este certificado?")) guardarDatos({ ...datos, items: (datos.items || []).filter(x => x.id !== id) }); };
+
+  const fmtDMY2 = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
+  const _e2 = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  function buildPdfRubro(item) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const filas = rubros.map(r => {
+      const av = Number((item.avances || {})[r.id]) || 0;
+      const pond = ((Number(r.incidencia) || 0) / 100) * (av / 100) * 100;
+      return `<tr><td>${_e2(r.nombre)}</td><td style="text-align:center">${r.incidencia}%</td><td style="text-align:center">${av}%</td><td style="text-align:center"><b>${(Math.round(pond * 10) / 10)}%</b></td></tr>`;
+    }).join("");
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
+      .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+      th { background: #F1F5F9; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 8px 10px; border: 1px solid #E3E8EF; }
+      td { font-size: 12px; padding: 8px 10px; border: 1px solid #E3E8EF; }
+      .total { margin-top: 16px; text-align: center; background: #F8FAFC; border: 1px solid #E3E8EF; border-radius: 10px; padding: 14px; }
+      .total .n { font-size: 26px; font-weight: 800; color: #B0894F; }
+      .total .l { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #5B6B7F; margin-top: 2px; }
+      .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Certificado de avance por rubro</div></div>
+      <div class="barra"><div>Obra: <b>${_e2(obraNombre)}</b></div><div>Fecha: <b>${fmtDMY2(item.fecha)}</b></div></div>
+      <table><tr><th>Rubro</th><th style="text-align:center">Incidencia</th><th style="text-align:center">Avance ejecutado</th><th style="text-align:center">Ponderado</th></tr>${filas}</table>
+      <div class="total"><div class="n">${item.ponderado}%</div><div class="l">Avance total ponderado de la obra</div></div>
+      <div class="foot">Generado por ${marca} · Certificado de avance por rubro.</div>
+    </div></body></html>`;
+  }
+  const verPdf = (item) => setPdfHtml(buildPdfRubro(item));
+
+  return (<div>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 8 }}>Rubros de la obra</div>
+      {rubros.length === 0 && <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>Todavía no cargaste rubros. Agregalos con su % de incidencia sobre el total (ej: Estructura 30%, Instalaciones 20%…).</div>}
+      {rubros.map(r => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
+          <span style={{ flex: 1, fontSize: 12.5, color: T.text, fontWeight: 600 }}>{r.nombre}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: BRASS }}>{r.incidencia}%</span>
+          <button onClick={() => borrarRubro(r.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer" }}>✕</button>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+        <input value={nombreRubro} onChange={e => setNombreRubro(e.target.value)} placeholder="Nombre del rubro" style={{ flex: 2, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 12.5, color: T.text }} />
+        <input value={incidenciaRubro} onChange={e => setIncidenciaRubro(e.target.value)} type="number" min="1" max="100" placeholder="% inc." style={{ width: 76, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 12.5, color: T.text }} />
+        <button onClick={agregarRubro} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>＋</button>
+      </div>
+      {rubros.length > 0 && <div style={{ fontSize: 11, color: Math.round(sumaIncidencia) === 100 ? "#15803D" : "#B45309", fontWeight: 700, marginTop: 8 }}>Suma de incidencias: {sumaIncidencia}% {Math.round(sumaIncidencia) !== 100 ? "— debería sumar 100%" : "✓"}</div>}
+    </div>
+
+    {rubros.length > 0 && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 8 }}><Ico n="calendar" /> Nuevo certificado</div>
+      <label style={{ fontSize: 10, fontWeight: 700, color: T.sub }}>FECHA</label>
+      <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13.5, color: T.text, boxSizing: "border-box", margin: "4px 0 10px" }} />
+      {rubros.map(r => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
+          <span style={{ flex: 1, fontSize: 12.5, color: T.text }}>{r.nombre} <span style={{ color: T.muted, fontSize: 11 }}>({r.incidencia}%)</span></span>
+          <input value={avances[r.id] || ""} onChange={e => setAvances(p => ({ ...p, [r.id]: e.target.value }))} type="number" min="0" max="100" placeholder="0" style={{ width: 66, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 8px", fontSize: 12.5, color: T.text, textAlign: "center" }} />
+          <span style={{ fontSize: 12, color: T.muted }}>%</span>
+        </div>
+      ))}
+      <div style={{ textAlign: "center", background: T.bg, borderRadius: 9, padding: "10px", margin: "8px 0" }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: BRASS }}>{Math.round(ponderadoActual * 10) / 10}%</div>
+        <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em" }}>Avance total ponderado</div>
+      </div>
+      <button onClick={guardarCertificado} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>✓ Guardar certificado</button>
+    </div>}
+
+    {items.length > 0 && <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 7 }}>Certificados por rubro guardados</div>
+      {items.map(it => (
+        <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "9px 11px", marginBottom: 6 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>{fmtDMY2(it.fecha)} · {it.ponderado}% ponderado</div>
+            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{rubros.length} rubro{rubros.length !== 1 ? "s" : ""}</div>
+          </div>
+          <button onClick={() => verPdf(it)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+          {onEnviarPropietario && <button onClick={() => { const h = buildPdfRubro(it); onEnviarPropietario({ ...it, html: h }); }} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>}
+          <button onClick={() => borrarCertificado(it.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
+        </div>
+      ))}
+    </div>}
+
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 320, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: "14px 14px 10px", background: "#0F1B2D", flexShrink: 0 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Certificado por rubro</span>
+        <button onClick={() => { const f = document.getElementById("rub-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="rub-pdf" srcDoc={pdfHtml} title="Certificado por rubro" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+  </div>);
+}
+function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, certifRubro = {}, setCertifRubro, docrecepcion = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  const [certTab, setCertTab] = React.useState("semanal"); // "semanal" | "rubro"
   const [enviosProp, setEnviosProp] = useStoredState("cliente_envios_prop", {});
   // Manda un informe (avance o certificado) directo al propietario, sin pasar por
   // Belfast — imprescindible para obras privadas, que Belfast nunca ve.
@@ -7748,6 +7896,11 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
           </div>}
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        <button onClick={() => setCertTab("semanal")} style={{ flex: 1, background: certTab === "semanal" ? T.navy : T.card, color: certTab === "semanal" ? "#fff" : T.sub, border: `1px solid ${certTab === "semanal" ? T.navy : T.border}`, borderRadius: 8, padding: "9px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Certificado semanal</button>
+        <button onClick={() => setCertTab("rubro")} style={{ flex: 1, background: certTab === "rubro" ? T.navy : T.card, color: certTab === "rubro" ? "#fff" : T.sub, border: `1px solid ${certTab === "rubro" ? T.navy : T.border}`, borderRadius: 8, padding: "9px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Certificado por rubro</button>
+      </div>
+      {certTab === "semanal" && <>
       <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 2 }}><Ico n="calendar" /> Certificado semanal</div>
         <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.45, marginBottom: 9 }}>Junta todos los avances de la semana + la bitácora en un solo informe. La semana cierra los viernes.</div>
@@ -7781,6 +7934,8 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
           </div>
         ))}
       </div>}
+      </>}
+      {certTab === "rubro" && <CertifRubroPanel obraId={obraId} obraNombre={obra?.nombre || ""} cfg={cfg} certifRubro={certifRubro} setCertifRubro={setCertifRubro} onEnviarPropietario={(item) => mandarAlPropietarioVV(obraId, { id: item.id, fecha: item.fecha, html: item.html }, "cert")} />}
       {historial.length > 0 && historial.some(h => !h.html) && <button onClick={prepararTodos} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {historial.filter(h => !h.html).length} informe{historial.filter(h => !h.html).length > 1 ? "s" : ""} para el cliente</button>}
       {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
@@ -7954,6 +8109,7 @@ function App() {
   const [bitacora, setBitacora] = useStoredState("vv_bitacora", []);
   const [informesSem, setInformesSem] = useStoredState("vv_informes_sem", {});
   const [certifSem, setCertifSem] = useStoredState("vv_certif_sem", {});
+  const [certifRubro, setCertifRubro] = useStoredState("vv_certif_rubro", {}); // { [obraId]: { rubros: [{id,nombre,incidencia}], items: [{id,fecha,avances:{rubroId:pct},ponderado,ts}] } }
   const [auditoria, setAuditoria] = useStoredState("vv_auditoria", []);
   const [plantillas, setPlantillas] = useStoredState("vv_plantillas", []);
   const [internos, setInternos] = useStoredState("vv_internos", []);
@@ -8194,7 +8350,7 @@ function App() {
             {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
-            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} docrecepcion={docrecepcion} />}
+            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} certifRubro={certifRubro} setCertifRubro={setCertifRubro} docrecepcion={docrecepcion} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
             {view==="chat" && <ChatIA db={db} cfg={cfg} apiKey={cfg.apiKey} msgs={chatMsgs} setMsgs={setChatMsgs} />}
