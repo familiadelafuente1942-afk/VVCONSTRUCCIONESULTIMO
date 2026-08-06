@@ -2179,7 +2179,6 @@ const MAS_TILES = [
   { id:"documentacion", label:"Documentación" },
   { id:"informes", label:"Informes" },
   { id:"auditoria", label:"Auditoría de obra" },
-  { id:"drone", label:"🚁 Drone IA", go:"drone" },
   { id:"plantillas", label:"Plantillas de documentos" },
   { id:"internos", label:"Chat privado" },
   { id:"infsemanal", label:"Informe semanal de obra" },
@@ -4568,7 +4567,7 @@ function PreviewStub({ titulo }) {
 }
 
 const NAV = [
-  { id:"chat", label:"IA" }, { id:"drone", label:"Drone IA" }, { id:"dashboard", label:"Inicio" }, { id:"obras", label:"Obras" },
+  { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" }, { id:"obras", label:"Obras" },
   { id:"personal", label:"Personal" }, { id:"cargar", label:"Cargar", fab:true }, { id:"mas", label:"Más" },
 ];
 
@@ -8053,7 +8052,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
   </div>);
 }
 const WEB_NAV = [
-  { id:"chat", label:"IA" }, { id:"drone", label:"Drone IA" }, { id:"minutas", label:"Grabar reunión" }, { id:"dashboard", label:"Inicio" },
+  { id:"chat", label:"IA" }, { id:"minutas", label:"Grabar reunión" }, { id:"dashboard", label:"Inicio" },
   { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" },
   { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos enviados" }, { id:"auditoria", label:"Auditoría" },
     { id:"mas", label:"Más" },
