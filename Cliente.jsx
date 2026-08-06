@@ -1228,14 +1228,112 @@ const AUD_TIPOS_CLI = [
   { id: "revision", label: "Revisión de doc.", sigla: "RDO" },
   { id: "certificacion", label: "Certificación", sigla: "CER" },
 ];
-function AuditoriaClienteView({ T, obras, auditoria }) {
+function AuditoriaClienteView({ T, obras, auditoria, cfg }) {
   const [tipo, setTipo] = useState("supervision");
   const [obraId, setObraId] = useState("");
   const tp = AUD_TIPOS_CLI.find(t => t.id === tipo) || AUD_TIPOS_CLI[0];
   const fmtDMY = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
+  const _e = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
   const nombreObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "—";
   const lista = (auditoria || []).filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const [abierto, setAbierto] = useState(null);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const AUD_TIPOS_FULL = [
+    { id: "supervision", titulo: "Acta de supervisión de obra" },
+    { id: "revision", titulo: "Informe de revisión de documentación" },
+    { id: "certificacion", titulo: "Certificado de etapa ejecutada" },
+  ];
+  // Mismo generador que en Constructora — mismo diseño, mismos datos, para
+  // que Cliente vea exactamente el mismo certificado que carga V+V.
+  function buildPdf(it) {
+    const t = AUD_TIPOS_FULL.find(x => x.id === it.tipo) || AUD_TIPOS_FULL[0];
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const nomObra = nombreObra(it.obra_id);
+    const colorRes = it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D";
+    const obsRows = (it.obs || []).length
+      ? `<table><tr><th style="width:38px">N°</th><th>Observación</th><th style="width:110px">Sector / ítem</th><th style="width:88px">Criticidad</th></tr>
+         ${(it.obs || []).map((o, i) => `<tr><td>${i + 1}</td><td>${_e(o.txt)}</td><td>${_e(o.sector || "—")}</td><td>${_e(o.crit || "Media")}</td></tr>`).join("")}</table>`
+      : `<div class="vacio">Sin observaciones registradas.</div>`;
+    let cuerpo = "";
+    if (it.tipo === "supervision") {
+      cuerpo = `
+        <div class="grid"><div><span>Período</span><b>${_e(it.periodo || "—")}</b></div><div><span>Presentes</span><b>${_e(it.presentes || "—")}</b></div></div>
+        <h2>Observaciones de la supervisión</h2>${obsRows}
+        <h2>Interferencias detectadas</h2>${(it.interferencias || []).length ? `<ul>${(it.interferencias || []).map(x => `<li>${_e(x)}</li>`).join("")}</ul>` : `<div class="vacio">No se detectaron interferencias.</div>`}`;
+    }
+    if (it.tipo === "revision") {
+      cuerpo = `
+        <div class="grid"><div><span>Etapa</span><b>${_e(it.etapa || "—")}</b></div><div><span>Documentos revisados</span><b>${(it.docs || []).length}</b></div></div>
+        <h2>Documentación revisada</h2>
+        ${(it.docs || []).length ? `<table><tr><th>Documento</th><th style="width:90px">Versión</th><th style="width:100px">Fecha doc.</th></tr>
+          ${(it.docs || []).map(d => `<tr><td>${_e(d.nombre)}</td><td>${_e(d.version || "—")}</td><td>${_e(d.fechaDoc || "—")}</td></tr>`).join("")}</table>` : `<div class="vacio">Sin documentos cargados.</div>`}
+        <h2>Observaciones sobre la documentación</h2>${obsRows}`;
+    }
+    if (it.tipo === "certificacion") {
+      cuerpo = `
+        <div class="grid"><div><span>Etapa certificada</span><b>${_e(it.etapa || "—")}</b></div><div><span>Ejecutado por</span><b>${_e(it.ejecutadoPor || marca)}</b></div>
+        <div><span>Plano de referencia</span><b>${_e(it.planoRef || "—")}</b></div><div><span>Versión / revisión</span><b>${_e(it.versionPlano || "—")}</b></div></div>
+        <div class="decl">Se deja constancia de que la etapa <b>${_e(it.etapa || "")}</b> de la obra <b>${_e(nomObra)}</b> fue ejecutada <b>conforme al plano de referencia indicado</b> y a la directiva impartida por la Jefatura de Obra que se transcribe a continuación.</div>
+        <h2>Directiva de la Jefatura de Obra</h2><div class="parr">${_e(it.directiva || "—")}</div>
+        <h2>Observaciones</h2>${obsRows}`;
+    }
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
+      .logo { max-height: 84px; max-width: 290px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 16px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      .grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
+      .grid > div { flex: 1 1 45%; background: #F8FAFC; border: 1px solid #E3E8EF; border-radius: 8px; padding: 8px 11px; }
+      .grid span { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #94A3B8; margin-bottom: 2px; }
+      .grid b { font-size: 12.5px; color: #0F1B2D; }
+      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: #F1F5F9; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
+      ul { margin: 0; padding-left: 20px; } li { font-size: 12px; line-height: 1.55; margin-bottom: 3px; }
+      .vacio { font-size: 11.5px; color: #98A2B3; font-style: italic; }
+      .parr { font-size: 12px; line-height: 1.6; text-align: justify; }
+      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: #F8FAFC; border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
+      .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 14px; color: ${colorRes}; border: 1.5px solid ${colorRes}; }
+      .firmas { display: flex; gap: 40px; margin-top: 34px; page-break-inside: avoid; }
+      .firma { flex: 1; text-align: center; }
+      .linea { border-top: 1px solid #0F1B2D; margin-bottom: 5px; }
+      .rol { font-size: 10px; color: #5B6B7F; }
+      .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 8px; }
+      .fotos img { width: 130px; height: 130px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">${_e(t.titulo)}</div></div>
+      <div class="barra"><div>Obra: <b>${_e(nomObra)}</b></div><div>N°: <b>${_e(it.nro || "—")}</b></div><div>Fecha: <b>${fmtDMY(it.fecha)}</b></div></div>
+      ${cuerpo}
+      ${(() => {
+        const fotos = it.fotos || [];
+        if (!fotos.length) return "";
+        const buenas = fotos.filter(f => f.url && (f.url.startsWith("http://") || f.url.startsWith("https://"))).slice(0, 8);
+        const sinSubir = fotos.length - buenas.length;
+        return `<h2>Fotos</h2>
+          ${buenas.length ? `<div class="fotos">${buenas.map(f => `<img src="${f.url}" />`).join("")}</div>` : ""}
+          ${sinSubir > 0 ? `<div class="vacio">${sinSubir} foto(s) no incluida(s) en el PDF: no se terminaron de subir a la nube desde el dispositivo de origen.</div>` : ""}`;
+      })()}
+      <div class="res">Resultado: ${_e(it.resultado || "—")}</div>
+      ${it.conclusion ? `<h2>Conclusión</h2><div class="parr">${_e(it.conclusion)}</div>` : ""}
+      <div class="firmas">
+        <div class="firma"><div class="linea"></div><div class="rol">${_e(it.responsable || "Responsable técnico")}<br/>${marca}</div></div>
+        <div class="firma"><div class="linea"></div><div class="rol">Jefatura de Obra / Dirección de Obra</div></div>
+      </div>
+      <div class="foot">Documento emitido por ${marca} · ${_e(t.titulo)} · ${_e(it.nro || "")}</div>
+    </div></body></html>`;
+  }
   return (<div style={{ flex: 1, overflowY: "auto" }}>
     <AppHeader title="Auditoría de obra" sub="Supervisiones y controles cargados por V+V" />
     <div style={{ padding: "14px 18px" }}>
@@ -1276,10 +1374,20 @@ function AuditoriaClienteView({ T, obras, auditoria }) {
                 <img src={f.url} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               </a>)}
             </div>)}
+            <button onClick={() => setPdfHtml(buildPdf(it))} style={{ marginTop: 10, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "9px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Ver PDF</button>
           </div>)}
         </div>);
       })}
     </div>
+
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 320, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: "14px 14px 10px", background: "#0F1B2D", flexShrink: 0 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Certificado</span>
+        <button onClick={() => { const f = document.getElementById("aud-cli-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="aud-cli-pdf" srcDoc={pdfHtml} title="Certificado auditoría" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
   </div>);
 }
 function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
@@ -4694,7 +4802,7 @@ function ClienteApp() {
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
           {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
-          {screen === "auditoria" && <AuditoriaClienteView T={T} obras={obras} auditoria={auditoria} />}
+          {screen === "auditoria" && <AuditoriaClienteView T={T} obras={obras} auditoria={auditoria} cfg={cfg} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
