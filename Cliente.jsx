@@ -2485,74 +2485,78 @@ function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
     alert(`Obra "${nom}" borrada.`);
   }
   function borrarPlano(obra, id) { if (confirm("¿Eliminar este plano?") && setObras) setObras(prev => prev.map(o => o.id === obra.id ? { ...o, planos: (o.planos || []).filter(x => x.id !== id) } : o)); }
-  const [ecoUnlocked, setEcoUnlocked] = useState(false);
-  const [pinInput, setPinInput] = useState("");
-  const ecoPin = String(cfg?.ecoPin || "2025");
-  const contratado = obras.reduce((a, o) => a + parseMontoNum(o.monto), 0);
-  const certificado = obras.reduce((a, o) => a + (o.pagado || 0), 0);
   const avg = obras.length ? Math.round(obras.reduce((a, o) => a + (o.avance || 0), 0) / obras.length) : 0;
   const activas = obras.filter(o => o.estado === "curso").length;
-  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
-    <div style={{ padding: "16px 20px" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 9, marginBottom: 10 }}>
-        {[["Activas", activas, "#16A34A"], ["Avance", avg + "%", T.accent], ["Obras", obras.length, T.text]].map(([l, v, c], i) =>
-          <div key={i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 12px", boxShadow: T.shadow }}><div style={{ fontSize: 19, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3 }}>{l}</div></div>)}
-      </div>
-      <div style={{ background: T.navy, borderRadius: T.rsm, padding: "15px 17px", marginBottom: 20, borderBottom: `2px solid ${BRASS}` }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span>Resumen económico</span>{ecoUnlocked && <button onClick={() => setEcoUnlocked(false)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.55)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}><Ico n="lock" /> Bloquear</button>}</div>
-        {ecoUnlocked ? [["Contratado", contratado, "#fff"], ["Certificado", certificado, "#16A34A"], ["Saldo", contratado - certificado, BRASS]].map(([l, v, c], i) =>
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderTop: i ? "1px solid rgba(255,255,255,.08)" : "none" }}><span style={{ fontSize: 12.5, color: "rgba(255,255,255,.75)" }}>{l}</span><span style={{ fontSize: 14, fontWeight: 800, color: c }}>{money(v)}</span></div>)
-          : <div><div style={{ fontSize: 12, color: "rgba(255,255,255,.7)", marginBottom: 11, lineHeight: 1.5 }}><Ico n="lock" /> Protegido. Ingresá la contraseña para ver los montos.</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input type="password" value={pinInput} onChange={e => setPinInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { if (pinInput === ecoPin) { setEcoUnlocked(true); setPinInput(""); } else alert("Contraseña incorrecta."); } }} placeholder="Contraseña" style={{ flex: 1, background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", borderRadius: T.rsm, padding: "10px 12px", fontSize: 14, color: "#fff", outline: "none" }} />
-              <button onClick={() => { if (pinInput === ecoPin) { setEcoUnlocked(true); setPinInput(""); } else alert("Contraseña incorrecta."); }} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Ver</button>
-            </div></div>}
-      </div>
-      <Eyebrow T={T}>Estado de obras</Eyebrow>
+  const dsecStyle = { fontSize: 9, letterSpacing: ".1em", textTransform: "uppercase", color: T.muted, margin: "10px 0 5px" };
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, background: T.bg }}>
+    <div style={{ padding: "16px 24px 4px" }}><div style={{ fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 600, color: T.text }}>Obras</div></div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, padding: "0 24px", marginTop: 16 }}>
+      {[["Activas", activas, "#6FCF97"], ["Avance", avg + "%", T.text], ["Obras", obras.length, T.text]].map(([l, v, c], i) =>
+        <div key={i} style={{ background: "rgba(255,255,255,.04)", border: `1px solid ${T.border}`, borderRadius: 2, padding: "11px 8px", textAlign: "center" }}><div style={{ fontSize: 19, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3 }}>{l}</div></div>)}
+    </div>
+    <div style={{ padding: "16px 24px 0" }}>
+      <div style={dsecStyle}>Estado de obras</div>
       {obras.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "38px 18px" }}>Todavía no hay obras publicadas.</div>}
       {obras.map(o => {
         const e = ESTADOS[o.estado] || ESTADOS.pendiente;
-        const contr = parseMontoNum(o.monto), cert = o.pagado || 0, pct = contr ? Math.round(cert / contr * 100) : 0;
         const ts = tareas.filter(t => t.obra_id === o.id);
         const ult = (o.informes || [])[o.informes?.length - 1];
         const forms = formularios.filter(f => f.compartido && f.obra_id === o.id);
         const isOpen = open === o.id;
-        return (<Card T={T} key={o.id} style={{ padding: 15, marginBottom: 11 }}>
+        return (<div key={o.id} style={{ borderBottom: `1px solid ${T.border}`, padding: "16px 0" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-            <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{o.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{o.sector} · {o.inicio} → {o.cierre}</div></div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 15, color: T.text }}>{o.nombre}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{o.sector} · {o.inicio} → {o.cierre}</div>
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
-              <Badge c={e.c} b={e.b}>{e.l}</Badge>
-              {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra"
-                style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}><Ico n="trash" /> </button>}
+              <span style={{ fontSize: 9, fontWeight: 700, color: o.estado === "curso" ? "#6FCF97" : e.c, background: o.estado === "curso" ? "rgba(111,207,151,.12)" : e.b, border: o.estado === "curso" ? "1px solid rgba(111,207,151,.3)" : `1px solid ${e.c}4d`, padding: "3px 9px", borderRadius: 20 }}>{e.l}</span>
+              {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra" style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}><Ico n="trash" /> </button>}
             </div>
           </div>
-          <div style={{ margin: "12px 0 6px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 5 }}><span style={{ color: T.sub, fontWeight: 600 }}>Avance de obra</span><span style={{ color: T.accent, fontWeight: 800 }}>{o.avance}%</span></div>
-            <div style={{ height: 8, background: T.bg, borderRadius: 5, overflow: "hidden" }}><div style={{ height: 8, width: `${o.avance}%`, background: T.accent, borderRadius: 5 }} /></div>
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "rgba(242,240,235,.55)", marginBottom: 5 }}><span>Avance de obra</span><span style={{ color: "#D9B27C", fontWeight: 700 }}>{o.avance}%</span></div>
+            <div style={{ height: 3, background: "rgba(255,255,255,.1)" }}><div style={{ height: 3, width: `${o.avance}%`, background: "#D9B27C" }} /></div>
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <div style={{ flex: 1, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Certificado</div><div style={{ fontSize: 12.5, fontWeight: 800, color: "#16A34A", marginTop: 2 }}>{pct}%</div></div>
-            <div style={{ flex: 2, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Saldo pendiente</div><div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginTop: 2 }}>{ecoUnlocked ? money(contr - cert) : "•••••"}</div></div>
-          </div>
-          <button onClick={() => setOpen(isOpen ? null : o.id)} style={{ width: "100%", marginTop: 12, background: "none", border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, color: T.accent }}>{isOpen ? "Ocultar detalle ▲" : `Ver detalle${forms.length ? ` · ${forms.length} formulario${forms.length > 1 ? "s" : ""}` : ""}${(o.planos || []).length ? ` · ${(o.planos || []).length} plano${(o.planos || []).length > 1 ? "s" : ""}` : ""} ▼`}</button>
+          <button onClick={() => setOpen(isOpen ? null : o.id)} style={{ width: "100%", marginTop: 11, background: "none", border: "1px solid rgba(255,255,255,.15)", borderRadius: 2, padding: "9px", fontSize: 11, fontWeight: 600, color: "#D9B27C", cursor: "pointer" }}>{isOpen ? "Ocultar detalle ▲" : `Ver detalle${forms.length ? ` · ${forms.length} formulario${forms.length > 1 ? "s" : ""}` : ""}${(o.planos || []).length ? ` · ${(o.planos || []).length} plano${(o.planos || []).length > 1 ? "s" : ""}` : ""} ▼`}</button>
           {isOpen && <div style={{ marginTop: 12 }}>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Planos (PDF / CAD){(o.planos || []).length ? ` (${(o.planos || []).length})` : ""}</div>
-              {(o.planos || []).map(p => <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}>
-                <div style={{ width: 30, height: 30, borderRadius: 7, background: "rgba(255,255,255,.08)", color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}><Ico n="ruler" /> </div>
-                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{p.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}</div></div>
-                <a href={p.url} target="_blank" rel="noreferrer" download={p.nombre} style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, textDecoration: "none", flexShrink: 0 }}>Abrir</a>
-                <button onClick={() => borrarPlano(o, p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+            <div style={dsecStyle}>Planos (PDF / CAD){(o.planos || []).length ? ` (${(o.planos || []).length})` : ""}</div>
+            {(o.planos || []).length === 0 && <div style={{ fontSize: 11.5, color: T.muted, fontStyle: "italic" }}>Sin planos cargados.</div>}
+            {(o.planos || []).map(p => <div key={p.id} style={{ fontSize: 11.5, color: "rgba(242,240,235,.75)", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,.05)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <span style={{ minWidth: 0, wordBreak: "break-word" }}>📐 {p.nombre}</span>
+              <span style={{ fontSize: 10, color: T.muted, flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}
+                <a href={p.url} target="_blank" rel="noreferrer" download={p.nombre} style={{ color: BRASS, fontWeight: 700, textDecoration: "none" }}>Abrir</a>
+                <button onClick={() => borrarPlano(o, p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer" }}>✕</button>
+              </span>
+            </div>)}
+            <label style={{ display: "block", width: "100%", marginTop: 10, background: "rgba(255,255,255,.06)", border: "1px dashed rgba(255,255,255,.2)", color: "rgba(242,240,235,.7)", borderRadius: 2, padding: "9px", fontSize: 11, textAlign: "center", cursor: "pointer", boxSizing: "border-box" }}>{subP ? "Subiendo…" : "＋ Subir plano (PDF/CAD)"}<input type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={ev => subirPlanos(ev, o)} style={{ display: "none" }} /></label>
+
+            {(o.fotos || []).length > 0 && <>
+              <div style={dsecStyle}>Avance fotográfico ({(o.fotos || []).length})</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 4 }}>{(o.fotos || []).slice().reverse().map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 2, border: "1px solid rgba(255,255,255,.08)", display: "block" }} /></a>)}</div>
+            </>}
+            {(o.videos || []).length > 0 && <><div style={dsecStyle}>Videos ({o.videos.length})</div>{o.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", borderRadius: 2, marginBottom: 8, background: "#000", display: "block" }} />)}</>}
+            {ts.length > 0 && <>
+              <div style={dsecStyle}>Cronograma</div>
+              {ts.map(t => <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
+                <span style={{ flex: 1, fontSize: 12.5, color: T.text }}>{t.nombre}</span>
+                <div style={{ width: 64, height: 4, background: "rgba(255,255,255,.1)", borderRadius: 3, overflow: "hidden", flexShrink: 0 }}><div style={{ height: 4, width: `${t.avance || 0}%`, background: BRASS }} /></div>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(242,240,235,.5)", width: 30, textAlign: "right", flexShrink: 0 }}>{t.avance || 0}%</span>
               </div>)}
-              <label style={{ display: "block", textAlign: "center", background: T.navy, color: "#fff", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>{subP ? "Subiendo…" : "＋ Subir plano (PDF/CAD)"}<input type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={e => subirPlanos(e, o)} style={{ display: "none" }} /></label>
-            </div>
-            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({(o.fotos || []).length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{(o.fotos || []).slice().reverse().map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
-            {(o.videos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Videos ({o.videos.length})</div>{o.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", borderRadius: 6, marginBottom: 8, background: "#000", display: "block" }} />)}</div>}
-            {ts.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Cronograma</div>{ts.map(t => <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}><span style={{ flex: 1, fontSize: 12, color: T.text }}>{t.nombre}</span><div style={{ width: 70, height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${t.avance || 0}%`, background: BRASS }} /></div><span style={{ fontSize: 11, fontWeight: 700, color: T.muted, width: 32, textAlign: "right" }}>{t.avance || 0}%</span></div>)}</div>}
-            {ult && <div><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Último informe · {ult.fecha}</div><div style={{ background: T.bg, borderRadius: T.rsm, padding: "11px 13px", fontSize: 12, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{ult.texto}</div></div>}
-            {forms.length > 0 && <div style={{ marginTop: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Formularios recibidos de V+V</div>{forms.map(f => { const tpl = FORM_TPLS.find(t => t.id === f.tplId); return (<div key={f.id} onClick={() => setVerForm({ f, tpl, obra: o.nombre })} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}><div style={{ minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{tpl?.nombre || "Formulario"}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{f.fecha}{f.nro ? ` · N° ${f.nro}` : ""}{f.compartidoFecha ? ` · compartido ${f.compartidoFecha}` : ""}</div></div>{f.resultado ? <span style={{ fontSize: 9.5, fontWeight: 800, color: f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#B45309" : "#16A34A", flexShrink: 0 }}>{f.resultado.replace(" PARA INICIO", "")}</span> : <span style={{ color: T.accent, fontWeight: 700, fontSize: 11 }}>Ver →</span>}</div>); })}</div>}
+            </>}
+            {ult && <>
+              <div style={dsecStyle}>Último informe · {ult.fecha}</div>
+              <div style={{ background: "rgba(255,255,255,.04)", borderRadius: 2, padding: "11px 13px", fontSize: 11.5, color: "rgba(242,240,235,.7)", lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 140, overflowY: "auto" }}>{ult.texto}</div>
+            </>}
+            {forms.length > 0 && <>
+              <div style={dsecStyle}>Formularios recibidos de V+V</div>
+              {forms.map(f => { const tpl = FORM_TPLS.find(t => t.id === f.tplId); return (<div key={f.id} onClick={() => setVerForm({ f, tpl, obra: o.nombre })} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 2, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+                <div style={{ minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{tpl?.nombre || "Formulario"}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{f.fecha}{f.nro ? ` · N° ${f.nro}` : ""}{f.compartidoFecha ? ` · compartido ${f.compartidoFecha}` : ""}</div></div>
+                {f.resultado ? <span style={{ fontSize: 9, fontWeight: 800, color: f.resultado.includes("NO APTO") ? "#E58989" : f.resultado.includes("OBSERV") ? "#D9B27C" : "#6FCF97", flexShrink: 0 }}>{f.resultado.replace(" PARA INICIO", "")}</span> : <span style={{ color: BRASS, fontWeight: 700, fontSize: 11 }}>Ver →</span>}
+              </div>); })}
+            </>}
           </div>}
-        </Card>);
+        </div>);
       })}
     </div>
     {verForm && <FormViewer T={T} tpl={verForm.tpl} f={verForm.f} obraNombre={verForm.obra} onClose={() => setVerForm(null)} />}
@@ -4550,15 +4554,6 @@ function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
           <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: BRASS, whiteSpace: "nowrap" }}>Panel de Cliente</span>
         </div>
       </div>
-      <div style={{ background: T.card, borderBottom: `1px solid ${T.border}` }}>
-        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "12px 24px", display: "flex", justifyContent: "center" }}>
-          <div onClick={() => setScreen("inicio")} style={{ display: "flex", alignItems: "center", gap: 11, cursor: "pointer" }}>
-            {cfg.logo ? <img src={cfg.logo} alt="" style={{ maxHeight: 46, maxWidth: 240, objectFit: "contain" }} />
-              : <><div style={{ width: 44, height: 44, background: T.navy, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 800, borderBottom: `2px solid ${BRASS}` }}>{(cfg.sigla || "C").slice(0, 3)}</div>
-                <div style={{ lineHeight: 1.2, textAlign: "left" }}><div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: "0.04em" }}>{cfg.nombre}</div><div style={{ fontSize: 8.5, color: T.muted, letterSpacing: "0.16em", textTransform: "uppercase", marginTop: 2 }}>Seguimiento de obra</div></div></>}
-          </div>
-        </div>
-      </div>
       <div style={{ height: 2, background: BRASS }} />
     </header>
   );
@@ -4676,15 +4671,26 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, onIr
         ? <img key={renderActual.url} src={renderActual.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, animation: "fadeIn .6s ease" }} />
         : <div key={obraActual?.id || "sin-obra"} style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#0d0d0f,#1a1a1d)", animation: "fadeIn .6s ease" }} />}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
+      <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", flexShrink: 0, background: "#0d0d0f" }}>
+          {cfg?.logo ? <img src={cfg.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#fff" }}>{(cfg?.sigla || "B").slice(0, 1)}</div>}
+        </div>
+        <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
+      </div>
       <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
         <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" }}>{cfg?.nombre || "Belfast"}</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
       </div>
       {listaCarrusel.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>
         {listaCarrusel.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % listaCarrusel.length) ? BRASS : "rgba(255,255,255,.35)" }} />)}
       </div>}
     </div>
     <div style={{ padding: "22px 22px 30px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1, color: "#fff" }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
+        <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,240,235,.45)", lineHeight: 1.3 }}>% de avance<br />general</div>
+      </div>
+      <div style={{ height: 1, background: "rgba(255,255,255,.1)", marginBottom: 18 }} />
       <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {feed.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
       {feed.map((f, i) => (<div key={i} onClick={() => onIr(f.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
@@ -4945,7 +4951,7 @@ function ClienteApp() {
     <style>{css}</style>
     <Toast T={T} toast={toast} />
     <div style={{ width: "100%", height: "100dvh", background: "transparent", display: "flex", flexDirection: "column", position: "relative", color: T.text, overflow: "hidden" }}>
-      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={irA} aviso={aviso} />
+      {screen !== "inicio" && <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={irA} aviso={aviso} />}
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
