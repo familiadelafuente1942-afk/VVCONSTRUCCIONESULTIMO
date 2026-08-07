@@ -2767,7 +2767,7 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "auditoria", label: "Auditoría", icon: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z M9.5 12l1.8 1.8L15 10" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "formularios", label: "Certificados", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "inicio", label: "Inicio", icon: "M11.47 3.841a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.061l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 101.061 1.061l8.69-8.69z" }, { id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "auditoria", label: "Auditoría", icon: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z M9.5 12l1.8 1.8L15 10" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "formularios", label: "Certificados", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
 function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], certif = {}, bitacora = [], onPedidos, onMinutas }) {
@@ -4510,7 +4510,7 @@ function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
       </div>
       <div style={{ background: T.card, borderBottom: `1px solid ${T.border}` }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: "12px 24px 2px", display: "flex", justifyContent: "center" }}>
-          <div onClick={() => setScreen("obras")} style={{ display: "flex", alignItems: "center", gap: 11, cursor: "pointer" }}>
+          <div onClick={() => setScreen("inicio")} style={{ display: "flex", alignItems: "center", gap: 11, cursor: "pointer" }}>
             {cfg.logo ? <img src={cfg.logo} alt="" style={{ maxHeight: 46, maxWidth: 240, objectFit: "contain" }} />
               : <><div style={{ width: 44, height: 44, background: T.navy, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 800, borderBottom: `2px solid ${BRASS}` }}>{(cfg.sigla || "C").slice(0, 3)}</div>
                 <div style={{ lineHeight: 1.2, textAlign: "left" }}><div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: "0.04em" }}>{cfg.nombre}</div><div style={{ fontSize: 8.5, color: T.muted, letterSpacing: "0.16em", textTransform: "uppercase", marginTop: 2 }}>Seguimiento de obra</div></div></>}
@@ -4557,11 +4557,57 @@ function WebClientFooter({ T, cfg }) {
   </div>);
 }
 
+function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, onIr }) {
+  const [slideIdx, setSlideIdx] = useState(0);
+  // Solo entran al carrusel las obras que ya tienen renders cargados en Ajustes.
+  const obrasConRender = (obras || []).filter(o => ((renders || {})[o.id] || []).length > 0);
+  useEffect(() => {
+    if (obrasConRender.length < 2) return;
+    const t = setInterval(() => setSlideIdx(i => (i + 1) % obrasConRender.length), 4500);
+    return () => clearInterval(t);
+  }, [obrasConRender.length]);
+  const obraActual = obrasConRender[slideIdx % Math.max(obrasConRender.length, 1)];
+  const renderActual = obraActual ? ((renders || {})[obraActual.id] || [])[0] : null;
+
+  // Novedades reales: últimos mensajes de V+V, hechos de bitácora e informes
+  // de avance ya armados (con PDF), mezclados por fecha, los 3 más recientes.
+  const nomObra = id => (obras.find(o => o.id === id) || {}).nombre || "";
+  const feed = [
+    ...(mensajes || []).filter(m => m.from && m.from !== "cliente").map(m => ({ ts: m.ts || 0, tipo: "Mensaje", texto: (m.texto || "").slice(0, 60), obra: "", ir: "mensajes" })),
+    ...(bitacora || []).map(h => ({ ts: h.ts || 0, tipo: "Bitácora", texto: h.titulo || "Hecho de obra", obra: nomObra(h.obra_id), ir: "bitacora" })),
+    ...obras.flatMap(o => (((avance || {})[o.id]) || []).filter(a => a.html).map(a => ({ ts: a.ts || 0, tipo: "Avance", texto: `${a.fecha || ""}${a.avance ? ` — ${a.avance}` : ""}`, obra: o.nombre, ir: "informes" }))),
+  ].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 3);
+
+  return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
+    <div style={{ position: "relative", height: 260, background: "#0d0d0f", overflow: "hidden" }}>
+      {renderActual
+        ? <img src={renderActual.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, transition: "opacity .6s" }} />
+        : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#0d0d0f,#1a1a1d)" }} />}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
+      <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
+        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" }}>{cfg?.nombre || "Belfast"}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
+      </div>
+    </div>
+    <div style={{ padding: "22px 22px 30px" }}>
+      <div onClick={() => onIr("asistente")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginBottom: 20, cursor: "pointer" }}>
+        <div style={{ fontSize: 9, letterSpacing: ".12em", textTransform: "uppercase", color: "#D9B27C", fontWeight: 700 }}>✦ IA Belfast</div>
+        <div style={{ fontSize: 12, color: "rgba(242,240,235,.6)", marginTop: 5 }}>Pedile a la IA — buscar, subir fotos, cargar archivos a una obra…</div>
+      </div>
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
+      {feed.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
+      {feed.map((f, i) => (<div key={i} onClick={() => onIr(f.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
+        <div><span style={{ fontSize: 9, fontWeight: 800, color: "#D9B27C", marginRight: 8, textTransform: "uppercase" }}>{f.tipo}</span><span style={{ fontSize: 12.5 }}>{f.texto}</span>{f.obra && <div style={{ fontSize: 10, color: "rgba(242,240,235,.4)", marginTop: 2 }}>{f.obra}</div>}</div>
+      </div>))}
+    </div>
+  </div>);
+}
+
 function ClienteApp() {
   useEffect(() => { if (FORCE_CLOUD) { try { history.replaceState(null, "", window.location.pathname); } catch { } } }, []);
   const [cfg, setCfg] = useStored("cliente_cfg", DEFAULT_CFG);
   const T = theme(cfg.accent);
-  const [screen, setScreen] = useState("asistente");
+  const [screen, setScreen] = useState("inicio");
   const [obrasRaw, setObras] = useStored("vv_obras", []);
   // Obras marcadas como "privada" en V+V no existen para Belfast: se filtran acá,
   // en el único lugar donde Cliente.jsx lee la lista completa.
@@ -4808,6 +4854,7 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
+          {screen === "inicio" && <InicioScreen T={T} cfg={cfg} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} onIr={(id) => irA(id)} />}
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
