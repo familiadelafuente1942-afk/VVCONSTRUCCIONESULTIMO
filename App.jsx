@@ -7395,6 +7395,29 @@ function CertifRubroPanel({ obraId, obraNombre, cfg, certifRubro, setCertifRubro
 function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, certifRubro = {}, setCertifRubro, docrecepcion = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
   const [certTab, setCertTab] = React.useState("semanal"); // "semanal" | "rubro"
+  // Arreglo de una sola vez para el error 413 ("Payload Too Large"): versiones
+  // anteriores guardaban el PDF completo de cada certificado semanal (con
+  // todas las fotos incrustadas) para siempre en la base. Acumulado semana a
+  // semana, ese paquete terminaba pesando más de lo que el servidor deja
+  // guardar en un solo pedido. Esto saca esos PDFs viejos guardados de más
+  // (dejando solo la marca de "preparado"), una vez, la primera vez que
+  // carga con datos viejos así.
+  React.useEffect(() => {
+    if (!setCertif) return;
+    const hayPesados = Object.values(certif || {}).some(lista => (lista || []).some(c => c.html));
+    if (!hayPesados) return;
+    setCertif(prev => {
+      const limpio = {};
+      for (const oid in (prev || {})) {
+        limpio[oid] = (prev[oid] || []).map(c => {
+          if (!c.html) return c;
+          const { html, ...resto } = c;
+          return { ...resto, preparado: true };
+        });
+      }
+      return limpio;
+    });
+  }, [certif, setCertif]);
   const [enviosProp, setEnviosProp] = useStoredState("cliente_envios_prop", {});
   // Manda un informe (avance o certificado) directo al propietario, sin pasar por
   // Belfast — imprescindible para obras privadas, que Belfast nunca ve.
@@ -7948,16 +7971,21 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         </div>
         <button onClick={armarSemanal} disabled={busy} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Armando…" : "✓ Generar certificado de la semana"}</button>
       </div>
-      {(certif[obraId] || []).some(c => !c.html) && <button onClick={() => {
-        const sin = (certif[obraId] || []).filter(c => !c.html);
+      {(certif[obraId] || []).some(c => !c.preparado) && <button onClick={() => {
+        const sin = (certif[obraId] || []).filter(c => !c.preparado);
         const esPrivada = (obras || []).find(o => o.id === obraId)?.privada;
         const msg = esPrivada
           ? `Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los veas vos y el propietario (obra privada: Belfast no la ve).\n\n¿Seguimos?`
           : `Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los vean Belfast y el propietario.\n\n¿Seguimos?`;
         if (!confirm(msg)) return;
-        setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(c => c.html ? c : { ...c, html: buildPdfSemanal(c) }) }));
+        // Solo se marca como "preparado" — el PDF se arma al momento de verlo
+        // o mandarlo, no se guarda el documento entero acá. Guardar el PDF
+        // completo (con las fotos incrustadas) de cada semana, para siempre,
+        // es lo que hacía que el paquete a guardar creciera sin límite y
+        // terminara rebotando con error 413 (Payload Too Large).
+        setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(c => c.preparado ? c : { ...c, preparado: true }) }));
         alert(`Listo: ${sin.length} certificado${sin.length > 1 ? "s quedaron disponibles" : " quedó disponible"} para el cliente.`);
-      }} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {(certif[obraId] || []).filter(c => !c.html).length} certificado{(certif[obraId] || []).filter(c => !c.html).length > 1 ? "s" : ""} para el cliente</button>}
+      }} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {(certif[obraId] || []).filter(c => !c.preparado).length} certificado{(certif[obraId] || []).filter(c => !c.preparado).length > 1 ? "s" : ""} para el cliente</button>}
       {(certif[obraId] || []).length > 0 && <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 7 }}>Certificados guardados</div>
         {(certif[obraId] || []).map(c => (
@@ -7966,8 +7994,8 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fmtDMY(c.desde)} al {fmtDMY(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
-            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); const h = buildPdfSemanal(c); setPdfHtml(h); if (!c.html && setCertif) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(x => x.id === c.id ? { ...x, html: h } : x) })); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
-            <button onClick={() => mandarAlPropietarioVV(obraId, c, "cert")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
+            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); setPdfHtml(buildPdfSemanal(c)); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+            <button onClick={() => mandarAlPropietarioVV(obraId, { ...c, html: buildPdfSemanal(c) }, "cert")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
             <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
           </div>
         ))}
