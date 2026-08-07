@@ -8172,7 +8172,7 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
           </div>}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
       <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ width: 40, height: 40, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", background: "#0a0a0a", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: cfg?.logoSize || 40, height: cfg?.logoSize || 40, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", background: "#0a0a0a", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           {tieneLogo ? <img src={l1 || l2} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 9, fontWeight: 800, color: "#fff" }}>V+V</span>}
         </div>
         <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
