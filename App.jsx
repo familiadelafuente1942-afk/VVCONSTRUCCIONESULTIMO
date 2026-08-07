@@ -492,8 +492,8 @@ function useStoredState(key, defaultValue) {
 
 // ── CONSTANTES ─────────────────────────────────────────────────────────
 const AIRPORTS = [{ id: "norte", code: "NORTE", name: "Zona Norte" }, { id: "sur", code: "SUR", name: "Zona Sur" }];
-const LIC_ESTADOS = [{ id: "visitar", label: "A Visitar", color: "#F59E0B", bg: "#FFFBEB" }, { id: "presupuesto", label: "Presupuesto", color: "#3B82F6", bg: "#EFF6FF" }, { id: "curso", label: "En Curso", color: "#8B5CF6", bg: "#F5F3FF" }, { id: "presentada", label: "Presentada", color: "#F97316", bg: "#FFF7ED" }, { id: "adjudicada", label: "Adjudicada", color: "#10B981", bg: "#ECFDF5" }, { id: "descartada", label: "Descartada", color: "#EF4444", bg: "#FEF2F2" }];
-const OBRA_ESTADOS = [{ id: "pendiente", label: "Pendiente", color: "#94A3B8", bg: "#F8FAFC" }, { id: "curso", label: "En Curso", color: "#10B981", bg: "#ECFDF5" }, { id: "pausada", label: "Pausada", color: "#F59E0B", bg: "#FFFBEB" }, { id: "terminada", label: "Terminada", color: "#6366F1", bg: "#EEF2FF" }];
+const LIC_ESTADOS = [{ id: "visitar", label: "A Visitar", color: "#F59E0B", bg: "rgba(180,83,9,.14)" }, { id: "presupuesto", label: "Presupuesto", color: "#3B82F6", bg: "rgba(37,99,235,.14)" }, { id: "curso", label: "En Curso", color: "#8B5CF6", bg: "rgba(139,92,246,.14)" }, { id: "presentada", label: "Presentada", color: "#F97316", bg: "#FFF7ED" }, { id: "adjudicada", label: "Adjudicada", color: "#10B981", bg: "rgba(22,163,74,.14)" }, { id: "descartada", label: "Descartada", color: "#EF4444", bg: "rgba(239,68,68,.10)" }];
+const OBRA_ESTADOS = [{ id: "pendiente", label: "Pendiente", color: "#94A3B8", bg: "rgba(255,255,255,.04)" }, { id: "curso", label: "En Curso", color: "#10B981", bg: "rgba(22,163,74,.14)" }, { id: "pausada", label: "Pausada", color: "#F59E0B", bg: "rgba(180,83,9,.14)" }, { id: "terminada", label: "Terminada", color: "#6366F1", bg: "#EEF2FF" }];
 const ROLES = ["Jefe de Obra", "Capataz", "Técnico", "Proveedor", "Contratista", "Administrativo"];
 const DOC_TYPES = [{ id: "art", label: "ART", acceptsExp: true }, { id: "antec", label: "Antecedentes", acceptsExp: false }, { id: "preoc", label: "Preocupacional", acceptsExp: true }, { id: "dni", label: "DNI", acceptsExp: false }, { id: "sicop", label: "SiCoP", acceptsExp: false }, { id: "alta", label: "Alta Temprana", acceptsExp: false }];
 const LIC_DOC_TYPES = [{ id: "planos", label: "Planos", accept: ".pdf,.png,.jpg,.dwg,.zip" }, { id: "pliego", label: "Pliego", accept: ".pdf,.doc,.docx" }, { id: "excel", label: "Excel", accept: ".xlsx,.xls,.csv,.pdf" }, { id: "otros", label: "Otros", accept: "*" }];
@@ -510,11 +510,11 @@ function isDirectivo(user) {
 
 // ── TEMA ───────────────────────────────────────────────────────────────
 const THEME_PRESETS = [
-    { id: "azul", label: "Azul", accent: "#1D4ED8", al: "#EFF6FF", bg: "#F1F5F9", card: "#fff", border: "#E2E8F0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#0F172A" },
-    { id: "oscuro", label: "Oscuro", accent: "#60A5FA", al: "#172554", bg: "#0F172A", card: "#1E293B", border: "#334155", text: "#F1F5F9", sub: "#94A3B8", muted: "#475569", navy: "#020617" },
-    { id: "verde", label: "Verde", accent: "#16A34A", al: "#DCFCE7", bg: "#F0FDF4", card: "#fff", border: "#BBF7D0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#14532D" },
-    { id: "violeta", label: "Violeta", accent: "#7C3AED", al: "#F5F3FF", bg: "#FAF5FF", card: "#fff", border: "#E9D5FF", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#3B0764" },
-    { id: "rojo", label: "Rojo", accent: "#DC2626", al: "#FEF2F2", bg: "#FFF5F5", card: "#fff", border: "#FECACA", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#7F1D1D" },
+    { id: "azul", label: "Azul", accent: "#1D4ED8", al: "rgba(37,99,235,.14)", bg: "rgba(255,255,255,.06)", card: "#fff", border: "#E2E8F0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#0F172A" },
+    { id: "oscuro", label: "Oscuro", accent: "#B0894F", al: "#241c14", bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", sub: "#B8B5AE", muted: "#7A776F", navy: "#0d0d0f" },
+    { id: "verde", label: "Verde", accent: "#16A34A", al: "rgba(22,163,74,.18)", bg: "#F0FDF4", card: "#fff", border: "#BBF7D0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#14532D" },
+    { id: "violeta", label: "Violeta", accent: "#7C3AED", al: "rgba(139,92,246,.14)", bg: "#FAF5FF", card: "#fff", border: "#E9D5FF", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#3B0764" },
+    { id: "rojo", label: "Rojo", accent: "#DC2626", al: "rgba(239,68,68,.10)", bg: "#FFF5F5", card: "#fff", border: "rgba(239,68,68,.30)", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#7F1D1D" },
     { id: "naranja", label: "Naranja", accent: "#EA580C", al: "#FFF7ED", bg: "#FFFBF5", card: "#fff", border: "#FED7AA", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#431407" },
     { id: "minimal", label: "Mínimal", accent: "#111111", al: "#F5F5F5", bg: "#FAFAFA", card: "#fff", border: "#E8E8E8", text: "#111", sub: "#555", muted: "#aaa", navy: "#111" },
     { id: "cyan", label: "Cyan", accent: "#0891B2", al: "#ECFEFF", bg: "#F0FDFF", card: "#fff", border: "#A5F3FC", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#164E63" },
@@ -530,7 +530,7 @@ const FONTS = [
 ];
 const RADIUS_OPTS = [{ id: "sharp", label: "Recto", r: 4 }, { id: "normal", label: "Normal", r: 14 }, { id: "suave", label: "Suave", r: 20 }, { id: "round", label: "Redondo", r: 28 }];
 const COLOR_KEYS = [{ k: "accent", label: "Principal" }, { k: "bg", label: "Fondo" }, { k: "card", label: "Tarjetas" }, { k: "text", label: "Texto" }, { k: "navy", label: "Encabezado" }, { k: "border", label: "Bordes" }];
-const DEFAULT_COLORS = { accent: "#1D4ED8", al: "#EFF6FF", bg: "#F1F5F9", card: "#ffffff", border: "#E2E8F0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#0F172A" };
+const DEFAULT_COLORS = { accent: "#1D4ED8", al: "rgba(37,99,235,.14)", bg: "rgba(255,255,255,.06)", card: "#ffffff", border: "#E2E8F0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#0F172A" };
 const DEFAULT_UBICACIONES = [{ id: "norte", code: "NORTE", name: "Zona Norte" }, { id: "sur", code: "SUR", name: "Zona Sur" }, { id: "oeste", code: "OESTE", name: "Zona Oeste" }, { id: "caba", code: "CABA", name: "Ciudad de Buenos Aires" }];
 
 const DEFAULT_TEXTOS = {
@@ -735,7 +735,7 @@ async function callAI(msgs, sys, apiKey, useSearch = false) {
 }
 
 function daysSince(s) { if (!s) return 999; const [d, m, y] = s.split("/"); return Math.ceil((new Date(`20${y}`, m - 1, d) - new Date()) / (1000 * 60 * 60 * 24)); }
-function hexLight(hex) { try { const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `#${Math.round(r * .12 + 255 * .88).toString(16).padStart(2, '0')}${Math.round(g * .12 + 255 * .88).toString(16).padStart(2, '0')}${Math.round(b * .12 + 255 * .88).toString(16).padStart(2, '0')}`; } catch { return '#EFF6FF'; } }
+function hexLight(hex) { try { const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `#${Math.round(r * .12 + 255 * .88).toString(16).padStart(2, '0')}${Math.round(g * .12 + 255 * .88).toString(16).padStart(2, '0')}${Math.round(b * .12 + 255 * .88).toString(16).padStart(2, '0')}`; } catch { return 'rgba(37,99,235,.14)'; } }
 function buildThemeCSS(cfg) {
     const c = cfg.colors || DEFAULT_COLORS;
     const fv = FONTS.find(f => f.id === cfg.fontId)?.value || "'Plus Jakarta Sans'";
@@ -764,12 +764,12 @@ function formatMonto(val) {
 }
 function parseMonto(val) { return String(val).replace(/[^\d]/g, ''); }
 
-const T = { bg: "var(--bg,#F1F5F9)", card: "var(--card,#fff)", border: "var(--border,#E2E8F0)", text: "var(--text,#0F172A)", sub: "var(--sub,#475569)", muted: "var(--muted,#94A3B8)", accent: "var(--accent,#1D4ED8)", accentLight: "var(--al,#EFF6FF)", navy: "var(--navy,#0F172A)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
+const T = { bg: "var(--bg,rgba(255,255,255,.06))", card: "var(--card,#fff)", border: "var(--border,#E2E8F0)", text: "var(--text,#0F172A)", sub: "var(--sub,#475569)", muted: "var(--muted,#94A3B8)", accent: "var(--accent,#1D4ED8)", accentLight: "var(--al,rgba(37,99,235,.14))", navy: "var(--navy,#0F172A)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Montserrat:wght@400;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Montserrat:wght@400;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg,#F1F5F9);overscroll-behavior:none;}
+  body{background:var(--bg,rgba(255,255,255,.06));overscroll-behavior:none;}
   input,textarea,select,button{font-family:var(--font,'Plus Jakarta Sans'),sans-serif;}
   input:focus,textarea:focus,select:focus{outline:none;}textarea{resize:none;}button{cursor:pointer;}::-webkit-scrollbar{display:none;}
   @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -843,7 +843,7 @@ async function ponerGlobito(n) {
 }
 function Badge({ color, bg, children, style = {} }) { return <span style={{ display: "inline-flex", alignItems: "center", fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 20, padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em", ...style }}>{children}</span>; }
 function PBtn({ children, onClick, disabled, full, style = {}, variant = "primary" }) {
-    const v = { primary: { background: disabled ? "#E2E8F0" : "var(--accent,#1D4ED8)", color: disabled ? "#94A3B8" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "#FEF2F2", border: "1.5px solid #FECACA", color: "#EF4444", boxShadow: "none" } };
+    const v = { primary: { background: disabled ? "#E2E8F0" : "var(--accent,#1D4ED8)", color: disabled ? "#94A3B8" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", color: "#EF4444", boxShadow: "none" } };
     return <button onClick={onClick} disabled={disabled} style={{ ...v[variant], borderRadius: T.rsm, padding: "11px 20px", fontSize: 14, fontWeight: 600, width: full ? "100%" : "auto", transition: "all .15s", ...style }}>{children}</button>;
 }
 function Sheet({ title, onClose, children }) { return (<div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 200, display: "flex", alignItems: "flex-end", backdropFilter: "blur(2px)" }}><div style={{ background: T.card, borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "90vh", overflow: "auto", animation: "up .25s ease", paddingBottom: 32 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 0" }}><span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{title}</span><button onClick={onClose} style={{ background: T.bg, border: "none", borderRadius: 20, width: 32, height: 32, fontSize: 18, color: T.muted, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button></div><div style={{ padding: "14px 20px 0" }}>{children}</div></div></div>); }
@@ -888,14 +888,14 @@ function LoginModal({ titulo, onSuccess, onClose }) {
             <input value={u} onChange={e => { setU(e.target.value); setErr(''); }} placeholder="Ingresá tu usuario"
                 autoCapitalize="none" autoCorrect="off" autoComplete="username"
                 onKeyDown={e => e.key === 'Enter' && login()}
-                style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? '#FECACA' : T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} />
+                style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? 'rgba(239,68,68,.30)' : T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} />
         </Field>
         <Field label="Contraseña">
             <div style={{ position: "relative" }}>
                 <input type={showPass ? "text" : "password"} value={p} onChange={e => { setP(e.target.value); setErr(''); }}
                     placeholder="••••••••" autoComplete="current-password"
                     onKeyDown={e => e.key === 'Enter' && login()}
-                    style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? '#FECACA' : T.border}`, borderRadius: T.rsm, padding: "11px 44px 11px 14px", fontSize: 14, color: T.text }} />
+                    style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? 'rgba(239,68,68,.30)' : T.border}`, borderRadius: T.rsm, padding: "11px 44px 11px 14px", fontSize: 14, color: T.text }} />
                 <button onClick={() => setShowPass(v => !v)} type="button"
                     style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: showPass ? "var(--accent,#1D4ED8)" : T.muted, display: "flex", alignItems: "center", padding: 4 }}>
                     {showPass
@@ -905,7 +905,7 @@ function LoginModal({ titulo, onSuccess, onClose }) {
                 </button>
             </div>
         </Field>
-        {err && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#EF4444", marginBottom: 12, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#EF4444", marginBottom: 12, fontWeight: 600 }}>{err}</div>}
         <PBtn full onClick={login}>Ingresar</PBtn>
     </Sheet>);
 }
@@ -1000,7 +1000,7 @@ function Dashboard({ lics, obras, personal, alerts, setView, setDetailObraId, re
             </div>
         </div>}
         <div style={{ padding: web ? "18px 18px 14px" : "14px 18px" }}>
-            {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
+            {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 10, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
                 <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div>
@@ -1013,7 +1013,7 @@ function Dashboard({ lics, obras, personal, alerts, setView, setDetailObraId, re
                     <button onClick={() => setView("obras")} style={{ fontSize: 12, color: T.accent, background: "none", border: "none", fontWeight: 600 }}>{t(cfg, 'dash_ver_todas')}</button>
                 </div>
                 {obras.filter(o => o.estado === "curso").map(o => (<Card key={o.id} onClick={() => { setDetailObraId(o.id); setView("obras"); }} style={{ padding: "12px 14px", marginBottom: 8, cursor: "pointer" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><div style={{ fontSize: 13, fontWeight: 600, color: T.text, flex: 1, paddingRight: 8 }}>{o.nombre}</div><Badge color="#10B981" bg="#ECFDF5">{o.avance}%</Badge></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><div style={{ fontSize: 13, fontWeight: 600, color: T.text, flex: 1, paddingRight: 8 }}>{o.nombre}</div><Badge color="#10B981" bg="rgba(22,163,74,.14)">{o.avance}%</Badge></div>
                     <div style={{ height: 4, background: T.bg, borderRadius: 4, marginBottom: 6 }}><div style={{ height: 4, background: T.accent, borderRadius: 4, width: `${o.avance}%` }} /></div>
                     <div style={{ fontSize: 11, color: T.muted }}>{UBICS.find(a => a.id === o.ap)?.code || o.ap} · {t(cfg, 'obras_cierre')}: {o.cierre}</div>
                 </Card>))}
@@ -1055,14 +1055,14 @@ function DocMultiGrid({ docs, onUpload, onRemove, refs, prefix }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                         {lista.map((f, i) => (
                             <div key={f.id || i} style={{ display: "flex", alignItems: "center", gap: 8, background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 9, padding: "8px 10px" }}>
-                                <div style={{ width: 28, height: 28, borderRadius: 6, background: "#ECFDF5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(22,163,74,.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                                     <span style={{ fontSize: 8, fontWeight: 800, color: "#15803D" }}>{(f.nombre || '').split('.').pop().toUpperCase().slice(0,4)}</span>
                                 </div>
                                 <span style={{ flex: 1, fontSize: 11, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</span>
                                 <a href={f.url} download={f.nombre} style={{ textDecoration: "none", flexShrink: 0 }}>
                                     <button style={{ background: "none", border: "1px solid #86EFAC", borderRadius: 6, padding: "4px 8px", fontSize: 10, color: "#15803D", fontWeight: 600, cursor: "pointer" }}>↓</button>
                                 </a>
-                                <button onClick={() => onRemove(d.id, f.id || i)} style={{ background: "none", border: "1px solid #FCA5A5", borderRadius: 6, padding: "4px 7px", fontSize: 10, color: "#EF4444", cursor: "pointer", flexShrink: 0 }}>✕</button>
+                                <button onClick={() => onRemove(d.id, f.id || i)} style={{ background: "none", border: "1px solid rgba(239,68,68,.35)", borderRadius: 6, padding: "4px 7px", fontSize: 10, color: "#EF4444", cursor: "pointer", flexShrink: 0 }}>✕</button>
                             </div>
                         ))}
                     </div>
@@ -1076,7 +1076,7 @@ function DocMultiGrid({ docs, onUpload, onRemove, refs, prefix }) {
 function DocGrid({ docs, onUpload, onRemove, refs, prefix }) {
     return (<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>{LIC_DOC_TYPES.map(d => {
         const doc = docs?.[d.id]; const rk = `${prefix}_${d.id}`; return (<div key={d.id}><input type="file" accept={d.accept} style={{ display: "none" }} ref={el => refs.current[rk] = el} onChange={async e => { if (e.target.files[0]) await onUpload(d.id, e.target.files[0]); e.target.value = ""; }} />
-            {doc ? (<div style={{ background: "#F0FDF4", border: "1.5px solid #86EFAC", borderRadius: 10, padding: "9px 10px" }}><div style={{ fontSize: 10, fontWeight: 700, color: "#15803D", marginBottom: 2 }}>{d.label}</div><div style={{ fontSize: 10, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 5 }}>{doc.nombre}</div><div style={{ display: "flex", gap: 4 }}><a href={doc.url} download={doc.nombre} style={{ textDecoration: "none", flex: 1 }}><button style={{ width: "100%", background: "none", border: "1px solid #86EFAC", borderRadius: 6, padding: "4px 0", fontSize: 9, color: "#15803D", fontWeight: 600, cursor: "pointer" }}>↓ Ver</button></a><button onClick={() => onRemove(d.id)} style={{ background: "none", border: "1px solid #FCA5A5", borderRadius: 6, padding: "4px 7px", fontSize: 9, color: "#EF4444", cursor: "pointer" }}>✕</button></div></div>
+            {doc ? (<div style={{ background: "#F0FDF4", border: "1.5px solid #86EFAC", borderRadius: 10, padding: "9px 10px" }}><div style={{ fontSize: 10, fontWeight: 700, color: "#15803D", marginBottom: 2 }}>{d.label}</div><div style={{ fontSize: 10, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 5 }}>{doc.nombre}</div><div style={{ display: "flex", gap: 4 }}><a href={doc.url} download={doc.nombre} style={{ textDecoration: "none", flex: 1 }}><button style={{ width: "100%", background: "none", border: "1px solid #86EFAC", borderRadius: 6, padding: "4px 0", fontSize: 9, color: "#15803D", fontWeight: 600, cursor: "pointer" }}>↓ Ver</button></a><button onClick={() => onRemove(d.id)} style={{ background: "none", border: "1px solid rgba(239,68,68,.35)", borderRadius: 6, padding: "4px 7px", fontSize: 9, color: "#EF4444", cursor: "pointer" }}>✕</button></div></div>
             ) : (<button onClick={() => refs.current[rk]?.click()} style={{ width: "100%", background: T.bg, border: "1.5px dashed #86EFAC", borderRadius: 10, padding: "10px 6px", cursor: "pointer", textAlign: "center" }}><div style={{ fontSize: 10, fontWeight: 700, color: "#15803D", marginBottom: 2 }}>{d.label.slice(0, 3).toUpperCase()}</div><div style={{ fontSize: 11, fontWeight: 600, color: T.sub }}>{d.label}</div><div style={{ fontSize: 9, color: T.muted, marginTop: 2 }}>Subir</div></button>)}</div>);
     })}</div>);
 }
@@ -1178,7 +1178,7 @@ function Proyectos({ lics, setLics, requireAuth, cfg, obras, setObras }) {
                         return (<Card key={lic.id} onClick={() => setShowDetail(lic.id)} style={{ padding: "13px 14px", marginBottom: 7, cursor: "pointer" }}>
                             <div style={{ display: "flex", justifyContent: "space-between" }}>
                                 <div style={{ flex: 1, paddingRight: 8 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>{lic.nombre}{obraVinc && <span style={{ fontSize: 9, fontWeight: 700, background: "#ECFDF5", color: "#10B981", border: "1px solid #86EFAC", borderRadius: 20, padding: "1px 6px" }}><Ico n="building" /> EN OBRA</span>}</div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>{lic.nombre}{obraVinc && <span style={{ fontSize: 9, fontWeight: 700, background: "rgba(22,163,74,.14)", color: "#10B981", border: "1px solid #86EFAC", borderRadius: 20, padding: "1px 6px" }}><Ico n="building" /> EN OBRA</span>}</div>
                                     <div style={{ fontSize: 11, color: T.muted }}>{ubicLabel}{lic.sector ? ` · ${lic.sector}` : ""}</div>
                                 </div>
                                 <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -1232,12 +1232,12 @@ function Proyectos({ lics, setLics, requireAuth, cfg, obras, setObras }) {
             {(detail.estado === "adjudicada" || detail.estado === "curso") && (() => {
                 const obraVinc = obras.find(o => o.lic_id === detail.id);
                 return obraVinc ? (
-                    <div style={{ background: "#ECFDF5", border: "1px solid #86EFAC", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ background: "rgba(22,163,74,.14)", border: "1px solid #86EFAC", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="#10B981"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
                         <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 700, color: "#15803D" }}><Ico n="check" /> Obra creada automáticamente</div><div style={{ fontSize: 11, color: "#166534", marginTop: 1 }}>{obraVinc.nombre} — En Curso ({obraVinc.avance}%)</div></div>
                     </div>
                 ) : (
-                    <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ background: "rgba(180,83,9,.14)", border: "1px solid rgba(180,83,9,.30)", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                         <div style={{ fontSize: 12, color: "#92400E", fontWeight: 600 }}>⚠ Sin obra vinculada</div>
                         <button onClick={() => autoCrearObra(detail)} style={{ background: "#F59E0B", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Crear obra ahora</button>
                     </div>
@@ -1264,9 +1264,9 @@ function Proyectos({ lics, setLics, requireAuth, cfg, obras, setObras }) {
 
 // ── REGISTRO FOTOGRÁFICO DE VISITAS (usado en Proyectos) ──────────
 const ETAPAS_VISITA = [
-    { id: 'antes', label: 'Antes', color: '#F59E0B', bg: '#FFFBEB' },
-    { id: 'durante', label: 'Durante', color: '#3B82F6', bg: '#EFF6FF' },
-    { id: 'despues', label: 'Después', color: '#10B981', bg: '#ECFDF5' },
+    { id: 'antes', label: 'Antes', color: '#F59E0B', bg: 'rgba(180,83,9,.14)' },
+    { id: 'durante', label: 'Durante', color: '#3B82F6', bg: 'rgba(37,99,235,.14)' },
+    { id: 'despues', label: 'Después', color: '#10B981', bg: 'rgba(22,163,74,.14)' },
 ];
 
 function RegistroVisitas({ visitas, onUpdate, licId }) {
@@ -1431,7 +1431,7 @@ function RegistroVisitas({ visitas, onUpdate, licId }) {
                             </button>
                         ))}
                         <button onClick={() => eliminar(foto.id)}
-                            style={{ marginLeft: "auto", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 20, padding: "4px 10px", fontSize: 10, fontWeight: 700, color: "#EF4444", cursor: "pointer" }}>
+                            style={{ marginLeft: "auto", background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 20, padding: "4px 10px", fontSize: 10, fontWeight: 700, color: "#EF4444", cursor: "pointer" }}>
                             Eliminar
                         </button>
                     </div>
@@ -1538,7 +1538,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} /><span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Informe IA generado</span></div>
                 <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => { try { navigator.clipboard.writeText(informe); } catch { } }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 10px", fontSize: 11, color: T.sub, cursor: "pointer" }}><Ico n="list" /> Copiar</button>
-                    <button onClick={() => setInforme('')} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, padding: "4px 8px", fontSize: 11, color: "#EF4444", cursor: "pointer" }}>✕</button>
+                    <button onClick={() => setInforme('')} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 7, padding: "4px 8px", fontSize: 11, color: "#EF4444", cursor: "pointer" }}>✕</button>
                 </div>
             </div>
             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "12px 14px", fontSize: 12, color: T.text, lineHeight: 1.7, whiteSpace: "pre-wrap", maxHeight: 320, overflowY: "auto" }}>{informe}</div>
@@ -1553,9 +1553,9 @@ function TabInformes({ detail, upd }) {
     const fileRef = useRef(null);
     const informes = detail.informes || [];
     const TIPOS_INF = [
-        { id: 'diario', label: 'Diario', color: '#3B82F6', bg: '#EFF6FF' },
-        { id: 'semanal', label: 'Semanal', color: '#7C3AED', bg: '#F5F3FF' },
-        { id: 'ingeniero', label: 'Ingeniero', color: '#10B981', bg: '#ECFDF5' },
+        { id: 'diario', label: 'Diario', color: '#3B82F6', bg: 'rgba(37,99,235,.14)' },
+        { id: 'semanal', label: 'Semanal', color: '#7C3AED', bg: 'rgba(139,92,246,.14)' },
+        { id: 'ingeniero', label: 'Ingeniero', color: '#10B981', bg: 'rgba(22,163,74,.14)' },
     ];
     async function handleFile(e) {
         const files = Array.from(e.target.files);
@@ -1605,7 +1605,7 @@ function TabInformes({ detail, upd }) {
                 </div>
                 <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
                     <button onClick={(e) => { e.stopPropagation(); descargarArchivo(inf.url, inf.nombre); }} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>👁</button>
-                    <button onClick={(e) => { e.stopPropagation(); upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) }); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
+                    <button onClick={(e) => { e.stopPropagation(); upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) }); }} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
                 </div>
             </div>))}
         {showNew && (<Sheet title={`Subir informe ${tp?.label}`} onClose={() => setShowNew(false)}>
@@ -1623,10 +1623,10 @@ function TabInformes({ detail, upd }) {
 // ── OBRAS ────────────────────────────────────────────────────────────
 // ── TAB GASTOS (dentro de cada Obra) ─────────────────────────────────
 const TIPOS_GASTO = [
-    { id: 'viatico', label: 'Viático', color: '#F59E0B', bg: '#FFFBEB' },
-    { id: 'compra', label: 'Compra material', color: '#3B82F6', bg: '#EFF6FF' },
-    { id: 'herramienta', label: 'Herramienta', color: '#8B5CF6', bg: '#F5F3FF' },
-    { id: 'subcontrato', label: 'Subcontrato', color: '#10B981', bg: '#ECFDF5' },
+    { id: 'viatico', label: 'Viático', color: '#F59E0B', bg: 'rgba(180,83,9,.14)' },
+    { id: 'compra', label: 'Compra material', color: '#3B82F6', bg: 'rgba(37,99,235,.14)' },
+    { id: 'herramienta', label: 'Herramienta', color: '#8B5CF6', bg: 'rgba(139,92,246,.14)' },
+    { id: 'subcontrato', label: 'Subcontrato', color: '#10B981', bg: 'rgba(22,163,74,.14)' },
     { id: 'combustible', label: 'Combustible', color: '#F97316', bg: '#FFF7ED' },
     { id: 'otro', label: 'Otro', color: '#6B7280', bg: '#F9FAFB' },
 ];
@@ -1706,7 +1706,7 @@ function TabGastos({ detail, upd }) {
                                 </div>
                             </a>
                         )}
-                        <button onClick={() => eliminar(g.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "6px 10px", fontSize: 11, color: "#EF4444", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>✕</button>
+                        <button onClick={() => eliminar(g.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 8, padding: "6px 10px", fontSize: 11, color: "#EF4444", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>✕</button>
                     </div>
                 </div>);
             })
@@ -1736,7 +1736,7 @@ function TabGastos({ detail, upd }) {
             <Field label="Comprobante (foto o PDF)">
                 <input ref={compRef} type="file" accept="image/*,.pdf" onChange={handleComp} style={{ display: "none" }} />
                 {form.comprobante ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#ECFDF5", border: "1px solid #86EFAC", borderRadius: T.rsm, padding: "10px 12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(22,163,74,.14)", border: "1px solid #86EFAC", borderRadius: T.rsm, padding: "10px 12px" }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", flex: 1 }}>✓ {form.comprobante.nombre}</div>
                         <button onClick={() => setForm(p => ({ ...p, comprobante: null }))} style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 14 }}>✕</button>
                     </div>
@@ -1912,7 +1912,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Presupuesto</div>
                                 <input value={detail.monto || ''} onChange={e => upd(detail.id, { monto: e.target.value })} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
-                            <div style={{ background: detail.pagado > 0 ? "#ECFDF5" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            <div style={{ background: detail.pagado > 0 ? "rgba(22,163,74,.14)" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}><Ico n="money" /> Pagado</div>
                                 <input value={detail.pagado || ''} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); upd(detail.id, { pagado: v ? parseFloat(v) : 0 }); }} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: "#10B981", padding: 0 }} />
                             </div>
@@ -1937,7 +1937,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <div style={{ fontSize: 9.5, color: T.muted, marginTop: 5 }}>Con este código entrás en la app de Propietario, sin pasar por Belfast.</div>
                             </div>}
                         </div>
-                        <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "#FEF2F2", border: "1.5px solid #FECACA", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
+                        <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
                     </div>)}
                     {tab === "obs" && (<div>
                         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
@@ -2018,7 +2018,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
 // ════════════════════════════════════════════════════════════════════
 
 const BRASS = "#B0894F";
-const INST_COLORS = { accent:"#1E3A5F", al:"#EAEEF3", bg:"#F5F6F8", card:"#FFFFFF", border:"#E6E9EE", text:"#131C2B", sub:"#4A5565", muted:"#97A0AE", navy:"#101C2C" };
+const INST_COLORS = { accent:"#1E3A5F", al:"rgba(255,255,255,.08)", bg:"#F5F6F8", card:"#FFFFFF", border:"#E6E9EE", text:"#131C2B", sub:"#4A5565", muted:"#97A0AE", navy:"#101C2C" };
 
 const SAMPLE_OBRAS = [
   { id:"o1", nombre:"Castores 475", ap:"norte", sector:"Vivienda PB+1", estado:"curso", avance:68, inicio:"10/03/26", cierre:"30/08/26", monto:"12.400.000 $", pagado:8100000, obs:[{id:"b1",txt:"Hormigón visto terminado en PB.",fecha:"20/06/26"}], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
@@ -2072,7 +2072,7 @@ function BrandHeader({ cfg }) {
             </div>
           </div>
         )}
-        <div style={{ position:"absolute", right:16, top:"50%", transform:"translateY(-50%)", width:34, height:34, borderRadius:"50%", background:"var(--al,#EAEEF3)", border:"1px solid var(--border,#E6E9EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"var(--accent,#1E3A5F)", flexShrink:0 }}>S</div>
+        <div style={{ position:"absolute", right:16, top:"50%", transform:"translateY(-50%)", width:34, height:34, borderRadius:"50%", background:"var(--al,rgba(255,255,255,.08))", border:"1px solid var(--border,#E6E9EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"var(--accent,#1E3A5F)", flexShrink:0 }}>S</div>
       </div>
       <div style={{ height:2, background:BRASS, width:"100%" }} />
     </div>
@@ -2247,7 +2247,7 @@ function InternosView({ db, cfg, onBack }) {
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="mensajes" label="Chat privado" sub="Consultas del equipo — Belfast no los ve" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
-      <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "9px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
+      <div style={{ background: "rgba(180,83,9,.14)", border: "1px solid rgba(180,83,9,.30)", borderRadius: 10, padding: "9px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
         Este canal es <b>privado de V+V</b>. Lo ven solo ustedes en esta app; no llega a Belfast ni al panel del cliente.
       </div>
 
@@ -2385,7 +2385,7 @@ function InformeSemanalView({ db, cfg, onBack }) {
       h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
       ul { margin: 0 0 4px; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.6; margin-bottom: 3px; }
       .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
-      .obs { font-size: 12px; line-height: 1.55; color: #1a2433; background: #F8FAFC; border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
+      .obs { font-size: 12px; line-height: 1.55; color: #1a2433; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
       .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
     </style></head><body><div class="sheet">
       <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Informe semanal de obra</div></div>
@@ -2467,7 +2467,7 @@ function InformeSemanalView({ db, cfg, onBack }) {
       <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} placeholder="Clima, faltantes, pedidos a la dirección de obra, etc." style={{ ...inp, resize: "vertical", lineHeight: 1.5, margin: "6px 0 14px" }} />
 
       {editandoId && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: "#FFFBEB", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "9px 12px", marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: "rgba(180,83,9,.14)", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "9px 12px", marginBottom: 10 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: "#7A5A24" }}>Editando informe de la semana {fmtFecha(desde)} al {fmtFecha(hasta)}</span>
           <button onClick={cancelarEdicion} style={{ background: "none", border: "none", color: "#7A5A24", fontWeight: 700, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>Cancelar</button>
         </div>
@@ -2480,14 +2480,14 @@ function InformeSemanalView({ db, cfg, onBack }) {
 
       {lista.length > 0 && <div style={{ marginTop: 22 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Informes guardados de esta obra</div>
-        {lista.map(rep => <div key={rep.id} style={{ background: rep.id === editandoId ? "#FFFBEB" : T.card, border: rep.id === editandoId ? `1.5px solid ${BRASS}` : `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+        {lista.map(rep => <div key={rep.id} style={{ background: rep.id === editandoId ? "rgba(180,83,9,.14)" : T.card, border: rep.id === editandoId ? `1.5px solid ${BRASS}` : `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div><div style={{ fontSize: 13, fontWeight: 800, color: T.navy }}>Semana {fmtFecha(rep.desde)} al {fmtFecha(rep.hasta)}{rep.id === editandoId ? " · editando" : ""}</div>
               <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{(rep.hechos || []).length} realizados · {(rep.proxima || []).length} previstos{rep.tsEditado ? " · editado" : ""}</div></div>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={() => editarInforme(rep)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✎ Editar</button>
               <button onClick={() => verPdf(rep)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" /> PDF</button>
-              <button onClick={() => borrar(rep.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> </button>
+              <button onClick={() => borrar(rep.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> </button>
             </div>
           </div>
         </div>)}
@@ -2607,17 +2607,17 @@ function AuditoriaView({ db, cfg, onBack }) {
       .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 16px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
       .barra b { color: #0F1B2D; }
       .grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
-      .grid > div { flex: 1 1 45%; background: #F8FAFC; border: 1px solid #E3E8EF; border-radius: 8px; padding: 8px 11px; }
+      .grid > div { flex: 1 1 45%; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 8px 11px; }
       .grid span { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #94A3B8; margin-bottom: 2px; }
       .grid b { font-size: 12.5px; color: #0F1B2D; }
       h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
       table { width: 100%; border-collapse: collapse; }
-      th { background: #F1F5F9; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      th { background: rgba(255,255,255,.06); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
       td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
       ul { margin: 0; padding-left: 20px; } li { font-size: 12px; line-height: 1.55; margin-bottom: 3px; }
       .vacio { font-size: 11.5px; color: #98A2B3; font-style: italic; }
       .parr { font-size: 12px; line-height: 1.6; text-align: justify; }
-      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: #F8FAFC; border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
+      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
       .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 14px; color: ${colorRes}; border: 1.5px solid ${colorRes}; }
       .firmas { display: flex; gap: 40px; margin-top: 34px; page-break-inside: avoid; }
       .firma { flex: 1; text-align: center; }
@@ -2708,7 +2708,7 @@ function AuditoriaView({ db, cfg, onBack }) {
           <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
             <button onClick={() => verPdf(it)} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "7px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" s={13} /> PDF</button>
             <button onClick={() => editar(it)} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 7, padding: "7px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
-            <button onClick={() => borrar(it.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} /></button>
+            <button onClick={() => borrar(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} /></button>
           </div>
         </div>
       ))}
@@ -2993,7 +2993,7 @@ function BitacoraView({ db, cfg, onBack }) {
       .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
       .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
       .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
-      .adj { font-size: 10.5px; color: #1B3A5B; background: #F1F5F9; border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
+      .adj { font-size: 10.5px; color: #1B3A5B; background: rgba(255,255,255,.06); border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
       .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
       .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
       .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
@@ -3132,7 +3132,7 @@ function BitacoraView({ db, cfg, onBack }) {
             </div>}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <button onClick={() => editarHecho(h)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
-              <button onClick={() => borrar(h.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Borrar</button>
+              <button onClick={() => borrar(h.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Borrar</button>
             </div>
           </div>
         ))}
@@ -4072,7 +4072,7 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
   return (<div style={{ minHeight: "100vh" }}>
     <PageHead eyebrow="Reuniones" title="🎙 Grabar reunión" sub="Grabá la reunión de corrido — se arma la minuta sola al terminar" back onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
-      {!sttOk && <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
+      {!sttOk && <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.35)", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
       <Field label="Título de la reunión"><TInput value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Reunión de avance semanal" /></Field>
       <Field label="Fecha"><TInput type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></Field>
       {obras.length > 0 && <Field label="Obra (opcional)"><Sel value={obraId} onChange={e => setObraId(e.target.value)}><option value="">— Sin asignar —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
@@ -4111,7 +4111,7 @@ function MatPedidosView({ db, cfg, onBack }) {
   // Días transcurridos desde que se pidió (para las alertas de definiciones y planos).
   const diasDe = (p) => { const t0 = p.ts || 0; if (!t0) return 0; return Math.max(0, Math.floor((Date.now() - t0) / 86400000)); };
   // SLA: 5 días. Amarillo desde 3, rojo al pasarse.
-  const alertaDe = (p) => { const d = diasDe(p); if (p.cumplido) return null; if (d >= 5) return { d, txt: `⚠ Vencido — ${d} días sin respuesta`, color: "#B91C1C", bg: "#FEF2F2", bd: "#FECACA" }; if (d >= 3) return { d, txt: `⏳ ${d} días esperando`, color: "#B45309", bg: "#FFFBEB", bd: "#FDE68A" }; return { d, txt: `${d === 0 ? "Pedido hoy" : d === 1 ? "1 día esperando" : d + " días esperando"}`, color: "#1B3A5B", bg: "#EFF6FF", bd: "#DBEAFE" }; };
+  const alertaDe = (p) => { const d = diasDe(p); if (p.cumplido) return null; if (d >= 5) return { d, txt: `⚠ Vencido — ${d} días sin respuesta`, color: "#B91C1C", bg: "rgba(239,68,68,.10)", bd: "rgba(239,68,68,.30)" }; if (d >= 3) return { d, txt: `⏳ ${d} días esperando`, color: "#B45309", bg: "rgba(180,83,9,.14)", bd: "rgba(180,83,9,.30)" }; return { d, txt: `${d === 0 ? "Pedido hoy" : d === 1 ? "1 día esperando" : d + " días esperando"}`, color: "#1B3A5B", bg: "rgba(37,99,235,.14)", bd: "#DBEAFE" }; };
   // Guarda fusionando por pedido: la versión más nueva de CADA pedido gana.
   // Así lo que marcás acá no se pierde cuando la otra app escribe su copia.
   async function guardarMats(fn) {
@@ -4182,7 +4182,7 @@ function MatPedidosView({ db, cfg, onBack }) {
     </div>
 
     {vista === "pedidos" && <div style={{ padding: "16px 20px" }}>
-      {(pendDefPl.length > 0 || cumplidosN > 0) && <div style={{ background: vencidos.length ? "#FEF2F2" : T.card, border: `1px solid ${vencidos.length ? "#FECACA" : T.border}`, borderLeft: `3px solid ${vencidos.length ? "#B91C1C" : BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 14 }}>
+      {(pendDefPl.length > 0 || cumplidosN > 0) && <div style={{ background: vencidos.length ? "rgba(239,68,68,.10)" : T.card, border: `1px solid ${vencidos.length ? "rgba(239,68,68,.30)" : T.border}`, borderLeft: `3px solid ${vencidos.length ? "#B91C1C" : BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 14 }}>
         <div style={{ fontSize: 12.5, fontWeight: 800, color: vencidos.length ? "#B91C1C" : T.navy }}>
           {vencidos.length ? `⚠ ${vencidos.length} pedido(s) vencido(s)` : pendDefPl.length ? `${pendDefPl.length} definición/plano pendiente(s)` : "Sin pendientes de definiciones ni planos"}
         </div>
@@ -4229,12 +4229,12 @@ function MatPedidosView({ db, cfg, onBack }) {
             <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 6, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado por ${cn}${p.leidoFecha ? " · " + p.leidoFecha : ""}` : `● No leído por ${cn}`}</div>
             {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 3 }}><Ico n="send" /> Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
             {p.tipo !== "material" && (p.cumplido
-              ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Cumplido{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
+              ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "rgba(22,163,74,.14)", border: "1px solid rgba(22,163,74,.30)", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Cumplido{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
               : (() => { const a = alertaDe(p); return a ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: a.color, background: a.bg, border: `1px solid ${a.bd}`, borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>{a.txt}</div> : null; })())}
           </div>
-          <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+          <button onClick={() => borrar(p.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
-        {p.tipo !== "material" && <button onClick={() => marcarCumplido(p.id, !p.cumplido)} style={{ width: "100%", marginTop: 10, background: p.cumplido ? T.bg : "#ECFDF5", color: p.cumplido ? T.sub : "#15803D", border: `1px solid ${p.cumplido ? T.border : "#A7F3D0"}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{p.cumplido ? "↩ Reabrir (volver a pendiente)" : "✓ Marcar como cumplido"}</button>}
+        {p.tipo !== "material" && <button onClick={() => marcarCumplido(p.id, !p.cumplido)} style={{ width: "100%", marginTop: 10, background: p.cumplido ? T.bg : "rgba(22,163,74,.14)", color: p.cumplido ? T.sub : "#15803D", border: `1px solid ${p.cumplido ? T.border : "rgba(22,163,74,.30)"}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{p.cumplido ? "↩ Reabrir (volver a pendiente)" : "✓ Marcar como cumplido"}</button>}
         <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 10, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> Enviar por WhatsApp a los jefes de obra</button>
         {waFor === p.id && <div style={{ marginTop: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
@@ -4393,7 +4393,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
   return (<div style={{ flex:1, overflowY:"auto", paddingBottom:80 }}>
     <PageHead eyebrow="Panel" title="Más" sub="Módulos y configuración del sistema" />
     <div style={{ padding:"16px 20px" }}>
-      {pend.length>0 && <div onClick={()=>setSub("pedidos")} style={{ display:"flex", alignItems:"center", gap:11, background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:T.rsm, padding:"12px 14px", marginBottom:16, cursor:"pointer" }}>
+      {pend.length>0 && <div onClick={()=>setSub("pedidos")} style={{ display:"flex", alignItems:"center", gap:11, background:"rgba(239,68,68,.10)", border:"1px solid rgba(239,68,68,.30)", borderRadius:T.rsm, padding:"12px 14px", marginBottom:16, cursor:"pointer" }}>
         <div style={{ width:30, height:30, borderRadius:"50%", background:"#EF4444", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, flexShrink:0 }}>{pend.length}</div>
         <div style={{ flex:1, minWidth:0 }}><div style={{ fontSize:13, fontWeight:700, color:"#991B1B" }}>{pend.length} pedido{pend.length>1?"s":""} pendiente{pend.length>1?"s":""} en Pedidos</div><div style={{ fontSize:11.5, color:"#B91C1C", marginTop:1 }}>{pendObras?`Obras: ${pendObras}`:"Tocá para ver"} →</div></div>
       </div>}
@@ -4608,7 +4608,7 @@ function MiniStat({ label, value, color }) {
 function RowItem({ onClick, children, onDelete }) {
   return (<div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", marginBottom: 9, boxShadow: T.shadow, display: "flex", alignItems: "center", gap: 12 }}>
     <div onClick={onClick} style={{ flex: 1, cursor: onClick ? "pointer" : "default", minWidth: 0 }}>{children}</div>
-    {onDelete && <button onClick={onDelete} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
+    {onDelete && <button onClick={onDelete} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
   </div>);
 }
 
@@ -4658,11 +4658,11 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nombre}</div>
               <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {obrasNombres(p)}{p.telefono ? ` · ${p.telefono}` : ""}</div>
-              {(p.sitios || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{p.sitios.map((s, i) => <span key={i} style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", background: "#ECFDF5", borderRadius: 5, padding: "2px 6px" }}>✓ {s.sitio}</span>)}</div>}
+              {(p.sitios || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{p.sitios.map((s, i) => <span key={i} style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", background: "rgba(22,163,74,.14)", borderRadius: 5, padding: "2px 6px" }}>✓ {s.sitio}</span>)}</div>}
             </div>
             {vc > 0
-              ? <Badge color="#EF4444" bg="#FEF2F2">{vc} vence</Badge>
-              : docsOk(p) > 0 ? <Badge color="#16A34A" bg="#ECFDF5">OK</Badge> : <Badge color="#94A3B8" bg="#F8FAFC">s/doc</Badge>}
+              ? <Badge color="#EF4444" bg="rgba(239,68,68,.10)">{vc} vence</Badge>
+              : docsOk(p) > 0 ? <Badge color="#16A34A" bg="rgba(22,163,74,.14)">OK</Badge> : <Badge color="#94A3B8" bg="rgba(255,255,255,.04)">s/doc</Badge>}
           </div>
         </RowItem>);
       })}
@@ -4705,7 +4705,7 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
         return (<div key={d.id} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{d.label}</span>
-            {doc ? <Badge color={dias != null && dias <= 15 ? "#EF4444" : "#16A34A"} bg={dias != null && dias <= 15 ? "#FEF2F2" : "#ECFDF5"}>{doc.nombre ? "cargado" : "—"}</Badge>
+            {doc ? <Badge color={dias != null && dias <= 15 ? "#EF4444" : "#16A34A"} bg={dias != null && dias <= 15 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.14)"}>{doc.nombre ? "cargado" : "—"}</Badge>
               : <DocUpload onPick={f => subirDoc(detalle.id, d.id, f)} />}
           </div>
           {d.acceptsExp && doc && <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
@@ -4716,7 +4716,7 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
         </div>);
       })}
       <div style={{ marginTop: 16 }}><Adjuntos items={detalle.adjuntos} onChange={next => { setPersonal(p => p.map(x => x.id === detalle.id ? { ...x, adjuntos: next } : x)); setDetalle(d => ({ ...d, adjuntos: next })); }} /></div>
-      <button onClick={() => borrar(detalle.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Eliminar trabajador</button>
+      <button onClick={() => borrar(detalle.id)} style={{ width: "100%", marginTop: 12, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Eliminar trabajador</button>
     </Sheet>}
   </div>);
 }
@@ -5191,7 +5191,7 @@ function SeguimientoView({ db, onBack }) {
     if (pct > o.avance + 15 && o.estado !== "terminada") alerts.push({ id: `${o.id}_pago`, msg: `${o.nombre}: ${pct}% pagado vs ${o.avance}% de avance`, prioridad: "alta" });
   });
   const col = { alta: "#EF4444", media: "#F59E0B", baja: "#3B82F6" };
-  const bg = { alta: "#FEF2F2", media: "#FFFBEB", baja: "#EFF6FF" };
+  const bg = { alta: "rgba(239,68,68,.10)", media: "rgba(180,83,9,.14)", baja: "rgba(37,99,235,.14)" };
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="seguimiento" label="Seguimiento" sub="Alertas calculadas en tiempo real" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
@@ -5252,7 +5252,7 @@ function MaterialesView({ db, onBack }) {
 function SubcontratosView({ db, onBack }) {
   const { obras, subcontratos, setSubcontratos } = db;
   const [form, setForm] = useState(null);
-  const estados = [{ id: "presupuestado", c: "#3B82F6", b: "#EFF6FF" }, { id: "contratado", c: "#8B5CF6", b: "#F5F3FF" }, { id: "ejecucion", c: "#F59E0B", b: "#FFFBEB" }, { id: "finalizado", c: "#16A34A", b: "#ECFDF5" }];
+  const estados = [{ id: "presupuestado", c: "#3B82F6", b: "rgba(37,99,235,.14)" }, { id: "contratado", c: "#8B5CF6", b: "rgba(139,92,246,.14)" }, { id: "ejecucion", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, { id: "finalizado", c: "#16A34A", b: "rgba(22,163,74,.14)" }];
   const total = subcontratos.reduce((a, s) => a + parseMontoNum(s.monto), 0);
   function guardar() { if (!form.empresa?.trim()) return; if (form.id) setSubcontratos(p => p.map(x => x.id === form.id ? form : x)); else setSubcontratos(p => [...p, { ...form, id: uid() }]); setForm(null); }
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
@@ -5345,7 +5345,7 @@ function InformesView({ db, apiKey, onBack }) {
       {todos.map(inf => (<RowItem key={inf.id} onClick={() => setOpen(inf)} onDelete={() => setObras(p => p.map(x => x.id === inf.obra_id ? { ...x, informes: (x.informes || []).filter(i => i.id !== inf.id) } : x))}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{inf.titulo || "Informe"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{inf.obra} · {inf.fecha}{(inf.archivos || []).length ? ` · ${(inf.archivos || []).length} adj.` : ""}{inf.enviado ? " · ✓ enviado a Belfast" : ""}</div></div>
-          <Badge color={inf.tipo === "ia" ? "#8B5CF6" : "#3B82F6"} bg={inf.tipo === "ia" ? "#F5F3FF" : "#EFF6FF"}>{inf.tipo === "ia" ? "IA" : "Técnico"}</Badge>
+          <Badge color={inf.tipo === "ia" ? "#8B5CF6" : "#3B82F6"} bg={inf.tipo === "ia" ? "rgba(139,92,246,.14)" : "rgba(37,99,235,.14)"}>{inf.tipo === "ia" ? "IA" : "Técnico"}</Badge>
         </div>
       </RowItem>))}
     </div>
@@ -5432,7 +5432,7 @@ function ContactosView({ db, onBack }) {
           <div style={{ width: 38, height: 38, borderRadius: "50%", background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>{(c.nombre || "?").slice(0, 1).toUpperCase()}</div>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{c.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{[c.rol, c.empresa].filter(Boolean).join(" · ") || "—"}</div></div>
           <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
-            {c.telefono && <a href={waLink(c.telefono, "")} target="_blank" rel="noreferrer" style={{ width: 32, height: 32, borderRadius: 7, background: "#ECFDF5", color: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14 }}>✆</a>}
+            {c.telefono && <a href={waLink(c.telefono, "")} target="_blank" rel="noreferrer" style={{ width: 32, height: 32, borderRadius: 7, background: "rgba(22,163,74,.14)", color: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14 }}>✆</a>}
             {c.email && <a href={`mailto:${c.email}`} style={{ width: 32, height: 32, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 13 }}>✉</a>}
           </div>
         </div>
@@ -5466,7 +5466,7 @@ function ProveedoresView({ db, onBack }) {
           <div style={{ width: 38, height: 38, borderRadius: 8, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><MIcon id="proveedores" /></div>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{c.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{c.rubro || "—"}</div></div>
           <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
-            {c.telefono && <a href={waLink(c.telefono, "")} target="_blank" rel="noreferrer" style={{ width: 32, height: 32, borderRadius: 7, background: "#ECFDF5", color: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14 }}>✆</a>}
+            {c.telefono && <a href={waLink(c.telefono, "")} target="_blank" rel="noreferrer" style={{ width: 32, height: 32, borderRadius: 7, background: "rgba(22,163,74,.14)", color: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14 }}>✆</a>}
             {c.email && <a href={`mailto:${c.email}`} style={{ width: 32, height: 32, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 13 }}>✉</a>}
           </div>
         </div>
@@ -5509,7 +5509,7 @@ function VigilanciaView({ db, onBack }) {
   const { obras, vigilancia, setVigilancia, camaras, setCamaras } = db;
   const [form, setForm] = useState(null);
   const [camForm, setCamForm] = useState(null);
-  const niveles = [{ id: "normal", c: "#16A34A", b: "#ECFDF5" }, { id: "atención", c: "#F59E0B", b: "#FFFBEB" }, { id: "incidente", c: "#EF4444", b: "#FEF2F2" }];
+  const niveles = [{ id: "normal", c: "#16A34A", b: "rgba(22,163,74,.14)" }, { id: "atención", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, { id: "incidente", c: "#EF4444", b: "rgba(239,68,68,.10)" }];
   function guardar() { if (!form.nota?.trim()) return; setVigilancia(p => [{ ...form, id: uid(), fecha: hoyStr() }, ...p]); setForm(null); }
   function guardarCam() { if (!camForm.nombre?.trim() || !camForm.url?.trim()) return; if (camForm.id) setCamaras(p => p.map(x => x.id === camForm.id ? camForm : x)); else setCamaras(p => [...p, { ...camForm, id: uid() }]); setCamForm(null); }
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
@@ -5566,7 +5566,7 @@ function PresentismoView({ db, onBack }) {
       return [...p, { id: uid(), fecha, persona_id: pid, estado }];
     });
   }
-  const opts = [{ id: "presente", lbl: "P", c: "#16A34A", b: "#ECFDF5" }, { id: "tarde", lbl: "T", c: "#F59E0B", b: "#FFFBEB" }, { id: "ausente", lbl: "A", c: "#EF4444", b: "#FEF2F2" }];
+  const opts = [{ id: "presente", lbl: "P", c: "#16A34A", b: "rgba(22,163,74,.14)" }, { id: "tarde", lbl: "T", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, { id: "ausente", lbl: "A", c: "#EF4444", b: "rgba(239,68,68,.10)" }];
   const pres = personal.filter(p => estadoDe(p.id) === "presente").length;
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="presentismo" label="Presentismo" sub="Control de asistencia diaria" onBack={onBack} />
@@ -5715,7 +5715,7 @@ function HerramientasView({ db, onBack }) {
   const [form, setForm] = useState(null);
   const [fObra, setFObra] = useState("");
   const [busca, setBusca] = useState("");
-  const est = [{ id: "ok", c: "#16A34A", b: "#ECFDF5" }, { id: "reparación", c: "#F59E0B", b: "#FFFBEB" }, { id: "baja", c: "#EF4444", b: "#FEF2F2" }];
+  const est = [{ id: "ok", c: "#16A34A", b: "rgba(22,163,74,.14)" }, { id: "reparación", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, { id: "baja", c: "#EF4444", b: "rgba(239,68,68,.10)" }];
   function guardar() { if (!form.nombre?.trim()) return; if (form.id) setHerramientas(p => p.map(x => x.id === form.id ? form : x)); else setHerramientas(p => [...p, { ...form, id: uid() }]); setForm(null); }
 
   const valorDe = (h) => (parseMontoNum(h.precio) || 0) * (Number(h.cantidad) || 1);
@@ -5872,7 +5872,7 @@ function AlertasWaView({ db, onBack }) {
 
 
 // ── PEDIDOS / SEGUIMIENTO (agente entre empresas) ────────────────────
-const PEDIDO_ESTADOS = { abierto:{l:"Abierto",c:"#F59E0B",b:"#FFFBEB"}, en_proceso:{l:"En proceso",c:"#3B82F6",b:"#EFF6FF"}, respondido:{l:"Respondido",c:"#8B5CF6",b:"#F5F3FF"}, resuelto:{l:"Resuelto",c:"#16A34A",b:"#ECFDF5"} };
+const PEDIDO_ESTADOS = { abierto:{l:"Abierto",c:"#F59E0B",b:"rgba(180,83,9,.14)"}, en_proceso:{l:"En proceso",c:"#3B82F6",b:"rgba(37,99,235,.14)"}, respondido:{l:"Respondido",c:"#8B5CF6",b:"rgba(139,92,246,.14)"}, resuelto:{l:"Resuelto",c:"#16A34A",b:"rgba(22,163,74,.14)"} };
 const PEDIDO_MAX_IA = 4; // tope de intercambios automáticos IA↔IA por pedido
 function parseAccion(texto){ const t=texto||""; let m=t.match(/```accion\s*([\s\S]*?)```/i)||t.match(/```accion\s*([\s\S]*)$/i); if(!m) return {limpio:texto,accion:null}; let raw=m[1].trim(); let a=null; try{a=JSON.parse(raw);}catch{ const i=raw.indexOf("{"),j=raw.lastIndexOf("}"); if(i>=0&&j>i){ try{a=JSON.parse(raw.slice(i,j+1));}catch{} } } return {limpio:(t.replace(m[0],"").trim()||"Listo."),accion:a}; }
 function esDeCasa(de){ return de === "vv" || de === "sebastian" || de === "nicolas"; }
@@ -6136,7 +6136,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="pedidos" label="Pedidos · Seguimiento" sub={`Gestión de temas con ${otroNom}`} onBack={onBack} />
     {!cur && <div style={{ padding: "16px 20px" }}>
-      {(() => { const pend = pedidos.filter(p => p.para === miSide && p.estado !== "resuelto"); if (!pend.length) return null; const obrasTxt = [...new Set(pend.map(p => p.obra_id ? obraNom(obras, p.obra_id) : "general").filter(Boolean))].join(", "); return (<div style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: T.rsm, padding: "12px 14px", marginBottom: 14 }}>
+      {(() => { const pend = pedidos.filter(p => p.para === miSide && p.estado !== "resuelto"); if (!pend.length) return null; const obrasTxt = [...new Set(pend.map(p => p.obra_id ? obraNom(obras, p.obra_id) : "general").filter(Boolean))].join(", "); return (<div style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "12px 14px", marginBottom: 14 }}>
         <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
         <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{obrasTxt ? `Obras: ${obrasTxt}` : ""}</div></div>
       </div>); })()}
@@ -6155,7 +6155,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
             <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
               {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "2px 7px" }}><Ico n="building" /> {obraNom(obras, p.obra_id)}</span>}
-              {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "#FEF2F2", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
+              {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "rgba(239,68,68,.10)", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
               <span style={{ fontSize: 10.5, color: T.muted }}>{esDeCasa(p.de) ? (p.de === "sebastian" || p.de === "nicolas" ? "Interno" : "Enviado") : "Recibido"} · {p.fecha}</span>
             </div>
             <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>{ult?.porIA ? "" : ""}{ult?.texto}</div>
@@ -6177,7 +6177,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
         <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
           {Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{v.l}</button>)}
         </div>
-        <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
+        <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
       </Card>
       <Eyebrow>Hilo</Eyebrow>
       {(cur.hilo || []).map((h, i) => { const mine = persp(h); return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
@@ -6477,7 +6477,7 @@ function PlantillasView({ db, cfg, onBack }) {
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="documentacion" label="Plantillas de documentos" sub="Subí un modelo, completalo y guardalo en la obra" onBack={onBack} />
     <div style={{ padding: "14px 18px" }}>
-      <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
+      <div style={{ background: "rgba(180,83,9,.14)", border: "1px solid rgba(180,83,9,.30)", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
         Los PDF se completan con el editor: tocás el documento donde querés escribir. En los Word, usá marcadores entre llaves: <b>{"{obra}"}</b>, <b>{"{fecha}"}</b>, <b>{"{responsable}"}</b>, <b>{"{empresa}"}</b>, <b>{"{sector}"}</b>. Podés sumar los tuyos y cargarlos al usar la plantilla.
       </div>
       <input ref={fileRef} type="file" multiple onChange={subirPlantilla} style={{ display: "none" }} />
@@ -6496,7 +6496,7 @@ function PlantillasView({ db, cfg, onBack }) {
           <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
             <button onClick={() => p.ext === "pdf" ? setEditPdf(p) : abrirUsar(p)} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 7, padding: "8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{p.ext === "pdf" ? "Completar y guardar" : "Usar en una obra"}</button>
             <button onClick={() => descargarArchivo(p.url, p.nombre)} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Abrir</button>
-            <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "8px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} c="#EF4444" /></button>
+            <button onClick={() => borrar(p.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "8px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} c="#EF4444" /></button>
           </div>
         </div>
       ))}
@@ -6686,9 +6686,9 @@ function FormulariosView({ db, cfg, onBack }) {
             {(f.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 7 }}>
               {(f.adjuntos || []).map(a => <button key={a.id} onClick={() => descargarArchivo(a.url, a.nombre)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", maxWidth: "100%" }}><Ico n={icoArch(a.nombre)} s={12} /><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span></button>)}
             </div>}</div>
-          {f.resultado ? <Badge color={f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#F59E0B" : "#16A34A"} bg={f.resultado.includes("NO APTO") ? "#FEF2F2" : f.resultado.includes("OBSERV") ? "#FFFBEB" : "#ECFDF5"}>{f.resultado.replace(" PARA INICIO", "")}</Badge> : <span style={{ color: T.muted, fontSize: 16 }}>›</span>}
+          {f.resultado ? <Badge color={f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#F59E0B" : "#16A34A"} bg={f.resultado.includes("NO APTO") ? "rgba(239,68,68,.10)" : f.resultado.includes("OBSERV") ? "rgba(180,83,9,.14)" : "rgba(22,163,74,.14)"}>{f.resultado.replace(" PARA INICIO", "")}</Badge> : <span style={{ color: T.muted, fontSize: 16 }}>›</span>}
         </div>
-        <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Eliminar este formulario (${tpl?.nombre || "Formulario"} · ${obraNom(obras, f.obra_id)})?${f.compartido ? "\n\nOJO: está compartido — también se borra en Belfast." : ""}`)) setFormularios(list.filter(x => x.id !== f.id)); }} style={{ marginTop: 10, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar formulario</button>
+        <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Eliminar este formulario (${tpl?.nombre || "Formulario"} · ${obraNom(obras, f.obra_id)})?${f.compartido ? "\n\nOJO: está compartido — también se borra en Belfast." : ""}`)) setFormularios(list.filter(x => x.id !== f.id)); }} style={{ marginTop: 10, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar formulario</button>
       </Card>); })}
     </div>
     <AddFab onClick={() => setPick(true)} label="Formulario" />
@@ -6716,7 +6716,7 @@ const FERIADOS = new Set([
 const _isoDe = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(cur))) n++; } return n; }
 function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaReal || new Date(); const dias = diasHabiles(fechaSolic, fin); const desvio = dias - plazo; let estado; if (fechaReal || cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo"; else estado = desvio <= 0 ? "En plazo" : "Vencido"; return { dias, desvio, estado, retraso: Math.max(0, desvio) }; }
-const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "#ECFDF5" }, "En plazo": { c: "#3B82F6", b: "#EFF6FF" }, "Fuera de plazo": { c: "#F59E0B", b: "#FFFBEB" }, "Vencido": { c: "#EF4444", b: "#FEF2F2" } };
+const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "rgba(22,163,74,.14)" }, "En plazo": { c: "#3B82F6", b: "rgba(37,99,235,.14)" }, "Fuera de plazo": { c: "#F59E0B", b: "rgba(180,83,9,.14)" }, "Vencido": { c: "#EF4444", b: "rgba(239,68,68,.10)" } };
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 const isoHoy = () => new Date().toISOString().slice(0, 10);
 
@@ -6793,7 +6793,7 @@ function GestionView({ db, cfg, onBack }) {
       table{width:100%;border-collapse:collapse;margin:14px 0}
       td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top}
       th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9.5px;letter-spacing:1px}
-      .calc{background:#F8FAFC;border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
+      .calc{background:rgba(255,255,255,.04);border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
       .tot{font-size:16px;font-weight:bold;color:#B91C1C;margin-top:6px}
       .firmas{display:flex;justify-content:space-between;margin-top:70px}
       .firma{width:44%;border-top:1px solid #1a202c;padding-top:6px;font-size:10.5px;text-align:center;color:#475569}
@@ -6826,7 +6826,7 @@ function GestionView({ db, cfg, onBack }) {
   }
 
   const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
-  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "#FEF2F2" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "#F1F5F9" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "#EFF6FF" } };
+  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
 
   // Tarjeta compartida por Registro y Punitorios
   const ItemCard = ({ it, conAcciones }) => {
@@ -6854,7 +6854,7 @@ function GestionView({ db, cfg, onBack }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end", flexShrink: 0 }}>
           <Badge color={e.c} bg={e.b}>{it.estado}</Badge>
           {db2 && <Badge color={db2.c} bg={db2.b}>{db2.t}</Badge>}
-          {!it.dec && esVencido(it) && <Badge color="#B45309" bg="#FFFBEB">En evaluación</Badge>}
+          {!it.dec && esVencido(it) && <Badge color="#B45309" bg="rgba(180,83,9,.14)">En evaluación</Badge>}
         </div>
       </div>
     </Card>);
@@ -6914,7 +6914,7 @@ function GestionView({ db, cfg, onBack }) {
         <MiniStat label="Días háb. prom." value={diasProm} color="#3B82F6" />
         <MiniStat label="Perjuicio confirmado" value={money(perjTotal)} color="#EF4444" />
       </div>
-      {enEval.length > 0 && <div onClick={() => setTab("punitorios")} style={{ background: "#FFFBEB", border: "1px solid #F59E0B", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 14, fontSize: 12, color: "#92400E", cursor: "pointer", fontWeight: 600 }}>⚠ {enEval.length} vencido{enEval.length > 1 ? "s" : ""} sin evaluar — tocá para revisarlos</div>}
+      {enEval.length > 0 && <div onClick={() => setTab("punitorios")} style={{ background: "rgba(180,83,9,.14)", border: "1px solid #F59E0B", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 14, fontSize: 12, color: "#92400E", cursor: "pointer", fontWeight: 600 }}>⚠ {enEval.length} vencido{enEval.length > 1 ? "s" : ""} sin evaluar — tocá para revisarlos</div>}
       <Eyebrow>Por estado</Eyebrow>
       <Card style={{ padding: 13, marginBottom: 14 }}>
         {["Cumplido", "En plazo", "Fuera de plazo", "Vencido"].map(s => { const e = GEST_ESTADOS[s]; return (<div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.bg}` }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: e.c }} /><span style={{ fontSize: 12.5, color: T.text }}>{s}</span></div><span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{cnt(s)}</span></div>); })}
@@ -6994,7 +6994,7 @@ function GestionView({ db, cfg, onBack }) {
           <Field label="Costo por persona/día ($)"><TInput type="number" value={pForm.costoDia} onChange={e => setPForm({ ...pForm, costoDia: e.target.value })} /></Field>
         </FieldRow>
         <Field label="Observaciones (opcional)"><TInput value={pForm.nota} onChange={e => setPForm({ ...pForm, nota: e.target.value })} placeholder="Contexto, referencia a bitácora…" /></Field>
-        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 12 }}>
+        <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: "#991B1B" }}>{pForm.it.retraso} d × {Number(pForm.personas) || 0} pers. × {money(Number(pForm.costoDia) || 0)}</div>
           <div style={{ fontSize: 17, fontWeight: 800, color: "#B91C1C" }}>{money(pForm.it.retraso * (Number(pForm.personas) || 0) * (Number(pForm.costoDia) || 0))}</div>
           {!pForm.it.fechaReal && <div style={{ fontSize: 10.5, color: "#991B1B", marginTop: 3 }}>Sigue sin respuesta: el monto crece {money((Number(pForm.personas) || 0) * (Number(pForm.costoDia) || 0))} por día hábil.</div>}
@@ -7079,7 +7079,7 @@ function MensajesVVView({ db, cfg, onBack }) {
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
     <SubHead id="mensajes" label="Mensajes" sub={`Chat con ${cn}`} onBack={onBack} />
     {(mensajes || []).length > 0 && <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 16px 0" }}>
-      <button onClick={vaciarMensajes} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> Vaciar mensajes ({(mensajes || []).length})</button>
+      <button onClick={vaciarMensajes} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> Vaciar mensajes ({(mensajes || []).length})</button>
     </div>}
     {clienteArchivos.length > 0 && <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "9px 16px", display: "flex", gap: 7, overflowX: "auto" }}>
       <span style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", flexShrink: 0, alignSelf: "center" }}>Del cliente:</span>
@@ -7314,9 +7314,9 @@ function CertifRubroPanel({ obraId, obraNombre, cfg, certifRubro, setCertifRubro
       .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
       .barra b { color: #0F1B2D; }
       table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-      th { background: #F1F5F9; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 8px 10px; border: 1px solid #E3E8EF; }
+      th { background: rgba(255,255,255,.06); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 8px 10px; border: 1px solid #E3E8EF; }
       td { font-size: 12px; padding: 8px 10px; border: 1px solid #E3E8EF; }
-      .total { margin-top: 16px; text-align: center; background: #F8FAFC; border: 1px solid #E3E8EF; border-radius: 10px; padding: 14px; }
+      .total { margin-top: 16px; text-align: center; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 10px; padding: 14px; }
       .total .n { font-size: 26px; font-weight: 800; color: #B0894F; }
       .total .l { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #5B6B7F; margin-top: 2px; }
       .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
@@ -7377,7 +7377,7 @@ function CertifRubroPanel({ obraId, obraNombre, cfg, certifRubro, setCertifRubro
           </div>
           <button onClick={() => verPdf(it)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
           {onEnviarPropietario && <button onClick={() => { const h = buildPdfRubro(it); onEnviarPropietario({ ...it, html: h }); }} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>}
-          <button onClick={() => borrarCertificado(it.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
+          <button onClick={() => borrarCertificado(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
         </div>
       ))}
     </div>}
@@ -7619,7 +7619,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       ul { margin: 0; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.55; margin-bottom: 3px; }
       .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
       table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-      th { background: #F1F5F9; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      th { background: rgba(255,255,255,.06); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
       td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
       .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
       .fecha { font-size: 12.5px; font-weight: 800; color: #B0894F; margin-bottom: 7px; }
@@ -7996,7 +7996,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
             </div>
             <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); setPdfHtml(buildPdfSemanal(c)); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
             <button onClick={() => mandarAlPropietarioVV(obraId, { ...c, html: buildPdfSemanal(c) }, "cert")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
-            <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
+            <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
           </div>
         ))}
       </div>}
@@ -8005,7 +8005,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       {historial.length > 0 && historial.some(h => !h.html) && <button onClick={prepararTodos} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {historial.filter(h => !h.html).length} informe{historial.filter(h => !h.html).length > 1 ? "s" : ""} para el cliente</button>}
       {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <button onClick={abrirRecuperar} style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="life" /> Recuperar fotos</button>
+        <button onClick={abrirRecuperar} style={{ flex: 1, background: "rgba(180,83,9,.14)", border: "1px solid rgba(180,83,9,.30)", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="life" /> Recuperar fotos</button>
         <button onClick={exportarBackup} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="save" /> Backup</button>
       </div>
       {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
@@ -8029,7 +8029,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               <button onClick={() => analizarEntry(h)} disabled={busy} title="Analizar con IA" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: busy ? "default" : "pointer", flexShrink: 0 }}><Ico n="search" /> IA</button>
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
               <button onClick={() => mandarAlPropietarioVV(obraId, h, "avance")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
-              <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> Borrar</button>
+              <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> Borrar</button>
             </div>
           </div>
           {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}><Ico n="chart" /> Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
@@ -8056,7 +8056,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         <span style={{ width: 60 }} />
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "#92400E", lineHeight: 1.5 }}>
+        <div style={{ background: "rgba(180,83,9,.14)", border: "1px solid rgba(180,83,9,.30)", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "#92400E", lineHeight: 1.5 }}>
           Estas son las fotos de avance que quedaron guardadas en la nube y no están asignadas a ninguna obra. Marcá las que quieras, elegí <b>la obra</b> (arriba, en la pantalla de avance) y <b>la fecha</b>, y tocá recuperar.
         </div>
         <div style={{ color: "#fff", fontSize: 12.5, marginBottom: 10 }}>{recuMsg}</div>
@@ -8086,51 +8086,67 @@ const WEB_NAV = [
 ];
 function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
   const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const tieneLogo = l1 || l2;
-  const lh = Math.min(Math.max(cfg?.logoSize || 42, 30), 64);
-  const cnt = (id) => (badges[id] || 0);
   return (
     <header style={{ position:"sticky", top:0, zIndex:200, flexShrink:0 }}>
-      <div style={{ background:T.navy, color:"#fff" }}>
-        <div style={{ maxWidth:1180, margin:"0 auto", padding:"6px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
+      <div style={{ background:T.navy, color:"#fff", paddingTop:"env(safe-area-inset-top)" }}>
+        <div style={{ maxWidth:1180, margin:"0 auto", padding:"10px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
           <span style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.22em", textTransform:"uppercase", color:"rgba(255,255,255,.6)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>Construcción · Obra · Gestión integral</span>
           <span style={{ fontSize:10.5, color:"rgba(255,255,255,.5)", whiteSpace:"nowrap" }}>{cfg?.ciudad || "Buenos Aires, Argentina"}</span>
         </div>
-      </div>
-      <div style={{ background:T.card, borderBottom:`1px solid ${T.border}` }}>
-        <div style={{ maxWidth:1180, margin:"0 auto", padding:"12px 24px 2px", display:"flex", justifyContent:"center" }}>
-          <div onClick={()=>go("dashboard")} style={{ display:"flex", alignItems:"center", gap:11, cursor:"pointer" }}>
-            {tieneLogo ? <img src={l1 || l2} alt="" style={{ maxHeight:lh, maxWidth:260, objectFit:"contain" }} />
-              : <><div style={{ width:44, height:44, background:T.navy, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:15, fontWeight:800, borderBottom:`2px solid ${BRASS}` }}>V+V</div>
-                <div style={{ lineHeight:1.2, textAlign:"left" }}><div style={{ fontSize:15, fontWeight:800, color:T.text, letterSpacing:"0.08em", textTransform:"uppercase" }}>V+V Construcciones</div><div style={{ fontSize:8.5, color:T.muted, letterSpacing:"0.18em", textTransform:"uppercase", marginTop:2 }}>Subcontratista de obra</div></div></>}
-          </div>
-        </div>
-        <nav style={{ maxWidth:1180, margin:"0 auto", padding:"4px 12px 0", display:"flex", gap:2, justifyContent:"center", flexWrap:"wrap" }}>
-          {WEB_NAV.map(n=>{ const active=view===n.id; const hayNuevo=cnt(n.id) > 0; return (
-            <button key={n.id} onClick={()=>go(n.id)} style={{ position:"relative", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, fontWeight:(active||hayNuevo)?800:600, color:hayNuevo?"#EF4444":(active?T.accent:T.sub), letterSpacing:"0.02em", borderBottom:`2px solid ${active?BRASS:"transparent"}`, whiteSpace:"nowrap", cursor:"pointer" }}>
-              {n.label}
-              {hayNuevo && <span style={{ position:"absolute", top:3, right:2, background:"#EF4444", color:"#fff", borderRadius:9, minWidth:16, height:16, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px" }}>{cnt(n.id) > 99 ? "99+" : cnt(n.id)}</span>}
-            </button>
-          ); })}
-        </nav>
       </div>
       <div style={{ height:2, background:BRASS }} />
     </header>
   );
 }
+// ── Menú inferior: los 6 accesos que se usan todo el día, fijo abajo. El
+// resto (IA, Personal, Materiales, Subcontratos, Herramientas, Vigilancia,
+// Presentismo, Gestión, Certificados, Documentación, Chat privado, Grabar
+// reunión, Panel cliente, Ajustes/Diseño) sigue viviendo en "Más", que ya
+// existe (MasView) — no se tocó nada de eso.
+const BOTTOM_NAV_VV = [
+  { id:"dashboard", label:"Inicio" },
+  { id:"obras", label:"Obras" },
+  { id:"avance", label:"Avance" },
+  { id:"bitacora", label:"Bitácora" },
+  { id:"matpedidos", label:"Pedidos" },
+  { id:"auditoria", label:"Auditoría" },
+];
+function BottomNavVV({ view, go, badges = {} }) {
+  const cnt = (id) => (badges[id] || 0);
+  const items = [...BOTTOM_NAV_VV, { id:"mas", label:"Más" }];
+  return (<nav style={{ flexShrink:0, background:T.card, borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"center", paddingBottom:"calc(env(safe-area-inset-bottom) + 6px)" }}>
+    <div style={{ width:"100%", maxWidth:1180, display:"flex" }}>
+      {items.map(n => {
+        const active = view === n.id;
+        const hayNuevo = cnt(n.id) > 0;
+        return (<button key={n.id} onClick={() => go(n.id)} style={{ position:"relative", flex:1, background:"none", border:"none", padding:"6px 4px 5px", fontSize:10.5, fontWeight:(active||hayNuevo)?800:600, color:hayNuevo?"#EF4444":(active?T.accent:T.sub), borderTop:`2px solid ${active?BRASS:"transparent"}`, marginTop:-1, cursor:"pointer" }}>
+          {n.label}
+          {hayNuevo && <span style={{ position:"absolute", top:4, right:"18%", background:"#EF4444", color:"#fff", borderRadius:9, minWidth:14, height:14, fontSize:8, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 3px" }}>{cnt(n.id) > 99 ? "99+" : cnt(n.id)}</span>}
+        </button>);
+      })}
+    </div>
+  </nav>);
+}
 function WebHero({ cfg, obras, personal }) {
   const activas = obras.filter(o=>o.estado==="curso").length;
   const avg = obras.length ? Math.round(obras.reduce((a,o)=>a+(o.avance||0),0)/obras.length) : 0;
+  const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const tieneLogo = l1 || l2;
   return (
-    <div style={{ background:LUXE_HERO, color:"#fff", borderBottom:`2px solid ${BRASS}`, flexShrink:0 }}>
-      <div style={{ maxWidth:1180, margin:"0 auto", padding:"32px 24px 28px", display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:24, flexWrap:"wrap" }}>
+    <div style={{ background:LUXE_HERO, color:"#fff", borderBottom:`2px solid ${BRASS}`, flexShrink:0, position:"relative" }}>
+      <div style={{ maxWidth:1180, margin:"0 auto", padding:"calc(env(safe-area-inset-top) + 16px) 24px 0" }}>
+        <div style={{ width:44, height:44, borderRadius:6, overflow:"hidden", border:"1px solid rgba(255,255,255,.35)", background:"#0a0a0a", display:"flex", alignItems:"center", justifyContent:"center" }}>
+          {tieneLogo ? <img src={l1 || l2} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <span style={{ fontSize:11, fontWeight:800, color:"#fff" }}>V+V</span>}
+        </div>
+      </div>
+      <div style={{ maxWidth:1180, margin:"0 auto", padding:"18px 24px 28px", display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:24, flexWrap:"wrap" }}>
         <div>
           <div style={{ fontSize:10, fontWeight:700, color:BRASS, letterSpacing:"0.26em", textTransform:"uppercase", marginBottom:9 }}>V+V Construcciones</div>
-          <div style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.01em", lineHeight:1.1, maxWidth:560 }}>Gestión integral de obra</div>
+          <div style={{ fontFamily:"'Fraunces',serif", fontWeight:600, fontSize:30, letterSpacing:"-0.01em", lineHeight:1.1, maxWidth:560 }}>Gestión integral de obra</div>
           <div style={{ fontSize:13, color:"rgba(255,255,255,.68)", marginTop:10, maxWidth:520, lineHeight:1.6 }}>Seguimiento de obras, personal, documentación y certificación, en un solo lugar.</div>
         </div>
         <div style={{ display:"flex", gap:28 }}>
           {[["Obras activas",activas],["Avance prom.",avg+"%"],["Personal",personal.length]].map(([l,v],i)=>(
-            <div key={i} style={{ textAlign:"center" }}><div style={{ fontSize:26, fontWeight:800 }}>{v}</div><div style={{ fontSize:9.5, color:"rgba(255,255,255,.55)", textTransform:"uppercase", letterSpacing:"0.06em", marginTop:3 }}>{l}</div></div>
+            <div key={i} style={{ textAlign:"center" }}><div style={{ fontFamily:"'Fraunces',serif", fontWeight:600, fontSize:26 }}>{v}</div><div style={{ fontSize:9.5, color:"rgba(255,255,255,.55)", textTransform:"uppercase", letterSpacing:"0.06em", marginTop:3 }}>{l}</div></div>
           ))}
         </div>
       </div>
@@ -8149,6 +8165,19 @@ function WebFooter({ cfg }) {
 function App() {
   useEffect(() => { if (FORCE_CLOUD) { try { history.replaceState(null, "", window.location.pathname); } catch { } } }, []);
   const [cfg, setCfg] = useStoredState("vv_cfg", { ...DEFAULT_CONFIG, themeId:"institucional", fontId:"inter", radiusId:"sharp", colors:{...INST_COLORS}, apiKey:"" });
+  // Rediseño oscuro/dorado: se aplica UNA sola vez (no fuerza nada si ya lo
+  // cambiaste vos a mano después). Si nunca tocaste el tema, pasa solo del
+  // institucional claro de siempre al nuevo "Oscuro" (ya con la paleta de
+  // Belfast: negro + dorado), sin que haya que ir a Ajustes a elegirlo.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("vv_dark_migrado_v1")) return;
+      if (cfg && cfg.themeId && cfg.themeId !== "institucional") { localStorage.setItem("vv_dark_migrado_v1", "1"); return; }
+      const preset = THEME_PRESETS.find(p => p.id === "oscuro");
+      if (preset) setCfg(p => ({ ...p, themeId: "oscuro", colors: { ...preset } }));
+      localStorage.setItem("vv_dark_migrado_v1", "1");
+    } catch { }
+  }, []);
   const [view, setView] = useState("chat");
   const [lics, setLics] = useStoredState("vv_lics", SAMPLE_LICS);
   const [obras, setObras] = useStoredState("vv_obras", SAMPLE_OBRAS);
@@ -8388,7 +8417,7 @@ function App() {
       <style>{css}</style>
       <style>{buildThemeCSS(cfg)}</style>
       <div style={{ width:"100%", height:"100dvh", background:"transparent", display:"flex", flexDirection:"column", position:"relative", color:"var(--text,#131C2B)", fontFamily:"var(--font,'Inter'),sans-serif", overflow:"hidden" }}>
-        <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />
+        {view!=="dashboard" && <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />}
         {view==="dashboard" && <WebHero cfg={cfg} obras={obras} personal={personal} />}
         {view==="dashboard" && (() => {
           const LABELS = {
@@ -8433,7 +8462,7 @@ function App() {
             {view==="internos" && <InternosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
           </div>
         </div>
-        <WebFooter cfg={cfg} />
+        <BottomNavVV view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} badges={navBadgesNuevo} />
       </div>
       <SyncBanner />
       <div style={{ padding: "10px 16px 0" }}><GlobitoPermiso /></div>
