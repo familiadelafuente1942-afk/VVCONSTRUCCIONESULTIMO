@@ -3628,6 +3628,61 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem =
       <div class="foot">Generado por ${marca} · Informe semanal de obra.</div>
     </div></body></html>`;
   }
+  // Arma el Certificado semanal (con bitácora y fotos) al momento — ya no
+  // depende de que el PDF completo haya quedado guardado (eso era lo que
+  // pesaba de más y tiraba error 413 al guardar); ahora se rearma desde los
+  // datos crudos del certificado (av, bt), igual que hace V+V.
+  function buildPdfCertSemanal(d, obraNombre) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const vin = (t) => (t || "").split("\n").map(l => l.replace(/^[-•\s]+/, "").trim()).filter(Boolean);
+    const lista = (t, vacio) => { const it = vin(t); return it.length ? `<ul>${it.map(x => `<li>${_escIS(x)}</li>`).join("")}</ul>` : `<div class="vacio">${vacio}</div>`; };
+    const visual = (d.av || []).map(h => { const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []); return `<div class="ent"><div class="fecha">${_escIS(h.fecha)}</div>${fs.length ? `<div class="fotos">${fs.map(u => `<img src="${u}" />`).join("")}</div>` : ""}<div class="txt">${_escIS(h.avance || h.descripcion || "")}</div></div>`; }).join("") || `<div class="vacio">Sin registros visuales en la semana</div>`;
+    const bita = (d.bt || []).length ? `<table><tr><th>Fecha</th><th>Hecho</th><th>Detalle</th></tr>${d.bt.map(h => `<tr><td>${_escIS(fmtFechaIS(h.fecha))}</td><td>${_escIS(h.titulo || "")}</td><td>${_escIS(h.desc || "")}</td></tr>`).join("")}</table>` : `<div class="vacio">Sin registros de bitácora en la semana</div>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
+      .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      .parr { font-size: 12.5px; line-height: 1.6; text-align: justify; }
+      ul { margin: 0; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.55; margin-bottom: 3px; }
+      .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
+      table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+      th { background: rgba(255,255,255,.06); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
+      .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+      .fecha { font-size: 12.5px; font-weight: 800; color: #B0894F; margin-bottom: 7px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+      .fotos img { width: calc(50% - 3px); max-height: 240px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
+      .fotos img:only-child { width: 100%; max-height: 320px; }
+      .txt { font-size: 12px; line-height: 1.5; page-break-inside: avoid; break-inside: avoid; }
+      .foot { margin-top: 20px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Certificado semanal de avance</div></div>
+      <div class="barra"><div>Obra: <b>${_escIS(obraNombre || "")}</b></div><div>Semana: <b>${fmtFechaIS(d.desde)} al ${fmtFechaIS(d.hasta)}</b></div><div>Emitido: <b>${_escIS(d.emitido || "")}</b></div></div>
+      <h2>Desarrollo de la semana</h2><div class="parr">${_escIS(d.desarrollo)}</div>
+      <h2>Recepción de materiales y documentación</h2>${lista(d.recepciones, "Sin registros en la semana")}
+      <h2>Orden, limpieza y protección del personal</h2>${lista(d.limpieza, "Sin fotos para evaluar en la semana")}
+      <h2>Recepción de documentación y elementos de protección</h2>
+      ${(d.recepEstado || []).length ? `<table><tr><th>Rubro</th><th style="width:74px">Recibido</th><th>Pendiente</th></tr>
+        ${(d.recepEstado || []).map(g => `<tr><td>${_escIS(g.cat)}</td><td style="text-align:center;font-weight:700;color:${g.ok === g.total ? "#15803D" : "#B45309"}">${g.ok}/${g.total}</td><td>${g.faltan.length ? _escIS(g.faltan.join(", ")) : "—"}</td></tr>`).join("")}</table>`
+        : `<div class="vacio">No se cargó el checklist de recepción para esta obra.</div>`}
+      <h2>Pendientes y alertas</h2>${lista(d.alertas, "Sin alertas")}
+      <h2>Registro visual del avance</h2>${visual}
+      <h2>Bitácora de la semana</h2>${bita}
+      <div class="foot">Generado por ${marca} · Certificado semanal de avance de obra.</div>
+    </div></body></html>`;
+  }
   // Todos los informes semanales de todas las obras (o de la filtrada),
   // del más nuevo al más viejo — mismo criterio que los certificados.
   const informesSemTodos = obras.flatMap(o => ((informesSem || {})[o.id] || []).map(r => ({ ...r, _obra: o.nombre, _obraId: o.id })))
@@ -3685,32 +3740,21 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem =
         </div>); })}
       </div>}
 
-      {/* Certificados semanales emitidos por V+V — sólo lectura */}
+      {/* Certificados semanales emitidos por V+V — sólo lectura. El PDF se arma
+          al momento (buildPdfCertSemanal), no depende de que haya quedado
+          guardado un c.html — por eso ahora TODOS muestran "Ver informe",
+          no solo el que por casualidad tenía el PDF viejo guardado. */}
       {certsTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Certificados semanales de avance</div>
-        {certsTodos.map(c => (<div key={c.id} onClick={() => c.html ? setDocAbierto({ html: c.html, titulo: `Certificado ${fFechaCorta(c.desde)} al ${fFechaCorta(c.hasta)}` }) : setCertAbierto(certAbierto?.id === c.id ? null : c)} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+        {certsTodos.map(c => (<div key={c.id} onClick={() => setDocAbierto({ html: c.html || buildPdfCertSemanal(c, c._obra), titulo: `Certificado ${fFechaCorta(c.desde)} al ${fFechaCorta(c.hasta)}` })} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{c._obra} · {(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
-              {c.html && <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>}
-              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(c._obraId, c._obra, c, "cert"); }} style={{ background: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "rgba(22,163,74,.18)" : BRASS, border: "none", color: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "✓ Enviado" : "→ Propietario"}</button>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>
+              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(c._obraId, c._obra, { ...c, html: c.html || buildPdfCertSemanal(c, c._obra) }, "cert"); }} style={{ background: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "rgba(22,163,74,.18)" : BRASS, border: "none", color: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "✓ Enviado" : "→ Propietario"}</button>
           </div>
-          {certAbierto?.id === c.id && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
-            {[["Desarrollo", c.desarrollo], ["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
-              <div key={lbl} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{lbl}</div>
-                <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{txt}</div>
-              </div>) : null)}
-            {(c.av || []).some(a => (a.fotos || []).length || a.fotoUrl) && <div style={{ marginTop: 4 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Fotos de la semana</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>
-                {(c.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])).map((u, i) => (
-                  <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>))}
-              </div>
-            </div>}
-          </div>}
         </div>))}
       </div>}
 
