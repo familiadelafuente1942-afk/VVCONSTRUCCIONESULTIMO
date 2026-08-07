@@ -602,7 +602,7 @@ const LUXE_HERO = "radial-gradient(620px 220px at 86% 0%, rgba(176,137,79,0.20),
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:#F5F6F8;overscroll-behavior:none;font-family:'Inter',sans-serif;}
+  body{background:#0d0d0f;overscroll-behavior:none;font-family:'Inter',sans-serif;}
   button{cursor:pointer;font-family:inherit;}input,textarea,select{font-family:inherit;}
   input:focus,textarea:focus{outline:none;}textarea{resize:none;}::-webkit-scrollbar{display:none;}
   @keyframes slidein{from{transform:translateY(-120%);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -610,11 +610,21 @@ const css = `
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   @keyframes fadeIn{from{opacity:0}to{opacity:.85}}
 `;
+// Dos temas completos, como en la app de V+V: "oscuro" (el actual) y
+// "claro". El modo elegido define los valores de base; si el usuario
+// además tocó algún color individual en Ajustes (Fondo/Texto/etc.), ese
+// toque puntual manda por encima del modo.
+const TEMA_OSCURO = { bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", accent: "#B0894F", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+const TEMA_CLARO = { bg: "#F5F6F8", card: "#ffffff", border: "#E6E9EE", text: "#131C2B", sub: "#4A5565", muted: "#97A0AE", accent: "#B0894F", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
 function theme(cfg) {
   const c = cfg || {};
-  const bg = c.themeBg || "#0d0d0f";
-  const borderHex = c.themeBorder || "#ffffff";
-  return { bg, card: c.themeCard || "#111214", border: hexToRgba(borderHex, .09), text: c.themeText || "#f2f0eb", sub: hexToRgba(c.themeText || "#f2f0eb", .6), muted: hexToRgba(c.themeText || "#f2f0eb", .42), accent: c.accent || "#B0894F", accentLight: hexToRgba(c.accent || "#B0894F", .14), navy: bg, r: 12, rsm: 8, shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+  const base = c.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO;
+  const bg = c.themeBg || base.bg;
+  const text = c.themeText || base.text;
+  const accent = c.accent || base.accent;
+  const sub = c.themeText ? hexToRgba(c.themeText, .6) : base.sub;
+  const muted = c.themeText ? hexToRgba(c.themeText, .42) : base.muted;
+  return { bg, card: c.themeCard || base.card, border: c.themeBorder || base.border, text, sub, muted, accent, accentLight: hexToRgba(accent, .14), navy: bg, r: 12, rsm: 8, shadow: base.shadow };
 }
 function hexToRgba(hex, alpha) {
   const h = String(hex || "").replace("#", "");
@@ -2740,26 +2750,32 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
         <button onClick={() => logoRef.current?.click()} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, color: T.text }}>{cfg.logo ? "Cambiar logo" : "Subir logo"}</button>
         {cfg.logo && <button onClick={() => setCfg(p => ({ ...p, logo: "" }))} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, fontWeight: 600 }}>Quitar</button>}
       </div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Modo</label>
+      <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 18 }}>
+        <button onClick={() => setCfg(p => { const n = { ...p, modo: "oscuro" }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; return n; })} style={{ flex: 1, background: (cfg.modo || "oscuro") === "oscuro" ? T.accent : T.card, color: (cfg.modo || "oscuro") === "oscuro" ? "#fff" : T.text, border: `1px solid ${(cfg.modo || "oscuro") === "oscuro" ? T.accent : T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🌙 Oscuro</button>
+        <button onClick={() => setCfg(p => { const n = { ...p, modo: "claro" }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; return n; })} style={{ flex: 1, background: cfg.modo === "claro" ? T.accent : T.card, color: cfg.modo === "claro" ? "#fff" : T.text, border: `1px solid ${cfg.modo === "claro" ? T.accent : T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>☀️ Claro</button>
+      </div>
+
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Color principal</label>
       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 8 }}>
         {["#B0894F", "#1E3A5F", "#1F5C49", "#6E3B2E", "#46406E", "#0E5A66", "#7A2E50"].map(col => <button key={col} onClick={() => setCfg(p => ({ ...p, accent: col }))} style={{ width: 32, height: 32, borderRadius: 5, background: col, border: `2px solid ${cfg.accent === col ? T.text : T.border}` }} />)}
         <input type="color" value={cfg.accent || "#B0894F"} onChange={e => setCfg(p => ({ ...p, accent: e.target.value }))} style={{ width: 32, height: 32, border: "none", background: "none" }} />
       </div>
 
-      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginTop: 18 }}>Paleta completa (toda la app, en vivo)</label>
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginTop: 18 }}>Ajuste fino (opcional, encima del modo)</label>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", marginTop: 8 }}>
         {[
-          ["Fondo", "themeBg", "#0d0d0f"],
-          ["Fondo de tarjetas", "themeCard", "#111214"],
-          ["Texto", "themeText", "#f2f0eb"],
-          ["Líneas / bordes", "themeBorder", "#ffffff"],
+          ["Fondo", "themeBg", (cfg.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO).bg],
+          ["Fondo de tarjetas", "themeCard", (cfg.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO).card],
+          ["Texto", "themeText", (cfg.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO).text],
+          ["Líneas / bordes", "themeBorder", (cfg.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO).border],
         ].map(([lbl, key, def]) => (
           <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0" }}>
             <span style={{ fontSize: 12.5, color: T.text }}>{lbl}</span>
             <input type="color" value={cfg[key] || def} onChange={e => setCfg(p => ({ ...p, [key]: e.target.value }))} style={{ width: 32, height: 26, border: `1px solid ${T.border}`, borderRadius: 5, background: "none", cursor: "pointer", padding: 0 }} />
           </div>
         ))}
-        <button onClick={() => setCfg(p => { const n = { ...p }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; n.accent = "#B0894F"; return n; })} style={{ width: "100%", marginTop: 10, background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Restaurar colores originales</button>
+        <button onClick={() => setCfg(p => { const n = { ...p }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; n.accent = "#B0894F"; return n; })} style={{ width: "100%", marginTop: 10, background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Restaurar colores del modo actual</button>
       </div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Agente IA</label></div>
       <div onClick={() => setCfg(p => ({ ...p, autoIA: !p.autoIA }))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", cursor: "pointer" }}>
