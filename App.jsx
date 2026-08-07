@@ -8127,6 +8127,82 @@ function BottomNavVV({ view, go, badges = {} }) {
     </div>
   </nav>);
 }
+// ── INICIO: foto de portada (última foto real de la obra en curso, va
+// rotando), % de avance, pendientes de hoy y acceso a la IA. Mismo
+// lenguaje que Cliente — real, no una lista de obras.
+function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avance = {}, mensajes = [], onIr }) {
+  const [slideIdx, setSlideIdx] = React.useState(0);
+  const enCurso = (obras || []).filter(o => o.estado === "curso");
+  const lista = enCurso.length ? enCurso : (obras || []);
+  React.useEffect(() => {
+    if (lista.length < 2) return;
+    const t = setInterval(() => setSlideIdx(i => (i + 1) % lista.length), 4500);
+    return () => clearInterval(t);
+  }, [lista.length]);
+  const obraActual = lista[slideIdx % Math.max(lista.length, 1)];
+  const fotoActual = obraActual ? (obraActual.fotos || [])[obraActual.fotos?.length - 1] : null;
+  const fotoUrl = fotoActual ? (fotoActual.url || fotoActual) : null;
+
+  const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const tieneLogo = l1 || l2;
+
+  const pend = (pedidos || []).filter(p => p.para === "vv" && p.estado !== "resuelto");
+
+  const nomObra = id => (obras.find(o => o.id === id) || {}).nombre || "";
+  const feed = [
+    ...(mensajes || []).filter(m => m.from && m.from !== "vv").map(m => ({ ts: m.ts || 0, tipo: "Mensaje", texto: (m.texto || "").slice(0, 60), obra: "" })),
+    ...(bitacora || []).map(h => ({ ts: h.ts || 0, tipo: "Bitácora", texto: h.titulo || "Hecho de obra", obra: nomObra(h.obra_id) })),
+    ...obras.flatMap(o => (((avance || {})[o.id]) || []).map(a => ({ ts: a.ts || 0, tipo: "Avance", texto: `${a.fecha || ""}${a.avance ? ` — ${a.avance}` : ""}`, obra: o.nombre }))),
+  ].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 3);
+
+  return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
+    <div style={{ position: "relative", height: "38vh", minHeight: 260, maxHeight: 420, background: "#0d0d0f", overflow: "hidden" }}>
+      {fotoUrl
+        ? <img key={fotoUrl} src={fotoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85 }} />
+        : <div key={obraActual?.id || "sin-obra"} style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#0d0d0f,#1a1a1d)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {tieneLogo && <img src={l1 || l2} alt="" style={{ width: "50%", maxWidth: 200, opacity: .45 }} />}
+          </div>}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
+      <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ width: 40, height: 40, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", background: "#0a0a0a", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {tieneLogo ? <img src={l1 || l2} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 9, fontWeight: 800, color: "#fff" }}>V+V</span>}
+        </div>
+        <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
+      </div>
+      <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
+        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" }}>V+V Construcciones</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
+      </div>
+    </div>
+    <div style={{ padding: "22px 22px 30px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 38, fontWeight: 600, color: "#fff" }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
+        <div style={{ fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(242,240,235,.45)", lineHeight: 1.3 }}>% de avance<br />general</div>
+      </div>
+      <div style={{ height: 1, background: "rgba(255,255,255,.1)", marginBottom: 18 }} />
+
+      {pend.length > 0 && <div onClick={() => onIr("mas")} style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(229,137,137,.08)", border: "1px solid rgba(229,137,137,.25)", borderRadius: 6, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
+        <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#E58989", color: "#0d0d0f", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{pend.length}</span>
+        <div><div style={{ fontSize: 12, fontWeight: 700, color: "#f2f0eb" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 10.5, color: "rgba(242,240,235,.5)", marginTop: 1 }}>Tocá para ver →</div></div>
+      </div>}
+
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
+      {feed.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
+      {feed.map((f, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
+        <div><span style={{ fontSize: 9, fontWeight: 800, color: "#D9B27C", marginRight: 8, textTransform: "uppercase" }}>{f.tipo}</span><span style={{ fontSize: 12.5 }}>{f.texto}</span>{f.obra && <div style={{ fontSize: 10, color: "rgba(242,240,235,.4)", marginTop: 2 }}>{f.obra}</div>}</div>
+      </div>))}
+
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 10px" }}>Tus obras</div>
+      {enCurso.map(o => (<div key={o.id} onClick={() => onIr("obras")} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
+        <span style={{ fontSize: 12.5 }}>{o.nombre}</span><span style={{ fontSize: 12, fontWeight: 700, color: "#D9B27C" }}>{o.avance}%</span>
+      </div>))}
+
+      <div onClick={() => onIr("chat")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
+        <div style={{ fontSize: 9, letterSpacing: ".12em", textTransform: "uppercase", color: "#D9B27C", fontWeight: 700 }}>✦ IA V+V</div>
+        <div style={{ fontSize: 12, color: "rgba(242,240,235,.6)", marginTop: 5 }}>Pedile a la IA — armar informes, mandar mensajes a Belfast, buscar en internet…</div>
+      </div>
+    </div>
+  </div>);
+}
 function WebHero({ cfg, obras, personal }) {
   const activas = obras.filter(o=>o.estado==="curso").length;
   const avg = obras.length ? Math.round(obras.reduce((a,o)=>a+(o.avance||0),0)/obras.length) : 0;
@@ -8418,7 +8494,6 @@ function App() {
       <style>{buildThemeCSS(cfg)}</style>
       <div style={{ width:"100%", height:"100dvh", background:"transparent", display:"flex", flexDirection:"column", position:"relative", color:"var(--text,#131C2B)", fontFamily:"var(--font,'Inter'),sans-serif", overflow:"hidden" }}>
         {view!=="dashboard" && <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />}
-        {view==="dashboard" && <WebHero cfg={cfg} obras={obras} personal={personal} />}
         {view==="dashboard" && (() => {
           const LABELS = {
             chat: ["consulta nueva en el chat IA", "consultas nuevas en el chat IA"],
@@ -8443,7 +8518,7 @@ function App() {
         })()}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
-            {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
+            {view==="dashboard" && <InicioViewVV cfg={cfg} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} onIr={(id)=>{ if(id==="mas"){ setView("mas"); setMasSub("pedidos"); } else { setView(id); } }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} certifRubro={certifRubro} setCertifRubro={setCertifRubro} docrecepcion={docrecepcion} />}
