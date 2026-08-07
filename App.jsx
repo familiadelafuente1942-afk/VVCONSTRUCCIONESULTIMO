@@ -8164,7 +8164,7 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
   ].filter(Boolean);
 
   return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
-    <div style={{ position: "relative", height: "38vh", minHeight: 260, maxHeight: 420, background: "#0d0d0f", overflow: "hidden" }}>
+    <div style={{ position: "relative", height: "50vh", minHeight: 320, maxHeight: 560, background: "#0d0d0f", overflow: "hidden" }}>
       {fotoUrl
         ? <img key={fotoUrl} src={fotoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85 }} />
         : <div key={obraActual?.id || "sin-obra"} style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#0d0d0f,#1a1a1d)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -8201,11 +8201,6 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
       {novedades.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
       {novedades.map((n, i) => (<div key={i} onClick={() => onIr(n.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
         <span style={{ fontSize: 12.5 }}><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
-      </div>))}
-
-      <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 10px" }}>Tus obras</div>
-      {enCurso.map(o => (<div key={o.id} onClick={() => onIr("obras")} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
-        <span style={{ fontSize: 12.5 }}>{o.nombre}</span><span style={{ fontSize: 12, fontWeight: 700, color: "#D9B27C" }}>{o.avance}%</span>
       </div>))}
 
       <div onClick={() => onIr("chat")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
@@ -8266,7 +8261,7 @@ function App() {
       localStorage.setItem("vv_dark_migrado_v1", "1");
     } catch { }
   }, []);
-  const [view, setView] = useState("chat");
+  const [view, setView] = useState("dashboard");
   const [lics, setLics] = useStoredState("vv_lics", SAMPLE_LICS);
   const [obras, setObras] = useStoredState("vv_obras", SAMPLE_OBRAS);
   const [personal, setPersonal] = useStoredState("vv_personal", SAMPLE_PERSONAL);
