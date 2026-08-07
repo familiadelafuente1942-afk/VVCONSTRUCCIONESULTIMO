@@ -4509,24 +4509,71 @@ function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
         </div>
       </div>
       <div style={{ background: T.card, borderBottom: `1px solid ${T.border}` }}>
-        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "12px 24px 2px", display: "flex", justifyContent: "center" }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "12px 24px", display: "flex", justifyContent: "center" }}>
           <div onClick={() => setScreen("inicio")} style={{ display: "flex", alignItems: "center", gap: 11, cursor: "pointer" }}>
             {cfg.logo ? <img src={cfg.logo} alt="" style={{ maxHeight: 46, maxWidth: 240, objectFit: "contain" }} />
               : <><div style={{ width: 44, height: 44, background: T.navy, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 800, borderBottom: `2px solid ${BRASS}` }}>{(cfg.sigla || "C").slice(0, 3)}</div>
                 <div style={{ lineHeight: 1.2, textAlign: "left" }}><div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: "0.04em" }}>{cfg.nombre}</div><div style={{ fontSize: 8.5, color: T.muted, letterSpacing: "0.16em", textTransform: "uppercase", marginTop: 2 }}>Seguimiento de obra</div></div></>}
           </div>
         </div>
-        <nav style={{ maxWidth: 1180, margin: "0 auto", padding: "4px 12px 0", display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
-          {NAV.map(n => { const active = screen === n.id; const hayNuevo = badge(n.id) > 0; return (
-            <button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", background: "none", border: "none", padding: "9px 12px", fontSize: 12.5, fontWeight: (active || hayNuevo) ? 800 : 600, color: hayNuevo ? "#EF4444" : (active ? T.accent : T.sub), borderBottom: `2px solid ${active ? BRASS : "transparent"}`, whiteSpace: "nowrap", cursor: "pointer" }}>
-              {n.label}
-              {hayNuevo && <span style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{badge(n.id)}</span>}
-            </button>); })}
-        </nav>
       </div>
       <div style={{ height: 2, background: BRASS }} />
     </header>
   );
+}
+// ── Menú inferior: los 5 accesos principales (los que se usan todo el
+// tiempo), fijo abajo, como una app de celular. El resto de las
+// secciones (IA, Informes, Cronogramas, Mensajes, Certificados,
+// Archivos, Personal, Gestión, Grabar reunión, Ajustes) vive en "Más".
+const BOTTOM_NAV = [
+  { id: "obras", label: "Obras" },
+  { id: "avance", label: "Avance" },
+  { id: "bitacora", label: "Bitácora" },
+  { id: "materiales", label: "Pedidos" },
+  { id: "auditoria", label: "Auditoría" },
+];
+const MAS_ITEMS = [
+  { id: "asistente", label: "IA" },
+  { id: "informes", label: "Informes" },
+  { id: "cronograma", label: "Cronogramas" },
+  { id: "mensajes", label: "Mensajes" },
+  { id: "formularios", label: "Certificados" },
+  { id: "archivos", label: "Archivos" },
+  { id: "personal", label: "Personal" },
+  { id: "gestion", label: "Gestión" },
+  { id: "minutas", label: "Grabar reunión" },
+  { id: "ajustes", label: "Ajustes" },
+];
+function BottomNav({ T, screen, setScreen, aviso }) {
+  const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);
+  const masBadge = MAS_ITEMS.reduce((s, it) => s + (badge(it.id) || 0), 0);
+  const items = [...BOTTOM_NAV, { id: "mas", label: "Más" }];
+  return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center" }}>
+    <div style={{ width: "100%", maxWidth: 1180, display: "flex" }}>
+      {items.map(n => {
+        const active = screen === n.id || (n.id === "mas" && MAS_ITEMS.some(m => m.id === screen));
+        const hayNuevo = n.id === "mas" ? masBadge > 0 : badge(n.id) > 0;
+        return (<button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", flex: 1, background: "none", border: "none", padding: "10px 4px", fontSize: 10.5, fontWeight: (active || hayNuevo) ? 800 : 600, color: hayNuevo ? "#EF4444" : (active ? T.accent : T.sub), borderTop: `2px solid ${active ? BRASS : "transparent"}`, marginTop: -1, cursor: "pointer" }}>
+          {n.label}
+          {hayNuevo && <span style={{ position: "absolute", top: 4, right: "18%", background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 14, height: 14, fontSize: 8, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{n.id === "mas" ? masBadge : badge(n.id)}</span>}
+        </button>);
+      })}
+    </div>
+  </nav>);
+}
+function MasScreen({ T, screen, setScreen, aviso }) {
+  const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+    <Eyebrow T={T}>Más</Eyebrow>
+    {MAS_ITEMS.map(it => { const n = badge(it.id); return (
+      <div key={it.id} onClick={() => setScreen(it.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 15px", marginBottom: 8, cursor: "pointer" }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{it.label}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {n > 0 && <span style={{ background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 17, height: 17, fontSize: 9.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{n}</span>}
+          <span style={{ color: T.muted, fontSize: 14 }}>›</span>
+        </div>
+      </div>); })}
+  </div>);
 }
 function WebClientHero({ T, cfg, obras }) {
   const activas = obras.filter(o => o.estado === "curso").length;
@@ -4872,8 +4919,10 @@ function ClienteApp() {
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
           {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} renders={renders} setRenders={setRenders} />}
+          {screen === "mas" && <MasScreen T={T} screen={screen} setScreen={irA} aviso={aviso} />}
         </div>
       </div>
+      <BottomNav T={T} screen={screen} setScreen={irA} aviso={aviso} />
       <WebClientFooter T={T} cfg={cfg} />
     </div>
     <SyncBanner />
