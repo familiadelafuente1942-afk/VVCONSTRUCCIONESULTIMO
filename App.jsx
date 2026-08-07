@@ -8172,6 +8172,9 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
         <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" }}>V+V Construcciones</div>
         <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
       </div>
+      {lista.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>
+        {lista.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % lista.length) ? BRASS : "rgba(255,255,255,.35)" }} />)}
+      </div>}
     </div>
     <div style={{ padding: "22px 22px 30px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
@@ -8494,28 +8497,6 @@ function App() {
       <style>{buildThemeCSS(cfg)}</style>
       <div style={{ width:"100%", height:"100dvh", background:"transparent", display:"flex", flexDirection:"column", position:"relative", color:"var(--text,#131C2B)", fontFamily:"var(--font,'Inter'),sans-serif", overflow:"hidden" }}>
         {view!=="dashboard" && <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />}
-        {view==="dashboard" && (() => {
-          const LABELS = {
-            chat: ["consulta nueva en el chat IA", "consultas nuevas en el chat IA"],
-            mensajes: ["mensaje nuevo", "mensajes nuevos"],
-            pedidos: ["pedido nuevo", "pedidos nuevos"],
-            materiales: ["pedido de materiales nuevo", "pedidos de materiales nuevos"],
-            informes: ["informe nuevo", "informes nuevos"],
-            formularios: ["formulario nuevo", "formularios nuevos"],
-            obras: ["obra nueva", "obras nuevas"],
-            personal: ["novedad de personal", "novedades de personal"],
-          };
-          const ORDEN = ["mensajes", "pedidos", "materiales", "informes", "formularios", "obras", "personal", "chat"];
-          const items = ORDEN.map(k => ({ k, n: navBadgesNuevo[k] || 0 })).filter(x => x.n > 0);
-          if (!items.length) return null;
-          return (<div style={{ margin: "10px 16px 0", background: "rgba(176,137,79,0.10)", border: "1px solid rgba(176,137,79,0.35)", borderRadius: 12, padding: "10px 14px", display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: "#B0894F", textTransform: "uppercase", letterSpacing: "0.04em" }}>Novedades:</span>
-            {items.map(({ k, n }) => (<span key={k} onClick={() => { setView(k === "mensajes" || k === "pedidos" || k === "materiales" || k === "informes" || k === "formularios" ? "mas" : k); if (k === "pedidos") setMasSub("pedidos"); if (k === "materiales") setMasSub("materiales"); if (k === "informes") setMasSub("informes"); if (k === "formularios") setMasSub("formularios"); if (k === "mensajes") setMasSub("mensajes"); marcarVisto(k); }}
-              style={{ fontSize: 12.5, color: "var(--text,#131C2B)", cursor: "pointer", fontWeight: 600 }}>
-              <b style={{ color: "#B0894F" }}>{n}</b> {LABELS[k][n > 1 ? 1 : 0]} →
-            </span>))}
-          </div>);
-        })()}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
             {view==="dashboard" && <InicioViewVV cfg={cfg} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} onIr={(id)=>{ if(id==="mas"){ setView("mas"); setMasSub("pedidos"); } else { setView(id); } }} />}
