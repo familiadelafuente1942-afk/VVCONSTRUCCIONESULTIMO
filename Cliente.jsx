@@ -2754,6 +2754,11 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
         <button onClick={() => logoRef.current?.click()} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, color: T.text }}>{cfg.logo ? "Cambiar logo" : "Subir logo"}</button>
         {cfg.logo && <button onClick={() => setCfg(p => ({ ...p, logo: "" }))} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, fontWeight: 600 }}>Quitar</button>}
       </div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Tamaño del logo (Inicio)</label>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "8px 0 14px" }}>
+        <input type="range" min="20" max="64" value={cfg.logoSize || 28} onChange={e => setCfg(p => ({ ...p, logoSize: Number(e.target.value) }))} style={{ flex: 1 }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.text, width: 32, textAlign: "right" }}>{cfg.logoSize || 28}px</span>
+      </div>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Modo</label>
       <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 18 }}>
         <button onClick={() => setCfg(p => { const n = { ...p, modo: "oscuro" }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; return n; })} style={{ flex: 1, background: (cfg.modo || "oscuro") === "oscuro" ? T.accent : T.card, color: (cfg.modo || "oscuro") === "oscuro" ? "#fff" : T.text, border: `1px solid ${(cfg.modo || "oscuro") === "oscuro" ? T.accent : T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🌙 Oscuro</button>
@@ -4584,16 +4589,15 @@ const MAS_ITEMS = [
 ];
 function BottomNav({ T, screen, setScreen, aviso }) {
   const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);
-  const masBadge = MAS_ITEMS.reduce((s, it) => s + (badge(it.id) || 0), 0);
-  const items = [...BOTTOM_NAV, { id: "mas", label: "Más" }];
+  const items = BOTTOM_NAV;
   return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", paddingBottom: "env(safe-area-inset-bottom)" }}>
     <div style={{ width: "100%", maxWidth: 1180, display: "flex" }}>
       {items.map(n => {
-        const active = screen === n.id || (n.id === "mas" && MAS_ITEMS.some(m => m.id === screen));
-        const hayNuevo = n.id === "mas" ? masBadge > 0 : badge(n.id) > 0;
+        const active = screen === n.id;
+        const hayNuevo = badge(n.id) > 0;
         return (<button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", flex: 1, background: "none", border: "none", padding: "10px 4px", fontSize: 10.5, fontWeight: (active || hayNuevo) ? 800 : 600, color: hayNuevo ? "#EF4444" : (active ? T.accent : T.sub), borderTop: `2px solid ${active ? BRASS : "transparent"}`, marginTop: -1, cursor: "pointer" }}>
           {n.label}
-          {hayNuevo && <span style={{ position: "absolute", top: 4, right: "18%", background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 14, height: 14, fontSize: 8, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{n.id === "mas" ? masBadge : badge(n.id)}</span>}
+          {hayNuevo && <span style={{ position: "absolute", top: 4, right: "18%", background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 14, height: 14, fontSize: 8, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{badge(n.id)}</span>}
         </button>);
       })}
     </div>
@@ -4666,13 +4670,13 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, onIr
   ].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 3);
 
   return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
-    <div style={{ position: "relative", height: 260, background: "#0d0d0f", overflow: "hidden" }}>
+    <div style={{ position: "relative", height: "38vh", minHeight: 260, maxHeight: 420, background: "#0d0d0f", overflow: "hidden" }}>
       {renderActual
         ? <img key={renderActual.url} src={renderActual.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, animation: "fadeIn .6s ease" }} />
         : <div key={obraActual?.id || "sin-obra"} style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#0d0d0f,#1a1a1d)", animation: "fadeIn .6s ease" }} />}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
       <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", flexShrink: 0, background: "#0d0d0f" }}>
+        <div style={{ width: cfg?.logoSize || 28, height: cfg?.logoSize || 28, borderRadius: "50%", overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", flexShrink: 0, background: "#0d0d0f" }}>
           {cfg?.logo ? <img src={cfg.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#fff" }}>{(cfg?.sigla || "B").slice(0, 1)}</div>}
         </div>
         <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
