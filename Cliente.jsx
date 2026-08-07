@@ -3570,7 +3570,7 @@ function docBelfast(cfg, obraNombre, titulo, subtitulo, bloques, fotos) {
   </body></html>`;
 }
 
-function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, cfg = {}, envios = {}, setEnvios }) {
+function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem = {}, avance = {}, cfg = {}, envios = {}, setEnvios }) {
   const [avAbierto, setAvAbierto] = React.useState(null);
   const [docAbierto, setDocAbierto] = React.useState(null);   // el informe armado, con logos
   // Arma el documento con la marca de Belfast y lo deja disponible para el
@@ -3589,10 +3589,50 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, 
     alert("Listo: el propietario ya lo puede ver en su panel.");
   }
   const [certAbierto, setCertAbierto] = React.useState(null);
+  const [semAbierto, setSemAbierto] = React.useState(null);
   const [filtro, setFiltro] = useState("");
   const [open, setOpen] = useState(null);
   const [verForm, setVerForm] = useState(null);
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
+  const _escIS = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const fmtFechaIS = (iso) => { if (!iso) return ""; const [a, m, d] = String(iso).split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso); };
+  function buildPdfInformeSemanal(rep, obraNombre) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const li = (arr) => (arr && arr.length) ? `<ul>${arr.map(x => `<li>${_escIS(x)}</li>`).join("")}</ul>` : `<div class="vacio">— sin registros —</div>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
+      .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      ul { margin: 0 0 4px; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.6; margin-bottom: 3px; }
+      .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
+      .obs { font-size: 12px; line-height: 1.55; color: #1a2433; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
+      .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Informe semanal de obra</div></div>
+      <div class="barra"><div>Obra: <b>${_escIS(obraNombre || "")}</b></div><div>Semana: <b>${fmtFechaIS(rep.desde)} al ${fmtFechaIS(rep.hasta)}</b></div><div>Emitido: <b>${_escIS(rep.emitido || "")}</b></div></div>
+      <h2>Trabajos realizados esta semana</h2>${li(rep.hechos)}
+      <h2>Trabajos previstos para la próxima semana</h2>${li(rep.proxima)}
+      ${rep.obs ? `<h2>Observaciones</h2><div class="obs">${_escIS(rep.obs)}</div>` : ""}
+      <div class="foot">Generado por ${marca} · Informe semanal de obra.</div>
+    </div></body></html>`;
+  }
+  // Todos los informes semanales de todas las obras (o de la filtrada),
+  // del más nuevo al más viejo — mismo criterio que los certificados.
+  const informesSemTodos = obras.flatMap(o => ((informesSem || {})[o.id] || []).map(r => ({ ...r, _obra: o.nombre, _obraId: o.id })))
+    .filter(r => !filtro || r._obraId === filtro)
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const forms = (formularios || []).filter(f => f.compartido && (!filtro || f.obra_id === filtro)).sort((a, b) => (b.id > a.id ? 1 : -1));
   const todos = obras.flatMap(o => (o.informes || []).map(inf => ({ ...inf, obra: o.nombre, obra_id: o.id }))).filter(inf => !filtro || inf.obra_id === filtro).sort((a, b) => (b.id > a.id ? 1 : -1));
   // Todos los certificados semanales, de todas las obras (o de la filtrada),
@@ -3622,6 +3662,28 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, 
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Obra</label>
         <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 2px" }}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
       </div>
+
+      {/* Informes semanales de obra — el texto de "trabajos realizados/previstos", distinto del certificado semanal */}
+      {informesSemTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Informes semanales de obra</div>
+        {informesSemTodos.map(r => { const isOpen = semAbierto?.id === r.id; return (<div key={r.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7 }}>
+          <div onClick={() => setSemAbierto(isOpen ? null : r)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(r.desde)} al {fFechaCorta(r.hasta)}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{r._obra} · {(r.hechos || []).length} trabajo{(r.hechos || []).length === 1 ? "" : "s"} realizado{(r.hechos || []).length === 1 ? "" : "s"} · emitido {r.emitido}</div>
+            </div>
+            <span style={{ color: T.muted, fontSize: 11 }}>{isOpen ? "▲" : "▼"}</span>
+          </div>
+          {isOpen && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Trabajos realizados</div>
+            {(r.hechos || []).length ? <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>{r.hechos.map((h, i) => <li key={i} style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, marginBottom: 3 }}>{h}</li>)}</ul> : <div style={{ fontSize: 12, color: T.muted, fontStyle: "italic", marginBottom: 10 }}>— sin registros —</div>}
+            <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Trabajos previstos</div>
+            {(r.proxima || []).length ? <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>{r.proxima.map((h, i) => <li key={i} style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, marginBottom: 3 }}>{h}</li>)}</ul> : <div style={{ fontSize: 12, color: T.muted, fontStyle: "italic", marginBottom: 10 }}>— sin registros —</div>}
+            {r.obs && <><div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Observaciones</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 4 }}>{r.obs}</div></>}
+            <button onClick={() => setDocAbierto({ html: buildPdfInformeSemanal(r, r._obra), titulo: `Informe semanal ${fFechaCorta(r.desde)} al ${fFechaCorta(r.hasta)}` })} style={{ marginTop: 8, background: "none", border: `1px solid ${BRASS}`, color: BRASS, borderRadius: 8, padding: "8px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Ver PDF</button>
+          </div>}
+        </div>); })}
+      </div>}
 
       {/* Certificados semanales emitidos por V+V — sólo lectura */}
       {certsTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
@@ -4743,6 +4805,7 @@ function ClienteApp() {
   const [minutas, setMinutas] = useStored("cliente_minutas", []);
   const [renders, setRenders] = useStored("vv_renders", {});
   const [certifSem] = useStored("vv_certif_sem", {});
+  const [informesSem] = useStored("vv_informes_sem", {});
   // Lo que Belfast le manda al propietario, con la marca de Belfast.
   const [enviosProp, setEnviosProp] = useStored("cliente_envios_prop", {});
   const [contactos, setContactos] = useStored("cliente_contactos", []);
@@ -4973,7 +5036,7 @@ function ClienteApp() {
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
-          {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
+          {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} informesSem={informesSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
