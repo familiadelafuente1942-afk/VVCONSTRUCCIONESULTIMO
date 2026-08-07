@@ -1764,7 +1764,7 @@ const DEFAULT_TEXTOS = {
     cfg_guardar: "✓ Guardar y cerrar", cfg_restaurar: "↺ Restaurar tema por defecto",
 };
 
-const OBRA_ESTADOS = [{ id: "pendiente", label: "Pendiente", color: "#94A3B8", bg: "rgba(255,255,255,.04)" }, { id: "curso", label: "En Curso", color: "#10B981", bg: "rgba(22,163,74,.14)" }, { id: "pausada", label: "Pausada", color: "#F59E0B", bg: "rgba(180,83,9,.14)" }, { id: "terminada", label: "Terminada", color: "#6366F1", bg: "#EEF2FF" }];
+const OBRA_ESTADOS = [{ id: "pendiente", label: "Pendiente", color: "#94A3B8", bg: "rgba(255,255,255,.04)" }, { id: "curso", label: "En Curso", color: "#6FCF97", bg: "rgba(111,207,151,.14)" }, { id: "pausada", label: "Pausada", color: "#D9B27C", bg: "rgba(180,83,9,.14)" }, { id: "terminada", label: "Terminada", color: "#8B93F5", bg: "rgba(99,102,241,.14)" }];
 
 function t(cfg, key) { return cfg?.textos?.[key] || DEFAULT_TEXTOS[key] || key; }
 function getLabelUbic(cfg) { return cfg?.labelUbicacion || "Zona/Barrio"; }
@@ -1876,12 +1876,12 @@ const money_OG = (n) => (Number(n) || 0).toLocaleString("es-AR") + " $";
 
 const hoyStr_OG = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
 
-const T = { bg: "var(--bg,rgba(255,255,255,.06))", card: "var(--card,#fff)", border: "var(--border,#E2E8F0)", text: "var(--text,#0F172A)", sub: "var(--sub,#475569)", muted: "var(--muted,#94A3B8)", accent: "var(--accent,#1D4ED8)", accentLight: "var(--al,rgba(37,99,235,.14))", navy: "var(--navy,#0F172A)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
+const T = { bg: "var(--bg,#0d0d0f)", card: "var(--card,#111214)", border: "var(--border,#232227)", text: "var(--text,#f2f0eb)", sub: "var(--sub,#B8B5AE)", muted: "var(--muted,#7A776F)", accent: "var(--accent,#B0894F)", accentLight: "var(--al,rgba(176,137,79,.14))", navy: "var(--navy,#0d0d0f)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
 
 function Card_OG({ children, style = {}, onClick }) { return <div onClick={onClick} style={{ background: T.card, borderRadius: T.r, border: `1px solid ${T.border}`, boxShadow: T.shadow, ...style }}>{children}</div>; }
 function Badge_OG({ color, bg, children, style = {} }) { return <span style={{ display: "inline-flex", alignItems: "center", fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 20, padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em", ...style }}>{children}</span>; }
 function PBtn_OG({ children, onClick, disabled, full, style = {}, variant = "primary" }) {
-    const v = { primary: { background: disabled ? "#E2E8F0" : "var(--accent,#1D4ED8)", color: disabled ? "#94A3B8" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", color: "#EF4444", boxShadow: "none" } };
+    const v = { primary: { background: disabled ? "rgba(255,255,255,.08)" : "var(--accent,#B0894F)", color: disabled ? "#7A776F" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", color: "#EF4444", boxShadow: "none" } };
     return <button onClick={onClick} disabled={disabled} style={{ ...v[variant], borderRadius: T.rsm, padding: "11px 20px", fontSize: 14, fontWeight: 600, width: full ? "100%" : "auto", transition: "all .15s", ...style }}>{children}</button>;
 }
 function Sheet({ title, onClose, children }) { return (<div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 200, display: "flex", alignItems: "flex-end", backdropFilter: "blur(2px)" }}><div style={{ background: T.card, borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "90vh", overflow: "auto", animation: "up .25s ease", paddingBottom: 32 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 0" }}><span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{title}</span><button onClick={onClose} style={{ background: T.bg, border: "none", borderRadius: 20, width: 32, height: 32, fontSize: 18, color: T.muted, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button></div><div style={{ padding: "14px 20px 0" }}>{children}</div></div></div>); }
@@ -1890,7 +1890,7 @@ function TInput({ value, onChange, placeholder, type = "text", extraStyle = {} }
 function Sel({ value, onChange, children }) { return <select value={value} onChange={onChange} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }}>{children}</select>; }
 function FieldRow({ children }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>{children}</div>; }
 function Field({ label, children }) { return <div style={{ marginBottom: 12 }}><Lbl>{label}</Lbl>{children}</div>; }
-function PlusBtn({ onClick }) { return <button onClick={onClick} style={{ background: "var(--accent,#1D4ED8)", color: "#fff", border: "none", borderRadius: 20, width: 34, height: 34, fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,.2)" }}>+</button>; }
+function PlusBtn({ onClick }) { return <button onClick={onClick} style={{ background: "var(--accent,#B0894F)", color: "#fff", border: "none", borderRadius: 20, width: 34, height: 34, fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,.2)" }}>+</button>; }
 function AppHeader({ title, sub, right, back, onBack }) { return (<div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "12px 18px", flexShrink: 0, position: "sticky", top: 0, zIndex: 10 }}><div style={{ display: "flex", alignItems: "center", gap: 10 }}>{back && <button onClick={onBack} style={{ background: T.bg, border: "none", borderRadius: 10, width: 32, height: 32, fontSize: 16, color: T.sub, display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>}<div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 700, color: T.text, lineHeight: 1.2 }}>{title}</div>{sub && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{sub}</div>}</div>{right}</div></div>); }
 
 function MontoInput({ value, onChange, placeholder }) {
@@ -2301,11 +2301,11 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 600 }}>{t(cfg, 'obras_avance')}</span><span style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{detail.avance}%</span></div>
                     <div style={{ height: 8, background: T.bg, borderRadius: 4 }}><div style={{ height: 8, background: T.accent, borderRadius: 4, width: `${detail.avance}%`, transition: "width .5s" }} /></div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_inicio')}: {detail.inicio || "—"}</span><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_cierre')}: {detail.cierre || "—"}</span></div>
-                    <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#1D4ED8)", marginTop: 10 }} />
+                    <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#B0894F)", marginTop: 10 }} />
                 </div>
                 <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, display: "flex", overflowX: "auto" }}>
                     {[[`info`, t(cfg, 'obras_info')], [`obs`, t(cfg, 'obras_notas')], [`fotos`, t(cfg, 'obras_fotos')], [`planos`, 'Planos'], [`archivos`, t(cfg, 'obras_archivos')], [`informes`, 'Informes'], [`gastos`, 'Gastos']].map(([id, label]) => (
-                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#1D4ED8)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
+                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#B0894F)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
                     ))}
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
@@ -2457,111 +2457,6 @@ const SAMPLE_ALERTS = [
 
 
 // ═══ fin OBRAS compartido ═══
-
-function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
-  const [verForm, setVerForm] = useState(null);
-  const [open, setOpen] = useState(null);
-  const [subP, setSubP] = useState(false);
-  async function subirPlanos(e, obra) {
-    const files = Array.from(e.target.files); if (!files.length) return; setSubP(true);
-    const nuevos = [];
-    for (const f of files) {
-      const data = await fileToDataUrl(f);
-      const url = await uploadArchivo(data, `planos/${obra.id}`, `${Date.now()}_${f.name.replace(/\W+/g, "_")}`);
-      const ext = (f.name.split(".").pop() || "").toLowerCase();
-      nuevos.push({ id: uid(), nombre: f.name, url, fecha: hoyStr(), from: "cliente", tipo: ext });
-    }
-    if (setObras) setObras(prev => prev.map(o => o.id === obra.id ? { ...o, planos: [...(o.planos || []), ...nuevos] } : o));
-    setSubP(false); e.target.value = "";
-    if (nuevos.some(n => !String(n.url || "").startsWith("http"))) alert("⚠ El plano quedó en este dispositivo pero NO se subió a la nube (bucket 'bco-media' en Supabase). Configuralo para que V+V y la IA lo puedan ver.");
-  }
-  function borrarObra(o) {
-    if (!setObras) return;
-    const nom = String(o.nombre || "").trim();
-    const esc = prompt(`BORRAR LA OBRA "${nom}"\n\nSe borra en las dos apps (Cliente y V+V) y no se puede deshacer.\nSe pierden sus tareas, planos e informes.\n\nEscribí el nombre de la obra para confirmar:`);
-    if (esc == null) return;
-    if (esc.trim().toLowerCase() !== nom.toLowerCase()) { alert("El nombre no coincide. No borré nada."); return; }
-    setObras(prev => prev.filter(x => x.id !== o.id));
-    alert(`Obra "${nom}" borrada.`);
-  }
-  function borrarPlano(obra, id) { if (confirm("¿Eliminar este plano?") && setObras) setObras(prev => prev.map(o => o.id === obra.id ? { ...o, planos: (o.planos || []).filter(x => x.id !== id) } : o)); }
-  const avg = obras.length ? Math.round(obras.reduce((a, o) => a + (o.avance || 0), 0) / obras.length) : 0;
-  const activas = obras.filter(o => o.estado === "curso").length;
-  const dsecStyle = { fontSize: 9, letterSpacing: ".1em", textTransform: "uppercase", color: T.muted, margin: "10px 0 5px" };
-  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, background: T.bg }}>
-    <div style={{ padding: "16px 24px 4px" }}><div style={{ fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 600, color: T.text }}>Obras</div></div>
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, padding: "0 24px", marginTop: 16 }}>
-      {[["Activas", activas, "#6FCF97"], ["Avance", avg + "%", T.text], ["Obras", obras.length, T.text]].map(([l, v, c], i) =>
-        <div key={i} style={{ background: "rgba(255,255,255,.04)", border: `1px solid ${T.border}`, borderRadius: 2, padding: "11px 8px", textAlign: "center" }}><div style={{ fontSize: 19, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3 }}>{l}</div></div>)}
-    </div>
-    <div style={{ padding: "16px 24px 0" }}>
-      <div style={dsecStyle}>Estado de obras</div>
-      {obras.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "38px 18px" }}>Todavía no hay obras publicadas.</div>}
-      {obras.map(o => {
-        const e = ESTADOS[o.estado] || ESTADOS.pendiente;
-        const ts = tareas.filter(t => t.obra_id === o.id);
-        const ult = (o.informes || [])[o.informes?.length - 1];
-        const forms = formularios.filter(f => f.compartido && f.obra_id === o.id);
-        const isOpen = open === o.id;
-        return (<div key={o.id} style={{ borderBottom: `1px solid ${T.border}`, padding: "16px 0" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 15, color: T.text }}>{o.nombre}</div>
-              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{o.sector} · {o.inicio} → {o.cierre}</div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: o.estado === "curso" ? "#6FCF97" : e.c, background: o.estado === "curso" ? "rgba(111,207,151,.12)" : e.b, border: o.estado === "curso" ? "1px solid rgba(111,207,151,.3)" : `1px solid ${e.c}4d`, padding: "3px 9px", borderRadius: 20 }}>{e.l}</span>
-              {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra" style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}><Ico n="trash" /> </button>}
-            </div>
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "rgba(242,240,235,.55)", marginBottom: 5 }}><span>Avance de obra</span><span style={{ color: "#D9B27C", fontWeight: 700 }}>{o.avance}%</span></div>
-            <div style={{ height: 3, background: "rgba(255,255,255,.1)" }}><div style={{ height: 3, width: `${o.avance}%`, background: "#D9B27C" }} /></div>
-          </div>
-          <button onClick={() => setOpen(isOpen ? null : o.id)} style={{ width: "100%", marginTop: 11, background: "none", border: "1px solid rgba(255,255,255,.15)", borderRadius: 2, padding: "9px", fontSize: 11, fontWeight: 600, color: "#D9B27C", cursor: "pointer" }}>{isOpen ? "Ocultar detalle ▲" : `Ver detalle${forms.length ? ` · ${forms.length} formulario${forms.length > 1 ? "s" : ""}` : ""}${(o.planos || []).length ? ` · ${(o.planos || []).length} plano${(o.planos || []).length > 1 ? "s" : ""}` : ""} ▼`}</button>
-          {isOpen && <div style={{ marginTop: 12 }}>
-            <div style={dsecStyle}>Planos (PDF / CAD){(o.planos || []).length ? ` (${(o.planos || []).length})` : ""}</div>
-            {(o.planos || []).length === 0 && <div style={{ fontSize: 11.5, color: T.muted, fontStyle: "italic" }}>Sin planos cargados.</div>}
-            {(o.planos || []).map(p => <div key={p.id} style={{ fontSize: 11.5, color: "rgba(242,240,235,.75)", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,.05)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <span style={{ minWidth: 0, wordBreak: "break-word" }}>📐 {p.nombre}</span>
-              <span style={{ fontSize: 10, color: T.muted, flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}
-                <a href={p.url} target="_blank" rel="noreferrer" download={p.nombre} style={{ color: BRASS, fontWeight: 700, textDecoration: "none" }}>Abrir</a>
-                <button onClick={() => borrarPlano(o, p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer" }}>✕</button>
-              </span>
-            </div>)}
-            <label style={{ display: "block", width: "100%", marginTop: 10, background: "rgba(255,255,255,.06)", border: "1px dashed rgba(255,255,255,.2)", color: "rgba(242,240,235,.7)", borderRadius: 2, padding: "9px", fontSize: 11, textAlign: "center", cursor: "pointer", boxSizing: "border-box" }}>{subP ? "Subiendo…" : "＋ Subir plano (PDF/CAD)"}<input type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={ev => subirPlanos(ev, o)} style={{ display: "none" }} /></label>
-
-            {(o.fotos || []).length > 0 && <>
-              <div style={dsecStyle}>Avance fotográfico ({(o.fotos || []).length})</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 4 }}>{(o.fotos || []).slice().reverse().map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 2, border: "1px solid rgba(255,255,255,.08)", display: "block" }} /></a>)}</div>
-            </>}
-            {(o.videos || []).length > 0 && <><div style={dsecStyle}>Videos ({o.videos.length})</div>{o.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", borderRadius: 2, marginBottom: 8, background: "#000", display: "block" }} />)}</>}
-            {ts.length > 0 && <>
-              <div style={dsecStyle}>Cronograma</div>
-              {ts.map(t => <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
-                <span style={{ flex: 1, fontSize: 12.5, color: T.text }}>{t.nombre}</span>
-                <div style={{ width: 64, height: 4, background: "rgba(255,255,255,.1)", borderRadius: 3, overflow: "hidden", flexShrink: 0 }}><div style={{ height: 4, width: `${t.avance || 0}%`, background: BRASS }} /></div>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(242,240,235,.5)", width: 30, textAlign: "right", flexShrink: 0 }}>{t.avance || 0}%</span>
-              </div>)}
-            </>}
-            {ult && <>
-              <div style={dsecStyle}>Último informe · {ult.fecha}</div>
-              <div style={{ background: "rgba(255,255,255,.04)", borderRadius: 2, padding: "11px 13px", fontSize: 11.5, color: "rgba(242,240,235,.7)", lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 140, overflowY: "auto" }}>{ult.texto}</div>
-            </>}
-            {forms.length > 0 && <>
-              <div style={dsecStyle}>Formularios recibidos de V+V</div>
-              {forms.map(f => { const tpl = FORM_TPLS.find(t => t.id === f.tplId); return (<div key={f.id} onClick={() => setVerForm({ f, tpl, obra: o.nombre })} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 2, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
-                <div style={{ minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{tpl?.nombre || "Formulario"}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{f.fecha}{f.nro ? ` · N° ${f.nro}` : ""}{f.compartidoFecha ? ` · compartido ${f.compartidoFecha}` : ""}</div></div>
-                {f.resultado ? <span style={{ fontSize: 9, fontWeight: 800, color: f.resultado.includes("NO APTO") ? "#E58989" : f.resultado.includes("OBSERV") ? "#D9B27C" : "#6FCF97", flexShrink: 0 }}>{f.resultado.replace(" PARA INICIO", "")}</span> : <span style={{ color: BRASS, fontWeight: 700, fontSize: 11 }}>Ver →</span>}
-              </div>); })}
-            </>}
-          </div>}
-        </div>);
-      })}
-    </div>
-    {verForm && <FormViewer T={T} tpl={verForm.tpl} f={verForm.f} obraNombre={verForm.obra} onClose={() => setVerForm(null)} />}
-  </div>);
-}
 
 // ── PANTALLA: ARCHIVOS ───────────────────────────────────────────────
 function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivosVV, registrarSubida, quitarDeObra }) {
