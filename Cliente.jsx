@@ -608,11 +608,19 @@ const css = `
   @keyframes slidein{from{transform:translateY(-120%);opacity:0}to{transform:translateY(0);opacity:1}}
   @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:.85}}
 `;
 function theme(cfg) {
   const c = cfg || {};
   const bg = c.themeBg || "#0d0d0f";
-  return { bg, card: c.themeCard || "#111214", border: "rgba(255,255,255,.09)", text: c.themeText || "#f2f0eb", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", accent: c.accent || "#B0894F", accentLight: "rgba(176,137,79,.14)", navy: bg, r: 12, rsm: 8, shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+  const borderHex = c.themeBorder || "#ffffff";
+  return { bg, card: c.themeCard || "#111214", border: hexToRgba(borderHex, .09), text: c.themeText || "#f2f0eb", sub: hexToRgba(c.themeText || "#f2f0eb", .6), muted: hexToRgba(c.themeText || "#f2f0eb", .42), accent: c.accent || "#B0894F", accentLight: hexToRgba(c.accent || "#B0894F", .14), navy: bg, r: 12, rsm: 8, shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+}
+function hexToRgba(hex, alpha) {
+  const h = String(hex || "").replace("#", "");
+  if (h.length !== 6) return `rgba(255,255,255,${alpha})`;
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 // ── COMPONENTES BASE ─────────────────────────────────────────────────
@@ -2744,13 +2752,14 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
           ["Fondo", "themeBg", "#0d0d0f"],
           ["Fondo de tarjetas", "themeCard", "#111214"],
           ["Texto", "themeText", "#f2f0eb"],
+          ["Líneas / bordes", "themeBorder", "#ffffff"],
         ].map(([lbl, key, def]) => (
           <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0" }}>
             <span style={{ fontSize: 12.5, color: T.text }}>{lbl}</span>
             <input type="color" value={cfg[key] || def} onChange={e => setCfg(p => ({ ...p, [key]: e.target.value }))} style={{ width: 32, height: 26, border: `1px solid ${T.border}`, borderRadius: 5, background: "none", cursor: "pointer", padding: 0 }} />
           </div>
         ))}
-        <button onClick={() => setCfg(p => { const n = { ...p }; delete n.themeBg; delete n.themeCard; delete n.themeText; n.accent = "#B0894F"; return n; })} style={{ width: "100%", marginTop: 10, background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Restaurar colores originales</button>
+        <button onClick={() => setCfg(p => { const n = { ...p }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; n.accent = "#B0894F"; return n; })} style={{ width: "100%", marginTop: 10, background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Restaurar colores originales</button>
       </div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Agente IA</label></div>
       <div onClick={() => setCfg(p => ({ ...p, autoIA: !p.autoIA }))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", cursor: "pointer" }}>
@@ -4520,8 +4529,8 @@ function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
   });
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
-      <div style={{ background: T.navy, color: "#fff" }}>
-        <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", padding: "6px 16px", display: "flex", justifyContent: "center", alignItems: "center" }}>
+      <div style={{ background: T.navy, color: "#fff", paddingTop: "env(safe-area-inset-top)" }}>
+        <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", padding: "10px 16px", display: "flex", justifyContent: "center", alignItems: "center" }}>
           <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: BRASS, whiteSpace: "nowrap" }}>Panel de Cliente</span>
         </div>
       </div>
@@ -4566,7 +4575,7 @@ function BottomNav({ T, screen, setScreen, aviso }) {
   const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);
   const masBadge = MAS_ITEMS.reduce((s, it) => s + (badge(it.id) || 0), 0);
   const items = [...BOTTOM_NAV, { id: "mas", label: "Más" }];
-  return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center" }}>
+  return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", paddingBottom: "env(safe-area-inset-bottom)" }}>
     <div style={{ width: "100%", maxWidth: 1180, display: "flex" }}>
       {items.map(n => {
         const active = screen === n.id || (n.id === "mas" && MAS_ITEMS.some(m => m.id === screen));
@@ -4624,14 +4633,16 @@ function WebClientFooter({ T, cfg }) {
 
 function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, onIr }) {
   const [slideIdx, setSlideIdx] = useState(0);
-  // Solo entran al carrusel las obras que ya tienen renders cargados en Ajustes.
-  const obrasConRender = (obras || []).filter(o => ((renders || {})[o.id] || []).length > 0);
+  // Rotan TODAS las obras en curso, tengan foto cargada o no — si a una
+  // le falta, se muestra igual (con un fondo liso) hasta que se le cargue.
+  const obrasEnCurso = (obras || []).filter(o => o.estado === "curso" || !o.estado);
+  const listaCarrusel = obrasEnCurso.length ? obrasEnCurso : (obras || []);
   useEffect(() => {
-    if (obrasConRender.length < 2) return;
-    const t = setInterval(() => setSlideIdx(i => (i + 1) % obrasConRender.length), 4500);
+    if (listaCarrusel.length < 2) return;
+    const t = setInterval(() => setSlideIdx(i => (i + 1) % listaCarrusel.length), 4500);
     return () => clearInterval(t);
-  }, [obrasConRender.length]);
-  const obraActual = obrasConRender[slideIdx % Math.max(obrasConRender.length, 1)];
+  }, [listaCarrusel.length]);
+  const obraActual = listaCarrusel[slideIdx % Math.max(listaCarrusel.length, 1)];
   const renderActual = obraActual ? ((renders || {})[obraActual.id] || [])[0] : null;
 
   // Novedades reales: últimos mensajes de V+V, hechos de bitácora e informes
@@ -4646,24 +4657,27 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, onIr
   return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
     <div style={{ position: "relative", height: 260, background: "#0d0d0f", overflow: "hidden" }}>
       {renderActual
-        ? <img src={renderActual.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, transition: "opacity .6s" }} />
-        : <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#0d0d0f,#1a1a1d)" }} />}
+        ? <img key={renderActual.url} src={renderActual.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, animation: "fadeIn .6s ease" }} />
+        : <div key={obraActual?.id || "sin-obra"} style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#0d0d0f,#1a1a1d)", animation: "fadeIn .6s ease" }} />}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
       <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
         <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" }}>{cfg?.nombre || "Belfast"}</div>
         <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
       </div>
+      {listaCarrusel.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>
+        {listaCarrusel.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % listaCarrusel.length) ? BRASS : "rgba(255,255,255,.35)" }} />)}
+      </div>}
     </div>
     <div style={{ padding: "22px 22px 30px" }}>
-      <div onClick={() => onIr("asistente")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginBottom: 20, cursor: "pointer" }}>
-        <div style={{ fontSize: 9, letterSpacing: ".12em", textTransform: "uppercase", color: "#D9B27C", fontWeight: 700 }}>✦ IA Belfast</div>
-        <div style={{ fontSize: 12, color: "rgba(242,240,235,.6)", marginTop: 5 }}>Pedile a la IA — buscar, subir fotos, cargar archivos a una obra…</div>
-      </div>
       <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {feed.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
       {feed.map((f, i) => (<div key={i} onClick={() => onIr(f.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
         <div><span style={{ fontSize: 9, fontWeight: 800, color: "#D9B27C", marginRight: 8, textTransform: "uppercase" }}>{f.tipo}</span><span style={{ fontSize: 12.5 }}>{f.texto}</span>{f.obra && <div style={{ fontSize: 10, color: "rgba(242,240,235,.4)", marginTop: 2 }}>{f.obra}</div>}</div>
       </div>))}
+      <div onClick={() => onIr("asistente")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
+        <div style={{ fontSize: 9, letterSpacing: ".12em", textTransform: "uppercase", color: "#D9B27C", fontWeight: 700 }}>✦ IA Belfast</div>
+        <div style={{ fontSize: 12, color: "rgba(242,240,235,.6)", marginTop: 5 }}>Pedile a la IA — buscar, subir fotos, cargar archivos a una obra…</div>
+      </div>
     </div>
   </div>);
 }
