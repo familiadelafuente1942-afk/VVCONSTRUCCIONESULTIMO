@@ -4590,12 +4590,12 @@ const MAS_ITEMS = [
 function BottomNav({ T, screen, setScreen, aviso }) {
   const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);
   const items = BOTTOM_NAV;
-  return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", paddingBottom: "env(safe-area-inset-bottom)" }}>
+  return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", paddingBottom: "calc(env(safe-area-inset-bottom) + 6px)" }}>
     <div style={{ width: "100%", maxWidth: 1180, display: "flex" }}>
       {items.map(n => {
         const active = screen === n.id;
         const hayNuevo = badge(n.id) > 0;
-        return (<button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", flex: 1, background: "none", border: "none", padding: "10px 4px", fontSize: 10.5, fontWeight: (active || hayNuevo) ? 800 : 600, color: hayNuevo ? "#EF4444" : (active ? T.accent : T.sub), borderTop: `2px solid ${active ? BRASS : "transparent"}`, marginTop: -1, cursor: "pointer" }}>
+        return (<button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", flex: 1, background: "none", border: "none", padding: "6px 4px 5px", fontSize: 10.5, fontWeight: (active || hayNuevo) ? 800 : 600, color: hayNuevo ? "#EF4444" : (active ? T.accent : T.sub), borderTop: `2px solid ${active ? BRASS : "transparent"}`, marginTop: -1, cursor: "pointer" }}>
           {n.label}
           {hayNuevo && <span style={{ position: "absolute", top: 4, right: "18%", background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 14, height: 14, fontSize: 8, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{badge(n.id)}</span>}
         </button>);
@@ -4639,7 +4639,7 @@ function WebClientHero({ T, cfg, obras }) {
 }
 function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "6px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 10.5 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
       <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-fixavance</span>
     </div>
@@ -4984,7 +4984,6 @@ function ClienteApp() {
         </div>
       </div>
       <BottomNav T={T} screen={screen} setScreen={irA} aviso={aviso} />
-      <WebClientFooter T={T} cfg={cfg} />
     </div>
     <SyncBanner />
     <div style={{ padding: "10px 16px 0" }}><GlobitoPermiso /></div>
