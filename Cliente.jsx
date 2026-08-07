@@ -609,8 +609,10 @@ const css = `
   @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 `;
-function theme(accent) {
-  return { bg: "#0d0d0f", card: "#111214", border: "rgba(255,255,255,.09)", text: "#f2f0eb", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", accent: accent || "#B0894F", accentLight: "rgba(176,137,79,.14)", navy: "#0F1B2D", r: 12, rsm: 8, shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+function theme(cfg) {
+  const c = cfg || {};
+  const bg = c.themeBg || "#0d0d0f";
+  return { bg, card: c.themeCard || "#111214", border: "rgba(255,255,255,.09)", text: c.themeText || "#f2f0eb", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", accent: c.accent || "#B0894F", accentLight: "rgba(176,137,79,.14)", navy: bg, r: 12, rsm: 8, shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
 }
 
 // ── COMPONENTES BASE ─────────────────────────────────────────────────
@@ -2732,8 +2734,23 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
       </div>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Color principal</label>
       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 8 }}>
-        {["#1E3A5F", "#101C2C", "#1F5C49", "#6E3B2E", "#46406E", "#0E5A66", "#7A2E50"].map(col => <button key={col} onClick={() => setCfg(p => ({ ...p, accent: col }))} style={{ width: 32, height: 32, borderRadius: 5, background: col, border: `2px solid ${cfg.accent === col ? T.text : T.border}` }} />)}
-        <input type="color" value={cfg.accent} onChange={e => setCfg(p => ({ ...p, accent: e.target.value }))} style={{ width: 32, height: 32, border: "none", background: "none" }} />
+        {["#B0894F", "#1E3A5F", "#1F5C49", "#6E3B2E", "#46406E", "#0E5A66", "#7A2E50"].map(col => <button key={col} onClick={() => setCfg(p => ({ ...p, accent: col }))} style={{ width: 32, height: 32, borderRadius: 5, background: col, border: `2px solid ${cfg.accent === col ? T.text : T.border}` }} />)}
+        <input type="color" value={cfg.accent || "#B0894F"} onChange={e => setCfg(p => ({ ...p, accent: e.target.value }))} style={{ width: 32, height: 32, border: "none", background: "none" }} />
+      </div>
+
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginTop: 18 }}>Paleta completa (toda la app, en vivo)</label>
+      <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", marginTop: 8 }}>
+        {[
+          ["Fondo", "themeBg", "#0d0d0f"],
+          ["Fondo de tarjetas", "themeCard", "#111214"],
+          ["Texto", "themeText", "#f2f0eb"],
+        ].map(([lbl, key, def]) => (
+          <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0" }}>
+            <span style={{ fontSize: 12.5, color: T.text }}>{lbl}</span>
+            <input type="color" value={cfg[key] || def} onChange={e => setCfg(p => ({ ...p, [key]: e.target.value }))} style={{ width: 32, height: 26, border: `1px solid ${T.border}`, borderRadius: 5, background: "none", cursor: "pointer", padding: 0 }} />
+          </div>
+        ))}
+        <button onClick={() => setCfg(p => { const n = { ...p }; delete n.themeBg; delete n.themeCard; delete n.themeText; n.accent = "#B0894F"; return n; })} style={{ width: "100%", marginTop: 10, background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Restaurar colores originales</button>
       </div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Agente IA</label></div>
       <div onClick={() => setCfg(p => ({ ...p, autoIA: !p.autoIA }))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", cursor: "pointer" }}>
@@ -4526,6 +4543,7 @@ function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
 // secciones (IA, Informes, Cronogramas, Mensajes, Certificados,
 // Archivos, Personal, Gestión, Grabar reunión, Ajustes) vive en "Más".
 const BOTTOM_NAV = [
+  { id: "inicio", label: "Inicio" },
   { id: "obras", label: "Obras" },
   { id: "avance", label: "Avance" },
   { id: "bitacora", label: "Bitácora" },
@@ -4653,7 +4671,7 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, onIr
 function ClienteApp() {
   useEffect(() => { if (FORCE_CLOUD) { try { history.replaceState(null, "", window.location.pathname); } catch { } } }, []);
   const [cfg, setCfg] = useStored("cliente_cfg", DEFAULT_CFG);
-  const T = theme(cfg.accent);
+  const T = theme(cfg);
   const [screen, setScreen] = useState("inicio");
   const [obrasRaw, setObras] = useStored("vv_obras", []);
   // Obras marcadas como "privada" en V+V no existen para Belfast: se filtran acá,
