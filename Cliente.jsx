@@ -4688,8 +4688,8 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
           </div>}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
       <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ width: cfg?.logoSize || 52, height: cfg?.logoSize || 52, borderRadius: "50%", overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", flexShrink: 0, background: "#0d0d0f" }}>
-          {cfg?.logo ? <img src={cfg.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#fff" }}>{(cfg?.sigla || "B").slice(0, 1)}</div>}
+        <div style={{ width: cfg?.logoSize || 88, height: cfg?.logoSize || 88, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: "transparent" }}>
+          {cfg?.logo ? <img src={cfg.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#fff" }}>{(cfg?.sigla || "B").slice(0, 1)}</div>}
         </div>
         <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
       </div>
