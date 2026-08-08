@@ -4667,10 +4667,12 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, onIr
   const hoyStrC = new Date().toDateString();
   const esHoyC = (ts) => ts && new Date(ts).toDateString() === hoyStrC;
   const avancesHoyC = obras.flatMap(o => (((avance || {})[o.id]) || [])).filter(a => esHoyC(a.ts)).length;
+  const informesHoyC = obras.flatMap(o => (((avance || {})[o.id]) || [])).filter(a => esHoyC(a.ts) && a.html).length;
   const bitacoraHoyC = (bitacora || []).filter(h => esHoyC(h.ts)).length;
   const mensajesNuevosC = (mensajes || []).filter(m => m.from && m.from !== "cliente").length;
   const novedadesC = [
     avancesHoyC > 0 && { n: avancesHoyC, txt: `avance${avancesHoyC > 1 ? "s" : ""} de obra cargado${avancesHoyC > 1 ? "s" : ""} hoy`, ir: "avance" },
+    informesHoyC > 0 && { n: informesHoyC, txt: `informe${informesHoyC > 1 ? "s" : ""} presentado${informesHoyC > 1 ? "s" : ""} hoy`, ir: "informes" },
     bitacoraHoyC > 0 && { n: bitacoraHoyC, txt: `hecho${bitacoraHoyC > 1 ? "s" : ""} en bitácora hoy`, ir: "bitacora" },
     mensajesNuevosC > 0 && { n: mensajesNuevosC, txt: `mensaje${mensajesNuevosC > 1 ? "s" : ""} nuevo${mensajesNuevosC > 1 ? "s" : ""}`, ir: "mensajes" },
   ].filter(Boolean);
