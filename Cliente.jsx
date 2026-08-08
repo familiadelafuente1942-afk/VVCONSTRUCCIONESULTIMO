@@ -908,7 +908,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, env
       {pendientes.length === 0
         ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Preparando…" : "Elegir foto(s)"}</button>
         : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{pendientes.length === 1 ? "1 foto seleccionada" : `${pendientes.length} fotos seleccionadas`} — poné la fecha y analizá</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 8 }}>{pendientes.length === 1 ? "1 foto seleccionada" : `${pendientes.length} fotos seleccionadas`} — poné la fecha y analizá</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
               {pendientes.map((pf, i) => <div key={i} style={{ position: "relative" }}>
                 <img src={pf.comp} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 7, display: "block", border: `1px solid ${T.border}` }} />
@@ -925,7 +925,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, env
           </div>}
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
-      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
+      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.text, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
       {historial.map((h, idx) => (<div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
         {(() => { const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []); if (!fs.length) return null; if (fs.length === 1) return <img src={fs[0]} alt="" style={{ width: "100%", maxHeight: 340, objectFit: "contain", background: "#0b0f14", display: "block" }} />; return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, alignItems: "start", padding: 4, background: "#0b0f14" }}>{fs.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block" }}><img src={u} alt="" style={{ width: "100%", height: "auto", display: "block", borderRadius: 4 }} /></a>)}</div>; })()}
@@ -999,7 +999,7 @@ function DroneIAClienteView({ T, obras, dronevuelos }) {
       {/* Los vuelos de hoy, de todas las obras */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: vuelosHoy.length ? 10 : 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Hoy en todas las obras</div>
           <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
         </div>
         {vuelosHoy.length === 0
@@ -1373,7 +1373,7 @@ function AuditoriaClienteView({ T, obras, auditoria, cfg }) {
         return (<div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div onClick={() => setAbierto(abiertoAqui ? null : it.id)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.nro}</span>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.navy, flex: 1, minWidth: 0 }}>{nombreObra(it.obra_id)}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{nombreObra(it.obra_id)}</span>
             <span style={{ fontSize: 10, fontWeight: 700, color: it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D" }}>{it.resultado}</span>
           </div>
           <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{fmtDMY(it.fecha)}{it.periodo ? ` · ${it.periodo}` : ""} · {(it.obs || []).length} observación(es)</div>
@@ -1548,7 +1548,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
       {/* Lo cargado hoy, de todas las obras */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: delDia.length ? 10 : 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Hoy en todas las obras</div>
           <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
         </div>
         {delDia.length === 0
@@ -1576,7 +1576,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
         {/* botón nuevo / formulario */}
         
         {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 12, color: T.sub, width: 46 }}>Fecha</span>
@@ -1605,7 +1605,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
               ))}
             </div>}
             <input ref={adjRef} type="file" multiple onChange={agregarAdjuntos} style={{ display: "none" }} />
-            <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "Adjuntar archivo (Word, PDF, Excel…)"}</button>
+            <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${BRASS}`, color: T.text, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "Adjuntar archivo (Word, PDF, Excel…)"}</button>
             <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
               <button onClick={limpiar} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
               <button onClick={guardar} disabled={subiendo} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{edit ? "Guardar cambios" : "Guardar hecho"}</button>
@@ -3619,7 +3619,7 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem =
         {informesSemTodos.map(r => { const isOpen = semAbierto?.id === r.id; return (<div key={r.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7 }}>
           <div onClick={() => setSemAbierto(isOpen ? null : r)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(r.desde)} al {fFechaCorta(r.hasta)}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>Semana {fFechaCorta(r.desde)} al {fFechaCorta(r.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{r._obra} · {(r.hechos || []).length} trabajo{(r.hechos || []).length === 1 ? "" : "s"} realizado{(r.hechos || []).length === 1 ? "" : "s"} · emitido {r.emitido}</div>
             </div>
             <span style={{ color: T.muted, fontSize: 11 }}>{isOpen ? "▲" : "▼"}</span>
@@ -3644,7 +3644,7 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem =
         {certsTodos.map(c => (<div key={c.id} onClick={() => setDocAbierto({ html: c.html || buildPdfCertSemanal(c, c._obra), titulo: `Certificado ${fFechaCorta(c.desde)} al ${fFechaCorta(c.hasta)}` })} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{c._obra} · {(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
               <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>
@@ -3660,7 +3660,7 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem =
           <div key={a.id} onClick={() => setDocAbierto({ html: a.html, titulo: `Informe de avance ${a.fecha}` })} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
                 <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{a._obra}{fs.length ? ` · ${fs.length} foto${fs.length > 1 ? "s" : ""}` : ""}</div>
               </div>
               <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>
@@ -3956,7 +3956,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
       </div>
 
       {grupos.map(g => (<div key={g.rubro} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 13, marginBottom: 10 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{g.rubro}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 8 }}>{g.rubro}</div>
         {g.items.map(it => (<div key={it.id} style={{ padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.tiene ? "#16A34A" : T.border}`, background: it.tiene ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.tiene ? "✓" : ""}</button>
@@ -3981,7 +3981,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
       {/* ── Google Form ── */}
       <div style={{ border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.card }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gformCfg ? 10 : (reg?.formId ? 10 : 0) }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}><Ico n="list" /> Formulario para el jefe de obra</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}><Ico n="list" /> Formulario para el jefe de obra</div>
           <button onClick={() => setGformCfg(v => !v)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, color: T.sub, cursor: "pointer" }}>⚙︎ {gformUrl ? "Configurado" : "Configurar"}</button>
         </div>
 
@@ -4004,7 +4004,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
 
       {/* observaciones del jefe (de las respuestas del form) */}
       {reg?.gformObs && Object.keys(reg.gformObs).some(k => reg.gformObs[k]) && <div style={{ border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.al }}>
-        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.navy, marginBottom: 6 }}>Observaciones del jefe de obra</div>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.text, marginBottom: 6 }}>Observaciones del jefe de obra</div>
         {Object.keys(reg.gformObs).filter(k => reg.gformObs[k]).map(k => (
           <div key={k} style={{ fontSize: 12, color: T.text, marginBottom: 4, lineHeight: 1.4 }}><b>{k}:</b> {reg.gformObs[k]}</div>
         ))}
