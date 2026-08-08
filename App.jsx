@@ -2417,7 +2417,7 @@ const AUD_TIPOS = [
 ];
 const AUD_RESULT = ["Conforme", "Conforme con observaciones", "No conforme"];
 
-function AuditoriaView({ db, cfg, onBack }) {
+function AuditoriaView({ db, cfg, onBack, desdeSemana }) {
   const obras = db.obras || [];
   const items = db.auditoria || [];
   const [tipo, setTipo] = useState("supervision");
@@ -2427,9 +2427,13 @@ function AuditoriaView({ db, cfg, onBack }) {
   const [pdfRep, setPdfRep] = useState(null);
   const [busy, setBusy] = useState(false);
   const [driveBusy, setDriveBusy] = useState(false);
+  const [soloSemana, setSoloSemana] = useState(!!desdeSemana);
   const obra = obras.find(o => o.id === obraId);
   const tp = AUD_TIPOS.find(t => t.id === tipo) || AUD_TIPOS[0];
-  const lista = items.filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const inicioSemanaAud = (() => { const d = new Date(); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day; d.setDate(d.getDate() + diff); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+  const listaSemana = items.filter(x => x.ts && x.ts >= inicioSemanaAud).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const lista = soloSemana ? listaSemana : items.filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const nombreObraDe = (id) => (obras.find(o => o.id === id) || {}).nombre || "—";
 
   const guardarLista = (arr) => db.setAuditoria(arr);
   const nroDe = (t) => { const n = items.filter(x => x.tipo === t).length + 1; const s = (AUD_TIPOS.find(x => x.id === t) || {}).sigla || "AUD"; return `${s}-${new Date().getFullYear()}-${String(n).padStart(3, "0")}`; };
@@ -2577,6 +2581,12 @@ function AuditoriaView({ db, cfg, onBack }) {
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="informes" label="Auditoría de obra" sub="Supervisiones, revisión de documentación y certificación de etapas" onBack={onBack} />
     <div style={{ padding: "14px 18px" }}>
+      {listaSemana.length > 0 && <div onClick={() => setSoloSemana(v => !v)} style={{ display: "flex", alignItems: "center", gap: 10, background: soloSemana ? T.navy : T.accentLight, border: `1px solid ${soloSemana ? T.navy : BRASS}`, borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, cursor: "pointer" }}>
+        <span style={{ width: 24, height: 24, borderRadius: "50%", background: BRASS, color: "#fff", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{listaSemana.length}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: soloSemana ? "#fff" : T.text, flex: 1 }}>{soloSemana ? "Viendo solo lo nuevo de esta semana" : "Nuevas esta semana — tocá para verlas todas juntas"}</span>
+        <span style={{ fontSize: 11, color: soloSemana ? "#fff" : BRASS, fontWeight: 700 }}>{soloSemana ? "Ver todo ▾" : "Ver ▸"}</span>
+      </div>}
+      {!soloSemana && <>
       <div style={{ display: "flex", gap: 7, marginBottom: 12 }}>
         {AUD_TIPOS.map(t => (
           <button key={t.id} onClick={() => { setTipo(t.id); setForm(null); }} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: tipo === t.id ? T.navy : T.card, color: tipo === t.id ? "#fff" : T.sub, border: `1px solid ${tipo === t.id ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
@@ -2595,13 +2605,14 @@ function AuditoriaView({ db, cfg, onBack }) {
 
       {tipo === "supervision" && <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, letterSpacing: ".03em", marginBottom: 8 }}>NUEVAS SUPERVISIONES</div>}
       <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>+ {tp.nuevo}</button>
+      </>}
 
-      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>Todavía no hay registros de este tipo para la obra elegida.</div>}
+      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>{soloSemana ? "No hay auditorías nuevas esta semana." : "Todavía no hay registros de este tipo para la obra elegida."}</div>}
       {lista.map(it => (
         <div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.nro}</span>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{it.etapa || it.periodo || fmtDMY(it.fecha)}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{soloSemana ? nombreObraDe(it.obra_id) : (it.etapa || it.periodo || fmtDMY(it.fecha))}</span>
             <span style={{ fontSize: 10, fontWeight: 700, color: it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D" }}>{it.resultado}</span>
           </div>
           <div style={{ fontSize: 11, color: T.muted }}>{fmtDMY(it.fecha)} · {(it.obs || []).length} observación(es){it.docs ? ` · ${(it.docs || []).length} doc.` : ""}</div>
@@ -8067,7 +8078,7 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
     avanceInfTot > 0 && { n: avanceInfTot, txt: `Informe${avanceInfTot > 1 ? "s" : ""} de avance esta semana`, ir: "avance" },
     bitacoraTot > 0 && { n: bitacoraTot, txt: `Bitácora${bitacoraTot > 1 ? "s" : ""} esta semana`, ir: "bitacora" },
     certifTot > 0 && { n: certifTot, txt: `Certificado${certifTot > 1 ? "s" : ""} semanal${certifTot > 1 ? "es" : ""}`, ir: "avance" },
-    auditoriaTot > 0 && { n: auditoriaTot, txt: `Auditoría${auditoriaTot > 1 ? "s" : ""} esta semana`, ir: "auditoria" },
+    auditoriaTot > 0 && { n: auditoriaTot, txt: `Auditoría${auditoriaTot > 1 ? "s" : ""} esta semana`, ir: "auditoria", param: "semana" },
     mensajesTot > 0 && { n: mensajesTot, txt: `Mensaje${mensajesTot > 1 ? "s" : ""} de Belfast`, ir: "mas-mensajes" },
   ].filter(Boolean);
 
@@ -8107,7 +8118,7 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
 
       <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedades.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
-      {novedades.map((n, i) => (<div key={i} onClick={() => onIr(n.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
+      {novedades.map((n, i) => (<div key={i} onClick={() => onIr(n.ir, n.param)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
         <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
       </div>))}
 
@@ -8170,6 +8181,7 @@ function App() {
     } catch { }
   }, []);
   const [view, setView] = useState("dashboard");
+  const [auditoriaDesdeSemana, setAuditoriaDesdeSemana] = useState(false);
   const [lics, setLics] = useStoredState("vv_lics", SAMPLE_LICS);
   const [obras, setObras] = useStoredState("vv_obras", SAMPLE_OBRAS);
   const [personal, setPersonal] = useStoredState("vv_personal", SAMPLE_PERSONAL);
@@ -8412,7 +8424,7 @@ function App() {
         {view!=="dashboard" && <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
-            {view==="dashboard" && <InicioViewVV cfg={cfg} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id)=>{ if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
+            {view==="dashboard" && <InicioViewVV cfg={cfg} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} certifRubro={certifRubro} setCertifRubro={setCertifRubro} docrecepcion={docrecepcion} />}
@@ -8426,7 +8438,7 @@ function App() {
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="minutas" && <GrabarReunion db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
-            {view==="auditoria" && <AuditoriaView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
+            {view==="auditoria" && <AuditoriaView db={db} cfg={cfg} onBack={()=>setView("dashboard")} desdeSemana={auditoriaDesdeSemana} />}
             {view==="mensajes" && <MensajesVVView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="internos" && <InternosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
           </div>
