@@ -76,43 +76,11 @@ function ConfigModalProp({ config, onSave, onClose }) {
   const [colorPrincipal, setColorPrincipal] = useState(config.colorPrincipal || TBASE.navy);
   const [colorAcento, setColorAcento] = useState(config.colorAcento || TBASE.brass);
   const [colorFondo, setColorFondo] = useState(config.colorFondo || TBASE.bg);
-  const [logo, setLogo] = useState(config.logo || "");
-  const [logoVV, setLogoVV] = useState(config.logoVV || "");
-  const [subiendo, setSubiendo] = useState(false);
-  const [subiendoVV, setSubiendoVV] = useState(false);
-  async function subirLogo(e) {
-    const f = e.target.files && e.target.files[0]; if (!f) return;
-    setSubiendo(true); const url = await subirArchivo(f);
-    if (url) setLogo(url); else alert("No se pudo subir. Revisá la conexión.");
-    setSubiendo(false); e.target.value = "";
-  }
-  async function subirLogoVV(e) {
-    const f = e.target.files && e.target.files[0]; if (!f) return;
-    setSubiendoVV(true); const url = await subirArchivo(f);
-    if (url) setLogoVV(url); else alert("No se pudo subir. Revisá la conexión.");
-    setSubiendoVV(false); e.target.value = "";
-  }
-  function guardar() { onSave({ nombre: nombre.trim(), subtitulo: subtitulo.trim(), logo, logoVV, colorPrincipal, colorAcento, colorFondo }); onClose(); }
+  function guardar() { onSave({ nombre: nombre.trim(), subtitulo: subtitulo.trim(), colorPrincipal, colorAcento, colorFondo }); onClose(); }
   return (<div style={{ position: "fixed", inset: 0, background: "rgba(11,22,34,.55)", zIndex: 450, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
     <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", padding: 20, paddingBottom: "calc(20px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 680, maxHeight: "90vh", overflowY: "auto", boxSizing: "border-box" }}>
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 3, letterSpacing: "-0.01em" }}>Personalizar app</div>
-      <div style={{ fontSize: 12, color: T.muted, marginBottom: 18 }}>El logo se elige solo según la obra: si es una obra que gestiona V+V directo (obra privada), se ve el logo de V+V; si pasa por Belfast, se ve el logo de Belfast.</div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".04em" }}>Logo Belfast (obras normales)</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-        <div style={{ width: 60, height: 60, borderRadius: "50%", background: logo ? "#fff" : T.navy, border: `1.5px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-          {logo ? <img src={logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={26} c={T.brass} />}
-        </div>
-        <label style={{ background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : logo ? "Cambiar logo" : "Subir logo"}<input type="file" accept="image/*" onChange={subirLogo} style={{ display: "none" }} /></label>
-        {logo && <button onClick={() => setLogo("")} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 9, padding: "10px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Quitar</button>}
-      </div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".04em" }}>Logo V+V (obras privadas, sin Belfast)</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <div style={{ width: 60, height: 60, borderRadius: "50%", background: logoVV ? "#fff" : T.navy, border: `1.5px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-          {logoVV ? <img src={logoVV} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={26} c={T.brass} />}
-        </div>
-        <label style={{ background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendoVV ? "Subiendo…" : logoVV ? "Cambiar logo" : "Subir logo"}<input type="file" accept="image/*" onChange={subirLogoVV} style={{ display: "none" }} /></label>
-        {logoVV && <button onClick={() => setLogoVV("")} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 9, padding: "10px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Quitar</button>}
-      </div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 18 }}>El logo es siempre el de Belfast (Belfast es quien te da el acceso) — no se cambia acá. Solo podés elegir cómo querés VER la app: el nombre y los colores.</div>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".04em" }}>Nombre</div>
       <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="BELFAST" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px", fontSize: 15, fontWeight: 700, color: T.text, boxSizing: "border-box", marginBottom: 14 }} />
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".04em" }}>Subtítulo</div>
@@ -148,7 +116,7 @@ function ConfigModalProp({ config, onSave, onClose }) {
 }
 
 
-function Entrada({ onEntrar, config, onGuardarConfig, codigoInicial, proyectoUrl }) {
+function Entrada({ onEntrar, config, onGuardarConfig, codigoInicial, proyectoUrl, logoBelfast }) {
   const T = temaDe(config);
   const [codigo, setCodigo] = useState(codigoInicial || "");
   const [nombre, setNombre] = useState("");
@@ -173,8 +141,8 @@ function Entrada({ onEntrar, config, onGuardarConfig, codigoInicial, proyectoUrl
   }
 
   return (<div style={{ minHeight: "100vh", background: T.navy, display: "flex", flexDirection: "column", justifyContent: "center", padding: "20px 24px", paddingTop: "calc(20px + env(safe-area-inset-top))", paddingBottom: "calc(20px + env(safe-area-inset-bottom))", boxSizing: "border-box" }}>
-    <div style={{ width: 76, height: 76, borderRadius: "50%", border: `2px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 22px", overflow: "hidden", background: config?.logo ? "#fff" : "none" }}>
-      {config?.logo ? <img src={config.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={32} c={T.brass} />}
+    <div style={{ width: 76, height: 76, borderRadius: "50%", border: `2px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 22px", overflow: "hidden", background: logoBelfast ? "#fff" : "none" }}>
+      {logoBelfast ? <img src={logoBelfast} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={32} c={T.brass} />}
     </div>
     <div style={{ textAlign: "center", color: "#fff", fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{proyectoUrl || config?.nombre || "BELFAST"}</div>
     <div style={{ textAlign: "center", color: "rgba(255,255,255,.6)", fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 30 }}>{config?.subtitulo || "Panel del propietario"}</div>
@@ -661,7 +629,7 @@ function SeccionMensajes({ onBack }) {
 }
 
 // ─── Panel principal ───
-function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, certConformidad, envios, costos, onGuardarPropia, onCrearPropia, config, onGuardarConfig }) {
+function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, renders, certif, certConformidad, envios, costos, onGuardarPropia, onCrearPropia, config, onGuardarConfig, logoBelfast, logoVVReal }) {
   const T = temaDe(config);
   const [seccion, setSeccion] = useState(null);
   const [idx, setIdx] = useState(0);
@@ -693,7 +661,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.15) 0%, transparent 40%)" }} />
         <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ width: 56, height: 56, borderRadius: "50%", border: `2.5px solid ${T.brass}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: "#fff", boxShadow: "0 3px 10px rgba(0,0,0,.3)" }}>
-            {(obra?.privada ? (config?.logoVV || config?.logo) : config?.logo) ? <img src={obra?.privada ? (config.logoVV || config.logo) : config.logo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={22} c={T.navy} />}
+            {(() => { const logoActivo = obra?.privada ? (logoVVReal || logoBelfast) : logoBelfast; return logoActivo ? <img src={logoActivo} style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={22} c={T.navy} />; })()}
           </div>
         </div>
       </div>
@@ -772,6 +740,8 @@ export default function ClientePropietarioApp() {
   const [obra, setObra] = useState(null);
   const [nombreCliente, setNombreCliente] = useState("");
   const [config, setConfig] = useState({});
+  const [logoBelfast, setLogoBelfast] = useState("");
+  const [logoVVReal, setLogoVVReal] = useState("");
   const [proyectoUrl, setProyectoUrl] = useState("");
   const [codigoInicial, setCodigoInicial] = useState("");
   const [extra, setExtra] = useState({ tareas: [], auditoria: [], formularios: [], avance: {}, renders: {}, certif: {}, certConformidad: [], envios: {} });
@@ -854,6 +824,11 @@ export default function ClientePropietarioApp() {
 
   useEffect(() => {
     storage.get("vv_propietario_config").then(r => { if (r?.value) { try { setConfig(JSON.parse(r.value)); } catch { } } });
+    // El logo es el de Belfast en las obras normales (Belfast da el acceso),
+    // pero en las obras PRIVADAS (las que V+V gestiona directo, sin Belfast
+    // — como Terralagos) es el de V+V, tomado de su propio Ajustes.
+    storage.get("cliente_cfg").then(r => { if (r?.value) { try { const c = JSON.parse(r.value); if (c.logo) setLogoBelfast(c.logo); } catch { } } });
+    storage.get("vv_cfg").then(r => { if (r?.value) { try { const c = JSON.parse(r.value); if (c.logoEmpresa2 || c.logoEmpresa) setLogoVVReal(c.logoEmpresa2 || c.logoEmpresa); } catch { } } });
     let params = null;
     try { params = new URLSearchParams(window.location.search); } catch { }
     const proyecto = params ? params.get("p") : null;
@@ -908,6 +883,6 @@ export default function ClientePropietarioApp() {
   }, [estado]);
 
   if (estado === "cargando") return <div style={{ minHeight: "100vh", background: T.navy }} />;
-  if (estado === "entrada") return <Entrada onEntrar={cargarObra} config={config} onGuardarConfig={guardarConfig} codigoInicial={codigoInicial} proyectoUrl={proyectoUrl} />;
-  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} certConformidad={extra.certConformidad} envios={extra.envios} costos={extra.costos} onGuardarPropia={guardarPropia} onCrearPropia={crearPropia} config={config} onGuardarConfig={guardarConfig} proyectoUrl={proyectoUrl} />;
+  if (estado === "entrada") return <Entrada onEntrar={cargarObra} config={config} onGuardarConfig={guardarConfig} codigoInicial={codigoInicial} proyectoUrl={proyectoUrl} logoBelfast={logoBelfast} />;
+  return <Panel obra={obra} nombreCliente={nombreCliente} tareas={extra.tareas} auditoria={extra.auditoria} formularios={extra.formularios} avance={extra.avance} renders={extra.renders} certif={extra.certif} certConformidad={extra.certConformidad} envios={extra.envios} costos={extra.costos} onGuardarPropia={guardarPropia} onCrearPropia={crearPropia} config={config} onGuardarConfig={guardarConfig} proyectoUrl={proyectoUrl} logoBelfast={logoBelfast} logoVVReal={logoVVReal} />;
 }
