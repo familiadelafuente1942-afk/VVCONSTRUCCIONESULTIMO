@@ -1967,7 +1967,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
         {fotos.length === 0
             ? <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_fotos')}</div>
             : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: informe ? 14 : 0 }}>
-                {fotos.map(f => {
+                {[...fotos].reverse().map(f => {
                     const sel = selFotos.includes(f.id);
                     return (<div key={f.id} onClick={() => modoSel && toggleSel(f.id)} style={{ borderRadius: T.rsm, overflow: "hidden", border: `2px solid ${sel ? "#10B981" : T.border}`, cursor: modoSel ? "pointer" : "default", position: "relative" }}>
                         {sel && <div style={{ position: "absolute", top: 5, right: 5, width: 20, height: 20, borderRadius: "50%", background: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</div>}
