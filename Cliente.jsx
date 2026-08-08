@@ -4662,14 +4662,18 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, onIr
   const obraActual = listaCarrusel[slideIdx % Math.max(listaCarrusel.length, 1)];
   const renderActual = obraActual ? ((renders || {})[obraActual.id] || [])[0] : null;
 
-  // Novedades reales: últimos mensajes de V+V, hechos de bitácora e informes
-  // de avance ya armados (con PDF), mezclados por fecha, los 3 más recientes.
-  const nomObra = id => (obras.find(o => o.id === id) || {}).nombre || "";
-  const feed = [
-    ...(mensajes || []).filter(m => m.from && m.from !== "cliente").map(m => ({ ts: m.ts || 0, tipo: "Mensaje", texto: (m.texto || "").slice(0, 60), obra: "", ir: "mensajes" })),
-    ...(bitacora || []).map(h => ({ ts: h.ts || 0, tipo: "Bitácora", texto: h.titulo || "Hecho de obra", obra: nomObra(h.obra_id), ir: "bitacora" })),
-    ...obras.flatMap(o => (((avance || {})[o.id]) || []).filter(a => a.html).map(a => ({ ts: a.ts || 0, tipo: "Avance", texto: `${a.fecha || ""}${a.avance ? ` — ${a.avance}` : ""}`, obra: o.nombre, ir: "informes" }))),
-  ].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 3);
+  // "Novedades recientes": conteos, no párrafos sueltos — cada línea lleva
+  // directo a su pantalla real al tocarla. Mismo criterio que V+V.
+  const hoyStrC = new Date().toDateString();
+  const esHoyC = (ts) => ts && new Date(ts).toDateString() === hoyStrC;
+  const avancesHoyC = obras.flatMap(o => (((avance || {})[o.id]) || [])).filter(a => esHoyC(a.ts)).length;
+  const bitacoraHoyC = (bitacora || []).filter(h => esHoyC(h.ts)).length;
+  const mensajesNuevosC = (mensajes || []).filter(m => m.from && m.from !== "cliente").length;
+  const novedadesC = [
+    avancesHoyC > 0 && { n: avancesHoyC, txt: `avance${avancesHoyC > 1 ? "s" : ""} de obra cargado${avancesHoyC > 1 ? "s" : ""} hoy`, ir: "avance" },
+    bitacoraHoyC > 0 && { n: bitacoraHoyC, txt: `hecho${bitacoraHoyC > 1 ? "s" : ""} en bitácora hoy`, ir: "bitacora" },
+    mensajesNuevosC > 0 && { n: mensajesNuevosC, txt: `mensaje${mensajesNuevosC > 1 ? "s" : ""} nuevo${mensajesNuevosC > 1 ? "s" : ""}`, ir: "mensajes" },
+  ].filter(Boolean);
 
   return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
     <div style={{ position: "relative", height: "38vh", minHeight: 260, maxHeight: 420, background: "#0d0d0f", overflow: "hidden" }}>
@@ -4700,9 +4704,9 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, onIr
       </div>
       <div style={{ height: 1, background: "rgba(255,255,255,.1)", marginBottom: 18 }} />
       <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
-      {feed.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
-      {feed.map((f, i) => (<div key={i} onClick={() => onIr(f.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
-        <div><span style={{ fontSize: 9, fontWeight: 800, color: "#D9B27C", marginRight: 8, textTransform: "uppercase" }}>{f.tipo}</span><span style={{ fontSize: 12.5 }}>{f.texto}</span>{f.obra && <div style={{ fontSize: 10, color: "rgba(242,240,235,.4)", marginTop: 2 }}>{f.obra}</div>}</div>
+      {novedadesC.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
+      {novedadesC.map((n, i) => (<div key={i} onClick={() => onIr(n.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
+        <span style={{ fontSize: 12.5 }}><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
       </div>))}
       <div onClick={() => onIr("asistente")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
         <div style={{ fontSize: 9, letterSpacing: ".12em", textTransform: "uppercase", color: "#D9B27C", fontWeight: 700 }}>✦ IA Belfast</div>
