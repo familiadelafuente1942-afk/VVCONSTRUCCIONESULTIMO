@@ -4662,22 +4662,23 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
   const obraActual = listaCarrusel[slideIdx % Math.max(listaCarrusel.length, 1)];
   const renderActual = obraActual ? ((renders || {})[obraActual.id] || [])[0] : null;
 
-  // "Novedades recientes": conteos totales (no solo "hoy" — muchos registros
-  // no traen una marca de tiempo confiable, así que contar solo "hoy" los
-  // dejaba en cero aunque hubiera datos cargados). Solo las 3 categorías
-  // pedidas: Informes, Bitácoras, Certificados semanales.
-  const informesTotC = obras.flatMap(o => (((informesSem || {})[o.id]) || [])).length;
-  const avanceInfTotC = obras.flatMap(o => (((avance || {})[o.id]) || [])).filter(a => a.html).length;
-  const bitacoraTotC = (bitacora || []).length;
-  const certifTotC = obras.flatMap(o => (((certif || {})[o.id]) || [])).length;
-  const auditoriaTotC = (auditoria || []).length;
-  const mensajesTotC = (mensajes || []).filter(m => m.from && m.from !== "cliente").length;
+  // "Novedades recientes": conteos de ESTA SEMANA (lunes a hoy) — si fuera
+  // acumulado de siempre, con el tiempo iba a terminar diciendo "37.000
+  // informes" y pierde sentido. Cada semana arranca de nuevo.
+  const inicioSemanaC = (() => { const d = new Date(); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day; d.setDate(d.getDate() + diff); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+  const estaSemanaC = (ts) => ts && ts >= inicioSemanaC;
+  const informesTotC = obras.flatMap(o => (((informesSem || {})[o.id]) || [])).filter(r => estaSemanaC(r.ts)).length;
+  const avanceInfTotC = obras.flatMap(o => (((avance || {})[o.id]) || [])).filter(a => a.html && estaSemanaC(a.ts)).length;
+  const bitacoraTotC = (bitacora || []).filter(h => estaSemanaC(h.ts)).length;
+  const certifTotC = obras.flatMap(o => (((certif || {})[o.id]) || [])).filter(c => estaSemanaC(c.ts)).length;
+  const auditoriaTotC = (auditoria || []).filter(a => estaSemanaC(a.ts)).length;
+  const mensajesTotC = (mensajes || []).filter(m => m.from && m.from !== "cliente" && estaSemanaC(m.ts)).length;
   const novedadesC = [
-    informesTotC > 0 && { n: informesTotC, txt: `Informe${informesTotC > 1 ? "s" : ""}`, ir: "informes" },
-    avanceInfTotC > 0 && { n: avanceInfTotC, txt: `Informe${avanceInfTotC > 1 ? "s" : ""} de avance`, ir: "informes" },
-    bitacoraTotC > 0 && { n: bitacoraTotC, txt: `Bitácora${bitacoraTotC > 1 ? "s" : ""}`, ir: "bitacora" },
+    informesTotC > 0 && { n: informesTotC, txt: `Informe${informesTotC > 1 ? "s" : ""} esta semana`, ir: "informes" },
+    avanceInfTotC > 0 && { n: avanceInfTotC, txt: `Informe${avanceInfTotC > 1 ? "s" : ""} de avance esta semana`, ir: "informes" },
+    bitacoraTotC > 0 && { n: bitacoraTotC, txt: `Bitácora${bitacoraTotC > 1 ? "s" : ""} esta semana`, ir: "bitacora" },
     certifTotC > 0 && { n: certifTotC, txt: `Certificado${certifTotC > 1 ? "s" : ""} semanal${certifTotC > 1 ? "es" : ""}`, ir: "informes" },
-    auditoriaTotC > 0 && { n: auditoriaTotC, txt: `Auditoría${auditoriaTotC > 1 ? "s" : ""}`, ir: "auditoria" },
+    auditoriaTotC > 0 && { n: auditoriaTotC, txt: `Auditoría${auditoriaTotC > 1 ? "s" : ""} esta semana`, ir: "auditoria" },
     mensajesTotC > 0 && { n: mensajesTotC, txt: `Mensaje${mensajesTotC > 1 ? "s" : ""} de V+V`, ir: "mensajes" },
   ].filter(Boolean);
 

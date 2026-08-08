@@ -8051,21 +8051,23 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
 
   const pend = (pedidos || []).filter(p => p.para === "vv" && p.estado !== "resuelto");
 
-  // "Novedades recientes": conteos totales, no párrafos sueltos — cada línea
-  // lleva directo a su pantalla real al tocarla. Mismas 5 categorías que
-  // Cliente, con mayúscula inicial.
-  const informesTot = obras.flatMap(o => (((informesSem || {})[o.id]) || [])).length;
-  const avanceInfTot = obras.flatMap(o => (((avance || {})[o.id]) || [])).filter(a => a.html).length;
-  const bitacoraTot = (bitacora || []).length;
-  const certifTot = obras.flatMap(o => (((certif || {})[o.id]) || [])).length;
-  const auditoriaTot = (auditoria || []).length;
-  const mensajesTot = (mensajes || []).filter(m => m.from && m.from !== "vv").length;
+  // "Novedades recientes": conteos de ESTA SEMANA (lunes a hoy) — si fuera
+  // acumulado de siempre, con el tiempo iba a terminar diciendo "37.000
+  // informes" y pierde sentido. Cada semana arranca de nuevo.
+  const inicioSemana = (() => { const d = new Date(); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day; d.setDate(d.getDate() + diff); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+  const estaSemana = (ts) => ts && ts >= inicioSemana;
+  const informesTot = obras.flatMap(o => (((informesSem || {})[o.id]) || [])).filter(r => estaSemana(r.ts)).length;
+  const avanceInfTot = obras.flatMap(o => (((avance || {})[o.id]) || [])).filter(a => a.html && estaSemana(a.ts)).length;
+  const bitacoraTot = (bitacora || []).filter(h => estaSemana(h.ts)).length;
+  const certifTot = obras.flatMap(o => (((certif || {})[o.id]) || [])).filter(c => estaSemana(c.ts)).length;
+  const auditoriaTot = (auditoria || []).filter(a => estaSemana(a.ts)).length;
+  const mensajesTot = (mensajes || []).filter(m => m.from && m.from !== "vv" && estaSemana(m.ts)).length;
   const novedades = [
-    informesTot > 0 && { n: informesTot, txt: `Informe${informesTot > 1 ? "s" : ""}`, ir: "mas-informes" },
-    avanceInfTot > 0 && { n: avanceInfTot, txt: `Informe${avanceInfTot > 1 ? "s" : ""} de avance`, ir: "avance" },
-    bitacoraTot > 0 && { n: bitacoraTot, txt: `Bitácora${bitacoraTot > 1 ? "s" : ""}`, ir: "bitacora" },
+    informesTot > 0 && { n: informesTot, txt: `Informe${informesTot > 1 ? "s" : ""} esta semana`, ir: "mas-informes" },
+    avanceInfTot > 0 && { n: avanceInfTot, txt: `Informe${avanceInfTot > 1 ? "s" : ""} de avance esta semana`, ir: "avance" },
+    bitacoraTot > 0 && { n: bitacoraTot, txt: `Bitácora${bitacoraTot > 1 ? "s" : ""} esta semana`, ir: "bitacora" },
     certifTot > 0 && { n: certifTot, txt: `Certificado${certifTot > 1 ? "s" : ""} semanal${certifTot > 1 ? "es" : ""}`, ir: "avance" },
-    auditoriaTot > 0 && { n: auditoriaTot, txt: `Auditoría${auditoriaTot > 1 ? "s" : ""}`, ir: "auditoria" },
+    auditoriaTot > 0 && { n: auditoriaTot, txt: `Auditoría${auditoriaTot > 1 ? "s" : ""} esta semana`, ir: "auditoria" },
     mensajesTot > 0 && { n: mensajesTot, txt: `Mensaje${mensajesTot > 1 ? "s" : ""} de Belfast`, ir: "mas-mensajes" },
   ].filter(Boolean);
 
