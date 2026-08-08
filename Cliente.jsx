@@ -4667,10 +4667,12 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
   // dejaba en cero aunque hubiera datos cargados). Solo las 3 categorías
   // pedidas: Informes, Bitácoras, Certificados semanales.
   const informesTotC = obras.flatMap(o => (((informesSem || {})[o.id]) || [])).length;
+  const avanceInfTotC = obras.flatMap(o => (((avance || {})[o.id]) || [])).filter(a => a.html).length;
   const bitacoraTotC = (bitacora || []).length;
   const certifTotC = obras.flatMap(o => (((certif || {})[o.id]) || [])).length;
   const novedadesC = [
     informesTotC > 0 && { n: informesTotC, txt: `informe${informesTotC > 1 ? "s" : ""}`, ir: "informes" },
+    avanceInfTotC > 0 && { n: avanceInfTotC, txt: `informe${avanceInfTotC > 1 ? "s" : ""} de avance`, ir: "informes" },
     bitacoraTotC > 0 && { n: bitacoraTotC, txt: `bitácora${bitacoraTotC > 1 ? "s" : ""}`, ir: "bitacora" },
     certifTotC > 0 && { n: certifTotC, txt: `certificado${certifTotC > 1 ? "s" : ""} semanal${certifTotC > 1 ? "es" : ""}`, ir: "informes" },
   ].filter(Boolean);
