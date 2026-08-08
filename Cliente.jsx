@@ -4671,12 +4671,14 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
   const bitacoraTotC = (bitacora || []).length;
   const certifTotC = obras.flatMap(o => (((certif || {})[o.id]) || [])).length;
   const auditoriaTotC = (auditoria || []).length;
+  const mensajesTotC = (mensajes || []).filter(m => m.from && m.from !== "cliente").length;
   const novedadesC = [
     informesTotC > 0 && { n: informesTotC, txt: `Informe${informesTotC > 1 ? "s" : ""}`, ir: "informes" },
     avanceInfTotC > 0 && { n: avanceInfTotC, txt: `Informe${avanceInfTotC > 1 ? "s" : ""} de avance`, ir: "informes" },
     bitacoraTotC > 0 && { n: bitacoraTotC, txt: `Bitácora${bitacoraTotC > 1 ? "s" : ""}`, ir: "bitacora" },
     certifTotC > 0 && { n: certifTotC, txt: `Certificado${certifTotC > 1 ? "s" : ""} semanal${certifTotC > 1 ? "es" : ""}`, ir: "informes" },
     auditoriaTotC > 0 && { n: auditoriaTotC, txt: `Auditoría${auditoriaTotC > 1 ? "s" : ""}`, ir: "auditoria" },
+    mensajesTotC > 0 && { n: mensajesTotC, txt: `Recibiste ${mensajesTotC} mensaje${mensajesTotC > 1 ? "s" : ""} de V+V`, ir: "mensajes", full: true },
   ].filter(Boolean);
 
   return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
@@ -4688,8 +4690,8 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
           </div>}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
       <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ width: cfg?.logoSize || 88, height: cfg?.logoSize || 88, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: "transparent" }}>
-          {cfg?.logo ? <img src={cfg.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#fff" }}>{(cfg?.sigla || "B").slice(0, 1)}</div>}
+        <div style={{ width: cfg?.logoSize || 60, height: cfg?.logoSize || 60, borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "transparent" }}>
+          <img src={cfg?.logo || LOGO_FALLBACK_HERO} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
         <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
       </div>
@@ -4710,7 +4712,7 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
       <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedadesC.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
       {novedadesC.map((n, i) => (<div key={i} onClick={() => onIr(n.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
-        <span style={{ fontSize: 12.5 }}><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
+        <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
       </div>))}
       <div onClick={() => onIr("asistente")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
         <div style={{ fontSize: 9, letterSpacing: ".12em", textTransform: "uppercase", color: "#D9B27C", fontWeight: 700 }}>✦ IA Belfast</div>

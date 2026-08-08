@@ -8059,12 +8059,14 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
   const bitacoraTot = (bitacora || []).length;
   const certifTot = obras.flatMap(o => (((certif || {})[o.id]) || [])).length;
   const auditoriaTot = (auditoria || []).length;
+  const mensajesTot = (mensajes || []).filter(m => m.from && m.from !== "vv").length;
   const novedades = [
     informesTot > 0 && { n: informesTot, txt: `Informe${informesTot > 1 ? "s" : ""}`, ir: "mas-informes" },
     avanceInfTot > 0 && { n: avanceInfTot, txt: `Informe${avanceInfTot > 1 ? "s" : ""} de avance`, ir: "avance" },
     bitacoraTot > 0 && { n: bitacoraTot, txt: `Bitácora${bitacoraTot > 1 ? "s" : ""}`, ir: "bitacora" },
     certifTot > 0 && { n: certifTot, txt: `Certificado${certifTot > 1 ? "s" : ""} semanal${certifTot > 1 ? "es" : ""}`, ir: "avance" },
     auditoriaTot > 0 && { n: auditoriaTot, txt: `Auditoría${auditoriaTot > 1 ? "s" : ""}`, ir: "auditoria" },
+    mensajesTot > 0 && { n: mensajesTot, txt: `Recibiste ${mensajesTot} mensaje${mensajesTot > 1 ? "s" : ""} de Belfast`, ir: "mas-mensajes", full: true },
   ].filter(Boolean);
 
   return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
@@ -8104,7 +8106,7 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
       <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedades.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
       {novedades.map((n, i) => (<div key={i} onClick={() => onIr(n.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
-        <span style={{ fontSize: 12.5 }}><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
+        <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
       </div>))}
 
       <div onClick={() => onIr("chat")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
