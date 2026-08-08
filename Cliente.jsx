@@ -1248,14 +1248,17 @@ const AUD_TIPOS_CLI = [
   { id: "revision", label: "Revisión de doc.", sigla: "RDO" },
   { id: "certificacion", label: "Certificación", sigla: "CER" },
 ];
-function AuditoriaClienteView({ T, obras, auditoria, cfg }) {
+function AuditoriaClienteView({ T, obras, auditoria, cfg, desdeSemana }) {
   const [tipo, setTipo] = useState("supervision");
   const [obraId, setObraId] = useState("");
+  const [soloSemana, setSoloSemana] = useState(!!desdeSemana);
   const tp = AUD_TIPOS_CLI.find(t => t.id === tipo) || AUD_TIPOS_CLI[0];
   const fmtDMY = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
   const _e = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
   const nombreObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "—";
-  const lista = (auditoria || []).filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const inicioSemanaAud = (() => { const d = new Date(); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day; d.setDate(d.getDate() + diff); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+  const listaSemana = (auditoria || []).filter(x => x.ts && x.ts >= inicioSemanaAud).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const lista = soloSemana ? listaSemana : (auditoria || []).filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const [abierto, setAbierto] = useState(null);
   const [pdfHtml, setPdfHtml] = useState(null);
   const AUD_TIPOS_FULL = [
@@ -1357,6 +1360,12 @@ function AuditoriaClienteView({ T, obras, auditoria, cfg }) {
   return (<div style={{ flex: 1, overflowY: "auto" }}>
     <AppHeader title="Auditoría de obra" sub="Supervisiones y controles cargados por V+V" />
     <div style={{ padding: "14px 18px" }}>
+      {listaSemana.length > 0 && <div onClick={() => setSoloSemana(v => !v)} style={{ display: "flex", alignItems: "center", gap: 10, background: soloSemana ? T.navy : T.accentLight, border: `1px solid ${soloSemana ? T.navy : BRASS}`, borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, cursor: "pointer" }}>
+        <span style={{ width: 24, height: 24, borderRadius: "50%", background: BRASS, color: "#fff", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{listaSemana.length}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: soloSemana ? "#fff" : T.text, flex: 1 }}>{soloSemana ? "Viendo solo lo nuevo de esta semana" : "Nuevas esta semana — tocá para verlas todas juntas"}</span>
+        <span style={{ fontSize: 11, color: soloSemana ? "#fff" : BRASS, fontWeight: 700 }}>{soloSemana ? "Ver todo ▾" : "Ver ▸"}</span>
+      </div>}
+      {!soloSemana && <>
       <div style={{ display: "flex", gap: 7, marginBottom: 12 }}>
         {AUD_TIPOS_CLI.map(t => (
           <button key={t.id} onClick={() => setTipo(t.id)} style={{ flex: 1, background: tipo === t.id ? T.navy : T.card, color: tipo === t.id ? "#fff" : T.sub, border: `1px solid ${tipo === t.id ? T.navy : T.border}`, borderRadius: T.rsm, padding: "9px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{t.label}</button>
@@ -1366,17 +1375,19 @@ function AuditoriaClienteView({ T, obras, auditoria, cfg }) {
         <option value="">Todas las obras</option>
         {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
       </select>
+      </>}
 
-      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>Todavía no hay {tp.label.toLowerCase()} cargadas.</div>}
+      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>{soloSemana ? "No hay auditorías nuevas esta semana." : `Todavía no hay ${tp.label.toLowerCase()} cargadas.`}</div>}
       {lista.map(it => {
         const abiertoAqui = abierto === it.id;
+        const tipoLbl = (AUD_TIPOS_CLI.find(t => t.id === it.tipo) || {}).label;
         return (<div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div onClick={() => setAbierto(abiertoAqui ? null : it.id)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.nro}</span>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{nombreObra(it.obra_id)}</span>
             <span style={{ fontSize: 10, fontWeight: 700, color: it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D" }}>{it.resultado}</span>
           </div>
-          <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{fmtDMY(it.fecha)}{it.periodo ? ` · ${it.periodo}` : ""} · {(it.obs || []).length} observación(es)</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{soloSemana && tipoLbl ? `${tipoLbl} · ` : ""}{fmtDMY(it.fecha)}{it.periodo ? ` · ${it.periodo}` : ""} · {(it.obs || []).length} observación(es)</div>
           {abiertoAqui && (<div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
             {it.presentes && <div style={{ fontSize: 12, color: T.sub, marginBottom: 8 }}><b style={{ color: T.text }}>Presentes:</b> {it.presentes}</div>}
             {(it.obs || []).length > 0 && (<div style={{ marginBottom: 8 }}>
@@ -4678,7 +4689,7 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
     avanceInfTotC > 0 && { n: avanceInfTotC, txt: `Informe${avanceInfTotC > 1 ? "s" : ""} de avance esta semana`, ir: "informes" },
     bitacoraTotC > 0 && { n: bitacoraTotC, txt: `Bitácora${bitacoraTotC > 1 ? "s" : ""} esta semana`, ir: "bitacora" },
     certifTotC > 0 && { n: certifTotC, txt: `Certificado${certifTotC > 1 ? "s" : ""} semanal${certifTotC > 1 ? "es" : ""}`, ir: "informes" },
-    auditoriaTotC > 0 && { n: auditoriaTotC, txt: `Auditoría${auditoriaTotC > 1 ? "s" : ""} esta semana`, ir: "auditoria" },
+    auditoriaTotC > 0 && { n: auditoriaTotC, txt: `Auditoría${auditoriaTotC > 1 ? "s" : ""} esta semana`, ir: "auditoria", param: "semana" },
     mensajesTotC > 0 && { n: mensajesTotC, txt: `Mensaje${mensajesTotC > 1 ? "s" : ""} de V+V`, ir: "mensajes" },
   ].filter(Boolean);
 
@@ -4712,7 +4723,7 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
       <div style={{ height: 1, background: "rgba(255,255,255,.1)", marginBottom: 18 }} />
       <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedadesC.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
-      {novedadesC.map((n, i) => (<div key={i} onClick={() => onIr(n.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
+      {novedadesC.map((n, i) => (<div key={i} onClick={() => onIr(n.ir, n.param)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
         <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
       </div>))}
       <div onClick={() => onIr("asistente")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
@@ -4798,7 +4809,8 @@ function ClienteApp() {
   };
   const { aviso, marcarVisto } = useAvisos("cliente_avisos", idsAviso);
   // al abrir una pantalla, se apaga su punto rojo
-  const irA = (id) => { setScreen(id); marcarVisto(id); };
+  const [auditoriaDesdeSemana, setAuditoriaDesdeSemana] = React.useState(false);
+  const irA = (id, param) => { setAuditoriaDesdeSemana(id === "auditoria" && param === "semana"); setScreen(id); marcarVisto(id); };
   // Si los datos de la pantalla activa siguen llegando de la nube (sync), se re-marca como
   // visto cada vez que cambian MIENTRAS el usuario sigue parado ahí — así el globito no
   // "revive" solo por datos que terminaron de sincronizar un segundo después del toque.
@@ -4975,14 +4987,14 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "inicio" && <InicioScreen T={T} cfg={cfg} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id) => irA(id)} />}
+          {screen === "inicio" && <InicioScreen T={T} cfg={cfg} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
           {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
-          {screen === "auditoria" && <AuditoriaClienteView T={T} obras={obras} auditoria={auditoria} cfg={cfg} />}
+          {screen === "auditoria" && <AuditoriaClienteView T={T} obras={obras} auditoria={auditoria} cfg={cfg} desdeSemana={auditoriaDesdeSemana} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
