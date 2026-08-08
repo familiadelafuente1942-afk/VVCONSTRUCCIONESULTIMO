@@ -2651,8 +2651,8 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
       </div>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Tamaño del logo (Inicio)</label>
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "8px 0 14px" }}>
-        <input type="range" min="20" max="64" value={cfg.logoSize || 28} onChange={e => setCfg(p => ({ ...p, logoSize: Number(e.target.value) }))} style={{ flex: 1 }} />
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.text, width: 32, textAlign: "right" }}>{cfg.logoSize || 28}px</span>
+        <input type="range" min="28" max="120" value={cfg.logoSize || 52} onChange={e => setCfg(p => ({ ...p, logoSize: Number(e.target.value) }))} style={{ flex: 1 }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.text, width: 32, textAlign: "right" }}>{cfg.logoSize || 52}px</span>
       </div>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Modo</label>
       <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 18 }}>
@@ -4688,7 +4688,7 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
           </div>}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
       <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ width: cfg?.logoSize || 28, height: cfg?.logoSize || 28, borderRadius: "50%", overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", flexShrink: 0, background: "#0d0d0f" }}>
+        <div style={{ width: cfg?.logoSize || 52, height: cfg?.logoSize || 52, borderRadius: "50%", overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", flexShrink: 0, background: "#0d0d0f" }}>
           {cfg?.logo ? <img src={cfg.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#fff" }}>{(cfg?.sigla || "B").slice(0, 1)}</div>}
         </div>
         <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
