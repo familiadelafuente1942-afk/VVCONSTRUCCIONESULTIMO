@@ -4662,18 +4662,17 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
   const obraActual = listaCarrusel[slideIdx % Math.max(listaCarrusel.length, 1)];
   const renderActual = obraActual ? ((renders || {})[obraActual.id] || [])[0] : null;
 
-  // "Novedades recientes": conteos, no párrafos sueltos — cada línea lleva
-  // directo a su pantalla real al tocarla. Solo las 3 categorías pedidas:
-  // Informes, Bitácoras, Certificados semanales.
-  const hoyStrC = new Date().toDateString();
-  const esHoyC = (ts) => ts && new Date(ts).toDateString() === hoyStrC;
-  const informesHoyC = obras.flatMap(o => (((informesSem || {})[o.id]) || [])).filter(r => esHoyC(r.ts)).length;
-  const bitacoraHoyC = (bitacora || []).filter(h => esHoyC(h.ts)).length;
-  const certifHoyC = obras.flatMap(o => (((certif || {})[o.id]) || [])).filter(c => esHoyC(c.ts)).length;
+  // "Novedades recientes": conteos totales (no solo "hoy" — muchos registros
+  // no traen una marca de tiempo confiable, así que contar solo "hoy" los
+  // dejaba en cero aunque hubiera datos cargados). Solo las 3 categorías
+  // pedidas: Informes, Bitácoras, Certificados semanales.
+  const informesTotC = obras.flatMap(o => (((informesSem || {})[o.id]) || [])).length;
+  const bitacoraTotC = (bitacora || []).length;
+  const certifTotC = obras.flatMap(o => (((certif || {})[o.id]) || [])).length;
   const novedadesC = [
-    informesHoyC > 0 && { n: informesHoyC, txt: `informe${informesHoyC > 1 ? "s" : ""}`, ir: "informes" },
-    bitacoraHoyC > 0 && { n: bitacoraHoyC, txt: `bitácora${bitacoraHoyC > 1 ? "s" : ""}`, ir: "bitacora" },
-    certifHoyC > 0 && { n: certifHoyC, txt: `certificado${certifHoyC > 1 ? "s" : ""} semanal${certifHoyC > 1 ? "es" : ""}`, ir: "informes" },
+    informesTotC > 0 && { n: informesTotC, txt: `informe${informesTotC > 1 ? "s" : ""}`, ir: "informes" },
+    bitacoraTotC > 0 && { n: bitacoraTotC, txt: `bitácora${bitacoraTotC > 1 ? "s" : ""}`, ir: "bitacora" },
+    certifTotC > 0 && { n: certifTotC, txt: `certificado${certifTotC > 1 ? "s" : ""} semanal${certifTotC > 1 ? "es" : ""}`, ir: "informes" },
   ].filter(Boolean);
 
   return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
