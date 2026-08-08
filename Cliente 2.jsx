@@ -363,7 +363,7 @@ async function callAI(msgs, sys, apiKey, useSearch = false) {
 }
 
 // ── PEDIDOS (agente entre empresas) — compartido con la app de V+V ────
-const PEDIDO_ESTADOS = { abierto: { l: "Abierto", c: "#F59E0B", b: "#FFFBEB" }, en_proceso: { l: "En proceso", c: "#3B82F6", b: "#EFF6FF" }, respondido: { l: "Respondido", c: "#8B5CF6", b: "#F5F3FF" }, resuelto: { l: "Resuelto", c: "#16A34A", b: "#ECFDF5" } };
+const PEDIDO_ESTADOS = { abierto: { l: "Abierto", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, en_proceso: { l: "En proceso", c: "#3B82F6", b: "rgba(37,99,235,.14)" }, respondido: { l: "Respondido", c: "#8B5CF6", b: "rgba(139,92,246,.14)" }, resuelto: { l: "Resuelto", c: "#16A34A", b: "rgba(22,163,74,.14)" } };
 const PEDIDO_MAX_IA = 4;
 function parseAccion(texto) { const m = (texto || "").match(/```accion\s*([\s\S]*?)```/i); if (!m) return { limpio: texto, accion: null }; let a = null; try { a = JSON.parse(m[1].trim()); } catch { } return { limpio: (texto.replace(m[0], "").trim() || "Listo."), accion: a }; }
 function nuevoPedido({ de, para, asunto, detalle, prioridad, obra_id }) { const f = hoyStr(), ts = Date.now(); return { id: uid() + ts, de, para, asunto: asunto || "(sin asunto)", estado: "abierto", prioridad: prioridad || "media", obra_id: obra_id || "", fecha: f, ts, iaTurns: 0, hilo: [{ de, texto: detalle || asunto || "", fecha: f, ts, porIA: false }] }; }
@@ -593,7 +593,7 @@ async function ejecutarAccion(accion, miSide, ctx) {
 }
 function accionLabel(a) { if (!a) return ""; if (a.tipo === "crear_pedido") return `Crear pedido → ${a.para === "cliente" ? "V+V/Cliente" : "V+V"}: “${a.asunto || ""}”`; if (a.tipo === "responder_pedido") return "Responder pedido"; if (a.tipo === "resolver_pedido") return "Marcar pedido como resuelto"; if (a.tipo === "enviar_mensaje") return `Enviar mensaje a V+V: “${(a.texto || "").slice(0, 60)}”`; if (a.tipo === "preguntar_ia") return `Consultar a la IA de V+V: “${(a.texto || "").slice(0, 60)}”`; if (a.tipo === "whatsapp") return `WhatsApp a ${a.persona || a.rol || "contacto"}: “${(a.texto || "").slice(0, 50)}”`; if (a.tipo === "traer_fotos") return `Traer ${a.videos ? "videos" : "fotos"} de ${a.obra || "la obra"}`; if (a.tipo === "traer_plano") return `Traer plano de ${a.obra || "la obra"}`; if (a.tipo === "cargar_personal") return `Cargar personal al sitio “${a.sitio || ""}”${a.obra ? ` (obra ${a.obra})` : a.personal && a.personal !== "todos" ? ` (${Array.isArray(a.personal) ? a.personal.join(", ") : a.personal})` : " (todos)"}`; return a.tipo; }
 
-const ESTADOS = { pendiente: { l: "Pendiente", c: "#94A3B8", b: "#F8FAFC" }, curso: { l: "En curso", c: "#10B981", b: "#ECFDF5" }, pausada: { l: "Pausada", c: "#F59E0B", b: "#FFFBEB" }, terminada: { l: "Terminada", c: "#6366F1", b: "#EEF2FF" } };
+const ESTADOS = { pendiente: { l: "Pendiente", c: "#94A3B8", b: "rgba(255,255,255,.04)" }, curso: { l: "En curso", c: "#10B981", b: "rgba(22,163,74,.14)" }, pausada: { l: "Pausada", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, terminada: { l: "Terminada", c: "#6366F1", b: "#EEF2FF" } };
 const BRASS = "#B0894F";
 const DEFAULT_CFG = { nombre: "Belfast Construction Management", sigla: "BELFAST", logo: "", accent: "#1E3A5F" };
 const LUXE_BG = "radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px) 0 0/22px 22px, radial-gradient(1100px 520px at 50% -8%, rgba(176,137,79,0.13), transparent 62%), linear-gradient(180deg,#0b141f 0%,#0a1019 100%)";
@@ -602,15 +602,35 @@ const LUXE_HERO = "radial-gradient(620px 220px at 86% 0%, rgba(176,137,79,0.20),
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:#F5F6F8;overscroll-behavior:none;font-family:'Inter',sans-serif;}
+  body{background:#0d0d0f;overscroll-behavior:none;font-family:'Inter',sans-serif;}
   button{cursor:pointer;font-family:inherit;}input,textarea,select{font-family:inherit;}
   input:focus,textarea:focus{outline:none;}textarea{resize:none;}::-webkit-scrollbar{display:none;}
   @keyframes slidein{from{transform:translateY(-120%);opacity:0}to{transform:translateY(0);opacity:1}}
   @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:.85}}
 `;
-function theme(accent) {
-  return { bg: "#F5F6F8", card: "#fff", border: "#E6E9EE", text: "#131C2B", sub: "#4A5565", muted: "#97A0AE", accent: accent || "#1E3A5F", navy: "#101C2C", r: 14, rsm: 10, shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
+// Dos temas completos, como en la app de V+V: "oscuro" (el actual) y
+// "claro". El modo elegido define los valores de base; si el usuario
+// además tocó algún color individual en Ajustes (Fondo/Texto/etc.), ese
+// toque puntual manda por encima del modo.
+const TEMA_OSCURO = { bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", accent: "#B0894F", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+const TEMA_CLARO = { bg: "#F5F6F8", card: "#ffffff", border: "#E6E9EE", text: "#131C2B", sub: "#4A5565", muted: "#97A0AE", accent: "#B0894F", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
+function theme(cfg) {
+  const c = cfg || {};
+  const base = c.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO;
+  const bg = c.themeBg || base.bg;
+  const text = c.themeText || base.text;
+  const accent = c.accent || base.accent;
+  const sub = c.themeText ? hexToRgba(c.themeText, .6) : base.sub;
+  const muted = c.themeText ? hexToRgba(c.themeText, .42) : base.muted;
+  return { bg, card: c.themeCard || base.card, border: c.themeBorder || base.border, text, sub, muted, accent, accentLight: hexToRgba(accent, .14), navy: bg, r: 12, rsm: 8, shadow: base.shadow };
+}
+function hexToRgba(hex, alpha) {
+  const h = String(hex || "").replace("#", "");
+  if (h.length !== 6) return `rgba(255,255,255,${alpha})`;
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 // ── COMPONENTES BASE ─────────────────────────────────────────────────
@@ -656,7 +676,7 @@ function FormViewer({ T, tpl, f, obraNombre, onClose }) {
       <div style={{ fontSize: 10.5, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{tpl.sub}</div>
       <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>{tpl.nombre}</div>
       <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12 }}>{obraNombre} · {f.fecha}{f.nro ? ` · N° ${f.nro}` : ""}</div>
-      {f.resultado && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 800, color: f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#B45309" : "#16A34A", background: f.resultado.includes("NO APTO") ? "#FEF2F2" : f.resultado.includes("OBSERV") ? "#FFFBEB" : "#ECFDF5", borderRadius: 6, padding: "5px 11px", marginBottom: 12 }}>{f.resultado}</div>}
+      {f.resultado && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 800, color: f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#B45309" : "#16A34A", background: f.resultado.includes("NO APTO") ? "rgba(239,68,68,.10)" : f.resultado.includes("OBSERV") ? "rgba(180,83,9,.14)" : "rgba(22,163,74,.14)", borderRadius: 6, padding: "5px 11px", marginBottom: 12 }}>{f.resultado}</div>}
       {(tpl.textos || []).filter(tx => tpl.modo !== "iav").map(tx => (f.textos?.[tx.k]) && <div key={tx.k} style={{ marginBottom: 12 }}><div style={{ fontSize: 11, fontWeight: 700, color: T.accent, textTransform: "uppercase", marginBottom: 4 }}>{tx.l}</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{f.textos[tx.k]}</div></div>)}
       {(tpl.secciones || []).map((sec, si) => <div key={si} style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12.5, fontWeight: 800, color: T.accent, marginBottom: 6 }}>{sec.t}</div>
@@ -888,7 +908,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, env
       {pendientes.length === 0
         ? <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer", marginBottom: 8 }}>{busy ? "Preparando…" : "Elegir foto(s)"}</button>
         : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{pendientes.length === 1 ? "1 foto seleccionada" : `${pendientes.length} fotos seleccionadas`} — poné la fecha y analizá</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 8 }}>{pendientes.length === 1 ? "1 foto seleccionada" : `${pendientes.length} fotos seleccionadas`} — poné la fecha y analizá</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
               {pendientes.map((pf, i) => <div key={i} style={{ position: "relative" }}>
                 <img src={pf.comp} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 7, display: "block", border: `1px solid ${T.border}` }} />
@@ -905,7 +925,7 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, env
           </div>}
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
-      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
+      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.text, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
       {historial.map((h, idx) => (<div key={h.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
         {(() => { const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []); if (!fs.length) return null; if (fs.length === 1) return <img src={fs[0]} alt="" style={{ width: "100%", maxHeight: 340, objectFit: "contain", background: "#0b0f14", display: "block" }} />; return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, alignItems: "start", padding: 4, background: "#0b0f14" }}>{fs.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block" }}><img src={u} alt="" style={{ width: "100%", height: "auto", display: "block", borderRadius: 4 }} /></a>)}</div>; })()}
@@ -915,8 +935,8 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, env
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {idx === historial.length - 1 && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.al, borderRadius: 6, padding: "2px 7px" }}>línea de base</span>}
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
-              <button onClick={() => enviarAInformes(h, false)} title="Copiar a Informes de Belfast (uso interno)" style={{ background: estado(h) ? "#EFF6FF" : T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 8px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{estado(h) ? "✓ Informes" : "→ Informes"}</button>
-              <button onClick={() => enviarAInformes(h, true)} title="Mandarlo al panel del propietario" style={{ background: estado(h)?.prop ? "#DCFCE7" : BRASS, border: "none", color: estado(h)?.prop ? "#166534" : "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{estado(h)?.prop ? "✓ Propietario" : "→ Propietario"}</button>
+              <button onClick={() => enviarAInformes(h, false)} title="Copiar a Informes de Belfast (uso interno)" style={{ background: estado(h) ? "rgba(37,99,235,.14)" : T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 8px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{estado(h) ? "✓ Informes" : "→ Informes"}</button>
+              <button onClick={() => enviarAInformes(h, true)} title="Mandarlo al panel del propietario" style={{ background: estado(h)?.prop ? "rgba(22,163,74,.18)" : BRASS, border: "none", color: estado(h)?.prop ? "#166534" : "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{estado(h)?.prop ? "✓ Propietario" : "→ Propietario"}</button>
             </div>
           </div>
           {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}><Ico n="chart" /> Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
@@ -979,7 +999,7 @@ function DroneIAClienteView({ T, obras, dronevuelos }) {
       {/* Los vuelos de hoy, de todas las obras */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: vuelosHoy.length ? 10 : 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Hoy en todas las obras</div>
           <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
         </div>
         {vuelosHoy.length === 0
@@ -1196,14 +1216,14 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
         <PBtn T={T} full onClick={() => mandarPdf()} style={{ marginBottom: 10 }}>📤 Mandar por WhatsApp o Mail</PBtn>
       </>}
       <button onClick={() => { setPaso("form"); setTitulo(""); setTranscripcion(""); setMinutaTexto(""); setMinutaId(null); setPdfUrl(null); }} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>Grabar otra reunión</button>
-      <button onClick={borrarEstaGrabacion} style={{ width: "100%", background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🗑 Borrar esta grabación</button>
+      <button onClick={borrarEstaGrabacion} style={{ width: "100%", background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#DC2626", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🗑 Borrar esta grabación</button>
     </div>
   </div>);
 
   return (<div style={{ flex: 1, overflowY: "auto" }}>
     <AppHeader T={T} title="🎙 Grabar reunión" sub="Se arma la minuta sola al terminar" back onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
-      {!sttOk && <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
+      {!sttOk && <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.35)", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
       <Field label="Título de la reunión"><TInput value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Reunión de avance semanal" /></Field>
       <Field label="Fecha"><TInput type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></Field>
       {obras.length > 0 && <Field label="Obra (opcional)"><Sel value={obraId} onChange={e => setObraId(e.target.value)}><option value="">— Sin asignar —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
@@ -1228,14 +1248,112 @@ const AUD_TIPOS_CLI = [
   { id: "revision", label: "Revisión de doc.", sigla: "RDO" },
   { id: "certificacion", label: "Certificación", sigla: "CER" },
 ];
-function AuditoriaClienteView({ T, obras, auditoria }) {
+function AuditoriaClienteView({ T, obras, auditoria, cfg }) {
   const [tipo, setTipo] = useState("supervision");
   const [obraId, setObraId] = useState("");
   const tp = AUD_TIPOS_CLI.find(t => t.id === tipo) || AUD_TIPOS_CLI[0];
   const fmtDMY = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
+  const _e = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
   const nombreObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "—";
   const lista = (auditoria || []).filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const [abierto, setAbierto] = useState(null);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const AUD_TIPOS_FULL = [
+    { id: "supervision", titulo: "Acta de supervisión de obra" },
+    { id: "revision", titulo: "Informe de revisión de documentación" },
+    { id: "certificacion", titulo: "Certificado de etapa ejecutada" },
+  ];
+  // Mismo generador que en Constructora — mismo diseño, mismos datos, para
+  // que Cliente vea exactamente el mismo certificado que carga V+V.
+  function buildPdf(it) {
+    const t = AUD_TIPOS_FULL.find(x => x.id === it.tipo) || AUD_TIPOS_FULL[0];
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const nomObra = nombreObra(it.obra_id);
+    const colorRes = it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D";
+    const obsRows = (it.obs || []).length
+      ? `<table><tr><th style="width:38px">N°</th><th>Observación</th><th style="width:110px">Sector / ítem</th><th style="width:88px">Criticidad</th></tr>
+         ${(it.obs || []).map((o, i) => `<tr><td>${i + 1}</td><td>${_e(o.txt)}</td><td>${_e(o.sector || "—")}</td><td>${_e(o.crit || "Media")}</td></tr>`).join("")}</table>`
+      : `<div class="vacio">Sin observaciones registradas.</div>`;
+    let cuerpo = "";
+    if (it.tipo === "supervision") {
+      cuerpo = `
+        <div class="grid"><div><span>Período</span><b>${_e(it.periodo || "—")}</b></div><div><span>Presentes</span><b>${_e(it.presentes || "—")}</b></div></div>
+        <h2>Observaciones de la supervisión</h2>${obsRows}
+        <h2>Interferencias detectadas</h2>${(it.interferencias || []).length ? `<ul>${(it.interferencias || []).map(x => `<li>${_e(x)}</li>`).join("")}</ul>` : `<div class="vacio">No se detectaron interferencias.</div>`}`;
+    }
+    if (it.tipo === "revision") {
+      cuerpo = `
+        <div class="grid"><div><span>Etapa</span><b>${_e(it.etapa || "—")}</b></div><div><span>Documentos revisados</span><b>${(it.docs || []).length}</b></div></div>
+        <h2>Documentación revisada</h2>
+        ${(it.docs || []).length ? `<table><tr><th>Documento</th><th style="width:90px">Versión</th><th style="width:100px">Fecha doc.</th></tr>
+          ${(it.docs || []).map(d => `<tr><td>${_e(d.nombre)}</td><td>${_e(d.version || "—")}</td><td>${_e(d.fechaDoc || "—")}</td></tr>`).join("")}</table>` : `<div class="vacio">Sin documentos cargados.</div>`}
+        <h2>Observaciones sobre la documentación</h2>${obsRows}`;
+    }
+    if (it.tipo === "certificacion") {
+      cuerpo = `
+        <div class="grid"><div><span>Etapa certificada</span><b>${_e(it.etapa || "—")}</b></div><div><span>Ejecutado por</span><b>${_e(it.ejecutadoPor || marca)}</b></div>
+        <div><span>Plano de referencia</span><b>${_e(it.planoRef || "—")}</b></div><div><span>Versión / revisión</span><b>${_e(it.versionPlano || "—")}</b></div></div>
+        <div class="decl">Se deja constancia de que la etapa <b>${_e(it.etapa || "")}</b> de la obra <b>${_e(nomObra)}</b> fue ejecutada <b>conforme al plano de referencia indicado</b> y a la directiva impartida por la Jefatura de Obra que se transcribe a continuación.</div>
+        <h2>Directiva de la Jefatura de Obra</h2><div class="parr">${_e(it.directiva || "—")}</div>
+        <h2>Observaciones</h2>${obsRows}`;
+    }
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
+      .logo { max-height: 84px; max-width: 290px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 16px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      .grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
+      .grid > div { flex: 1 1 45%; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 8px 11px; }
+      .grid span { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #94A3B8; margin-bottom: 2px; }
+      .grid b { font-size: 12.5px; color: #0F1B2D; }
+      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: rgba(255,255,255,.06); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
+      ul { margin: 0; padding-left: 20px; } li { font-size: 12px; line-height: 1.55; margin-bottom: 3px; }
+      .vacio { font-size: 11.5px; color: #98A2B3; font-style: italic; }
+      .parr { font-size: 12px; line-height: 1.6; text-align: justify; }
+      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
+      .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 14px; color: ${colorRes}; border: 1.5px solid ${colorRes}; }
+      .firmas { display: flex; gap: 40px; margin-top: 34px; page-break-inside: avoid; }
+      .firma { flex: 1; text-align: center; }
+      .linea { border-top: 1px solid #0F1B2D; margin-bottom: 5px; }
+      .rol { font-size: 10px; color: #5B6B7F; }
+      .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 8px; }
+      .fotos img { width: 130px; height: 130px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">${_e(t.titulo)}</div></div>
+      <div class="barra"><div>Obra: <b>${_e(nomObra)}</b></div><div>N°: <b>${_e(it.nro || "—")}</b></div><div>Fecha: <b>${fmtDMY(it.fecha)}</b></div></div>
+      ${cuerpo}
+      ${(() => {
+        const fotos = it.fotos || [];
+        if (!fotos.length) return "";
+        const buenas = fotos.filter(f => f.url && (f.url.startsWith("http://") || f.url.startsWith("https://"))).slice(0, 8);
+        const sinSubir = fotos.length - buenas.length;
+        return `<h2>Fotos</h2>
+          ${buenas.length ? `<div class="fotos">${buenas.map(f => `<img src="${f.url}" />`).join("")}</div>` : ""}
+          ${sinSubir > 0 ? `<div class="vacio">${sinSubir} foto(s) no incluida(s) en el PDF: no se terminaron de subir a la nube desde el dispositivo de origen.</div>` : ""}`;
+      })()}
+      <div class="res">Resultado: ${_e(it.resultado || "—")}</div>
+      ${it.conclusion ? `<h2>Conclusión</h2><div class="parr">${_e(it.conclusion)}</div>` : ""}
+      <div class="firmas">
+        <div class="firma"><div class="linea"></div><div class="rol">${_e(it.responsable || "Responsable técnico")}<br/>${marca}</div></div>
+        <div class="firma"><div class="linea"></div><div class="rol">Jefatura de Obra / Dirección de Obra</div></div>
+      </div>
+      <div class="foot">Documento emitido por ${marca} · ${_e(t.titulo)} · ${_e(it.nro || "")}</div>
+    </div></body></html>`;
+  }
   return (<div style={{ flex: 1, overflowY: "auto" }}>
     <AppHeader title="Auditoría de obra" sub="Supervisiones y controles cargados por V+V" />
     <div style={{ padding: "14px 18px" }}>
@@ -1255,7 +1373,7 @@ function AuditoriaClienteView({ T, obras, auditoria }) {
         return (<div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div onClick={() => setAbierto(abiertoAqui ? null : it.id)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.nro}</span>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.navy, flex: 1, minWidth: 0 }}>{nombreObra(it.obra_id)}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{nombreObra(it.obra_id)}</span>
             <span style={{ fontSize: 10, fontWeight: 700, color: it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D" }}>{it.resultado}</span>
           </div>
           <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{fmtDMY(it.fecha)}{it.periodo ? ` · ${it.periodo}` : ""} · {(it.obs || []).length} observación(es)</div>
@@ -1276,10 +1394,20 @@ function AuditoriaClienteView({ T, obras, auditoria }) {
                 <img src={f.url} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               </a>)}
             </div>)}
+            <button onClick={() => setPdfHtml(buildPdf(it))} style={{ marginTop: 10, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "9px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Ver PDF</button>
           </div>)}
         </div>);
       })}
     </div>
+
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 320, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: "14px 14px 10px", background: "#0F1B2D", flexShrink: 0 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Certificado</span>
+        <button onClick={() => { const f = document.getElementById("aud-cli-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="aud-cli-pdf" srcDoc={pdfHtml} title="Certificado auditoría" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
   </div>);
 }
 function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
@@ -1380,7 +1508,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
       .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
       .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
       .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
-      .adj { font-size: 10.5px; color: #1B3A5B; background: #F1F5F9; border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
+      .adj { font-size: 10.5px; color: #1B3A5B; background: rgba(255,255,255,.06); border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
       .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
       .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
       .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
@@ -1420,7 +1548,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
       {/* Lo cargado hoy, de todas las obras */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: delDia.length ? 10 : 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Hoy en todas las obras</div>
           <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
         </div>
         {delDia.length === 0
@@ -1448,7 +1576,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
         {/* botón nuevo / formulario */}
         
         {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 12, color: T.sub, width: 46 }}>Fecha</span>
@@ -1477,7 +1605,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
               ))}
             </div>}
             <input ref={adjRef} type="file" multiple onChange={agregarAdjuntos} style={{ display: "none" }} />
-            <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "Adjuntar archivo (Word, PDF, Excel…)"}</button>
+            <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${BRASS}`, color: T.text, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "Adjuntar archivo (Word, PDF, Excel…)"}</button>
             <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
               <button onClick={limpiar} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
               <button onClick={guardar} disabled={subiendo} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{edit ? "Guardar cambios" : "Guardar hecho"}</button>
@@ -1636,7 +1764,7 @@ const DEFAULT_TEXTOS = {
     cfg_guardar: "✓ Guardar y cerrar", cfg_restaurar: "↺ Restaurar tema por defecto",
 };
 
-const OBRA_ESTADOS = [{ id: "pendiente", label: "Pendiente", color: "#94A3B8", bg: "#F8FAFC" }, { id: "curso", label: "En Curso", color: "#10B981", bg: "#ECFDF5" }, { id: "pausada", label: "Pausada", color: "#F59E0B", bg: "#FFFBEB" }, { id: "terminada", label: "Terminada", color: "#6366F1", bg: "#EEF2FF" }];
+const OBRA_ESTADOS = [{ id: "pendiente", label: "Pendiente", color: "#94A3B8", bg: "rgba(255,255,255,.04)" }, { id: "curso", label: "En Curso", color: "#6FCF97", bg: "rgba(111,207,151,.14)" }, { id: "pausada", label: "Pausada", color: "#D9B27C", bg: "rgba(180,83,9,.14)" }, { id: "terminada", label: "Terminada", color: "#8B93F5", bg: "rgba(99,102,241,.14)" }];
 
 function t(cfg, key) { return cfg?.textos?.[key] || DEFAULT_TEXTOS[key] || key; }
 function getLabelUbic(cfg) { return cfg?.labelUbicacion || "Zona/Barrio"; }
@@ -1748,12 +1876,12 @@ const money_OG = (n) => (Number(n) || 0).toLocaleString("es-AR") + " $";
 
 const hoyStr_OG = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
 
-const T = { bg: "var(--bg,#F1F5F9)", card: "var(--card,#fff)", border: "var(--border,#E2E8F0)", text: "var(--text,#0F172A)", sub: "var(--sub,#475569)", muted: "var(--muted,#94A3B8)", accent: "var(--accent,#1D4ED8)", accentLight: "var(--al,#EFF6FF)", navy: "var(--navy,#0F172A)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
+const T = { bg: "var(--bg,#0d0d0f)", card: "var(--card,#111214)", border: "var(--border,#232227)", text: "var(--text,#f2f0eb)", sub: "var(--sub,#B8B5AE)", muted: "var(--muted,#7A776F)", accent: "var(--accent,#B0894F)", accentLight: "var(--al,rgba(176,137,79,.14))", navy: "var(--navy,#0d0d0f)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
 
 function Card_OG({ children, style = {}, onClick }) { return <div onClick={onClick} style={{ background: T.card, borderRadius: T.r, border: `1px solid ${T.border}`, boxShadow: T.shadow, ...style }}>{children}</div>; }
 function Badge_OG({ color, bg, children, style = {} }) { return <span style={{ display: "inline-flex", alignItems: "center", fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 20, padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em", ...style }}>{children}</span>; }
 function PBtn_OG({ children, onClick, disabled, full, style = {}, variant = "primary" }) {
-    const v = { primary: { background: disabled ? "#E2E8F0" : "var(--accent,#1D4ED8)", color: disabled ? "#94A3B8" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "#FEF2F2", border: "1.5px solid #FECACA", color: "#EF4444", boxShadow: "none" } };
+    const v = { primary: { background: disabled ? "rgba(255,255,255,.08)" : "var(--accent,#B0894F)", color: disabled ? "#7A776F" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", color: "#EF4444", boxShadow: "none" } };
     return <button onClick={onClick} disabled={disabled} style={{ ...v[variant], borderRadius: T.rsm, padding: "11px 20px", fontSize: 14, fontWeight: 600, width: full ? "100%" : "auto", transition: "all .15s", ...style }}>{children}</button>;
 }
 function Sheet({ title, onClose, children }) { return (<div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 200, display: "flex", alignItems: "flex-end", backdropFilter: "blur(2px)" }}><div style={{ background: T.card, borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "90vh", overflow: "auto", animation: "up .25s ease", paddingBottom: 32 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 0" }}><span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{title}</span><button onClick={onClose} style={{ background: T.bg, border: "none", borderRadius: 20, width: 32, height: 32, fontSize: 18, color: T.muted, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button></div><div style={{ padding: "14px 20px 0" }}>{children}</div></div></div>); }
@@ -1762,7 +1890,7 @@ function TInput({ value, onChange, placeholder, type = "text", extraStyle = {} }
 function Sel({ value, onChange, children }) { return <select value={value} onChange={onChange} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }}>{children}</select>; }
 function FieldRow({ children }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>{children}</div>; }
 function Field({ label, children }) { return <div style={{ marginBottom: 12 }}><Lbl>{label}</Lbl>{children}</div>; }
-function PlusBtn({ onClick }) { return <button onClick={onClick} style={{ background: "var(--accent,#1D4ED8)", color: "#fff", border: "none", borderRadius: 20, width: 34, height: 34, fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,.2)" }}>+</button>; }
+function PlusBtn({ onClick }) { return <button onClick={onClick} style={{ background: "var(--accent,#B0894F)", color: "#fff", border: "none", borderRadius: 20, width: 34, height: 34, fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,.2)" }}>+</button>; }
 function AppHeader({ title, sub, right, back, onBack }) { return (<div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "12px 18px", flexShrink: 0, position: "sticky", top: 0, zIndex: 10 }}><div style={{ display: "flex", alignItems: "center", gap: 10 }}>{back && <button onClick={onBack} style={{ background: T.bg, border: "none", borderRadius: 10, width: 32, height: 32, fontSize: 16, color: T.sub, display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>}<div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 700, color: T.text, lineHeight: 1.2 }}>{title}</div>{sub && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{sub}</div>}</div>{right}</div></div>); }
 
 function MontoInput({ value, onChange, placeholder }) {
@@ -1839,7 +1967,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
         {fotos.length === 0
             ? <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_fotos')}</div>
             : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: informe ? 14 : 0 }}>
-                {fotos.map(f => {
+                {[...fotos].reverse().map(f => {
                     const sel = selFotos.includes(f.id);
                     return (<div key={f.id} onClick={() => modoSel && toggleSel(f.id)} style={{ borderRadius: T.rsm, overflow: "hidden", border: `2px solid ${sel ? "#10B981" : T.border}`, cursor: modoSel ? "pointer" : "default", position: "relative" }}>
                         {sel && <div style={{ position: "absolute", top: 5, right: 5, width: 20, height: 20, borderRadius: "50%", background: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, color: "#fff", fontSize: 11, fontWeight: 700 }}>✓</div>}
@@ -1861,7 +1989,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} /><span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Informe IA generado</span></div>
                 <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => { try { navigator.clipboard.writeText(informe); } catch { } }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 10px", fontSize: 11, color: T.sub, cursor: "pointer" }}><Ico n="list" /> Copiar</button>
-                    <button onClick={() => setInforme('')} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, padding: "4px 8px", fontSize: 11, color: "#EF4444", cursor: "pointer" }}>✕</button>
+                    <button onClick={() => setInforme('')} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 7, padding: "4px 8px", fontSize: 11, color: "#EF4444", cursor: "pointer" }}>✕</button>
                 </div>
             </div>
             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "12px 14px", fontSize: 12, color: T.text, lineHeight: 1.7, whiteSpace: "pre-wrap", maxHeight: 320, overflowY: "auto" }}>{informe}</div>
@@ -1876,9 +2004,9 @@ function TabInformes({ detail, upd }) {
     const fileRef = useRef(null);
     const informes = detail.informes || [];
     const TIPOS_INF = [
-        { id: 'diario', label: 'Diario', color: '#3B82F6', bg: '#EFF6FF' },
-        { id: 'semanal', label: 'Semanal', color: '#7C3AED', bg: '#F5F3FF' },
-        { id: 'ingeniero', label: 'Ingeniero', color: '#10B981', bg: '#ECFDF5' },
+        { id: 'diario', label: 'Diario', color: '#3B82F6', bg: 'rgba(37,99,235,.14)' },
+        { id: 'semanal', label: 'Semanal', color: '#7C3AED', bg: 'rgba(139,92,246,.14)' },
+        { id: 'ingeniero', label: 'Ingeniero', color: '#10B981', bg: 'rgba(22,163,74,.14)' },
     ];
     async function handleFile(e) {
         const files = Array.from(e.target.files);
@@ -1928,7 +2056,7 @@ function TabInformes({ detail, upd }) {
                 </div>
                 <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
                     <button onClick={() => descargarArchivo_OG(inf.url, inf.nombre)} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>↓</button>
-                    <button onClick={() => upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) })} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
+                    <button onClick={() => upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) })} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
                 </div>
             </div>))}
         {showNew && (<Sheet title={`Subir informe ${tp?.label}`} onClose={() => setShowNew(false)}>
@@ -1946,10 +2074,10 @@ function TabInformes({ detail, upd }) {
 // ── OBRAS ────────────────────────────────────────────────────────────
 // ── TAB GASTOS (dentro de cada Obra) ─────────────────────────────────
 const TIPOS_GASTO = [
-    { id: 'viatico', label: 'Viático', color: '#F59E0B', bg: '#FFFBEB' },
-    { id: 'compra', label: 'Compra material', color: '#3B82F6', bg: '#EFF6FF' },
-    { id: 'herramienta', label: 'Herramienta', color: '#8B5CF6', bg: '#F5F3FF' },
-    { id: 'subcontrato', label: 'Subcontrato', color: '#10B981', bg: '#ECFDF5' },
+    { id: 'viatico', label: 'Viático', color: '#F59E0B', bg: 'rgba(180,83,9,.14)' },
+    { id: 'compra', label: 'Compra material', color: '#3B82F6', bg: 'rgba(37,99,235,.14)' },
+    { id: 'herramienta', label: 'Herramienta', color: '#8B5CF6', bg: 'rgba(139,92,246,.14)' },
+    { id: 'subcontrato', label: 'Subcontrato', color: '#10B981', bg: 'rgba(22,163,74,.14)' },
     { id: 'combustible', label: 'Combustible', color: '#F97316', bg: '#FFF7ED' },
     { id: 'otro', label: 'Otro', color: '#6B7280', bg: '#F9FAFB' },
 ];
@@ -2029,7 +2157,7 @@ function TabGastos({ detail, upd }) {
                                 </div>
                             </a>
                         )}
-                        <button onClick={() => eliminar(g.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "6px 10px", fontSize: 11, color: "#EF4444", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>✕</button>
+                        <button onClick={() => eliminar(g.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 8, padding: "6px 10px", fontSize: 11, color: "#EF4444", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>✕</button>
                     </div>
                 </div>);
             })
@@ -2059,7 +2187,7 @@ function TabGastos({ detail, upd }) {
             <Field label="Comprobante (foto o PDF)">
                 <input ref={compRef} type="file" accept="image/*,.pdf" onChange={handleComp} style={{ display: "none" }} />
                 {form.comprobante ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#ECFDF5", border: "1px solid #86EFAC", borderRadius: T.rsm, padding: "10px 12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(22,163,74,.14)", border: "1px solid #86EFAC", borderRadius: T.rsm, padding: "10px 12px" }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", flex: 1 }}>✓ {form.comprobante.nombre}</div>
                         <button onClick={() => setForm(p => ({ ...p, comprobante: null }))} style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 14 }}>✕</button>
                     </div>
@@ -2173,11 +2301,11 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 600 }}>{t(cfg, 'obras_avance')}</span><span style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{detail.avance}%</span></div>
                     <div style={{ height: 8, background: T.bg, borderRadius: 4 }}><div style={{ height: 8, background: T.accent, borderRadius: 4, width: `${detail.avance}%`, transition: "width .5s" }} /></div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_inicio')}: {detail.inicio || "—"}</span><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_cierre')}: {detail.cierre || "—"}</span></div>
-                    <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#1D4ED8)", marginTop: 10 }} />
+                    <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#B0894F)", marginTop: 10 }} />
                 </div>
                 <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, display: "flex", overflowX: "auto" }}>
                     {[[`info`, t(cfg, 'obras_info')], [`obs`, t(cfg, 'obras_notas')], [`fotos`, t(cfg, 'obras_fotos')], [`planos`, 'Planos'], [`archivos`, t(cfg, 'obras_archivos')], [`informes`, 'Informes'], [`gastos`, 'Gastos']].map(([id, label]) => (
-                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#1D4ED8)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
+                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#B0894F)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
                     ))}
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
@@ -2211,7 +2339,7 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Presupuesto</div>
                                 <input value={detail.monto || ''} onChange={e => upd(detail.id, { monto: e.target.value })} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
-                            <div style={{ background: detail.pagado > 0 ? "#ECFDF5" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            <div style={{ background: detail.pagado > 0 ? "rgba(22,163,74,.14)" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}><Ico n="money" /> Pagado</div>
                                 <input value={detail.pagado || ''} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); upd(detail.id, { pagado: v ? parseFloat(v) : 0 }); }} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: "#10B981", padding: 0 }} />
                             </div>
@@ -2220,7 +2348,7 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
                             {OBRA_ESTADOS.map(e => (<button key={e.id} onClick={() => upd(detail.id, { estado: e.id })} style={{ padding: "9px", borderRadius: T.rsm, border: `1.5px solid ${detail.estado === e.id ? e.color : T.border}`, background: detail.estado === e.id ? e.bg : T.card, color: e.color, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{e.label}</button>))}
                         </div>
-                        <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "#FEF2F2", border: "1.5px solid #FECACA", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
+                        <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
                     </div>)}
                     {tab === "obs" && (<div>
                         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
@@ -2301,7 +2429,7 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
 // ════════════════════════════════════════════════════════════════════
 
 const BRASS_OG = "#B0894F";
-const INST_COLORS = { accent:"#1E3A5F", al:"#EAEEF3", bg:"#F5F6F8", card:"#FFFFFF", border:"#E6E9EE", text:"#131C2B", sub:"#4A5565", muted:"#97A0AE", navy:"#101C2C" };
+const INST_COLORS = { accent:"#1E3A5F", al:"rgba(255,255,255,.08)", bg:"#F5F6F8", card:"#FFFFFF", border:"#E6E9EE", text:"#131C2B", sub:"#4A5565", muted:"#97A0AE", navy:"#101C2C" };
 
 const SAMPLE_OBRAS = [
   { id:"o1", nombre:"Castores 475", ap:"norte", sector:"Vivienda PB+1", estado:"curso", avance:68, inicio:"10/03/26", cierre:"30/08/26", monto:"12.400.000 $", pagado:8100000, obs:[{id:"b1",txt:"Hormigón visto terminado en PB.",fecha:"20/06/26"}], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
@@ -2330,107 +2458,6 @@ const SAMPLE_ALERTS = [
 
 // ═══ fin OBRAS compartido ═══
 
-function ObrasScreen({ T, obras, setObras, tareas, cfg, formularios = [] }) {
-  const [verForm, setVerForm] = useState(null);
-  const [open, setOpen] = useState(null);
-  const [subP, setSubP] = useState(false);
-  async function subirPlanos(e, obra) {
-    const files = Array.from(e.target.files); if (!files.length) return; setSubP(true);
-    const nuevos = [];
-    for (const f of files) {
-      const data = await fileToDataUrl(f);
-      const url = await uploadArchivo(data, `planos/${obra.id}`, `${Date.now()}_${f.name.replace(/\W+/g, "_")}`);
-      const ext = (f.name.split(".").pop() || "").toLowerCase();
-      nuevos.push({ id: uid(), nombre: f.name, url, fecha: hoyStr(), from: "cliente", tipo: ext });
-    }
-    if (setObras) setObras(prev => prev.map(o => o.id === obra.id ? { ...o, planos: [...(o.planos || []), ...nuevos] } : o));
-    setSubP(false); e.target.value = "";
-    if (nuevos.some(n => !String(n.url || "").startsWith("http"))) alert("⚠ El plano quedó en este dispositivo pero NO se subió a la nube (bucket 'bco-media' en Supabase). Configuralo para que V+V y la IA lo puedan ver.");
-  }
-  function borrarObra(o) {
-    if (!setObras) return;
-    const nom = String(o.nombre || "").trim();
-    const esc = prompt(`BORRAR LA OBRA "${nom}"\n\nSe borra en las dos apps (Cliente y V+V) y no se puede deshacer.\nSe pierden sus tareas, planos e informes.\n\nEscribí el nombre de la obra para confirmar:`);
-    if (esc == null) return;
-    if (esc.trim().toLowerCase() !== nom.toLowerCase()) { alert("El nombre no coincide. No borré nada."); return; }
-    setObras(prev => prev.filter(x => x.id !== o.id));
-    alert(`Obra "${nom}" borrada.`);
-  }
-  function borrarPlano(obra, id) { if (confirm("¿Eliminar este plano?") && setObras) setObras(prev => prev.map(o => o.id === obra.id ? { ...o, planos: (o.planos || []).filter(x => x.id !== id) } : o)); }
-  const [ecoUnlocked, setEcoUnlocked] = useState(false);
-  const [pinInput, setPinInput] = useState("");
-  const ecoPin = String(cfg?.ecoPin || "2025");
-  const contratado = obras.reduce((a, o) => a + parseMontoNum(o.monto), 0);
-  const certificado = obras.reduce((a, o) => a + (o.pagado || 0), 0);
-  const avg = obras.length ? Math.round(obras.reduce((a, o) => a + (o.avance || 0), 0) / obras.length) : 0;
-  const activas = obras.filter(o => o.estado === "curso").length;
-  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
-    <div style={{ padding: "16px 20px" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 9, marginBottom: 10 }}>
-        {[["Activas", activas, "#16A34A"], ["Avance", avg + "%", T.accent], ["Obras", obras.length, T.text]].map(([l, v, c], i) =>
-          <div key={i} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 12px", boxShadow: T.shadow }}><div style={{ fontSize: 19, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3 }}>{l}</div></div>)}
-      </div>
-      <div style={{ background: T.navy, borderRadius: T.rsm, padding: "15px 17px", marginBottom: 20, borderBottom: `2px solid ${BRASS}` }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.6)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span>Resumen económico</span>{ecoUnlocked && <button onClick={() => setEcoUnlocked(false)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.55)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}><Ico n="lock" /> Bloquear</button>}</div>
-        {ecoUnlocked ? [["Contratado", contratado, "#fff"], ["Certificado", certificado, "#16A34A"], ["Saldo", contratado - certificado, BRASS]].map(([l, v, c], i) =>
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderTop: i ? "1px solid rgba(255,255,255,.08)" : "none" }}><span style={{ fontSize: 12.5, color: "rgba(255,255,255,.75)" }}>{l}</span><span style={{ fontSize: 14, fontWeight: 800, color: c }}>{money(v)}</span></div>)
-          : <div><div style={{ fontSize: 12, color: "rgba(255,255,255,.7)", marginBottom: 11, lineHeight: 1.5 }}><Ico n="lock" /> Protegido. Ingresá la contraseña para ver los montos.</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input type="password" value={pinInput} onChange={e => setPinInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { if (pinInput === ecoPin) { setEcoUnlocked(true); setPinInput(""); } else alert("Contraseña incorrecta."); } }} placeholder="Contraseña" style={{ flex: 1, background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", borderRadius: T.rsm, padding: "10px 12px", fontSize: 14, color: "#fff", outline: "none" }} />
-              <button onClick={() => { if (pinInput === ecoPin) { setEcoUnlocked(true); setPinInput(""); } else alert("Contraseña incorrecta."); }} style={{ background: BRASS, color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Ver</button>
-            </div></div>}
-      </div>
-      <Eyebrow T={T}>Estado de obras</Eyebrow>
-      {obras.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "38px 18px" }}>Todavía no hay obras publicadas.</div>}
-      {obras.map(o => {
-        const e = ESTADOS[o.estado] || ESTADOS.pendiente;
-        const contr = parseMontoNum(o.monto), cert = o.pagado || 0, pct = contr ? Math.round(cert / contr * 100) : 0;
-        const ts = tareas.filter(t => t.obra_id === o.id);
-        const ult = (o.informes || [])[o.informes?.length - 1];
-        const forms = formularios.filter(f => f.compartido && f.obra_id === o.id);
-        const isOpen = open === o.id;
-        return (<Card T={T} key={o.id} style={{ padding: 15, marginBottom: 11 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-            <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{o.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{o.sector} · {o.inicio} → {o.cierre}</div></div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
-              <Badge c={e.c} b={e.b}>{e.l}</Badge>
-              {setObras && <button onClick={ev => { ev.stopPropagation(); borrarObra(o); }} title="Borrar obra"
-                style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}><Ico n="trash" /> </button>}
-            </div>
-          </div>
-          <div style={{ margin: "12px 0 6px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 5 }}><span style={{ color: T.sub, fontWeight: 600 }}>Avance de obra</span><span style={{ color: T.accent, fontWeight: 800 }}>{o.avance}%</span></div>
-            <div style={{ height: 8, background: T.bg, borderRadius: 5, overflow: "hidden" }}><div style={{ height: 8, width: `${o.avance}%`, background: T.accent, borderRadius: 5 }} /></div>
-          </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <div style={{ flex: 1, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Certificado</div><div style={{ fontSize: 12.5, fontWeight: 800, color: "#16A34A", marginTop: 2 }}>{pct}%</div></div>
-            <div style={{ flex: 2, background: T.bg, borderRadius: T.rsm, padding: "9px 11px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase" }}>Saldo pendiente</div><div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginTop: 2 }}>{ecoUnlocked ? money(contr - cert) : "•••••"}</div></div>
-          </div>
-          <button onClick={() => setOpen(isOpen ? null : o.id)} style={{ width: "100%", marginTop: 12, background: "none", border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, color: T.accent }}>{isOpen ? "Ocultar detalle ▲" : `Ver detalle${forms.length ? ` · ${forms.length} formulario${forms.length > 1 ? "s" : ""}` : ""}${(o.planos || []).length ? ` · ${(o.planos || []).length} plano${(o.planos || []).length > 1 ? "s" : ""}` : ""} ▼`}</button>
-          {isOpen && <div style={{ marginTop: 12 }}>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Planos (PDF / CAD){(o.planos || []).length ? ` (${(o.planos || []).length})` : ""}</div>
-              {(o.planos || []).map(p => <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginBottom: 6 }}>
-                <div style={{ width: 30, height: 30, borderRadius: 7, background: "#EAEEF3", color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}><Ico n="ruler" /> </div>
-                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{p.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{p.fecha}{p.from ? ` · ${p.from === "vv" ? "V+V" : "Belfast"}` : ""}</div></div>
-                <a href={p.url} target="_blank" rel="noreferrer" download={p.nombre} style={{ color: T.accent, fontWeight: 700, fontSize: 11.5, textDecoration: "none", flexShrink: 0 }}>Abrir</a>
-                <button onClick={() => borrarPlano(o, p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
-              </div>)}
-              <label style={{ display: "block", textAlign: "center", background: T.navy, color: "#fff", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>{subP ? "Subiendo…" : "＋ Subir plano (PDF/CAD)"}<input type="file" accept=".pdf,.dwg,.dxf,.dwf,.rvt,application/pdf,image/*" multiple onChange={e => subirPlanos(e, o)} style={{ display: "none" }} /></label>
-            </div>
-            {(o.fotos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Avance fotográfico ({(o.fotos || []).length})</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>{(o.fotos || []).slice().reverse().map((f, i) => <a key={i} href={f.url || f} target="_blank" rel="noreferrer"><img src={f.url || f} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div></div>}
-            {(o.videos || []).length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Videos ({o.videos.length})</div>{o.videos.map((v, i) => <video key={i} src={v.url || v} controls playsInline style={{ width: "100%", borderRadius: 6, marginBottom: 8, background: "#000", display: "block" }} />)}</div>}
-            {ts.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Cronograma</div>{ts.map(t => <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}><span style={{ flex: 1, fontSize: 12, color: T.text }}>{t.nombre}</span><div style={{ width: 70, height: 6, background: T.bg, borderRadius: 4, overflow: "hidden" }}><div style={{ height: 6, width: `${t.avance || 0}%`, background: BRASS }} /></div><span style={{ fontSize: 11, fontWeight: 700, color: T.muted, width: 32, textAlign: "right" }}>{t.avance || 0}%</span></div>)}</div>}
-            {ult && <div><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Último informe · {ult.fecha}</div><div style={{ background: T.bg, borderRadius: T.rsm, padding: "11px 13px", fontSize: 12, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto" }}>{ult.texto}</div></div>}
-            {forms.length > 0 && <div style={{ marginTop: 12 }}><div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 7 }}>Formularios recibidos de V+V</div>{forms.map(f => { const tpl = FORM_TPLS.find(t => t.id === f.tplId); return (<div key={f.id} onClick={() => setVerForm({ f, tpl, obra: o.nombre })} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}><div style={{ minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{tpl?.nombre || "Formulario"}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{f.fecha}{f.nro ? ` · N° ${f.nro}` : ""}{f.compartidoFecha ? ` · compartido ${f.compartidoFecha}` : ""}</div></div>{f.resultado ? <span style={{ fontSize: 9.5, fontWeight: 800, color: f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#B45309" : "#16A34A", flexShrink: 0 }}>{f.resultado.replace(" PARA INICIO", "")}</span> : <span style={{ color: T.accent, fontWeight: 700, fontSize: 11 }}>Ver →</span>}</div>); })}</div>}
-          </div>}
-        </Card>);
-      })}
-    </div>
-    {verForm && <FormViewer T={T} tpl={verForm.tpl} f={verForm.f} obraNombre={verForm.obra} onClose={() => setVerForm(null)} />}
-  </div>);
-}
-
 // ── PANTALLA: ARCHIVOS ───────────────────────────────────────────────
 function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivosVV, registrarSubida, quitarDeObra }) {
   const ref = useRef(null);
@@ -2452,10 +2479,10 @@ function ArchivosScreen({ T, obras, archivosCliente, setArchivosCliente, archivo
     setSubiendo(false); e.target.value = "";
   }
   const FileRow = ({ a, mine, onDelete }) => (<div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px", marginBottom: 8, boxShadow: T.shadow, display: "flex", alignItems: "center", gap: 11 }}>
-    <div style={{ width: 36, height: 36, borderRadius: 8, background: mine ? "#EAEEF3" : T.bg, color: mine ? T.accent : T.muted, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}><Ico n="doc" /> </div>
+    <div style={{ width: 36, height: 36, borderRadius: 8, background: mine ? "rgba(255,255,255,.08)" : T.bg, color: mine ? T.accent : T.muted, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}><Ico n="doc" /> </div>
     <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.nombre || "archivo"}</div><div style={{ fontSize: 11, color: T.muted }}>{a.fecha || a.obra || ""}</div></div>
     {a.url && <a href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ background: T.bg, color: T.accent, borderRadius: 7, padding: "7px 11px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Abrir</a>}
-    {onDelete && <button onClick={() => { if (confirm("¿Eliminar este archivo?")) onDelete(); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: 7, padding: "7px 9px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>}
+    {onDelete && <button onClick={() => { if (confirm("¿Eliminar este archivo?")) onDelete(); }} style={{ background: "none", border: "1px solid rgba(239,68,68,.35)", color: "#EF4444", borderRadius: 7, padding: "7px 9px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>}
   </div>);
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <div style={{ padding: "16px 20px" }}>
@@ -2490,7 +2517,7 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje, vaciar
   async function send() { const t = input.trim(); if (!t && adj.length === 0) return; await enviar(t, adj, adj.length ? obraAdj : ""); setInput(""); setAdj([]); setObraAdj(""); }
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
     {mensajes.length > 0 && vaciarMensajes && <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 16px 0" }}>
-      <button onClick={vaciarMensajes} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> Vaciar mensajes ({mensajes.length})</button>
+      <button onClick={vaciarMensajes} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> Vaciar mensajes ({mensajes.length})</button>
     </div>}
     <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
       {mensajes.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "40px 18px", lineHeight: 1.6 }}>Escribile a V+V Construcciones. Te avisamos acá cuando respondan.</div>}
@@ -2620,12 +2647,39 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
       <input ref={logoRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) setLogo(e.target.files[0]); }} />
       <div style={{ display: "flex", gap: 8, margin: "6px 0 14px" }}>
         <button onClick={() => logoRef.current?.click()} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, color: T.text }}>{cfg.logo ? "Cambiar logo" : "Subir logo"}</button>
-        {cfg.logo && <button onClick={() => setCfg(p => ({ ...p, logo: "" }))} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, fontWeight: 600 }}>Quitar</button>}
+        {cfg.logo && <button onClick={() => setCfg(p => ({ ...p, logo: "" }))} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, fontWeight: 600 }}>Quitar</button>}
       </div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Tamaño del logo (Inicio)</label>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "8px 0 14px" }}>
+        <input type="range" min="28" max="120" value={cfg.logoSize || 52} onChange={e => setCfg(p => ({ ...p, logoSize: Number(e.target.value) }))} style={{ flex: 1 }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.text, width: 32, textAlign: "right" }}>{cfg.logoSize || 52}px</span>
+      </div>
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Modo</label>
+      <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 18 }}>
+        <button onClick={() => setCfg(p => { const n = { ...p, modo: "oscuro" }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; return n; })} style={{ flex: 1, background: (cfg.modo || "oscuro") === "oscuro" ? T.accent : T.card, color: (cfg.modo || "oscuro") === "oscuro" ? "#fff" : T.text, border: `1px solid ${(cfg.modo || "oscuro") === "oscuro" ? T.accent : T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🌙 Oscuro</button>
+        <button onClick={() => setCfg(p => { const n = { ...p, modo: "claro" }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; return n; })} style={{ flex: 1, background: cfg.modo === "claro" ? T.accent : T.card, color: cfg.modo === "claro" ? "#fff" : T.text, border: `1px solid ${cfg.modo === "claro" ? T.accent : T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>☀️ Claro</button>
+      </div>
+
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Color principal</label>
       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 8 }}>
-        {["#1E3A5F", "#101C2C", "#1F5C49", "#6E3B2E", "#46406E", "#0E5A66", "#7A2E50"].map(col => <button key={col} onClick={() => setCfg(p => ({ ...p, accent: col }))} style={{ width: 32, height: 32, borderRadius: 5, background: col, border: `2px solid ${cfg.accent === col ? T.text : T.border}` }} />)}
-        <input type="color" value={cfg.accent} onChange={e => setCfg(p => ({ ...p, accent: e.target.value }))} style={{ width: 32, height: 32, border: "none", background: "none" }} />
+        {["#B0894F", "#1E3A5F", "#1F5C49", "#6E3B2E", "#46406E", "#0E5A66", "#7A2E50"].map(col => <button key={col} onClick={() => setCfg(p => ({ ...p, accent: col }))} style={{ width: 32, height: 32, borderRadius: 5, background: col, border: `2px solid ${cfg.accent === col ? T.text : T.border}` }} />)}
+        <input type="color" value={cfg.accent || "#B0894F"} onChange={e => setCfg(p => ({ ...p, accent: e.target.value }))} style={{ width: 32, height: 32, border: "none", background: "none" }} />
+      </div>
+
+      <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginTop: 18 }}>Ajuste fino (opcional, encima del modo)</label>
+      <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", marginTop: 8 }}>
+        {[
+          ["Fondo", "themeBg", (cfg.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO).bg],
+          ["Fondo de tarjetas", "themeCard", (cfg.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO).card],
+          ["Texto", "themeText", (cfg.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO).text],
+          ["Líneas / bordes", "themeBorder", (cfg.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO).border],
+        ].map(([lbl, key, def]) => (
+          <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0" }}>
+            <span style={{ fontSize: 12.5, color: T.text }}>{lbl}</span>
+            <input type="color" value={cfg[key] || def} onChange={e => setCfg(p => ({ ...p, [key]: e.target.value }))} style={{ width: 32, height: 26, border: `1px solid ${T.border}`, borderRadius: 5, background: "none", cursor: "pointer", padding: 0 }} />
+          </div>
+        ))}
+        <button onClick={() => setCfg(p => { const n = { ...p }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; n.accent = "#B0894F"; return n; })} style={{ width: "100%", marginTop: 10, background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Restaurar colores del modo actual</button>
       </div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Agente IA</label></div>
       <div onClick={() => setCfg(p => ({ ...p, autoIA: !p.autoIA }))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", cursor: "pointer" }}>
@@ -2659,7 +2713,7 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "drone", label: "Drone IA", icon: "M12 8a2 2 0 100 4 2 2 0 000-4zM4 4a2 2 0 100 4 2 2 0 000-4zM20 4a2 2 0 100 4 2 2 0 000-4zM4 16a2 2 0 100 4 2 2 0 000-4zM20 16a2 2 0 100 4 2 2 0 000-4zM6 6l4 4M18 6l-4 4M6 18l4-4M18 18l-4-4" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "auditoria", label: "Auditoría", icon: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z M9.5 12l1.8 1.8L15 10" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "formularios", label: "Formularios", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "inicio", label: "Inicio", icon: "M11.47 3.841a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.061l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 101.061 1.061l8.69-8.69z" }, { id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "auditoria", label: "Auditoría", icon: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z M9.5 12l1.8 1.8L15 10" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "formularios", label: "Certificados", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
 function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], certif = {}, bitacora = [], onPedidos, onMinutas }) {
@@ -3077,7 +3131,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   }, []);
   const QUICK = ["📝 Redactá una minuta de la reunión que te voy a contar", "¿Cómo viene el avance de cada obra?", "Cargá al personal de [obra] al barrio…", "¿Hay pedidos sin resolver?"];
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-    {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", borderBottom: "1px solid #FECACA", padding: "11px 16px", cursor: "pointer", flexShrink: 0 }}>
+    {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(239,68,68,.10)", borderBottom: "1px solid rgba(239,68,68,.30)", padding: "11px 16px", cursor: "pointer", flexShrink: 0 }}>
       <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
       <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de V+V</div><div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{pendObras ? `Obras: ${pendObras}` : "Tocá para ver"} →</div></div>
     </div>}
@@ -3125,7 +3179,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
         {debateActive ? <button onClick={stopDebate} style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Frenar debate</button>
           : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.accent : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="mic" /> Debate IA</button>}
         {ttsOk && <button onClick={toggleNarrarAuto} title="Narrar las respuestas en voz alta" style={{ background: narrarAuto ? "#16A34A" : T.bg, color: narrarAuto ? "#fff" : T.sub, border: `1px solid ${narrarAuto ? "#16A34A" : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🔊 {narrarAuto ? "Narrando ON" : "Narrar"}</button>}
-        {hablando && <button onClick={pararVoz} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Callar</button>}
+        {hablando && <button onClick={pararVoz} style={{ background: "rgba(239,68,68,.10)", color: "#EF4444", border: "1px solid rgba(239,68,68,.30)", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Callar</button>}
         {msgs.length > 0 && <button onClick={() => setMsgs([])} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginLeft: "auto" }}>Limpiar</button>}
       </div>
       {debateOpen && !debateActive && <div style={{ maxWidth: 760, margin: "0 auto 8px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px" }}>
@@ -3187,12 +3241,12 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
   async function responderIA(p) { setIaLoad(true); const hist = (p.hilo || []).map(h => `${h.de === miSide ? cfg.nombre : "V+V"}: ${h.texto}`).join("\n"); const sys = `Sos el agente de ${cfg.nombre} respondiendo a V+V Construcciones. Redactá una respuesta breve y concreta (español rioplatense) al último mensaje. Solo el texto.`; const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey); setReply(r); setIaLoad(false); }
-  const Pill = (k, l) => <button key={k} onClick={() => setFiltro(k)} style={{ flex: 1, padding: "8px", borderRadius: T.rsm, border: `1px solid ${filtro === k ? T.accent : T.border}`, background: filtro === k ? "#EAEEF3" : T.card, color: filtro === k ? T.accent : T.sub, fontSize: 12, fontWeight: 700 }}>{l}</button>;
+  const Pill = (k, l) => <button key={k} onClick={() => setFiltro(k)} style={{ flex: 1, padding: "8px", borderRadius: T.rsm, border: `1px solid ${filtro === k ? T.accent : T.border}`, background: filtro === k ? "rgba(255,255,255,.08)" : T.card, color: filtro === k ? T.accent : T.sub, fontSize: 12, fontWeight: 700 }}>{l}</button>;
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "16px 20px" }}>
       {!cur && <>
-        {(() => { const pend = pedidos.filter(p => p.para === miSide && p.estado !== "resuelto"); if (!pend.length) return null; const obrasTxt = [...new Set(pend.map(p => p.obra_id ? nomObra(p.obra_id) : "general").filter(Boolean))].join(", "); return (<div style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: T.rsm, padding: "12px 14px", marginBottom: 14 }}>
+        {(() => { const pend = pedidos.filter(p => p.para === miSide && p.estado !== "resuelto"); if (!pend.length) return null; const obrasTxt = [...new Set(pend.map(p => p.obra_id ? nomObra(p.obra_id) : "general").filter(Boolean))].join(", "); return (<div style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{obrasTxt ? `Obras: ${obrasTxt}` : ""}</div></div>
         </div>); })()}
@@ -3205,8 +3259,8 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
               <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>
               <div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{p.de === miSide ? "Enviado" : "Recibido"} · {p.fecha}</div>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 4 }}>
-                {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: "#EAEEF3", borderRadius: 5, padding: "2px 7px" }}><Ico n="building" /> {nomObra(p.obra_id)}</span>}
-                {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "#FEF2F2", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
+                {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: "rgba(255,255,255,.08)", borderRadius: 5, padding: "2px 7px" }}><Ico n="building" /> {nomObra(p.obra_id)}</span>}
+                {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "rgba(239,68,68,.10)", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
               </div>
               <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 230 }}>{ult?.porIA ? "" : ""}{ult?.texto}</div>
             </div>
@@ -3220,10 +3274,10 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
         <button onClick={() => setOpen(null)} style={{ background: "none", border: "none", color: T.accent, fontSize: 12.5, fontWeight: 700, marginBottom: 12 }}>← Volver</button>
         <Card T={T} style={{ padding: 14, marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}><div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{cur.asunto}</div><Badge c={e.c} b={e.b}>{e.l}</Badge></div>
-          {cur.obra_id && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: T.accent, background: "#EAEEF3", borderRadius: 6, padding: "4px 10px", marginTop: 8 }}><Ico n="building" /> Obra: {nomObra(cur.obra_id)}</div>}
+          {cur.obra_id && <div style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: T.accent, background: "rgba(255,255,255,.08)", borderRadius: 6, padding: "4px 10px", marginTop: 8 }}><Ico n="building" /> Obra: {nomObra(cur.obra_id)}</div>}
           <div style={{ fontSize: 11.5, color: T.muted, marginTop: 6 }}>{cur.de === miSide ? "Enviado a V+V" : "Recibido de V+V"} · {cur.fecha} · prioridad {cur.prioridad}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 12 }}>{Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700 }}>{v.l}</button>)}</div>
-          <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
+          <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
         </Card>
         <Eyebrow T={T}>Hilo</Eyebrow>
         {(cur.hilo || []).map((h, i) => { const mine = h.de === miSide; return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
@@ -3236,11 +3290,11 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
           </div>
         </div>); })}
         <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Escribí una respuesta…" rows={3} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, marginTop: 8 }} />
-        {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: "#EAEEF3", borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>{a.img ? "" : ""} {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
+        {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: "rgba(255,255,255,.08)", borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub }}>{a.img ? "" : ""} {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button onClick={() => fileRef.current?.click()} style={{ width: 44, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, fontSize: 17 }}>＋</button>
-          <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: "#EAEEF3", color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700 }}>{iaLoad ? "Redactando…" : "Redactar con IA"}</button>
+          <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: "rgba(255,255,255,.08)", color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700 }}>{iaLoad ? "Redactando…" : "Redactar con IA"}</button>
           <PBtn T={T} onClick={() => responder(cur.id, reply, false, adj)} style={{ flex: 1 }}>Enviar</PBtn>
         </div>
       </>); })()}
@@ -3296,7 +3350,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
           <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#25D366", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}><Ico n="send" /> </div>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{c.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{c.rol || "—"} · {nomObra(c.obra_id)} · {c.telefono}</div></div>
           <button onClick={() => setCForm({ id: c.id, nombre: c.nombre || "", rol: c.rol || "", obra_id: c.obra_id || "", telefono: c.telefono || "" })} style={{ background: "none", border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
-          <button onClick={() => borrarC(c.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, width: 30, height: 30, fontSize: 13, cursor: "pointer" }}>✕</button>
+          <button onClick={() => borrarC(c.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, width: 30, height: 30, fontSize: 13, cursor: "pointer" }}>✕</button>
         </div>
       </Card>))}
       <button onClick={nuevoC} style={{ width: "100%", background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, marginBottom: 20, cursor: "pointer" }}>＋ Agregar contacto de WhatsApp</button>
@@ -3310,9 +3364,9 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{p.nombre}</div>
             <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {nomObra(p.obra_id)}{p.telefono ? ` · ${p.telefono}` : ""}</div>
-            {(p.sitios || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>{p.sitios.map((s, i) => <span key={i} style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", background: "#ECFDF5", borderRadius: 5, padding: "2px 6px" }}>✓ {s.sitio}</span>)}</div>}
+            {(p.sitios || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 5 }}>{p.sitios.map((s, i) => <span key={i} style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", background: "rgba(22,163,74,.14)", borderRadius: 5, padding: "2px 6px" }}>✓ {s.sitio}</span>)}</div>}
           </div>
-          {vc > 0 ? <Badge c="#EF4444" b="#FEF2F2">{vc} vence</Badge> : docn > 0 ? <Badge c="#16A34A" b="#ECFDF5">{docn} doc</Badge> : <Badge c="#94A3B8" b="#F8FAFC">s/doc</Badge>}
+          {vc > 0 ? <Badge c="#EF4444" b="rgba(239,68,68,.10)">{vc} vence</Badge> : docn > 0 ? <Badge c="#16A34A" b="rgba(22,163,74,.14)">{docn} doc</Badge> : <Badge c="#94A3B8" b="rgba(255,255,255,.04)">s/doc</Badge>}
         </div>
       </Card>); })}
     </div>
@@ -3328,7 +3382,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
           <div><div style={{ fontSize: 13, fontWeight: 700, color: T.text, textTransform: "uppercase" }}>{k}</div>{d?.vence && <div style={{ fontSize: 11, color: dias != null && dias <= 15 ? "#EF4444" : T.muted }}>Vence {d.vence}{dias != null ? ` (${dias < 0 ? "vencido" : dias + " d"})` : ""}</div>}</div>
           {d?.url && <a href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 11px", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Ver</a>}
         </div>); })}
-        {(detalle.sitios || []).length > 0 && <><Eyebrow T={T}>Sitios cargados</Eyebrow><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{detalle.sitios.map((s, i) => <span key={i} style={{ fontSize: 11, fontWeight: 700, color: "#16A34A", background: "#ECFDF5", borderRadius: 6, padding: "5px 10px" }}>✓ {s.sitio} · {s.fecha}</span>)}</div></>}
+        {(detalle.sitios || []).length > 0 && <><Eyebrow T={T}>Sitios cargados</Eyebrow><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{detalle.sitios.map((s, i) => <span key={i} style={{ fontSize: 11, fontWeight: 700, color: "#16A34A", background: "rgba(22,163,74,.14)", borderRadius: 6, padding: "5px 10px" }}>✓ {s.sitio} · {s.fecha}</span>)}</div></>}
       </div>
     </div>}
 
@@ -3345,7 +3399,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
             <span style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>Personal ({sel.length} sel.)</span>
             <button onClick={() => setSel(sel.length === lista.length ? [] : lista.map(p => p.id))} style={{ background: "none", border: "none", color: T.accent, fontSize: 12, fontWeight: 700 }}>{sel.length === lista.length ? "Ninguno" : "Todos"}</button>
           </div>
-          {lista.map(p => <div key={p.id} onClick={() => toggle(p.id)} style={{ display: "flex", alignItems: "center", gap: 11, background: sel.includes(p.id) ? "#EAEEF3" : T.bg, border: `1px solid ${sel.includes(p.id) ? T.accent : T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+          {lista.map(p => <div key={p.id} onClick={() => toggle(p.id)} style={{ display: "flex", alignItems: "center", gap: 11, background: sel.includes(p.id) ? "rgba(255,255,255,.08)" : T.bg, border: `1px solid ${sel.includes(p.id) ? T.accent : T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
             <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${sel.includes(p.id) ? T.accent : T.border}`, background: sel.includes(p.id) ? T.accent : "transparent", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0 }}>{sel.includes(p.id) ? "✓" : ""}</div>
             <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{p.nombre}</div><div style={{ fontSize: 11, color: T.muted }}>{p.rol || "—"} · {nomObra(p.obra_id)}</div></div>
           </div>)}
@@ -3355,7 +3409,7 @@ function PersonalScreen({ T, cfg, personal, setPersonal, obras, contactos = [], 
           <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Nómina lista para enviar a la administración del barrio.</div>
           <pre style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px", fontSize: 12, color: T.text, whiteSpace: "pre-wrap", fontFamily: "inherit", lineHeight: 1.6 }}>{nomina}</pre>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button onClick={() => copiar(nomina)} style={{ flex: 1, background: "#EAEEF3", color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700 }}>Copiar nómina</button>
+            <button onClick={() => copiar(nomina)} style={{ flex: 1, background: "rgba(255,255,255,.08)", color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700 }}>Copiar nómina</button>
             <PBtn T={T} onClick={() => { setCargar(false); setNomina(null); }} style={{ flex: 1 }}>Listo</PBtn>
           </div>
         </>}
@@ -3411,7 +3465,7 @@ function docBelfast(cfg, obraNombre, titulo, subtitulo, bloques, fotos) {
   </body></html>`;
 }
 
-function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, cfg = {}, envios = {}, setEnvios }) {
+function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem = {}, avance = {}, cfg = {}, envios = {}, setEnvios }) {
   const [avAbierto, setAvAbierto] = React.useState(null);
   const [docAbierto, setDocAbierto] = React.useState(null);   // el informe armado, con logos
   // Arma el documento con la marca de Belfast y lo deja disponible para el
@@ -3430,10 +3484,105 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, 
     alert("Listo: el propietario ya lo puede ver en su panel.");
   }
   const [certAbierto, setCertAbierto] = React.useState(null);
+  const [semAbierto, setSemAbierto] = React.useState(null);
   const [filtro, setFiltro] = useState("");
   const [open, setOpen] = useState(null);
   const [verForm, setVerForm] = useState(null);
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
+  const _escIS = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const fmtFechaIS = (iso) => { if (!iso) return ""; const [a, m, d] = String(iso).split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso); };
+  function buildPdfInformeSemanal(rep, obraNombre) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const li = (arr) => (arr && arr.length) ? `<ul>${arr.map(x => `<li>${_escIS(x)}</li>`).join("")}</ul>` : `<div class="vacio">— sin registros —</div>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
+      .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      ul { margin: 0 0 4px; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.6; margin-bottom: 3px; }
+      .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
+      .obs { font-size: 12px; line-height: 1.55; color: #1a2433; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
+      .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Informe semanal de obra</div></div>
+      <div class="barra"><div>Obra: <b>${_escIS(obraNombre || "")}</b></div><div>Semana: <b>${fmtFechaIS(rep.desde)} al ${fmtFechaIS(rep.hasta)}</b></div><div>Emitido: <b>${_escIS(rep.emitido || "")}</b></div></div>
+      <h2>Trabajos realizados esta semana</h2>${li(rep.hechos)}
+      <h2>Trabajos previstos para la próxima semana</h2>${li(rep.proxima)}
+      ${rep.obs ? `<h2>Observaciones</h2><div class="obs">${_escIS(rep.obs)}</div>` : ""}
+      <div class="foot">Generado por ${marca} · Informe semanal de obra.</div>
+    </div></body></html>`;
+  }
+  // Arma el Certificado semanal (con bitácora y fotos) al momento — ya no
+  // depende de que el PDF completo haya quedado guardado (eso era lo que
+  // pesaba de más y tiraba error 413 al guardar); ahora se rearma desde los
+  // datos crudos del certificado (av, bt), igual que hace V+V.
+  function buildPdfCertSemanal(d, obraNombre) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const vin = (t) => (t || "").split("\n").map(l => l.replace(/^[-•\s]+/, "").trim()).filter(Boolean);
+    const lista = (t, vacio) => { const it = vin(t); return it.length ? `<ul>${it.map(x => `<li>${_escIS(x)}</li>`).join("")}</ul>` : `<div class="vacio">${vacio}</div>`; };
+    const visual = (d.av || []).map(h => { const fs = (h.fotos && h.fotos.length) ? h.fotos : (h.fotoUrl ? [h.fotoUrl] : []); return `<div class="ent"><div class="fecha">${_escIS(h.fecha)}</div>${fs.length ? `<div class="fotos">${fs.map(u => `<img src="${u}" />`).join("")}</div>` : ""}<div class="txt">${_escIS(h.avance || h.descripcion || "")}</div></div>`; }).join("") || `<div class="vacio">Sin registros visuales en la semana</div>`;
+    const bita = (d.bt || []).length ? `<table><tr><th>Fecha</th><th>Hecho</th><th>Detalle</th></tr>${d.bt.map(h => `<tr><td>${_escIS(fmtFechaIS(h.fecha))}</td><td>${_escIS(h.titulo || "")}</td><td>${_escIS(h.desc || "")}</td></tr>`).join("")}</table>` : `<div class="vacio">Sin registros de bitácora en la semana</div>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
+      .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      .parr { font-size: 12.5px; line-height: 1.6; text-align: justify; }
+      ul { margin: 0; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.55; margin-bottom: 3px; }
+      .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
+      table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+      th { background: rgba(255,255,255,.06); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
+      .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+      .fecha { font-size: 12.5px; font-weight: 800; color: #B0894F; margin-bottom: 7px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+      .fotos img { width: calc(50% - 3px); max-height: 240px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
+      .fotos img:only-child { width: 100%; max-height: 320px; }
+      .txt { font-size: 12px; line-height: 1.5; page-break-inside: avoid; break-inside: avoid; }
+      .foot { margin-top: 20px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Certificado semanal de avance</div></div>
+      <div class="barra"><div>Obra: <b>${_escIS(obraNombre || "")}</b></div><div>Semana: <b>${fmtFechaIS(d.desde)} al ${fmtFechaIS(d.hasta)}</b></div><div>Emitido: <b>${_escIS(d.emitido || "")}</b></div></div>
+      <h2>Desarrollo de la semana</h2><div class="parr">${_escIS(d.desarrollo)}</div>
+      <h2>Recepción de materiales y documentación</h2>${lista(d.recepciones, "Sin registros en la semana")}
+      <h2>Orden, limpieza y protección del personal</h2>${lista(d.limpieza, "Sin fotos para evaluar en la semana")}
+      <h2>Recepción de documentación y elementos de protección</h2>
+      ${(d.recepEstado || []).length ? `<table><tr><th>Rubro</th><th style="width:74px">Recibido</th><th>Pendiente</th></tr>
+        ${(d.recepEstado || []).map(g => `<tr><td>${_escIS(g.cat)}</td><td style="text-align:center;font-weight:700;color:${g.ok === g.total ? "#15803D" : "#B45309"}">${g.ok}/${g.total}</td><td>${g.faltan.length ? _escIS(g.faltan.join(", ")) : "—"}</td></tr>`).join("")}</table>`
+        : `<div class="vacio">No se cargó el checklist de recepción para esta obra.</div>`}
+      <h2>Pendientes y alertas</h2>${lista(d.alertas, "Sin alertas")}
+      <h2>Registro visual del avance</h2>${visual}
+      <h2>Bitácora de la semana</h2>${bita}
+      <div class="foot">Generado por ${marca} · Certificado semanal de avance de obra.</div>
+    </div></body></html>`;
+  }
+  // Todos los informes semanales de todas las obras (o de la filtrada),
+  // del más nuevo al más viejo — mismo criterio que los certificados.
+  const informesSemTodos = obras.flatMap(o => ((informesSem || {})[o.id] || []).map(r => ({ ...r, _obra: o.nombre, _obraId: o.id })))
+    .filter(r => !filtro || r._obraId === filtro)
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const forms = (formularios || []).filter(f => f.compartido && (!filtro || f.obra_id === filtro)).sort((a, b) => (b.id > a.id ? 1 : -1));
   const todos = obras.flatMap(o => (o.informes || []).map(inf => ({ ...inf, obra: o.nombre, obra_id: o.id }))).filter(inf => !filtro || inf.obra_id === filtro).sort((a, b) => (b.id > a.id ? 1 : -1));
   // Todos los certificados semanales, de todas las obras (o de la filtrada),
@@ -3464,32 +3613,43 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, 
         <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 2px" }}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
       </div>
 
-      {/* Certificados semanales emitidos por V+V — sólo lectura */}
+      {/* Informes semanales de obra — el texto de "trabajos realizados/previstos", distinto del certificado semanal */}
+      {informesSemTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Informes semanales de obra</div>
+        {informesSemTodos.map(r => { const isOpen = semAbierto?.id === r.id; return (<div key={r.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7 }}>
+          <div onClick={() => setSemAbierto(isOpen ? null : r)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>Semana {fFechaCorta(r.desde)} al {fFechaCorta(r.hasta)}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{r._obra} · {(r.hechos || []).length} trabajo{(r.hechos || []).length === 1 ? "" : "s"} realizado{(r.hechos || []).length === 1 ? "" : "s"} · emitido {r.emitido}</div>
+            </div>
+            <span style={{ color: T.muted, fontSize: 11 }}>{isOpen ? "▲" : "▼"}</span>
+          </div>
+          {isOpen && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Trabajos realizados</div>
+            {(r.hechos || []).length ? <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>{r.hechos.map((h, i) => <li key={i} style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, marginBottom: 3 }}>{h}</li>)}</ul> : <div style={{ fontSize: 12, color: T.muted, fontStyle: "italic", marginBottom: 10 }}>— sin registros —</div>}
+            <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Trabajos previstos</div>
+            {(r.proxima || []).length ? <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>{r.proxima.map((h, i) => <li key={i} style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, marginBottom: 3 }}>{h}</li>)}</ul> : <div style={{ fontSize: 12, color: T.muted, fontStyle: "italic", marginBottom: 10 }}>— sin registros —</div>}
+            {r.obs && <><div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Observaciones</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: 4 }}>{r.obs}</div></>}
+            <button onClick={() => setDocAbierto({ html: buildPdfInformeSemanal(r, r._obra), titulo: `Informe semanal ${fFechaCorta(r.desde)} al ${fFechaCorta(r.hasta)}` })} style={{ marginTop: 8, background: "none", border: `1px solid ${BRASS}`, color: BRASS, borderRadius: 8, padding: "8px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Ver PDF</button>
+          </div>}
+        </div>); })}
+      </div>}
+
+      {/* Certificados semanales emitidos por V+V — sólo lectura. El PDF se arma
+          al momento (buildPdfCertSemanal), no depende de que haya quedado
+          guardado un c.html — por eso ahora TODOS muestran "Ver informe",
+          no solo el que por casualidad tenía el PDF viejo guardado. */}
       {certsTodos.length > 0 && <div style={{ padding: "0 18px", marginBottom: 6 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 8px" }}>Certificados semanales de avance</div>
-        {certsTodos.map(c => (<div key={c.id} onClick={() => c.html ? setDocAbierto({ html: c.html, titulo: `Certificado ${fFechaCorta(c.desde)} al ${fFechaCorta(c.hasta)}` }) : setCertAbierto(certAbierto?.id === c.id ? null : c)} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
+        {certsTodos.map(c => (<div key={c.id} onClick={() => setDocAbierto({ html: c.html || buildPdfCertSemanal(c, c._obra), titulo: `Certificado ${fFechaCorta(c.desde)} al ${fFechaCorta(c.hasta)}` })} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>Semana {fFechaCorta(c.desde)} al {fFechaCorta(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{c._obra} · {(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
-              {c.html && <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>}
-              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(c._obraId, c._obra, c, "cert"); }} style={{ background: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#DCFCE7" : BRASS, border: "none", color: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "✓ Enviado" : "→ Propietario"}</button>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>
+              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(c._obraId, c._obra, { ...c, html: c.html || buildPdfCertSemanal(c, c._obra) }, "cert"); }} style={{ background: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "rgba(22,163,74,.18)" : BRASS, border: "none", color: ((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[c._obraId] || []).some(x => x.id === c.id) ? "✓ Enviado" : "→ Propietario"}</button>
           </div>
-          {certAbierto?.id === c.id && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
-            {[["Desarrollo", c.desarrollo], ["Recepciones", c.recepciones], ["Limpieza y seguridad", c.limpieza], ["Alertas", c.alertas]].map(([lbl, txt]) => txt ? (
-              <div key={lbl} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{lbl}</div>
-                <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{txt}</div>
-              </div>) : null)}
-            {(c.av || []).some(a => (a.fotos || []).length || a.fotoUrl) && <div style={{ marginTop: 4 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 }}>Fotos de la semana</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5 }}>
-                {(c.av || []).flatMap(a => (a.fotos && a.fotos.length) ? a.fotos : (a.fotoUrl ? [a.fotoUrl] : [])).map((u, i) => (
-                  <a key={i} href={u} target="_blank" rel="noreferrer" style={{ display: "block", borderRadius: 7, overflow: "hidden", border: `1px solid ${T.border}` }}><img src={u} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} /></a>))}
-              </div>
-            </div>}
-          </div>}
         </div>))}
       </div>}
 
@@ -3500,11 +3660,11 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, 
           <div key={a.id} onClick={() => setDocAbierto({ html: a.html, titulo: `Informe de avance ${a.fecha}` })} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7, cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{a.fecha}{a.avance ? ` — ${a.avance}` : ""}</div>
                 <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{a._obra}{fs.length ? ` · ${fs.length} foto${fs.length > 1 ? "s" : ""}` : ""}</div>
               </div>
               <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, flexShrink: 0, background: T.accentLight, borderRadius: 6, padding: "5px 9px" }}>Ver informe</div>
-              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(a._obraId, a._obra, a, "av"); }} style={{ background: ((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "#DCFCE7" : BRASS, border: "none", color: ((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "✓ Enviado" : "→ Propietario"}</button>
+              <button onClick={e => { e.stopPropagation(); mandarAlPropietario(a._obraId, a._obra, a, "av"); }} style={{ background: ((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "rgba(22,163,74,.18)" : BRASS, border: "none", color: ((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "#166534" : "#fff", borderRadius: 6, padding: "5px 9px", fontSize: 10.5, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{((envios || {})[a._obraId] || []).some(x => x.id === a.id) ? "✓ Enviado" : "→ Propietario"}</button>
             </div>
             {avAbierto?.id === a.id && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }} onClick={e => e.stopPropagation()}>
               {a.descripcion && <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap", marginBottom: fs.length ? 9 : 0 }}>{a.descripcion}</div>}
@@ -3529,7 +3689,7 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, 
       {todos.map(inf => (<Card T={T} key={inf.id} style={{ padding: 13, marginBottom: 9 }}>
         <div onClick={() => setOpen(inf)} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{inf.titulo || "Informe"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{inf.obra} · {inf.fecha}{(inf.archivos || []).length ? ` · ${(inf.archivos || []).length} adj.` : ""}</div></div>
-          <Badge c={inf.tipo === "ia" ? "#8B5CF6" : "#3B82F6"} b={inf.tipo === "ia" ? "#F5F3FF" : "#EFF6FF"}>{inf.tipo === "ia" ? "IA" : "Técnico"}</Badge>
+          <Badge c={inf.tipo === "ia" ? "#8B5CF6" : "#3B82F6"} b={inf.tipo === "ia" ? "rgba(139,92,246,.14)" : "rgba(37,99,235,.14)"}>{inf.tipo === "ia" ? "IA" : "Técnico"}</Badge>
         </div>
       </Card>))}
     </div>
@@ -3549,13 +3709,25 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, avance = {}, 
 function FormulariosScreen({ T, obras, formularios = [] }) {
   const [filtro, setFiltro] = useState("");
   const [verForm, setVerForm] = useState(null);
+  const [certConformidad] = useStored("vv_cert_conformidad", []);
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const forms = (formularios || []).filter(f => f.compartido && (!filtro || f.obra_id === filtro)).sort((a, b) => (b.id > a.id ? 1 : -1));
+  const certs = (certConformidad || []).filter(c => !filtro || c.obra_id === filtro).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "16px 20px" }}>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Obra</label>
       <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 16px" }}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
-      <Eyebrow T={T}>Formularios recibidos de V+V</Eyebrow>
+
+      <Eyebrow T={T}>Certificados de conformidad de etapas</Eyebrow>
+      {certs.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12, padding: "14px 4px", lineHeight: 1.5 }}>Todavía no hay certificados de conformidad cargados.</div>}
+      {certs.map(c => (<Card T={T} key={c.id} style={{ padding: 12, marginBottom: 8, borderLeft: `3px solid ${BRASS}` }}>
+        <a href={c.url} target="_blank" rel="noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, textDecoration: "none" }}>
+          <div style={{ minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{c.nombre}</div><div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{nomObra(c.obra_id)} · {c.fecha}{c.auditor ? ` · Auditor: ${c.auditor}` : ""}</div></div>
+          <span style={{ color: T.accent, fontWeight: 700, fontSize: 11, flexShrink: 0 }}>Ver →</span>
+        </a>
+      </Card>))}
+
+      <div style={{ marginTop: 18 }}><Eyebrow T={T}>Formularios recibidos de V+V</Eyebrow></div>
       {forms.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "34px 18px", lineHeight: 1.55 }}>Todavía no recibiste formularios de V+V.<br />Cuando V+V comparta un formulario, aparece acá.</div>}
       {forms.map(f => { const tpl = FORM_TPLS.find(t => t.id === f.tplId); return (<Card T={T} key={f.id} style={{ padding: 13, marginBottom: 9, borderLeft: `3px solid ${BRASS}` }}>
         <div onClick={() => setVerForm({ f, tpl, obra: nomObra(f.obra_id) })} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
@@ -3784,7 +3956,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
       </div>
 
       {grupos.map(g => (<div key={g.rubro} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 13, marginBottom: 10 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{g.rubro}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 8 }}>{g.rubro}</div>
         {g.items.map(it => (<div key={it.id} style={{ padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.tiene ? "#16A34A" : T.border}`, background: it.tiene ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.tiene ? "✓" : ""}</button>
@@ -3809,7 +3981,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
       {/* ── Google Form ── */}
       <div style={{ border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.card }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gformCfg ? 10 : (reg?.formId ? 10 : 0) }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}><Ico n="list" /> Formulario para el jefe de obra</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}><Ico n="list" /> Formulario para el jefe de obra</div>
           <button onClick={() => setGformCfg(v => !v)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, color: T.sub, cursor: "pointer" }}>⚙︎ {gformUrl ? "Configurado" : "Configurar"}</button>
         </div>
 
@@ -3832,7 +4004,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
 
       {/* observaciones del jefe (de las respuestas del form) */}
       {reg?.gformObs && Object.keys(reg.gformObs).some(k => reg.gformObs[k]) && <div style={{ border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.al }}>
-        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.navy, marginBottom: 6 }}>Observaciones del jefe de obra</div>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.text, marginBottom: 6 }}>Observaciones del jefe de obra</div>
         {Object.keys(reg.gformObs).filter(k => reg.gformObs[k]).map(k => (
           <div key={k} style={{ fontSize: 12, color: T.text, marginBottom: 4, lineHeight: 1.4 }}><b>{k}:</b> {reg.gformObs[k]}</div>
         ))}
@@ -3931,7 +4103,7 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
   // Estado del pedido de información (definiciones y planos): cuánto hace que espera
   // y cuándo V+V registró la recepción.
   const diasDe = (p) => { const t0 = p.ts || 0; return t0 ? Math.max(0, Math.floor((Date.now() - t0) / 86400000)) : 0; };
-  const alertaDe = (p) => { const d = diasDe(p); if (d >= 5) return { txt: `⚠ Vencido — ${d} días sin respuesta`, color: "#B91C1C", bg: "#FEF2F2", bd: "#FECACA" }; if (d >= 3) return { txt: `⏳ ${d} días esperando`, color: "#B45309", bg: "#FFFBEB", bd: "#FDE68A" }; return { txt: d === 0 ? "Pedido hoy" : d === 1 ? "1 día esperando" : `${d} días esperando`, color: "#1B3A5B", bg: "#EFF6FF", bd: "#DBEAFE" }; };
+  const alertaDe = (p) => { const d = diasDe(p); if (d >= 5) return { txt: `⚠ Vencido — ${d} días sin respuesta`, color: "#B91C1C", bg: "rgba(239,68,68,.10)", bd: "rgba(239,68,68,.30)" }; if (d >= 3) return { txt: `⏳ ${d} días esperando`, color: "#B45309", bg: "rgba(180,83,9,.14)", bd: "rgba(180,83,9,.30)" }; return { txt: d === 0 ? "Pedido hoy" : d === 1 ? "1 día esperando" : `${d} días esperando`, color: "#1B3A5B", bg: "rgba(37,99,235,.14)", bd: "#DBEAFE" }; };
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const [waFor, setWaFor] = useState(null);
   function marcarEnviado(id) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
@@ -3992,7 +4164,7 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
         <button key={k} onClick={() => setVistaMat(k)} style={{ flex: 1, background: vistaMat === k ? T.navy : "transparent", color: vistaMat === k ? "#fff" : T.sub, border: `1px solid ${vistaMat === k ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
       ))}
     </div>
-    {(infoPend.length > 0 || infoOk.length > 0) && <div style={{ margin: "14px 16px 0", background: infoVenc.length ? "#FEF2F2" : "#fff", border: `1px solid ${infoVenc.length ? "#FECACA" : T.border}`, borderLeft: `3px solid ${infoVenc.length ? "#B91C1C" : BRASS}`, borderRadius: 10, padding: "11px 13px" }}>
+    {(infoPend.length > 0 || infoOk.length > 0) && <div style={{ margin: "14px 16px 0", background: infoVenc.length ? "rgba(239,68,68,.10)" : "#fff", border: `1px solid ${infoVenc.length ? "rgba(239,68,68,.30)" : T.border}`, borderLeft: `3px solid ${infoVenc.length ? "#B91C1C" : BRASS}`, borderRadius: 10, padding: "11px 13px" }}>
       <div style={{ fontSize: 12.5, fontWeight: 800, color: infoVenc.length ? "#B91C1C" : T.navy }}>
         {infoVenc.length ? `⚠ ${infoVenc.length} pedido(s) de información vencido(s)` : infoPend.length ? `${infoPend.length} pedido(s) de información pendiente(s)` : "Sin pedidos de información pendientes"}
       </div>
@@ -4031,13 +4203,13 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
           {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 5, fontStyle: "italic" }}>{p.nota}</div>}
           <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 6, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado${p.leidoFecha ? " · " + p.leidoFecha : ""}` : "● Sin levantar"}</div>
           {p.tipo !== "material" && (p.cumplido
-            ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Recepción registrada{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
+            ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "rgba(22,163,74,.14)", border: "1px solid rgba(22,163,74,.30)", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Recepción registrada{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
             : (() => { const a = alertaDe(p); return <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: a.color, background: a.bg, border: `1px solid ${a.bd}`, borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>{a.txt}</div>; })())}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 11 }}>
-          <button onClick={() => levantar(p.id, !p.leido)} style={{ flex: 1, background: p.leido ? T.bg : "#ECFDF5", color: p.leido ? T.sub : "#15803D", border: `1px solid ${p.leido ? T.border : "#A7F3D0"}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{p.leido ? "↩ Marcar sin levantar" : "✓ Levantar pedido"}</button>
+          <button onClick={() => levantar(p.id, !p.leido)} style={{ flex: 1, background: p.leido ? T.bg : "rgba(22,163,74,.14)", color: p.leido ? T.sub : "#15803D", border: `1px solid ${p.leido ? T.border : "rgba(22,163,74,.30)"}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{p.leido ? "↩ Marcar sin levantar" : "✓ Levantar pedido"}</button>
           <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> WhatsApp</button>
-          <button onClick={() => { if (confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) aplicarMats(setMatpedidos, prev => (prev || []).filter(x => x.id !== p.id)); }} style={{ background: "none", border: "1px solid #FCA5A5", color: "#EF4444", borderRadius: T.rsm, padding: "10px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕</button>
+          <button onClick={() => { if (confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) aplicarMats(setMatpedidos, prev => (prev || []).filter(x => x.id !== p.id)); }} style={{ background: "none", border: "1px solid rgba(239,68,68,.35)", color: "#EF4444", borderRadius: T.rsm, padding: "10px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
         {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 5 }}><Ico n="send" /> Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
         {waFor === p.id && <div style={{ marginTop: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
@@ -4100,7 +4272,7 @@ const FERIADOS = new Set([
 const _isoDe = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(cur))) n++; } return n; }
 function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaReal || new Date(); const dias = diasHabiles(fechaSolic, fin); const desvio = dias - plazo; let estado; if (fechaReal || cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo"; else estado = desvio <= 0 ? "En plazo" : "Vencido"; return { dias, desvio, estado, retraso: Math.max(0, desvio) }; }
-const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "#ECFDF5" }, "En plazo": { c: "#3B82F6", b: "#EFF6FF" }, "Fuera de plazo": { c: "#F59E0B", b: "#FFFBEB" }, "Vencido": { c: "#EF4444", b: "#FEF2F2" } };
+const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "rgba(22,163,74,.14)" }, "En plazo": { c: "#3B82F6", b: "rgba(37,99,235,.14)" }, "Fuera de plazo": { c: "#F59E0B", b: "rgba(180,83,9,.14)" }, "Vencido": { c: "#EF4444", b: "rgba(239,68,68,.10)" } };
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 
 /* ═══ CRONOGRAMAS (solo lectura, espejo de la app Cronograma de V+V) ═══
@@ -4136,7 +4308,7 @@ function CronogramaScreen(props) {
   catch (e) {
     const T = props.T || {};
     return (<div style={{ padding: "20px" }}>
-      <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, padding: 16 }}>
+      <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 12, padding: 16 }}>
         <div style={{ fontSize: 13.5, fontWeight: 800, color: "#B91C1C" }}>La pantalla de cronogramas tuvo un problema</div>
         <div style={{ fontSize: 12, color: "#991B1B", marginTop: 6, wordBreak: "break-word" }}>Error: {String(e && e.message || e)}</div>
         <div style={{ fontSize: 11, color: "#991B1B", marginTop: 6 }}>Sacale una captura a este mensaje y pasásela a Sebastián para corregirlo.</div>
@@ -4179,7 +4351,7 @@ function CronogramaScreenInner({ T, cfg, crono, gestion }) {
     const corr = (o.finBase && fin) ? crDiasEntre(o.finBase, fin) : null;
     return { o, tareas, fin, defsPend, venc, corr };
   } catch (e) { return { o, tareas: [], fin: "", defsPend: [], venc: [], corr: null, error: String(e && e.message || e) }; } }).filter(p => p && p.o);
-  const GEST_TAG = { punitorio: ["Punitorio", "#B91C1C", "#FEF2F2"], evaluacion: ["En evaluación", "#B45309", "#FFFBEB"], prorroga: ["Prórroga", "#2563EB", "#EFF6FF"], sin_perjuicio: ["Sin perjuicio", "#64748B", "#F1F5F9"] };
+  const GEST_TAG = { punitorio: ["Punitorio", "#B91C1C", "rgba(239,68,68,.10)"], evaluacion: ["En evaluación", "#B45309", "rgba(180,83,9,.14)"], prorroga: ["Prórroga", "#2563EB", "rgba(37,99,235,.14)"], sin_perjuicio: ["Sin perjuicio", "#64748B", "rgba(255,255,255,.06)"] };
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "16px 20px" }}>
       <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.55, marginBottom: 14 }}>El plan de cada obra: fechas planificadas, comprometidas y REALES, y las definiciones pendientes de {cfg?.nombre || "Belfast"} con su estado en Gestión. Responder a tiempo evita que un retraso pase a evaluación de punitorio.</div>
@@ -4193,16 +4365,16 @@ function CronogramaScreenInner({ T, cfg, crono, gestion }) {
               <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Fin estimado: {crFmt(fin)} · {tareas.length} tareas{corr !== null && corr > 0 ? <span style={{ color: "#B91C1C", fontWeight: 800 }}> · corrida +{corr} días</span> : ""}</div>
             </div>
             <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
-              {venc.length > 0 ? <Badge c="#B91C1C" b="#FEF2F2">{venc.length} vencida{venc.length > 1 ? "s" : ""}</Badge> : defsPend.length > 0 ? <Badge c="#B45309" b="#FFFBEB">{defsPend.length} pendiente{defsPend.length > 1 ? "s" : ""}</Badge> : <Badge c="#16A34A" b="#ECFDF5">al día</Badge>}
+              {venc.length > 0 ? <Badge c="#B91C1C" b="rgba(239,68,68,.10)">{venc.length} vencida{venc.length > 1 ? "s" : ""}</Badge> : defsPend.length > 0 ? <Badge c="#B45309" b="rgba(180,83,9,.14)">{defsPend.length} pendiente{defsPend.length > 1 ? "s" : ""}</Badge> : <Badge c="#16A34A" b="rgba(22,163,74,.14)">al día</Badge>}
               <span style={{ fontSize: 11, color: T.muted }}>{abierta ? "▲" : "▼"}</span>
             </div>
           </div>
           {abierta && <div style={{ borderTop: `1px solid ${T.border}`, padding: "4px 14px 13px" }}>
             {planes.find(p => p.o.id === o.id)?.error && <div style={{ fontSize: 11, color: "#B91C1C", marginTop: 10 }}>No pude calcular esta obra: {planes.find(p => p.o.id === o.id).error}</div>}
-            {corr !== null && corr > 0 && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 11px", marginTop: 10, fontSize: 11.5, color: "#991B1B", lineHeight: 1.5 }}>El fin de obra se corrió <b>+{corr} días (~{(corr / 30.44).toFixed(1)} meses)</b> respecto del plan original. Todo corrimiento adicional queda sujeto a redeterminación de precios sobre el saldo del contrato.</div>}
+            {corr !== null && corr > 0 && <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 10, padding: "10px 11px", marginTop: 10, fontSize: 11.5, color: "#991B1B", lineHeight: 1.5 }}>El fin de obra se corrió <b>+{corr} días (~{(corr / 30.44).toFixed(1)} meses)</b> respecto del plan original. Todo corrimiento adicional queda sujeto a redeterminación de precios sobre el saldo del contrato.</div>}
             {defsPend.length > 0 && <>
               <div style={{ fontSize: 10.5, fontWeight: 800, color: "#B91C1C", textTransform: "uppercase", letterSpacing: ".05em", marginTop: 10 }}>Definiciones a responder</div>
-              {defsPend.map(d => { const tag = d.gest ? GEST_TAG[d.gest] : null; return (<div key={d.id} style={{ background: d.estado === "vencida" ? "#FEF2F2" : d.estado === "urgente" ? "#FFFBEB" : T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 11px", marginTop: 7 }}>
+              {defsPend.map(d => { const tag = d.gest ? GEST_TAG[d.gest] : null; return (<div key={d.id} style={{ background: d.estado === "vencida" ? "rgba(239,68,68,.10)" : d.estado === "urgente" ? "rgba(180,83,9,.14)" : T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 11px", marginTop: 7 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{d.nombre}</div>
@@ -4219,7 +4391,7 @@ function CronogramaScreenInner({ T, cfg, crono, gestion }) {
             {tareas.map(t => (<div key={t.id} style={{ padding: "8px 0", borderBottom: `1px solid ${T.bg}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, minWidth: 0, flex: 1 }}>{t.nombre}{t.critica && <span style={{ fontSize: 9, color: "#B91C1C", fontWeight: 800, marginLeft: 6 }}>CRÍTICA</span>}</div>
-                {crNum(t.avance) > 0 && <Badge c="#16A34A" b="#ECFDF5">{crNum(t.avance)}%</Badge>}
+                {crNum(t.avance) > 0 && <Badge c="#16A34A" b="rgba(22,163,74,.14)">{crNum(t.avance)}%</Badge>}
               </div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>Plan: {crFmt(t.vvInicio)} → {crFmt(t.vvFin)}{t.bfInicio && t.bfFin ? ` · Comprometido: ${crFmt(t.bfInicio)} → ${crFmt(t.bfFin)}` : ""}</div>
               {t.realInicio && <div style={{ fontSize: 10.5, color: T.text, fontWeight: 700, marginTop: 1 }}>Real: {crFmt(t.realInicio)}{t.realFin ? ` → ${crFmt(t.realFin)}` : " → en curso"}{t.desvRealIni > 0 ? <span style={{ color: "#B91C1C" }}> · arrancó +{t.desvRealIni}d</span> : null}{t.desvReal !== null && t.desvReal !== 0 ? <span style={{ color: t.desvReal > 0 ? "#B91C1C" : "#16A34A" }}> · terminó {t.desvReal > 0 ? "+" : ""}{t.desvReal}d</span> : null}</div>}
@@ -4292,7 +4464,7 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
   const grp = n => confirmados.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
   const perjB = grp(cli), perjVV = grp("V+V"), perjE = grp("Estudio"), perjT = perjB + perjVV + perjE;
   const cnt = e => items.filter(i => i.estado === e).length;
-  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "#FEF2F2" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "#F1F5F9" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "#EFF6FF" } };
+  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
   const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
 
   const ItemCard = ({ it }) => {
@@ -4309,7 +4481,7 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end", flexShrink: 0 }}>
           <Badge c={e.c} b={e.b}>{it.estado}</Badge>
           {db2 && <Badge c={db2.c} b={db2.b}>{db2.t}</Badge>}
-          {!it.dec && esVencido(it) && <Badge c="#B45309" b="#FFFBEB">En evaluación</Badge>}
+          {!it.dec && esVencido(it) && <Badge c="#B45309" b="rgba(180,83,9,.14)">En evaluación</Badge>}
         </div>
       </div>
     </Card>);
@@ -4317,7 +4489,7 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "14px 20px 0" }}>
-      <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? "#EAEEF3" : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700 }}>{l}</button>)}</div>
+      <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? "rgba(255,255,255,.08)" : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700 }}>{l}</button>)}</div>
     </div>
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
       <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Desempeño medido sobre los pedidos (plazo {g.plazo} días háb.).</div>
@@ -4383,30 +4555,68 @@ function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
   });
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
-      <div style={{ background: T.navy, color: "#fff" }}>
-        <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", padding: "6px 16px", display: "flex", justifyContent: "center", alignItems: "center" }}>
+      <div style={{ background: T.navy, color: "#fff", paddingTop: "env(safe-area-inset-top)" }}>
+        <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", padding: "10px 16px", display: "flex", justifyContent: "center", alignItems: "center" }}>
           <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: BRASS, whiteSpace: "nowrap" }}>Panel de Cliente</span>
         </div>
-      </div>
-      <div style={{ background: T.card, borderBottom: `1px solid ${T.border}` }}>
-        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "12px 24px 2px", display: "flex", justifyContent: "center" }}>
-          <div onClick={() => setScreen("obras")} style={{ display: "flex", alignItems: "center", gap: 11, cursor: "pointer" }}>
-            {cfg.logo ? <img src={cfg.logo} alt="" style={{ maxHeight: 46, maxWidth: 240, objectFit: "contain" }} />
-              : <><div style={{ width: 44, height: 44, background: T.navy, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 800, borderBottom: `2px solid ${BRASS}` }}>{(cfg.sigla || "C").slice(0, 3)}</div>
-                <div style={{ lineHeight: 1.2, textAlign: "left" }}><div style={{ fontSize: 15, fontWeight: 800, color: T.text, letterSpacing: "0.04em" }}>{cfg.nombre}</div><div style={{ fontSize: 8.5, color: T.muted, letterSpacing: "0.16em", textTransform: "uppercase", marginTop: 2 }}>Seguimiento de obra</div></div></>}
-          </div>
-        </div>
-        <nav style={{ maxWidth: 1180, margin: "0 auto", padding: "4px 12px 0", display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
-          {NAV.map(n => { const active = screen === n.id; const hayNuevo = badge(n.id) > 0; return (
-            <button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", background: "none", border: "none", padding: "9px 12px", fontSize: 12.5, fontWeight: (active || hayNuevo) ? 800 : 600, color: hayNuevo ? "#EF4444" : (active ? T.accent : T.sub), borderBottom: `2px solid ${active ? BRASS : "transparent"}`, whiteSpace: "nowrap", cursor: "pointer" }}>
-              {n.label}
-              {hayNuevo && <span style={{ position: "absolute", top: 2, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{badge(n.id)}</span>}
-            </button>); })}
-        </nav>
       </div>
       <div style={{ height: 2, background: BRASS }} />
     </header>
   );
+}
+// ── Menú inferior: los 5 accesos principales (los que se usan todo el
+// tiempo), fijo abajo, como una app de celular. El resto de las
+// secciones (IA, Informes, Cronogramas, Mensajes, Certificados,
+// Archivos, Personal, Gestión, Grabar reunión, Ajustes) vive en "Más".
+const BOTTOM_NAV = [
+  { id: "inicio", label: "Inicio" },
+  { id: "obras", label: "Obras" },
+  { id: "avance", label: "Avance" },
+  { id: "bitacora", label: "Bitácora" },
+  { id: "materiales", label: "Pedidos" },
+  { id: "auditoria", label: "Auditoría" },
+];
+const MAS_ITEMS = [
+  { id: "asistente", label: "IA" },
+  { id: "informes", label: "Informes" },
+  { id: "cronograma", label: "Cronogramas" },
+  { id: "mensajes", label: "Mensajes" },
+  { id: "formularios", label: "Certificados" },
+  { id: "archivos", label: "Archivos" },
+  { id: "personal", label: "Personal" },
+  { id: "gestion", label: "Gestión" },
+  { id: "minutas", label: "Grabar reunión" },
+  { id: "ajustes", label: "Ajustes" },
+];
+function BottomNav({ T, screen, setScreen, aviso }) {
+  const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);
+  const items = BOTTOM_NAV;
+  return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", paddingBottom: "calc(env(safe-area-inset-bottom) + 6px)" }}>
+    <div style={{ width: "100%", maxWidth: 1180, display: "flex" }}>
+      {items.map(n => {
+        const active = screen === n.id;
+        const hayNuevo = badge(n.id) > 0;
+        return (<button key={n.id} onClick={() => setScreen(n.id)} style={{ position: "relative", flex: 1, background: "none", border: "none", padding: "6px 4px 5px", fontSize: 10.5, fontWeight: (active || hayNuevo) ? 800 : 600, color: hayNuevo ? "#EF4444" : (active ? T.accent : T.sub), borderTop: `2px solid ${active ? BRASS : "transparent"}`, marginTop: -1, cursor: "pointer" }}>
+          {n.label}
+          {hayNuevo && <span style={{ position: "absolute", top: 4, right: "18%", background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 14, height: 14, fontSize: 8, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{badge(n.id)}</span>}
+        </button>);
+      })}
+    </div>
+  </nav>);
+}
+function MasScreen({ T, screen, setScreen, aviso }) {
+  const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+    <Eyebrow T={T}>Más</Eyebrow>
+    {MAS_ITEMS.map(it => { const n = badge(it.id); return (
+      <div key={it.id} onClick={() => setScreen(it.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 15px", marginBottom: 8, cursor: "pointer" }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{it.label}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {n > 0 && <span style={{ background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 17, height: 17, fontSize: 9.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{n}</span>}
+          <span style={{ color: T.muted, fontSize: 14 }}>›</span>
+        </div>
+      </div>); })}
+  </div>);
 }
 function WebClientHero({ T, cfg, obras }) {
   const activas = obras.filter(o => o.estado === "curso").length;
@@ -4430,9 +4640,84 @@ function WebClientHero({ T, cfg, obras }) {
 }
 function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "11px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 11 }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "6px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 10.5 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
       <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-fixavance</span>
+    </div>
+  </div>);
+}
+
+const LOGO_FALLBACK_HERO = "data:image/jpeg;base64,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";
+function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], onIr }) {
+  const [slideIdx, setSlideIdx] = useState(0);
+  // Rotan TODAS las obras en curso, tengan foto cargada o no — si a una
+  // le falta, se muestra igual (con un fondo liso) hasta que se le cargue.
+  const obrasEnCurso = (obras || []).filter(o => o.estado === "curso" || !o.estado);
+  const listaCarrusel = obrasEnCurso.length ? obrasEnCurso : (obras || []);
+  useEffect(() => {
+    if (listaCarrusel.length < 2) return;
+    const t = setInterval(() => setSlideIdx(i => (i + 1) % listaCarrusel.length), 4500);
+    return () => clearInterval(t);
+  }, [listaCarrusel.length]);
+  const obraActual = listaCarrusel[slideIdx % Math.max(listaCarrusel.length, 1)];
+  const renderActual = obraActual ? ((renders || {})[obraActual.id] || [])[0] : null;
+
+  // "Novedades recientes": conteos totales (no solo "hoy" — muchos registros
+  // no traen una marca de tiempo confiable, así que contar solo "hoy" los
+  // dejaba en cero aunque hubiera datos cargados). Solo las 3 categorías
+  // pedidas: Informes, Bitácoras, Certificados semanales.
+  const informesTotC = obras.flatMap(o => (((informesSem || {})[o.id]) || [])).length;
+  const avanceInfTotC = obras.flatMap(o => (((avance || {})[o.id]) || [])).filter(a => a.html).length;
+  const bitacoraTotC = (bitacora || []).length;
+  const certifTotC = obras.flatMap(o => (((certif || {})[o.id]) || [])).length;
+  const auditoriaTotC = (auditoria || []).length;
+  const mensajesTotC = (mensajes || []).filter(m => m.from && m.from !== "cliente").length;
+  const novedadesC = [
+    informesTotC > 0 && { n: informesTotC, txt: `Informe${informesTotC > 1 ? "s" : ""}`, ir: "informes" },
+    avanceInfTotC > 0 && { n: avanceInfTotC, txt: `Informe${avanceInfTotC > 1 ? "s" : ""} de avance`, ir: "informes" },
+    bitacoraTotC > 0 && { n: bitacoraTotC, txt: `Bitácora${bitacoraTotC > 1 ? "s" : ""}`, ir: "bitacora" },
+    certifTotC > 0 && { n: certifTotC, txt: `Certificado${certifTotC > 1 ? "s" : ""} semanal${certifTotC > 1 ? "es" : ""}`, ir: "informes" },
+    auditoriaTotC > 0 && { n: auditoriaTotC, txt: `Auditoría${auditoriaTotC > 1 ? "s" : ""}`, ir: "auditoria" },
+    mensajesTotC > 0 && { n: mensajesTotC, txt: `Recibiste ${mensajesTotC} mensaje${mensajesTotC > 1 ? "s" : ""} de V+V`, ir: "mensajes", full: true },
+  ].filter(Boolean);
+
+  return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
+    <div style={{ position: "relative", height: "38vh", minHeight: 260, maxHeight: 420, background: "#0d0d0f", overflow: "hidden" }}>
+      {renderActual
+        ? <img key={renderActual.url} src={renderActual.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, animation: "fadeIn .6s ease" }} />
+        : <div key={obraActual?.id || "sin-obra"} style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#0d0d0f,#1a1a1d)", animation: "fadeIn .6s ease", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <img src={LOGO_FALLBACK_HERO} alt="" style={{ width: "56%", maxWidth: 220, opacity: .5, filter: "grayscale(.2)" }} />
+          </div>}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
+      <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ width: cfg?.logoSize || 60, height: cfg?.logoSize || 60, borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "transparent" }}>
+          <img src={cfg?.logo || LOGO_FALLBACK_HERO} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </div>
+        <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
+      </div>
+      <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
+        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" }}>{cfg?.nombre || "Belfast"}</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
+      </div>
+      {listaCarrusel.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>
+        {listaCarrusel.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % listaCarrusel.length) ? BRASS : "rgba(255,255,255,.35)" }} />)}
+      </div>}
+    </div>
+    <div style={{ padding: "22px 22px 30px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1, color: "#fff" }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
+        <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,240,235,.45)", lineHeight: 1.3 }}>% de avance<br />general</div>
+      </div>
+      <div style={{ height: 1, background: "rgba(255,255,255,.1)", marginBottom: 18 }} />
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
+      {novedadesC.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
+      {novedadesC.map((n, i) => (<div key={i} onClick={() => onIr(n.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
+        <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
+      </div>))}
+      <div onClick={() => onIr("asistente")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
+        <div style={{ fontSize: 9, letterSpacing: ".12em", textTransform: "uppercase", color: "#D9B27C", fontWeight: 700 }}>✦ IA Belfast</div>
+        <div style={{ fontSize: 12, color: "rgba(242,240,235,.6)", marginTop: 5 }}>Pedile a la IA — buscar, subir fotos, cargar archivos a una obra…</div>
+      </div>
     </div>
   </div>);
 }
@@ -4440,8 +4725,8 @@ function WebClientFooter({ T, cfg }) {
 function ClienteApp() {
   useEffect(() => { if (FORCE_CLOUD) { try { history.replaceState(null, "", window.location.pathname); } catch { } } }, []);
   const [cfg, setCfg] = useStored("cliente_cfg", DEFAULT_CFG);
-  const T = theme(cfg.accent);
-  const [screen, setScreen] = useState("asistente");
+  const T = theme(cfg);
+  const [screen, setScreen] = useState("inicio");
   const [obrasRaw, setObras] = useStored("vv_obras", []);
   // Obras marcadas como "privada" en V+V no existen para Belfast: se filtran acá,
   // en el único lugar donde Cliente.jsx lee la lista completa.
@@ -4469,6 +4754,7 @@ function ClienteApp() {
   const [minutas, setMinutas] = useStored("cliente_minutas", []);
   const [renders, setRenders] = useStored("vv_renders", {});
   const [certifSem] = useStored("vv_certif_sem", {});
+  const [informesSem] = useStored("vv_informes_sem", {});
   // Lo que Belfast le manda al propietario, con la marca de Belfast.
   const [enviosProp, setEnviosProp] = useStored("cliente_envios_prop", {});
   const [contactos, setContactos] = useStored("cliente_contactos", []);
@@ -4684,30 +4970,32 @@ function ClienteApp() {
     <style>{css}</style>
     <Toast T={T} toast={toast} />
     <div style={{ width: "100%", height: "100dvh", background: "transparent", display: "flex", flexDirection: "column", position: "relative", color: T.text, overflow: "hidden" }}>
-      <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={irA} aviso={aviso} />
+      {screen !== "inicio" && <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={irA} aviso={aviso} />}
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
+          {screen === "inicio" && <InicioScreen T={T} cfg={cfg} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id) => irA(id)} />}
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
           {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
-          {screen === "auditoria" && <AuditoriaClienteView T={T} obras={obras} auditoria={auditoria} />}
+          {screen === "auditoria" && <AuditoriaClienteView T={T} obras={obras} auditoria={auditoria} cfg={cfg} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
-          {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
+          {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} informesSem={informesSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
           {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} renders={renders} setRenders={setRenders} />}
+          {screen === "mas" && <MasScreen T={T} screen={screen} setScreen={irA} aviso={aviso} />}
         </div>
       </div>
-      <WebClientFooter T={T} cfg={cfg} />
+      <BottomNav T={T} screen={screen} setScreen={irA} aviso={aviso} />
     </div>
     <SyncBanner />
     <div style={{ padding: "10px 16px 0" }}><GlobitoPermiso /></div>

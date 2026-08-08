@@ -255,19 +255,25 @@ async function cachePut(url, blob) {
 async function abrirArchivo(url, nombre) {
     if (!url) return { ok: false, motivo: "sin-url" };
     if (url.startsWith("data:")) { window.open(url, "_blank"); return { ok: true }; }
+    // Abrimos la pestaña ACÁ, antes de cualquier await: si se abre después de
+    // esperar la descarga, Safari/iOS ya no lo cuenta como un toque directo
+    // del usuario y bloquea la pestaña sin avisar — se ve como que "no pasa
+    // nada" al tocar el botón. Por eso abrimos en blanco primero y recién
+    // después le cargamos el contenido real.
+    const w = window.open("", "_blank");
     let blob = await cacheGet(url);
     let nuevo = false;
     if (!blob) {
-        if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, motivo: "sin-conexion" };
+        if (typeof navigator !== "undefined" && navigator.onLine === false) { if (w) w.close(); return { ok: false, motivo: "sin-conexion" }; }
         try {
             const r = await fetch(url);
             if (!r.ok) throw new Error("no se pudo traer");
             blob = await r.blob();
             nuevo = true;
-        } catch { return { ok: false, motivo: "sin-conexion" }; }
+        } catch { if (w) w.close(); return { ok: false, motivo: "sin-conexion" }; }
     }
     const objUrl = URL.createObjectURL(blob);
-    window.open(objUrl, "_blank");
+    if (w && !w.closed) { w.location = objUrl; } else { window.open(objUrl, "_blank"); }
     if (nuevo) cachePut(url, blob);
     return { ok: true, nuevo };
 }
@@ -377,6 +383,17 @@ function useStoredState(key, defaultValue) {
     });
     const [cloudSynced, setCloudSynced] = useState(false);
     const esObras = key === "vv_obras";   // las obras se editan desde varios dispositivos: acá hace falta FUSIONAR, no "gana el más nuevo entero" (eso tapaba obras que otro cargó)
+    // Para obras: la fusión con la nube es asíncrona (va a buscar lo último
+    // subido por otros dispositivos). Si se dispara en cada tecla tipeada
+    // (por ej. al escribir "En ejecución"), esos pedidos de red pueden
+    // resolverse fuera de orden y "pisar" con una versión vieja lo que se
+    // acaba de escribir — se ve como que el campo se borra solo. Por eso:
+    // 1) el guardado LOCAL es instantáneo en cada cambio (nunca se pierde
+    //    lo que se tipeó), y 2) la fusión con la nube se espera una pausa
+    //    de inactividad y se descarta si mientras tanto hubo una edición
+    //    más nueva.
+    const obrasPersistTimer = useRef(null);
+    const obrasPersistSeq = useRef(0);
 
     // Al montar: sincronizar con Supabase una sola vez
     useEffect(() => {
@@ -418,14 +435,18 @@ function useStoredState(key, defaultValue) {
     // Persiste cada vez que cambia el estado
     const setAndPersist = useCallback((updater) => {
         if (esObras) {
-            // Con obras: guardamos el cambio local al toque (para que se vea
-            // ya mismo), y en paralelo lo fusionamos con lo que haya en la
-            // nube — así lo que otro dispositivo cargó mientras tanto no
-            // se pierde. Lo que borraste acá queda con lápida, para que no
-            // "resucite" si otro dispositivo todavía tiene la copia vieja.
             setState(prev => {
                 const next = typeof updater === 'function' ? updater(prev) : updater;
-                (async () => {
+                // 1) Guardado local INSTANTÁNEO — lo que se ve en pantalla y lo
+                //    que queda en este dispositivo nunca depende de la red.
+                try { localStorage.setItem(key, JSON.stringify(next)); localStorage.setItem(key + "__ts", String(Date.now())); } catch { }
+                // 2) Fusión con la nube: se espera una pausa breve de inactividad
+                //    (para no disparar una por cada letra) y se numera cada
+                //    pedido — si al responder ya hay uno más nuevo en camino,
+                //    se descarta el resultado viejo en vez de aplicarlo.
+                const mySeq = ++obrasPersistSeq.current;
+                if (obrasPersistTimer.current) clearTimeout(obrasPersistTimer.current);
+                obrasPersistTimer.current = setTimeout(async () => {
                     try {
                         const idsPrev = new Set((prev || []).map(o => o?.id));
                         const idsNext = new Set((next || []).map(o => o?.id));
@@ -439,6 +460,7 @@ function useStoredState(key, defaultValue) {
                         let cloud = [];
                         try { const r = await storage.get(key); if (r?.value) cloud = JSON.parse(r.value) || []; } catch { }
                         const fusionado = fusionarObras(next, cloud, tumbas);
+                        if (mySeq !== obrasPersistSeq.current) return; // quedó vieja, se descarta
                         const json = JSON.stringify(fusionado);
                         const ts = Date.now();
                         lastWrite[key] = ts;
@@ -447,7 +469,7 @@ function useStoredState(key, defaultValue) {
                         storage.set(key + "__ts", String(ts)).catch(() => { });
                         setState(fusionado);
                     } catch { }
-                })();
+                }, 800);
                 return next;
             });
             return;
@@ -470,8 +492,8 @@ function useStoredState(key, defaultValue) {
 
 // ── CONSTANTES ─────────────────────────────────────────────────────────
 const AIRPORTS = [{ id: "norte", code: "NORTE", name: "Zona Norte" }, { id: "sur", code: "SUR", name: "Zona Sur" }];
-const LIC_ESTADOS = [{ id: "visitar", label: "A Visitar", color: "#F59E0B", bg: "#FFFBEB" }, { id: "presupuesto", label: "Presupuesto", color: "#3B82F6", bg: "#EFF6FF" }, { id: "curso", label: "En Curso", color: "#8B5CF6", bg: "#F5F3FF" }, { id: "presentada", label: "Presentada", color: "#F97316", bg: "#FFF7ED" }, { id: "adjudicada", label: "Adjudicada", color: "#10B981", bg: "#ECFDF5" }, { id: "descartada", label: "Descartada", color: "#EF4444", bg: "#FEF2F2" }];
-const OBRA_ESTADOS = [{ id: "pendiente", label: "Pendiente", color: "#94A3B8", bg: "#F8FAFC" }, { id: "curso", label: "En Curso", color: "#10B981", bg: "#ECFDF5" }, { id: "pausada", label: "Pausada", color: "#F59E0B", bg: "#FFFBEB" }, { id: "terminada", label: "Terminada", color: "#6366F1", bg: "#EEF2FF" }];
+const LIC_ESTADOS = [{ id: "visitar", label: "A Visitar", color: "#F59E0B", bg: "rgba(180,83,9,.14)" }, { id: "presupuesto", label: "Presupuesto", color: "#3B82F6", bg: "rgba(37,99,235,.14)" }, { id: "curso", label: "En Curso", color: "#8B5CF6", bg: "rgba(139,92,246,.14)" }, { id: "presentada", label: "Presentada", color: "#F97316", bg: "#FFF7ED" }, { id: "adjudicada", label: "Adjudicada", color: "#10B981", bg: "rgba(22,163,74,.14)" }, { id: "descartada", label: "Descartada", color: "#EF4444", bg: "rgba(239,68,68,.10)" }];
+const OBRA_ESTADOS = [{ id: "pendiente", label: "Pendiente", color: "#94A3B8", bg: "rgba(255,255,255,.04)" }, { id: "curso", label: "En Curso", color: "#10B981", bg: "rgba(22,163,74,.14)" }, { id: "pausada", label: "Pausada", color: "#F59E0B", bg: "rgba(180,83,9,.14)" }, { id: "terminada", label: "Terminada", color: "#6366F1", bg: "#EEF2FF" }];
 const ROLES = ["Jefe de Obra", "Capataz", "Técnico", "Proveedor", "Contratista", "Administrativo"];
 const DOC_TYPES = [{ id: "art", label: "ART", acceptsExp: true }, { id: "antec", label: "Antecedentes", acceptsExp: false }, { id: "preoc", label: "Preocupacional", acceptsExp: true }, { id: "dni", label: "DNI", acceptsExp: false }, { id: "sicop", label: "SiCoP", acceptsExp: false }, { id: "alta", label: "Alta Temprana", acceptsExp: false }];
 const LIC_DOC_TYPES = [{ id: "planos", label: "Planos", accept: ".pdf,.png,.jpg,.dwg,.zip" }, { id: "pliego", label: "Pliego", accept: ".pdf,.doc,.docx" }, { id: "excel", label: "Excel", accept: ".xlsx,.xls,.csv,.pdf" }, { id: "otros", label: "Otros", accept: "*" }];
@@ -488,11 +510,11 @@ function isDirectivo(user) {
 
 // ── TEMA ───────────────────────────────────────────────────────────────
 const THEME_PRESETS = [
-    { id: "azul", label: "Azul", accent: "#1D4ED8", al: "#EFF6FF", bg: "#F1F5F9", card: "#fff", border: "#E2E8F0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#0F172A" },
-    { id: "oscuro", label: "Oscuro", accent: "#60A5FA", al: "#172554", bg: "#0F172A", card: "#1E293B", border: "#334155", text: "#F1F5F9", sub: "#94A3B8", muted: "#475569", navy: "#020617" },
-    { id: "verde", label: "Verde", accent: "#16A34A", al: "#DCFCE7", bg: "#F0FDF4", card: "#fff", border: "#BBF7D0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#14532D" },
-    { id: "violeta", label: "Violeta", accent: "#7C3AED", al: "#F5F3FF", bg: "#FAF5FF", card: "#fff", border: "#E9D5FF", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#3B0764" },
-    { id: "rojo", label: "Rojo", accent: "#DC2626", al: "#FEF2F2", bg: "#FFF5F5", card: "#fff", border: "#FECACA", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#7F1D1D" },
+    { id: "azul", label: "Azul", accent: "#1D4ED8", al: "rgba(37,99,235,.14)", bg: "rgba(255,255,255,.06)", card: "#fff", border: "#E2E8F0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#0F172A" },
+    { id: "oscuro", label: "Oscuro", accent: "#B0894F", al: "#241c14", bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", sub: "#B8B5AE", muted: "#7A776F", navy: "#0d0d0f" },
+    { id: "verde", label: "Verde", accent: "#16A34A", al: "rgba(22,163,74,.18)", bg: "#F0FDF4", card: "#fff", border: "#BBF7D0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#14532D" },
+    { id: "violeta", label: "Violeta", accent: "#7C3AED", al: "rgba(139,92,246,.14)", bg: "#FAF5FF", card: "#fff", border: "#E9D5FF", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#3B0764" },
+    { id: "rojo", label: "Rojo", accent: "#DC2626", al: "rgba(239,68,68,.10)", bg: "#FFF5F5", card: "#fff", border: "rgba(239,68,68,.30)", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#7F1D1D" },
     { id: "naranja", label: "Naranja", accent: "#EA580C", al: "#FFF7ED", bg: "#FFFBF5", card: "#fff", border: "#FED7AA", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#431407" },
     { id: "minimal", label: "Mínimal", accent: "#111111", al: "#F5F5F5", bg: "#FAFAFA", card: "#fff", border: "#E8E8E8", text: "#111", sub: "#555", muted: "#aaa", navy: "#111" },
     { id: "cyan", label: "Cyan", accent: "#0891B2", al: "#ECFEFF", bg: "#F0FDFF", card: "#fff", border: "#A5F3FC", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#164E63" },
@@ -508,7 +530,7 @@ const FONTS = [
 ];
 const RADIUS_OPTS = [{ id: "sharp", label: "Recto", r: 4 }, { id: "normal", label: "Normal", r: 14 }, { id: "suave", label: "Suave", r: 20 }, { id: "round", label: "Redondo", r: 28 }];
 const COLOR_KEYS = [{ k: "accent", label: "Principal" }, { k: "bg", label: "Fondo" }, { k: "card", label: "Tarjetas" }, { k: "text", label: "Texto" }, { k: "navy", label: "Encabezado" }, { k: "border", label: "Bordes" }];
-const DEFAULT_COLORS = { accent: "#1D4ED8", al: "#EFF6FF", bg: "#F1F5F9", card: "#ffffff", border: "#E2E8F0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#0F172A" };
+const DEFAULT_COLORS = { accent: "#1D4ED8", al: "rgba(37,99,235,.14)", bg: "rgba(255,255,255,.06)", card: "#ffffff", border: "#E2E8F0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#0F172A" };
 const DEFAULT_UBICACIONES = [{ id: "norte", code: "NORTE", name: "Zona Norte" }, { id: "sur", code: "SUR", name: "Zona Sur" }, { id: "oeste", code: "OESTE", name: "Zona Oeste" }, { id: "caba", code: "CABA", name: "Ciudad de Buenos Aires" }];
 
 const DEFAULT_TEXTOS = {
@@ -713,7 +735,7 @@ async function callAI(msgs, sys, apiKey, useSearch = false) {
 }
 
 function daysSince(s) { if (!s) return 999; const [d, m, y] = s.split("/"); return Math.ceil((new Date(`20${y}`, m - 1, d) - new Date()) / (1000 * 60 * 60 * 24)); }
-function hexLight(hex) { try { const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `#${Math.round(r * .12 + 255 * .88).toString(16).padStart(2, '0')}${Math.round(g * .12 + 255 * .88).toString(16).padStart(2, '0')}${Math.round(b * .12 + 255 * .88).toString(16).padStart(2, '0')}`; } catch { return '#EFF6FF'; } }
+function hexLight(hex) { try { const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `#${Math.round(r * .12 + 255 * .88).toString(16).padStart(2, '0')}${Math.round(g * .12 + 255 * .88).toString(16).padStart(2, '0')}${Math.round(b * .12 + 255 * .88).toString(16).padStart(2, '0')}`; } catch { return 'rgba(37,99,235,.14)'; } }
 function buildThemeCSS(cfg) {
     const c = cfg.colors || DEFAULT_COLORS;
     const fv = FONTS.find(f => f.id === cfg.fontId)?.value || "'Plus Jakarta Sans'";
@@ -742,12 +764,12 @@ function formatMonto(val) {
 }
 function parseMonto(val) { return String(val).replace(/[^\d]/g, ''); }
 
-const T = { bg: "var(--bg,#F1F5F9)", card: "var(--card,#fff)", border: "var(--border,#E2E8F0)", text: "var(--text,#0F172A)", sub: "var(--sub,#475569)", muted: "var(--muted,#94A3B8)", accent: "var(--accent,#1D4ED8)", accentLight: "var(--al,#EFF6FF)", navy: "var(--navy,#0F172A)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
+const T = { bg: "var(--bg,rgba(255,255,255,.06))", card: "var(--card,#fff)", border: "var(--border,#E2E8F0)", text: "var(--text,#0F172A)", sub: "var(--sub,#475569)", muted: "var(--muted,#94A3B8)", accent: "var(--accent,#1D4ED8)", accentLight: "var(--al,rgba(37,99,235,.14))", navy: "var(--navy,#0F172A)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Montserrat:wght@400;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Montserrat:wght@400;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg,#F1F5F9);overscroll-behavior:none;}
+  body{background:var(--bg,rgba(255,255,255,.06));overscroll-behavior:none;}
   input,textarea,select,button{font-family:var(--font,'Plus Jakarta Sans'),sans-serif;}
   input:focus,textarea:focus,select:focus{outline:none;}textarea{resize:none;}button{cursor:pointer;}::-webkit-scrollbar{display:none;}
   @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -821,7 +843,7 @@ async function ponerGlobito(n) {
 }
 function Badge({ color, bg, children, style = {} }) { return <span style={{ display: "inline-flex", alignItems: "center", fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 20, padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em", ...style }}>{children}</span>; }
 function PBtn({ children, onClick, disabled, full, style = {}, variant = "primary" }) {
-    const v = { primary: { background: disabled ? "#E2E8F0" : "var(--accent,#1D4ED8)", color: disabled ? "#94A3B8" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "#FEF2F2", border: "1.5px solid #FECACA", color: "#EF4444", boxShadow: "none" } };
+    const v = { primary: { background: disabled ? "#E2E8F0" : "var(--accent,#1D4ED8)", color: disabled ? "#94A3B8" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", color: "#EF4444", boxShadow: "none" } };
     return <button onClick={onClick} disabled={disabled} style={{ ...v[variant], borderRadius: T.rsm, padding: "11px 20px", fontSize: 14, fontWeight: 600, width: full ? "100%" : "auto", transition: "all .15s", ...style }}>{children}</button>;
 }
 function Sheet({ title, onClose, children }) { return (<div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 200, display: "flex", alignItems: "flex-end", backdropFilter: "blur(2px)" }}><div style={{ background: T.card, borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "90vh", overflow: "auto", animation: "up .25s ease", paddingBottom: 32 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 0" }}><span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{title}</span><button onClick={onClose} style={{ background: T.bg, border: "none", borderRadius: 20, width: 32, height: 32, fontSize: 18, color: T.muted, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button></div><div style={{ padding: "14px 20px 0" }}>{children}</div></div></div>); }
@@ -866,14 +888,14 @@ function LoginModal({ titulo, onSuccess, onClose }) {
             <input value={u} onChange={e => { setU(e.target.value); setErr(''); }} placeholder="Ingresá tu usuario"
                 autoCapitalize="none" autoCorrect="off" autoComplete="username"
                 onKeyDown={e => e.key === 'Enter' && login()}
-                style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? '#FECACA' : T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} />
+                style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? 'rgba(239,68,68,.30)' : T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} />
         </Field>
         <Field label="Contraseña">
             <div style={{ position: "relative" }}>
                 <input type={showPass ? "text" : "password"} value={p} onChange={e => { setP(e.target.value); setErr(''); }}
                     placeholder="••••••••" autoComplete="current-password"
                     onKeyDown={e => e.key === 'Enter' && login()}
-                    style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? '#FECACA' : T.border}`, borderRadius: T.rsm, padding: "11px 44px 11px 14px", fontSize: 14, color: T.text }} />
+                    style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? 'rgba(239,68,68,.30)' : T.border}`, borderRadius: T.rsm, padding: "11px 44px 11px 14px", fontSize: 14, color: T.text }} />
                 <button onClick={() => setShowPass(v => !v)} type="button"
                     style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: showPass ? "var(--accent,#1D4ED8)" : T.muted, display: "flex", alignItems: "center", padding: 4 }}>
                     {showPass
@@ -883,7 +905,7 @@ function LoginModal({ titulo, onSuccess, onClose }) {
                 </button>
             </div>
         </Field>
-        {err && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#EF4444", marginBottom: 12, fontWeight: 600 }}>{err}</div>}
+        {err && <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#EF4444", marginBottom: 12, fontWeight: 600 }}>{err}</div>}
         <PBtn full onClick={login}>Ingresar</PBtn>
     </Sheet>);
 }
@@ -891,13 +913,12 @@ function LoginModal({ titulo, onSuccess, onClose }) {
 // ── NAVEGACIÓN ─────────────────────────────────────────────────────────
 const NAV_DEFS = [
     { id: "chat", tk: "nav_ia", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" /></svg> },
-    { id: "drone", tk: "nav_drone", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="10" width="6" height="4" rx="1" fill="currentColor" stroke="none" /><circle cx="4" cy="5" r="2.2" /><circle cx="20" cy="5" r="2.2" /><circle cx="4" cy="19" r="2.2" /><circle cx="20" cy="19" r="2.2" /><line x1="6" y1="6.5" x2="10" y2="10.5" /><line x1="18" y1="6.5" x2="14" y2="10.5" /><line x1="6" y1="17.5" x2="10" y2="13.5" /><line x1="18" y1="17.5" x2="14" y2="13.5" /></svg> },
-    { id: "minutas", tk: "nav_minutas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z" /><path d="M5 11a7 7 0 0014 0" /><path d="M12 18v3" /></svg> },
     { id: "dashboard", tk: "nav_inicio", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M11.47 3.841a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.061l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 101.061 1.061l8.69-8.69z" /><path d="M12 5.432l8.159 8.159.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198l.091-.086L12 5.432z" /></svg> },
     { id: "obras", tk: "nav_obras", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.5 2.25a.75.75 0 000 1.5v16.5h-.75a.75.75 0 000 1.5h16.5a.75.75 0 000-1.5h-.75V3.75a.75.75 0 000-1.5h-15zM9 6a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm-.75 3.75A.75.75 0 019 9h1.5a.75.75 0 010 1.5H9a.75.75 0 01-.75-.75zM9 12a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm3.75-5.25A.75.75 0 0113.5 6H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 9a.75.75 0 000 1.5H15A.75.75 0 0015 9h-1.5zm-.75 3.75a.75.75 0 01.75-.75H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM9 19.5v-2.25a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75V19.5H9z" /></svg> },
     { id: "personal", tk: "nav_personal", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg> },
     { id: "cargar", tk: "nav_cargar", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 9a3.75 3.75 0 100 7.5A3.75 3.75 0 0012 9z" /><path fillRule="evenodd" clipRule="evenodd" d="M9.344 3.071a49.52 49.52 0 015.312 0c.967.052 1.83.585 2.332 1.39l.821 1.317c.24.383.645.643 1.11.71.386.054.77.113 1.152.177 1.432.239 2.429 1.493 2.429 2.909V18a3 3 0 01-3 3H6a3 3 0 01-3-3V9.574c0-1.416.997-2.67 2.429-2.909.382-.064.766-.123 1.151-.178a1.56 1.56 0 001.11-.71l.822-1.315a2.942 2.942 0 012.332-1.39zM6.75 12.75a5.25 5.25 0 1110.5 0 5.25 5.25 0 01-10.5 0zm12-1.5a.75.75 0 100-1.5.75.75 0 000 1.5z" /></svg> },
     { id: "internos", tk: "nav_privado", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" /></svg> },
+    { id: "minutas", tk: "nav_minutas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z" /><path d="M5 11a7 7 0 0014 0" /><path d="M12 18v3" /></svg> },
     { id: "mas", tk: "nav_mas", icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M4.5 12a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm6 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm6 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" /></svg> },
 ];
 
@@ -958,106 +979,6 @@ function useAvisos(clave, mapaIds) {
         });
     };
     return { aviso, marcarVisto };
-}
-
-function Dashboard({ lics, obras, personal, alerts, setView, setDetailObraId, requireAuth, cfg, customIcons = {}, web = false, pedidos = [], onPedidos }) {
-    const UBICS = getUbics(cfg);
-    const pend = (pedidos || []).filter(p => p.para === "vv" && p.estado !== "resuelto");
-    const pendObras = [...new Set(pend.map(p => p.obra_id ? obraNom(obras, p.obra_id) : "general").filter(Boolean))].join(", ");
-    return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
-        {!web && <div style={{ background: T.navy, padding: "16px 18px 20px" }}>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginBottom: 3 }}>{t(cfg, 'dash_subtitulo')}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#fff" }}>{t(cfg, 'dash_titulo')}</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginTop: 4 }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginTop: 16 }}>
-                {[{ l: t(cfg, 'dash_proyectoes'), v: lics.filter(l => !["adjudicada", "descartada"].includes(l.estado)).length, c: "#7E9CB8" }, { l: t(cfg, 'dash_obras_activas'), v: obras.filter(o => o.estado === "curso").length, c: "#5E8C7B" }, { l: t(cfg, 'dash_personal'), v: personal.length, c: "#8A8FA3" }].map(k => (
-                    <div key={k.l} style={{ background: "rgba(255,255,255,.08)", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: k.c }}>{k.v}</div>
-                        <div style={{ fontSize: 9, color: "rgba(255,255,255,.5)", marginTop: 2, lineHeight: 1.3 }}>{k.l}</div>
-                    </div>
-                ))}
-            </div>
-        </div>}
-        <div style={{ padding: web ? "18px 18px 14px" : "14px 18px" }}>
-            {pend.length > 0 && <div onClick={onPedidos} style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
-                <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div>
-                    <div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{pendObras ? `Obras: ${pendObras}` : "Tocá para ver"} →</div>
-                </div>
-            </div>}
-            <div style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t(cfg, 'dash_obras_curso')}</div>
-                    <button onClick={() => setView("obras")} style={{ fontSize: 12, color: T.accent, background: "none", border: "none", fontWeight: 600 }}>{t(cfg, 'dash_ver_todas')}</button>
-                </div>
-                {obras.filter(o => o.estado === "curso").map(o => (<Card key={o.id} onClick={() => { setDetailObraId(o.id); setView("obras"); }} style={{ padding: "12px 14px", marginBottom: 8, cursor: "pointer" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><div style={{ fontSize: 13, fontWeight: 600, color: T.text, flex: 1, paddingRight: 8 }}>{o.nombre}</div><Badge color="#10B981" bg="#ECFDF5">{o.avance}%</Badge></div>
-                    <div style={{ height: 4, background: T.bg, borderRadius: 4, marginBottom: 6 }}><div style={{ height: 4, background: T.accent, borderRadius: 4, width: `${o.avance}%` }} /></div>
-                    <div style={{ fontSize: 11, color: T.muted }}>{UBICS.find(a => a.id === o.ap)?.code || o.ap} · {t(cfg, 'obras_cierre')}: {o.cierre}</div>
-                </Card>))}
-            </div>
-        </div>
-    </div>);
-}
-
-// DocMultiGrid: múltiples archivos por categoría (planos, pliegos, excel, otros)
-function DocMultiGrid({ docs, onUpload, onRemove, refs, prefix }) {
-    // docs es ahora un objeto { planos: [{id,nombre,url},...], pliego: [...], ... }
-    return (<div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {LIC_DOC_TYPES.map(d => {
-            const lista = Array.isArray(docs?.[d.id]) ? docs[d.id] : docs?.[d.id] ? [docs[d.id]] : [];
-            const rk = `${prefix}_${d.id}`;
-            return (<div key={d.id}>
-                <input type="file" accept={d.accept} multiple style={{ display: "none" }} ref={el => refs.current[rk] = el}
-                    onChange={async e => {
-                        for (const f of Array.from(e.target.files)) { await onUpload(d.id, f); }
-                        e.target.value = "";
-                    }} />
-                {/* Header de categoría + botón agregar */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
-                        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{d.label}</span>
-                        {lista.length > 0 && <span style={{ fontSize: 10, color: T.muted }}>({lista.length})</span>}
-                    </div>
-                    <button onClick={() => refs.current[rk]?.click()} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: T.accent, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> Agregar
-                    </button>
-                </div>
-                {/* Lista de archivos */}
-                {lista.length === 0 ? (
-                    <button onClick={() => refs.current[rk]?.click()} style={{ width: "100%", background: T.bg, border: `1.5px dashed ${T.border}`, borderRadius: 10, padding: "10px", cursor: "pointer", textAlign: "center", color: T.muted, fontSize: 11 }}>
-                        Sin archivos — tocá para subir
-                    </button>
-                ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                        {lista.map((f, i) => (
-                            <div key={f.id || i} style={{ display: "flex", alignItems: "center", gap: 8, background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 9, padding: "8px 10px" }}>
-                                <div style={{ width: 28, height: 28, borderRadius: 6, background: "#ECFDF5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                    <span style={{ fontSize: 8, fontWeight: 800, color: "#15803D" }}>{(f.nombre || '').split('.').pop().toUpperCase().slice(0,4)}</span>
-                                </div>
-                                <span style={{ flex: 1, fontSize: 11, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</span>
-                                <a href={f.url} download={f.nombre} style={{ textDecoration: "none", flexShrink: 0 }}>
-                                    <button style={{ background: "none", border: "1px solid #86EFAC", borderRadius: 6, padding: "4px 8px", fontSize: 10, color: "#15803D", fontWeight: 600, cursor: "pointer" }}>↓</button>
-                                </a>
-                                <button onClick={() => onRemove(d.id, f.id || i)} style={{ background: "none", border: "1px solid #FCA5A5", borderRadius: 6, padding: "4px 7px", fontSize: 10, color: "#EF4444", cursor: "pointer", flexShrink: 0 }}>✕</button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>);
-        })}
-    </div>);
-}
-
-// Mantener DocGrid viejo para compatibilidad con otros módulos que lo usen
-function DocGrid({ docs, onUpload, onRemove, refs, prefix }) {
-    return (<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>{LIC_DOC_TYPES.map(d => {
-        const doc = docs?.[d.id]; const rk = `${prefix}_${d.id}`; return (<div key={d.id}><input type="file" accept={d.accept} style={{ display: "none" }} ref={el => refs.current[rk] = el} onChange={async e => { if (e.target.files[0]) await onUpload(d.id, e.target.files[0]); e.target.value = ""; }} />
-            {doc ? (<div style={{ background: "#F0FDF4", border: "1.5px solid #86EFAC", borderRadius: 10, padding: "9px 10px" }}><div style={{ fontSize: 10, fontWeight: 700, color: "#15803D", marginBottom: 2 }}>{d.label}</div><div style={{ fontSize: 10, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 5 }}>{doc.nombre}</div><div style={{ display: "flex", gap: 4 }}><a href={doc.url} download={doc.nombre} style={{ textDecoration: "none", flex: 1 }}><button style={{ width: "100%", background: "none", border: "1px solid #86EFAC", borderRadius: 6, padding: "4px 0", fontSize: 9, color: "#15803D", fontWeight: 600, cursor: "pointer" }}>↓ Ver</button></a><button onClick={() => onRemove(d.id)} style={{ background: "none", border: "1px solid #FCA5A5", borderRadius: 6, padding: "4px 7px", fontSize: 9, color: "#EF4444", cursor: "pointer" }}>✕</button></div></div>
-            ) : (<button onClick={() => refs.current[rk]?.click()} style={{ width: "100%", background: T.bg, border: "1.5px dashed #86EFAC", borderRadius: 10, padding: "10px 6px", cursor: "pointer", textAlign: "center" }}><div style={{ fontSize: 10, fontWeight: 700, color: "#15803D", marginBottom: 2 }}>{d.label.slice(0, 3).toUpperCase()}</div><div style={{ fontSize: 11, fontWeight: 600, color: T.sub }}>{d.label}</div><div style={{ fontSize: 9, color: T.muted, marginTop: 2 }}>Subir</div></button>)}</div>);
-    })}</div>);
 }
 
 // ── PROYECTOS ─────────────────────────────────────────────────────
@@ -1157,7 +1078,7 @@ function Proyectos({ lics, setLics, requireAuth, cfg, obras, setObras }) {
                         return (<Card key={lic.id} onClick={() => setShowDetail(lic.id)} style={{ padding: "13px 14px", marginBottom: 7, cursor: "pointer" }}>
                             <div style={{ display: "flex", justifyContent: "space-between" }}>
                                 <div style={{ flex: 1, paddingRight: 8 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>{lic.nombre}{obraVinc && <span style={{ fontSize: 9, fontWeight: 700, background: "#ECFDF5", color: "#10B981", border: "1px solid #86EFAC", borderRadius: 20, padding: "1px 6px" }}><Ico n="building" /> EN OBRA</span>}</div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>{lic.nombre}{obraVinc && <span style={{ fontSize: 9, fontWeight: 700, background: "rgba(22,163,74,.14)", color: "#10B981", border: "1px solid #86EFAC", borderRadius: 20, padding: "1px 6px" }}><Ico n="building" /> EN OBRA</span>}</div>
                                     <div style={{ fontSize: 11, color: T.muted }}>{ubicLabel}{lic.sector ? ` · ${lic.sector}` : ""}</div>
                                 </div>
                                 <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -1211,12 +1132,12 @@ function Proyectos({ lics, setLics, requireAuth, cfg, obras, setObras }) {
             {(detail.estado === "adjudicada" || detail.estado === "curso") && (() => {
                 const obraVinc = obras.find(o => o.lic_id === detail.id);
                 return obraVinc ? (
-                    <div style={{ background: "#ECFDF5", border: "1px solid #86EFAC", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ background: "rgba(22,163,74,.14)", border: "1px solid #86EFAC", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="#10B981"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>
                         <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 700, color: "#15803D" }}><Ico n="check" /> Obra creada automáticamente</div><div style={{ fontSize: 11, color: "#166534", marginTop: 1 }}>{obraVinc.nombre} — En Curso ({obraVinc.avance}%)</div></div>
                     </div>
                 ) : (
-                    <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ background: "rgba(180,83,9,.14)", border: "1px solid rgba(180,83,9,.30)", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                         <div style={{ fontSize: 12, color: "#92400E", fontWeight: 600 }}>⚠ Sin obra vinculada</div>
                         <button onClick={() => autoCrearObra(detail)} style={{ background: "#F59E0B", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Crear obra ahora</button>
                     </div>
@@ -1243,9 +1164,9 @@ function Proyectos({ lics, setLics, requireAuth, cfg, obras, setObras }) {
 
 // ── REGISTRO FOTOGRÁFICO DE VISITAS (usado en Proyectos) ──────────
 const ETAPAS_VISITA = [
-    { id: 'antes', label: 'Antes', color: '#F59E0B', bg: '#FFFBEB' },
-    { id: 'durante', label: 'Durante', color: '#3B82F6', bg: '#EFF6FF' },
-    { id: 'despues', label: 'Después', color: '#10B981', bg: '#ECFDF5' },
+    { id: 'antes', label: 'Antes', color: '#F59E0B', bg: 'rgba(180,83,9,.14)' },
+    { id: 'durante', label: 'Durante', color: '#3B82F6', bg: 'rgba(37,99,235,.14)' },
+    { id: 'despues', label: 'Después', color: '#10B981', bg: 'rgba(22,163,74,.14)' },
 ];
 
 function RegistroVisitas({ visitas, onUpdate, licId }) {
@@ -1410,7 +1331,7 @@ function RegistroVisitas({ visitas, onUpdate, licId }) {
                             </button>
                         ))}
                         <button onClick={() => eliminar(foto.id)}
-                            style={{ marginLeft: "auto", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 20, padding: "4px 10px", fontSize: 10, fontWeight: 700, color: "#EF4444", cursor: "pointer" }}>
+                            style={{ marginLeft: "auto", background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 20, padding: "4px 10px", fontSize: 10, fontWeight: 700, color: "#EF4444", cursor: "pointer" }}>
                             Eliminar
                         </button>
                     </div>
@@ -1517,7 +1438,7 @@ Usá un tono técnico y profesional. Respondé en español rioplatense.`});
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} /><span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Informe IA generado</span></div>
                 <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => { try { navigator.clipboard.writeText(informe); } catch { } }} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 10px", fontSize: 11, color: T.sub, cursor: "pointer" }}><Ico n="list" /> Copiar</button>
-                    <button onClick={() => setInforme('')} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, padding: "4px 8px", fontSize: 11, color: "#EF4444", cursor: "pointer" }}>✕</button>
+                    <button onClick={() => setInforme('')} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 7, padding: "4px 8px", fontSize: 11, color: "#EF4444", cursor: "pointer" }}>✕</button>
                 </div>
             </div>
             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "12px 14px", fontSize: 12, color: T.text, lineHeight: 1.7, whiteSpace: "pre-wrap", maxHeight: 320, overflowY: "auto" }}>{informe}</div>
@@ -1532,9 +1453,9 @@ function TabInformes({ detail, upd }) {
     const fileRef = useRef(null);
     const informes = detail.informes || [];
     const TIPOS_INF = [
-        { id: 'diario', label: 'Diario', color: '#3B82F6', bg: '#EFF6FF' },
-        { id: 'semanal', label: 'Semanal', color: '#7C3AED', bg: '#F5F3FF' },
-        { id: 'ingeniero', label: 'Ingeniero', color: '#10B981', bg: '#ECFDF5' },
+        { id: 'diario', label: 'Diario', color: '#3B82F6', bg: 'rgba(37,99,235,.14)' },
+        { id: 'semanal', label: 'Semanal', color: '#7C3AED', bg: 'rgba(139,92,246,.14)' },
+        { id: 'ingeniero', label: 'Ingeniero', color: '#10B981', bg: 'rgba(22,163,74,.14)' },
     ];
     async function handleFile(e) {
         const files = Array.from(e.target.files);
@@ -1574,17 +1495,17 @@ function TabInformes({ detail, upd }) {
         </button>
         {filtered.length === 0
             ? <div style={{ textAlign: "center", padding: "28px 0", color: T.muted, fontSize: 12 }}>Sin informes {tp?.label?.toLowerCase()}s cargados</div>
-            : filtered.map(inf => (<div key={inf.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8 }}>
+            : filtered.map(inf => (<div key={inf.id} onClick={() => descargarArchivo(inf.url, inf.nombre)} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8, cursor: "pointer" }}>
                 <div style={{ width: 38, height: 38, borderRadius: 9, background: tp?.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <span style={{ fontSize: 9, fontWeight: 800, color: tp?.color }}>{inf.ext}</span>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inf.titulo}</div>
-                    <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{inf.fecha} · {inf.size}</div>
+                    <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{inf.fecha} · {inf.size} · tocá para ver</div>
                 </div>
                 <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                    <button onClick={() => descargarArchivo(inf.url, inf.nombre)} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>↓</button>
-                    <button onClick={() => upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) })} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
+                    <button onClick={(e) => { e.stopPropagation(); descargarArchivo(inf.url, inf.nombre); }} style={{ background: T.accentLight, border: `1px solid ${T.border}`, borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: T.accent, fontSize: 12 }}>👁</button>
+                    <button onClick={(e) => { e.stopPropagation(); upd(detail.id, { informes: informes.filter(x => x.id !== inf.id) }); }} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "#EF4444", fontSize: 12 }}>✕</button>
                 </div>
             </div>))}
         {showNew && (<Sheet title={`Subir informe ${tp?.label}`} onClose={() => setShowNew(false)}>
@@ -1602,10 +1523,10 @@ function TabInformes({ detail, upd }) {
 // ── OBRAS ────────────────────────────────────────────────────────────
 // ── TAB GASTOS (dentro de cada Obra) ─────────────────────────────────
 const TIPOS_GASTO = [
-    { id: 'viatico', label: 'Viático', color: '#F59E0B', bg: '#FFFBEB' },
-    { id: 'compra', label: 'Compra material', color: '#3B82F6', bg: '#EFF6FF' },
-    { id: 'herramienta', label: 'Herramienta', color: '#8B5CF6', bg: '#F5F3FF' },
-    { id: 'subcontrato', label: 'Subcontrato', color: '#10B981', bg: '#ECFDF5' },
+    { id: 'viatico', label: 'Viático', color: '#F59E0B', bg: 'rgba(180,83,9,.14)' },
+    { id: 'compra', label: 'Compra material', color: '#3B82F6', bg: 'rgba(37,99,235,.14)' },
+    { id: 'herramienta', label: 'Herramienta', color: '#8B5CF6', bg: 'rgba(139,92,246,.14)' },
+    { id: 'subcontrato', label: 'Subcontrato', color: '#10B981', bg: 'rgba(22,163,74,.14)' },
     { id: 'combustible', label: 'Combustible', color: '#F97316', bg: '#FFF7ED' },
     { id: 'otro', label: 'Otro', color: '#6B7280', bg: '#F9FAFB' },
 ];
@@ -1685,7 +1606,7 @@ function TabGastos({ detail, upd }) {
                                 </div>
                             </a>
                         )}
-                        <button onClick={() => eliminar(g.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "6px 10px", fontSize: 11, color: "#EF4444", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>✕</button>
+                        <button onClick={() => eliminar(g.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 8, padding: "6px 10px", fontSize: 11, color: "#EF4444", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>✕</button>
                     </div>
                 </div>);
             })
@@ -1715,7 +1636,7 @@ function TabGastos({ detail, upd }) {
             <Field label="Comprobante (foto o PDF)">
                 <input ref={compRef} type="file" accept="image/*,.pdf" onChange={handleComp} style={{ display: "none" }} />
                 {form.comprobante ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#ECFDF5", border: "1px solid #86EFAC", borderRadius: T.rsm, padding: "10px 12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(22,163,74,.14)", border: "1px solid #86EFAC", borderRadius: T.rsm, padding: "10px 12px" }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", flex: 1 }}>✓ {form.comprobante.nombre}</div>
                         <button onClick={() => setForm(p => ({ ...p, comprobante: null }))} style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 14 }}>✕</button>
                     </div>
@@ -1891,7 +1812,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Presupuesto</div>
                                 <input value={detail.monto || ''} onChange={e => upd(detail.id, { monto: e.target.value })} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
-                            <div style={{ background: detail.pagado > 0 ? "#ECFDF5" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            <div style={{ background: detail.pagado > 0 ? "rgba(22,163,74,.14)" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}><Ico n="money" /> Pagado</div>
                                 <input value={detail.pagado || ''} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); upd(detail.id, { pagado: v ? parseFloat(v) : 0 }); }} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: "#10B981", padding: 0 }} />
                             </div>
@@ -1916,7 +1837,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <div style={{ fontSize: 9.5, color: T.muted, marginTop: 5 }}>Con este código entrás en la app de Propietario, sin pasar por Belfast.</div>
                             </div>}
                         </div>
-                        <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "#FEF2F2", border: "1.5px solid #FECACA", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
+                        <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
                     </div>)}
                     {tab === "obs" && (<div>
                         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
@@ -1997,7 +1918,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
 // ════════════════════════════════════════════════════════════════════
 
 const BRASS = "#B0894F";
-const INST_COLORS = { accent:"#1E3A5F", al:"#EAEEF3", bg:"#F5F6F8", card:"#FFFFFF", border:"#E6E9EE", text:"#131C2B", sub:"#4A5565", muted:"#97A0AE", navy:"#101C2C" };
+const INST_COLORS = { accent:"#1E3A5F", al:"rgba(255,255,255,.08)", bg:"#F5F6F8", card:"#FFFFFF", border:"#E6E9EE", text:"#131C2B", sub:"#4A5565", muted:"#97A0AE", navy:"#101C2C" };
 
 const SAMPLE_OBRAS = [
   { id:"o1", nombre:"Castores 475", ap:"norte", sector:"Vivienda PB+1", estado:"curso", avance:68, inicio:"10/03/26", cierre:"30/08/26", monto:"12.400.000 $", pagado:8100000, obs:[{id:"b1",txt:"Hormigón visto terminado en PB.",fecha:"20/06/26"}], fotos:[], archivos:[], informes:[], gastos:[], docs:{} },
@@ -2051,7 +1972,7 @@ function BrandHeader({ cfg }) {
             </div>
           </div>
         )}
-        <div style={{ position:"absolute", right:16, top:"50%", transform:"translateY(-50%)", width:34, height:34, borderRadius:"50%", background:"var(--al,#EAEEF3)", border:"1px solid var(--border,#E6E9EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"var(--accent,#1E3A5F)", flexShrink:0 }}>S</div>
+        <div style={{ position:"absolute", right:16, top:"50%", transform:"translateY(-50%)", width:34, height:34, borderRadius:"50%", background:"var(--al,rgba(255,255,255,.08))", border:"1px solid var(--border,#E6E9EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"var(--accent,#1E3A5F)", flexShrink:0 }}>S</div>
       </div>
       <div style={{ height:2, background:BRASS, width:"100%" }} />
     </div>
@@ -2153,11 +2074,10 @@ function MIcon({ id }){
 const MAS_TILES = [
   { id:"mensajes", label:"Mensajes" },
   { id:"personal", label:"Personal" },
-  { id:"formularios", label:"Formularios" },
+  { id:"formularios", label:"Certificados" },
   { id:"documentacion", label:"Documentación" },
   { id:"informes", label:"Informes" },
   { id:"auditoria", label:"Auditoría de obra" },
-  { id:"drone", label:"🚁 Drone IA", go:"drone" },
   { id:"plantillas", label:"Plantillas de documentos" },
   { id:"internos", label:"Chat privado" },
   { id:"infsemanal", label:"Informe semanal de obra" },
@@ -2227,7 +2147,7 @@ function InternosView({ db, cfg, onBack }) {
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="mensajes" label="Chat privado" sub="Consultas del equipo — Belfast no los ve" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
-      <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "9px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
+      <div style={{ background: "rgba(180,83,9,.14)", border: "1px solid rgba(180,83,9,.30)", borderRadius: 10, padding: "9px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
         Este canal es <b>privado de V+V</b>. Lo ven solo ustedes en esta app; no llega a Belfast ni al panel del cliente.
       </div>
 
@@ -2249,7 +2169,7 @@ function InternosView({ db, cfg, onBack }) {
       {lista.map(m => (
         <div key={m.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>{m.de}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>{m.de}</span>
             {m.obra_id && obraNom(m.obra_id) && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "1px 7px" }}>{obraNom(m.obra_id)}</span>}
             <span style={{ fontSize: 10.5, color: T.muted, marginLeft: "auto" }}>{m.fecha}</span>
           </div>
@@ -2279,6 +2199,7 @@ function InformeSemanalView({ db, cfg, onBack }) {
   const [busy, setBusy] = useState(false);
   const [pdfHtml, setPdfHtml] = useState(null);
   const [pdfRep, setPdfRep] = useState(null);
+  const [editandoId, setEditandoId] = useState(null); // si no es null, "Guardar" actualiza ese informe en vez de crear uno nuevo
   const lista = ((informes || {})[obraId] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
   const fmtFecha = (iso) => { if (!iso) return ""; const [a, m, d] = iso.split("-"); return `${d}/${m}/${a.slice(2)}`; };
@@ -2321,11 +2242,25 @@ function InformeSemanalView({ db, cfg, onBack }) {
   const guardar = () => {
     if (!obraId) { alert("Elegí una obra."); return; }
     if (!hechos.length && !proxima.length) { alert("Cargá al menos un trabajo realizado o previsto."); return; }
+    if (editandoId) {
+      // Actualiza el informe existente en el lugar — no crea uno nuevo ni
+      // pierde el orden del historial.
+      guardarLista(obraId, lista.map(x => x.id === editandoId ? { ...x, desde, hasta, hechos: [...hechos], proxima: [...proxima], obs: obs.trim(), tsEditado: Date.now() } : x));
+      setHechos([]); setProxima([]); setObs(""); setNuevoH(""); setNuevoP(""); setEditandoId(null);
+      alert("Informe semanal actualizado.");
+      return;
+    }
     const item = { id: uid() + Date.now(), desde, hasta, hechos: [...hechos], proxima: [...proxima], obs: obs.trim(), ts: Date.now(), emitido: hoyStr() };
     guardarLista(obraId, [item, ...lista]);
     setHechos([]); setProxima([]); setObs(""); setNuevoH(""); setNuevoP("");
     alert("Informe semanal guardado.");
   };
+  const editarInforme = (rep) => {
+    setDesde(rep.desde); setHasta(rep.hasta); setHechos([...(rep.hechos || [])]); setProxima([...(rep.proxima || [])]); setObs(rep.obs || ""); setEditandoId(rep.id);
+    // Llevar la vista arriba, al formulario, para que se vea que entró en modo edición.
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { }
+  };
+  const cancelarEdicion = () => { setHechos([]); setProxima([]); setObs(""); setNuevoH(""); setNuevoP(""); setEditandoId(null); };
   const borrar = (id) => { if (confirm("¿Borrar este informe semanal?")) guardarLista(obraId, lista.filter(x => x.id !== id)); };
 
   const _esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
@@ -2350,7 +2285,7 @@ function InformeSemanalView({ db, cfg, onBack }) {
       h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
       ul { margin: 0 0 4px; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.6; margin-bottom: 3px; }
       .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
-      .obs { font-size: 12px; line-height: 1.55; color: #1a2433; background: #F8FAFC; border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
+      .obs { font-size: 12px; line-height: 1.55; color: #1a2433; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
       .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
     </style></head><body><div class="sheet">
       <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Informe semanal de obra</div></div>
@@ -2420,32 +2355,39 @@ function InformeSemanalView({ db, cfg, onBack }) {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 800, color: T.navy }}><Ico n="check" /> Trabajos realizados</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}><Ico n="check" /> Trabajos realizados</span>
         <button onClick={traerDeAvances} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>↧ Traer de avances</button>
       </div>
       <ListaEditable items={hechos} setItems={setHechos} nuevo={nuevoH} setNuevo={setNuevoH} add={addH} ph="Ej: Se terminó la mampostería de PB…" color="#10B981" />
 
-      <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 6 }}><Ico n="pin" /> A realizar la próxima semana</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 6 }}><Ico n="pin" /> A realizar la próxima semana</div>
       <ListaEditable items={proxima} setItems={setProxima} nuevo={nuevoP} setNuevo={setNuevoP} add={addP} ph="Ej: Iniciar contrapisos del 1º piso…" color="#B0894F" />
 
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Observaciones (opcional)</label>
       <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} placeholder="Clima, faltantes, pedidos a la dirección de obra, etc." style={{ ...inp, resize: "vertical", lineHeight: 1.5, margin: "6px 0 14px" }} />
 
-      <button onClick={redactarIA} disabled={busy} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>{busy ? "Redactando…" : "Mejorar redacción con IA"}</button>
+      {editandoId && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: "rgba(180,83,9,.14)", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "9px 12px", marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#7A5A24" }}>Editando informe de la semana {fmtFecha(desde)} al {fmtFecha(hasta)}</span>
+          <button onClick={cancelarEdicion} style={{ background: "none", border: "none", color: "#7A5A24", fontWeight: 700, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>Cancelar</button>
+        </div>
+      )}
+      <button onClick={redactarIA} disabled={busy} style={{ width: "100%", background: T.card, border: `1px solid ${BRASS}`, color: T.text, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>{busy ? "Redactando…" : "Mejorar redacción con IA"}</button>
       <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-        <button onClick={guardar} style={{ flex: 1, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
-        <button onClick={verPdfActual} style={{ flex: 1, background: T.al, color: T.navy, border: `1px solid ${T.border}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" /> Ver PDF</button>
+        <button onClick={guardar} style={{ flex: 1, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{editandoId ? "Actualizar informe" : "Guardar"}</button>
+        <button onClick={verPdfActual} style={{ flex: 1, background: T.al, color: T.text, border: `1px solid ${T.border}`, borderRadius: 9, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" /> Ver PDF</button>
       </div>
 
       {lista.length > 0 && <div style={{ marginTop: 22 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Informes guardados de esta obra</div>
-        {lista.map(rep => <div key={rep.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+        {lista.map(rep => <div key={rep.id} style={{ background: rep.id === editandoId ? "rgba(180,83,9,.14)" : T.card, border: rep.id === editandoId ? `1.5px solid ${BRASS}` : `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div><div style={{ fontSize: 13, fontWeight: 800, color: T.navy }}>Semana {fmtFecha(rep.desde)} al {fmtFecha(rep.hasta)}</div>
-              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{(rep.hechos || []).length} realizados · {(rep.proxima || []).length} previstos</div></div>
+            <div><div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>Semana {fmtFecha(rep.desde)} al {fmtFecha(rep.hasta)}{rep.id === editandoId ? " · editando" : ""}</div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{(rep.hechos || []).length} realizados · {(rep.proxima || []).length} previstos{rep.tsEditado ? " · editado" : ""}</div></div>
             <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => editarInforme(rep)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✎ Editar</button>
               <button onClick={() => verPdf(rep)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" /> PDF</button>
-              <button onClick={() => borrar(rep.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> </button>
+              <button onClick={() => borrar(rep.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> </button>
             </div>
           </div>
         </div>)}
@@ -2469,9 +2411,9 @@ function InformeSemanalView({ db, cfg, onBack }) {
 
 // ═══ AUDITORÍA DE OBRA — supervisiones, revisión de documentación y certificación de etapas ═══
 const AUD_TIPOS = [
-  { id: "supervision", label: "Supervisiones", titulo: "Acta de supervisión de obra", sigla: "SUP", icon: "search" },
-  { id: "revision", label: "Revisión de doc.", titulo: "Informe de revisión de documentación", sigla: "RDO", icon: "doc" },
-  { id: "certificacion", label: "Certificación", titulo: "Certificado de etapa ejecutada", sigla: "CER", icon: "check" },
+  { id: "supervision", label: "Supervisiones", nuevo: "Nueva supervisión", titulo: "Acta de supervisión de obra", sigla: "SUP", icon: "search" },
+  { id: "revision", label: "Revisión de doc.", nuevo: "Nueva revisión", titulo: "Informe de revisión de documentación", sigla: "RDO", icon: "doc" },
+  { id: "certificacion", label: "Certificación", nuevo: "Nueva certificación", titulo: "Certificado de etapa ejecutada", sigla: "CER", icon: "check" },
 ];
 const AUD_RESULT = ["Conforme", "Conforme con observaciones", "No conforme"];
 
@@ -2482,7 +2424,9 @@ function AuditoriaView({ db, cfg, onBack }) {
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   const [form, setForm] = useState(null);
   const [pdfHtml, setPdfHtml] = useState(null);
+  const [pdfRep, setPdfRep] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [driveBusy, setDriveBusy] = useState(false);
   const obra = obras.find(o => o.id === obraId);
   const tp = AUD_TIPOS.find(t => t.id === tipo) || AUD_TIPOS[0];
   const lista = items.filter(x => x.tipo === tipo && (!obraId || x.obra_id === obraId)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
@@ -2494,12 +2438,12 @@ function AuditoriaView({ db, cfg, onBack }) {
 
   function nuevo() {
     if (!obraId) { alert("Elegí una obra."); return; }
-    const base = { id: uid() + Date.now(), tipo, obra_id: obraId, nro: nroDe(tipo), fecha: hoyISO(), ts: Date.now(), responsable: cfg?.responsableTecnico || "", obs: [], resultado: AUD_RESULT[0], conclusion: "" };
+    const base = { id: uid() + Date.now(), tipo, obra_id: obraId, nro: nroDe(tipo), fecha: hoyISO(), ts: Date.now(), responsable: cfg?.responsableTecnico || "", obs: [], fotos: [], resultado: AUD_RESULT[0], conclusion: "" };
     if (tipo === "supervision") setForm({ ...base, periodo: "", presentes: "", interferencias: [] });
     if (tipo === "revision") setForm({ ...base, etapa: "", docs: [{ nombre: "", version: "", fechaDoc: "" }] });
     if (tipo === "certificacion") setForm({ ...base, etapa: "", planoRef: "", versionPlano: "", directiva: "", ejecutadoPor: "" });
   }
-  const editar = (it) => setForm({ ...it, obs: it.obs || [], interferencias: it.interferencias || [], docs: it.docs || [] });
+  const editar = (it) => setForm({ ...it, obs: it.obs || [], fotos: it.fotos || [], interferencias: it.interferencias || [], docs: it.docs || [] });
   const borrar = (id) => { if (confirm("¿Borrar este registro de auditoría?")) guardarLista(items.filter(x => x.id !== id)); };
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const addLinea = (k, val) => setForm(f => ({ ...f, [k]: [...(f[k] || []), val] }));
@@ -2563,27 +2507,41 @@ function AuditoriaView({ db, cfg, onBack }) {
       .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 16px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
       .barra b { color: #0F1B2D; }
       .grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
-      .grid > div { flex: 1 1 45%; background: #F8FAFC; border: 1px solid #E3E8EF; border-radius: 8px; padding: 8px 11px; }
+      .grid > div { flex: 1 1 45%; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 8px 11px; }
       .grid span { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #94A3B8; margin-bottom: 2px; }
       .grid b { font-size: 12.5px; color: #0F1B2D; }
       h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
       table { width: 100%; border-collapse: collapse; }
-      th { background: #F1F5F9; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      th { background: rgba(255,255,255,.06); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
       td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
       ul { margin: 0; padding-left: 20px; } li { font-size: 12px; line-height: 1.55; margin-bottom: 3px; }
       .vacio { font-size: 11.5px; color: #98A2B3; font-style: italic; }
       .parr { font-size: 12px; line-height: 1.6; text-align: justify; }
-      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: #F8FAFC; border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
+      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
       .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 14px; color: ${colorRes}; border: 1.5px solid ${colorRes}; }
       .firmas { display: flex; gap: 40px; margin-top: 34px; page-break-inside: avoid; }
       .firma { flex: 1; text-align: center; }
       .linea { border-top: 1px solid #0F1B2D; margin-bottom: 5px; }
       .rol { font-size: 10px; color: #5B6B7F; }
       .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 8px; }
+      .fotos img { width: 130px; height: 130px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
     </style></head><body><div class="sheet">
       <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">${_e(t.titulo)}</div></div>
       <div class="barra"><div>Obra: <b>${_e(nomObra)}</b></div><div>N°: <b>${_e(it.nro || "—")}</b></div><div>Fecha: <b>${fmtDMY(it.fecha)}</b></div></div>
       ${cuerpo}
+      ${(() => {
+        const fotos = it.fotos || [];
+        if (!fotos.length) return "";
+        // Solo se incrustan fotos ya subidas a la nube (URL http/https, livianas).
+        // Las que quedaron guardadas solo en el celular (por falla de subida) NO se
+        // meten en el PDF, para no romper el documento — se avisa en su lugar.
+        const buenas = fotos.filter(f => f.url && (f.url.startsWith("http://") || f.url.startsWith("https://"))).slice(0, 8);
+        const sinSubir = fotos.length - buenas.length;
+        return `<h2>Fotos</h2>
+          ${buenas.length ? `<div class="fotos">${buenas.map(f => `<img src="${f.url}" />`).join("")}</div>` : ""}
+          ${sinSubir > 0 ? `<div class="vacio">${sinSubir} foto(s) no incluida(s) en el PDF: no se terminaron de subir a la nube desde este dispositivo. Volvé a intentar la carga con buena conexión.</div>` : ""}`;
+      })()}
       <div class="res">Resultado: ${_e(it.resultado || "—")}</div>
       ${it.conclusion ? `<h2>Conclusión</h2><div class="parr">${_e(it.conclusion)}</div>` : ""}
       <div class="firmas">
@@ -2593,7 +2551,25 @@ function AuditoriaView({ db, cfg, onBack }) {
       <div class="foot">Documento emitido por ${marca} · ${_e(t.titulo)} · ${_e(it.nro || "")}</div>
     </div></body></html>`;
   }
-  const verPdf = (it) => setPdfHtml(buildPdf(it));
+  const verPdf = (it) => { setPdfRep(it); setPdfHtml(buildPdf(it)); };
+  const subirCertificadoADrive = async () => {
+    if (!pdfHtml || !pdfRep) return;
+    setDriveBusy(true);
+    try {
+      const base64 = btoa(unescape(encodeURIComponent(pdfHtml)));
+      const r = await fetch("/api/drive-upload", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: `${pdfRep.nro || "auditoria"}.html`, mimeType: "text/html", base64 }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Error subiendo a Drive");
+      alert("✔ Certificado subido a Drive.");
+    } catch (e) {
+      alert("No se pudo subir a Drive: " + e.message);
+    } finally {
+      setDriveBusy(false);
+    }
+  };
 
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 11px", fontSize: 13.5, color: T.text, boxSizing: "border-box" };
   const lbl = { fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em" };
@@ -2617,21 +2593,22 @@ function AuditoriaView({ db, cfg, onBack }) {
       {tipo === "revision" && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Revisión de la documentación según la etapa a ejecutar, con observaciones sobre planos y especificaciones.</div>}
       {tipo === "certificacion" && <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, marginBottom: 10 }}>Certificado de que la etapa se ejecutó según el plano otorgado y la directiva de la Jefatura de Obra.</div>}
 
-      <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>+ Nuevo {tp.label.toLowerCase()}</button>
+      {tipo === "supervision" && <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, letterSpacing: ".03em", marginBottom: 8 }}>NUEVAS SUPERVISIONES</div>}
+      <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}>+ {tp.nuevo}</button>
 
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>Todavía no hay registros de este tipo para la obra elegida.</div>}
       {lista.map(it => (
         <div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.nro}</span>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.navy, flex: 1, minWidth: 0 }}>{it.etapa || it.periodo || fmtDMY(it.fecha)}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{it.etapa || it.periodo || fmtDMY(it.fecha)}</span>
             <span style={{ fontSize: 10, fontWeight: 700, color: it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D" }}>{it.resultado}</span>
           </div>
           <div style={{ fontSize: 11, color: T.muted }}>{fmtDMY(it.fecha)} · {(it.obs || []).length} observación(es){it.docs ? ` · ${(it.docs || []).length} doc.` : ""}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
             <button onClick={() => verPdf(it)} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "7px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" s={13} /> PDF</button>
             <button onClick={() => editar(it)} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 7, padding: "7px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
-            <button onClick={() => borrar(it.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} /></button>
+            <button onClick={() => borrar(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} /></button>
           </div>
         </div>
       ))}
@@ -2639,7 +2616,7 @@ function AuditoriaView({ db, cfg, onBack }) {
 
     {form && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={() => setForm(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, width: "100%", maxHeight: "92vh", overflowY: "auto", borderRadius: "16px 16px 0 0", padding: "16px 18px calc(24px + env(safe-area-inset-bottom))" }}>
-        <div style={{ fontSize: 14.5, fontWeight: 800, color: T.navy, marginBottom: 3 }}>{tp.titulo}</div>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text, marginBottom: 3 }}>{tp.titulo}</div>
         <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>{form.nro} · {obra?.nombre || ""}</div>
 
         <label style={lbl}>Fecha</label>
@@ -2705,6 +2682,33 @@ function AuditoriaView({ db, cfg, onBack }) {
           <button onClick={() => addLinea("interferencias", "")} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", margin: "3px 0 12px" }}>+ Agregar interferencia</button>
         </>}
 
+        <label style={lbl}>Fotos</label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "5px 0 8px" }}>
+          {(form.fotos || []).map((f, i) => (
+            <div key={f.id || i} style={{ position: "relative", width: 74, height: 74, borderRadius: 9, overflow: "hidden", border: `1px solid ${T.border}` }}>
+              <img src={f.url} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <button onClick={() => delLinea("fotos", i)} style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,.55)", color: "#fff", border: "none", fontSize: 12, lineHeight: 1, cursor: "pointer" }}>✕</button>
+            </div>
+          ))}
+          <label style={{ width: 74, height: 74, borderRadius: 9, border: `1.5px dashed ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: T.accent, fontSize: 22, fontWeight: 300 }}>
+            +
+            <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={async e => {
+              const files = Array.from(e.target.files || []);
+              if (!files.length) return;
+              const nuevas = await Promise.all(files.map(async f => {
+                const dataUrl = await toDataUrl(f);
+                const comprimida = await compressImage(dataUrl);
+                const fotoId = uid();
+                const url = await uploadFoto(comprimida, `auditoria/${obraId}`, fotoId);
+                return { id: fotoId, url };
+              }));
+              setF("fotos", [...(form.fotos || []), ...nuevas]);
+              e.target.value = "";
+              if (nuevas.some(n => !mediaStorage.isRemoteUrl(n.url))) alert("⚠ Una o más fotos NO se pudieron subir a la nube (revisá tu conexión). Quedan guardadas en este dispositivo pero no van a incluirse en el PDF hasta que se suban bien — volvé a intentar más tarde.");
+            }} />
+          </label>
+        </div>
+
         <label style={lbl}>Resultado</label>
         <select value={form.resultado} onChange={e => setF("resultado", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}>
           {AUD_RESULT.map(r => <option key={r} value={r}>{r}</option>)}
@@ -2726,6 +2730,7 @@ function AuditoriaView({ db, cfg, onBack }) {
         <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
         <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Certificado</span>
         <button onClick={() => { const f = document.getElementById("aud-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+        <button onClick={subirCertificadoADrive} disabled={driveBusy} style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: driveBusy ? "default" : "pointer", flexShrink: 0, whiteSpace: "nowrap", opacity: driveBusy ? 0.6 : 1 }}>{driveBusy ? "Subiendo…" : "☁ Subir a Drive"}</button>
       </div>
       <iframe id="aud-pdf" srcDoc={pdfHtml} title="Certificado auditoría" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
@@ -2888,7 +2893,7 @@ function BitacoraView({ db, cfg, onBack }) {
       .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
       .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
       .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
-      .adj { font-size: 10.5px; color: #1B3A5B; background: #F1F5F9; border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
+      .adj { font-size: 10.5px; color: #1B3A5B; background: rgba(255,255,255,.06); border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
       .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
       .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
       .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
@@ -2928,7 +2933,7 @@ function BitacoraView({ db, cfg, onBack }) {
       {/* Lo cargado hoy, de todas las obras */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: delDia.length ? 10 : 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Hoy en todas las obras</div>
           <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
         </div>
         {delDia.length === 0
@@ -2957,7 +2962,7 @@ function BitacoraView({ db, cfg, onBack }) {
         {!abrir && <button onClick={() => setAbrir(true)} style={{ width: "100%", background: T.al, border: `1px dashed ${BRASS}`, color: T.accent, borderRadius: 10, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>+ Cargar un hecho</button>}
         {!abrir && !impAbierto && <button onClick={() => setImpAbierto(true)} style={{ width: "100%", background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 10, padding: "11px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", marginBottom: 14 }}>⬇ Importar varios hechos de una vez</button>}
         {impAbierto && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 4 }}>Importar hechos a {obraNom(obras, obraId) || "esta obra"}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 4 }}>Importar hechos a {obraNom(obras, obraId) || "esta obra"}</div>
           <div style={{ fontSize: 11, color: T.muted, marginBottom: 9, lineHeight: 1.5 }}>Pegá acá el archivo de hechos completo (desde el [ hasta el ]). Los que ya estén cargados no se duplican.</div>
           <textarea value={impTexto} onChange={e => setImpTexto(e.target.value)} placeholder='[ { "fecha": "2026-03-27", "titulo": "…", "desc": "…", "etapa": "…" } ]' style={{ width: "100%", minHeight: 130, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", fontSize: 11.5, color: T.text, boxSizing: "border-box", fontFamily: "monospace" }} />
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -2967,7 +2972,7 @@ function BitacoraView({ db, cfg, onBack }) {
         </div>}
 
         {abrir && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 10 }}>{edit ? "Editar hecho" : "Nuevo hecho"}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 12, color: T.sub, width: 46 }}>Fecha</span>
@@ -3000,7 +3005,7 @@ function BitacoraView({ db, cfg, onBack }) {
               ))}
             </div>}
             <input ref={adjRef} type="file" multiple onChange={agregarAdjuntos} style={{ display: "none" }} />
-            <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "Adjuntar archivo (Word, PDF, Excel…)"}</button>
+            <button onClick={() => adjRef.current?.click()} disabled={subiendo} style={{ background: T.bg, border: `1px solid ${BRASS}`, color: T.text, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "Adjuntar archivo (Word, PDF, Excel…)"}</button>
             <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
               <button onClick={limpiar} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
               <button onClick={guardar} disabled={subiendo} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{edit ? "Guardar cambios" : "Guardar hecho"}</button>
@@ -3027,7 +3032,7 @@ function BitacoraView({ db, cfg, onBack }) {
             </div>}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <button onClick={() => editarHecho(h)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button>
-              <button onClick={() => borrar(h.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Borrar</button>
+              <button onClick={() => borrar(h.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Borrar</button>
             </div>
           </div>
         ))}
@@ -3046,7 +3051,7 @@ function BitacoraView({ db, cfg, onBack }) {
   </div>);
 }
 
-function DocumentacionView({ db, cfg, onBack }) {
+function DocumentacionView({ db, cfg, setCfg, onBack }) {
   const documentacion = db.documentacion || [];
   const setDocumentacion = db.setDocumentacion;
   const CATS = ["Planillas modelo", "Formularios modelo", "Contratos / Legal", "Instructivos", "Certificados modelo", "Planos", "Presupuestos", "Certificaciones", "Notas de pedido", "Actas", "Otros"];
@@ -3058,6 +3063,16 @@ function DocumentacionView({ db, cfg, onBack }) {
   function onCatChange(e) {
     if (e.target.value === "__new__") { const n = prompt("Nombre de la nueva carpeta:"); if (n && n.trim()) setCat(n.trim()); return; }
     setCat(e.target.value);
+  }
+  function editarLinkDrive() {
+    const actual = cfg?.driveEstudio || "";
+    const n = prompt("Pegá el link del Drive donde el estudio comparte la documentación del proyecto:", actual);
+    if (n === null) return; // canceló
+    setCfg(p => ({ ...p, driveEstudio: n.trim() }));
+  }
+  function abrirDriveEstudio() {
+    if (!cfg?.driveEstudio) { editarLinkDrive(); return; }
+    window.open(cfg.driveEstudio, "_blank", "noopener");
   }
   async function subir(e) {
     const files = Array.from(e.target.files);
@@ -3080,6 +3095,16 @@ function DocumentacionView({ db, cfg, onBack }) {
     <div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
       <PageHead title="Documentación" sub="Modelos de planillas y archivos de uso" back onBack={onBack} />
       <div style={{ padding: "0 16px" }}>
+        <div onClick={abrirDriveEstudio} style={{ background: "#0F1B2D", borderRadius: T.r, padding: 16, marginBottom: 14, boxShadow: T.shadow, cursor: "pointer", display: "flex", alignItems: "center", gap: 13, borderBottom: `3px solid ${BRASS}` }}>
+          <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(255,255,255,.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Ico n="link" s={20} c={BRASS} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff" }}>Drive del estudio</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginTop: 2, lineHeight: 1.4 }}>{cfg?.driveEstudio ? "Documentación del proyecto (planos, ingeniería). Bajala acá y subila a la obra que corresponda." : "Todavía no cargaste el link — tocá para pegarlo."}</div>
+          </div>
+          {cfg?.driveEstudio && <button onClick={(e) => { e.stopPropagation(); editarLinkDrive(); }} style={{ background: "rgba(255,255,255,.12)", border: "none", color: "#fff", borderRadius: 7, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Editar</button>}
+        </div>
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 14, marginBottom: 16, boxShadow: T.shadow }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Subir modelo / archivo</div>
           <label style={{ fontSize: 11, color: T.muted }}>Carpeta</label>
@@ -3359,7 +3384,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
       </div>
 
       {grupos.map(g => (<div key={g.rubro} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 13, marginBottom: 10 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{g.rubro}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 8 }}>{g.rubro}</div>
         {g.items.map(it => (<div key={it.id} style={{ padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.tiene ? "#16A34A" : T.border}`, background: it.tiene ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.tiene ? "✓" : ""}</button>
@@ -3384,7 +3409,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
       {/* ── Google Form ── */}
       <div style={{ border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.card }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gformCfg ? 10 : (reg?.formId ? 10 : 0) }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}><Ico n="list" /> Formulario para el jefe de obra</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}><Ico n="list" /> Formulario para el jefe de obra</div>
           <button onClick={() => setGformCfg(v => !v)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, color: T.sub, cursor: "pointer" }}>⚙︎ {gformUrl ? "Configurado" : "Configurar"}</button>
         </div>
 
@@ -3407,7 +3432,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
 
       {/* observaciones del jefe (de las respuestas del form) */}
       {reg?.gformObs && Object.keys(reg.gformObs).some(k => reg.gformObs[k]) && <div style={{ border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.al }}>
-        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.navy, marginBottom: 6 }}>Observaciones del jefe de obra</div>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.text, marginBottom: 6 }}>Observaciones del jefe de obra</div>
         {Object.keys(reg.gformObs).filter(k => reg.gformObs[k]).map(k => (
           <div key={k} style={{ fontSize: 12, color: T.text, marginBottom: 4, lineHeight: 1.4 }}><b>{k}:</b> {reg.gformObs[k]}</div>
         ))}
@@ -3660,7 +3685,7 @@ function DroneIAView({ db, cfg, apiKey, onBack }) {
         {/* Los vuelos de hoy, de todas las obras */}
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 14, marginBottom: 14, boxShadow: T.shadow }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: vuelosHoy.length ? 10 : 0 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}>Hoy en todas las obras</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text }}>Hoy en todas las obras</div>
             <div style={{ fontSize: 11, color: T.muted }}>{new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</div>
           </div>
           {vuelosHoy.length === 0
@@ -3947,7 +3972,7 @@ Al final, SOLO si de verdad surgieron de la charla, agregá "ACUERDOS / DECISION
   return (<div style={{ minHeight: "100vh" }}>
     <PageHead eyebrow="Reuniones" title="🎙 Grabar reunión" sub="Grabá la reunión de corrido — se arma la minuta sola al terminar" back onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
-      {!sttOk && <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
+      {!sttOk && <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.35)", borderRadius: T.rsm, padding: 12, marginBottom: 14, fontSize: 12, color: "#991B1B" }}>Este navegador no tiene reconocimiento de voz disponible. Probá desde el celular, con Chrome o Safari.</div>}
       <Field label="Título de la reunión"><TInput value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ej: Reunión de avance semanal" /></Field>
       <Field label="Fecha"><TInput type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></Field>
       {obras.length > 0 && <Field label="Obra (opcional)"><Sel value={obraId} onChange={e => setObraId(e.target.value)}><option value="">— Sin asignar —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
@@ -3986,7 +4011,7 @@ function MatPedidosView({ db, cfg, onBack }) {
   // Días transcurridos desde que se pidió (para las alertas de definiciones y planos).
   const diasDe = (p) => { const t0 = p.ts || 0; if (!t0) return 0; return Math.max(0, Math.floor((Date.now() - t0) / 86400000)); };
   // SLA: 5 días. Amarillo desde 3, rojo al pasarse.
-  const alertaDe = (p) => { const d = diasDe(p); if (p.cumplido) return null; if (d >= 5) return { d, txt: `⚠ Vencido — ${d} días sin respuesta`, color: "#B91C1C", bg: "#FEF2F2", bd: "#FECACA" }; if (d >= 3) return { d, txt: `⏳ ${d} días esperando`, color: "#B45309", bg: "#FFFBEB", bd: "#FDE68A" }; return { d, txt: `${d === 0 ? "Pedido hoy" : d === 1 ? "1 día esperando" : d + " días esperando"}`, color: "#1B3A5B", bg: "#EFF6FF", bd: "#DBEAFE" }; };
+  const alertaDe = (p) => { const d = diasDe(p); if (p.cumplido) return null; if (d >= 5) return { d, txt: `⚠ Vencido — ${d} días sin respuesta`, color: "#B91C1C", bg: "rgba(239,68,68,.10)", bd: "rgba(239,68,68,.30)" }; if (d >= 3) return { d, txt: `⏳ ${d} días esperando`, color: "#B45309", bg: "rgba(180,83,9,.14)", bd: "rgba(180,83,9,.30)" }; return { d, txt: `${d === 0 ? "Pedido hoy" : d === 1 ? "1 día esperando" : d + " días esperando"}`, color: "#1B3A5B", bg: "rgba(37,99,235,.14)", bd: "#DBEAFE" }; };
   // Guarda fusionando por pedido: la versión más nueva de CADA pedido gana.
   // Así lo que marcás acá no se pierde cuando la otra app escribe su copia.
   async function guardarMats(fn) {
@@ -4057,7 +4082,7 @@ function MatPedidosView({ db, cfg, onBack }) {
     </div>
 
     {vista === "pedidos" && <div style={{ padding: "16px 20px" }}>
-      {(pendDefPl.length > 0 || cumplidosN > 0) && <div style={{ background: vencidos.length ? "#FEF2F2" : T.card, border: `1px solid ${vencidos.length ? "#FECACA" : T.border}`, borderLeft: `3px solid ${vencidos.length ? "#B91C1C" : BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 14 }}>
+      {(pendDefPl.length > 0 || cumplidosN > 0) && <div style={{ background: vencidos.length ? "rgba(239,68,68,.10)" : T.card, border: `1px solid ${vencidos.length ? "rgba(239,68,68,.30)" : T.border}`, borderLeft: `3px solid ${vencidos.length ? "#B91C1C" : BRASS}`, borderRadius: 10, padding: "11px 13px", marginBottom: 14 }}>
         <div style={{ fontSize: 12.5, fontWeight: 800, color: vencidos.length ? "#B91C1C" : T.navy }}>
           {vencidos.length ? `⚠ ${vencidos.length} pedido(s) vencido(s)` : pendDefPl.length ? `${pendDefPl.length} definición/plano pendiente(s)` : "Sin pendientes de definiciones ni planos"}
         </div>
@@ -4104,12 +4129,12 @@ function MatPedidosView({ db, cfg, onBack }) {
             <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 6, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado por ${cn}${p.leidoFecha ? " · " + p.leidoFecha : ""}` : `● No leído por ${cn}`}</div>
             {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 3 }}><Ico n="send" /> Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
             {p.tipo !== "material" && (p.cumplido
-              ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Cumplido{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
+              ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "rgba(22,163,74,.14)", border: "1px solid rgba(22,163,74,.30)", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Cumplido{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
               : (() => { const a = alertaDe(p); return a ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: a.color, background: a.bg, border: `1px solid ${a.bd}`, borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>{a.txt}</div> : null; })())}
           </div>
-          <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+          <button onClick={() => borrar(p.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
         </div>
-        {p.tipo !== "material" && <button onClick={() => marcarCumplido(p.id, !p.cumplido)} style={{ width: "100%", marginTop: 10, background: p.cumplido ? T.bg : "#ECFDF5", color: p.cumplido ? T.sub : "#15803D", border: `1px solid ${p.cumplido ? T.border : "#A7F3D0"}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{p.cumplido ? "↩ Reabrir (volver a pendiente)" : "✓ Marcar como cumplido"}</button>}
+        {p.tipo !== "material" && <button onClick={() => marcarCumplido(p.id, !p.cumplido)} style={{ width: "100%", marginTop: 10, background: p.cumplido ? T.bg : "rgba(22,163,74,.14)", color: p.cumplido ? T.sub : "#15803D", border: `1px solid ${p.cumplido ? T.border : "rgba(22,163,74,.30)"}`, borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{p.cumplido ? "↩ Reabrir (volver a pendiente)" : "✓ Marcar como cumplido"}</button>}
         <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 10, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> Enviar por WhatsApp a los jefes de obra</button>
         {waFor === p.id && <div style={{ marginTop: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
@@ -4236,7 +4261,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "alertas": return <AlertasWaView {...P} />;
       case "cliente": return <ClientePanel {...P} />;
       case "personal": return <PersonalView personal={db.personal} setPersonal={db.setPersonal} obras={db.obras} cfg={cfg} />;
-      case "documentacion": return <DocumentacionView db={db} cfg={cfg} onBack={back} />;
+      case "documentacion": return <DocumentacionView db={db} cfg={cfg} setCfg={setCfg} onBack={back} />;
       case "bitacora": return <BitacoraView db={db} cfg={cfg} onBack={back} />;
       case "auditoria": return <AuditoriaView db={db} cfg={cfg} onBack={back} />;
       case "plantillas": return <PlantillasView db={db} cfg={cfg} onBack={back} />;
@@ -4268,7 +4293,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
   return (<div style={{ flex:1, overflowY:"auto", paddingBottom:80 }}>
     <PageHead eyebrow="Panel" title="Más" sub="Módulos y configuración del sistema" />
     <div style={{ padding:"16px 20px" }}>
-      {pend.length>0 && <div onClick={()=>setSub("pedidos")} style={{ display:"flex", alignItems:"center", gap:11, background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:T.rsm, padding:"12px 14px", marginBottom:16, cursor:"pointer" }}>
+      {pend.length>0 && <div onClick={()=>setSub("pedidos")} style={{ display:"flex", alignItems:"center", gap:11, background:"rgba(239,68,68,.10)", border:"1px solid rgba(239,68,68,.30)", borderRadius:T.rsm, padding:"12px 14px", marginBottom:16, cursor:"pointer" }}>
         <div style={{ width:30, height:30, borderRadius:"50%", background:"#EF4444", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, flexShrink:0 }}>{pend.length}</div>
         <div style={{ flex:1, minWidth:0 }}><div style={{ fontSize:13, fontWeight:700, color:"#991B1B" }}>{pend.length} pedido{pend.length>1?"s":""} pendiente{pend.length>1?"s":""} en Pedidos</div><div style={{ fontSize:11.5, color:"#B91C1C", marginTop:1 }}>{pendObras?`Obras: ${pendObras}`:"Tocá para ver"} →</div></div>
       </div>}
@@ -4441,7 +4466,7 @@ function PreviewStub({ titulo }) {
 }
 
 const NAV = [
-  { id:"chat", label:"IA" }, { id:"drone", label:"Drone IA" }, { id:"dashboard", label:"Inicio" }, { id:"obras", label:"Obras" },
+  { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" }, { id:"obras", label:"Obras" },
   { id:"personal", label:"Personal" }, { id:"cargar", label:"Cargar", fab:true }, { id:"mas", label:"Más" },
 ];
 
@@ -4483,7 +4508,7 @@ function MiniStat({ label, value, color }) {
 function RowItem({ onClick, children, onDelete }) {
   return (<div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", marginBottom: 9, boxShadow: T.shadow, display: "flex", alignItems: "center", gap: 12 }}>
     <div onClick={onClick} style={{ flex: 1, cursor: onClick ? "pointer" : "default", minWidth: 0 }}>{children}</div>
-    {onDelete && <button onClick={onDelete} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
+    {onDelete && <button onClick={onDelete} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 6, width: 30, height: 30, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>}
   </div>);
 }
 
@@ -4533,11 +4558,11 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nombre}</div>
               <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{p.rol || "—"} · {obrasNombres(p)}{p.telefono ? ` · ${p.telefono}` : ""}</div>
-              {(p.sitios || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{p.sitios.map((s, i) => <span key={i} style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", background: "#ECFDF5", borderRadius: 5, padding: "2px 6px" }}>✓ {s.sitio}</span>)}</div>}
+              {(p.sitios || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{p.sitios.map((s, i) => <span key={i} style={{ fontSize: 9.5, fontWeight: 700, color: "#16A34A", background: "rgba(22,163,74,.14)", borderRadius: 5, padding: "2px 6px" }}>✓ {s.sitio}</span>)}</div>}
             </div>
             {vc > 0
-              ? <Badge color="#EF4444" bg="#FEF2F2">{vc} vence</Badge>
-              : docsOk(p) > 0 ? <Badge color="#16A34A" bg="#ECFDF5">OK</Badge> : <Badge color="#94A3B8" bg="#F8FAFC">s/doc</Badge>}
+              ? <Badge color="#EF4444" bg="rgba(239,68,68,.10)">{vc} vence</Badge>
+              : docsOk(p) > 0 ? <Badge color="#16A34A" bg="rgba(22,163,74,.14)">OK</Badge> : <Badge color="#94A3B8" bg="rgba(255,255,255,.04)">s/doc</Badge>}
           </div>
         </RowItem>);
       })}
@@ -4580,7 +4605,7 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
         return (<div key={d.id} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{d.label}</span>
-            {doc ? <Badge color={dias != null && dias <= 15 ? "#EF4444" : "#16A34A"} bg={dias != null && dias <= 15 ? "#FEF2F2" : "#ECFDF5"}>{doc.nombre ? "cargado" : "—"}</Badge>
+            {doc ? <Badge color={dias != null && dias <= 15 ? "#EF4444" : "#16A34A"} bg={dias != null && dias <= 15 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.14)"}>{doc.nombre ? "cargado" : "—"}</Badge>
               : <DocUpload onPick={f => subirDoc(detalle.id, d.id, f)} />}
           </div>
           {d.acceptsExp && doc && <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
@@ -4591,7 +4616,7 @@ function PersonalView({ personal, setPersonal, obras, cfg }) {
         </div>);
       })}
       <div style={{ marginTop: 16 }}><Adjuntos items={detalle.adjuntos} onChange={next => { setPersonal(p => p.map(x => x.id === detalle.id ? { ...x, adjuntos: next } : x)); setDetalle(d => ({ ...d, adjuntos: next })); }} /></div>
-      <button onClick={() => borrar(detalle.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Eliminar trabajador</button>
+      <button onClick={() => borrar(detalle.id)} style={{ width: "100%", marginTop: 12, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Eliminar trabajador</button>
     </Sheet>}
   </div>);
 }
@@ -4997,7 +5022,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
             {arch.map((f, k) => <button key={k} onClick={() => descargarArchivo(f.url, f.nombre)} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${BRASS}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", textAlign: "left", width: "100%" }}>
               <span style={{ fontSize: 17, flexShrink: 0 }}>{icono(f.nombre)}</span>
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: T.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</span>
+                <span style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</span>
                 <span style={{ display: "block", fontSize: 10.5, color: T.muted, marginTop: 1 }}>{f.tipo}{f.obra && f.obra !== "—" ? ` · ${f.obra}` : ""}</span>
               </span>
               <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, flexShrink: 0 }}>Abrir</span>
@@ -5066,7 +5091,7 @@ function SeguimientoView({ db, onBack }) {
     if (pct > o.avance + 15 && o.estado !== "terminada") alerts.push({ id: `${o.id}_pago`, msg: `${o.nombre}: ${pct}% pagado vs ${o.avance}% de avance`, prioridad: "alta" });
   });
   const col = { alta: "#EF4444", media: "#F59E0B", baja: "#3B82F6" };
-  const bg = { alta: "#FEF2F2", media: "#FFFBEB", baja: "#EFF6FF" };
+  const bg = { alta: "rgba(239,68,68,.10)", media: "rgba(180,83,9,.14)", baja: "rgba(37,99,235,.14)" };
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="seguimiento" label="Seguimiento" sub="Alertas calculadas en tiempo real" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
@@ -5127,7 +5152,7 @@ function MaterialesView({ db, onBack }) {
 function SubcontratosView({ db, onBack }) {
   const { obras, subcontratos, setSubcontratos } = db;
   const [form, setForm] = useState(null);
-  const estados = [{ id: "presupuestado", c: "#3B82F6", b: "#EFF6FF" }, { id: "contratado", c: "#8B5CF6", b: "#F5F3FF" }, { id: "ejecucion", c: "#F59E0B", b: "#FFFBEB" }, { id: "finalizado", c: "#16A34A", b: "#ECFDF5" }];
+  const estados = [{ id: "presupuestado", c: "#3B82F6", b: "rgba(37,99,235,.14)" }, { id: "contratado", c: "#8B5CF6", b: "rgba(139,92,246,.14)" }, { id: "ejecucion", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, { id: "finalizado", c: "#16A34A", b: "rgba(22,163,74,.14)" }];
   const total = subcontratos.reduce((a, s) => a + parseMontoNum(s.monto), 0);
   function guardar() { if (!form.empresa?.trim()) return; if (form.id) setSubcontratos(p => p.map(x => x.id === form.id ? form : x)); else setSubcontratos(p => [...p, { ...form, id: uid() }]); setForm(null); }
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
@@ -5220,7 +5245,7 @@ function InformesView({ db, apiKey, onBack }) {
       {todos.map(inf => (<RowItem key={inf.id} onClick={() => setOpen(inf)} onDelete={() => setObras(p => p.map(x => x.id === inf.obra_id ? { ...x, informes: (x.informes || []).filter(i => i.id !== inf.id) } : x))}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{inf.titulo || "Informe"}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{inf.obra} · {inf.fecha}{(inf.archivos || []).length ? ` · ${(inf.archivos || []).length} adj.` : ""}{inf.enviado ? " · ✓ enviado a Belfast" : ""}</div></div>
-          <Badge color={inf.tipo === "ia" ? "#8B5CF6" : "#3B82F6"} bg={inf.tipo === "ia" ? "#F5F3FF" : "#EFF6FF"}>{inf.tipo === "ia" ? "IA" : "Técnico"}</Badge>
+          <Badge color={inf.tipo === "ia" ? "#8B5CF6" : "#3B82F6"} bg={inf.tipo === "ia" ? "rgba(139,92,246,.14)" : "rgba(37,99,235,.14)"}>{inf.tipo === "ia" ? "IA" : "Técnico"}</Badge>
         </div>
       </RowItem>))}
     </div>
@@ -5307,7 +5332,7 @@ function ContactosView({ db, onBack }) {
           <div style={{ width: 38, height: 38, borderRadius: "50%", background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>{(c.nombre || "?").slice(0, 1).toUpperCase()}</div>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{c.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{[c.rol, c.empresa].filter(Boolean).join(" · ") || "—"}</div></div>
           <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
-            {c.telefono && <a href={waLink(c.telefono, "")} target="_blank" rel="noreferrer" style={{ width: 32, height: 32, borderRadius: 7, background: "#ECFDF5", color: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14 }}>✆</a>}
+            {c.telefono && <a href={waLink(c.telefono, "")} target="_blank" rel="noreferrer" style={{ width: 32, height: 32, borderRadius: 7, background: "rgba(22,163,74,.14)", color: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14 }}>✆</a>}
             {c.email && <a href={`mailto:${c.email}`} style={{ width: 32, height: 32, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 13 }}>✉</a>}
           </div>
         </div>
@@ -5341,7 +5366,7 @@ function ProveedoresView({ db, onBack }) {
           <div style={{ width: 38, height: 38, borderRadius: 8, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><MIcon id="proveedores" /></div>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{c.nombre}</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{c.rubro || "—"}</div></div>
           <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
-            {c.telefono && <a href={waLink(c.telefono, "")} target="_blank" rel="noreferrer" style={{ width: 32, height: 32, borderRadius: 7, background: "#ECFDF5", color: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14 }}>✆</a>}
+            {c.telefono && <a href={waLink(c.telefono, "")} target="_blank" rel="noreferrer" style={{ width: 32, height: 32, borderRadius: 7, background: "rgba(22,163,74,.14)", color: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14 }}>✆</a>}
             {c.email && <a href={`mailto:${c.email}`} style={{ width: 32, height: 32, borderRadius: 7, background: T.al, color: T.accent, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 13 }}>✉</a>}
           </div>
         </div>
@@ -5384,7 +5409,7 @@ function VigilanciaView({ db, onBack }) {
   const { obras, vigilancia, setVigilancia, camaras, setCamaras } = db;
   const [form, setForm] = useState(null);
   const [camForm, setCamForm] = useState(null);
-  const niveles = [{ id: "normal", c: "#16A34A", b: "#ECFDF5" }, { id: "atención", c: "#F59E0B", b: "#FFFBEB" }, { id: "incidente", c: "#EF4444", b: "#FEF2F2" }];
+  const niveles = [{ id: "normal", c: "#16A34A", b: "rgba(22,163,74,.14)" }, { id: "atención", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, { id: "incidente", c: "#EF4444", b: "rgba(239,68,68,.10)" }];
   function guardar() { if (!form.nota?.trim()) return; setVigilancia(p => [{ ...form, id: uid(), fecha: hoyStr() }, ...p]); setForm(null); }
   function guardarCam() { if (!camForm.nombre?.trim() || !camForm.url?.trim()) return; if (camForm.id) setCamaras(p => p.map(x => x.id === camForm.id ? camForm : x)); else setCamaras(p => [...p, { ...camForm, id: uid() }]); setCamForm(null); }
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
@@ -5441,7 +5466,7 @@ function PresentismoView({ db, onBack }) {
       return [...p, { id: uid(), fecha, persona_id: pid, estado }];
     });
   }
-  const opts = [{ id: "presente", lbl: "P", c: "#16A34A", b: "#ECFDF5" }, { id: "tarde", lbl: "T", c: "#F59E0B", b: "#FFFBEB" }, { id: "ausente", lbl: "A", c: "#EF4444", b: "#FEF2F2" }];
+  const opts = [{ id: "presente", lbl: "P", c: "#16A34A", b: "rgba(22,163,74,.14)" }, { id: "tarde", lbl: "T", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, { id: "ausente", lbl: "A", c: "#EF4444", b: "rgba(239,68,68,.10)" }];
   const pres = personal.filter(p => estadoDe(p.id) === "presente").length;
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="presentismo" label="Presentismo" sub="Control de asistencia diaria" onBack={onBack} />
@@ -5590,7 +5615,7 @@ function HerramientasView({ db, onBack }) {
   const [form, setForm] = useState(null);
   const [fObra, setFObra] = useState("");
   const [busca, setBusca] = useState("");
-  const est = [{ id: "ok", c: "#16A34A", b: "#ECFDF5" }, { id: "reparación", c: "#F59E0B", b: "#FFFBEB" }, { id: "baja", c: "#EF4444", b: "#FEF2F2" }];
+  const est = [{ id: "ok", c: "#16A34A", b: "rgba(22,163,74,.14)" }, { id: "reparación", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, { id: "baja", c: "#EF4444", b: "rgba(239,68,68,.10)" }];
   function guardar() { if (!form.nombre?.trim()) return; if (form.id) setHerramientas(p => p.map(x => x.id === form.id ? form : x)); else setHerramientas(p => [...p, { ...form, id: uid() }]); setForm(null); }
 
   const valorDe = (h) => (parseMontoNum(h.precio) || 0) * (Number(h.cantidad) || 1);
@@ -5617,18 +5642,18 @@ function HerramientasView({ db, onBack }) {
           </div>
           <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px" }}>
             <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Unidades</div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: T.navy, marginTop: 2 }}>{(herramientas || []).reduce((a, h) => a + (Number(h.cantidad) || 1), 0)}</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginTop: 2 }}>{(herramientas || []).reduce((a, h) => a + (Number(h.cantidad) || 1), 0)}</div>
           </div>
         </div>
 
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 11, marginBottom: 12 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 800, color: T.navy, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 7 }}>Dónde está</div>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: T.text, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 7 }}>Dónde está</div>
           {porUbic.map(u => (
             <div key={u.id} onClick={() => setFObra(fObra === u.id ? "" : u.id)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: fObra === u.id ? T.al : "transparent" }}>
               <Ico n={u.id === "_dep" ? "box" : "building"} s={14} c={T.accent} />
               <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.nombre}</span>
               <span style={{ fontSize: 10.5, color: T.muted, whiteSpace: "nowrap" }}>{u.unidades} u.</span>
-              <span style={{ fontSize: 11, fontWeight: 800, color: T.navy, whiteSpace: "nowrap" }}>{money(u.total)}</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: T.text, whiteSpace: "nowrap" }}>{money(u.total)}</span>
             </div>
           ))}
           {fObra && <button onClick={() => setFObra("")} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: "4px 0 0" }}>Ver todas</button>}
@@ -5645,7 +5670,7 @@ function HerramientasView({ db, onBack }) {
             <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{h.nombre} {h.cantidad && Number(h.cantidad) > 1 ? `×${h.cantidad}` : ""}</div>
             <div style={{ fontSize: 11.5, color: T.muted, marginTop: 1 }}>{h.marca ? h.marca + " · " : ""}{h.obra_id ? obraNom(obras, h.obra_id) : "Depósito"}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-              {h.precio && <span style={{ fontSize: 10.5, fontWeight: 800, color: T.navy, background: T.al, borderRadius: 6, padding: "2px 7px" }}>{money(parseMontoNum(h.precio))}{Number(h.cantidad) > 1 ? " c/u" : ""}</span>}
+              {h.precio && <span style={{ fontSize: 10.5, fontWeight: 800, color: T.text, background: T.al, borderRadius: 6, padding: "2px 7px" }}>{money(parseMontoNum(h.precio))}{Number(h.cantidad) > 1 ? " c/u" : ""}</span>}
               {h.fechaCompra && <span style={{ fontSize: 10.5, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 7px" }}>Compra {h.fechaCompra}</span>}
               {h.serie && <span style={{ fontSize: 10.5, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 7px" }}>N° {h.serie}</span>}
               {h.responsable && <span style={{ fontSize: 10.5, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "2px 7px" }}>{h.responsable}</span>}
@@ -5675,7 +5700,7 @@ function HerramientasView({ db, onBack }) {
         <Field label="A cargo de"><TInput value={form.responsable || ""} onChange={e => setForm({ ...form, responsable: e.target.value })} placeholder="Quién la tiene" /></Field>
         <Field label="Estado"><Sel value={form.estado || ""} onChange={e => setForm({ ...form, estado: e.target.value })}>{est.map(x => <option key={x.id} value={x.id}>{x.id}</option>)}</Sel></Field>
       </FieldRow>
-      {form.precio && Number(form.cantidad) > 1 && <div style={{ fontSize: 11.5, color: T.sub, marginTop: -4, marginBottom: 8 }}>Total de este ítem: <b style={{ color: T.navy }}>{money((parseMontoNum(form.precio) || 0) * (Number(form.cantidad) || 1))}</b></div>}
+      {form.precio && Number(form.cantidad) > 1 && <div style={{ fontSize: 11.5, color: T.sub, marginTop: -4, marginBottom: 8 }}>Total de este ítem: <b style={{ color: T.text }}>{money((parseMontoNum(form.precio) || 0) * (Number(form.cantidad) || 1))}</b></div>}
       <Adjuntos items={form.adjuntos} onChange={next => setForm({ ...form, adjuntos: next })} />
       <PBtn full onClick={guardar} style={{ marginTop: 10 }}>{form.id ? "Guardar" : "Agregar"}</PBtn>
     </Sheet>}
@@ -5747,7 +5772,7 @@ function AlertasWaView({ db, onBack }) {
 
 
 // ── PEDIDOS / SEGUIMIENTO (agente entre empresas) ────────────────────
-const PEDIDO_ESTADOS = { abierto:{l:"Abierto",c:"#F59E0B",b:"#FFFBEB"}, en_proceso:{l:"En proceso",c:"#3B82F6",b:"#EFF6FF"}, respondido:{l:"Respondido",c:"#8B5CF6",b:"#F5F3FF"}, resuelto:{l:"Resuelto",c:"#16A34A",b:"#ECFDF5"} };
+const PEDIDO_ESTADOS = { abierto:{l:"Abierto",c:"#F59E0B",b:"rgba(180,83,9,.14)"}, en_proceso:{l:"En proceso",c:"#3B82F6",b:"rgba(37,99,235,.14)"}, respondido:{l:"Respondido",c:"#8B5CF6",b:"rgba(139,92,246,.14)"}, resuelto:{l:"Resuelto",c:"#16A34A",b:"rgba(22,163,74,.14)"} };
 const PEDIDO_MAX_IA = 4; // tope de intercambios automáticos IA↔IA por pedido
 function parseAccion(texto){ const t=texto||""; let m=t.match(/```accion\s*([\s\S]*?)```/i)||t.match(/```accion\s*([\s\S]*)$/i); if(!m) return {limpio:texto,accion:null}; let raw=m[1].trim(); let a=null; try{a=JSON.parse(raw);}catch{ const i=raw.indexOf("{"),j=raw.lastIndexOf("}"); if(i>=0&&j>i){ try{a=JSON.parse(raw.slice(i,j+1));}catch{} } } return {limpio:(t.replace(m[0],"").trim()||"Listo."),accion:a}; }
 function esDeCasa(de){ return de === "vv" || de === "sebastian" || de === "nicolas"; }
@@ -6011,7 +6036,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="pedidos" label="Pedidos · Seguimiento" sub={`Gestión de temas con ${otroNom}`} onBack={onBack} />
     {!cur && <div style={{ padding: "16px 20px" }}>
-      {(() => { const pend = pedidos.filter(p => p.para === miSide && p.estado !== "resuelto"); if (!pend.length) return null; const obrasTxt = [...new Set(pend.map(p => p.obra_id ? obraNom(obras, p.obra_id) : "general").filter(Boolean))].join(", "); return (<div style={{ display: "flex", alignItems: "center", gap: 11, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: T.rsm, padding: "12px 14px", marginBottom: 14 }}>
+      {(() => { const pend = pedidos.filter(p => p.para === miSide && p.estado !== "resuelto"); if (!pend.length) return null; const obrasTxt = [...new Set(pend.map(p => p.obra_id ? obraNom(obras, p.obra_id) : "general").filter(Boolean))].join(", "); return (<div style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "12px 14px", marginBottom: 14 }}>
         <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
         <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{obrasTxt ? `Obras: ${obrasTxt}` : ""}</div></div>
       </div>); })()}
@@ -6030,7 +6055,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
             <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
               {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "2px 7px" }}><Ico n="building" /> {obraNom(obras, p.obra_id)}</span>}
-              {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "#FEF2F2", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
+              {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "rgba(239,68,68,.10)", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
               <span style={{ fontSize: 10.5, color: T.muted }}>{esDeCasa(p.de) ? (p.de === "sebastian" || p.de === "nicolas" ? "Interno" : "Enviado") : "Recibido"} · {p.fecha}</span>
             </div>
             <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>{ult?.porIA ? "" : ""}{ult?.texto}</div>
@@ -6052,7 +6077,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
         <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
           {Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>{v.l}</button>)}
         </div>
-        <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
+        <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
       </Card>
       <Eyebrow>Hilo</Eyebrow>
       {(cur.hilo || []).map((h, i) => { const mine = persp(h); return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
@@ -6352,7 +6377,7 @@ function PlantillasView({ db, cfg, onBack }) {
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
     <SubHead id="documentacion" label="Plantillas de documentos" sub="Subí un modelo, completalo y guardalo en la obra" onBack={onBack} />
     <div style={{ padding: "14px 18px" }}>
-      <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
+      <div style={{ background: "rgba(180,83,9,.14)", border: "1px solid rgba(180,83,9,.30)", borderRadius: 10, padding: "10px 12px", marginBottom: 14, fontSize: 11.5, color: "#92400E", lineHeight: 1.5 }}>
         Los PDF se completan con el editor: tocás el documento donde querés escribir. En los Word, usá marcadores entre llaves: <b>{"{obra}"}</b>, <b>{"{fecha}"}</b>, <b>{"{responsable}"}</b>, <b>{"{empresa}"}</b>, <b>{"{sector}"}</b>. Podés sumar los tuyos y cargarlos al usar la plantilla.
       </div>
       <input ref={fileRef} type="file" multiple onChange={subirPlantilla} style={{ display: "none" }} />
@@ -6364,14 +6389,14 @@ function PlantillasView({ db, cfg, onBack }) {
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <Ico n={icoArch(p.nombre)} s={18} c={T.accent} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{p.ext?.toUpperCase()}{p.ext === "docx" ? " · se completa automáticamente" : " · se guarda una copia"}</div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
             <button onClick={() => p.ext === "pdf" ? setEditPdf(p) : abrirUsar(p)} style={{ flex: 2, background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 7, padding: "8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{p.ext === "pdf" ? "Completar y guardar" : "Usar en una obra"}</button>
             <button onClick={() => descargarArchivo(p.url, p.nombre)} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Abrir</button>
-            <button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "8px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} c="#EF4444" /></button>
+            <button onClick={() => borrar(p.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "8px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" s={13} c="#EF4444" /></button>
           </div>
         </div>
       ))}
@@ -6381,7 +6406,7 @@ function PlantillasView({ db, cfg, onBack }) {
       onGuardar={({ obraId, arch }) => db.setObras(prev => (prev || []).map(o => o.id === obraId ? { ...o, archivos: [arch, ...(o.archivos || [])] } : o))} />}
     {usar && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={() => setUsar(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, width: "100%", maxHeight: "92vh", overflowY: "auto", borderRadius: "16px 16px 0 0", padding: "16px 18px calc(24px + env(safe-area-inset-bottom))" }}>
-        <div style={{ fontSize: 14.5, fontWeight: 800, color: T.navy, marginBottom: 2 }}>Completar y guardar en la obra</div>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: T.text, marginBottom: 2 }}>Completar y guardar en la obra</div>
         <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>{usar.plantilla.nombre}</div>
         <label style={lbl}>Obra</label>
         <select value={usar.obra_id} onChange={e => setUsar(u => ({ ...u, obra_id: e.target.value }))} style={{ ...inp, margin: "5px 0 10px" }}>
@@ -6415,7 +6440,28 @@ function PlantillasView({ db, cfg, onBack }) {
 function FormulariosView({ db, cfg, onBack }) {
   const adjRefForm = useRef(null);
   const [subiendoAdj, setSubiendoAdj] = useState(false);
-  const { obras, formularios, setFormularios, setPedidos } = db;
+  const { obras, formularios, setFormularios, setPedidos, certConformidad, setCertConformidad } = db;
+  // ── Certificados de conformidad de etapas de obra (auditor Héctor) ──
+  const certRef = useRef(null);
+  const [subiendoCert, setSubiendoCert] = useState(false);
+  const [certObraId, setCertObraId] = useState(obras[0]?.id || "");
+  const listaCert = (certConformidad || []).filter(c => c.obra_id === certObraId).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  async function subirCertConformidad(e) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    if (!certObraId) { alert("Elegí una obra primero."); return; }
+    setSubiendoCert(true);
+    const nuevos = [];
+    for (const f of files) {
+      const data = await toDataUrl(f);
+      const url = await uploadFoto(data, `certconformidad/${certObraId}`, `${Date.now()}_${f.name.replace(/[^\w.\-]+/g, "_")}`);
+      nuevos.push({ id: uid(), obra_id: certObraId, nombre: f.name, url, auditor: "Héctor Ayala", fecha: hoyStr(), ts: Date.now() });
+    }
+    setCertConformidad(p => [...nuevos, ...(p || [])]);
+    setSubiendoCert(false);
+    e.target.value = "";
+    if (nuevos.some(n => !mediaStorage.isRemoteUrl(n.url))) alert("⚠ El archivo quedó guardado en este dispositivo pero no se pudo subir a la nube. Revisá el bucket de fotos en Supabase.");
+  }
+  function borrarCertConformidad(id) { if (confirm("¿Eliminar este certificado de conformidad?")) setCertConformidad(p => (p || []).filter(x => x.id !== id)); }
   const cli = cfg?.clienteNombre || "Belfast Construction Management";
   const [pick, setPick] = useState(false);
   const [obraPick, setObraPick] = useState(obras[0]?.id || "");
@@ -6462,7 +6508,7 @@ function FormulariosView({ db, cfg, onBack }) {
           <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>Comitente: {cli} · Contratista: V+V Construcciones{tpl.id === "iav" ? " · Auditor: Arq. Héctor Ayala" : ""}</div>
         </Card>
         <Card style={{ padding: 13, marginBottom: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 3 }}>Archivos adjuntos</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 3 }}>Archivos adjuntos</div>
           <div style={{ fontSize: 11, color: T.muted, marginBottom: 9, lineHeight: 1.45 }}>Sumá planos, PDF, Word, Excel o fotos que respalden este formulario.</div>
           {(ed.adjuntos || []).map(a => (
             <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px", marginBottom: 5 }}>
@@ -6472,7 +6518,7 @@ function FormulariosView({ db, cfg, onBack }) {
             </div>
           ))}
           <input ref={adjRefForm} type="file" multiple onChange={subirAdjuntos} style={{ display: "none" }} />
-          <button onClick={() => adjRefForm.current?.click()} disabled={subiendoAdj} style={{ width: "100%", background: T.bg, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendoAdj ? "Subiendo…" : <><Ico n="clip" s={14} /> Adjuntar archivo</>}</button>
+          <button onClick={() => adjRefForm.current?.click()} disabled={subiendoAdj} style={{ width: "100%", background: T.bg, border: `1px solid ${BRASS}`, color: T.text, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{subiendoAdj ? "Subiendo…" : <><Ico n="clip" s={14} /> Adjuntar archivo</>}</button>
         </Card>
         {tpl.textos?.filter(tx => tpl.modo !== "iav").map(tx => <Field key={tx.k} label={tx.l}><textarea value={ed.textos[tx.k] || ""} onChange={e => set({ textos: { ...ed.textos, [tx.k]: e.target.value } })} rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 13.5, color: T.text }} /></Field>)}
         {tpl.secciones?.map((sec, si) => <Card key={si} style={{ padding: 13, marginBottom: 11 }}>
@@ -6511,8 +6557,27 @@ function FormulariosView({ db, cfg, onBack }) {
   }
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
-    <SubHead id="formularios" label="Formularios" sub="Plantillas digitales en uso continuo" onBack={onBack} />
+    <SubHead id="formularios" label="Certificados" sub="Conformidad de etapas y plantillas digitales" onBack={onBack} />
     <div style={{ padding: "16px 20px" }}>
+      <Card style={{ padding: 14, marginBottom: 16, borderLeft: `3px solid ${BRASS}` }}>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 3 }}>Certificados de conformidad de etapas de obra</div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.45 }}>Certificados firmados por el auditor (Héctor Ayala) que dan conformidad a una etapa ejecutada. Subilos acá, por obra.</div>
+        <Field label="Obra"><Sel value={certObraId} onChange={e => setCertObraId(e.target.value)}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        <input ref={certRef} type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={subirCertConformidad} style={{ display: "none" }} />
+        <button onClick={() => certRef.current && certRef.current.click()} disabled={subiendoCert} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}`, marginTop: 4 }}>{subiendoCert ? "Subiendo…" : "＋ Cargar certificado"}</button>
+        {listaCert.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12, padding: "16px 0 4px" }}>Sin certificados de conformidad cargados en esta obra.</div>}
+        {listaCert.map(c => (
+          <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginTop: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{c.nombre}</div>
+              <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{c.fecha} · Auditor: {c.auditor}</div>
+            </div>
+            <button onClick={() => descargarArchivo(c.url, c.nombre)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Ver</button>
+            <button onClick={() => borrarCertConformidad(c.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer", flexShrink: 0 }}>✕</button>
+          </div>
+        ))}
+      </Card>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Plantillas digitales</div>
       <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 14 }}>Completá y guardá las planillas por obra; quedan en la app para reusarlas siempre. Plantillas: Certificado de Inicio de Etapa, Informe de Auditoría, Estado de situación y Nota de pedido.</div>
       {list.length === 0 && <EmptyMsg>Sin formularios cargados. Tocá ＋ para empezar uno.</EmptyMsg>}
       {list.map(f => { const tpl = tplOf(f.tplId); return (<Card key={f.id} style={{ padding: 13, marginBottom: 9 }}>
@@ -6521,9 +6586,9 @@ function FormulariosView({ db, cfg, onBack }) {
             {(f.adjuntos || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 7 }}>
               {(f.adjuntos || []).map(a => <button key={a.id} onClick={() => descargarArchivo(a.url, a.nombre)} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", maxWidth: "100%" }}><Ico n={icoArch(a.nombre)} s={12} /><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span></button>)}
             </div>}</div>
-          {f.resultado ? <Badge color={f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#F59E0B" : "#16A34A"} bg={f.resultado.includes("NO APTO") ? "#FEF2F2" : f.resultado.includes("OBSERV") ? "#FFFBEB" : "#ECFDF5"}>{f.resultado.replace(" PARA INICIO", "")}</Badge> : <span style={{ color: T.muted, fontSize: 16 }}>›</span>}
+          {f.resultado ? <Badge color={f.resultado.includes("NO APTO") ? "#EF4444" : f.resultado.includes("OBSERV") ? "#F59E0B" : "#16A34A"} bg={f.resultado.includes("NO APTO") ? "rgba(239,68,68,.10)" : f.resultado.includes("OBSERV") ? "rgba(180,83,9,.14)" : "rgba(22,163,74,.14)"}>{f.resultado.replace(" PARA INICIO", "")}</Badge> : <span style={{ color: T.muted, fontSize: 16 }}>›</span>}
         </div>
-        <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Eliminar este formulario (${tpl?.nombre || "Formulario"} · ${obraNom(obras, f.obra_id)})?${f.compartido ? "\n\nOJO: está compartido — también se borra en Belfast." : ""}`)) setFormularios(list.filter(x => x.id !== f.id)); }} style={{ marginTop: 10, background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: T.rsm, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar formulario</button>
+        <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Eliminar este formulario (${tpl?.nombre || "Formulario"} · ${obraNom(obras, f.obra_id)})?${f.compartido ? "\n\nOJO: está compartido — también se borra en Belfast." : ""}`)) setFormularios(list.filter(x => x.id !== f.id)); }} style={{ marginTop: 10, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar formulario</button>
       </Card>); })}
     </div>
     <AddFab onClick={() => setPick(true)} label="Formulario" />
@@ -6551,7 +6616,7 @@ const FERIADOS = new Set([
 const _isoDe = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(cur))) n++; } return n; }
 function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaReal || new Date(); const dias = diasHabiles(fechaSolic, fin); const desvio = dias - plazo; let estado; if (fechaReal || cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo"; else estado = desvio <= 0 ? "En plazo" : "Vencido"; return { dias, desvio, estado, retraso: Math.max(0, desvio) }; }
-const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "#ECFDF5" }, "En plazo": { c: "#3B82F6", b: "#EFF6FF" }, "Fuera de plazo": { c: "#F59E0B", b: "#FFFBEB" }, "Vencido": { c: "#EF4444", b: "#FEF2F2" } };
+const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "rgba(22,163,74,.14)" }, "En plazo": { c: "#3B82F6", b: "rgba(37,99,235,.14)" }, "Fuera de plazo": { c: "#F59E0B", b: "rgba(180,83,9,.14)" }, "Vencido": { c: "#EF4444", b: "rgba(239,68,68,.10)" } };
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 const isoHoy = () => new Date().toISOString().slice(0, 10);
 
@@ -6628,7 +6693,7 @@ function GestionView({ db, cfg, onBack }) {
       table{width:100%;border-collapse:collapse;margin:14px 0}
       td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top}
       th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9.5px;letter-spacing:1px}
-      .calc{background:#F8FAFC;border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
+      .calc{background:rgba(255,255,255,.04);border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
       .tot{font-size:16px;font-weight:bold;color:#B91C1C;margin-top:6px}
       .firmas{display:flex;justify-content:space-between;margin-top:70px}
       .firma{width:44%;border-top:1px solid #1a202c;padding-top:6px;font-size:10.5px;text-align:center;color:#475569}
@@ -6661,7 +6726,7 @@ function GestionView({ db, cfg, onBack }) {
   }
 
   const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
-  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "#FEF2F2" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "#F1F5F9" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "#EFF6FF" } };
+  const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
 
   // Tarjeta compartida por Registro y Punitorios
   const ItemCard = ({ it, conAcciones }) => {
@@ -6689,7 +6754,7 @@ function GestionView({ db, cfg, onBack }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end", flexShrink: 0 }}>
           <Badge color={e.c} bg={e.b}>{it.estado}</Badge>
           {db2 && <Badge color={db2.c} bg={db2.b}>{db2.t}</Badge>}
-          {!it.dec && esVencido(it) && <Badge color="#B45309" bg="#FFFBEB">En evaluación</Badge>}
+          {!it.dec && esVencido(it) && <Badge color="#B45309" bg="rgba(180,83,9,.14)">En evaluación</Badge>}
         </div>
       </div>
     </Card>);
@@ -6749,7 +6814,7 @@ function GestionView({ db, cfg, onBack }) {
         <MiniStat label="Días háb. prom." value={diasProm} color="#3B82F6" />
         <MiniStat label="Perjuicio confirmado" value={money(perjTotal)} color="#EF4444" />
       </div>
-      {enEval.length > 0 && <div onClick={() => setTab("punitorios")} style={{ background: "#FFFBEB", border: "1px solid #F59E0B", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 14, fontSize: 12, color: "#92400E", cursor: "pointer", fontWeight: 600 }}>⚠ {enEval.length} vencido{enEval.length > 1 ? "s" : ""} sin evaluar — tocá para revisarlos</div>}
+      {enEval.length > 0 && <div onClick={() => setTab("punitorios")} style={{ background: "rgba(180,83,9,.14)", border: "1px solid #F59E0B", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 14, fontSize: 12, color: "#92400E", cursor: "pointer", fontWeight: 600 }}>⚠ {enEval.length} vencido{enEval.length > 1 ? "s" : ""} sin evaluar — tocá para revisarlos</div>}
       <Eyebrow>Por estado</Eyebrow>
       <Card style={{ padding: 13, marginBottom: 14 }}>
         {["Cumplido", "En plazo", "Fuera de plazo", "Vencido"].map(s => { const e = GEST_ESTADOS[s]; return (<div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.bg}` }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: e.c }} /><span style={{ fontSize: 12.5, color: T.text }}>{s}</span></div><span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{cnt(s)}</span></div>); })}
@@ -6829,7 +6894,7 @@ function GestionView({ db, cfg, onBack }) {
           <Field label="Costo por persona/día ($)"><TInput type="number" value={pForm.costoDia} onChange={e => setPForm({ ...pForm, costoDia: e.target.value })} /></Field>
         </FieldRow>
         <Field label="Observaciones (opcional)"><TInput value={pForm.nota} onChange={e => setPForm({ ...pForm, nota: e.target.value })} placeholder="Contexto, referencia a bitácora…" /></Field>
-        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 12 }}>
+        <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "11px 13px", marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: "#991B1B" }}>{pForm.it.retraso} d × {Number(pForm.personas) || 0} pers. × {money(Number(pForm.costoDia) || 0)}</div>
           <div style={{ fontSize: 17, fontWeight: 800, color: "#B91C1C" }}>{money(pForm.it.retraso * (Number(pForm.personas) || 0) * (Number(pForm.costoDia) || 0))}</div>
           {!pForm.it.fechaReal && <div style={{ fontSize: 10.5, color: "#991B1B", marginTop: 3 }}>Sigue sin respuesta: el monto crece {money((Number(pForm.personas) || 0) * (Number(pForm.costoDia) || 0))} por día hábil.</div>}
@@ -6914,7 +6979,7 @@ function MensajesVVView({ db, cfg, onBack }) {
   return (<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
     <SubHead id="mensajes" label="Mensajes" sub={`Chat con ${cn}`} onBack={onBack} />
     {(mensajes || []).length > 0 && <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 16px 0" }}>
-      <button onClick={vaciarMensajes} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> Vaciar mensajes ({(mensajes || []).length})</button>
+      <button onClick={vaciarMensajes} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="trash" /> Vaciar mensajes ({(mensajes || []).length})</button>
     </div>}
     {clienteArchivos.length > 0 && <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "9px 16px", display: "flex", gap: 7, overflowX: "auto" }}>
       <span style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", flexShrink: 0, alignSelf: "center" }}>Del cliente:</span>
@@ -7080,8 +7145,179 @@ async function extraerCuadros(file, n = 6) {
   });
 }
 
-function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, docrecepcion = [] }) {
+// ── Certificado por rubro: cada rubro tiene un % de incidencia fijo sobre
+// el total de la obra (ej: Estructura 30%, Instalaciones 20%...). Cada
+// certificado carga el % de avance EJECUTADO de cada rubro a esa fecha, y
+// el avance total de la obra sale ponderado: Σ (incidencia × avance/100).
+function CertifRubroPanel({ obraId, obraNombre, cfg, certifRubro, setCertifRubro, onEnviarPropietario }) {
+  const datos = certifRubro[obraId] || { rubros: [], items: [] };
+  const rubros = datos.rubros || [];
+  const items = (datos.items || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const sumaIncidencia = rubros.reduce((s, r) => s + (Number(r.incidencia) || 0), 0);
+
+  const [nombreRubro, setNombreRubro] = React.useState("");
+  const [incidenciaRubro, setIncidenciaRubro] = React.useState("");
+  const [fecha, setFecha] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [avances, setAvances] = React.useState({}); // { rubroId: pct }
+  const [pdfHtml, setPdfHtml] = React.useState(null);
+
+  const guardarDatos = (next) => setCertifRubro(prev => ({ ...(prev || {}), [obraId]: next }));
+
+  const agregarRubro = () => {
+    if (!nombreRubro.trim()) { alert("Poné el nombre del rubro."); return; }
+    const inc = Number(incidenciaRubro);
+    if (!inc || inc <= 0 || inc > 100) { alert("La incidencia tiene que ser un % entre 1 y 100."); return; }
+    const nuevo = { id: uid(), nombre: nombreRubro.trim(), incidencia: inc };
+    guardarDatos({ ...datos, rubros: [...rubros, nuevo] });
+    setNombreRubro(""); setIncidenciaRubro("");
+  };
+  const borrarRubro = (id) => {
+    if (!confirm("¿Borrar este rubro? Los certificados ya guardados no se modifican.")) return;
+    guardarDatos({ ...datos, rubros: rubros.filter(r => r.id !== id) });
+  };
+
+  const ponderadoActual = rubros.reduce((s, r) => s + ((Number(r.incidencia) || 0) / 100) * ((Number(avances[r.id]) || 0) / 100) * 100, 0);
+
+  const guardarCertificado = () => {
+    if (!rubros.length) { alert("Primero cargá los rubros de la obra y su % de incidencia."); return; }
+    if (Math.round(sumaIncidencia) !== 100) { if (!confirm(`Las incidencias suman ${sumaIncidencia}%, no 100%. ¿Guardar igual?`)) return; }
+    const item = { id: uid() + Date.now(), fecha, avances: { ...avances }, ponderado: Math.round(ponderadoActual * 10) / 10, ts: Date.now() };
+    guardarDatos({ ...datos, items: [item, ...(datos.items || [])] });
+    setAvances({});
+    alert("Certificado por rubro guardado.");
+  };
+  const borrarCertificado = (id) => { if (confirm("¿Borrar este certificado?")) guardarDatos({ ...datos, items: (datos.items || []).filter(x => x.id !== id) }); };
+
+  const fmtDMY2 = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
+  const _e2 = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  function buildPdfRubro(item) {
+    const marca = (cfg?.empresa || "V+V Construcciones").toUpperCase();
+    const logo = cfg?.logoEmpresa || cfg?.logoCentral || cfg?.logoEmpresa2 || "";
+    const filas = rubros.map(r => {
+      const av = Number((item.avances || {})[r.id]) || 0;
+      const pond = ((Number(r.incidencia) || 0) / 100) * (av / 100) * 100;
+      return `<tr><td>${_e2(r.nombre)}</td><td style="text-align:center">${r.incidencia}%</td><td style="text-align:center">${av}%</td><td style="text-align:center"><b>${(Math.round(pond * 10) / 10)}%</b></td></tr>`;
+    }).join("");
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 15mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
+      .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
+      .barra b { color: #0F1B2D; }
+      table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+      th { background: rgba(255,255,255,.06); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 8px 10px; border: 1px solid #E3E8EF; }
+      td { font-size: 12px; padding: 8px 10px; border: 1px solid #E3E8EF; }
+      .total { margin-top: 16px; text-align: center; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 10px; padding: 14px; }
+      .total .n { font-size: 26px; font-weight: 800; color: #B0894F; }
+      .total .l { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #5B6B7F; margin-top: 2px; }
+      .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">Certificado de avance por rubro</div></div>
+      <div class="barra"><div>Obra: <b>${_e2(obraNombre)}</b></div><div>Fecha: <b>${fmtDMY2(item.fecha)}</b></div></div>
+      <table><tr><th>Rubro</th><th style="text-align:center">Incidencia</th><th style="text-align:center">Avance ejecutado</th><th style="text-align:center">Ponderado</th></tr>${filas}</table>
+      <div class="total"><div class="n">${item.ponderado}%</div><div class="l">Avance total ponderado de la obra</div></div>
+      <div class="foot">Generado por ${marca} · Certificado de avance por rubro.</div>
+    </div></body></html>`;
+  }
+  const verPdf = (item) => setPdfHtml(buildPdfRubro(item));
+
+  return (<div>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 8 }}>Rubros de la obra</div>
+      {rubros.length === 0 && <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>Todavía no cargaste rubros. Agregalos con su % de incidencia sobre el total (ej: Estructura 30%, Instalaciones 20%…).</div>}
+      {rubros.map(r => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}` }}>
+          <span style={{ flex: 1, fontSize: 12.5, color: T.text, fontWeight: 600 }}>{r.nombre}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: BRASS }}>{r.incidencia}%</span>
+          <button onClick={() => borrarRubro(r.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer" }}>✕</button>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+        <input value={nombreRubro} onChange={e => setNombreRubro(e.target.value)} placeholder="Nombre del rubro" style={{ flex: 2, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 12.5, color: T.text }} />
+        <input value={incidenciaRubro} onChange={e => setIncidenciaRubro(e.target.value)} type="number" min="1" max="100" placeholder="% inc." style={{ width: 76, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 12.5, color: T.text }} />
+        <button onClick={agregarRubro} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "0 14px", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>＋</button>
+      </div>
+      {rubros.length > 0 && <div style={{ fontSize: 11, color: Math.round(sumaIncidencia) === 100 ? "#15803D" : "#B45309", fontWeight: 700, marginTop: 8 }}>Suma de incidencias: {sumaIncidencia}% {Math.round(sumaIncidencia) !== 100 ? "— debería sumar 100%" : "✓"}</div>}
+    </div>
+
+    {rubros.length > 0 && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 8 }}><Ico n="calendar" /> Nuevo certificado</div>
+      <label style={{ fontSize: 10, fontWeight: 700, color: T.sub }}>FECHA</label>
+      <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13.5, color: T.text, boxSizing: "border-box", margin: "4px 0 10px" }} />
+      {rubros.map(r => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
+          <span style={{ flex: 1, fontSize: 12.5, color: T.text }}>{r.nombre} <span style={{ color: T.muted, fontSize: 11 }}>({r.incidencia}%)</span></span>
+          <input value={avances[r.id] || ""} onChange={e => setAvances(p => ({ ...p, [r.id]: e.target.value }))} type="number" min="0" max="100" placeholder="0" style={{ width: 66, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 8px", fontSize: 12.5, color: T.text, textAlign: "center" }} />
+          <span style={{ fontSize: 12, color: T.muted }}>%</span>
+        </div>
+      ))}
+      <div style={{ textAlign: "center", background: T.bg, borderRadius: 9, padding: "10px", margin: "8px 0" }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: BRASS }}>{Math.round(ponderadoActual * 10) / 10}%</div>
+        <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em" }}>Avance total ponderado</div>
+      </div>
+      <button onClick={guardarCertificado} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>✓ Guardar certificado</button>
+    </div>}
+
+    {items.length > 0 && <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 7 }}>Certificados por rubro guardados</div>
+      {items.map(it => (
+        <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "9px 11px", marginBottom: 6 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{fmtDMY2(it.fecha)} · {it.ponderado}% ponderado</div>
+            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{rubros.length} rubro{rubros.length !== 1 ? "s" : ""}</div>
+          </div>
+          <button onClick={() => verPdf(it)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+          {onEnviarPropietario && <button onClick={() => { const h = buildPdfRubro(it); onEnviarPropietario({ ...it, html: h }); }} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>}
+          <button onClick={() => borrarCertificado(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
+        </div>
+      ))}
+    </div>}
+
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 320, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: "14px 14px 10px", background: "#0F1B2D", flexShrink: 0 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
+        <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Certificado por rubro</span>
+        <button onClick={() => { const f = document.getElementById("rub-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="rub-pdf" srcDoc={pdfHtml} title="Certificado por rubro" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+  </div>);
+}
+function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], certif = {}, setCertif, certifRubro = {}, setCertifRubro, docrecepcion = [] }) {
   const [obraId, setObraId] = React.useState(obras[0]?.id || "");
+  const [certTab, setCertTab] = React.useState("semanal"); // "semanal" | "rubro"
+  // Arreglo de una sola vez para el error 413 ("Payload Too Large"): versiones
+  // anteriores guardaban el PDF completo de cada certificado semanal (con
+  // todas las fotos incrustadas) para siempre en la base. Acumulado semana a
+  // semana, ese paquete terminaba pesando más de lo que el servidor deja
+  // guardar en un solo pedido. Esto saca esos PDFs viejos guardados de más
+  // (dejando solo la marca de "preparado"), una vez, la primera vez que
+  // carga con datos viejos así.
+  React.useEffect(() => {
+    if (!setCertif) return;
+    const hayPesados = Object.values(certif || {}).some(lista => (lista || []).some(c => c.html));
+    if (!hayPesados) return;
+    setCertif(prev => {
+      const limpio = {};
+      for (const oid in (prev || {})) {
+        limpio[oid] = (prev[oid] || []).map(c => {
+          if (!c.html) return c;
+          const { html, ...resto } = c;
+          return { ...resto, preparado: true };
+        });
+      }
+      return limpio;
+    });
+  }, [certif, setCertif]);
   const [enviosProp, setEnviosProp] = useStoredState("cliente_envios_prop", {});
   // Manda un informe (avance o certificado) directo al propietario, sin pasar por
   // Belfast — imprescindible para obras privadas, que Belfast nunca ve.
@@ -7283,7 +7519,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       ul { margin: 0; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.55; margin-bottom: 3px; }
       .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
       table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-      th { background: #F1F5F9; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
+      th { background: rgba(255,255,255,.06); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
       td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
       .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
       .fecha { font-size: 12.5px; font-weight: 800; color: #B0894F; margin-bottom: 7px; }
@@ -7599,10 +7835,10 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       {pendientes.length === 0
         ? <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <button onClick={() => fileRef.current?.click()} disabled={busy || !obraId} style={{ flex: 2, background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 15, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Preparando…" : "Elegir foto(s)"}</button>
-            <button onClick={() => videoRef.current?.click()} disabled={busy || !obraId} style={{ flex: 1, background: T.card, color: T.navy, border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 14, fontWeight: 700, cursor: busy ? "default" : "pointer" }}><Ico n="video" s={15} /> Video</button>
+            <button onClick={() => videoRef.current?.click()} disabled={busy || !obraId} style={{ flex: 1, background: T.card, color: T.text, border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "14px", fontSize: 14, fontWeight: 700, cursor: busy ? "default" : "pointer" }}><Ico n="video" s={15} /> Video</button>
           </div>
         : <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{pendientes.length === 1 ? "1 imagen seleccionada" : `${pendientes.length} imágenes seleccionadas`} — poné la fecha y analizá</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: T.text, marginBottom: 8 }}>{pendientes.length === 1 ? "1 imagen seleccionada" : `${pendientes.length} imágenes seleccionadas`} — poné la fecha y analizá</div>
             {vidPend.length > 0 && <div style={{ fontSize: 11, color: T.sub, background: T.al, border: `1px solid ${BRASS}`, borderRadius: 8, padding: "7px 9px", marginBottom: 8, lineHeight: 1.45 }}><Ico n="video" s={13} /> {vidPend.length} video{vidPend.length > 1 ? "s" : ""} ({vidPend.map(v => v.nombre).join(", ")}). Saqué {pendientes.filter(x => x.deVideo).length} cuadros del recorrido para que los analice la IA; el video queda guardado para verlo.</div>}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
               {pendientes.map((pf, i) => <div key={i} style={{ position: "relative" }}>
@@ -7616,13 +7852,18 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               <button onClick={() => { setPendientes([]); setVidPend([]); setStatus(""); }} disabled={busy} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
               <button onClick={analizar} disabled={busy} style={{ flex: 2, background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Analizando…" : "✓ Analizar avance"}</button>
               <button onClick={() => fileRef.current?.click()} disabled={busy} title="Agregar fotos" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: T.rsm, padding: "0 13px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
-              <button onClick={() => videoRef.current?.click()} disabled={busy} title="Agregar video" style={{ background: T.al, border: `1px solid ${BRASS}`, color: T.navy, borderRadius: T.rsm, padding: "0 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}><Ico n="video" s={15} /></button>
+              <button onClick={() => videoRef.current?.click()} disabled={busy} title="Agregar video" style={{ background: T.al, border: `1px solid ${BRASS}`, color: T.text, borderRadius: T.rsm, padding: "0 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}><Ico n="video" s={15} /></button>
             </div>
           </div>}
       {status && <div style={{ fontSize: 12.5, color: T.sub, textAlign: "center", padding: "6px 0 12px" }}>{status}</div>}
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, marginBottom: 16 }}>Consejo: elegí las fotos, fijate cuáles son y recién ahí poné la fecha del día en que se sacaron. Podés subir varias del mismo día (distintos sectores). El % es una estimación visual, no una medición exacta.</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        <button onClick={() => setCertTab("semanal")} style={{ flex: 1, background: certTab === "semanal" ? T.navy : T.card, color: certTab === "semanal" ? "#fff" : T.sub, border: `1px solid ${certTab === "semanal" ? T.navy : T.border}`, borderRadius: 8, padding: "9px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Certificado semanal</button>
+        <button onClick={() => setCertTab("rubro")} style={{ flex: 1, background: certTab === "rubro" ? T.navy : T.card, color: certTab === "rubro" ? "#fff" : T.sub, border: `1px solid ${certTab === "rubro" ? T.navy : T.border}`, borderRadius: 8, padding: "9px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Certificado por rubro</button>
+      </div>
+      {certTab === "semanal" && <>
       <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 12, boxShadow: T.shadow }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: T.navy, marginBottom: 2 }}><Ico n="calendar" /> Certificado semanal</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 2 }}><Ico n="calendar" /> Certificado semanal</div>
         <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.45, marginBottom: 9 }}>Junta todos los avances de la semana + la bitácora en un solo informe. La semana cierra los viernes.</div>
         <div style={{ display: "flex", gap: 8, marginBottom: 9 }}>
           <div style={{ flex: 1 }}><label style={{ fontSize: 10, fontWeight: 700, color: T.sub }}>DESDE (sáb)</label><input type="date" value={semDesde} onChange={e => setSemDesde(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13.5, color: T.text, boxSizing: "border-box", marginTop: 3 }} /></div>
@@ -7630,34 +7871,41 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         </div>
         <button onClick={armarSemanal} disabled={busy} style={{ width: "100%", background: busy ? T.border : T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Armando…" : "✓ Generar certificado de la semana"}</button>
       </div>
-      {(certif[obraId] || []).some(c => !c.html) && <button onClick={() => {
-        const sin = (certif[obraId] || []).filter(c => !c.html);
+      {(certif[obraId] || []).some(c => !c.preparado) && <button onClick={() => {
+        const sin = (certif[obraId] || []).filter(c => !c.preparado);
         const esPrivada = (obras || []).find(o => o.id === obraId)?.privada;
         const msg = esPrivada
           ? `Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los veas vos y el propietario (obra privada: Belfast no la ve).\n\n¿Seguimos?`
           : `Se van a preparar ${sin.length} certificado${sin.length > 1 ? "s" : ""} para que los vean Belfast y el propietario.\n\n¿Seguimos?`;
         if (!confirm(msg)) return;
-        setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(c => c.html ? c : { ...c, html: buildPdfSemanal(c) }) }));
+        // Solo se marca como "preparado" — el PDF se arma al momento de verlo
+        // o mandarlo, no se guarda el documento entero acá. Guardar el PDF
+        // completo (con las fotos incrustadas) de cada semana, para siempre,
+        // es lo que hacía que el paquete a guardar creciera sin límite y
+        // terminara rebotando con error 413 (Payload Too Large).
+        setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(c => c.preparado ? c : { ...c, preparado: true }) }));
         alert(`Listo: ${sin.length} certificado${sin.length > 1 ? "s quedaron disponibles" : " quedó disponible"} para el cliente.`);
-      }} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {(certif[obraId] || []).filter(c => !c.html).length} certificado{(certif[obraId] || []).filter(c => !c.html).length > 1 ? "s" : ""} para el cliente</button>}
+      }} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {(certif[obraId] || []).filter(c => !c.preparado).length} certificado{(certif[obraId] || []).filter(c => !c.preparado).length > 1 ? "s" : ""} para el cliente</button>}
       {(certif[obraId] || []).length > 0 && <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 7 }}>Certificados guardados</div>
         {(certif[obraId] || []).map(c => (
           <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 10, padding: "9px 11px", marginBottom: 6 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.navy }}>Semana {fmtDMY(c.desde)} al {fmtDMY(c.hasta)}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>Semana {fmtDMY(c.desde)} al {fmtDMY(c.hasta)}</div>
               <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{(c.av || []).length} avance(s) · {(c.bt || []).length} de bitácora · emitido {c.emitido}</div>
             </div>
-            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); const h = buildPdfSemanal(c); setPdfHtml(h); if (!c.html && setCertif) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).map(x => x.id === c.id ? { ...x, html: h } : x) })); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
-            <button onClick={() => mandarAlPropietarioVV(obraId, c, "cert")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
-            <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
+            <button onClick={() => { setSemData(c); setPdfEntries(c.av || []); setPdfHtml(buildPdfSemanal(c)); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
+            <button onClick={() => mandarAlPropietarioVV(obraId, { ...c, html: buildPdfSemanal(c) }, "cert")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "5px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
+            <button onClick={() => { if (confirm("¿Borrar este certificado guardado?")) setCertif(prev => ({ ...(prev || {}), [obraId]: ((prev || {})[obraId] || []).filter(x => x.id !== c.id) })); }} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> </button>
           </div>
         ))}
       </div>}
+      </>}
+      {certTab === "rubro" && <CertifRubroPanel obraId={obraId} obraNombre={obra?.nombre || ""} cfg={cfg} certifRubro={certifRubro} setCertifRubro={setCertifRubro} onEnviarPropietario={(item) => mandarAlPropietarioVV(obraId, { id: item.id, fecha: item.fecha, html: item.html }, "cert")} />}
       {historial.length > 0 && historial.some(h => !h.html) && <button onClick={prepararTodos} style={{ width: "100%", background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>📤 Preparar {historial.filter(h => !h.html).length} informe{historial.filter(h => !h.html).length > 1 ? "s" : ""} para el cliente</button>}
-      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, color: T.navy, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
+      {historial.length > 0 && <button onClick={pdfTodos} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}><Ico n="doc" /> PDF de toda la obra ({historial.length} fecha{historial.length > 1 ? "s" : ""})</button>}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <button onClick={abrirRecuperar} style={{ flex: 1, background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="life" /> Recuperar fotos</button>
+        <button onClick={abrirRecuperar} style={{ flex: 1, background: "rgba(180,83,9,.14)", border: "1px solid rgba(180,83,9,.30)", color: "#92400E", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="life" /> Recuperar fotos</button>
         <button onClick={exportarBackup} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, color: T.sub, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="save" /> Backup</button>
       </div>
       {historial.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px", lineHeight: 1.6 }}>Todavía no hay fotos de avance para esta obra.<br />Subí la primera (será la línea de base).</div>}
@@ -7681,7 +7929,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
               <button onClick={() => analizarEntry(h)} disabled={busy} title="Analizar con IA" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: busy ? "default" : "pointer", flexShrink: 0 }}><Ico n="search" /> IA</button>
               <button onClick={() => pdfUno(h)} title="Exportar esta fecha a PDF" style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="doc" /> PDF</button>
               <button onClick={() => mandarAlPropietarioVV(obraId, h, "avance")} title="Mandar al propietario" style={{ background: T.navy, border: `1px solid ${BRASS}`, color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>📤</button>
-              <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> Borrar</button>
+              <button onClick={() => { if (confirm("¿Borrar esta foto de avance? No se puede deshacer.")) mergeSaveAvance(obraId, list => list.filter(x => x.id !== h.id)); }} title="Borrar" style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}><Ico n="trash" /> Borrar</button>
             </div>
           </div>
           {h.avance && <div style={{ background: T.al, borderRadius: 8, padding: "9px 11px", marginBottom: 8 }}><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}><Ico n="chart" /> Avance</div><div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.avance}</div></div>}
@@ -7708,7 +7956,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         <span style={{ width: 60 }} />
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "#92400E", lineHeight: 1.5 }}>
+        <div style={{ background: "rgba(180,83,9,.14)", border: "1px solid rgba(180,83,9,.30)", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "#92400E", lineHeight: 1.5 }}>
           Estas son las fotos de avance que quedaron guardadas en la nube y no están asignadas a ninguna obra. Marcá las que quieras, elegí <b>la obra</b> (arriba, en la pantalla de avance) y <b>la fecha</b>, y tocá recuperar.
         </div>
         <div style={{ color: "#fff", fontSize: 12.5, marginBottom: 10 }}>{recuMsg}</div>
@@ -7731,58 +7979,163 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
   </div>);
 }
 const WEB_NAV = [
-  { id:"chat", label:"IA" }, { id:"drone", label:"Drone IA" }, { id:"minutas", label:"Grabar reunión" }, { id:"dashboard", label:"Inicio" },
+  { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" },
   { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" },
   { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos enviados" }, { id:"auditoria", label:"Auditoría" },
-    { id:"mas", label:"Más" },
+    { id:"minutas", label:"Grabar reunión" }, { id:"mas", label:"Más" },
 ];
 function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
   const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const tieneLogo = l1 || l2;
-  const lh = Math.min(Math.max(cfg?.logoSize || 42, 30), 64);
-  const cnt = (id) => (badges[id] || 0);
   return (
     <header style={{ position:"sticky", top:0, zIndex:200, flexShrink:0 }}>
-      <div style={{ background:T.navy, color:"#fff" }}>
-        <div style={{ maxWidth:1180, margin:"0 auto", padding:"6px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
+      <div style={{ background:T.navy, color:"#fff", paddingTop:"env(safe-area-inset-top)" }}>
+        <div style={{ maxWidth:1180, margin:"0 auto", padding:"10px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
           <span style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.22em", textTransform:"uppercase", color:"rgba(255,255,255,.6)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>Construcción · Obra · Gestión integral</span>
           <span style={{ fontSize:10.5, color:"rgba(255,255,255,.5)", whiteSpace:"nowrap" }}>{cfg?.ciudad || "Buenos Aires, Argentina"}</span>
         </div>
-      </div>
-      <div style={{ background:T.card, borderBottom:`1px solid ${T.border}` }}>
-        <div style={{ maxWidth:1180, margin:"0 auto", padding:"12px 24px 2px", display:"flex", justifyContent:"center" }}>
-          <div onClick={()=>go("dashboard")} style={{ display:"flex", alignItems:"center", gap:11, cursor:"pointer" }}>
-            {tieneLogo ? <img src={l1 || l2} alt="" style={{ maxHeight:lh, maxWidth:260, objectFit:"contain" }} />
-              : <><div style={{ width:44, height:44, background:T.navy, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:15, fontWeight:800, borderBottom:`2px solid ${BRASS}` }}>V+V</div>
-                <div style={{ lineHeight:1.2, textAlign:"left" }}><div style={{ fontSize:15, fontWeight:800, color:T.text, letterSpacing:"0.08em", textTransform:"uppercase" }}>V+V Construcciones</div><div style={{ fontSize:8.5, color:T.muted, letterSpacing:"0.18em", textTransform:"uppercase", marginTop:2 }}>Subcontratista de obra</div></div></>}
-          </div>
-        </div>
-        <nav style={{ maxWidth:1180, margin:"0 auto", padding:"4px 12px 0", display:"flex", gap:2, justifyContent:"center", flexWrap:"wrap" }}>
-          {WEB_NAV.map(n=>{ const active=view===n.id; const hayNuevo=cnt(n.id) > 0; return (
-            <button key={n.id} onClick={()=>go(n.id)} style={{ position:"relative", background:"none", border:"none", padding:"9px 12px", fontSize:12.5, fontWeight:(active||hayNuevo)?800:600, color:hayNuevo?"#EF4444":(active?T.accent:T.sub), letterSpacing:"0.02em", borderBottom:`2px solid ${active?BRASS:"transparent"}`, whiteSpace:"nowrap", cursor:"pointer" }}>
-              {n.label}
-              {hayNuevo && <span style={{ position:"absolute", top:3, right:2, background:"#EF4444", color:"#fff", borderRadius:9, minWidth:16, height:16, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px" }}>{cnt(n.id) > 99 ? "99+" : cnt(n.id)}</span>}
-            </button>
-          ); })}
-        </nav>
       </div>
       <div style={{ height:2, background:BRASS }} />
     </header>
   );
 }
+// ── Menú inferior: los 6 accesos que se usan todo el día, fijo abajo. El
+// resto (IA, Personal, Materiales, Subcontratos, Herramientas, Vigilancia,
+// Presentismo, Gestión, Certificados, Documentación, Chat privado, Grabar
+// reunión, Panel cliente, Ajustes/Diseño) sigue viviendo en "Más", que ya
+// existe (MasView) — no se tocó nada de eso.
+const BOTTOM_NAV_VV = [
+  { id:"dashboard", label:"Inicio" },
+  { id:"obras", label:"Obras" },
+  { id:"avance", label:"Avance" },
+  { id:"bitacora", label:"Bitácora" },
+  { id:"matpedidos", label:"Pedidos" },
+  { id:"auditoria", label:"Auditoría" },
+];
+function BottomNavVV({ view, go, badges = {} }) {
+  const cnt = (id) => (badges[id] || 0);
+  const items = BOTTOM_NAV_VV;
+  return (<nav style={{ flexShrink:0, background:T.card, borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"center", paddingBottom:"calc(env(safe-area-inset-bottom) + 6px)" }}>
+    <div style={{ width:"100%", maxWidth:1180, display:"flex" }}>
+      {items.map(n => {
+        const active = view === n.id;
+        const hayNuevo = cnt(n.id) > 0;
+        return (<button key={n.id} onClick={() => go(n.id)} style={{ position:"relative", flex:1, background:"none", border:"none", padding:"6px 4px 5px", fontSize:10.5, fontWeight:(active||hayNuevo)?800:600, color:hayNuevo?"#EF4444":(active?T.accent:T.sub), borderTop:`2px solid ${active?BRASS:"transparent"}`, marginTop:-1, cursor:"pointer" }}>
+          {n.label}
+          {hayNuevo && <span style={{ position:"absolute", top:4, right:"18%", background:"#EF4444", color:"#fff", borderRadius:9, minWidth:14, height:14, fontSize:8, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 3px" }}>{cnt(n.id) > 99 ? "99+" : cnt(n.id)}</span>}
+        </button>);
+      })}
+    </div>
+  </nav>);
+}
+// ── INICIO: foto de portada (última foto real de la obra en curso, va
+// rotando), % de avance, pendientes de hoy y acceso a la IA. Mismo
+// lenguaje que Cliente — real, no una lista de obras.
+const VV_LOGO_FALLBACK = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAwMDAgQDAwMEBAQFBgoGBgUFBgwICQcKDgwPDg4MDQ0PERYTDxAVEQ0NExoTFRcYGRkZDxIbHRsYHRYYGRj/2wBDAQQEBAYFBgsGBgsYEA0QGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBj/wAARCALQAtADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD4FooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAoqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oASiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAoopQCc4BOKAEopcHjg89KTBzjBzQAUUYPpSkEHBBB9DQAlFGCOoooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACgAk4AzSgE9ATXofw9+CfxM+J8kK+EvCl7c2rsFN/Mvk2yjJBPmt8pwRg4zQB55tOcYOfSrNnZ3mo3cNjY2s93cyHbFDCjSOx9FUda+4vh7+wPawvFefE3xZ9pHBOnaKu1enIeZ1z7fKv/AAIV9S+CPhd8P/hzp62vg3wnpumEAAzrH5k8nu0rAsT9TQB+fHgH9jT4weMJ4Z9Y0+38Laa4DNcao48zB9IUy5P1Ar6q+H37GHwl8GiK61+C68XagnzF9RIS3DeqQqcY6ff3evHQfRh5Ock59f8A9Zo7H6UAYGu/s9/Bv4geHYYfEvw90aVgnlpcWsP2WZVU8KJYtrbeOma+c/HX/BOLw9d+bc/DjxvfaZI2SLHWYxPFknOBKgVlUdMFWJx1r7b0f/kCQfQ/zNXqAPyD8afsY/H3wa883/CH/wBt2UWT9q0eZJwwHfZkOP8AvnNeEalp2o6XqUtjqljdWd3EQskFzE0bocA4KtyOCK/fFsg5A/GuZ8VfDzwP46s/snjLwjo+txc4+22qSMOOoYjKn3BoA/CnBzjFFfqL44/4J9fCHxCHm8I6hrHhK5Y5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pXn8RXO0UARlWz0o2t6VJRQAs889wUMpzsXavsKi2t6VJRQBFsb0o2N6VLRQBZguTHotzZk48x0YD1xnNUirelSUUARbG9KkjjDOquyoCeWIzilooA17fT/D64a51ln9Vjhcf0qW4svDDqfs2rTR+geNj/SsOigCW6t4IZdtvdJcp/eVGT9CKrFWJ6frUlFAEWxvSjY3pUtFAEWxvSjY3pUtFAEWxvSnBCcA8c9fSn0UARlGycc10Xhu40nT0e5vZ1FyTtVSjHavc8DrWDRQB6D/AMJLomeL3/yG/wDhSf8ACS6J/wA/v/kN/wDCvP6KAPQP+El0T/n9/wDIb/4Uf8JLon/P7/5Df/CvP6KAPQP+El0T/n9/8hv/AIUf8JLon/P7/wCQ3/wrz+igD0D/AISXRP8An9/8hv8A4Ux/EejmRSt7gD/pm/8AhXBUUAegf8JLov8Az+/+Q3/wo/4SXRP+f3/yG/8AhXn9FAHoH/CS6J/z+/8AkN/8KP8AhJdE/wCf3/yG/wDhXn9FAHoH/CS6J/z+/wDkN/8ACj/hJdE/5/f/ACG/+Fef0UAd8viPRhOzG84Ix/q3/wAKd/wkui4H+m/+Q3/wrz+igD0D/hJdE/5/f/Ib/wCFH/CS6J/z+/8AkN/8K8/ooA9A/wCEl0T/AJ/f/Ib/AOFH/CS6J/z+/wDkN/8ACvP6KACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAP/2Q==";
+function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avance = {}, mensajes = [], renders = {}, certif = {}, informesSem = {}, auditoria = [], onIr }) {
+  const [slideIdx, setSlideIdx] = React.useState(0);
+  const enCurso = (obras || []).filter(o => o.estado === "curso");
+  const lista = enCurso.length ? enCurso : (obras || []);
+  React.useEffect(() => {
+    if (lista.length < 2) return;
+    const t = setInterval(() => setSlideIdx(i => (i + 1) % lista.length), 4500);
+    return () => clearInterval(t);
+  }, [lista.length]);
+  const obraActual = lista[slideIdx % Math.max(lista.length, 1)];
+  // Solo renders (los que se suben en Ajustes → "Renders del panel del
+  // propietario") — nunca fotos de avance de obra. Si esa obra no tiene
+  // ningún render cargado, se ve el logo, no la primera foto que haya.
+  const renderActual = obraActual ? ((renders || {})[obraActual.id] || [])[0] : null;
+  const fotoUrl = renderActual ? (renderActual.url || renderActual) : null;
+
+  const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const logoSrc = l1 || l2 || VV_LOGO_FALLBACK;
+
+  const pend = (pedidos || []).filter(p => p.para === "vv" && p.estado !== "resuelto");
+
+  // "Novedades recientes": conteos totales, no párrafos sueltos — cada línea
+  // lleva directo a su pantalla real al tocarla. Mismas 5 categorías que
+  // Cliente, con mayúscula inicial.
+  const informesTot = obras.flatMap(o => (((informesSem || {})[o.id]) || [])).length;
+  const avanceInfTot = obras.flatMap(o => (((avance || {})[o.id]) || [])).filter(a => a.html).length;
+  const bitacoraTot = (bitacora || []).length;
+  const certifTot = obras.flatMap(o => (((certif || {})[o.id]) || [])).length;
+  const auditoriaTot = (auditoria || []).length;
+  const mensajesTot = (mensajes || []).filter(m => m.from && m.from !== "vv").length;
+  const novedades = [
+    informesTot > 0 && { n: informesTot, txt: `Informe${informesTot > 1 ? "s" : ""}`, ir: "mas-informes" },
+    avanceInfTot > 0 && { n: avanceInfTot, txt: `Informe${avanceInfTot > 1 ? "s" : ""} de avance`, ir: "avance" },
+    bitacoraTot > 0 && { n: bitacoraTot, txt: `Bitácora${bitacoraTot > 1 ? "s" : ""}`, ir: "bitacora" },
+    certifTot > 0 && { n: certifTot, txt: `Certificado${certifTot > 1 ? "s" : ""} semanal${certifTot > 1 ? "es" : ""}`, ir: "avance" },
+    auditoriaTot > 0 && { n: auditoriaTot, txt: `Auditoría${auditoriaTot > 1 ? "s" : ""}`, ir: "auditoria" },
+    mensajesTot > 0 && { n: mensajesTot, txt: `Recibiste ${mensajesTot} mensaje${mensajesTot > 1 ? "s" : ""} de Belfast`, ir: "mas-mensajes", full: true },
+  ].filter(Boolean);
+
+  return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
+    <div style={{ position: "relative", height: "50vh", minHeight: 320, maxHeight: 560, background: "#0d0d0f", overflow: "hidden" }}>
+      {fotoUrl
+        ? <img key={fotoUrl} src={fotoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85 }} />
+        : <div key={obraActual?.id || "sin-obra"} style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#0d0d0f,#1a1a1d)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <img src={logoSrc} alt="" style={{ width: "50%", maxWidth: 200, opacity: .45 }} />
+          </div>}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(13,13,15,.15) 0%, rgba(13,13,15,.4) 45%, #0d0d0f 100%)" }} />
+      <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ width: cfg?.logoSize || 40, height: cfg?.logoSize || 40, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", background: "#0a0a0a", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <img src={logoSrc} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </div>
+        <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
+      </div>
+      <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
+        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" }}>V+V Construcciones</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
+      </div>
+      {lista.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>
+        {lista.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % lista.length) ? BRASS : "rgba(255,255,255,.35)" }} />)}
+      </div>}
+    </div>
+    <div style={{ padding: "22px 22px 30px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 38, fontWeight: 600, color: "#fff" }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
+        <div style={{ fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(242,240,235,.45)", lineHeight: 1.3 }}>% de avance<br />general</div>
+      </div>
+      <div style={{ height: 1, background: "rgba(255,255,255,.1)", marginBottom: 18 }} />
+
+      {pend.length > 0 && <div onClick={() => onIr("mas-pedidos")} style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(229,137,137,.08)", border: "1px solid rgba(229,137,137,.25)", borderRadius: 6, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
+        <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#E58989", color: "#0d0d0f", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{pend.length}</span>
+        <div><div style={{ fontSize: 12, fontWeight: 700, color: "#f2f0eb" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 10.5, color: "rgba(242,240,235,.5)", marginTop: 1 }}>Tocá para ver →</div></div>
+      </div>}
+
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
+      {novedades.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
+      {novedades.map((n, i) => (<div key={i} onClick={() => onIr(n.ir)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
+        <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
+      </div>))}
+
+      <div onClick={() => onIr("chat")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
+        <div style={{ fontSize: 9, letterSpacing: ".12em", textTransform: "uppercase", color: "#D9B27C", fontWeight: 700 }}>✦ IA V+V</div>
+        <div style={{ fontSize: 12, color: "rgba(242,240,235,.6)", marginTop: 5 }}>Pedile a la IA — armar informes, mandar mensajes a Belfast, buscar en internet…</div>
+      </div>
+    </div>
+  </div>);
+}
 function WebHero({ cfg, obras, personal }) {
   const activas = obras.filter(o=>o.estado==="curso").length;
   const avg = obras.length ? Math.round(obras.reduce((a,o)=>a+(o.avance||0),0)/obras.length) : 0;
+  const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const tieneLogo = l1 || l2;
   return (
-    <div style={{ background:LUXE_HERO, color:"#fff", borderBottom:`2px solid ${BRASS}`, flexShrink:0 }}>
-      <div style={{ maxWidth:1180, margin:"0 auto", padding:"32px 24px 28px", display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:24, flexWrap:"wrap" }}>
+    <div style={{ background:LUXE_HERO, color:"#fff", borderBottom:`2px solid ${BRASS}`, flexShrink:0, position:"relative" }}>
+      <div style={{ maxWidth:1180, margin:"0 auto", padding:"calc(env(safe-area-inset-top) + 16px) 24px 0" }}>
+        <div style={{ width:44, height:44, borderRadius:6, overflow:"hidden", border:"1px solid rgba(255,255,255,.35)", background:"#0a0a0a", display:"flex", alignItems:"center", justifyContent:"center" }}>
+          {tieneLogo ? <img src={l1 || l2} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <span style={{ fontSize:11, fontWeight:800, color:"#fff" }}>V+V</span>}
+        </div>
+      </div>
+      <div style={{ maxWidth:1180, margin:"0 auto", padding:"18px 24px 28px", display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:24, flexWrap:"wrap" }}>
         <div>
           <div style={{ fontSize:10, fontWeight:700, color:BRASS, letterSpacing:"0.26em", textTransform:"uppercase", marginBottom:9 }}>V+V Construcciones</div>
-          <div style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.01em", lineHeight:1.1, maxWidth:560 }}>Gestión integral de obra</div>
+          <div style={{ fontFamily:"'Fraunces',serif", fontWeight:600, fontSize:30, letterSpacing:"-0.01em", lineHeight:1.1, maxWidth:560 }}>Gestión integral de obra</div>
           <div style={{ fontSize:13, color:"rgba(255,255,255,.68)", marginTop:10, maxWidth:520, lineHeight:1.6 }}>Seguimiento de obras, personal, documentación y certificación, en un solo lugar.</div>
         </div>
         <div style={{ display:"flex", gap:28 }}>
           {[["Obras activas",activas],["Avance prom.",avg+"%"],["Personal",personal.length]].map(([l,v],i)=>(
-            <div key={i} style={{ textAlign:"center" }}><div style={{ fontSize:26, fontWeight:800 }}>{v}</div><div style={{ fontSize:9.5, color:"rgba(255,255,255,.55)", textTransform:"uppercase", letterSpacing:"0.06em", marginTop:3 }}>{l}</div></div>
+            <div key={i} style={{ textAlign:"center" }}><div style={{ fontFamily:"'Fraunces',serif", fontWeight:600, fontSize:26 }}>{v}</div><div style={{ fontSize:9.5, color:"rgba(255,255,255,.55)", textTransform:"uppercase", letterSpacing:"0.06em", marginTop:3 }}>{l}</div></div>
           ))}
         </div>
       </div>
@@ -7801,7 +8154,20 @@ function WebFooter({ cfg }) {
 function App() {
   useEffect(() => { if (FORCE_CLOUD) { try { history.replaceState(null, "", window.location.pathname); } catch { } } }, []);
   const [cfg, setCfg] = useStoredState("vv_cfg", { ...DEFAULT_CONFIG, themeId:"institucional", fontId:"inter", radiusId:"sharp", colors:{...INST_COLORS}, apiKey:"" });
-  const [view, setView] = useState("chat");
+  // Rediseño oscuro/dorado: se aplica UNA sola vez (no fuerza nada si ya lo
+  // cambiaste vos a mano después). Si nunca tocaste el tema, pasa solo del
+  // institucional claro de siempre al nuevo "Oscuro" (ya con la paleta de
+  // Belfast: negro + dorado), sin que haya que ir a Ajustes a elegirlo.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("vv_dark_migrado_v1")) return;
+      if (cfg && cfg.themeId && cfg.themeId !== "institucional") { localStorage.setItem("vv_dark_migrado_v1", "1"); return; }
+      const preset = THEME_PRESETS.find(p => p.id === "oscuro");
+      if (preset) setCfg(p => ({ ...p, themeId: "oscuro", colors: { ...preset } }));
+      localStorage.setItem("vv_dark_migrado_v1", "1");
+    } catch { }
+  }, []);
+  const [view, setView] = useState("dashboard");
   const [lics, setLics] = useStoredState("vv_lics", SAMPLE_LICS);
   const [obras, setObras] = useStoredState("vv_obras", SAMPLE_OBRAS);
   const [personal, setPersonal] = useStoredState("vv_personal", SAMPLE_PERSONAL);
@@ -7816,9 +8182,11 @@ function App() {
   const [vigilancia, setVigilancia] = useStoredState("vv_vigilancia", []);
   const [camaras, setCamaras] = useStoredState("vv_camaras", []);
   const [avance, setAvance] = useStoredState("vv_avance", {});
+  const [renders, setRenders] = useStoredState("vv_renders", {}); // mismos renders que carga Belfast en Ajustes → "Renders del panel del propietario"
   const [gestion, setGestion] = useStoredState("vv_gestion", {});
   const [formularios, setFormularios] = useStoredState("vv_formularios", []);
   const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
+  const [certConformidad, setCertConformidad] = useStoredState("vv_cert_conformidad", []); // certificados de conformidad de etapas de obra (auditor Héctor)
   const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
   const [dronevuelos, setDronevuelos] = useStoredState("vv_drone", []);
   const [minutas, setMinutas] = useStoredState("vv_minutas", []);
@@ -7827,6 +8195,7 @@ function App() {
   const [bitacora, setBitacora] = useStoredState("vv_bitacora", []);
   const [informesSem, setInformesSem] = useStoredState("vv_informes_sem", {});
   const [certifSem, setCertifSem] = useStoredState("vv_certif_sem", {});
+  const [certifRubro, setCertifRubro] = useStoredState("vv_certif_rubro", {}); // { [obraId]: { rubros: [{id,nombre,incidencia}], items: [{id,fecha,avances:{rubroId:pct},ponderado,ts}] } }
   const [auditoria, setAuditoria] = useStoredState("vv_auditoria", []);
   const [plantillas, setPlantillas] = useStoredState("vv_plantillas", []);
   const [internos, setInternos] = useStoredState("vv_internos", []);
@@ -7873,7 +8242,7 @@ function App() {
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
-    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_minutas", setMinutas], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
+    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_cert_conformidad", setCertConformidad], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_minutas", setMinutas], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
     let alive = true;
     const pullAll = async () => {
       for (const [key, setter] of stores) {
@@ -8031,43 +8400,20 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, certConformidad, setCertConformidad, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
       <style>{css}</style>
       <style>{buildThemeCSS(cfg)}</style>
       <div style={{ width:"100%", height:"100dvh", background:"transparent", display:"flex", flexDirection:"column", position:"relative", color:"var(--text,#131C2B)", fontFamily:"var(--font,'Inter'),sans-serif", overflow:"hidden" }}>
-        <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />
-        {view==="dashboard" && <WebHero cfg={cfg} obras={obras} personal={personal} />}
-        {view==="dashboard" && (() => {
-          const LABELS = {
-            chat: ["consulta nueva en el chat IA", "consultas nuevas en el chat IA"],
-            mensajes: ["mensaje nuevo", "mensajes nuevos"],
-            pedidos: ["pedido nuevo", "pedidos nuevos"],
-            materiales: ["pedido de materiales nuevo", "pedidos de materiales nuevos"],
-            informes: ["informe nuevo", "informes nuevos"],
-            formularios: ["formulario nuevo", "formularios nuevos"],
-            obras: ["obra nueva", "obras nuevas"],
-            personal: ["novedad de personal", "novedades de personal"],
-          };
-          const ORDEN = ["mensajes", "pedidos", "materiales", "informes", "formularios", "obras", "personal", "chat"];
-          const items = ORDEN.map(k => ({ k, n: navBadgesNuevo[k] || 0 })).filter(x => x.n > 0);
-          if (!items.length) return null;
-          return (<div style={{ margin: "10px 16px 0", background: "rgba(176,137,79,0.10)", border: "1px solid rgba(176,137,79,0.35)", borderRadius: 12, padding: "10px 14px", display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: "#B0894F", textTransform: "uppercase", letterSpacing: "0.04em" }}>Novedades:</span>
-            {items.map(({ k, n }) => (<span key={k} onClick={() => { setView(k === "mensajes" || k === "pedidos" || k === "materiales" || k === "informes" || k === "formularios" ? "mas" : k); if (k === "pedidos") setMasSub("pedidos"); if (k === "materiales") setMasSub("materiales"); if (k === "informes") setMasSub("informes"); if (k === "formularios") setMasSub("formularios"); if (k === "mensajes") setMasSub("mensajes"); marcarVisto(k); }}
-              style={{ fontSize: 12.5, color: "var(--text,#131C2B)", cursor: "pointer", fontWeight: 600 }}>
-              <b style={{ color: "#B0894F" }}>{n}</b> {LABELS[k][n > 1 ? 1 : 0]} →
-            </span>))}
-          </div>);
-        })()}
+        {view!=="dashboard" && <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
-            {view==="dashboard" && <Dashboard lics={lics} obras={obras} personal={personal} alerts={SAMPLE_ALERTS} setView={setView} setDetailObraId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} web pedidos={pedidos} onPedidos={()=>{ setView("mas"); setMasSub("pedidos"); }} />}
+            {view==="dashboard" && <InicioViewVV cfg={cfg} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id)=>{ if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
-            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} docrecepcion={docrecepcion} />}
+            {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} certifRubro={certifRubro} setCertifRubro={setCertifRubro} docrecepcion={docrecepcion} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
             {view==="chat" && <ChatIA db={db} cfg={cfg} apiKey={cfg.apiKey} msgs={chatMsgs} setMsgs={setChatMsgs} />}
@@ -8083,7 +8429,7 @@ function App() {
             {view==="internos" && <InternosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
           </div>
         </div>
-        <WebFooter cfg={cfg} />
+        <BottomNavVV view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} badges={navBadgesNuevo} />
       </div>
       <SyncBanner />
       <div style={{ padding: "10px 16px 0" }}><GlobitoPermiso /></div>
