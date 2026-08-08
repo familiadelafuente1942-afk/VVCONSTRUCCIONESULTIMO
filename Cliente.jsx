@@ -4678,7 +4678,7 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
     bitacoraTotC > 0 && { n: bitacoraTotC, txt: `Bitácora${bitacoraTotC > 1 ? "s" : ""}`, ir: "bitacora" },
     certifTotC > 0 && { n: certifTotC, txt: `Certificado${certifTotC > 1 ? "s" : ""} semanal${certifTotC > 1 ? "es" : ""}`, ir: "informes" },
     auditoriaTotC > 0 && { n: auditoriaTotC, txt: `Auditoría${auditoriaTotC > 1 ? "s" : ""}`, ir: "auditoria" },
-    mensajesTotC > 0 && { n: mensajesTotC, txt: `Recibiste ${mensajesTotC} mensaje${mensajesTotC > 1 ? "s" : ""} de V+V`, ir: "mensajes", full: true },
+    mensajesTotC > 0 && { n: mensajesTotC, txt: `Mensaje${mensajesTotC > 1 ? "s" : ""} de V+V`, ir: "mensajes" },
   ].filter(Boolean);
 
   return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>

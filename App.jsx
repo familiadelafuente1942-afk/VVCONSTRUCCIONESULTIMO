@@ -8066,7 +8066,7 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
     bitacoraTot > 0 && { n: bitacoraTot, txt: `Bitácora${bitacoraTot > 1 ? "s" : ""}`, ir: "bitacora" },
     certifTot > 0 && { n: certifTot, txt: `Certificado${certifTot > 1 ? "s" : ""} semanal${certifTot > 1 ? "es" : ""}`, ir: "avance" },
     auditoriaTot > 0 && { n: auditoriaTot, txt: `Auditoría${auditoriaTot > 1 ? "s" : ""}`, ir: "auditoria" },
-    mensajesTot > 0 && { n: mensajesTot, txt: `Recibiste ${mensajesTot} mensaje${mensajesTot > 1 ? "s" : ""} de Belfast`, ir: "mas-mensajes", full: true },
+    mensajesTot > 0 && { n: mensajesTot, txt: `Mensaje${mensajesTot > 1 ? "s" : ""} de Belfast`, ir: "mas-mensajes" },
   ].filter(Boolean);
 
   return (<div style={{ flex: 1, overflowY: "auto", background: "#0d0d0f", color: "#f2f0eb" }}>
