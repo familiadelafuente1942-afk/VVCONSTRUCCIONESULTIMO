@@ -67,11 +67,15 @@ async function callAI(msgs, sys, apiKey, useSearch) {
   msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
   const body = { model: "claude-sonnet-5", max_tokens: 4096, thinking: { type: "disabled" }, messages: msgs };
   if (sys) body.system = sys;
-  if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }];
+  if (useSearch) body.tools = [
+    { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+    { type: "web_fetch_20250910", name: "web_fetch", max_uses: 5 },
+  ];
   async function doFetch(b) {
     try { const rp = await fetch("/api/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }); if (rp.ok) return { ok: true, data: await rp.json() }; if (rp.status !== 404) { try { const e = await rp.json(); return { ok: false, err: e.error?.message || `Error ${rp.status}` }; } catch { return { ok: false, err: `Error ${rp.status}` }; } } } catch { }
     if (!apiKey) return { ok: false, err: "⚠ La IA no está disponible (falta crédito o configuración en Vercel)." };
     const headers = { "Content-Type": "application/json", "anthropic-dangerous-direct-browser-access": "true", "anthropic-version": "2023-06-01", "x-api-key": apiKey };
+    if (useSearch) headers["anthropic-beta"] = "web-fetch-2025-09-10";
     const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(b) });
     if (!r.ok) { let m = "Error de conexión."; try { const d = await r.json(); m = d.error?.message || `Error ${r.status}`; } catch { } return { ok: false, err: m }; }
     return { ok: true, data: await r.json() };
