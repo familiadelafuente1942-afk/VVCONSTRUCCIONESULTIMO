@@ -683,8 +683,9 @@ function toDataUrl(f, maxW = 1400) {
 function getBase64(d) { return d.split(',')[1]; }
 function getMediaType(d) { const m = d.match(/data:([^;]+);/); return m ? m[1] : 'image/jpeg'; }
 
-// callAI con soporte de web_search real
-// useSearch=true activa búsqueda en internet (precios, proveedores, noticias, etc.)
+// callAI con soporte de web_search + web_fetch reales
+// useSearch=true activa búsqueda en internet Y lectura de páginas completas
+// (precios, proveedores, noticias, y también abrir un link puntual que le pases).
 async function callAI(msgs, sys, apiKey, useSearch = false) {
     msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
     const body = {
@@ -694,7 +695,10 @@ async function callAI(msgs, sys, apiKey, useSearch = false) {
         messages: msgs,
     };
     if (sys) body.system = sys;
-    if (useSearch) body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 5, user_location: { type: "approximate", city: "Buenos Aires", region: "Buenos Aires", country: "AR", timezone: "America/Argentina/Buenos_Aires" } }];
+    if (useSearch) body.tools = [
+        { type: "web_search_20250305", name: "web_search", max_uses: 5, user_location: { type: "approximate", city: "Buenos Aires", region: "Buenos Aires", country: "AR", timezone: "America/Argentina/Buenos_Aires" } },
+        { type: "web_fetch_20250910", name: "web_fetch", max_uses: 5 },
+    ];
 
     // Intenta primero el proxy serverless (/api/claude, clave del lado del servidor).
     // Si no existe (hosting estático) cae a la API directa con la key de Configuración.
@@ -708,6 +712,7 @@ async function callAI(msgs, sys, apiKey, useSearch = false) {
         } catch { /* sin proxy: seguimos al modo directo */ }
         if (!apiKey) return { ok: false, err: "⚠ Falta configurar la IA: agregá la API Key en Más → Configuración, o configurá el proxy (variable ANTHROPIC_API_KEY en Vercel)." };
         const headers = { "Content-Type": "application/json", "anthropic-dangerous-direct-browser-access": "true", "anthropic-version": "2023-06-01", "x-api-key": apiKey };
+        if (useSearch) headers["anthropic-beta"] = "web-fetch-2025-09-10";
         const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(b) });
         if (!r.ok) { try { const e = await r.json(); return { ok: false, err: e.error?.message || `Error ${r.status}` }; } catch { return { ok: false, err: `Error ${r.status}` }; } }
         return { ok: true, data: await r.json() };
@@ -4765,7 +4770,7 @@ IMPORTANTE — QUIÉN ES QUIÉN (no los confundas NUNCA):
 Si Tita o la asistente de Nicolás te escriben o consultan algo, son GENTE DE LA CASA (V+V): tratalos con confianza, nunca como si fueran ${cn} ni un cliente externo. Solo ${cn} es "el cliente".
 
 Tus capacidades:
-1) BUSCAR EN INTERNET (tenés la herramienta de búsqueda web activa): conseguir proveedores y contactos (corralones, ferreterías, alquiler de equipos, hormigón, áridos), precios de materiales, normativa y código de edificación de CABA/Buenos Aires, teléfonos, direcciones, datos de empresas, o cualquier información actual. Cuando te pidan algo que no está en la app o que cambia seguido, BUSCÁ en internet (no digas que no podés). Priorizá fuentes argentinas; al dar proveedores listá nombre, zona, contacto/teléfono y link, y citá la fuente.
+1) BUSCAR EN INTERNET Y LEER PÁGINAS COMPLETAS (tenés búsqueda web y lectura de páginas activas): conseguir proveedores y contactos (corralones, ferreterías, alquiler de equipos, hormigón, áridos), precios de materiales, normativa y código de edificación de CABA/Buenos Aires, teléfonos, direcciones, datos de empresas, o cualquier información actual. Si te pasan un link puntual, ABRILO y leé el contenido completo de esa página (no solo un resumen de búsqueda). Cuando te pidan algo que no está en la app o que cambia seguido, BUSCÁ en internet (no digas que no podés). Priorizá fuentes argentinas; al dar proveedores listá nombre, zona, contacto/teléfono y link, y citá la fuente.
 1b) ANALIZAR ARCHIVOS ADJUNTOS: el usuario puede adjuntarte FOTOS y PDF (con el ) para que los leas y analices. Si te mandan una PÓLIZA o NÓMINA de seguro, leela y extraé los datos de CADA PERSONA de forma ordenada: nombre y apellido, DNI/CUIL, y lo que figure (categoría, ART/aseguradora, N° de póliza, vigencia, suma asegurada). Devolvé una lista clara persona por persona. Si te piden, compará con el Personal cargado en la app y marcá quién está y quién falta. También podés analizar remitos, facturas, planos o cualquier foto de obra.
 2) Conocés los datos de la app y respondés sobre obras, personal, proyectos y pedidos.
 3) Redactás notas, mails y mensajes.
@@ -7294,7 +7299,7 @@ function CertifRubroPanel({ obraId, obraNombre, cfg, certifRubro, setCertifRubro
     </div>}
 
     {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 320, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: "14px 14px 10px", background: "#0F1B2D", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
         <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
         <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: "1 1 auto", textAlign: "center", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Certificado por rubro</span>
         <button onClick={() => { const f = document.getElementById("rub-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
