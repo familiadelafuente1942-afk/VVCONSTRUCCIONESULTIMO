@@ -10,13 +10,19 @@ export default async function handler(req, res) {
   }
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const headers = {
+      "Content-Type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+    };
+    // Si el pedido incluye la herramienta web_fetch (leer páginas completas),
+    // hace falta este header extra para que Anthropic la habilite.
+    if ((body.tools || []).some(t => t.type === "web_fetch_20250910")) {
+      headers["anthropic-beta"] = "web-fetch-2025-09-10";
+    }
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-      },
+      headers,
       body: JSON.stringify(body),
     });
     const data = await r.json();
