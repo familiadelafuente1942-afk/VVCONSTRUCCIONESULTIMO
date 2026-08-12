@@ -131,6 +131,7 @@ function avisarErrorSync(key) {
 }
 
 function SyncBanner() {
+  useEffect(() => { registrarApertura("cliente"); }, []);
   const [msg, setMsg] = useState("");
   useEffect(() => {
     const onErr = () => {
@@ -157,7 +158,18 @@ const storage = {
     try {
       let r = await intentar();
       if (!r.ok) r = await intentar();
-      if (!r.ok) { avisarErrorSync(key); return { value, ok: false }; }
+      if (!r.ok) { avisarErrorSync(key); return { value, ok: false };
+
+// Registra que la app se abrió — usado por NEXO Control para saber
+// cuántas personas usan cada vista. No interfiere con nada existente.
+function registrarApertura(appTag) {
+  try {
+    const key = "apertura:" + appTag + ":" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
+    const valor = JSON.stringify({ app: appTag, ts: new Date().toISOString() });
+    storage.set(key, valor).catch(() => {});
+  } catch (e) {}
+}
+ }
     } catch { avisarErrorSync(key); return { value, ok: false }; }
     return { value, ok: true };
   },

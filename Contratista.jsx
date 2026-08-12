@@ -88,6 +88,17 @@ const storage = {
     try { localStorage.setItem(key, value); } catch { }
     try { await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); } catch { }
     return { value };
+
+// Registra que la app se abrió — usado por NEXO Control para saber
+// cuántas personas usan cada vista. No interfiere con nada existente.
+function registrarApertura(appTag) {
+  try {
+    const key = "apertura:" + appTag + ":" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
+    const valor = JSON.stringify({ app: appTag, ts: new Date().toISOString() });
+    storage.set(key, valor).catch(() => {});
+  } catch (e) {}
+}
+
   },
   get: async (key) => {
     try {
@@ -165,6 +176,7 @@ const DOC_CATS = ["Documentación técnica", "Elementos de protección", "Otros 
 
 // Carga SheetJS desde CDN una sola vez (para leer el Excel en el navegador)
 function cargarXLSX() {
+  useEffect(() => { registrarApertura("contratista"); }, []);
   return new Promise((resolve, reject) => {
     if (window.XLSX) return resolve(window.XLSX);
     const s = document.createElement("script");

@@ -16,7 +16,18 @@ const storage = {
   get: async (key) => {
     try {
       const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { method: "GET", headers: SH(), mode: "cors" });
-      if (r.ok) { const d = await r.json(); if (d && d.length > 0) return { value: d[0].value }; }
+      if (r.ok) { const d = await r.json(); if (d && d.length > 0) return { value: d[0].value };
+
+// Registra que la app se abrió — usado por NEXO Control para saber
+// cuántas personas usan cada vista. No interfiere con nada existente.
+function registrarApertura(appTag) {
+  try {
+    const key = "apertura:" + appTag + ":" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
+    const valor = JSON.stringify({ app: appTag, ts: new Date().toISOString() });
+    storage.set(key, valor).catch(() => {});
+  } catch (e) {}
+}
+ }
     } catch { }
     try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; }
   },
@@ -125,6 +136,7 @@ function Entrada({ onEntrar, config, onGuardarConfig, codigoInicial, proyectoUrl
   const [editando, setEditando] = useState(false);
 
   async function entrar() {
+  useEffect(() => { registrarApertura("propietario"); }, []);
     const cod = codigo.trim().toUpperCase().replace(/\s+/g, "");
     if (!cod) { setError("Ingresá el código que te dio Belfast."); return; }
     if (!nombre.trim()) { setError("Ingresá tu nombre."); return; }
