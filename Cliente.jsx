@@ -1481,6 +1481,9 @@ function AuditoriaClienteView({ T, obras, auditoria, cfg, desdeSemana }) {
       .vacio { font-size: 11.5px; color: #98A2B3; font-style: italic; }
       .parr { font-size: 12px; line-height: 1.6; text-align: justify; }
       .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
+      .critico { background: #FEF2F2; border: 2px solid #EF4444; border-radius: 8px; padding: 11px 14px; margin: 14px 0 4px; font-size: 12px; font-weight: 800; color: #B91C1C; text-transform: uppercase; letter-spacing: .03em; }
+      .criticoSub { font-size: 9.5px; font-weight: 800; color: #B91C1C; text-transform: uppercase; letter-spacing: .04em; margin-top: 9px; }
+      .criticoTxt { font-size: 12.5px; font-weight: 600; color: #7F1D1D; text-transform: none; letter-spacing: normal; line-height: 1.55; margin-top: 3px; }
       .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 14px; color: ${colorRes}; border: 1.5px solid ${colorRes}; }
       .firmas { display: flex; gap: 40px; margin-top: 34px; page-break-inside: avoid; }
       .firma { flex: 1; text-align: center; }
@@ -1492,6 +1495,10 @@ function AuditoriaClienteView({ T, obras, auditoria, cfg, desdeSemana }) {
     </style></head><body><div class="sheet">
       <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">${_e(t.titulo)}</div></div>
       <div class="barra"><div>Obra: <b>${_e(nomObra)}</b></div><div>N°: <b>${_e(it.nro || "—")}</b></div><div>Fecha: <b>${fmtDMY(it.fecha)}</b></div></div>
+      ${it.critico ? `<div class="critico">⚠ CRÍTICO
+        ${it.criticoTexto ? `<div class="criticoSub">Qué se encontró</div><div class="criticoTxt">${_e(it.criticoTexto)}</div>` : ""}
+        ${it.criticoPrioridad ? `<div class="criticoSub">Prioritario / qué hay que hacer ahora</div><div class="criticoTxt">${_e(it.criticoPrioridad)}</div>` : ""}
+      </div>` : ""}
       ${cuerpo}
       ${(() => {
         const fotos = it.fotos || [];
@@ -1535,12 +1542,15 @@ function AuditoriaClienteView({ T, obras, auditoria, cfg, desdeSemana }) {
       {lista.map(it => {
         const abiertoAqui = abierto === it.id;
         const tipoLbl = (AUD_TIPOS_CLI.find(t => t.id === it.tipo) || {}).label;
-        return (<div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+        return (<div key={it.id} style={{ background: T.card, border: `1px solid ${it.critico ? "#EF4444" : T.border}`, borderLeft: `3px solid ${it.critico ? "#EF4444" : BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div onClick={() => setAbierto(abiertoAqui ? null : it.id)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.nro}</span>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{nombreObra(it.obra_id)}</span>
+            {it.critico && <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", background: "#EF4444", borderRadius: 5, padding: "3px 7px", flexShrink: 0 }}>⚠ CRÍTICO</span>}
             <span style={{ fontSize: 10, fontWeight: 700, color: it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D" }}>{it.resultado}</span>
           </div>
+          {it.critico && it.criticoTexto && <div style={{ fontSize: 11.5, color: "#B91C1C", fontWeight: 600, background: "rgba(239,68,68,.08)", borderRadius: 6, padding: "6px 9px", marginTop: 6 }}><b>Encontrado:</b> {it.criticoTexto}</div>}
+          {it.critico && it.criticoPrioridad && <div style={{ fontSize: 11.5, color: "#B91C1C", fontWeight: 600, background: "rgba(239,68,68,.08)", borderRadius: 6, padding: "6px 9px", marginTop: 4 }}><b>Prioritario:</b> {it.criticoPrioridad}</div>}
           <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{soloSemana && tipoLbl ? `${tipoLbl} · ` : ""}{fmtDMY(it.fecha)}{it.periodo ? ` · ${it.periodo}` : ""} · {(it.obs || []).length} observación(es)</div>
           {abiertoAqui && (<div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
             {it.presentes && <div style={{ fontSize: 12, color: T.sub, marginBottom: 8 }}><b style={{ color: T.text }}>Presentes:</b> {it.presentes}</div>}

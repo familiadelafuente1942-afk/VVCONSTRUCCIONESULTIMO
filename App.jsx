@@ -2653,7 +2653,7 @@ function AuditoriaView({ db, cfg, onBack, desdeSemana }) {
 
   function nuevo() {
     if (!obraId) { alert("Elegí una obra."); return; }
-    const base = { id: uid() + Date.now(), tipo, obra_id: obraId, nro: nroDe(tipo), fecha: hoyISO(), ts: Date.now(), responsable: cfg?.responsableTecnico || "", obs: [], fotos: [], resultado: AUD_RESULT[0], conclusion: "" };
+    const base = { id: uid() + Date.now(), tipo, obra_id: obraId, nro: nroDe(tipo), fecha: hoyISO(), ts: Date.now(), responsable: cfg?.responsableTecnico || "", obs: [], fotos: [], resultado: AUD_RESULT[0], conclusion: "", critico: false, criticoTexto: "", criticoPrioridad: "" };
     if (tipo === "supervision") setForm({ ...base, periodo: "", presentes: "", interferencias: [] });
     if (tipo === "revision") setForm({ ...base, etapa: "", docs: [{ nombre: "", version: "", fechaDoc: "" }] });
     if (tipo === "certificacion") setForm({ ...base, etapa: "", planoRef: "", versionPlano: "", directiva: "", ejecutadoPor: "" });
@@ -2733,6 +2733,9 @@ function AuditoriaView({ db, cfg, onBack, desdeSemana }) {
       .vacio { font-size: 11.5px; color: #98A2B3; font-style: italic; }
       .parr { font-size: 12px; line-height: 1.6; text-align: justify; }
       .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
+      .critico { background: #FEF2F2; border: 2px solid #EF4444; border-radius: 8px; padding: 11px 14px; margin: 14px 0 4px; font-size: 12px; font-weight: 800; color: #B91C1C; text-transform: uppercase; letter-spacing: .03em; }
+      .criticoSub { font-size: 9.5px; font-weight: 800; color: #B91C1C; text-transform: uppercase; letter-spacing: .04em; margin-top: 9px; }
+      .criticoTxt { font-size: 12.5px; font-weight: 600; color: #7F1D1D; text-transform: none; letter-spacing: normal; line-height: 1.55; margin-top: 3px; }
       .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 14px; color: ${colorRes}; border: 1.5px solid ${colorRes}; }
       .firmas { display: flex; gap: 40px; margin-top: 34px; page-break-inside: avoid; }
       .firma { flex: 1; text-align: center; }
@@ -2744,6 +2747,10 @@ function AuditoriaView({ db, cfg, onBack, desdeSemana }) {
     </style></head><body><div class="sheet">
       <div class="hdr">${logo ? `<img class="logo" src="${logo}" />` : ""}<div class="marca">${marca}</div><div class="tipo">${_e(t.titulo)}</div></div>
       <div class="barra"><div>Obra: <b>${_e(nomObra)}</b></div><div>N°: <b>${_e(it.nro || "—")}</b></div><div>Fecha: <b>${fmtDMY(it.fecha)}</b></div></div>
+      ${it.critico ? `<div class="critico">⚠ CRÍTICO
+        ${it.criticoTexto ? `<div class="criticoSub">Qué se encontró</div><div class="criticoTxt">${_e(it.criticoTexto)}</div>` : ""}
+        ${it.criticoPrioridad ? `<div class="criticoSub">Prioritario / qué hay que hacer ahora</div><div class="criticoTxt">${_e(it.criticoPrioridad)}</div>` : ""}
+      </div>` : ""}
       ${cuerpo}
       ${(() => {
         const fotos = it.fotos || [];
@@ -2820,12 +2827,15 @@ function AuditoriaView({ db, cfg, onBack, desdeSemana }) {
 
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px", lineHeight: 1.6 }}>{soloSemana ? "No hay auditorías nuevas esta semana." : "Todavía no hay registros de este tipo para la obra elegida."}</div>}
       {lista.map(it => (
-        <div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+        <div key={it.id} style={{ background: T.card, border: `1px solid ${it.critico ? "#EF4444" : T.border}`, borderLeft: `3px solid ${it.critico ? "#EF4444" : BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.nro}</span>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{soloSemana ? nombreObraDe(it.obra_id) : (it.etapa || it.periodo || fmtDMY(it.fecha))}</span>
+            {it.critico && <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", background: "#EF4444", borderRadius: 5, padding: "3px 7px", flexShrink: 0 }}>⚠ CRÍTICO</span>}
             <span style={{ fontSize: 10, fontWeight: 700, color: it.resultado === "No conforme" ? "#B91C1C" : it.resultado === "Conforme con observaciones" ? "#B45309" : "#15803D" }}>{it.resultado}</span>
           </div>
+          {it.critico && it.criticoTexto && <div style={{ fontSize: 11.5, color: "#B91C1C", fontWeight: 600, background: "rgba(239,68,68,.08)", borderRadius: 6, padding: "6px 9px", marginBottom: 4 }}><b>Encontrado:</b> {it.criticoTexto}</div>}
+          {it.critico && it.criticoPrioridad && <div style={{ fontSize: 11.5, color: "#B91C1C", fontWeight: 600, background: "rgba(239,68,68,.08)", borderRadius: 6, padding: "6px 9px", marginBottom: 6 }}><b>Prioritario:</b> {it.criticoPrioridad}</div>}
           <div style={{ fontSize: 11, color: T.muted }}>{fmtDMY(it.fecha)} · {(it.obs || []).length} observación(es){it.docs ? ` · ${(it.docs || []).length} doc.` : ""}</div>
           <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
             <button onClick={() => verPdf(it)} style={{ flex: 1, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "7px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="doc" s={13} /> PDF</button>
@@ -2843,6 +2853,20 @@ function AuditoriaView({ db, cfg, onBack, desdeSemana }) {
 
         <label style={lbl}>Fecha</label>
         <input type="date" value={form.fecha} onChange={e => setF("fecha", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }} />
+
+        <div style={{ background: form.critico ? "rgba(239,68,68,.08)" : T.bg, border: `1.5px solid ${form.critico ? "#EF4444" : T.border}`, borderRadius: 10, padding: "11px 13px", margin: "0 0 14px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={!!form.critico} onChange={e => setF("critico", e.target.checked)} style={{ width: 17, height: 17, accentColor: "#EF4444" }} />
+            <span style={{ fontSize: 12.5, fontWeight: 800, color: form.critico ? "#EF4444" : T.text }}>⚠ ¿Hay algo crítico que observar?</span>
+          </label>
+          {form.critico && <>
+            <div style={{ fontSize: 10, color: T.muted, margin: "9px 0 4px" }}>Se muestra primero, arriba de todo, en el certificado — para que no quede perdido entre el resto de las observaciones.</div>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#EF4444", marginBottom: 3 }}>Qué se encontró</div>
+            <textarea value={form.criticoTexto || ""} onChange={e => setF("criticoTexto", e.target.value)} placeholder="Ej: fisura estructural visible en columna B4." rows={3} style={{ ...inp, resize: "vertical", fontWeight: 600 }} />
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "#EF4444", margin: "10px 0 3px" }}>Prioritario / qué hay que hacer ahora</div>
+            <textarea value={form.criticoPrioridad || ""} onChange={e => setF("criticoPrioridad", e.target.value)} placeholder="Ej: frenar el hormigonado de esa columna hasta que el calculista lo revise." rows={3} style={{ ...inp, resize: "vertical", fontWeight: 600 }} />
+          </>}
+        </div>
 
         {form.tipo === "supervision" && <>
           <label style={lbl}>Período (quincena)</label>

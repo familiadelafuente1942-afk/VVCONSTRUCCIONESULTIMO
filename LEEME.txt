@@ -1,28 +1,17 @@
-CLIENTE + V+V — Fix: los períodos improductivos (y otros cambios de obra) se borraban solos
+V+V + CLIENTE — Auditoría: "Qué se encontró" + "Prioritario/qué hacer"
 ======================================================================
 
-QUÉ PASABA (la causa real):
-Cargabas un período improductivo, se guardaba bien... y a los pocos
-minutos desaparecía. La causa: el chequeo automático que agregamos
-antes (revisa la nube cada 8 segundos) NO esperaba a que un cambio
-recién hecho en una obra terminara de guardarse del todo — así que
-podía llegar a mezclar tu cambio con una copia de la nube todavía
-vieja, y esa mezcla "ganaba", haciendo que el cambio pareciera
-borrarse solo.
+QUÉ AGREGUÉ (extiende el cuadro crítico del paso anterior):
+Cuando activás "⚠ ¿Hay algo crítico que observar?", ahora hay DOS
+campos, no uno:
+1. "Qué se encontró" — lo crítico que se vio.
+2. "Prioritario / qué hay que hacer ahora" — la acción a tomar.
 
-Además, en Cliente.jsx el guardado de obras no tenía la misma
-protección que ya tenía V+V (una pausa breve antes de guardar de
-verdad + un número de secuencia para descartar guardados que quedaron
-viejos) — eso también sumaba al problema.
-
-QUÉ CORREGÍ:
-1. El chequeo automático de obras ahora espera unos segundos después
-   de cualquier edición antes de volver a mezclar con la nube.
-2. Cliente.jsx ahora tiene la misma protección robusta que V+V para
-   guardar obras (pausa + secuencia), que antes le faltaba.
-
-Esto debería solucionar que los períodos improductivos (y cualquier
-otro campo de obra) se "borren solos" después de un rato.
+DÓNDE SE VE:
+- En el PDF: los dos, uno debajo del otro, dentro del mismo cuadro
+  rojo destacado arriba de todo.
+- En el listado (V+V y Cliente): "Encontrado: ..." y "Prioritario: ..."
+  como dos líneas separadas, antes de tocar para ver el detalle.
 
 ARCHIVOS:
 - App.jsx / Cliente.jsx              → reemplazan los de tu repo.
