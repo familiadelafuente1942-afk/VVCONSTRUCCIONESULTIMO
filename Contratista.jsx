@@ -83,12 +83,6 @@ async function pushNotify(title, message, app, url) {
 
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
-const storage = {
-  set: async (key, value) => {
-    try { localStorage.setItem(key, value); } catch { }
-    try { await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); } catch { }
-    return { value };
-
 // Registra que la app se abrió — usado por NEXO Control para saber
 // cuántas personas usan cada vista. No interfiere con nada existente.
 function registrarApertura(appTag) {
@@ -99,6 +93,11 @@ function registrarApertura(appTag) {
   } catch (e) {}
 }
 
+const storage = {
+  set: async (key, value) => {
+    try { localStorage.setItem(key, value); } catch { }
+    try { await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); } catch { }
+    return { value };
   },
   get: async (key) => {
     try {
