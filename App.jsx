@@ -152,6 +152,42 @@ function SyncBanner() {
   </div>);
 }
 
+// Registra que la app se abrió — usado por NEXO Control para saber
+// cuántas personas usan cada vista. No interfiere con nada existente.
+function registrarApertura(appTag) {
+  // Va a una tabla liviana propia (no a bco_storage) para no sobrecargar
+  // esa tabla, que ya tiene todo el resto del sistema.
+  try {
+    fetch(SUPA_URL + "/rest/v1/aperturas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Prefer": "return=minimal" },
+      body: JSON.stringify({ app: appTag }),
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+// Vigía de errores — avisa a NEXO Control si algo se rompe en el navegador
+// de cualquier persona que use esta vista, sin que nadie tenga que reportarlo.
+function reportarError(mensaje, detalle) {
+  try {
+    fetch(SUPA_URL + "/rest/v1/app_errores", {
+      method: "POST",
+      headers: { ...SH(), "Prefer": "return=minimal" },
+      body: JSON.stringify({
+        app: "constructora",
+        mensaje: String(mensaje || "").slice(0, 500),
+        detalle: String(detalle || "").slice(0, 2000),
+        url: (typeof location !== "undefined" ? location.href : ""),
+        dispositivo: (typeof navigator !== "undefined" ? navigator.userAgent : ""),
+      }),
+    }).catch(() => {});
+  } catch (e) {}
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (ev) => { reportarError(ev.message, ev.error && ev.error.stack); });
+  window.addEventListener("unhandledrejection", (ev) => { reportarError("Promise rechazada: " + ((ev.reason && ev.reason.message) || ev.reason), ev.reason && ev.reason.stack); });
+}
+
 const storage = {
     // Escribe SIEMPRE en localStorage primero (síncrono, instantáneo)
     // Luego intenta Supabase en background sin bloquear
@@ -368,53 +404,13 @@ const lastWrite = {};
 // borrado. Si el mismo id está en las dos, gana la de "prioridad"
 // (la que se acaba de tocar en ESTE dispositivo) — y se suma cualquier
 // obra que la nube tenga y acá no (la que cargó otro dispositivo).
-// Fusiona dos listas de obras por id. Para una obra que existe en las dos
-// (ej: la editaron desde el celular y desde el iPad), NO gana automático la
-// del dispositivo local — gana la que se editó más recientemente de verdad
-// (comparando "updatedAt"), así un dispositivo con una versión vieja en su
-// memoria no vuelve a pisar el cambio bueno cada vez que sincroniza.
 function fusionarObras(prioridad, otras, tumbas) {
   const mapa = new Map();
   (otras || []).forEach(o => { if (o?.id) mapa.set(o.id, o); });
-  (prioridad || []).forEach(o => {
-    if (!o?.id) return;
-    const actual = mapa.get(o.id);
-    if (!actual) { mapa.set(o.id, o); return; }
-    const tsNuevo = Number(o.updatedAt || 0);
-    const tsActual = Number(actual.updatedAt || 0);
-    // Si ninguna de las dos tiene sello de tiempo (obras viejas, de antes de
-    // este cambio), se mantiene el comportamiento de siempre: gana la local.
-    if (!tsNuevo && !tsActual) { mapa.set(o.id, o); return; }
-    if (tsNuevo >= tsActual) mapa.set(o.id, o);
-  });
+  (prioridad || []).forEach(o => { if (o?.id) mapa.set(o.id, o); });
   Object.keys(tumbas || {}).forEach(id => mapa.delete(id));
   return Array.from(mapa.values());
 }
-// Igual que fusionarObras pero para listas simples que se van cargando desde
-// varios dispositivos a la vez (bitácora, mensajes): en vez de "gana el más
-// nuevo entero" (que hacía desaparecer lo que cargó el otro dispositivo si
-// llegaba unos segundos después), esto SUMA — la unión de las dos listas por
-// id, sin duplicar, ordenada por fecha.
-function fusionarLista(local, cloud) {
-  const mapa = new Map();
-  (cloud || []).forEach(x => { if (x?.id) mapa.set(x.id, x); });
-  (local || []).forEach(x => { if (x?.id) mapa.set(x.id, x); });
-  return Array.from(mapa.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
-}
-const CLAVES_LISTA_SUMADA = new Set(["vv_bitacora", "vv_mensajes"]);
-// Igual que fusionarLista, pero para datos guardados "por obra"
-// ({ obraId: [ {id, ts, ...}, ... ] }) — avance y certificados semanales.
-// Sin esto, si Cliente y V+V cargaban cada uno un registro casi al mismo
-// tiempo, el que se guardaba último pisaba entero al otro (por eso los
-// conteos de "Informes de avance" / "Certificados semanales" no coincidían
-// entre Cliente y V+V).
-function fusionarPorObra(local, cloud) {
-  const resultado = {};
-  const obraIds = new Set([...Object.keys(local || {}), ...Object.keys(cloud || {})]);
-  obraIds.forEach(oid => { resultado[oid] = fusionarLista((local || {})[oid], (cloud || {})[oid]); });
-  return resultado;
-}
-const CLAVES_OBJETO_SUMADO = new Set(["vv_avance", "vv_certif_sem"]);
 function useStoredState(key, defaultValue) {
     const [state, setState] = useState(() => {
         const local = storage.getLocal(key);
@@ -434,49 +430,23 @@ function useStoredState(key, defaultValue) {
     //    más nueva.
     const obrasPersistTimer = useRef(null);
     const obrasPersistSeq = useRef(0);
-    const esListaSumada = CLAVES_LISTA_SUMADA.has(key); // bitácora, mensajes: se suman, no se pisan
-    const esObjetoSumado = CLAVES_OBJETO_SUMADO.has(key); // avance, certificados semanales: se suman por obra
 
-    // Al montar, y después cada 8 segundos mientras la app está abierta:
-    // sincroniza con Supabase — así lo que carga Cliente/Belfast (mensajes,
-    // avances, bitácora, etc.) aparece solo, sin cerrar y volver a abrir.
+    // Al montar: sincronizar con Supabase una sola vez
     useEffect(() => {
-        let alive = true;
-        async function pull() {
+        (async () => {
             try {
                 if (esObras) {
                     const [rCloud, rDel] = await Promise.all([storage.get(key), storage.get(key + "_del")]);
                     const cloud = rCloud?.value ? JSON.parse(rCloud.value) : [];
                     const tumbas = rDel?.value ? JSON.parse(rDel.value) : {};
-                    if (alive) setState(prevLocal => fusionarObras(prevLocal, cloud, tumbas));
-                } else if (esListaSumada) {
-                    const r = await storage.get(key);
-                    const cloud = r?.value ? JSON.parse(r.value) : [];
-                    if (alive) setState(prevLocal => {
-                        const unida = fusionarLista(prevLocal, cloud);
-                        // Si la unión trajo algo que la nube no tenía todavía (lo cargó
-                        // este dispositivo hace instantes), lo re-sube para no perderlo.
-                        if (unida.length !== cloud.length) { storage.set(key, JSON.stringify(unida)); storage.set(key + "__ts", String(Date.now())); }
-                        return JSON.stringify(unida) !== JSON.stringify(prevLocal) ? unida : prevLocal;
-                    });
-                    try { localStorage.setItem(key, JSON.stringify(cloud)); } catch { }
-                } else if (esObjetoSumado) {
-                    const r = await storage.get(key);
-                    const cloud = r?.value ? JSON.parse(r.value) : {};
-                    if (alive) setState(prevLocal => {
-                        const unido = fusionarPorObra(prevLocal, cloud);
-                        const j = JSON.stringify(unido);
-                        if (j !== JSON.stringify(cloud)) { storage.set(key, j); storage.set(key + "__ts", String(Date.now())); }
-                        return j !== JSON.stringify(prevLocal) ? unido : prevLocal;
-                    });
-                    try { localStorage.setItem(key, JSON.stringify(cloud)); } catch { }
+                    setState(prevLocal => fusionarObras(prevLocal, cloud, tumbas));
                 } else {
                     const r = await storage.get(key);
                     if (r?.value) {
                         const cloudData = JSON.parse(r.value);
                         if (FORCE_CLOUD) {
                             // Forzar la versión de la nube (lo último cargado por cualquier dispositivo)
-                            if (alive) setState(cloudData);
+                            setState(cloudData);
                             try { localStorage.setItem(key, r.value); } catch { }
                         } else {
                             // Gana el MÁS RECIENTE, no el más grande.
@@ -487,21 +457,15 @@ function useStoredState(key, defaultValue) {
                             let localTs = 0;
                             try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
                             if (cloudTs >= localTs) {
-                                if (alive) setState(cur => JSON.stringify(cloudData) !== JSON.stringify(cur) ? cloudData : cur);
+                                setState(cloudData);
                                 try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
                             }
                         }
                     }
                 }
             } catch { }
-            if (alive) setCloudSynced(true);
-        }
-        pull();
-        const iv = setInterval(pull, 8000);
-        const onVis = () => { if (document.visibilityState === "visible") pull(); };
-        document.addEventListener("visibilitychange", onVis);
-        window.addEventListener("focus", pull);
-        return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); };
+            setCloudSynced(true);
+        })();
     }, [key]);
 
     // Persiste cada vez que cambia el estado
@@ -542,50 +506,6 @@ function useStoredState(key, defaultValue) {
                         setState(fusionado);
                     } catch { }
                 }, 800);
-                return next;
-            });
-            return;
-        }
-        if (esListaSumada) {
-            setState(prev => {
-                const next = typeof updater === 'function' ? updater(prev) : updater;
-                try { localStorage.setItem(key, JSON.stringify(next)); } catch { }
-                // Antes de guardar, se trae lo último de la nube y se fusiona —
-                // así lo que cargó otro dispositivo hace instantes no se pierde.
-                (async () => {
-                    try {
-                        let cloud = [];
-                        const r = await storage.get(key);
-                        if (r?.value) cloud = JSON.parse(r.value) || [];
-                        const fusionado = fusionarLista(next, cloud);
-                        const json = JSON.stringify(fusionado);
-                        try { localStorage.setItem(key, json); } catch { }
-                        storage.set(key, json).catch(() => { });
-                        storage.set(key + "__ts", String(Date.now())).catch(() => { });
-                        setState(cur => JSON.stringify(fusionado) !== JSON.stringify(cur) ? fusionado : cur);
-                    } catch { }
-                })();
-                return next;
-            });
-            return;
-        }
-        if (esObjetoSumado) {
-            setState(prev => {
-                const next = typeof updater === 'function' ? updater(prev) : updater;
-                try { localStorage.setItem(key, JSON.stringify(next)); } catch { }
-                (async () => {
-                    try {
-                        let cloud = {};
-                        const r = await storage.get(key);
-                        if (r?.value) cloud = JSON.parse(r.value) || {};
-                        const fusionado = fusionarPorObra(next, cloud);
-                        const json = JSON.stringify(fusionado);
-                        try { localStorage.setItem(key, json); } catch { }
-                        storage.set(key, json).catch(() => { });
-                        storage.set(key + "__ts", String(Date.now())).catch(() => { });
-                        setState(cur => JSON.stringify(fusionado) !== JSON.stringify(cur) ? fusionado : cur);
-                    } catch { }
-                })();
                 return next;
             });
             return;
@@ -1772,30 +1692,6 @@ function TabGastos({ detail, upd }) {
     </div>);
 }
 
-// Mini-formulario para cargar un período improductivo (desde-hasta). Vive
-// afuera de Obras para no repetir el useState en cada obra que se abre.
-function PeriodoImproductivoForm({ T, onAgregar }) {
-    const [desde, setDesde] = useState("");
-    const [hasta, setHasta] = useState("");
-    function submit() {
-        if (!desde.trim() || !hasta.trim()) { alert("Cargá las dos fechas."); return; }
-        onAgregar(desde.trim(), hasta.trim());
-        setDesde(""); setHasta("");
-    }
-    return (
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
-            <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 9, color: T.muted, marginBottom: 3 }}>Desde</div>
-                <input value={desde} onChange={e => setDesde(e.target.value)} placeholder="dd/mm/aa" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 8px", fontSize: 12, color: T.text, boxSizing: "border-box" }} />
-            </div>
-            <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 9, color: T.muted, marginBottom: 3 }}>Hasta</div>
-                <input value={hasta} onChange={e => setHasta(e.target.value)} placeholder="dd/mm/aa" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 8px", fontSize: 12, color: T.text, boxSizing: "border-box" }} />
-            </div>
-            <button onClick={submit} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>+ Agregar</button>
-        </div>
-    );
-}
 function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg, apiKey }) {
     const UBICS = getUbics(cfg);
     const defaultAp = UBICS[0]?.id || 'aep';
@@ -1811,15 +1707,6 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         setForm(f => ({ ...f, ap: UBICS[0]?.id || f.ap }));
     }, [UBICS.length]);
 
-    // La primera vez que la obra tiene una fecha de cierre cargada, se guarda
-    // como "comprometida" — no se vuelve a tocar aunque después el cierre se
-    // vaya corriendo. Contra esa, se mide el atraso real. (Este efecto va acá
-    // arriba, SIEMPRE, y no adentro del "if (detail)" de más abajo — los Hooks
-    // de React no pueden estar adentro de un if.)
-    useEffect(() => {
-        if (detail && detail.cierre && !detail.cierreComprometido) upd(detail.id, { cierreComprometido: detail.cierre });
-    }, [detail?.id, detail?.cierre]);
-
     function add() {
         if (!String(form.nombre || "").trim()) return;
         const apFinal = form.ap || UBICS[0]?.id || defaultAp;
@@ -1828,7 +1715,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         setShowNew(false);
     }
     function upd(id, patch) {
-        setObras(p => p.map(o => o.id === id ? { ...o, ...patch, updatedAt: Date.now() } : o));
+        setObras(p => p.map(o => o.id === id ? { ...o, ...patch } : o));
     }
     async function handleFoto(e) {
         if (!detail) return;
@@ -1894,33 +1781,6 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
 
     if (detail) {
         const e = ec(detail.estado);
-        // Convierte "dd/mm/aa" o "dd/mm/aaaa" a Date. Devuelve null si no se puede.
-        function parseFechaObra(s) {
-            if (!s) return null;
-            const m = String(s).trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
-            if (!m) return null;
-            let [, d, mo, y] = m;
-            y = y.length === 2 ? "20" + y : y;
-            const dt = new Date(Number(y), Number(mo) - 1, Number(d));
-            return isNaN(dt.getTime()) ? null : dt;
-        }
-        // Períodos improductivos cargados a mano (desde-hasta), sumados en un
-        // listado general por obra — no se calcula solo contra ninguna fecha.
-        const periodos = detail.periodosImproductivos || [];
-        const diasAtraso = periodos.reduce((a, p) => a + (Number(p.dias) || 0), 0);
-        const costoEstructuraDiario = Number(detail.costoEstructuraDiario) || 0;
-        const costoImproductividad = diasAtraso * costoEstructuraDiario;
-        function agregarPeriodo(desde, hasta) {
-            const fd = parseFechaObra(desde), fh = parseFechaObra(hasta);
-            if (!fd || !fh) { alert("Poné las dos fechas en formato dd/mm/aa."); return; }
-            const dias = Math.round((fh - fd) / 86400000) + 1; // inclusive: si es el mismo día, cuenta 1
-            if (dias <= 0) { alert("La fecha \"hasta\" tiene que ser igual o posterior a \"desde\"."); return; }
-            const nuevo = { id: uid(), desde, hasta, dias, ts: Date.now() };
-            upd(detail.id, { periodosImproductivos: [...periodos, nuevo] });
-        }
-        function borrarPeriodo(id) {
-            upd(detail.id, { periodosImproductivos: periodos.filter(p => p.id !== id) });
-        }
         return (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                 <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap} · ${detail.sector || t(cfg, 'obras_sector')}`} back onBack={() => setDetailId(null)} right={<Badge color={e.color} bg={e.bg}>{e.label}</Badge>} />
@@ -1986,29 +1846,6 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_cierre')}</div>
                                 <input value={detail.cierre || ''} onChange={e => upd(detail.id, { cierre: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
-                            </div>
-                        </div>
-                        <div style={{ background: T.bg, borderRadius: T.rsm, border: `1px solid ${T.border}`, padding: "12px 13px", marginBottom: 14 }}>
-                            <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".03em", marginBottom: 8 }}>Costo de improductividad</div>
-                            <div style={{ marginBottom: 10 }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>Costo de estructura / día ($)</div>
-                                <input type="number" inputMode="decimal" value={detail.costoEstructuraDiario || ''} onChange={e => upd(detail.id, { costoEstructuraDiario: e.target.value })} placeholder="Ej: 45000" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 9px", fontSize: 13, fontWeight: 700, color: T.text }} />
-                                <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, lineHeight: 1.4 }}>Gastos generales que corren igual, haya o no gente en obra (administración, alquileres, seguros, etc.)</div>
-                            </div>
-                            <div style={{ fontSize: 10, color: T.muted, marginBottom: 6, textTransform: "uppercase" }}>Cargar período improductivo</div>
-                            <PeriodoImproductivoForm T={T} onAgregar={agregarPeriodo} />
-                            {periodos.length > 0 && <div style={{ marginTop: 10 }}>
-                                {periodos.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).map(p => (
-                                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 10px", marginBottom: 6 }}>
-                                        <span style={{ flex: 1, fontSize: 12, color: T.text }}>{p.desde} → {p.hasta}</span>
-                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#EF4444" }}>{p.dias} día{p.dias > 1 ? "s" : ""}</span>
-                                        <button onClick={() => borrarPeriodo(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: "0 2px" }}>✕</button>
-                                    </div>
-                                ))}
-                            </div>}
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: diasAtraso > 0 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.10)", border: `1px solid ${diasAtraso > 0 ? "rgba(239,68,68,.30)" : "rgba(22,163,74,.30)"}`, borderRadius: 8, padding: "9px 12px", marginTop: 10 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: diasAtraso > 0 ? "#EF4444" : "#16A34A" }}>{diasAtraso > 0 ? `${diasAtraso} día${diasAtraso > 1 ? "s" : ""} improductivos en total` : "Sin días improductivos cargados"}</span>
-                                <span style={{ fontSize: 15, fontWeight: 800, color: diasAtraso > 0 ? "#EF4444" : "#16A34A" }}>{diasAtraso > 0 ? money(costoImproductividad) : "$ 0"}</span>
                             </div>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
@@ -8369,6 +8206,7 @@ function WebFooter({ cfg }) {
 }
 
 function App() {
+  useEffect(() => { registrarApertura("constructora"); }, []);
   useEffect(() => { if (FORCE_CLOUD) { try { history.replaceState(null, "", window.location.pathname); } catch { } } }, []);
   const [cfg, setCfg] = useStoredState("vv_cfg", { ...DEFAULT_CONFIG, themeId:"institucional", fontId:"inter", radiusId:"sharp", colors:{...INST_COLORS}, apiKey:"" });
   // Rediseño oscuro/dorado: se aplica UNA sola vez (no fuerza nada si ya lo

@@ -15,10 +15,14 @@ const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Aut
 // Registra que la app se abrió — usado por NEXO Control para saber
 // cuántas personas usan cada vista. No interfiere con nada existente.
 function registrarApertura(appTag) {
+  // Va a una tabla liviana propia (no a bco_storage) para no sobrecargar
+  // esa tabla, que ya tiene todo el resto del sistema.
   try {
-    const key = "apertura:" + appTag + ":" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
-    const valor = JSON.stringify({ app: appTag, ts: new Date().toISOString() });
-    storage.set(key, valor).catch(() => {});
+    fetch(SUPA_URL + "/rest/v1/aperturas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Prefer": "return=minimal" },
+      body: JSON.stringify({ app: appTag }),
+    }).catch(() => {});
   } catch (e) {}
 }
 
