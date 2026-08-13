@@ -1,26 +1,28 @@
-CLIENTE + V+V — Costo de improductividad por atraso de obra
+CLIENTE + V+V — Fix: los períodos improductivos (y otros cambios de obra) se borraban solos
 ======================================================================
 
-QUÉ AGREGUÉ (en Obras → detalle de cada obra → pestaña Info):
+QUÉ PASABA (la causa real):
+Cargabas un período improductivo, se guardaba bien... y a los pocos
+minutos desaparecía. La causa: el chequeo automático que agregamos
+antes (revisa la nube cada 8 segundos) NO esperaba a que un cambio
+recién hecho en una obra terminara de guardarse del todo — así que
+podía llegar a mezclar tu cambio con una copia de la nube todavía
+vieja, y esa mezcla "ganaba", haciendo que el cambio pareciera
+borrarse solo.
 
-1) "Fecha comprometida" — se guarda SOLA la primera vez que cargás una
-   fecha de cierre. Nunca se vuelve a mover, aunque después vayas
-   corriendo la fecha de cierre real. Es tu punto de comparación fijo.
+Además, en Cliente.jsx el guardado de obras no tenía la misma
+protección que ya tenía V+V (una pausa breve antes de guardar de
+verdad + un número de secuencia para descartar guardados que quedaron
+viejos) — eso también sumaba al problema.
 
-2) "Costo de estructura / día" — lo cargás vos, por obra (gastos
-   generales que corren igual haya o no gente trabajando:
-   administración, alquileres, seguros, etc.).
+QUÉ CORREGÍ:
+1. El chequeo automático de obras ahora espera unos segundos después
+   de cualquier edición antes de volver a mezclar con la nube.
+2. Cliente.jsx ahora tiene la misma protección robusta que V+V para
+   guardar obras (pausa + secuencia), que antes le faltaba.
 
-3) Cálculo automático:
-   Días de atraso = hoy (o la fecha de cierre real, si ya terminó) −
-                     fecha comprometida
-   Costo de improductividad = días de atraso × costo de estructura/día
-
-   Se ve en un cartel: rojo con el monto si hay atraso, verde "Sin
-   atraso" si no.
-
-Está en las DOS apps, mismo cálculo — es el mismo componente de Obras
-que ya comparten.
+Esto debería solucionar que los períodos improductivos (y cualquier
+otro campo de obra) se "borren solos" después de un rato.
 
 ARCHIVOS:
 - App.jsx / Cliente.jsx              → reemplazan los de tu repo.
