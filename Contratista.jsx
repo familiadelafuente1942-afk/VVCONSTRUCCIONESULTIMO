@@ -176,7 +176,6 @@ const DOC_CATS = ["Documentación técnica", "Elementos de protección", "Otros 
 
 // Carga SheetJS desde CDN una sola vez (para leer el Excel en el navegador)
 function cargarXLSX() {
-  useEffect(() => { registrarApertura("contratista"); }, []);
   return new Promise((resolve, reject) => {
     if (window.XLSX) return resolve(window.XLSX);
     const s = document.createElement("script");
@@ -551,6 +550,7 @@ function RecepcionDocs({ obras, empresa, docrecepcion, persistDoc }) {
 }
 
 export default function ContratistaApp() {
+  useEffect(() => { registrarApertura("contratista"); }, []);
   const [empresa, setEmpresa] = useState(() => { try { return localStorage.getItem("contratista_empresa") || ""; } catch { return ""; } });
   const [persona, setPersona] = useState(() => { try { return localStorage.getItem("contratista_persona") || ""; } catch { return ""; } });
   const setPersonaP = (v) => { setPersona(v); try { localStorage.setItem("contratista_persona", v); } catch { } };

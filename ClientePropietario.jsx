@@ -136,7 +136,6 @@ function Entrada({ onEntrar, config, onGuardarConfig, codigoInicial, proyectoUrl
   const [editando, setEditando] = useState(false);
 
   async function entrar() {
-  useEffect(() => { registrarApertura("propietario"); }, []);
     const cod = codigo.trim().toUpperCase().replace(/\s+/g, "");
     if (!cod) { setError("Ingresá el código que te dio Belfast."); return; }
     if (!nombre.trim()) { setError("Ingresá tu nombre."); return; }
@@ -748,6 +747,7 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
 }
 
 export default function ClientePropietarioApp() {
+  useEffect(() => { registrarApertura("propietario"); }, []);
   const [estado, setEstado] = useState("cargando"); // cargando | entrada | panel | error
   const [obra, setObra] = useState(null);
   const [nombreCliente, setNombreCliente] = useState("");

@@ -70,7 +70,6 @@ function b64ToU8(b64) {
 }
 // Estado: "activo" | "bloqueado" | "no-soportado" | "inactivo"
 async function pushEstado() {
-  useEffect(() => { registrarApertura("constructora"); }, []);
   try {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "no-soportado";
     if (Notification.permission === "denied") return "bloqueado";
@@ -8182,6 +8181,7 @@ function WebFooter({ cfg }) {
 }
 
 function App() {
+  useEffect(() => { registrarApertura("constructora"); }, []);
   useEffect(() => { if (FORCE_CLOUD) { try { history.replaceState(null, "", window.location.pathname); } catch { } } }, []);
   const [cfg, setCfg] = useStoredState("vv_cfg", { ...DEFAULT_CONFIG, themeId:"institucional", fontId:"inter", radiusId:"sharp", colors:{...INST_COLORS}, apiKey:"" });
   // Rediseño oscuro/dorado: se aplica UNA sola vez (no fuerza nada si ya lo
