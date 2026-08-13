@@ -93,6 +93,28 @@ function registrarApertura(appTag) {
   } catch (e) {}
 }
 
+// Vigía de errores — avisa a NEXO Control si algo se rompe en el navegador
+// de cualquier persona que use esta vista, sin que nadie tenga que reportarlo.
+function reportarError(mensaje, detalle) {
+  try {
+    fetch(SUPA_URL + "/rest/v1/app_errores", {
+      method: "POST",
+      headers: { ...SH(), "Prefer": "return=minimal" },
+      body: JSON.stringify({
+        app: "contratista",
+        mensaje: String(mensaje || "").slice(0, 500),
+        detalle: String(detalle || "").slice(0, 2000),
+        url: (typeof location !== "undefined" ? location.href : ""),
+        dispositivo: (typeof navigator !== "undefined" ? navigator.userAgent : ""),
+      }),
+    }).catch(() => {});
+  } catch (e) {}
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (ev) => { reportarError(ev.message, ev.error && ev.error.stack); });
+  window.addEventListener("unhandledrejection", (ev) => { reportarError("Promise rechazada: " + ((ev.reason && ev.reason.message) || ev.reason), ev.reason && ev.reason.stack); });
+}
+
 const storage = {
   set: async (key, value) => {
     try { localStorage.setItem(key, value); } catch { }
