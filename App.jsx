@@ -368,13 +368,40 @@ const lastWrite = {};
 // borrado. Si el mismo id está en las dos, gana la de "prioridad"
 // (la que se acaba de tocar en ESTE dispositivo) — y se suma cualquier
 // obra que la nube tenga y acá no (la que cargó otro dispositivo).
+// Fusiona dos listas de obras por id. Para una obra que existe en las dos
+// (ej: la editaron desde el celular y desde el iPad), NO gana automático la
+// del dispositivo local — gana la que se editó más recientemente de verdad
+// (comparando "updatedAt"), así un dispositivo con una versión vieja en su
+// memoria no vuelve a pisar el cambio bueno cada vez que sincroniza.
 function fusionarObras(prioridad, otras, tumbas) {
   const mapa = new Map();
   (otras || []).forEach(o => { if (o?.id) mapa.set(o.id, o); });
-  (prioridad || []).forEach(o => { if (o?.id) mapa.set(o.id, o); });
+  (prioridad || []).forEach(o => {
+    if (!o?.id) return;
+    const actual = mapa.get(o.id);
+    if (!actual) { mapa.set(o.id, o); return; }
+    const tsNuevo = Number(o.updatedAt || 0);
+    const tsActual = Number(actual.updatedAt || 0);
+    // Si ninguna de las dos tiene sello de tiempo (obras viejas, de antes de
+    // este cambio), se mantiene el comportamiento de siempre: gana la local.
+    if (!tsNuevo && !tsActual) { mapa.set(o.id, o); return; }
+    if (tsNuevo >= tsActual) mapa.set(o.id, o);
+  });
   Object.keys(tumbas || {}).forEach(id => mapa.delete(id));
   return Array.from(mapa.values());
 }
+// Igual que fusionarObras pero para listas simples que se van cargando desde
+// varios dispositivos a la vez (bitácora, mensajes): en vez de "gana el más
+// nuevo entero" (que hacía desaparecer lo que cargó el otro dispositivo si
+// llegaba unos segundos después), esto SUMA — la unión de las dos listas por
+// id, sin duplicar, ordenada por fecha.
+function fusionarLista(local, cloud) {
+  const mapa = new Map();
+  (cloud || []).forEach(x => { if (x?.id) mapa.set(x.id, x); });
+  (local || []).forEach(x => { if (x?.id) mapa.set(x.id, x); });
+  return Array.from(mapa.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+}
+const CLAVES_LISTA_SUMADA = new Set(["vv_bitacora", "vv_mensajes"]);
 function useStoredState(key, defaultValue) {
     const [state, setState] = useState(() => {
         const local = storage.getLocal(key);
@@ -394,6 +421,7 @@ function useStoredState(key, defaultValue) {
     //    más nueva.
     const obrasPersistTimer = useRef(null);
     const obrasPersistSeq = useRef(0);
+    const esListaSumada = CLAVES_LISTA_SUMADA.has(key); // bitácora, mensajes: se suman, no se pisan
 
     // Al montar, y después cada 8 segundos mientras la app está abierta:
     // sincroniza con Supabase — así lo que carga Cliente/Belfast (mensajes,
@@ -407,6 +435,17 @@ function useStoredState(key, defaultValue) {
                     const cloud = rCloud?.value ? JSON.parse(rCloud.value) : [];
                     const tumbas = rDel?.value ? JSON.parse(rDel.value) : {};
                     if (alive) setState(prevLocal => fusionarObras(prevLocal, cloud, tumbas));
+                } else if (esListaSumada) {
+                    const r = await storage.get(key);
+                    const cloud = r?.value ? JSON.parse(r.value) : [];
+                    if (alive) setState(prevLocal => {
+                        const unida = fusionarLista(prevLocal, cloud);
+                        // Si la unión trajo algo que la nube no tenía todavía (lo cargó
+                        // este dispositivo hace instantes), lo re-sube para no perderlo.
+                        if (unida.length !== cloud.length) { storage.set(key, JSON.stringify(unida)); storage.set(key + "__ts", String(Date.now())); }
+                        return JSON.stringify(unida) !== JSON.stringify(prevLocal) ? unida : prevLocal;
+                    });
+                    try { localStorage.setItem(key, JSON.stringify(cloud)); } catch { }
                 } else {
                     const r = await storage.get(key);
                     if (r?.value) {
@@ -479,6 +518,29 @@ function useStoredState(key, defaultValue) {
                         setState(fusionado);
                     } catch { }
                 }, 800);
+                return next;
+            });
+            return;
+        }
+        if (esListaSumada) {
+            setState(prev => {
+                const next = typeof updater === 'function' ? updater(prev) : updater;
+                try { localStorage.setItem(key, JSON.stringify(next)); } catch { }
+                // Antes de guardar, se trae lo último de la nube y se fusiona —
+                // así lo que cargó otro dispositivo hace instantes no se pierde.
+                (async () => {
+                    try {
+                        let cloud = [];
+                        const r = await storage.get(key);
+                        if (r?.value) cloud = JSON.parse(r.value) || [];
+                        const fusionado = fusionarLista(next, cloud);
+                        const json = JSON.stringify(fusionado);
+                        try { localStorage.setItem(key, json); } catch { }
+                        storage.set(key, json).catch(() => { });
+                        storage.set(key + "__ts", String(Date.now())).catch(() => { });
+                        setState(cur => JSON.stringify(fusionado) !== JSON.stringify(cur) ? fusionado : cur);
+                    } catch { }
+                })();
                 return next;
             });
             return;
@@ -1697,7 +1759,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         setShowNew(false);
     }
     function upd(id, patch) {
-        setObras(p => p.map(o => o.id === id ? { ...o, ...patch } : o));
+        setObras(p => p.map(o => o.id === id ? { ...o, ...patch, updatedAt: Date.now() } : o));
     }
     async function handleFoto(e) {
         if (!detail) return;

@@ -290,17 +290,68 @@ async function descargarArchivo(url, nombre) {
 
 const FORCE_CLOUD = (() => { try { return new URLSearchParams(window.location.search).has("sync"); } catch { return false; } })();
 const lastWrite = {};
+// Unión de dos listas por id (sin duplicar, ordenada por fecha) — para listas
+// que se van cargando desde varios dispositivos a la vez (bitácora, mensajes):
+// en vez de "gana el más nuevo entero" (que hacía desaparecer lo que cargó el
+// otro dispositivo si llegaba unos segundos después), esto SUMA.
+function fusionarLista(local, cloud) {
+  const mapa = new Map();
+  (cloud || []).forEach(x => { if (x?.id) mapa.set(x.id, x); });
+  (local || []).forEach(x => { if (x?.id) mapa.set(x.id, x); });
+  return Array.from(mapa.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+}
+const CLAVES_LISTA_SUMADA = new Set(["vv_bitacora", "vv_mensajes"]);
+// Fusiona dos listas de OBRAS por id. Si la misma obra existe en las dos
+// versiones (se editó desde el celular y desde el iPad, o desde Cliente y
+// desde V+V), gana la que se editó más recientemente de verdad (comparando
+// "updatedAt") — no la del dispositivo local a ciegas. Respeta las tumbas
+// (obras borradas) para que un borrado hecho en V+V no "resucite" acá.
+function fusionarObras(prioridad, otras, tumbas) {
+  const mapa = new Map();
+  (otras || []).forEach(o => { if (o?.id) mapa.set(o.id, o); });
+  (prioridad || []).forEach(o => {
+    if (!o?.id) return;
+    const actual = mapa.get(o.id);
+    if (!actual) { mapa.set(o.id, o); return; }
+    const tsNuevo = Number(o.updatedAt || 0);
+    const tsActual = Number(actual.updatedAt || 0);
+    if (!tsNuevo && !tsActual) { mapa.set(o.id, o); return; }
+    if (tsNuevo >= tsActual) mapa.set(o.id, o);
+  });
+  Object.keys(tumbas || {}).forEach(id => mapa.delete(id));
+  return Array.from(mapa.values());
+}
 function useStored(key, def) {
   const [v, setV] = useState(() => { try { const l = localStorage.getItem(key); return l ? JSON.parse(l) : def; } catch { return def; } });
+  const esListaSumada = CLAVES_LISTA_SUMADA.has(key);
+  const esObras = key === "vv_obras"; // fusión por objeto (updatedAt), igual que en V+V
   // Gana el MÁS RECIENTE (por sello de fecha), no el más grande: si no, un borrado
   // hecho en V+V (que achica la lista) se descarta acá y la obra borrada vuelve.
   useEffect(() => {
     let alive = true;
     async function pull() {
+      if (esObras) {
+        try {
+          const [rCloud, rDel] = await Promise.all([storage.get(key), storage.get(key + "_del")]);
+          const cloud = rCloud?.value ? JSON.parse(rCloud.value) : [];
+          const tumbas = rDel?.value ? JSON.parse(rDel.value) : {};
+          if (alive) setV(prevLocal => fusionarObras(prevLocal, cloud, tumbas));
+        } catch { }
+        return;
+      }
       const r = await storage.get(key);
       if (!r?.value) return;
       try {
         const d = JSON.parse(r.value);
+        if (esListaSumada) {
+          if (alive) setV(prevLocal => {
+            const unida = fusionarLista(prevLocal, d);
+            if (unida.length !== d.length) { storage.set(key, JSON.stringify(unida)); storage.set(key + "__ts", String(Date.now())); }
+            return JSON.stringify(unida) !== JSON.stringify(prevLocal) ? unida : prevLocal;
+          });
+          try { localStorage.setItem(key, JSON.stringify(d)); } catch { }
+          return;
+        }
         if (Date.now() - (lastWrite[key] || 0) < 8000) return;
         if (FORCE_CLOUD) { if (alive) setV(d); try { localStorage.setItem(key, r.value); } catch { } return; }
         const rTs = await storage.get(key + "__ts");
@@ -326,6 +377,44 @@ function useStored(key, def) {
   const set = useCallback(u => {
     setV(prev => {
       const n = typeof u === 'function' ? u(prev) : u;
+      if (esObras) {
+        try { localStorage.setItem(key, JSON.stringify(n)); } catch { }
+        (async () => {
+          try {
+            const [rCloud, rDel] = await Promise.all([storage.get(key), storage.get(key + "_del")]);
+            const cloud = rCloud?.value ? JSON.parse(rCloud.value) : [];
+            const tumbas = rDel?.value ? JSON.parse(rDel.value) : {};
+            const idsPrev = new Set((prev || []).map(o => o?.id));
+            const idsNext = new Set((n || []).map(o => o?.id));
+            const borrados = [...idsPrev].filter(id => id && !idsNext.has(id));
+            if (borrados.length) { borrados.forEach(id => { tumbas[id] = Date.now(); }); try { await storage.set(key + "_del", JSON.stringify(tumbas)); } catch { } }
+            const fusionado = fusionarObras(n, cloud, tumbas);
+            const j = JSON.stringify(fusionado);
+            try { localStorage.setItem(key, j); } catch { }
+            storage.set(key, j);
+            storage.set(key + "__ts", String(Date.now()));
+            setV(cur => JSON.stringify(fusionado) !== JSON.stringify(cur) ? fusionado : cur);
+          } catch { }
+        })();
+        return n;
+      }
+      if (esListaSumada) {
+        try { localStorage.setItem(key, JSON.stringify(n)); } catch { }
+        (async () => {
+          try {
+            let cloud = [];
+            const r = await storage.get(key);
+            if (r?.value) cloud = JSON.parse(r.value) || [];
+            const fusionado = fusionarLista(n, cloud);
+            const j = JSON.stringify(fusionado);
+            try { localStorage.setItem(key, j); } catch { }
+            storage.set(key, j);
+            storage.set(key + "__ts", String(Date.now()));
+            setV(cur => JSON.stringify(fusionado) !== JSON.stringify(cur) ? fusionado : cur);
+          } catch { }
+        })();
+        return n;
+      }
       const j = JSON.stringify(n);
       const ts = Date.now();
       lastWrite[key] = ts;
@@ -2262,7 +2351,7 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
         setShowNew(false);
     }
     function upd(id, patch) {
-        setObras(p => p.map(o => o.id === id ? { ...o, ...patch } : o));
+        setObras(p => p.map(o => o.id === id ? { ...o, ...patch, updatedAt: Date.now() } : o));
     }
     async function handleFoto(e) {
         if (!detail) return;
