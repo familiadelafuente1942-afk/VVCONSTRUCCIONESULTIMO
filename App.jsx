@@ -1772,6 +1772,30 @@ function TabGastos({ detail, upd }) {
     </div>);
 }
 
+// Mini-formulario para cargar un período improductivo (desde-hasta). Vive
+// afuera de Obras para no repetir el useState en cada obra que se abre.
+function PeriodoImproductivoForm({ T, onAgregar }) {
+    const [desde, setDesde] = useState("");
+    const [hasta, setHasta] = useState("");
+    function submit() {
+        if (!desde.trim() || !hasta.trim()) { alert("Cargá las dos fechas."); return; }
+        onAgregar(desde.trim(), hasta.trim());
+        setDesde(""); setHasta("");
+    }
+    return (
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+            <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 9, color: T.muted, marginBottom: 3 }}>Desde</div>
+                <input value={desde} onChange={e => setDesde(e.target.value)} placeholder="dd/mm/aa" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 8px", fontSize: 12, color: T.text, boxSizing: "border-box" }} />
+            </div>
+            <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 9, color: T.muted, marginBottom: 3 }}>Hasta</div>
+                <input value={hasta} onChange={e => setHasta(e.target.value)} placeholder="dd/mm/aa" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 8px", fontSize: 12, color: T.text, boxSizing: "border-box" }} />
+            </div>
+            <button onClick={submit} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>+ Agregar</button>
+        </div>
+    );
+}
 function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg, apiKey }) {
     const UBICS = getUbics(cfg);
     const defaultAp = UBICS[0]?.id || 'aep';
@@ -1880,13 +1904,23 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
             const dt = new Date(Number(y), Number(mo) - 1, Number(d));
             return isNaN(dt.getTime()) ? null : dt;
         }
-        const fComprometida = parseFechaObra(detail.cierreComprometido || detail.cierre);
-        const fCierreActual = parseFechaObra(detail.cierre);
-        const fReferencia = detail.estado === "terminada" ? fCierreActual : new Date(); // si sigue en curso, se mide contra hoy
-        let diasAtraso = 0;
-        if (fComprometida && fReferencia) diasAtraso = Math.max(0, Math.round((fReferencia - fComprometida) / 86400000));
+        // Períodos improductivos cargados a mano (desde-hasta), sumados en un
+        // listado general por obra — no se calcula solo contra ninguna fecha.
+        const periodos = detail.periodosImproductivos || [];
+        const diasAtraso = periodos.reduce((a, p) => a + (Number(p.dias) || 0), 0);
         const costoEstructuraDiario = Number(detail.costoEstructuraDiario) || 0;
         const costoImproductividad = diasAtraso * costoEstructuraDiario;
+        function agregarPeriodo(desde, hasta) {
+            const fd = parseFechaObra(desde), fh = parseFechaObra(hasta);
+            if (!fd || !fh) { alert("Poné las dos fechas en formato dd/mm/aa."); return; }
+            const dias = Math.round((fh - fd) / 86400000) + 1; // inclusive: si es el mismo día, cuenta 1
+            if (dias <= 0) { alert("La fecha \"hasta\" tiene que ser igual o posterior a \"desde\"."); return; }
+            const nuevo = { id: uid(), desde, hasta, dias, ts: Date.now() };
+            upd(detail.id, { periodosImproductivos: [...periodos, nuevo] });
+        }
+        function borrarPeriodo(id) {
+            upd(detail.id, { periodosImproductivos: periodos.filter(p => p.id !== id) });
+        }
         return (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                 <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap} · ${detail.sector || t(cfg, 'obras_sector')}`} back onBack={() => setDetailId(null)} right={<Badge color={e.color} bg={e.bg}>{e.label}</Badge>} />
@@ -1955,21 +1989,25 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             </div>
                         </div>
                         <div style={{ background: T.bg, borderRadius: T.rsm, border: `1px solid ${T.border}`, padding: "12px 13px", marginBottom: 14 }}>
-                            <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".03em", marginBottom: 8 }}>Costo de improductividad por atraso</div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-                                <div>
-                                    <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>Costo de estructura / día ($)</div>
-                                    <input type="number" inputMode="decimal" value={detail.costoEstructuraDiario || ''} onChange={e => upd(detail.id, { costoEstructuraDiario: e.target.value })} placeholder="Ej: 45000" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 9px", fontSize: 13, fontWeight: 700, color: T.text }} />
-                                    <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, lineHeight: 1.4 }}>Gastos generales que corren igual, haya o no gente en obra (administración, alquileres, seguros, etc.)</div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>Fecha comprometida (fija)</div>
-                                    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 9px", fontSize: 13, fontWeight: 700, color: T.muted }}>{detail.cierreComprometido || detail.cierre || "—"}</div>
-                                    <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, lineHeight: 1.4 }}>Se guardó sola la primera vez — no se mueve aunque corras el cierre.</div>
-                                </div>
+                            <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".03em", marginBottom: 8 }}>Costo de improductividad</div>
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>Costo de estructura / día ($)</div>
+                                <input type="number" inputMode="decimal" value={detail.costoEstructuraDiario || ''} onChange={e => upd(detail.id, { costoEstructuraDiario: e.target.value })} placeholder="Ej: 45000" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 9px", fontSize: 13, fontWeight: 700, color: T.text }} />
+                                <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, lineHeight: 1.4 }}>Gastos generales que corren igual, haya o no gente en obra (administración, alquileres, seguros, etc.)</div>
                             </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: diasAtraso > 0 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.10)", border: `1px solid ${diasAtraso > 0 ? "rgba(239,68,68,.30)" : "rgba(22,163,74,.30)"}`, borderRadius: 8, padding: "9px 12px" }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: diasAtraso > 0 ? "#EF4444" : "#16A34A" }}>{diasAtraso > 0 ? `${diasAtraso} día${diasAtraso > 1 ? "s" : ""} de atraso` : "Sin atraso"}</span>
+                            <div style={{ fontSize: 10, color: T.muted, marginBottom: 6, textTransform: "uppercase" }}>Cargar período improductivo</div>
+                            <PeriodoImproductivoForm T={T} onAgregar={agregarPeriodo} />
+                            {periodos.length > 0 && <div style={{ marginTop: 10 }}>
+                                {periodos.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).map(p => (
+                                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 10px", marginBottom: 6 }}>
+                                        <span style={{ flex: 1, fontSize: 12, color: T.text }}>{p.desde} → {p.hasta}</span>
+                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#EF4444" }}>{p.dias} día{p.dias > 1 ? "s" : ""}</span>
+                                        <button onClick={() => borrarPeriodo(p.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: "0 2px" }}>✕</button>
+                                    </div>
+                                ))}
+                            </div>}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: diasAtraso > 0 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.10)", border: `1px solid ${diasAtraso > 0 ? "rgba(239,68,68,.30)" : "rgba(22,163,74,.30)"}`, borderRadius: 8, padding: "9px 12px", marginTop: 10 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: diasAtraso > 0 ? "#EF4444" : "#16A34A" }}>{diasAtraso > 0 ? `${diasAtraso} día${diasAtraso > 1 ? "s" : ""} improductivos en total` : "Sin días improductivos cargados"}</span>
                                 <span style={{ fontSize: 15, fontWeight: 800, color: diasAtraso > 0 ? "#EF4444" : "#16A34A" }}>{diasAtraso > 0 ? money(costoImproductividad) : "$ 0"}</span>
                             </div>
                         </div>
