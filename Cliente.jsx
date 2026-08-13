@@ -301,6 +301,15 @@ function fusionarLista(local, cloud) {
   return Array.from(mapa.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
 }
 const CLAVES_LISTA_SUMADA = new Set(["vv_bitacora", "vv_mensajes"]);
+// Igual que fusionarLista, pero para datos guardados "por obra"
+// ({ obraId: [ {id, ts, ...}, ... ] }) — avance y certificados semanales.
+function fusionarPorObra(local, cloud) {
+  const resultado = {};
+  const obraIds = new Set([...Object.keys(local || {}), ...Object.keys(cloud || {})]);
+  obraIds.forEach(oid => { resultado[oid] = fusionarLista((local || {})[oid], (cloud || {})[oid]); });
+  return resultado;
+}
+const CLAVES_OBJETO_SUMADO = new Set(["vv_avance", "vv_certif_sem"]);
 // Fusiona dos listas de OBRAS por id. Si la misma obra existe en las dos
 // versiones (se editó desde el celular y desde el iPad, o desde Cliente y
 // desde V+V), gana la que se editó más recientemente de verdad (comparando
@@ -324,6 +333,7 @@ function fusionarObras(prioridad, otras, tumbas) {
 function useStored(key, def) {
   const [v, setV] = useState(() => { try { const l = localStorage.getItem(key); return l ? JSON.parse(l) : def; } catch { return def; } });
   const esListaSumada = CLAVES_LISTA_SUMADA.has(key);
+  const esObjetoSumado = CLAVES_OBJETO_SUMADO.has(key); // avance, certificados semanales: se suman por obra
   const esObras = key === "vv_obras"; // fusión por objeto (updatedAt), igual que en V+V
   // Gana el MÁS RECIENTE (por sello de fecha), no el más grande: si no, un borrado
   // hecho en V+V (que achica la lista) se descarta acá y la obra borrada vuelve.
@@ -348,6 +358,16 @@ function useStored(key, def) {
             const unida = fusionarLista(prevLocal, d);
             if (unida.length !== d.length) { storage.set(key, JSON.stringify(unida)); storage.set(key + "__ts", String(Date.now())); }
             return JSON.stringify(unida) !== JSON.stringify(prevLocal) ? unida : prevLocal;
+          });
+          try { localStorage.setItem(key, JSON.stringify(d)); } catch { }
+          return;
+        }
+        if (esObjetoSumado) {
+          if (alive) setV(prevLocal => {
+            const unido = fusionarPorObra(prevLocal, d);
+            const j = JSON.stringify(unido);
+            if (j !== JSON.stringify(d)) { storage.set(key, j); storage.set(key + "__ts", String(Date.now())); }
+            return j !== JSON.stringify(prevLocal) ? unido : prevLocal;
           });
           try { localStorage.setItem(key, JSON.stringify(d)); } catch { }
           return;
@@ -406,6 +426,23 @@ function useStored(key, def) {
             const r = await storage.get(key);
             if (r?.value) cloud = JSON.parse(r.value) || [];
             const fusionado = fusionarLista(n, cloud);
+            const j = JSON.stringify(fusionado);
+            try { localStorage.setItem(key, j); } catch { }
+            storage.set(key, j);
+            storage.set(key + "__ts", String(Date.now()));
+            setV(cur => JSON.stringify(fusionado) !== JSON.stringify(cur) ? fusionado : cur);
+          } catch { }
+        })();
+        return n;
+      }
+      if (esObjetoSumado) {
+        try { localStorage.setItem(key, JSON.stringify(n)); } catch { }
+        (async () => {
+          try {
+            let cloud = {};
+            const r = await storage.get(key);
+            if (r?.value) cloud = JSON.parse(r.value) || {};
+            const fusionado = fusionarPorObra(n, cloud);
             const j = JSON.stringify(fusionado);
             try { localStorage.setItem(key, j); } catch { }
             storage.set(key, j);

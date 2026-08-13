@@ -402,6 +402,19 @@ function fusionarLista(local, cloud) {
   return Array.from(mapa.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
 }
 const CLAVES_LISTA_SUMADA = new Set(["vv_bitacora", "vv_mensajes"]);
+// Igual que fusionarLista, pero para datos guardados "por obra"
+// ({ obraId: [ {id, ts, ...}, ... ] }) — avance y certificados semanales.
+// Sin esto, si Cliente y V+V cargaban cada uno un registro casi al mismo
+// tiempo, el que se guardaba último pisaba entero al otro (por eso los
+// conteos de "Informes de avance" / "Certificados semanales" no coincidían
+// entre Cliente y V+V).
+function fusionarPorObra(local, cloud) {
+  const resultado = {};
+  const obraIds = new Set([...Object.keys(local || {}), ...Object.keys(cloud || {})]);
+  obraIds.forEach(oid => { resultado[oid] = fusionarLista((local || {})[oid], (cloud || {})[oid]); });
+  return resultado;
+}
+const CLAVES_OBJETO_SUMADO = new Set(["vv_avance", "vv_certif_sem"]);
 function useStoredState(key, defaultValue) {
     const [state, setState] = useState(() => {
         const local = storage.getLocal(key);
@@ -422,6 +435,7 @@ function useStoredState(key, defaultValue) {
     const obrasPersistTimer = useRef(null);
     const obrasPersistSeq = useRef(0);
     const esListaSumada = CLAVES_LISTA_SUMADA.has(key); // bitácora, mensajes: se suman, no se pisan
+    const esObjetoSumado = CLAVES_OBJETO_SUMADO.has(key); // avance, certificados semanales: se suman por obra
 
     // Al montar, y después cada 8 segundos mientras la app está abierta:
     // sincroniza con Supabase — así lo que carga Cliente/Belfast (mensajes,
@@ -444,6 +458,16 @@ function useStoredState(key, defaultValue) {
                         // este dispositivo hace instantes), lo re-sube para no perderlo.
                         if (unida.length !== cloud.length) { storage.set(key, JSON.stringify(unida)); storage.set(key + "__ts", String(Date.now())); }
                         return JSON.stringify(unida) !== JSON.stringify(prevLocal) ? unida : prevLocal;
+                    });
+                    try { localStorage.setItem(key, JSON.stringify(cloud)); } catch { }
+                } else if (esObjetoSumado) {
+                    const r = await storage.get(key);
+                    const cloud = r?.value ? JSON.parse(r.value) : {};
+                    if (alive) setState(prevLocal => {
+                        const unido = fusionarPorObra(prevLocal, cloud);
+                        const j = JSON.stringify(unido);
+                        if (j !== JSON.stringify(cloud)) { storage.set(key, j); storage.set(key + "__ts", String(Date.now())); }
+                        return j !== JSON.stringify(prevLocal) ? unido : prevLocal;
                     });
                     try { localStorage.setItem(key, JSON.stringify(cloud)); } catch { }
                 } else {
@@ -534,6 +558,27 @@ function useStoredState(key, defaultValue) {
                         const r = await storage.get(key);
                         if (r?.value) cloud = JSON.parse(r.value) || [];
                         const fusionado = fusionarLista(next, cloud);
+                        const json = JSON.stringify(fusionado);
+                        try { localStorage.setItem(key, json); } catch { }
+                        storage.set(key, json).catch(() => { });
+                        storage.set(key + "__ts", String(Date.now())).catch(() => { });
+                        setState(cur => JSON.stringify(fusionado) !== JSON.stringify(cur) ? fusionado : cur);
+                    } catch { }
+                })();
+                return next;
+            });
+            return;
+        }
+        if (esObjetoSumado) {
+            setState(prev => {
+                const next = typeof updater === 'function' ? updater(prev) : updater;
+                try { localStorage.setItem(key, JSON.stringify(next)); } catch { }
+                (async () => {
+                    try {
+                        let cloud = {};
+                        const r = await storage.get(key);
+                        if (r?.value) cloud = JSON.parse(r.value) || {};
+                        const fusionado = fusionarPorObra(next, cloud);
                         const json = JSON.stringify(fusionado);
                         try { localStorage.setItem(key, json); } catch { }
                         storage.set(key, json).catch(() => { });
