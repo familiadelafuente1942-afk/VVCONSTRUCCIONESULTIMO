@@ -1680,6 +1680,15 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         setForm(f => ({ ...f, ap: UBICS[0]?.id || f.ap }));
     }, [UBICS.length]);
 
+    // La primera vez que la obra tiene una fecha de cierre cargada, se guarda
+    // como "comprometida" — no se vuelve a tocar aunque después el cierre se
+    // vaya corriendo. Contra esa, se mide el atraso real. (Este efecto va acá
+    // arriba, SIEMPRE, y no adentro del "if (detail)" de más abajo — los Hooks
+    // de React no pueden estar adentro de un if.)
+    useEffect(() => {
+        if (detail && detail.cierre && !detail.cierreComprometido) upd(detail.id, { cierreComprometido: detail.cierre });
+    }, [detail?.id, detail?.cierre]);
+
     function add() {
         if (!String(form.nombre || "").trim()) return;
         const apFinal = form.ap || UBICS[0]?.id || defaultAp;
@@ -1764,12 +1773,6 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
             const dt = new Date(Number(y), Number(mo) - 1, Number(d));
             return isNaN(dt.getTime()) ? null : dt;
         }
-        // La primera vez que la obra tiene una fecha de cierre cargada, se guarda
-        // como "comprometida" — no se vuelve a tocar aunque después el cierre se
-        // vaya corriendo. Contra esa, se mide el atraso real.
-        useEffect(() => {
-            if (detail.cierre && !detail.cierreComprometido) upd(detail.id, { cierreComprometido: detail.cierre });
-        }, [detail.id, detail.cierre]);
         const fComprometida = parseFechaObra(detail.cierreComprometido || detail.cierre);
         const fCierreActual = parseFechaObra(detail.cierre);
         const fReferencia = detail.estado === "terminada" ? fCierreActual : new Date(); // si sigue en curso, se mide contra hoy
