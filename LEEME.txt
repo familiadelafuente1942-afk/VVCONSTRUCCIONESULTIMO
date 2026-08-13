@@ -1,22 +1,28 @@
-V+V Construcciones — Deploy (versión plana, todo en la raíz)
+CLIENTE + V+V — Costo de improductividad por atraso de obra
+======================================================================
 
-POR QUÉ FALLÓ ANTES: a GitHub no llegaron todos los archivos (Vercel transformó
-solo 3 módulos en vez de 34). Faltaban App.jsx / Cliente.jsx. Esta versión no usa
-subcarpetas para que la subida sea simple y completa.
+QUÉ AGREGUÉ (en Obras → detalle de cada obra → pestaña Info):
 
-CÓMO SUBIRLO BIEN A GITHUB:
-1. Descomprimí este ZIP. Vas a ver 9 archivos sueltos (App.jsx, Cliente.jsx,
-   index.html, cliente.html, main-vv.jsx, main-cliente.jsx, global.css,
-   package.json, vite.config.js).
-2. En tu repo de GitHub: "Add file -> Upload files".
-3. Seleccioná los 9 archivos JUNTOS y soltálos. Confirmá que aparezcan los 9
-   en la lista antes de confirmar (sobre todo App.jsx y Cliente.jsx).
-4. "Commit changes".
-5. Vercel reconstruye solo. Esta vez debe decir "34 modules transformed".
+1) "Fecha comprometida" — se guarda SOLA la primera vez que cargás una
+   fecha de cierre. Nunca se vuelve a mover, aunque después vayas
+   corriendo la fecha de cierre real. Es tu punto de comparación fijo.
 
-URLs al terminar:
-- V+V:     https://tu-proyecto.vercel.app/
-- Cliente: https://tu-proyecto.vercel.app/cliente.html
+2) "Costo de estructura / día" — lo cargás vos, por obra (gastos
+   generales que corren igual haya o no gente trabajando:
+   administración, alquileres, seguros, etc.).
 
-NOTA: si en el repo te quedó una carpeta vieja "src", podés borrarla; no molesta,
-pero conviene dejar el repo limpio.
+3) Cálculo automático:
+   Días de atraso = hoy (o la fecha de cierre real, si ya terminó) −
+                     fecha comprometida
+   Costo de improductividad = días de atraso × costo de estructura/día
+
+   Se ve en un cartel: rojo con el monto si hay atraso, verde "Sin
+   atraso" si no.
+
+Está en las DOS apps, mismo cálculo — es el mismo componente de Obras
+que ya comparten.
+
+ARCHIVOS:
+- App.jsx / Cliente.jsx              → reemplazan los de tu repo.
+- App.ORIGINAL.jsx.bak / Cliente.ORIGINAL.jsx.bak → como estaban ANTES
+  de todos los cambios de esta conversación.

@@ -152,38 +152,6 @@ function SyncBanner() {
   </div>);
 }
 
-// Registra que la app se abrió — usado por NEXO Control para saber
-// cuántas personas usan cada vista. No interfiere con nada existente.
-function registrarApertura(appTag) {
-  try {
-    const key = "apertura:" + appTag + ":" + Date.now() + ":" + Math.random().toString(36).slice(2, 8);
-    const valor = JSON.stringify({ app: appTag, ts: new Date().toISOString() });
-    storage.set(key, valor).catch(() => {});
-  } catch (e) {}
-}
-
-// Vigía de errores — avisa a NEXO Control si algo se rompe en el navegador
-// de cualquier persona que use esta vista, sin que nadie tenga que reportarlo.
-function reportarError(mensaje, detalle) {
-  try {
-    fetch(SUPA_URL + "/rest/v1/app_errores", {
-      method: "POST",
-      headers: { ...SH(), "Prefer": "return=minimal" },
-      body: JSON.stringify({
-        app: "constructora",
-        mensaje: String(mensaje || "").slice(0, 500),
-        detalle: String(detalle || "").slice(0, 2000),
-        url: (typeof location !== "undefined" ? location.href : ""),
-        dispositivo: (typeof navigator !== "undefined" ? navigator.userAgent : ""),
-      }),
-    }).catch(() => {});
-  } catch (e) {}
-}
-if (typeof window !== "undefined") {
-  window.addEventListener("error", (ev) => { reportarError(ev.message, ev.error && ev.error.stack); });
-  window.addEventListener("unhandledrejection", (ev) => { reportarError("Promise rechazada: " + ((ev.reason && ev.reason.message) || ev.reason), ev.reason && ev.reason.stack); });
-}
-
 const storage = {
     // Escribe SIEMPRE en localStorage primero (síncrono, instantáneo)
     // Luego intenta Supabase en background sin bloquear
@@ -427,22 +395,25 @@ function useStoredState(key, defaultValue) {
     const obrasPersistTimer = useRef(null);
     const obrasPersistSeq = useRef(0);
 
-    // Al montar: sincronizar con Supabase una sola vez
+    // Al montar, y después cada 8 segundos mientras la app está abierta:
+    // sincroniza con Supabase — así lo que carga Cliente/Belfast (mensajes,
+    // avances, bitácora, etc.) aparece solo, sin cerrar y volver a abrir.
     useEffect(() => {
-        (async () => {
+        let alive = true;
+        async function pull() {
             try {
                 if (esObras) {
                     const [rCloud, rDel] = await Promise.all([storage.get(key), storage.get(key + "_del")]);
                     const cloud = rCloud?.value ? JSON.parse(rCloud.value) : [];
                     const tumbas = rDel?.value ? JSON.parse(rDel.value) : {};
-                    setState(prevLocal => fusionarObras(prevLocal, cloud, tumbas));
+                    if (alive) setState(prevLocal => fusionarObras(prevLocal, cloud, tumbas));
                 } else {
                     const r = await storage.get(key);
                     if (r?.value) {
                         const cloudData = JSON.parse(r.value);
                         if (FORCE_CLOUD) {
                             // Forzar la versión de la nube (lo último cargado por cualquier dispositivo)
-                            setState(cloudData);
+                            if (alive) setState(cloudData);
                             try { localStorage.setItem(key, r.value); } catch { }
                         } else {
                             // Gana el MÁS RECIENTE, no el más grande.
@@ -453,15 +424,21 @@ function useStoredState(key, defaultValue) {
                             let localTs = 0;
                             try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
                             if (cloudTs >= localTs) {
-                                setState(cloudData);
+                                if (alive) setState(cur => JSON.stringify(cloudData) !== JSON.stringify(cur) ? cloudData : cur);
                                 try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
                             }
                         }
                     }
                 }
             } catch { }
-            setCloudSynced(true);
-        })();
+            if (alive) setCloudSynced(true);
+        }
+        pull();
+        const iv = setInterval(pull, 8000);
+        const onVis = () => { if (document.visibilityState === "visible") pull(); };
+        document.addEventListener("visibilitychange", onVis);
+        window.addEventListener("focus", pull);
+        return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); };
     }, [key]);
 
     // Persiste cada vez que cambia el estado
@@ -1777,6 +1754,29 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
 
     if (detail) {
         const e = ec(detail.estado);
+        // Convierte "dd/mm/aa" o "dd/mm/aaaa" a Date. Devuelve null si no se puede.
+        function parseFechaObra(s) {
+            if (!s) return null;
+            const m = String(s).trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+            if (!m) return null;
+            let [, d, mo, y] = m;
+            y = y.length === 2 ? "20" + y : y;
+            const dt = new Date(Number(y), Number(mo) - 1, Number(d));
+            return isNaN(dt.getTime()) ? null : dt;
+        }
+        // La primera vez que la obra tiene una fecha de cierre cargada, se guarda
+        // como "comprometida" — no se vuelve a tocar aunque después el cierre se
+        // vaya corriendo. Contra esa, se mide el atraso real.
+        useEffect(() => {
+            if (detail.cierre && !detail.cierreComprometido) upd(detail.id, { cierreComprometido: detail.cierre });
+        }, [detail.id, detail.cierre]);
+        const fComprometida = parseFechaObra(detail.cierreComprometido || detail.cierre);
+        const fCierreActual = parseFechaObra(detail.cierre);
+        const fReferencia = detail.estado === "terminada" ? fCierreActual : new Date(); // si sigue en curso, se mide contra hoy
+        let diasAtraso = 0;
+        if (fComprometida && fReferencia) diasAtraso = Math.max(0, Math.round((fReferencia - fComprometida) / 86400000));
+        const costoEstructuraDiario = Number(detail.costoEstructuraDiario) || 0;
+        const costoImproductividad = diasAtraso * costoEstructuraDiario;
         return (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                 <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap} · ${detail.sector || t(cfg, 'obras_sector')}`} back onBack={() => setDetailId(null)} right={<Badge color={e.color} bg={e.bg}>{e.label}</Badge>} />
@@ -1842,6 +1842,25 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_cierre')}</div>
                                 <input value={detail.cierre || ''} onChange={e => upd(detail.id, { cierre: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
+                            </div>
+                        </div>
+                        <div style={{ background: T.bg, borderRadius: T.rsm, border: `1px solid ${T.border}`, padding: "12px 13px", marginBottom: 14 }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".03em", marginBottom: 8 }}>Costo de improductividad por atraso</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+                                <div>
+                                    <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>Costo de estructura / día ($)</div>
+                                    <input type="number" inputMode="decimal" value={detail.costoEstructuraDiario || ''} onChange={e => upd(detail.id, { costoEstructuraDiario: e.target.value })} placeholder="Ej: 45000" style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 9px", fontSize: 13, fontWeight: 700, color: T.text }} />
+                                    <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, lineHeight: 1.4 }}>Gastos generales que corren igual, haya o no gente en obra (administración, alquileres, seguros, etc.)</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>Fecha comprometida (fija)</div>
+                                    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 9px", fontSize: 13, fontWeight: 700, color: T.muted }}>{detail.cierreComprometido || detail.cierre || "—"}</div>
+                                    <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, lineHeight: 1.4 }}>Se guardó sola la primera vez — no se mueve aunque corras el cierre.</div>
+                                </div>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: diasAtraso > 0 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.10)", border: `1px solid ${diasAtraso > 0 ? "rgba(239,68,68,.30)" : "rgba(22,163,74,.30)"}`, borderRadius: 8, padding: "9px 12px" }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: diasAtraso > 0 ? "#EF4444" : "#16A34A" }}>{diasAtraso > 0 ? `${diasAtraso} día${diasAtraso > 1 ? "s" : ""} de atraso` : "Sin atraso"}</span>
+                                <span style={{ fontSize: 15, fontWeight: 800, color: diasAtraso > 0 ? "#EF4444" : "#16A34A" }}>{diasAtraso > 0 ? money(costoImproductividad) : "$ 0"}</span>
                             </div>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
@@ -8202,7 +8221,6 @@ function WebFooter({ cfg }) {
 }
 
 function App() {
-  useEffect(() => { registrarApertura("constructora"); }, []);
   useEffect(() => { if (FORCE_CLOUD) { try { history.replaceState(null, "", window.location.pathname); } catch { } } }, []);
   const [cfg, setCfg] = useStoredState("vv_cfg", { ...DEFAULT_CONFIG, themeId:"institucional", fontId:"inter", radiusId:"sharp", colors:{...INST_COLORS}, apiKey:"" });
   // Rediseño oscuro/dorado: se aplica UNA sola vez (no fuerza nada si ya lo
