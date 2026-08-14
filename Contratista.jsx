@@ -87,13 +87,16 @@ const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Aut
 // cuántas personas usan cada vista. No interfiere con nada existente.
 function registrarApertura(appTag) {
   // Va a una tabla liviana propia (no a bco_storage) para no sobrecargar
-  // esa tabla, que ya tiene todo el resto del sistema.
+  // esa tabla, que ya tiene todo el resto del sistema. Si falla, avisa por
+  // el mismo canal de errores que usa el resto de la app (no en silencio).
   try {
     fetch(SUPA_URL + "/rest/v1/aperturas", {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Prefer": "return=minimal" },
       body: JSON.stringify({ app: appTag }),
-    }).catch(() => {});
+    }).then(r => {
+      if (!r.ok) r.text().then(t => reportarError("No se pudo registrar apertura: HTTP " + r.status, t)).catch(() => {});
+    }).catch(e => reportarError("No se pudo registrar apertura (red)", String(e)));
   } catch (e) {}
 }
 
