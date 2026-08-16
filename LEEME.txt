@@ -1,22 +1,19 @@
-VITE.CONFIG.JS — Fix del error 404 en finanzascliente.html
+FINANZASCLIENTE — Fix definitivo: sin costo en ningún lado
 ======================================================================
 
-QUÉ PASABA:
-Aunque los 3 archivos de FinanzasCliente estaban bien subidos al repo,
-Vercel nunca generó esa página — porque "vite.config.js" (el archivo
-que le dice a la herramienta de compilación qué páginas armar) no
-sabía que "finanzascliente.html" existía. Por eso daba 404.
+QUÉ SAQUÉ (en la pestaña Presupuesto), además de lo del paso anterior:
+- El cartel "Presupuesto costo / Margen bruto" que aparecía después de
+  los rubros.
+- En la tarjeta de cada obra en el listado: la caja de "Presupuesto
+  costo" al lado de "Presupuesto cliente" — ahora solo queda
+  "Presupuesto" (el del cliente).
+- La sección completa "Otros costos (impuestos, gastos grales.)" con
+  su botón "+ Agregar costo".
+- El campo "Imprevistos (%)".
 
-QUÉ CAMBIÉ:
-Agregué una línea nueva (finanzascliente) a la lista de páginas que ya
-tenía el archivo — nada más, el resto quedó exactamente igual.
+Ahora, en toda la pestaña Presupuesto, solo se ve: nombre, inicio,
+plazo, m², precio cliente, presupuesto total, anticipo, tipo de obra y
+rubros (%). Nada de costos ni márgenes en ningún lado de la pantalla.
 
-CÓMO SUBIRLO:
-1. Entrá a "vite.config.js" en la RAÍZ de tu repo (mismo nivel que
-   App.jsx).
-2. Tocá el lápiz de editar (no "Add file" — este archivo ya existe,
-   hay que reemplazarlo).
-3. Borrá todo y pegá el contenido de este archivo.
-4. "Commit changes".
-5. Esperá 1-2 minutos a que Vercel redespliegue solo, y probá de nuevo:
-   https://vvconstruccionesultimo.vercel.app/finanzascliente.html
+ARCHIVOS:
+- FinanzasCliente.jsx → reemplaza el de tu repo.

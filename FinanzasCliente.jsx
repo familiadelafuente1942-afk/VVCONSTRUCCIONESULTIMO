@@ -1279,23 +1279,10 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
         </div>
       </div>
 
-      {pCli > 0 && pCos > 0 && <div style={{ background: T.bg, borderRadius: 9, padding: 11, marginBottom: 12 }}>
+      {pCli > 0 && <div style={{ background: T.bg, borderRadius: 9, padding: 11, marginBottom: 12 }}>
         <Line t="Presupuesto cliente" v={money(pCli)} c={T.accent} />
-        <Line t="Presupuesto costo" v={money(pCos)} c={T.warn} />
-        <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 5 }}><Line t={`Margen bruto (${(( pCli - pCos) / pCli * 100).toFixed(1)}%)`} v={money(pCli - pCos)} c={T.ok} /></div>
       </div>}
 
-      <div style={{ borderTop: `1px solid ${T.border}`, margin: "4px 0 10px", paddingTop: 12 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Otros costos (impuestos, gastos grales)</div>
-        {(form.costoExtra || []).map((l, i) => (<div key={l.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
-          <input value={l.nombre} onChange={e => setForm(f => ({ ...f, costoExtra: f.costoExtra.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x) }))} placeholder="Concepto" style={{ ...inp, marginTop: 0, flex: 1, minWidth: 0 }} />
-          <button onClick={() => setForm(f => ({ ...f, costoExtra: f.costoExtra.map((x, j) => j === i ? { ...x, tipo: x.tipo === "pct" ? "monto" : "pct" } : x) }))} style={{ background: l.tipo === "pct" ? T.warn : T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "11px 10px", fontSize: 14, fontWeight: 800, cursor: "pointer", width: 40 }}>{l.tipo === "pct" ? "%" : "$"}</button>
-          <input value={l.valor} onChange={e => setForm(f => ({ ...f, costoExtra: f.costoExtra.map((x, j) => j === i ? { ...x, valor: x.tipo === "pct" ? e.target.value : fmtMiles(e.target.value) } : x) }))} inputMode="decimal" placeholder={l.tipo === "pct" ? "%" : "0"} style={{ ...inp, marginTop: 0, width: 82, textAlign: "right" }} />
-          <button onClick={() => setForm(f => ({ ...f, costoExtra: f.costoExtra.filter((_, j) => j !== i) }))} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 8, padding: "11px 9px", fontSize: 12, cursor: "pointer" }}>✕</button>
-        </div>))}
-        <button onClick={() => setForm(f => ({ ...f, costoExtra: [...(f.costoExtra || []), { id: uid(), nombre: "", tipo: "monto", valor: "" }] }))} style={{ background: T.al, color: T.accent, border: "none", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>＋ Agregar costo</button>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}><span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Imprevistos (%)</span><input value={form.imprevistosPct} onChange={e => setForm({ ...form, imprevistosPct: e.target.value })} inputMode="decimal" placeholder="5" style={{ ...inp, marginTop: 0, width: 82, textAlign: "right" }} /></div>
-      </div>
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={() => setForm(null)} style={{ flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 9, padding: "12px", fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
         <button onClick={guardar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "12px", fontWeight: 700, cursor: "pointer" }}>Guardar obra</button>
@@ -1352,7 +1339,7 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
           <button onClick={() => borrar(o.id)} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA", borderRadius: 7, padding: "6px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✕</button>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}><Box t="Presupuesto costo" v={money(presupCosto(o))} c={T.warn} /><Box t="Presupuesto cliente" v={money(presupCliente(o))} c={T.accent} /></div>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}><Box t="Presupuesto" v={money(presupCliente(o))} c={T.accent} /></div>
       <div style={{ display: "flex", gap: 7, marginTop: 10 }}>
         <button onClick={() => imprimirPresupuesto(o)} style={{ flex: 2, background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📄 Presupuesto PDF</button>
         <button onClick={() => setFirmandoP(o)} style={{ flex: 1, background: T.al, color: T.accent, border: "none", borderRadius: 9, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>✍️ Firmar{(o.firmasPresup?.cliente || o.firmasPresup?.contratista) ? " ✓" : ""}</button>
