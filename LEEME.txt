@@ -1,31 +1,22 @@
-FINANZAS · CLIENTE (v2) — Editable: Presupuesto, Certificado, Precios
+VITE.CONFIG.JS — Fix del error 404 en finanzascliente.html
 ======================================================================
 
-CAMBIO DE PLAN respecto a la primera versión que te mandé: esa era de
-solo lectura — esta NO. Se puede cargar y editar todo, igual que en
-Finanzas, pero con la navegación recortada a solo 3 pestañas:
+QUÉ PASABA:
+Aunque los 3 archivos de FinanzasCliente estaban bien subidos al repo,
+Vercel nunca generó esa página — porque "vite.config.js" (el archivo
+que le dice a la herramienta de compilación qué páginas armar) no
+sabía que "finanzascliente.html" existía. Por eso daba 404.
 
-- Precios (precio base $/m² + tabla de índices CAC — se editan igual
-  que en Finanzas).
-- Presupuesto (alta y edición de obras, m², precio, rubros — igual
-  que en Finanzas).
-- Certificado (certificación al cliente, por obra o general — con
-  ajuste CAC automático, firma, PDF — igual que en Finanzas).
+QUÉ CAMBIÉ:
+Agregué una línea nueva (finanzascliente) a la lista de páginas que ya
+tenía el archivo — nada más, el resto quedó exactamente igual.
 
-Quedaron AFUERA de esta app (no aparecen en el menú): la IA de carga,
-Certificado de COSTO interno, Gastos/Caja, Resultados (con PIN,
-sociedad/margen) y Agenda.
-
-IMPORTANTE — usa la MISMA base de datos que Finanzas ("vv_finanzas"):
-lo que cargues acá (un presupuesto nuevo, un certificado, un precio)
-se ve también en Finanzas, y viceversa. No es una copia separada — es
-una puerta de entrada distinta a los mismos datos, con menos opciones
-a la vista.
-
-CÓMO SUBIRLO (reemplaza los archivos del intento anterior, si ya los
-habías subido):
-1. FinanzasCliente.jsx → raíz del repo (reemplaza el que subiste antes).
-2. main-finanzascliente.jsx → raíz (sin cambios si ya lo subiste).
-3. finanzascliente.html → raíz (reemplaza, solo cambió el título).
-
-Va a quedar en: https://vvconstruccionesultimo.vercel.app/finanzascliente.html
+CÓMO SUBIRLO:
+1. Entrá a "vite.config.js" en la RAÍZ de tu repo (mismo nivel que
+   App.jsx).
+2. Tocá el lápiz de editar (no "Add file" — este archivo ya existe,
+   hay que reemplazarlo).
+3. Borrá todo y pegá el contenido de este archivo.
+4. "Commit changes".
+5. Esperá 1-2 minutos a que Vercel redespliegue solo, y probá de nuevo:
+   https://vvconstruccionesultimo.vercel.app/finanzascliente.html

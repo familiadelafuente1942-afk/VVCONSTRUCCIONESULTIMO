@@ -13,6 +13,7 @@ export default defineConfig({
         miasistente: resolve(__dirname, 'mi-asistente.html'),
         nicolas: resolve(__dirname, 'nicolas.html'),
         finanzas: resolve(__dirname, 'finanzas.html'),
+        finanzascliente: resolve(__dirname, 'finanzascliente.html'),
         muebles: resolve(__dirname, 'muebles.html'),
         cronograma: resolve(__dirname, 'cronograma.html'),
         viajes: resolve(__dirname, 'viajes.html'),
