@@ -1,19 +1,31 @@
-V+V + CLIENTE — Auditoría: "Qué se encontró" + "Prioritario/qué hacer"
+FINANZAS · CLIENTE (v2) — Editable: Presupuesto, Certificado, Precios
 ======================================================================
 
-QUÉ AGREGUÉ (extiende el cuadro crítico del paso anterior):
-Cuando activás "⚠ ¿Hay algo crítico que observar?", ahora hay DOS
-campos, no uno:
-1. "Qué se encontró" — lo crítico que se vio.
-2. "Prioritario / qué hay que hacer ahora" — la acción a tomar.
+CAMBIO DE PLAN respecto a la primera versión que te mandé: esa era de
+solo lectura — esta NO. Se puede cargar y editar todo, igual que en
+Finanzas, pero con la navegación recortada a solo 3 pestañas:
 
-DÓNDE SE VE:
-- En el PDF: los dos, uno debajo del otro, dentro del mismo cuadro
-  rojo destacado arriba de todo.
-- En el listado (V+V y Cliente): "Encontrado: ..." y "Prioritario: ..."
-  como dos líneas separadas, antes de tocar para ver el detalle.
+- Precios (precio base $/m² + tabla de índices CAC — se editan igual
+  que en Finanzas).
+- Presupuesto (alta y edición de obras, m², precio, rubros — igual
+  que en Finanzas).
+- Certificado (certificación al cliente, por obra o general — con
+  ajuste CAC automático, firma, PDF — igual que en Finanzas).
 
-ARCHIVOS:
-- App.jsx / Cliente.jsx              → reemplazan los de tu repo.
-- App.ORIGINAL.jsx.bak / Cliente.ORIGINAL.jsx.bak → como estaban ANTES
-  de todos los cambios de esta conversación.
+Quedaron AFUERA de esta app (no aparecen en el menú): la IA de carga,
+Certificado de COSTO interno, Gastos/Caja, Resultados (con PIN,
+sociedad/margen) y Agenda.
+
+IMPORTANTE — usa la MISMA base de datos que Finanzas ("vv_finanzas"):
+lo que cargues acá (un presupuesto nuevo, un certificado, un precio)
+se ve también en Finanzas, y viceversa. No es una copia separada — es
+una puerta de entrada distinta a los mismos datos, con menos opciones
+a la vista.
+
+CÓMO SUBIRLO (reemplaza los archivos del intento anterior, si ya los
+habías subido):
+1. FinanzasCliente.jsx → raíz del repo (reemplaza el que subiste antes).
+2. main-finanzascliente.jsx → raíz (sin cambios si ya lo subiste).
+3. finanzascliente.html → raíz (reemplaza, solo cambió el título).
+
+Va a quedar en: https://vvconstruccionesultimo.vercel.app/finanzascliente.html
