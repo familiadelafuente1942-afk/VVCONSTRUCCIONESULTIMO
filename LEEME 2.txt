@@ -1,29 +1,23 @@
-V+V — IA: ahora puede abrir un link puntual y leerlo completo
+FINANZASCLIENTE — Fix: saqué "Costo interno" de Presupuesto
 ======================================================================
 
-QUÉ AGREGUÉ:
-La IA ya tenía "Buscar en internet" (resultados de búsqueda). Ahora,
-con el mismo botón activado, TAMBIÉN puede abrir un link específico
-que le pases y leer la página completa (no solo un resumen de
-búsqueda) — por ejemplo, le pasás la URL de la ficha técnica de un
-proveedor y te la lee entera.
+QUÉ SAQUÉ:
+En la pestaña Presupuesto había quedado el campo "Costo interno
+$/m²" (con el cartel "Cliente: / Costo:") y todo el bloque de
+"Ya cobrado sin certificado" (que mostraba Pagado/costo, utilidad
+histórica, etc.) — cosas internas que no tienen que estar en la app
+del cliente.
 
-No hace falta nada nuevo de tu parte — es la misma clave de API que ya
-usás, solo que ahora la herramienta tiene un alcance más.
+Ahora la pestaña Presupuesto solo muestra: nombre, inicio, plazo, m²,
+precio cliente, el total del presupuesto, anticipo, tipo de obra y
+rubros. Nada de costos internos.
+
+No toqué Finanzas.jsx — ese sigue teniendo todo completo, como
+corresponde para uso interno de V+V.
+
+CÓMO SUBIRLO:
+Reemplazá "FinanzasCliente.jsx" en la raíz de tu repo (con el lápiz de
+editar), "Commit changes", esperá el redeploy de Vercel.
 
 ARCHIVOS:
-- App.jsx                → reemplaza el de tu repo.
-- claude.js               → va en la carpeta api/ de tu repo (reemplaza
-  api/claude.js) — SOLO hace falta si usás el proxy de Vercel en vez de
-  poner la API Key directo en Configuración.
-- App.ORIGINAL.jsx.bak / claude.ORIGINAL.js.bak → como estaban ANTES.
-
-SOBRE SUPABASE Y VERCEL (solo lectura):
-Esto es más grande — necesito que generes dos cosas de tu lado, porque
-son claves que solo vos podés crear (no puedo generarlas yo):
-1. Un token de Vercel de solo lectura (Vercel → Configuración de
-   cuenta → Tokens → crear uno nuevo).
-2. Para Supabase, lo más seguro es crear un usuario de base de datos
-   de SOLO LECTURA (no usar la clave principal) — te puedo guiar paso
-   a paso cuando quieras seguir con esto.
-Avisame y armamos esa parte en el próximo paso.
+- FinanzasCliente.jsx → reemplaza el de tu repo.

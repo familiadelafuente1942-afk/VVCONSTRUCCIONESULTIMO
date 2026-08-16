@@ -1214,62 +1214,8 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
         const precio = Math.round(numMoney(data.precioBase.valor) * factor);
         setForm({ ...form, precioCliente: fmtMiles(precio), mesBase: mesHoy });
       }} style={{ width: "100%", background: "none", border: `1px dashed ${T.border}`, color: T.accent, borderRadius: 9, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", marginTop: -6, marginBottom: 12 }}>🔄 Redeterminar esta obra a hoy</button>}
-      <Field label="Costo interno $/m²" hint="Tu costo por m² (ej: 260.000). Presupuesto costo = m² × este valor."><input value={form.costoM2} onChange={e => setForm({ ...form, costoM2: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="260.000" style={inp} /></Field>
-      {(pCli > 0 || pCos > 0) && <div style={{ background: T.al, borderRadius: 9, padding: 10, marginBottom: 12, display: "flex", justifyContent: "space-around" }}><span style={{ fontSize: 12, color: T.sub }}>Cliente: <Money v={pCli} c={T.accent} /></span><span style={{ fontSize: 12, color: T.sub }}>Costo: <Money v={pCos} c={T.warn} /></span></div>}
+      {pCli > 0 && <div style={{ background: T.al, borderRadius: 9, padding: 10, marginBottom: 12, display: "flex", justifyContent: "center" }}><span style={{ fontSize: 12, color: T.sub }}>Presupuesto: <Money v={pCli} c={T.accent} /></span></div>}
 
-      {/* Histórico: para obras ya cobradas sin certificados en la app */}
-      {(() => {
-        const abierto = !!form._histAbierto;
-        const calc = ajusteInflacionSaldo(form, data.movimientos, data.cacMensual, obras);
-        const hcManual = form.histCobrado != null && form.histCobrado !== "" ? numMoney(form.histCobrado) : null;
-        const hc = calc.cobrado, ha = calc.ajuste, hp = numMoney(form.histPagado);
-        const fact = hc + ha, util = fact - hp;
-        return (<div style={{ background: T.bg, borderRadius: 11, padding: abierto ? 13 : 0, marginBottom: 12, border: abierto ? `1px solid ${T.border}` : "none" }}>
-          {!abierto
-            ? <button onClick={() => setForm({ ...form, _histAbierto: true })} style={{ width: "100%", background: "none", color: T.accent, border: `1px dashed ${T.border}`, borderRadius: 10, padding: "11px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>＋ Ya se cobró sin certificado (cargar a mano)</button>
-            : <>
-              <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Ya cobrado sin certificado</div>
-              <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12, lineHeight: 1.45 }}>Para obras viejas que ya cobraste sin cargar certificados acá. Si no ponés nada en "Cobrado", se calcula solo desde los cobros con fecha que cargaste en Caja. Si lo cargás a mano, el "Cobrado" se pisa con ese valor, pero el ajuste por inflación se sigue calculando igual con los cobros de Caja (si hay).</div>
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                  <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>Cobrado <span style={{ color: T.muted, fontWeight: 400 }}>(a mano)</span></span>
-                  <input value={form.histCobrado != null ? form.histCobrado : ""} onChange={e => setForm({ ...form, histCobrado: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 140, textAlign: "right" }} />
-                </div>
-                {hcManual == null && <div style={{ fontSize: 10, color: T.muted, textAlign: "right" }}>{calc.sinDatos ? "No encontró cobros en Caja para esta obra." : `Encontrado en Caja: ${money(calc.cobrado)}`}</div>}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>＋ Ajuste inflación <span style={{ color: T.muted, fontWeight: 400 }}>(automático)</span></span>
-                <span style={{ width: 140, textAlign: "right", fontSize: 14, fontWeight: 700, color: (calc.sinDatos || calc.sinAjuste) ? T.muted : T.accent }}>{(calc.sinDatos || calc.sinAjuste) ? "—" : money(ha)}</span>
-              </div>
-              {calc.sinAjuste
-                ? <div style={{ fontSize: 10, color: "#B45309", marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>No hay cobros con fecha en Caja para calcular el ajuste — se usa solo el Cobrado que cargaste, sin ajuste.</div>
-                : calc.sinDatos
-                  ? <div style={{ fontSize: 10, color: T.muted, marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>No hay cobros con fecha cargados para esta obra en "Caja". Cargalos ahí (Cobro), importá el Excel desde Redeterminación, o poné el Cobrado a mano arriba.</div>
-                  : calc.mesesSinIPC > 0 && <div style={{ fontSize: 10, color: "#B45309", marginTop: -4, marginBottom: 8, lineHeight: 1.4 }}>⚠ Faltan {calc.mesesSinIPC} mes(es) de IPC cargado en Redeterminación → el ajuste está incompleto.</div>}
-              {!calc.sinDatos && calc.detalle && calc.detalle.length > 0 && <div style={{ marginBottom: 8 }}>
-                <button type="button" onClick={() => setForm({ ...form, _verDetalleHist: !form._verDetalleHist })} style={{ background: "none", border: "none", color: T.accent, fontSize: 10.5, fontWeight: 700, cursor: "pointer", padding: 0 }}>{form._verDetalleHist ? "▾ Ocultar detalle mes a mes" : "▸ Ver detalle mes a mes"}</button>
-                {form._verDetalleHist && <div style={{ background: T.bg, borderRadius: 8, padding: 8, marginTop: 6, fontSize: 10, fontFamily: "monospace" }}>
-                  <div style={{ display: "flex", fontWeight: 700, color: T.sub, borderBottom: `1px solid ${T.border}`, paddingBottom: 3, marginBottom: 3 }}>
-                    <span style={{ width: 52 }}>Mes</span><span style={{ width: 78, textAlign: "right" }}>Saldo antes</span><span style={{ width: 78, textAlign: "right" }}>Cobro</span><span style={{ width: 42, textAlign: "right" }}>IPC</span><span style={{ width: 78, textAlign: "right" }}>Ajuste</span><span style={{ width: 78, textAlign: "right" }}>Saldo desp.</span>
-                  </div>
-                  {calc.detalle.map(d => (<div key={d.mes} style={{ display: "flex", padding: "2px 0", color: d.saldoAntes < 0 || d.saldoDespues < 0 ? "#DC2626" : T.text }}>
-                    <span style={{ width: 52 }}>{d.mes}</span><span style={{ width: 78, textAlign: "right" }}>{d.saldoAntes.toLocaleString("es-AR")}</span><span style={{ width: 78, textAlign: "right" }}>{d.cobroMes.toLocaleString("es-AR")}</span><span style={{ width: 42, textAlign: "right" }}>{d.ipcPct == null ? "—" : d.ipcPct}</span><span style={{ width: 78, textAlign: "right" }}>{d.ajusteMes.toLocaleString("es-AR")}</span><span style={{ width: 78, textAlign: "right" }}>{d.saldoDespues.toLocaleString("es-AR")}</span>
-                  </div>))}
-                </div>}
-              </div>}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>Pagado (costo) <span style={{ color: T.muted, fontWeight: 400 }}>(a mano)</span></span>
-                <input value={form.histPagado || ""} onChange={e => setForm({ ...form, histPagado: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="0" style={{ ...inp, marginTop: 0, width: 140, textAlign: "right" }} />
-              </div>
-              {(fact > 0 || hp > 0) && <div style={{ background: T.card, borderRadius: 9, padding: 10, marginTop: 4, fontSize: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: T.sub }}>Facturado (cobrado + ajuste)</span><b>{money(fact)}</b></div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: T.sub }}>Utilidad histórica</span><b style={{ color: util >= 0 ? T.ok : "#EF4444" }}>{money(util)}</b></div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: T.sub }}>Saldo a cobrar <span style={{ color: T.muted, fontWeight: 400 }}>(facturado − cobrado)</span></span><b style={{ color: BRASS }}>{money(fact - hc)}</b></div>
-              </div>}
-              <button onClick={() => setForm({ ...form, _histAbierto: false, histPagado: "" })} style={{ marginTop: 10, background: "none", border: "none", color: T.muted, fontSize: 11, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>Quitar histórico</button>
-            </>}
-        </div>);
-      })()}
       <Field label="Anticipo">
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 5 }}>
           <div style={{ display: "flex", background: T.bg, borderRadius: 9, padding: 3, border: `1px solid ${T.border}` }}>
