@@ -1078,7 +1078,7 @@ export default function App() {
     </div>
     <div style={{ background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
       {[
-        [["precios", "Precios"], ["presupuesto", "Presup."], ["cliente", "Certificado"]],
+        [["precios", "Valores", "por m²"], ["presupuesto", "Presup."], ["cliente", "Certificado"]],
       ].map((fila, fi) => (
         <div key={fi} style={{ display: "flex", borderTop: fi > 0 ? `1px solid ${T.border}` : "none" }}>
           {fila.map(([k, l1, l2]) => (

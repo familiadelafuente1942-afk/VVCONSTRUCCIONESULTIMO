@@ -1,19 +1,7 @@
-FINANZASCLIENTE — Fix definitivo: sin costo en ningún lado
+FINANZASCLIENTE — Pestaña "Precios" renombrada a "Valores por m²"
 ======================================================================
-
-QUÉ SAQUÉ (en la pestaña Presupuesto), además de lo del paso anterior:
-- El cartel "Presupuesto costo / Margen bruto" que aparecía después de
-  los rubros.
-- En la tarjeta de cada obra en el listado: la caja de "Presupuesto
-  costo" al lado de "Presupuesto cliente" — ahora solo queda
-  "Presupuesto" (el del cliente).
-- La sección completa "Otros costos (impuestos, gastos grales.)" con
-  su botón "+ Agregar costo".
-- El campo "Imprevistos (%)".
-
-Ahora, en toda la pestaña Presupuesto, solo se ve: nombre, inicio,
-plazo, m², precio cliente, presupuesto total, anticipo, tipo de obra y
-rubros (%). Nada de costos ni márgenes en ningún lado de la pantalla.
+Cambié el nombre de la pestaña, se ve en dos líneas: "Valores" arriba,
+"por m²" abajo. El contenido de adentro no cambió, solo el nombre.
 
 ARCHIVOS:
 - FinanzasCliente.jsx → reemplaza el de tu repo.
