@@ -374,20 +374,20 @@ function TablaPreciosTab({ data, save }) {
     </div>
 
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Precio base</div>
-      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>El precio que sabías que era correcto en un mes determinado. Desde ahí, la tabla lo va actualizando sola con el IPC que cargues abajo, mes a mes, hasta hoy.</div>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", marginBottom: 4 }}>Valor base</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 10, lineHeight: 1.4 }}>El valor que sabías que era correcto en un mes determinado. Desde ahí, la tabla lo va actualizando sola con el IPC que cargues abajo, mes a mes, hasta hoy.</div>
       <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}><label style={lb}>Precio $/m²</label><input value={form.valor} onChange={e => setForm({ ...form, valor: fmtMiles(e.target.value) })} inputMode="numeric" style={inp2} /></div>
-        <div style={{ flex: 1 }}><label style={lb}>Mes de ese precio</label><input type="month" value={form.mes} onChange={e => setForm({ ...form, mes: e.target.value })} style={inp2} /></div>
+        <div style={{ flex: 1 }}><label style={lb}>Valor $/m²</label><input value={form.valor} onChange={e => setForm({ ...form, valor: fmtMiles(e.target.value) })} inputMode="numeric" style={inp2} /></div>
+        <div style={{ flex: 1 }}><label style={lb}>Mes de ese valor</label><input type="month" value={form.mes} onChange={e => setForm({ ...form, mes: e.target.value })} style={inp2} /></div>
       </div>
-      <button onClick={guardarBase} style={{ marginTop: 10, width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Guardar precio base</button>
+      <button onClick={guardarBase} style={{ marginTop: 10, width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "11px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Guardar valor base</button>
     </div>
 
     <div style={{ background: `linear-gradient(155deg, #14263E 0%, ${T.navy} 68%)`, color: "#fff", borderRadius: 16, padding: 18, marginBottom: 12, textAlign: "center", boxShadow: SHD }}>
-      <div style={{ fontSize: 10, opacity: .7, textTransform: "uppercase", letterSpacing: "0.08em" }}>Precio hoy ({nomMesCorto(hoyMes)})</div>
+      <div style={{ fontSize: 10, opacity: .7, textTransform: "uppercase", letterSpacing: "0.08em" }}>Valor hoy ({nomMesCorto(hoyMes)})</div>
       <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>{money(precioHoy)}</div>
       <div style={{ fontSize: 11, opacity: .75, marginTop: 4 }}>Base {money(valorBase)} en {nomMesCorto(mesBase)} · acumulado {(factorHoy * 100 - 100).toFixed(2)}%</div>
-      {faltan > 0 && <div style={{ fontSize: 10.5, color: "#FCA5A5", marginTop: 6 }}>⚠ Faltan {faltan} mes(es) de IPC — precio incompleto</div>}
+      {faltan > 0 && <div style={{ fontSize: 10.5, color: "#FCA5A5", marginTop: 6 }}>⚠ Faltan {faltan} mes(es) de IPC — valor incompleto</div>}
     </div>
 
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13 }}>

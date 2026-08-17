@@ -1,7 +1,12 @@
-FINANZASCLIENTE — Pestaña "Precios" renombrada a "Valores por m²"
+FINANZASCLIENTE — Ahora sí, "Precio" cambiado en todo el cuadro
 ======================================================================
-Cambié el nombre de la pestaña, se ve en dos líneas: "Valores" arriba,
-"por m²" abajo. El contenido de adentro no cambió, solo el nombre.
+Faltaba dentro del cuadro principal de esa pestaña:
+- "Precio base" → "Valor base"
+- "Precio $/m²" → "Valor $/m²"
+- "Mes de ese precio" → "Mes de ese valor"
+- "Guardar precio base" → "Guardar valor base"
+- "Precio hoy" → "Valor hoy"
+- "precio incompleto" → "valor incompleto"
 
 ARCHIVOS:
 - FinanzasCliente.jsx → reemplaza el de tu repo.
