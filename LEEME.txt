@@ -1,16 +1,24 @@
-FINANZAS — Mismos 2 agregados que en FinanzasCliente
+FINANZAS + FINANZASCLIENTE — Gráficos en los DOS PDFs (Presupuesto y Certificado)
 ======================================================================
 
-1) EN PRESUPUESTO — gráficos de incidencia de rubros:
-Torta + barras, se arman solos al cargar los rubros con su %.
+RESUMEN COMPLETO de lo que hay ahora en cada PDF:
 
-2) EN CERTIFICADO — columna "Resta" por rubro:
-En pantalla y en el PDF, se ve Incidencia · Acumulado · Resta ·
-Importe para cada rubro — tanto en el certificado al cliente como en
-el de costo interno.
+PDF DE PRESUPUESTO:
+- Tabla "Detalle por rubros" (ya estaba).
+- NUEVO: gráfico de torta + barras con la incidencia de cada rubro,
+  justo debajo de la tabla.
 
-Es exactamente lo mismo que ya subiste en FinanzasCliente.jsx, ahora
-también en la app completa.
+PDF DE CERTIFICADO:
+- Tabla de rubros con Incidencia · Avance · Resta · Importe (ya
+  estaba, del paso anterior).
+- NUEVO: gráfico de barras "Avance por rubro" — una barra por cada
+  rubro de la obra, coloreada según cuánto está certificado (dorado)
+  y cuánto resta (gris) — muestra TODOS los rubros de la obra, no
+  solo los que se movieron en este certificado puntual, para dar la
+  foto completa del avance.
+
+Está en las DOS apps (Finanzas y FinanzasCliente), en los dos PDFs,
+mismo criterio en todos lados.
 
 ARCHIVOS:
-- Finanzas.jsx → reemplaza el de tu repo.
+- Finanzas.jsx / FinanzasCliente.jsx → reemplazan los de tu repo.
