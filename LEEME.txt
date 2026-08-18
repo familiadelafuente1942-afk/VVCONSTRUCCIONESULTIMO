@@ -1,21 +1,16 @@
-FINANZASCLIENTE — Gráficos de rubros + "Resta" en el certificado
+FINANZAS — Mismos 2 agregados que en FinanzasCliente
 ======================================================================
 
 1) EN PRESUPUESTO — gráficos de incidencia de rubros:
-Al cargar los rubros (con su %), aparecen automáticamente:
-- Un gráfico de TORTA con los colores de cada rubro.
-- Un gráfico de BARRAS horizontal, ordenado de mayor a menor
-  incidencia.
-Se actualizan solos a medida que cargás/cambiás los rubros.
+Torta + barras, se arman solos al cargar los rubros con su %.
 
 2) EN CERTIFICADO — columna "Resta" por rubro:
-Tanto en la pantalla (al cargar un certificado nuevo) como en el PDF
-final, cada rubro ahora muestra 4 datos en vez de 3:
-Incidencia · Acumulado · Resta · Importe
+En pantalla y en el PDF, se ve Incidencia · Acumulado · Resta ·
+Importe para cada rubro — tanto en el certificado al cliente como en
+el de costo interno.
 
-Por ejemplo: "Trabajos preliminares: acumulado 100% · resta 0%" y
-"Estructura: acumulado 20% · resta 80%" — se ve de un vistazo qué está
-completo y qué falta, rubro por rubro.
+Es exactamente lo mismo que ya subiste en FinanzasCliente.jsx, ahora
+también en la app completa.
 
 ARCHIVOS:
-- FinanzasCliente.jsx → reemplaza el de tu repo.
+- Finanzas.jsx → reemplaza el de tu repo.
