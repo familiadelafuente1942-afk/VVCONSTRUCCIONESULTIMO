@@ -734,8 +734,14 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("TOTAL:", 130, y); doc.text(money(total), W - M - 2, y, { align: "right" }); y += 8;
     }
     if (a.pie) { y += 4; doc.setFont("helvetica", "italic"); doc.setFontSize(9); doc.setTextColor(90, 90, 90); const pl = doc.splitTextToSize(a.pie, W - 2 * M); doc.text(pl, M, y); }
-    doc.save(`${String(a.titulo || "documento").replace(/[^\w\s-]/g, "").slice(0, 40)}_${hoyStr().replace(/\//g, "-")}.pdf`);
-    return true;
+    const nombreArchivo = `${String(a.titulo || "documento").replace(/[^\w\s-]/g, "").slice(0, 40)}_${hoyStr().replace(/\//g, "-")}.pdf`;
+    doc.save(nombreArchivo);
+    // Además de descargarlo, se guarda como data URL para poder volver a
+    // abrirlo después desde el mensaje del chat — si no, quedaba solo la
+    // descarga de una vez y se perdía apenas se cerraba la app.
+    let pdfDataUrl = null;
+    try { pdfDataUrl = doc.output("datauristring"); } catch { }
+    return { ok: true, pdfDataUrl, nombreArchivo };
   }
   async function subirModelo(e) {
     const f = e.target.files[0]; if (!f) return; e.target.value = "";
@@ -839,8 +845,9 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     }
     if (accion && accion.tipo === "generar_pdf") {
       setMsgs(prev => [...prev, { role: "assistant", content: limpio || `Generando el PDF "${accion.titulo || "documento"}"…` }]);
-      const ok = await generarPDF(accion);
-      if (ok) setMsgs(prev => [...prev, { role: "assistant", content: `✅ PDF generado y descargado: "${accion.titulo || "documento"}". Buscalo en tus Descargas.` }]);
+      const res = await generarPDF(accion);
+      if (res) setMsgs(prev => [...prev, { role: "assistant", content: `✅ PDF generado y descargado: "${accion.titulo || "documento"}". Buscalo en tus Descargas, o volvé a abrirlo acá abajo cuando quieras.`, pdfUrl: res.pdfDataUrl, pdfNombre: res.nombreArchivo }]);
+      else setMsgs(prev => [...prev, { role: "assistant", content: "No pude generar el PDF (revisá la conexión a internet e intentá de nuevo)." }]);
       setBusy(false); return;
     }
     if (accion && accion.tipo === "cargar_gasto") {
@@ -932,6 +939,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
           <div style={{ background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: 14, padding: "11px 14px", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "anywhere" }}>{m.content}</div>
           {m.role === "assistant" && m.content && m.content.length > 8 && <button onClick={() => hablar(m.content)} title="Escuchar" style={{ marginTop: 4, background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: "2px 0" }}>🔊 Escuchar</button>}
           {m.waLink && <a href={m.waLink} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#25D366", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📲 {m.waLabel || "Enviar por WhatsApp"}</a>}
+          {m.pdfUrl && <a href={m.pdfUrl} download={m.pdfNombre || "documento.pdf"} style={{ display: "inline-block", marginTop: 8, background: "#B0894F", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📄 Ver / descargar PDF</a>}
           {m.mapUrl && <a href={m.mapUrl} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#1A73E8", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>🗺 {m.mapLabel || "Ver en Google Maps"}</a>}
           {m.mailUrl && <a href={m.mailUrl} style={{ display: "inline-block", marginTop: 8, background: "#EA4335", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>✉️ {m.mailLabel || "Enviar mail"}</a>}
           {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8 }}>{m.docs.map((d, j) => <a key={j} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.navy, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: BRASS, fontWeight: 700, fontSize: 11.5 }}>Abrir ↗</span></a>)}</div>}

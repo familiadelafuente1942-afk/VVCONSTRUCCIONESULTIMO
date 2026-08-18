@@ -1,23 +1,21 @@
-FINANZASCLIENTE — Fix: saqué "Costo interno" de Presupuesto
+MI ASISTENTE — Fix: los PDF ahora quedan en el chat
 ======================================================================
 
-QUÉ SAQUÉ:
-En la pestaña Presupuesto había quedado el campo "Costo interno
-$/m²" (con el cartel "Cliente: / Costo:") y todo el bloque de
-"Ya cobrado sin certificado" (que mostraba Pagado/costo, utilidad
-histórica, etc.) — cosas internas que no tienen que estar en la app
-del cliente.
+QUÉ PASABA:
+Cuando Tita generaba un PDF (presupuesto, comprobante, nota), lo
+descargaba una sola vez al dispositivo y avisaba con un mensaje de
+texto — pero el PDF en sí nunca quedaba guardado en ningún lado. Si
+cerrabas la app o borrabas la descarga, se perdía, y no había forma
+de volver a abrirlo desde el chat.
 
-Ahora la pestaña Presupuesto solo muestra: nombre, inicio, plazo, m²,
-precio cliente, el total del presupuesto, anticipo, tipo de obra y
-rubros. Nada de costos internos.
+QUÉ CORREGÍ:
+Ahora, junto con el mensaje "✅ PDF generado", aparece un botón real:
 
-No toqué Finanzas.jsx — ese sigue teniendo todo completo, como
-corresponde para uso interno de V+V.
+  📄 Ver / descargar PDF
 
-CÓMO SUBIRLO:
-Reemplazá "FinanzasCliente.jsx" en la raíz de tu repo (con el lápiz de
-editar), "Commit changes", esperá el redeploy de Vercel.
+Que te deja volver a abrirlo/descargarlo cuando quieras, con solo
+scrollear hasta ese mensaje en el chat — no hace falta buscarlo en
+Descargas ni volver a pedírselo a Tita.
 
 ARCHIVOS:
-- FinanzasCliente.jsx → reemplaza el de tu repo.
+- MiAsistente.jsx → reemplaza el de tu repo.
