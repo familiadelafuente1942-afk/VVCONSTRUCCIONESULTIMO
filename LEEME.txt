@@ -1,24 +1,20 @@
-FINANZAS + FINANZASCLIENTE — Gráficos en los DOS PDFs (Presupuesto y Certificado)
+PROPIETARIO — Fix: "Galería de obra" en Inicio también mostraba fotos viejas primero
 ======================================================================
 
-RESUMEN COMPLETO de lo que hay ahora en cada PDF:
+QUÉ ERA:
+Ya había arreglado esto en la pantalla de Galería completa (SeccionGaleria),
+pero se me pasó la vista previa de 4 fotos que se ve en la pantalla de
+Inicio (la que mostraste en la captura, arriba de "AVANCE GENERAL") —
+usaba el mismo tipo de orden, pero sin el respaldo que agregué para las
+fotos viejas sin fecha exacta.
 
-PDF DE PRESUPUESTO:
-- Tabla "Detalle por rubros" (ya estaba).
-- NUEVO: gráfico de torta + barras con la incidencia de cada rubro,
-  justo debajo de la tabla.
+QUÉ CORREGÍ:
+Le agregué el mismo respaldo ahí también: si una foto no tiene la
+fecha exacta guardada (las viejas, de antes del primer arreglo), usa
+la fecha en texto que sí tiene, para ordenarla lo mejor posible.
 
-PDF DE CERTIFICADO:
-- Tabla de rubros con Incidencia · Avance · Resta · Importe (ya
-  estaba, del paso anterior).
-- NUEVO: gráfico de barras "Avance por rubro" — una barra por cada
-  rubro de la obra, coloreada según cuánto está certificado (dorado)
-  y cuánto resta (gris) — muestra TODOS los rubros de la obra, no
-  solo los que se movieron en este certificado puntual, para dar la
-  foto completa del avance.
-
-Está en las DOS apps (Finanzas y FinanzasCliente), en los dos PDFs,
-mismo criterio en todos lados.
+Con esto, tanto la vista previa de Inicio como la Galería completa
+deberían mostrar las últimas fotos primero.
 
 ARCHIVOS:
-- Finanzas.jsx / FinanzasCliente.jsx → reemplazan los de tu repo.
+- ClientePropietario.jsx → reemplaza el de tu repo.

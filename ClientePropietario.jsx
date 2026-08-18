@@ -12,45 +12,6 @@ import React, { useState, useEffect, useRef } from "react";
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
-// Registra que la app se abrió — usado por NEXO Control para saber
-// cuántas personas usan cada vista. No interfiere con nada existente.
-function registrarApertura(appTag) {
-  // Va a una tabla liviana propia (no a bco_storage) para no sobrecargar
-  // esa tabla, que ya tiene todo el resto del sistema. Si falla, avisa por
-  // el mismo canal de errores que usa el resto de la app (no en silencio).
-  try {
-    fetch(SUPA_URL + "/rest/v1/aperturas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Prefer": "return=minimal" },
-      body: JSON.stringify({ app: appTag }),
-    }).then(r => {
-      if (!r.ok) r.text().then(t => reportarError("No se pudo registrar apertura: HTTP " + r.status, t)).catch(() => {});
-    }).catch(e => reportarError("No se pudo registrar apertura (red)", String(e)));
-  } catch (e) {}
-}
-
-// Vigía de errores — avisa a NEXO Control si algo se rompe en el navegador
-// de cualquier persona que use esta vista, sin que nadie tenga que reportarlo.
-function reportarError(mensaje, detalle) {
-  try {
-    fetch(SUPA_URL + "/rest/v1/app_errores", {
-      method: "POST",
-      headers: { ...SH(), "Prefer": "return=minimal" },
-      body: JSON.stringify({
-        app: "propietario",
-        mensaje: String(mensaje || "").slice(0, 500),
-        detalle: String(detalle || "").slice(0, 2000),
-        url: (typeof location !== "undefined" ? location.href : ""),
-        dispositivo: (typeof navigator !== "undefined" ? navigator.userAgent : ""),
-      }),
-    }).catch(() => {});
-  } catch (e) {}
-}
-if (typeof window !== "undefined") {
-  window.addEventListener("error", (ev) => { reportarError(ev.message, ev.error && ev.error.stack); });
-  window.addEventListener("unhandledrejection", (ev) => { reportarError("Promise rechazada: " + ((ev.reason && ev.reason.message) || ev.reason), ev.reason && ev.reason.stack); });
-}
-
 const storage = {
   get: async (key) => {
     try {
@@ -301,7 +262,11 @@ function rendersDe(obra, renders) {
 // ellos, distinto del informe semanal de avance.
 function SeccionGaleria({ obra, onBack, config }) {
   const T = temaDe(config);
-  const fotos = (obra.fotos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  // Respaldo: si a la foto le falta la fecha exacta (ts), se usa la fecha en
+  // texto (dd/mm/aaaa) que sí tienen todas — para que las fotos viejas, de
+  // antes de este arreglo, también queden ordenadas bien.
+  const tsDe = (f) => f.ts || (() => { const m = String(f.fecha || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (!m) return 0; const d = new Date(+m[3], +m[2] - 1, +m[1]); return isNaN(d.getTime()) ? 0 : d.getTime(); })();
+  const fotos = (obra.fotos || []).slice().sort((a, b) => tsDe(b) - tsDe(a));
   return (<div style={{ minHeight: "100vh", background: T.bg }}>
     <SubHead titulo="Galería de obra" onBack={onBack} config={config} />
     <div style={{ padding: 18 }}>
@@ -708,10 +673,14 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
         // Prioriza el álbum general de la obra (Belfast/Constructora → Fotos).
         // Si esa obra todavía no tiene fotos cargadas ahí, muestra las del
         // informe de avance para no dejar la galería vacía mientras tanto.
+        // Respaldo: si a una foto le falta la fecha exacta (ts — pasa en las
+        // fotos viejas, de antes de un arreglo anterior), se usa la fecha en
+        // texto (dd/mm/aaaa) que sí tienen todas.
+        const tsFotoDe = (f) => f.ts || (() => { const m = String(f.fecha || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (!m) return 0; const d = new Date(+m[3], +m[2] - 1, +m[1]); return isNaN(d.getTime()) ? 0 : d.getTime(); })();
         const album = obra.fotos || [];
         const historial = ((avance || {})[obra.id] || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
         const fotosRecientes = album.length
-          ? album.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 4)
+          ? album.slice().sort((a, b) => tsFotoDe(b) - tsFotoDe(a)).slice(0, 4)
           : historial.flatMap(h => (h.fotos && h.fotos.length) ? h.fotos.map(u => ({ url: u })) : (h.fotoUrl ? [{ url: h.fotoUrl }] : [])).slice(0, 4);
         if (!fotosRecientes.length) return null;
         const destino = album.length ? "galeria" : "fotos";
@@ -775,7 +744,6 @@ function Panel({ obra, nombreCliente, tareas, auditoria, formularios, avance, re
 }
 
 export default function ClientePropietarioApp() {
-  useEffect(() => { registrarApertura("propietario"); }, []);
   const [estado, setEstado] = useState("cargando"); // cargando | entrada | panel | error
   const [obra, setObra] = useState(null);
   const [nombreCliente, setNombreCliente] = useState("");
