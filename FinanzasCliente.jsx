@@ -1106,6 +1106,57 @@ export default function App() {
 }
 
 // ═══════════ 1 · PRESUPUESTO
+// Colores fijos para los gráficos de rubros — se repiten en orden si hay
+// más rubros que colores.
+const RUBRO_COLORS = ["#B0894F", "#1B3A5B", "#3DDC84", "#D97706", "#7C3AED", "#DC2626", "#0891B2", "#DB2777", "#65A30D", "#4338CA", "#EA580C", "#0D9488"];
+// Gráfico de torta (SVG puro, sin librerías) — sirve tanto en pantalla como
+// pegado dentro de un PDF (srcDoc de iframe), porque es SVG plano.
+function GraficoTortaRubros({ rubros, size = 190 }) {
+  const total = rubros.reduce((s, r) => s + Math.max(0, num(r.pct)), 0) || 1;
+  const cx = size / 2, cy = size / 2, rad = size / 2 - 4;
+  let acumAngulo = -90;
+  const slices = rubros.map((r, i) => {
+    const pct = Math.max(0, num(r.pct)) / total;
+    const angulo = pct * 360;
+    const x1 = cx + rad * Math.cos((acumAngulo * Math.PI) / 180);
+    const y1 = cy + rad * Math.sin((acumAngulo * Math.PI) / 180);
+    const finAngulo = acumAngulo + angulo;
+    const x2 = cx + rad * Math.cos((finAngulo * Math.PI) / 180);
+    const y2 = cy + rad * Math.sin((finAngulo * Math.PI) / 180);
+    const largeArc = angulo > 180 ? 1 : 0;
+    const d = pct >= 0.999 ? `M ${cx} ${cy - rad} A ${rad} ${rad} 0 1 1 ${cx - 0.01} ${cy - rad} Z` : `M ${cx} ${cy} L ${x1} ${y1} A ${rad} ${rad} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+    acumAngulo = finAngulo;
+    return { d, color: RUBRO_COLORS[i % RUBRO_COLORS.length], nombre: r.nombre, pct: num(r.pct) };
+  });
+  return (<svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>{slices.map((s, i) => <path key={i} d={s.d} fill={s.color} stroke="#fff" strokeWidth={1.5} />)}</svg>);
+}
+// Gráfico de barras horizontales (SVG puro) — una fila por rubro, ordenadas
+// de mayor a menor incidencia.
+function GraficoBarrasRubros({ rubros, width = 300 }) {
+  const ordenados = rubros.slice().sort((a, b) => num(b.pct) - num(a.pct));
+  const max = Math.max(1, ...ordenados.map(r => num(r.pct)));
+  const filaAlto = 26, labelAncho = 108, barMax = width - labelAncho - 44;
+  return (<svg width={width} height={ordenados.length * filaAlto} viewBox={`0 0 ${width} ${ordenados.length * filaAlto}`}>
+    {ordenados.map((r, i) => {
+      const w = (num(r.pct) / max) * barMax;
+      const y = i * filaAlto;
+      return (<g key={i}>
+        <text x={labelAncho - 6} y={y + filaAlto / 2 + 4} textAnchor="end" fontSize="10.5" fill="#5B6B7F">{(r.nombre || "—").length > 16 ? (r.nombre || "").slice(0, 15) + "…" : r.nombre}</text>
+        <rect x={labelAncho} y={y + 5} width={Math.max(2, w)} height={filaAlto - 10} rx={3} fill={RUBRO_COLORS[rubros.indexOf(r) % RUBRO_COLORS.length]} />
+        <text x={labelAncho + w + 6} y={y + filaAlto / 2 + 4} fontSize="10.5" fontWeight="700" fill="#1B3A5B">{num(r.pct).toFixed(1)}%</text>
+      </g>);
+    })}
+  </svg>);
+}
+// Referencia (colores + nombre) para acompañar la torta.
+function ReferenciaRubros({ rubros, small }) {
+  return (<div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+    {rubros.map((r, i) => (<div key={i} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+      <span style={{ width: 10, height: 10, borderRadius: 3, background: RUBRO_COLORS[i % RUBRO_COLORS.length], flexShrink: 0 }} />
+      <span style={{ fontSize: small ? 11.5 : 12.5, color: "#3A4658" }}>{r.nombre || "—"} <b style={{ color: "#1B3A5B" }}>{num(r.pct).toFixed(1)}%</b></span>
+    </div>))}
+  </div>);
+}
 function PresupuestoTab({ obras, data, save, certsDe, indices }) {
   const [form, setForm] = useState(null);
   const [firmandoP, setFirmandoP] = useState(null);
@@ -1277,6 +1328,15 @@ function PresupuestoTab({ obras, data, save, certsDe, indices }) {
             </button>
           )}
         </div>
+
+        {(form.rubros || []).filter(r => num(r.pct) > 0).length > 0 && <div style={{ background: T.bg, borderRadius: 12, padding: 14, marginTop: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 10 }}>Incidencia de cada rubro</div>
+          <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+            <GraficoTortaRubros rubros={form.rubros.filter(r => num(r.pct) > 0)} size={150} />
+            <div style={{ flex: 1, minWidth: 140 }}><ReferenciaRubros rubros={form.rubros.filter(r => num(r.pct) > 0)} small /></div>
+          </div>
+          <div style={{ overflowX: "auto" }}><GraficoBarrasRubros rubros={form.rubros.filter(r => num(r.pct) > 0)} width={320} /></div>
+        </div>}
       </div>
 
       {pCli > 0 && <div style={{ background: T.bg, borderRadius: 9, padding: 11, marginBottom: 12 }}>
@@ -1614,8 +1674,8 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
     const r = calcCert(c, obra, cs, indices); const dd = detalleRubros(c, obra, cs).filter(d => d.per > 0);
     const certN = cs.findIndex(x => x.id === c.id) + 1;
     const cP = dd.reduce((s, d) => s + d.costoPeriodo, 0);
-    const rows = dd.map(d => `<tr><td>${d.nombre}</td><td class="ctr">${(d.inc * 100).toFixed(1)}%</td><td class="ctr"><b>${d.pctAcum.toFixed(1)}%</b></td><td class="rgt">${money(esCosto ? d.costoPeriodo : d.clientePeriodo)}</td></tr>`).join("");
-    const tr = (t, v, cls) => `<tr class="${cls || ""}"><td colspan="3" class="rgt">${t}</td><td class="rgt">${v}</td></tr>`;
+    const rows = dd.map(d => `<tr><td>${d.nombre}</td><td class="ctr">${(d.inc * 100).toFixed(1)}%</td><td class="ctr"><b>${d.pctAcum.toFixed(1)}%</b></td><td class="ctr" style="color:${d.pctAcum >= 100 ? '#16A34A' : '#B45309'}">${(100 - d.pctAcum).toFixed(1)}%</td><td class="rgt">${money(esCosto ? d.costoPeriodo : d.clientePeriodo)}</td></tr>`).join("");
+    const tr = (t, v, cls) => `<tr class="${cls || ""}"><td colspan="4" class="rgt">${t}</td><td class="rgt">${v}</td></tr>`;
     const resumen = esCosto ? tr("TOTAL COSTO DEL PERÍODO", money(cP), "neto") : `${tr("Certificado bruto", money(r.bruto))}${r.ajuste > 0 || r.provisorio ? tr(`Ajuste CAC (redet.)${r.provisorio ? " · provisorio" : ""}`, "+ " + money(r.ajuste)) : ""}${tr("Subtotal", money(r.ajustado))}${tr("Descuento anticipo", "− " + money(r.amort))}${tr("NETO A COBRAR", money(r.neto), "neto")}`;
     const fc = c.firmas || {};
     const firmaBox = (f, rol) => `<div style="width:230px;text-align:center">${f?.dataUrl ? `<img src="${f.dataUrl}" style="height:44px;display:block;margin:0 auto"/>` : `<div style="height:44px"></div>`}<div style="border-top:1px solid #0F1B2D;padding-top:5px;font-size:11px;color:#5B6B7F">${rol}${f?.nombre ? `<br><b style="color:#0F1B2D">${f.nombre}</b>` : ""}${f?.codigo ? `<br><span style="font-size:8.5px;color:#94A3B8">Cód. ${f.codigo} · ${f.ts || ""}</span>` : ""}</div></div>`;
@@ -1625,7 +1685,7 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
     const secTit = esCosto ? "Rubros (costo interno)" : "Rubros certificados (incidencia sobre el total)";
     const baseP = esCosto ? presupCosto(obra) : presupCliente(obra); const acumP = esCosto ? costoAcumDe(c.cantidades, obra) : clienteAcumDe(c.cantidades, obra); const saldoP = baseP - acumP;
     const saldoHtml = baseP > 0 ? `<div style="margin-top:12px;padding:11px 13px;background:#F4F6F9;border-radius:8px;font-size:12px"><div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:#5B6B7F">Presupuesto ${esCosto ? "de costo" : "cliente"}</span><b>${money(baseP)}</b></div><div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:#5B6B7F">Certificado acumulado (${(baseP > 0 ? acumP / baseP * 100 : 0).toFixed(0)}%)</span><b>${money(acumP)}</b></div><div style="display:flex;justify-content:space-between;padding:5px 0 0;border-top:1px solid #E3E8EF;margin-top:3px"><span style="color:#0F1B2D;font-weight:700">${esCosto ? "Resta para terminar la obra" : "Resta por cobrar al cliente"}</span><b style="color:#1B3A5B">${money(saldoP)}</b></div></div>` : "";
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Certificado ${obra.nombre}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 34px}.head{background:#0F1B2D;color:#fff;padding:20px 40px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:10px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{text-align:right;font-size:11px;color:#cdd5e0}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 40px}.meta{display:flex;justify-content:space-between;margin:22px 0 6px;font-size:12.5px}.meta span{color:#5B6B7F}h2{font-size:12px;color:#5B6B7F;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px;border-bottom:1px solid #E3E8EF;padding-bottom:5px}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#EAF0F7;color:#1B3A5B;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase}td{padding:8px 10px;border-bottom:1px solid #EEF1F5}.ctr{text-align:center}.rgt{text-align:right}.tot td{border:none;padding:4px 10px;font-size:13px}.tot.neto td{background:#EAF1FB;border-top:2px solid #1B3A5B;border-bottom:2px solid #1B3A5B;font-size:17px;font-weight:800;color:#1B3A5B;padding:13px 12px}.tot.neto td:first-child{border-left:2px solid #1B3A5B;border-top-left-radius:8px;border-bottom-left-radius:8px}.tot.neto td:last-child{border-right:2px solid #1B3A5B;border-top-right-radius:8px;border-bottom-right-radius:8px}.foot{display:flex;justify-content:space-between;font-size:11px;color:#5B6B7F}</style></head><body><div class="head">${brandHtml}<div class="doc"><b>${docTit}</b>Fecha: ${fmtISO(c.fecha)}</div></div><div class="wrap"><div class="meta"><div><span>Obra:</span> <b>${obra.nombre}</b></div><div><span>Comitente:</span> <b>${comitente}</b></div></div><h2>${secTit}</h2><table><thead><tr><th>Rubro</th><th class="ctr">Incid.</th><th class="ctr">Avance</th><th class="rgt">Importe</th></tr></thead><tbody>${rows}</tbody></table><h2>Resumen</h2><table class="tot">${resumen}</table><div style="margin-top:14px;font-size:12px;color:#5B6B7F">Pago: <b style="color:#0F1B2D">${fmtISO(c.fechaPago)}</b></div>${saldoHtml}${fotosHtml}<div class="foot" style="margin-top:44px">${firmaBox(fc.contratista, "Contratista · V+V Construcciones")}${firmaBox(fc.cliente, "Cliente · " + comitente)}</div></div></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Certificado ${obra.nombre}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 34px}.head{background:#0F1B2D;color:#fff;padding:20px 40px;border-bottom:4px solid #B0894F;display:flex;justify-content:space-between;align-items:center}.brand{font-size:22px;font-weight:800}.brand small{display:block;font-size:10px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{text-align:right;font-size:11px;color:#cdd5e0}.doc b{display:block;font-size:15px;color:#fff}.wrap{padding:0 40px}.meta{display:flex;justify-content:space-between;margin:22px 0 6px;font-size:12.5px}.meta span{color:#5B6B7F}h2{font-size:12px;color:#5B6B7F;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px;border-bottom:1px solid #E3E8EF;padding-bottom:5px}table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#EAF0F7;color:#1B3A5B;text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase}td{padding:8px 10px;border-bottom:1px solid #EEF1F5}.ctr{text-align:center}.rgt{text-align:right}.tot td{border:none;padding:4px 10px;font-size:13px}.tot.neto td{background:#EAF1FB;border-top:2px solid #1B3A5B;border-bottom:2px solid #1B3A5B;font-size:17px;font-weight:800;color:#1B3A5B;padding:13px 12px}.tot.neto td:first-child{border-left:2px solid #1B3A5B;border-top-left-radius:8px;border-bottom-left-radius:8px}.tot.neto td:last-child{border-right:2px solid #1B3A5B;border-top-right-radius:8px;border-bottom-right-radius:8px}.foot{display:flex;justify-content:space-between;font-size:11px;color:#5B6B7F}</style></head><body><div class="head">${brandHtml}<div class="doc"><b>${docTit}</b>Fecha: ${fmtISO(c.fecha)}</div></div><div class="wrap"><div class="meta"><div><span>Obra:</span> <b>${obra.nombre}</b></div><div><span>Comitente:</span> <b>${comitente}</b></div></div><h2>${secTit}</h2><table><thead><tr><th>Rubro</th><th class="ctr">Incid.</th><th class="ctr">Avance</th><th class="ctr">Resta</th><th class="rgt">Importe</th></tr></thead><tbody>${rows}</tbody></table><h2>Resumen</h2><table class="tot">${resumen}</table><div style="margin-top:14px;font-size:12px;color:#5B6B7F">Pago: <b style="color:#0F1B2D">${fmtISO(c.fechaPago)}</b></div>${saldoHtml}${fotosHtml}<div class="foot" style="margin-top:44px">${firmaBox(fc.contratista, "Contratista · V+V Construcciones")}${firmaBox(fc.cliente, "Cliente · " + comitente)}</div></div></body></html>`;
     setPdfHtml(html);
   }
 
@@ -1641,13 +1701,14 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
           <button onClick={() => { if (confirm("¿Certificar el cierre? Completa el avance nuevo para llegar al 100%.")) { const nc = {}; (obra.rubros || []).forEach(r => { const ant = ultimo ? num(ultimo.cantidades?.[r.id]) : 0; nc[r.id] = Math.max(0, 100 - ant); }); setNuevo(nc); } }} style={{ background: T.al, color: T.accent, border: "none", borderRadius: 7, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>Cierre 100%</button>
         </div>
         <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 9 }}>Escribí solo el <b>% NUEVO</b> de este certificado. El acumulado se suma solo y cobrás únicamente lo nuevo.</div>
-        <div style={{ display: "flex", gap: 6, fontSize: 9, color: T.muted, fontWeight: 700, textTransform: "uppercase", padding: "0 2px 3px" }}><span style={{ flex: 1 }}>Rubro</span><span style={{ width: 52, textAlign: "center" }}>Anterior</span><span style={{ width: 58, textAlign: "center" }}>Nuevo</span><span style={{ width: 54, textAlign: "center" }}>Acum.</span></div>
+        <div style={{ display: "flex", gap: 6, fontSize: 9, color: T.muted, fontWeight: 700, textTransform: "uppercase", padding: "0 2px 3px" }}><span style={{ flex: 1 }}>Rubro</span><span style={{ width: 52, textAlign: "center" }}>Anterior</span><span style={{ width: 58, textAlign: "center" }}>Nuevo</span><span style={{ width: 54, textAlign: "center" }}>Acum.</span><span style={{ width: 48, textAlign: "center" }}>Resta</span></div>
         {(obra.rubros || []).map(r => { const inc = incidencia(obra, r) * 100; const ant = ultimo ? num(ultimo.cantidades?.[r.id]) : 0; const nv = num(nuevo[r.id]); const acum = Math.min(100, ant + nv); const val = esCosto ? (nv / 100) * incidencia(obra, r) * presupCosto(obra) : (nv / 100) * incidencia(obra, r) * presupCliente(obra);
           return (<div key={r.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
             <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>incid. {inc.toFixed(1)}%{nv > 0 ? ` = ${money(val)}` : ""}</div></div>
             <span style={{ width: 52, textAlign: "center", fontSize: 13, fontWeight: 700, color: T.sub }}>{ant}%</span>
             <div style={{ width: 58, display: "flex", alignItems: "center", gap: 1, justifyContent: "center" }}><input value={nuevo[r.id] ?? ""} onChange={e => setNuevo(a => ({ ...a, [r.id]: e.target.value }))} inputMode="decimal" placeholder="0" style={{ ...inp, marginTop: 0, width: 44, textAlign: "center", padding: "10px 2px" }} /><span style={{ fontSize: 11, color: T.sub }}>%</span></div>
             <span style={{ width: 54, textAlign: "center", fontSize: 13, fontWeight: 800, color: acum > ant ? T.accent : T.muted }}>{acum}%</span>
+            <span style={{ width: 48, textAlign: "center", fontSize: 12, fontWeight: 700, color: acum >= 100 ? T.ok : T.warn }}>{100 - acum}%</span>
           </div>); })}
         {(() => { const base = esCosto ? presupCosto(obra) : presupCliente(obra); const ya = ultimo ? (esCosto ? costoAcumDe(ultimo.cantidades, obra) : clienteAcumDe(ultimo.cantidades, obra)) : 0; const saldo = base - ya; const avance = base > 0 ? ya / base * 100 : 0; const antic = anticipoDe(obra); const amortYa = cs.reduce((s, cc) => s + calcCert(cc, obra, cs, indices).amort, 0); const dispAnt = antic - amortYa; return base > 0 ? <div style={{ background: T.bg, borderRadius: 9, padding: "10px 11px", marginTop: 4, fontSize: 11.5 }}>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span style={{ color: T.sub }}>Presupuesto {esCosto ? "de costo" : "cliente"}</span><b>{money(base)}</b></div>
@@ -1667,7 +1728,7 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
           {det.filter(d => d.per > 0).map((d, i) => <Line key={i} t={`${d.nombre} (${d.pctAcum.toFixed(0)}%)`} v={money(d.costoPeriodo)} />)}
           <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 6, display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 13, fontWeight: 800 }}>Total costo directo</span><Money v={costoPeriodo} c={T.warn} /></div></>
           : <><div style={{ fontSize: 10, fontWeight: 800, color: T.accent, letterSpacing: "0.06em", marginBottom: 4 }}>CERTIFICADO AL CLIENTE</div>
-          {det.filter(d => d.per > 0).map((d, i) => <Line key={i} t={`${d.nombre} · incid ${(d.inc * 100).toFixed(0)}% (${d.pctAcum.toFixed(0)}%)`} v={money(d.clientePeriodo)} />)}
+          {det.filter(d => d.per > 0).map((d, i) => <Line key={i} t={`${d.nombre} · incid ${(d.inc * 100).toFixed(0)}% (${d.pctAcum.toFixed(0)}% ac. · resta ${(100 - d.pctAcum).toFixed(0)}%)`} v={money(d.clientePeriodo)} />)}
           <div style={{ borderTop: `1px solid ${T.border}`, margin: "5px 0", paddingTop: 6 }}><Line t="Bruto" v={money(preview.bruto)} />{(preview.ajuste > 0 || preview.provisorio) && <Line t={`Ajuste CAC${preview.provisorio ? " · prov." : ""}`} v={"+ " + money(preview.ajuste)} c={T.ok} />}<Line t="Descuento anticipo" v={"− " + money(preview.amort)} c="#B45309" /></div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: `${T.accent}1A`, border: `1.5px solid ${T.accent}`, borderRadius: 10, padding: "11px 13px", marginTop: 8 }}><span style={{ fontSize: 13.5, fontWeight: 800, color: T.accent }}>Neto a cobrar</span><span style={{ fontSize: 17, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{money(preview.neto)}</span></div></>}
       </div>}
