@@ -217,7 +217,10 @@ const mediaStorage = {
       const res = await fetch(dataUrl); const blob = await res.blob();
       const tipo = forceType || blob.type || "application/octet-stream";
       const ext = (tipo.split('/')[1] || 'bin');
-      const filePath = `${path}.${ext}`;
+      // Si "path" ya termina con una extensión real (tipo "algo.pdf"), no se
+      // le vuelve a agregar — si no, quedaba "algo.pdf.pdf".
+      const yaTieneExt = /\.[a-zA-Z0-9]{2,4}$/.test(path);
+      const filePath = yaTieneExt ? path : `${path}.${ext}`;
       const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${filePath}`, { method: "POST", headers: { "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY, "Content-Type": tipo, "x-upsert": "true" }, body: blob });
       if (!r.ok) return null;
       return `${SUPA_STORAGE_URL}/object/public/${SUPA_BUCKET}/${filePath}`;
@@ -1292,6 +1295,137 @@ const AUD_TIPOS_CLI = [
   { id: "revision", label: "Revisión de doc.", sigla: "RDO" },
   { id: "certificacion", label: "Certificación", sigla: "CER" },
 ];
+// ── Tarea adicional (solo lectura, del lado de Cliente) — mismo dato y
+// mismo PDF que carga V+V en "Más → Tarea adicional", pero acá solo se ve.
+const MEDIOS_PEDIDO_CLI = ["Verbal", "E-mail", "Nota de pedido", "Orden de servicio", "Otro"];
+const DOCS_RESPALDO_CLI = ["Plano de definiciones", "Plano de modificaciones de tareas ya realizadas", "Croquis / detalle constructivo", "Especificación técnica", "Registro fotográfico del estado actual", "Cómputo / metrado", "Nota / e-mail del pedido", "Otro"];
+const REQUISITOS_INICIO_CLI = ["Requerimiento recibido por escrito", "Tarea definida técnicamente", "Plano de definiciones / modificaciones adjunto", "Adicional cotizado", "Incidencia en plazo acordada", "Autorización firmada por Belfast CM"];
+const RUBROS_COTIZ_CLI = [{ id: "materiales", label: "Materiales" }, { id: "manoObra", label: "Mano de obra" }, { id: "equipos", label: "Equipos / herramientas" }, { id: "subcontratos", label: "Subcontratos" }, { id: "otros", label: "Otros" }];
+function AdicionalesClienteView({ T, obras, adicionales, cfg }) {
+  const [obraId, setObraId] = useState("");
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const num = (v) => { const n = Number(String(v == null ? "" : v).replace(/[^\d.-]/g, "")); return isNaN(n) ? 0 : n; };
+  const nomObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "—";
+  const lista = (adicionales || []).filter(it => !obraId || it.obra_id === obraId).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+  function buildPdfAdicional(it) {
+    const _e = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+    const fmtD = (iso) => { if (!iso) return "—"; const [a, m, d] = String(iso).split("-"); return a ? `${d}/${m}/${a.slice(2)}` : iso; };
+    const chk = (marcado) => `<span class="cb">${marcado ? "☑" : "☐"}</span>`;
+    const total = RUBROS_COTIZ_CLI.reduce((s, r) => s + (num(it.cotiz?.[r.id]?.cant) * num(it.cotiz?.[r.id]?.punit)), 0);
+    const filasCotiz = RUBROS_COTIZ_CLI.map(r => { const c = it.cotiz?.[r.id] || {}; const sub = num(c.cant) * num(c.punit); return `<tr><td>${r.label}</td><td class="ctr">${_e(c.unidad)}</td><td class="ctr">${_e(c.cant)}</td><td class="rgt">${c.punit ? money(num(c.punit)) : ""}</td><td class="rgt">${sub ? money(sub) : ""}</td></tr>`; }).join("");
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 14mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; font-size: 12px; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 24px 28px 32px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 4px; }
+      .marca { font-size: 16px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
+      .warn { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 9px 12px; font-size: 10.5px; color: #92400E; line-height: 1.5; margin: 12px 0; }
+      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 7px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; font-size: 11.5px; }
+      .grid2 div { padding: 3px 0; border-bottom: 1px solid #EEF1F5; }
+      .grid2 b { color: #5B6B7F; font-weight: 600; }
+      .parr { font-size: 11.5px; line-height: 1.55; background: #FAFBFC; border: 1px solid #EEF1F5; border-radius: 6px; padding: 9px 11px; margin-top: 4px; }
+      .cbrow { font-size: 11px; padding: 2px 0; }
+      .cb { margin-right: 5px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 11px; }
+      th { background: #EAF0F7; color: #1B3A5B; text-align: left; padding: 6px 8px; font-size: 9.5px; text-transform: uppercase; }
+      td { padding: 6px 8px; border-bottom: 1px solid #EEF1F5; }
+      .ctr { text-align: center; } .rgt { text-align: right; }
+      .tot td { font-weight: 800; background: #EAF1FB; border-top: 2px solid #1B3A5B; font-size: 12.5px; }
+      .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 4px; }
+      .firmas { display: flex; gap: 24px; margin-top: 28px; page-break-inside: avoid; }
+      .firma { flex: 1; text-align: center; }
+      .linea { border-top: 1px solid #0F1B2D; margin-bottom: 5px; padding-top: 30px; }
+      .rol { font-size: 9.5px; color: #5B6B7F; }
+      .foot { margin-top: 18px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr"><div class="marca">${(cfg?.empresa || "V+V CONSTRUCCIONES").toUpperCase()}</div><div class="tipo">Certificado de solicitud y autorización de tarea adicional</div></div>
+      <div class="warn"><b>IMPORTANTE:</b> no se asignará personal ni se dará inicio a la tarea adicional sin (1) requerimiento por escrito, (2) plano de definiciones/modificaciones adjunto, (3) adicional cotizado y (4) autorización firmada por Belfast CM. Todo trabajo ejecutado sin este certificado queda fuera del alcance contratado.</div>
+
+      <h2>1. Identificación</h2>
+      <div class="grid2">
+        <div><b>Obra/Proyecto:</b> ${_e(nomObra(it.obra_id))}</div><div><b>Adicional N°:</b> ${_e(it.adicionalNro)}</div>
+        <div><b>Ubicación/Sector:</b> ${_e(it.ubicacion)}</div><div><b>Fecha de emisión:</b> ${fmtD(it.fecha)}</div>
+        <div><b>Contratista:</b> ${_e(it.contratista)}</div><div><b>Comitente/Dirección de Obra:</b> ${_e(it.comitente)}</div>
+      </div>
+
+      <h2>2. Origen del requerimiento</h2>
+      <div class="grid2">
+        <div><b>Solicitado por:</b> ${_e(it.solicitadoPor)}</div><div><b>Fecha del pedido:</b> ${fmtD(it.fechaPedido)}</div>
+        <div><b>Medio del pedido:</b> ${_e(it.medioPedido)}</div><div></div>
+      </div>
+      <div class="parr">${_e(it.requerimiento) || "—"}</div>
+
+      <h2>3. Definición de la tarea adicional</h2>
+      <div class="grid2"><div><b>Tipo:</b> ${_e(it.tipoAdicional)}</div><div><b>¿Modifica tarea ya certificada?:</b> ${it.modificaCert ? "Sí" : "No"}</div></div>
+      <div class="parr">${_e(it.descripcionTecnica) || "—"}</div>
+      ${it.modificaCert && it.detalleModificacion ? `<div class="parr" style="margin-top:6px"><b>Detalle de la modificación:</b><br/>${_e(it.detalleModificacion)}</div>` : ""}
+
+      <h2>4. Documentación de respaldo adjunta</h2>
+      ${DOCS_RESPALDO_CLI.map(d => `<div class="cbrow">${chk((it.docsAdjuntos || []).includes(d))}${_e(d)}</div>`).join("")}
+      ${it.identificacionPlanos ? `<div style="font-size:11px;margin-top:6px"><b>Planos:</b> ${_e(it.identificacionPlanos)}</div>` : ""}
+
+      <h2>5. Cotización del adicional</h2>
+      <table><thead><tr><th>Concepto</th><th class="ctr">Unidad</th><th class="ctr">Cant.</th><th class="rgt">P. unitario</th><th class="rgt">Subtotal</th></tr></thead><tbody>${filasCotiz}<tr class="tot"><td colspan="4">TOTAL DEL ADICIONAL</td><td class="rgt">${money(total)}</td></tr></tbody></table>
+      <div style="font-size:11px;margin-top:8px"><b>Incidencia en el plazo:</b> ${it.incidenciaPlazo === "sin" ? "Sin incidencia" : `Adiciona ${_e(it.diasIncidencia) || "—"} días`} &nbsp;·&nbsp; <b>Validez de la cotización:</b> ${_e(it.validezCotizacion) || "—"} días</div>
+
+      <h2>6. Requisitos para liberar el inicio</h2>
+      ${REQUISITOS_INICIO_CLI.map(r => `<div class="cbrow">${chk((it.requisitos || []).includes(r))}${_e(r)}</div>`).join("")}
+
+      <h2>7. Autorización (Belfast CM)</h2>
+      <div class="res" style="color:${it.resolucion === "APROBADO para ejecutar" ? "#15803D" : it.resolucion === "Rechazado" ? "#B91C1C" : "#B45309"};border:1.5px solid currentColor">${_e(it.resolucion)}</div>
+      <div style="font-size:11px;margin-top:6px"><b>Autorizado por:</b> ${_e(it.autorizadoPor) || "—"}</div>
+      <div class="firmas">
+        <div class="firma"><div class="linea"></div>Solicitó (Comitente / Dir. de Obra)<div class="rol">Fecha: ___/___/______</div></div>
+        <div class="firma"><div class="linea"></div>Cotizó / Elaboró (V+V)<div class="rol">Fecha: ___/___/______</div></div>
+        <div class="firma"><div class="linea"></div>Autorizó (Belfast CM)<div class="rol">Fecha: ___/___/______</div></div>
+      </div>
+      <div class="foot">Documento de gestión de obra — Solicitud / Autorización de adicional. Conservar copia firmada y planos adjuntos como respaldo contractual.</div>
+    </div></body></html>`;
+  }
+
+  if (pdfHtml) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 500, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
+      <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>‹ Volver</button>
+      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>Certificado de tarea adicional</span>
+      <button onClick={() => { const f = document.getElementById("adic-pdf-cli"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+    </div>
+    <iframe id="adic-pdf-cli" srcDoc={pdfHtml} style={{ flex: 1, border: "none", background: "#fff" }} />
+  </div>);
+
+  return (<div style={{ flex: 1, overflowY: "auto" }}>
+    <AppHeader title="Tarea adicional" sub="Certificados de solicitud y autorización cargados por V+V" />
+    <div style={{ padding: "14px 18px" }}>
+      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 13, color: T.text, marginBottom: 14 }}>
+        <option value="">Todas las obras</option>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>
+      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px" }}>Todavía no hay tareas adicionales cargadas.</div>}
+      {lista.map(it => {
+        const total = RUBROS_COTIZ_CLI.reduce((s, r) => s + (num(it.cotiz?.[r.id]?.cant) * num(it.cotiz?.[r.id]?.punit)), 0);
+        const colorRes = it.resolucion === "APROBADO para ejecutar" ? "#15803D" : it.resolucion === "Rechazado" ? "#B91C1C" : "#B45309";
+        return (<div key={it.id} onClick={() => setPdfHtml(buildPdfAdicional(it))} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: 12, padding: 12, marginBottom: 9, boxShadow: T.shadow, cursor: "pointer" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.adicionalNro ? `Adic. N° ${it.adicionalNro}` : "Sin N°"}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{nomObra(it.obra_id)}</span>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: colorRes }}>{it.resolucion}</span>
+          </div>
+          <div style={{ fontSize: 11.5, color: T.sub, marginBottom: 6, lineHeight: 1.4 }}>{(it.descripcionTecnica || "Sin descripción").slice(0, 90)}{(it.descripcionTecnica || "").length > 90 ? "…" : ""}</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{total > 0 ? money(total) : "Sin cotizar"}</span>
+            <span style={{ fontSize: 11, color: T.accent, fontWeight: 700 }}>Ver PDF ›</span>
+          </div>
+        </div>);
+      })}
+    </div>
+  </div>);
+}
 function AuditoriaClienteView({ T, obras, auditoria, cfg, desdeSemana }) {
   const [tipo, setTipo] = useState("supervision");
   const [obraId, setObraId] = useState("");
@@ -1784,7 +1918,8 @@ const mediaStorage_OG = {
             const res = await fetch(dataUrl);
             const blob = await res.blob();
             const ext = blob.type.split('/')[1] || 'jpg';
-            const filePath = `${path}.${ext}`;
+            const yaTieneExt = /\.[a-zA-Z0-9]{2,4}$/.test(path);
+            const filePath = yaTieneExt ? path : `${path}.${ext}`;
 
             // Subir al bucket
             const r = await fetch(`${SUPA_STORAGE_URL_OG}/object/${SUPA_BUCKET_OG}/${filePath}`, {
@@ -4697,6 +4832,7 @@ const MAS_ITEMS = [
   { id: "cronograma", label: "Cronogramas" },
   { id: "mensajes", label: "Mensajes" },
   { id: "formularios", label: "Certificados" },
+  { id: "adicionales", label: "Tarea adicional" },
   { id: "archivos", label: "Archivos" },
   { id: "personal", label: "Personal" },
   { id: "gestion", label: "Gestión" },
@@ -4876,6 +5012,7 @@ function ClienteApp() {
   const [contactos, setContactos] = useStored("cliente_contactos", []);
   const [documentacion] = useStored("vv_documentacion", []);
   const [auditoria] = useStored("vv_auditoria", []);
+  const [adicionales] = useStored("vv_adicionales", []);
   const unreadMat = (matpedidos || []).filter(p => p.de === "vv" && !p.leido).length; // pedidos de V+V sin levantar
   const pendPed = (pedidos || []).filter(p => p.para === "cliente" && p.estado !== "resuelto").length;
   const lastPed = useRef(null);
@@ -5104,6 +5241,7 @@ function ClienteApp() {
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} informesSem={informesSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
+          {screen === "adicionales" && <AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}

@@ -1,16 +1,21 @@
-V+V — Tarea adicional, ahora también accesible desde Obras
+CLIENTE — Ahora se ven los PDF de "Tarea adicional" que carga V+V
 ======================================================================
 
 QUÉ AGREGUÉ:
-En Obras → detalle de una obra, al lado de las pestañas (Info, Notas,
-Fotos, Planos, Archivos, Informes, Gastos), hay una nueva:
-"Adicionales" — te lleva directo al mismo certificado de tarea
-adicional que armamos antes, pero ya con ESA obra fija (no hay que
-elegirla de nuevo, y no se puede cambiar por error).
+En Más → "Tarea adicional" (nueva opción), Cliente ve el listado de
+todos los certificados de tarea adicional que V+V va cargando —
+filtrable por obra, cada uno con su N°, resolución (Aprobado/
+Rechazado/En revisión) y monto cotizado.
 
-Es el MISMO dato y la MISMA pantalla que "Más → Tarea adicional" — no
-es una copia aparte. Si cargás una tarea adicional desde acá, la vas a
-ver también entrando por Más, y al revés.
+Tocando cualquiera se abre el PDF completo, con el mismo formato
+exacto que genera V+V (las 7 secciones: identificación, origen del
+pedido, definición de la tarea, documentación de respaldo, cotización,
+requisitos y autorización) — se puede guardar o imprimir desde ahí.
+
+Es de SOLO LECTURA de este lado — Cliente ve, no carga ni edita nada
+(eso lo sigue haciendo V+V, como ya habías confirmado). Es el MISMO
+dato compartido, así que lo que V+V cargue aparece automático acá,
+sin nada que sincronizar a mano.
 
 ARCHIVOS:
-- App.jsx → reemplaza el de tu repo.
+- Cliente.jsx → reemplaza el de tu repo.
