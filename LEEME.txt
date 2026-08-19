@@ -1,23 +1,33 @@
-CLIENTE — Bitácora: bajar/imprimir o mandar por mail UN solo hecho
+V+V — Nueva sección: Tarea adicional (certificado completo, editable)
 ======================================================================
 
 QUÉ AGREGUÉ:
-En cada hecho de la bitácora (dentro de una obra), ahora hay dos
-botones nuevos:
+En Más → "Tarea adicional" (nueva opción, al lado de Documentación),
+un certificado completo igual al PDF modelo que me pasaste, con las 7
+secciones:
 
-- 📄 PDF — arma el documento con SOLO ese hecho (no toda la bitácora
-  junta), con el mismo formato de siempre — desde ahí lo podés
-  guardar o imprimir con el botón de arriba, como ya funcionaba.
+1. Identificación (obra, N° de adicional, ubicación, contratista,
+   comitente)
+2. Origen del requerimiento (quién lo pidió, cuándo, por qué medio, el
+   pedido tal cual se recibió)
+3. Definición de la tarea (tipo, descripción técnica, si modifica algo
+   ya certificado)
+4. Documentación de respaldo (los mismos checkboxes del modelo: plano
+   de definiciones, croquis, fotos, etc.)
+5. Cotización (Materiales / Mano de obra / Equipos / Subcontratos /
+   Otros, con unidad-cantidad-precio, total automático) + incidencia
+   en el plazo
+6. Requisitos para liberar el inicio (checkboxes)
+7. Autorización (resolución, quién autorizó)
 
-- ✉️ Mail — abre directo tu app de correo, con el asunto y el texto de
-  ese hecho ya escritos (obra, fecha, título y descripción), listo
-  para mandar. No adjunta el PDF como archivo (eso el teléfono no lo
-  deja hacer solo con un link de mail), pero te ahorra escribirlo de
-  cero — y siempre podés generar el PDF con el otro botón y adjuntarlo
-  vos a mano si lo necesitás con archivo.
+Desde la lista podés ver, editar o borrar cada tarea adicional
+cargada, y generar el PDF con el mismo formato del modelo (con la
+advertencia en amarillo, las tablas, las firmas) — se puede guardar o
+imprimir desde ahí.
 
-El botón "PDF" grande de arriba (que junta TODOS los hechos de la
-obra) sigue funcionando igual que antes, sin tocar nada.
+Por ahora todo se carga y edita desde V+V (como confirmaste) — la
+sección 7 "Autorización" también se completa desde acá, no está
+conectada a que Belfast la apruebe desde Cliente.
 
 ARCHIVOS:
-- Cliente.jsx → reemplaza el de tu repo.
+- App.jsx → reemplaza el de tu repo.

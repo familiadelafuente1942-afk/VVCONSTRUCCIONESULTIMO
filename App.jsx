@@ -330,7 +330,11 @@ const mediaStorage = {
             const res = await fetch(dataUrl);
             const blob = await res.blob();
             const ext = blob.type.split('/')[1] || 'jpg';
-            const filePath = `${path}.${ext}`;
+            // Si "path" ya termina con esa extensión (o cualquier otra de 2-4
+            // letras, típico de un nombre de archivo real tipo "algo.pdf"), no
+            // se le vuelve a agregar — si no, quedaba "algo.pdf.pdf".
+            const yaTieneExt = /\.[a-zA-Z0-9]{2,4}$/.test(path);
+            const filePath = yaTieneExt ? path : `${path}.${ext}`;
 
             // Subir al bucket
             const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${filePath}`, {
@@ -2120,6 +2124,7 @@ const MAS_TILES = [
   { id:"personal", label:"Personal" },
   { id:"formularios", label:"Certificados" },
   { id:"documentacion", label:"Documentación" },
+  { id:"adicionales", label:"Tarea adicional" },
   { id:"informes", label:"Informes" },
   { id:"auditoria", label:"Auditoría de obra" },
   { id:"plantillas", label:"Plantillas de documentos" },
@@ -3213,6 +3218,256 @@ function DocumentacionView({ db, cfg, setCfg, onBack }) {
     </div>
   );
 }
+
+// ── Certificado de Solicitud y Autorización de Tarea Adicional ──────────
+// Mismo formulario que la planilla en papel: identificación, origen del
+// pedido, definición de la tarea, documentación de respaldo, cotización,
+// requisitos para liberar el inicio, y autorización — todo cargado y
+// editado desde acá (V+V), como pediste.
+const MEDIOS_PEDIDO = ["Verbal", "E-mail", "Nota de pedido", "Orden de servicio", "Otro"];
+const TIPOS_ADICIONAL = ["Tarea nueva", "Modificación de tarea ya ejecutada", "Retrabajo / trabajo de más"];
+const DOCS_RESPALDO = ["Plano de definiciones", "Plano de modificaciones de tareas ya realizadas", "Croquis / detalle constructivo", "Especificación técnica", "Registro fotográfico del estado actual", "Cómputo / metrado", "Nota / e-mail del pedido", "Otro"];
+const REQUISITOS_INICIO = ["Requerimiento recibido por escrito", "Tarea definida técnicamente", "Plano de definiciones / modificaciones adjunto", "Adicional cotizado", "Incidencia en plazo acordada", "Autorización firmada por Belfast CM"];
+const RESOLUCIONES_ADIC = ["APROBADO para ejecutar", "Aprobado c/observaciones", "Rechazado", "En revisión"];
+const RUBROS_COTIZ = [{ id: "materiales", label: "Materiales" }, { id: "manoObra", label: "Mano de obra" }, { id: "equipos", label: "Equipos / herramientas" }, { id: "subcontratos", label: "Subcontratos" }, { id: "otros", label: "Otros" }];
+function nuevoAdicional(obraId) {
+  return {
+    id: uid() + Date.now(), ts: Date.now(), obra_id: obraId, adicionalNro: "", ubicacion: "", fecha: new Date().toISOString().slice(0, 10), contratista: "V+V Construcciones", comitente: "",
+    solicitadoPor: "", fechaPedido: "", medioPedido: MEDIOS_PEDIDO[0], requerimiento: "",
+    tipoAdicional: TIPOS_ADICIONAL[0], descripcionTecnica: "", modificaCert: false, detalleModificacion: "",
+    docsAdjuntos: [], identificacionPlanos: "",
+    cotiz: { materiales: { unidad: "", cant: "", punit: "" }, manoObra: { unidad: "", cant: "", punit: "" }, equipos: { unidad: "", cant: "", punit: "" }, subcontratos: { unidad: "", cant: "", punit: "" }, otros: { unidad: "", cant: "", punit: "" } },
+    incidenciaPlazo: "sin", diasIncidencia: "", validezCotizacion: "15",
+    requisitos: [],
+    resolucion: "En revisión", autorizadoPor: "",
+  };
+}
+function AdicionalesView({ db, cfg, onBack }) {
+  const obras = db.obras || [];
+  const items = db.adicionales || [];
+  const setItems = db.setAdicionales;
+  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [form, setForm] = useState(null);
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const num = (v) => { const n = Number(String(v == null ? "" : v).replace(/[^\d.-]/g, "")); return isNaN(n) ? 0 : n; };
+  const hoyISO = () => new Date().toISOString().slice(0, 10);
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 11px", fontSize: 13.5, color: T.text, boxSizing: "border-box" };
+  const lbl = { fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.04em" };
+  const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setCotiz = (rubro, campo, v) => setForm(f => ({ ...f, cotiz: { ...f.cotiz, [rubro]: { ...f.cotiz[rubro], [campo]: v } } }));
+  const toggleEnLista = (campo, val) => setForm(f => ({ ...f, [campo]: (f[campo] || []).includes(val) ? f[campo].filter(x => x !== val) : [...(f[campo] || []), val] }));
+  function nuevo() { if (!obraId) { alert("Elegí una obra primero."); return; } setForm(nuevoAdicional(obraId)); }
+  function editar(it) { setForm({ ...nuevoAdicional(it.obra_id), ...it }); }
+  function guardar() {
+    if (!form.descripcionTecnica.trim()) { alert("Cargá al menos la descripción técnica de la tarea."); return; }
+    setItems(p => { const otros = (p || []).filter(x => x.id !== form.id); return [{ ...form }, ...otros]; });
+    setForm(null);
+  }
+  function borrar(id) { if (confirm("¿Eliminar este certificado de tarea adicional?")) setItems(p => (p || []).filter(x => x.id !== id)); }
+  const totalCotiz = form ? RUBROS_COTIZ.reduce((s, r) => s + (num(form.cotiz[r.id]?.cant) * num(form.cotiz[r.id]?.punit)), 0) : 0;
+  function nomObra(id) { return (obras.find(o => o.id === id) || {}).nombre || "—"; }
+
+  function buildPdfAdicional(it) {
+    const _e = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+    const fmtD = (iso) => { if (!iso) return "—"; const [a, m, d] = String(iso).split("-"); return a ? `${d}/${m}/${a.slice(2)}` : iso; };
+    const chk = (marcado) => `<span class="cb">${marcado ? "☑" : "☐"}</span>`;
+    const total = RUBROS_COTIZ.reduce((s, r) => s + (num(it.cotiz[r.id]?.cant) * num(it.cotiz[r.id]?.punit)), 0);
+    const filasCotiz = RUBROS_COTIZ.map(r => { const c = it.cotiz[r.id] || {}; const sub = num(c.cant) * num(c.punit); return `<tr><td>${r.label}</td><td class="ctr">${_e(c.unidad)}</td><td class="ctr">${_e(c.cant)}</td><td class="rgt">${c.punit ? money(num(c.punit)) : ""}</td><td class="rgt">${sub ? money(sub) : ""}</td></tr>`; }).join("");
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 14mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; font-size: 12px; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 24px 28px 32px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 4px; }
+      .marca { font-size: 16px; font-weight: 800; color: #0F1B2D; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
+      .warn { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 9px 12px; font-size: 10.5px; color: #92400E; line-height: 1.5; margin: 12px 0; }
+      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 7px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; font-size: 11.5px; }
+      .grid2 div { padding: 3px 0; border-bottom: 1px solid #EEF1F5; }
+      .grid2 b { color: #5B6B7F; font-weight: 600; }
+      .parr { font-size: 11.5px; line-height: 1.55; background: #FAFBFC; border: 1px solid #EEF1F5; border-radius: 6px; padding: 9px 11px; margin-top: 4px; }
+      .cbrow { font-size: 11px; padding: 2px 0; }
+      .cb { margin-right: 5px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 11px; }
+      th { background: #EAF0F7; color: #1B3A5B; text-align: left; padding: 6px 8px; font-size: 9.5px; text-transform: uppercase; }
+      td { padding: 6px 8px; border-bottom: 1px solid #EEF1F5; }
+      .ctr { text-align: center; } .rgt { text-align: right; }
+      .tot td { font-weight: 800; background: #EAF1FB; border-top: 2px solid #1B3A5B; font-size: 12.5px; }
+      .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 4px; }
+      .firmas { display: flex; gap: 24px; margin-top: 28px; page-break-inside: avoid; }
+      .firma { flex: 1; text-align: center; }
+      .linea { border-top: 1px solid #0F1B2D; margin-bottom: 5px; padding-top: 30px; }
+      .rol { font-size: 9.5px; color: #5B6B7F; }
+      .foot { margin-top: 18px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr"><div class="marca">${(cfg?.empresa || "V+V CONSTRUCCIONES").toUpperCase()}</div><div class="tipo">Certificado de solicitud y autorización de tarea adicional</div></div>
+      <div class="warn"><b>IMPORTANTE:</b> no se asignará personal ni se dará inicio a la tarea adicional sin (1) requerimiento por escrito, (2) plano de definiciones/modificaciones adjunto, (3) adicional cotizado y (4) autorización firmada por Belfast CM. Todo trabajo ejecutado sin este certificado queda fuera del alcance contratado.</div>
+
+      <h2>1. Identificación</h2>
+      <div class="grid2">
+        <div><b>Obra/Proyecto:</b> ${_e(nomObra(it.obra_id))}</div><div><b>Adicional N°:</b> ${_e(it.adicionalNro)}</div>
+        <div><b>Ubicación/Sector:</b> ${_e(it.ubicacion)}</div><div><b>Fecha de emisión:</b> ${fmtD(it.fecha)}</div>
+        <div><b>Contratista:</b> ${_e(it.contratista)}</div><div><b>Comitente/Dirección de Obra:</b> ${_e(it.comitente)}</div>
+      </div>
+
+      <h2>2. Origen del requerimiento</h2>
+      <div class="grid2">
+        <div><b>Solicitado por:</b> ${_e(it.solicitadoPor)}</div><div><b>Fecha del pedido:</b> ${fmtD(it.fechaPedido)}</div>
+        <div><b>Medio del pedido:</b> ${_e(it.medioPedido)}</div><div></div>
+      </div>
+      <div class="parr">${_e(it.requerimiento) || "—"}</div>
+
+      <h2>3. Definición de la tarea adicional</h2>
+      <div class="grid2"><div><b>Tipo:</b> ${_e(it.tipoAdicional)}</div><div><b>¿Modifica tarea ya certificada?:</b> ${it.modificaCert ? "Sí" : "No"}</div></div>
+      <div class="parr">${_e(it.descripcionTecnica) || "—"}</div>
+      ${it.modificaCert && it.detalleModificacion ? `<div class="parr" style="margin-top:6px"><b>Detalle de la modificación:</b><br/>${_e(it.detalleModificacion)}</div>` : ""}
+
+      <h2>4. Documentación de respaldo adjunta</h2>
+      ${DOCS_RESPALDO.map(d => `<div class="cbrow">${chk((it.docsAdjuntos || []).includes(d))}${_e(d)}</div>`).join("")}
+      ${it.identificacionPlanos ? `<div style="font-size:11px;margin-top:6px"><b>Planos:</b> ${_e(it.identificacionPlanos)}</div>` : ""}
+
+      <h2>5. Cotización del adicional</h2>
+      <table><thead><tr><th>Concepto</th><th class="ctr">Unidad</th><th class="ctr">Cant.</th><th class="rgt">P. unitario</th><th class="rgt">Subtotal</th></tr></thead><tbody>${filasCotiz}<tr class="tot"><td colspan="4">TOTAL DEL ADICIONAL</td><td class="rgt">${money(total)}</td></tr></tbody></table>
+      <div style="font-size:11px;margin-top:8px"><b>Incidencia en el plazo:</b> ${it.incidenciaPlazo === "sin" ? "Sin incidencia" : `Adiciona ${_e(it.diasIncidencia) || "—"} días`} &nbsp;·&nbsp; <b>Validez de la cotización:</b> ${_e(it.validezCotizacion) || "—"} días</div>
+
+      <h2>6. Requisitos para liberar el inicio</h2>
+      ${REQUISITOS_INICIO.map(r => `<div class="cbrow">${chk((it.requisitos || []).includes(r))}${_e(r)}</div>`).join("")}
+
+      <h2>7. Autorización (Belfast CM)</h2>
+      <div class="res" style="color:${it.resolucion === "APROBADO para ejecutar" ? "#15803D" : it.resolucion === "Rechazado" ? "#B91C1C" : "#B45309"};border:1.5px solid currentColor">${_e(it.resolucion)}</div>
+      <div style="font-size:11px;margin-top:6px"><b>Autorizado por:</b> ${_e(it.autorizadoPor) || "—"}</div>
+      <div class="firmas">
+        <div class="firma"><div class="linea"></div>Solicitó (Comitente / Dir. de Obra)<div class="rol">Fecha: ___/___/______</div></div>
+        <div class="firma"><div class="linea"></div>Cotizó / Elaboró (V+V)<div class="rol">Fecha: ___/___/______</div></div>
+        <div class="firma"><div class="linea"></div>Autorizó (Belfast CM)<div class="rol">Fecha: ___/___/______</div></div>
+      </div>
+      <div class="foot">Documento de gestión de obra — Solicitud / Autorización de adicional. Conservar copia firmada y planos adjuntos como respaldo contractual.</div>
+    </div></body></html>`;
+  }
+
+  if (pdfHtml) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 500, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: "#0F1B2D", flexShrink: 0, position: "relative", zIndex: 2 }}>
+      <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>‹ Volver</button>
+      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>Certificado de tarea adicional</span>
+      <button onClick={() => { const f = document.getElementById("adic-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+    </div>
+    <iframe id="adic-pdf" srcDoc={pdfHtml} style={{ flex: 1, border: "none", background: "#fff" }} />
+  </div>);
+
+  if (form) return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
+    <PageHead title="Tarea adicional" sub="Certificado de solicitud y autorización" back onBack={() => setForm(null)} />
+    <div style={{ padding: "0 16px" }}>
+      <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: T.rsm, padding: 12, marginBottom: 16, fontSize: 11, color: "#92400E", lineHeight: 1.5 }}>⚠ No se asigna personal ni se inicia la tarea sin requerimiento escrito, plano de definiciones, cotización y autorización de Belfast CM.</div>
+
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>1. Identificación</div>
+      <label style={lbl}>Obra</label>
+      <select value={form.obra_id} onChange={e => setF("obra_id", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}><label style={lbl}>Adicional N°</label><input value={form.adicionalNro} onChange={e => setF("adicionalNro", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }} /></div>
+        <div style={{ flex: 1 }}><label style={lbl}>Fecha de emisión</label><input type="date" value={form.fecha} onChange={e => setF("fecha", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }} /></div>
+      </div>
+      <label style={lbl}>Ubicación / Sector</label>
+      <input value={form.ubicacion} onChange={e => setF("ubicacion", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}><label style={lbl}>Contratista</label><input value={form.contratista} onChange={e => setF("contratista", e.target.value)} style={{ ...inp, margin: "5px 0 14px" }} /></div>
+        <div style={{ flex: 1 }}><label style={lbl}>Comitente / Dir. de Obra</label><input value={form.comitente} onChange={e => setF("comitente", e.target.value)} style={{ ...inp, margin: "5px 0 14px" }} /></div>
+      </div>
+
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>2. Origen del requerimiento</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}><label style={lbl}>Solicitado por</label><input value={form.solicitadoPor} onChange={e => setF("solicitadoPor", e.target.value)} placeholder="Nombre y cargo" style={{ ...inp, margin: "5px 0 10px" }} /></div>
+        <div style={{ flex: 1 }}><label style={lbl}>Fecha del pedido</label><input type="date" value={form.fechaPedido} onChange={e => setF("fechaPedido", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }} /></div>
+      </div>
+      <label style={lbl}>Medio del pedido</label>
+      <select value={form.medioPedido} onChange={e => setF("medioPedido", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}>{MEDIOS_PEDIDO.map(m => <option key={m} value={m}>{m}</option>)}</select>
+      <label style={lbl}>Requerimiento tal como fue recibido</label>
+      <textarea value={form.requerimiento} onChange={e => setF("requerimiento", e.target.value)} rows={3} style={{ ...inp, margin: "5px 0 14px", resize: "vertical" }} />
+
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>3. Definición de la tarea adicional</div>
+      <label style={lbl}>Tipo de adicional</label>
+      <select value={form.tipoAdicional} onChange={e => setF("tipoAdicional", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}>{TIPOS_ADICIONAL.map(t => <option key={t} value={t}>{t}</option>)}</select>
+      <label style={lbl}>Descripción técnica (alcance, sector, locales afectados)</label>
+      <textarea value={form.descripcionTecnica} onChange={e => setF("descripcionTecnica", e.target.value)} rows={3} style={{ ...inp, margin: "5px 0 10px", resize: "vertical" }} />
+      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: form.modificaCert ? 8 : 14 }}><input type="checkbox" checked={form.modificaCert} onChange={e => setF("modificaCert", e.target.checked)} style={{ width: 17, height: 17 }} /><span style={{ fontSize: 12.5, fontWeight: 600, color: T.text }}>¿Modifica / demuele tarea ya certificada?</span></label>
+      {form.modificaCert && <><label style={lbl}>Detalle de la modificación</label><textarea value={form.detalleModificacion} onChange={e => setF("detalleModificacion", e.target.value)} rows={2} style={{ ...inp, margin: "5px 0 14px", resize: "vertical" }} /></>}
+
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>4. Documentación de respaldo adjunta</div>
+      {DOCS_RESPALDO.map(d => (<label key={d} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "5px 0" }}><input type="checkbox" checked={(form.docsAdjuntos || []).includes(d)} onChange={() => toggleEnLista("docsAdjuntos", d)} style={{ width: 16, height: 16 }} /><span style={{ fontSize: 12.5, color: T.text }}>{d}</span></label>))}
+      <label style={lbl}>Identificación de planos adjuntos (código / revisión / fecha)</label>
+      <input value={form.identificacionPlanos} onChange={e => setF("identificacionPlanos", e.target.value)} style={{ ...inp, margin: "5px 0 14px" }} />
+
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>5. Cotización del adicional</div>
+      {RUBROS_COTIZ.map(r => (<div key={r.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 10, marginBottom: 7 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>{r.label}</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input value={form.cotiz[r.id].unidad} onChange={e => setCotiz(r.id, "unidad", e.target.value)} placeholder="Unidad" style={{ ...inp, margin: 0, flex: 1 }} />
+          <input value={form.cotiz[r.id].cant} onChange={e => setCotiz(r.id, "cant", e.target.value)} placeholder="Cant." inputMode="decimal" style={{ ...inp, margin: 0, width: 70 }} />
+          <input value={form.cotiz[r.id].punit} onChange={e => setCotiz(r.id, "punit", e.target.value)} placeholder="P. unit." inputMode="decimal" style={{ ...inp, margin: 0, width: 100 }} />
+        </div>
+        {num(form.cotiz[r.id].cant) > 0 && num(form.cotiz[r.id].punit) > 0 && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginTop: 6, textAlign: "right" }}>{money(num(form.cotiz[r.id].cant) * num(form.cotiz[r.id].punit))}</div>}
+      </div>))}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(176,137,79,.12)", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "10px 13px", marginTop: 4, marginBottom: 12 }}><span style={{ fontSize: 12.5, fontWeight: 800, color: BRASS }}>TOTAL DEL ADICIONAL</span><span style={{ fontSize: 16, fontWeight: 800, color: BRASS }}>{money(totalCotiz)}</span></div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <label style={lbl}>Incidencia en el plazo</label>
+          <select value={form.incidenciaPlazo} onChange={e => setF("incidenciaPlazo", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}><option value="sin">Sin incidencia</option><option value="dias">Adiciona días</option></select>
+        </div>
+        {form.incidenciaPlazo === "dias" && <div style={{ flex: 1 }}><label style={lbl}>Días</label><input value={form.diasIncidencia} onChange={e => setF("diasIncidencia", e.target.value)} inputMode="numeric" style={{ ...inp, margin: "5px 0 10px" }} /></div>}
+        <div style={{ flex: 1 }}><label style={lbl}>Validez cotización (días)</label><input value={form.validezCotizacion} onChange={e => setF("validezCotizacion", e.target.value)} inputMode="numeric" style={{ ...inp, margin: "5px 0 14px" }} /></div>
+      </div>
+
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>6. Requisitos para liberar el inicio</div>
+      {REQUISITOS_INICIO.map(r => (<label key={r} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "5px 0" }}><input type="checkbox" checked={(form.requisitos || []).includes(r)} onChange={() => toggleEnLista("requisitos", r)} style={{ width: 16, height: 16 }} /><span style={{ fontSize: 12.5, color: T.text }}>{r}</span></label>))}
+
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", margin: "14px 0 8px" }}>7. Autorización (Belfast CM)</div>
+      <label style={lbl}>Resolución</label>
+      <select value={form.resolucion} onChange={e => setF("resolucion", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}>{RESOLUCIONES_ADIC.map(r => <option key={r} value={r}>{r}</option>)}</select>
+      <label style={lbl}>Autorizado por</label>
+      <input value={form.autorizadoPor} onChange={e => setF("autorizadoPor", e.target.value)} placeholder="Responsable Belfast CM / Héctor Ayala" style={{ ...inp, margin: "5px 0 18px" }} />
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <button onClick={guardar} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}` }}>Guardar</button>
+        <button onClick={() => setPdfHtml(buildPdfAdicional(form))} style={{ flex: 1, background: "none", border: `1px solid ${BRASS}`, color: BRASS, borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Ver PDF</button>
+      </div>
+    </div>
+  </div>);
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
+    <PageHead title="Tarea adicional" sub="Certificado de solicitud y autorización" back onBack={onBack} />
+    <div style={{ padding: "0 16px" }}>
+      <label style={lbl}>Obra</label>
+      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...inp, margin: "5px 0 14px" }}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+      <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}`, marginBottom: 16 }}>+ Nuevo certificado de tarea adicional</button>
+
+      {items.filter(it => !obraId || it.obra_id === obraId).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 18px" }}>Todavía no hay tareas adicionales cargadas.</div>}
+      {items.filter(it => !obraId || it.obra_id === obraId).sort((a, b) => (b.ts || 0) - (a.ts || 0)).map(it => {
+        const total = RUBROS_COTIZ.reduce((s, r) => s + (num(it.cotiz?.[r.id]?.cant) * num(it.cotiz?.[r.id]?.punit)), 0);
+        const colorRes = it.resolucion === "APROBADO para ejecutar" ? "#15803D" : it.resolucion === "Rechazado" ? "#B91C1C" : "#B45309";
+        return (<div key={it.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, boxShadow: T.shadow }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: BRASS }}>{it.adicionalNro ? `Adic. N° ${it.adicionalNro}` : "Sin N°"}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text, flex: 1, minWidth: 0 }}>{nomObra(it.obra_id)}</span>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: colorRes }}>{it.resolucion}</span>
+          </div>
+          <div style={{ fontSize: 11.5, color: T.sub, marginBottom: 8, lineHeight: 1.4 }}>{(it.descripcionTecnica || "Sin descripción").slice(0, 90)}{(it.descripcionTecnica || "").length > 90 ? "…" : ""}</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{total > 0 ? money(total) : "Sin cotizar"}</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => setPdfHtml(buildPdfAdicional(it))} style={{ background: "none", border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>
+              <button onClick={() => editar(it)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 7, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+              <button onClick={() => borrar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", padding: "0 3px" }}>✕</button>
+            </div>
+          </div>
+        </div>);
+      })}
+    </div>
+  </div>);
+}
+
 // Los pedidos ahora pueden ser de 3 tipos, todos con el mismo mecanismo.
 const TIPOS_PEDIDO = [
   { id: "material", label: "Materiales", sing: "material", icon: "box", color: "#1B3A5B" },
@@ -4342,6 +4597,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "cliente": return <ClientePanel {...P} />;
       case "personal": return <PersonalView personal={db.personal} setPersonal={db.setPersonal} obras={db.obras} cfg={cfg} />;
       case "documentacion": return <DocumentacionView db={db} cfg={cfg} setCfg={setCfg} onBack={back} />;
+      case "adicionales": return <AdicionalesView db={db} cfg={cfg} onBack={back} />;
       case "bitacora": return <BitacoraView db={db} cfg={cfg} onBack={back} />;
       case "auditoria": return <AuditoriaView db={db} cfg={cfg} onBack={back} />;
       case "plantillas": return <PlantillasView db={db} cfg={cfg} onBack={back} />;
@@ -8270,6 +8526,7 @@ function App() {
   const [gestion, setGestion] = useStoredState("vv_gestion", {});
   const [formularios, setFormularios] = useStoredState("vv_formularios", []);
   const [documentacion, setDocumentacion] = useStoredState("vv_documentacion", []);
+  const [adicionales, setAdicionales] = useStoredState("vv_adicionales", []);
   const [certConformidad, setCertConformidad] = useStoredState("vv_cert_conformidad", []); // certificados de conformidad de etapas de obra (auditor Héctor)
   const [matpedidos, setMatpedidos] = useStoredState("vv_matpedidos", []);
   const [dronevuelos, setDronevuelos] = useStoredState("vv_drone", []);
@@ -8484,7 +8741,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, certConformidad, setCertConformidad, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, adicionales, setAdicionales, certConformidad, setCertConformidad, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
