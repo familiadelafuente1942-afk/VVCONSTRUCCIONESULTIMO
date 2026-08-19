@@ -1581,6 +1581,65 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
     setPdfHtml(html);
   };
 
+  // Arma el mismo documento que exportarPDF, pero para un solo hecho — para
+  // bajar/imprimir/mandar nada más que ese, sin arrastrar el resto.
+  const exportarUnHecho = (h) => {
+    if (!obra) return;
+    const marca = "V+V CONSTRUCCIONES";
+    const hoy = hoyStr();
+    const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
+    const fotosH = (h.fotos || []).map(ft => `<img src="${ft.url}" />`).join("");
+    const item = `<div class="hecho">
+        <div class="hh"><span class="fecha">${fFmt}</span><span class="tit">${(h.titulo || "").replace(/</g, "&lt;")}</span></div>
+        ${h.desc ? `<div class="desc">${(h.desc || "").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</div>` : ""}
+        ${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}
+        ${(h.adjuntos || []).length ? `<div class="adj"><b>Adjuntos:</b> ${(h.adjuntos || []).map(a => (a.nombre || "").replace(/</g, "&lt;")).join(" · ")}</div>` : ""}
+      </div>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page { margin: 14mm; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
+      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
+      @media screen { body { padding: 14px; } }
+      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 14px; }
+      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; letter-spacing: -.01em; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      .meta { font-size: 11px; color: #5B6B7F; margin-top: 8px; }
+      h1 { font-size: 15px; color: #0F1B2D; margin: 4px 0 2px; }
+      .hecho { border: 1px solid #E3E8EF; border-left: 3px solid #1B3A5B; border-radius: 8px; padding: 11px 13px; page-break-inside: avoid; }
+      .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; flex-wrap: wrap; }
+      .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
+      .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
+      .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
+      .adj { font-size: 10.5px; color: #1B3A5B; background: rgba(255,255,255,.06); border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
+      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+      .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
+      .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
+    </style></head><body><div class="sheet">
+      <div class="hdr">
+        <div class="marca">${marca}</div>
+        <div class="tipo">Historial de obra · Bitácora — Hecho individual</div>
+        <h1>${(obra.nombre || "").replace(/</g, "&lt;")}</h1>
+        <div class="meta">Comitente: ${(cfg?.comitente || "Belfast Construction Management")} · Emitido: ${hoy}</div>
+      </div>
+      ${item}
+      <div class="foot">Documento generado por ${marca} para respaldo y justificación de adicionales de obra.</div>
+    </div></body></html>`;
+    setPdfHtml(html);
+  };
+  // Abre el correo con el asunto y el texto de ese hecho ya cargados — no
+  // manda un PDF adjunto (eso no se puede armar solo con un mailto:), pero
+  // deja todo listo para escribir y mandar en el momento.
+  const mailearHecho = (h) => {
+    if (!obra) return;
+    const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
+    const asunto = `Bitácora — ${obra.nombre} — ${fFmt}${h.titulo ? " — " + h.titulo : ""}`;
+    const cuerpo = `${h.titulo || "Hecho de obra"}\nObra: ${obra.nombre}\nFecha: ${fFmt}\n\n${h.desc || ""}`;
+    window.location.href = `mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+  };
+
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
 
   // ── Lo del día, de TODAS las obras juntas ──────────────────────────
@@ -1686,7 +1745,8 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
               {h.adjuntos.map(a => <button key={a.id} onClick={() => window.open(a.url, "_blank")} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", maxWidth: "100%" }}><span>{iconoArch(a.nombre, a.tipo)}</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span></button>)}
             </div>}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                            
+              <button onClick={() => exportarUnHecho(h)} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>📄 PDF</button>
+              <button onClick={() => mailearHecho(h)} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✉️ Mail</button>
             </div>
           </div>
         ))}

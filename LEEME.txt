@@ -1,20 +1,23 @@
-PROPIETARIO — Fix: "Galería de obra" en Inicio también mostraba fotos viejas primero
+CLIENTE — Bitácora: bajar/imprimir o mandar por mail UN solo hecho
 ======================================================================
 
-QUÉ ERA:
-Ya había arreglado esto en la pantalla de Galería completa (SeccionGaleria),
-pero se me pasó la vista previa de 4 fotos que se ve en la pantalla de
-Inicio (la que mostraste en la captura, arriba de "AVANCE GENERAL") —
-usaba el mismo tipo de orden, pero sin el respaldo que agregué para las
-fotos viejas sin fecha exacta.
+QUÉ AGREGUÉ:
+En cada hecho de la bitácora (dentro de una obra), ahora hay dos
+botones nuevos:
 
-QUÉ CORREGÍ:
-Le agregué el mismo respaldo ahí también: si una foto no tiene la
-fecha exacta guardada (las viejas, de antes del primer arreglo), usa
-la fecha en texto que sí tiene, para ordenarla lo mejor posible.
+- 📄 PDF — arma el documento con SOLO ese hecho (no toda la bitácora
+  junta), con el mismo formato de siempre — desde ahí lo podés
+  guardar o imprimir con el botón de arriba, como ya funcionaba.
 
-Con esto, tanto la vista previa de Inicio como la Galería completa
-deberían mostrar las últimas fotos primero.
+- ✉️ Mail — abre directo tu app de correo, con el asunto y el texto de
+  ese hecho ya escritos (obra, fecha, título y descripción), listo
+  para mandar. No adjunta el PDF como archivo (eso el teléfono no lo
+  deja hacer solo con un link de mail), pero te ahorra escribirlo de
+  cero — y siempre podés generar el PDF con el otro botón y adjuntarlo
+  vos a mano si lo necesitás con archivo.
+
+El botón "PDF" grande de arriba (que junta TODOS los hechos de la
+obra) sigue funcionando igual que antes, sin tocar nada.
 
 ARCHIVOS:
-- ClientePropietario.jsx → reemplaza el de tu repo.
+- Cliente.jsx → reemplaza el de tu repo.
