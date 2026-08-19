@@ -3145,6 +3145,15 @@ function DocumentacionView({ db, cfg, setCfg, onBack }) {
     if (nuevos.some(n => !mediaStorage.isRemoteUrl(n.url))) alert("⚠ El archivo quedó guardado en este dispositivo pero no se pudo subir a la nube. Revisá el bucket de fotos en Supabase.");
   }
   function borrar(id) { if (confirm("¿Eliminar este documento?")) setDocumentacion(p => (p || []).filter(x => x.id !== id)); }
+  // Editar nombre y/o carpeta de un documento ya subido — antes solo se
+  // podía subir y borrar, no corregir un nombre mal puesto ni moverlo de
+  // carpeta.
+  const [editando, setEditando] = useState(null); // { id, nombre, cat }
+  function guardarEdicion() {
+    if (!editando) return;
+    setDocumentacion(p => (p || []).map(x => x.id === editando.id ? { ...x, nombre: editando.nombre.trim() || x.nombre, cat: editando.cat } : x));
+    setEditando(null);
+  }
   const porCat = allCats.map(c => ({ c, items: documentacion.filter(d => d.cat === c) })).filter(g => (g.items || []).length);
   return (
     <div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
@@ -3173,13 +3182,29 @@ function DocumentacionView({ db, cfg, setCfg, onBack }) {
           <div key={g.c} style={{ marginBottom: 18 }}>
             <div style={{ fontSize: 10.5, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{g.c} ({(g.items || []).length})</div>
             {(g.items || []).map(d => (
-              <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 7 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</div>
-                  <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{d.fecha}</div>
-                </div>
-                <a href={d.url} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a>
-                <button onClick={() => borrar(d.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+              <div key={d.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 7 }}>
+                {editando?.id === d.id ? (
+                  <div>
+                    <label style={{ fontSize: 10.5, color: T.muted }}>Nombre</label>
+                    <input value={editando.nombre} onChange={e => setEditando(p => ({ ...p, nombre: e.target.value }))} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13, color: T.text, margin: "4px 0 10px" }} />
+                    <label style={{ fontSize: 10.5, color: T.muted }}>Carpeta</label>
+                    <select value={editando.cat} onChange={e => setEditando(p => ({ ...p, cat: e.target.value }))} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 13, color: T.text, margin: "4px 0 12px" }}>{allCats.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={guardarEdicion} style={{ flex: 1, background: T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+                      <button onClick={() => setEditando(null)} style={{ flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 8, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</div>
+                      <div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{d.fecha}</div>
+                    </div>
+                    <a href={d.url} target="_blank" rel="noreferrer" style={{ color: T.accent, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a>
+                    <button onClick={() => setEditando({ id: d.id, nombre: d.nombre, cat: d.cat })} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>✎</button>
+                    <button onClick={() => borrar(d.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

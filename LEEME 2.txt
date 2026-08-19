@@ -1,21 +1,19 @@
-MI ASISTENTE — Fix: los PDF ahora quedan en el chat
+V+V — Documentación ahora es editable
 ======================================================================
 
-QUÉ PASABA:
-Cuando Tita generaba un PDF (presupuesto, comprobante, nota), lo
-descargaba una sola vez al dispositivo y avisaba con un mensaje de
-texto — pero el PDF en sí nunca quedaba guardado en ningún lado. Si
-cerrabas la app o borrabas la descarga, se perdía, y no había forma
-de volver a abrirlo desde el chat.
+QUÉ AGREGUÉ:
+En Más → Documentación, cada documento ya subido tiene un botón nuevo
+"✎" (lápiz) al lado de "Abrir" y "✕" — al tocarlo, podés:
+- Cambiarle el NOMBRE.
+- Moverlo a otra CARPETA.
 
-QUÉ CORREGÍ:
-Ahora, junto con el mensaje "✅ PDF generado", aparece un botón real:
+Antes, una vez subido un archivo, solo se podía abrir o borrar — si le
+habías puesto mal el nombre o lo habías puesto en la carpeta
+equivocada, no había forma de corregirlo sin borrar y volver a subir.
 
-  📄 Ver / descargar PDF
-
-Que te deja volver a abrirlo/descargarlo cuando quieras, con solo
-scrollear hasta ese mensaje en el chat — no hace falta buscarlo en
-Descargas ni volver a pedírselo a Tita.
+(El archivo en sí — el PDF, Word, Excel, etc. — no se puede editar
+desde acá, eso lo maneja el programa correspondiente; lo que se edita
+es cómo aparece listado en la app: nombre y carpeta.)
 
 ARCHIVOS:
-- MiAsistente.jsx → reemplaza el de tu repo.
+- App.jsx → reemplaza el de tu repo.
