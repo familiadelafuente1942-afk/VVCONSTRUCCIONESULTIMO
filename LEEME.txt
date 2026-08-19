@@ -1,33 +1,16 @@
-V+V — Nueva sección: Tarea adicional (certificado completo, editable)
+V+V — Tarea adicional, ahora también accesible desde Obras
 ======================================================================
 
 QUÉ AGREGUÉ:
-En Más → "Tarea adicional" (nueva opción, al lado de Documentación),
-un certificado completo igual al PDF modelo que me pasaste, con las 7
-secciones:
+En Obras → detalle de una obra, al lado de las pestañas (Info, Notas,
+Fotos, Planos, Archivos, Informes, Gastos), hay una nueva:
+"Adicionales" — te lleva directo al mismo certificado de tarea
+adicional que armamos antes, pero ya con ESA obra fija (no hay que
+elegirla de nuevo, y no se puede cambiar por error).
 
-1. Identificación (obra, N° de adicional, ubicación, contratista,
-   comitente)
-2. Origen del requerimiento (quién lo pidió, cuándo, por qué medio, el
-   pedido tal cual se recibió)
-3. Definición de la tarea (tipo, descripción técnica, si modifica algo
-   ya certificado)
-4. Documentación de respaldo (los mismos checkboxes del modelo: plano
-   de definiciones, croquis, fotos, etc.)
-5. Cotización (Materiales / Mano de obra / Equipos / Subcontratos /
-   Otros, con unidad-cantidad-precio, total automático) + incidencia
-   en el plazo
-6. Requisitos para liberar el inicio (checkboxes)
-7. Autorización (resolución, quién autorizó)
-
-Desde la lista podés ver, editar o borrar cada tarea adicional
-cargada, y generar el PDF con el mismo formato del modelo (con la
-advertencia en amarillo, las tablas, las firmas) — se puede guardar o
-imprimir desde ahí.
-
-Por ahora todo se carga y edita desde V+V (como confirmaste) — la
-sección 7 "Autorización" también se completa desde acá, no está
-conectada a que Belfast la apruebe desde Cliente.
+Es el MISMO dato y la MISMA pantalla que "Más → Tarea adicional" — no
+es una copia aparte. Si cargás una tarea adicional desde acá, la vas a
+ver también entrando por Más, y al revés.
 
 ARCHIVOS:
 - App.jsx → reemplaza el de tu repo.

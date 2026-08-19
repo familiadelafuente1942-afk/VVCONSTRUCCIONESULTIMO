@@ -1699,11 +1699,12 @@ function TabGastos({ detail, upd }) {
     </div>);
 }
 
-function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg, apiKey }) {
+function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg, apiKey, adicionales, setAdicionales }) {
     const UBICS = getUbics(cfg);
     const defaultAp = UBICS[0]?.id || 'aep';
     const [showNew, setShowNew] = useState(false);
     const [tab, setTab] = useState("info");
+    const [mostrarAdicionales, setMostrarAdicionales] = useState(false);
     const [form, setForm] = useState({ nombre: "", ap: defaultAp, sector: "", estado: "pendiente", avance: 0, inicio: "", cierre: "" });
     const [newObs, setNewObs] = useState("");
     const fileRef = useRef(null); const archRef = useRef(null); const videoRef = useRef(null); const planoRef = useRef(null);
@@ -1801,6 +1802,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                     {[[`info`, t(cfg, 'obras_info')], [`obs`, t(cfg, 'obras_notas')], [`fotos`, t(cfg, 'obras_fotos')], [`planos`, 'Planos'], [`archivos`, t(cfg, 'obras_archivos')], [`informes`, 'Informes'], [`gastos`, 'Gastos']].map(([id, label]) => (
                         <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#1D4ED8)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
                     ))}
+                    <button onClick={() => setMostrarAdicionales(true)} style={{ flex: 1, minWidth: 74, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: 500, color: T.muted, borderBottom: "2px solid transparent", whiteSpace: "nowrap" }}>Adicionales</button>
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
                     {tab === "info" && (<div>
@@ -1920,6 +1922,11 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                     {tab === "informes" && <TabInformes detail={detail} upd={upd} />}
                     {tab === "gastos" && <TabGastos detail={detail} upd={upd} />}
                 </div>
+                {mostrarAdicionales && (
+                    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
+                        <AdicionalesView db={{ obras, adicionales, setAdicionales }} cfg={cfg} onBack={() => setMostrarAdicionales(false)} obraIdFijo={detail.id} />
+                    </div>
+                )}
             </div>
         );
     }
@@ -3242,11 +3249,11 @@ function nuevoAdicional(obraId) {
     resolucion: "En revisión", autorizadoPor: "",
   };
 }
-function AdicionalesView({ db, cfg, onBack }) {
+function AdicionalesView({ db, cfg, onBack, obraIdFijo }) {
   const obras = db.obras || [];
   const items = db.adicionales || [];
   const setItems = db.setAdicionales;
-  const [obraId, setObraId] = useState(obras[0]?.id || "");
+  const [obraId, setObraId] = useState(obraIdFijo || obras[0]?.id || "");
   const [form, setForm] = useState(null);
   const [pdfHtml, setPdfHtml] = useState(null);
   const num = (v) => { const n = Number(String(v == null ? "" : v).replace(/[^\d.-]/g, "")); return isNaN(n) ? 0 : n; };
@@ -3365,7 +3372,11 @@ function AdicionalesView({ db, cfg, onBack }) {
 
       <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>1. Identificación</div>
       <label style={lbl}>Obra</label>
-      <select value={form.obra_id} onChange={e => setF("obra_id", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+      {obraIdFijo ? (
+        <div style={{ ...inp, margin: "5px 0 10px", color: T.muted, display: "flex", alignItems: "center" }}>{obras.find(o => o.id === form.obra_id)?.nombre || "—"}</div>
+      ) : (
+        <select value={form.obra_id} onChange={e => setF("obra_id", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+      )}
       <div style={{ display: "flex", gap: 8 }}>
         <div style={{ flex: 1 }}><label style={lbl}>Adicional N°</label><input value={form.adicionalNro} onChange={e => setF("adicionalNro", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }} /></div>
         <div style={{ flex: 1 }}><label style={lbl}>Fecha de emisión</label><input type="date" value={form.fecha} onChange={e => setF("fecha", e.target.value)} style={{ ...inp, margin: "5px 0 10px" }} /></div>
@@ -3437,10 +3448,12 @@ function AdicionalesView({ db, cfg, onBack }) {
   </div>);
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90 }}>
-    <PageHead title="Tarea adicional" sub="Certificado de solicitud y autorización" back onBack={onBack} />
+    <PageHead title="Tarea adicional" sub={obraIdFijo ? (obras.find(o => o.id === obraIdFijo)?.nombre || "") : "Certificado de solicitud y autorización"} back onBack={onBack} />
     <div style={{ padding: "0 16px" }}>
-      <label style={lbl}>Obra</label>
-      <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...inp, margin: "5px 0 14px" }}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+      {!obraIdFijo && <>
+        <label style={lbl}>Obra</label>
+        <select value={obraId} onChange={e => setObraId(e.target.value)} style={{ ...inp, margin: "5px 0 14px" }}><option value="">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>
+      </>}
       <button onClick={nuevo} style={{ width: "100%", background: T.navy, color: "#fff", border: "none", borderRadius: T.rsm, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", borderBottom: `2px solid ${BRASS}`, marginBottom: 16 }}>+ Nuevo certificado de tarea adicional</button>
 
       {items.filter(it => !obraId || it.obra_id === obraId).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 18px" }}>Todavía no hay tareas adicionales cargadas.</div>}
@@ -8753,7 +8766,7 @@ function App() {
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
             {view==="dashboard" && <InicioViewVV cfg={cfg} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
-            {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} />}
+            {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} adicionales={adicionales} setAdicionales={setAdicionales} />}
             {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} certifRubro={certifRubro} setCertifRubro={setCertifRubro} docrecepcion={docrecepcion} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
