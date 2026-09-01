@@ -138,6 +138,22 @@ const storage = {
 };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const hoyStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
+const SUPA_BUCKET = "bco-media";
+const SUPA_STORAGE_URL = SUPA_URL + "/storage/v1";
+// Sube un archivo (foto de la respuesta, PDF, lo que sea) al mismo bucket
+// que usan las otras apps → devuelve la URL pública.
+async function subirArchivoDef(file) {
+  const buf = await file.arrayBuffer();
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+  const path = `definiciones/${uid()}_${Date.now()}.${ext}`;
+  const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${path}`, {
+    method: "POST",
+    headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": file.type || "application/octet-stream" },
+    body: buf,
+  });
+  if (!r.ok) return null;
+  return `${SUPA_STORAGE_URL}/object/public/${SUPA_BUCKET}/${path}`;
+}
 
 let BRASS = "#B0894F";
 let T = { navy: "#0F1B2D", accent: "#1B3A5B", al: "#EAF0F7", bg: "#F5F7FA", card: "#FFFFFF", border: "#E3E8EF", text: "#0F1B2D", sub: "#5B6B7F", muted: "#94A3B8", rsm: 12, shadow: "0 1px 3px rgba(15,27,45,.06)" };
@@ -290,6 +306,26 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
   const toggle = (id) => guardar(items.map(it => it.id === id ? { ...it, tiene: !it.tiene } : it));
   const setObs = (id, v) => guardar(items.map(it => it.id === id ? { ...it, obs: v } : it));
   const quitar = (id) => guardar(items.filter(it => it.id !== id));
+  // Estado + seguimiento por definición: cuándo se pidió, cuándo llegó la
+  // respuesta, y el archivo/texto de esa respuesta — para poder abrir
+  // cualquier definición y saber en qué está.
+  const [abierto, setAbierto] = useState(null); // id de la definición abierta
+  const [respTexto, setRespTexto] = useState("");
+  const [subiendoResp, setSubiendoResp] = useState(false);
+  const marcarPedidas = (ids) => {
+    guardar(items.map(it => ids.includes(it.id) ? { ...it, estado: "pedida", historial: [...(it.historial || []), { ts: Date.now(), tipo: "pedida", texto: "Se solicitó la definición." }] } : it));
+  };
+  async function cargarRespuesta(id, archivoFile) {
+    setSubiendoResp(true);
+    let archivoUrl = null, archivoNombre = null;
+    if (archivoFile) { archivoUrl = await subirArchivoDef(archivoFile); archivoNombre = archivoFile.name; if (!archivoUrl) { alert("No se pudo subir el archivo. Probá de nuevo."); setSubiendoResp(false); return; } }
+    guardar(items.map(it => it.id === id ? {
+      ...it, tiene: true, estado: "respondida",
+      historial: [...(it.historial || []), { ts: Date.now(), tipo: "respondida", texto: respTexto.trim(), archivoUrl, archivoNombre }],
+    } : it));
+    setRespTexto(""); setSubiendoResp(false); setAbierto(null);
+  }
+  const estadoDe = (it) => it.tiene ? "respondida" : (it.estado === "pedida" ? "pedida" : "pendiente");
   const agregarManual = () => {
     const nom = nuevaDef.trim(); if (!nom) return;
     guardar([...items, { id: uid() + Math.random().toString(36).slice(2, 5), rubro: (nuevoRubro.trim() || "General"), nombre: nom, tiene: false }]);
@@ -312,6 +348,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
     const pct = items.length ? Math.round(tienen / items.length * 100) : 0;
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${tituloDoc} ${obraNom(obraId)}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 40px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 34px;border-bottom:4px solid #B0894F}.brand{font-size:20px;font-weight:800}.brand small{display:block;font-size:9px;color:#B0894F;letter-spacing:2px;margin-top:6px}.doc{font-size:12px;font-weight:800;color:#B0894F;text-transform:uppercase;letter-spacing:1px;margin-top:6px}.wrap{padding:0 34px}.meta{display:flex;justify-content:space-between;margin:18px 0;font-size:12px;color:#5B6B7F}.kpi{display:flex;gap:0;margin:14px 0;border:1px solid #E3E8EF;border-radius:8px;overflow:hidden}.kpi div{flex:1;text-align:center;padding:10px;border-right:1px solid #E3E8EF}.kpi div:last-child{border-right:none}.kpi b{display:block;font-size:20px}.kpi span{font-size:8px;color:#5B6B7F;text-transform:uppercase}table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}td{padding:7px 8px;border-bottom:1px solid #EEF1F5;vertical-align:top}.rub td{background:#EAF0F7;color:#1B3A5B;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.dot{width:20px;color:#B0894F;text-align:center}.obs{font-size:10px;color:#5B6B7F;margin-top:20px;border-top:1px solid #D6DCE4;padding-top:8px}.firmas{display:flex;justify-content:space-between;margin-top:44px}.firma{width:44%;text-align:center;font-size:10px;color:#5B6B7F}.firma .ln{border-top:1px solid #0F1B2D;padding-top:5px;margin-top:34px}@media print{.noprint{display:none}}</style></head><body><div class="head"><div class="brand">V+V CONSTRUCCIONES<small>CONSTRUCTORA</small></div><div class="doc">${tituloDoc}</div></div><div class="wrap"><div class="meta"><div>Obra: <b>${obraNom(obraId)}</b></div><div>Fecha: ${hoyStr()}</div></div>${usarSeleccion ? "" : `<div class="kpi"><div><b style="color:#B91C1C">${faltan}</b><span>Faltantes</span></div><div><b style="color:#16A34A">${tienen}</b><span>Definidas</span></div><div><b>${items.length}</b><span>Total</span></div><div><b>${pct}%</b><span>Definido</span></div></div>`}${faltantes.length ? `<table><tbody>${rowsHtml}</tbody></table>` : '<p style="padding:20px 0;text-align:center;color:#16A34A;font-weight:700">No hay definiciones faltantes. Todas resueltas.</p>'}<div class="obs">Las definiciones pendientes atrasan el normal desarrollo de las tareas de albañilería, revoques y colocaciones. Es importante resolverlas para poder dar curso a las tareas, contrataciones y pedidos de materiales.</div><div class="firmas"><div class="firma"><div class="ln">${empresa || "V+V Construcciones"}</div></div><div class="firma"><div class="ln">Belfast CM — Recibido</div></div></div></div></body></html>`;
     setPdfHtml(html);
+    if (usarSeleccion) marcarPedidas(faltantes.flatMap(g => g.items.map(i => i.id)));
   }
   function waFaltantes() {
     const usarSeleccion = seleccion.size > 0;
@@ -321,6 +358,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
     const pie = usarSeleccion ? `\n\n(V+V Construcciones)` : `\n\nFaltan ${faltan} de ${items.length} definiciones.\n(V+V Construcciones)`;
     const txt = `${titulo}\nObra: ${obraNom(obraId)}\nFecha: ${hoyStr()}\n\n` + faltantes.map(g => `*${g.rubro}*\n` + g.items.map(i => `• ${i.nombre}${i.obs ? ` (${i.obs})` : ""}`).join("\n")).join("\n\n") + pie;
     window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
+    if (usarSeleccion) marcarPedidas(faltantes.flatMap(g => g.items.map(i => i.id)));
   }
 
   // Genera un Word (.doc) EDITABLE con TODAS las definiciones (faltantes y las que ya tenés) + observaciones.
@@ -459,15 +497,41 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
 
       {grupos.map(g => (<div key={g.rubro} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 13, marginBottom: 10 }}>
         <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{g.rubro}</div>
-        {g.items.map(it => (<div key={it.id} style={{ padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
+        {g.items.map(it => { const est = estadoDe(it); const estLbl = est === "respondida" ? "TENEMOS" : est === "pedida" ? "PEDIDA" : "FALTA"; const estColor = est === "respondida" ? "#16A34A" : est === "pedida" ? "#B0894F" : "#B45309";
+        return (<div key={it.id} style={{ padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick={() => toggle(it.id)} style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${it.tiene ? "#16A34A" : T.border}`, background: it.tiene ? "#16A34A" : "transparent", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{it.tiene ? "✓" : ""}</button>
-            <div style={{ flex: 1, fontSize: 13, color: it.tiene ? T.text : T.sub }}>{it.nombre}<span style={{ fontSize: 9.5, fontWeight: 800, color: it.tiene ? "#16A34A" : "#B45309", marginLeft: 6 }}>{it.tiene ? "TENEMOS" : "FALTA"}</span></div>
+            <div onClick={() => { setAbierto(abierto === it.id ? null : it.id); setRespTexto(""); }} style={{ flex: 1, fontSize: 13, color: it.tiene ? T.text : T.sub, cursor: "pointer" }}>{it.nombre}<span style={{ fontSize: 9.5, fontWeight: 800, color: estColor, marginLeft: 6 }}>{estLbl}</span>{(it.historial || []).length > 0 && <span style={{ fontSize: 9.5, color: T.muted, marginLeft: 6 }}>· {abierto === it.id ? "▾" : "▸"} historial</span>}</div>
             {!it.tiene && <button onClick={() => toggleSeleccion(it.id)} title="Pedir esta ahora" style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${seleccion.has(it.id) ? BRASS : T.border}`, background: seleccion.has(it.id) ? BRASS : "transparent", color: "#fff", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>★</button>}
             <button onClick={() => quitar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>
           </div>
           <input defaultValue={it.obs || ""} onBlur={e => setObs(it.id, e.target.value)} placeholder="Observación (opcional)…" style={{ width: "100%", marginTop: 6, marginLeft: 34, maxWidth: "calc(100% - 34px)", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 10px", fontSize: 12, color: T.text, boxSizing: "border-box" }} />
-        </div>))}
+
+          {abierto === it.id && <div style={{ marginTop: 10, marginLeft: 34, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: T.navy, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Seguimiento</div>
+            {(it.historial || []).length === 0 && <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 10 }}>Todavía no se pidió esta definición — tildala con ★ y mandala por PDF o WhatsApp para empezar el seguimiento.</div>}
+            {(it.historial || []).slice().reverse().map((h, i) => (<div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: h.tipo === "respondida" ? "#16A34A" : BRASS, marginTop: 5, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: T.text }}>{h.tipo === "respondida" ? "Respondida" : "Pedida"} <span style={{ fontWeight: 400, color: T.muted, fontSize: 10 }}>{new Date(h.ts).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></div>
+                {h.texto && <div style={{ fontSize: 12, color: T.sub, marginTop: 2, whiteSpace: "pre-wrap" }}>{h.texto}</div>}
+                {h.archivoUrl && <a href={h.archivoUrl} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 4, fontSize: 11.5, color: BRASS, fontWeight: 700, textDecoration: "none" }}>📎 {h.archivoNombre || "Ver archivo"}</a>}
+              </div>
+            </div>))}
+
+            {!it.tiene && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: T.navy, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Cargar respuesta</div>
+              <textarea value={abierto === it.id ? respTexto : ""} onChange={e => setRespTexto(e.target.value)} placeholder="Escribí la respuesta que llegó (o dejá vacío si solo adjuntás un archivo)…" rows={2} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 10px", fontSize: 12, color: T.text, boxSizing: "border-box", resize: "vertical", marginBottom: 8 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <label style={{ flex: 1, textAlign: "center", background: T.card, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  📎 Adjuntar archivo
+                  <input type="file" accept="image/*,.pdf,.doc,.docx" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) cargarRespuesta(it.id, f); }} disabled={subiendoResp} />
+                </label>
+                <button onClick={() => cargarRespuesta(it.id, null)} disabled={subiendoResp || !respTexto.trim()} style={{ flex: 1, background: respTexto.trim() ? T.navy : T.border, color: "#fff", border: "none", borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: respTexto.trim() ? "pointer" : "default" }}>{subiendoResp ? "Guardando…" : "Guardar solo texto"}</button>
+              </div>
+            </div>}
+          </div>}
+        </div>); })}
       </div>))}
 
       {seleccion.size > 0 && <div style={{ display: "flex", alignItems: "center", gap: 10, background: T.al, border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 12 }}>
