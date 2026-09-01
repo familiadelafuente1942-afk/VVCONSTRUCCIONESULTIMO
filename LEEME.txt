@@ -1,21 +1,29 @@
-CLIENTE — Ahora se ven los PDF de "Tarea adicional" que carga V+V
+CONTRATISTA — Definiciones: pedir solo las que necesitás, no todo el listado
 ======================================================================
 
+QUÉ ESTABA MAL:
+Al generar el PDF o mandar por WhatsApp desde "Definiciones", siempre
+salía TODO el listado de faltantes — no había forma de pedir puntual
+solo una o dos que necesitás en ese momento.
+
 QUÉ AGREGUÉ:
-En Más → "Tarea adicional" (nueva opción), Cliente ve el listado de
-todos los certificados de tarea adicional que V+V va cargando —
-filtrable por obra, cada uno con su N°, resolución (Aprobado/
-Rechazado/En revisión) y monto cotizado.
+Al lado de cada definición que falta, un botón ★ nuevo — tocalo en las
+que estás pidiendo AHORA. Cuando hay algo marcado con ★:
 
-Tocando cualquiera se abre el PDF completo, con el mismo formato
-exacto que genera V+V (las 7 secciones: identificación, origen del
-pedido, definición de la tarea, documentación de respaldo, cotización,
-requisitos y autorización) — se puede guardar o imprimir desde ahí.
+- El botón de PDF cambia a "PDF de la(s) seleccionada(s)" — y el
+  documento lleva SOLO esas, no el listado completo.
+- El botón de WhatsApp cambia a "Enviar la(s) seleccionada(s) por
+  WhatsApp" — mismo criterio, solo lo tildado.
+- Aparece un cartel arriba de los botones avisando cuántas hay
+  seleccionadas, con un link para "Limpiar" si te arrepentís.
 
-Es de SOLO LECTURA de este lado — Cliente ve, no carga ni edita nada
-(eso lo sigue haciendo V+V, como ya habías confirmado). Es el MISMO
-dato compartido, así que lo que V+V cargue aparece automático acá,
-sin nada que sincronizar a mano.
+Si NO marcás ninguna con ★, todo sigue funcionando exactamente como
+antes (te manda todas las faltantes) — no rompí nada de lo que ya
+usabas.
+
+El botón de Word ("todas + observaciones") lo dejé sin tocar a
+propósito — ese sí tiene sentido que siempre lleve el listado
+completo, es para archivo/registro, no para pedir puntual.
 
 ARCHIVOS:
-- Cliente.jsx → reemplaza el de tu repo.
+- Contratista.jsx → reemplaza el de tu repo.
