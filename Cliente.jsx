@@ -2946,7 +2946,7 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5 }}>Protege los montos (Contratado, Certificado, Saldo) en la pantalla Obra. Si lo dejás vacío, la contraseña es 2025.</div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actualizaciones</label></div>
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px" }}>
-        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 30-07-fixavance</b></div>
+        <div style={{ fontSize: 12.5, color: T.text, marginBottom: 4 }}>Versión instalada: <b>build 22-09-cond</b></div>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.5 }}>Trae la última versión y todo lo último que cargó V+V (obras, informes, formularios, archivos). Limpia la caché.</div>
         <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Actualizar y traer lo último</button>
       </div>
@@ -4552,6 +4552,131 @@ function crCPM(tareas) {
   T2.forEach(fLS);
   return T2.map(t => ({ ...t, es: ES[t.id] ?? 0, ef: EF[t.id] ?? 0, critica: Math.round((LS[t.id] ?? 0) - (ES[t.id] ?? 0)) <= 0 }));
 }
+// ── Línea de tiempo del cronograma, SOLO LECTURA (espejo visual de la app de V+V) ──
+function crDowDe(iso) { return iso ? new Date(iso + "T12:00:00").getDay() : -1; }
+function crColorEtapa(etapa) {
+  const M = { "Preliminares": "#94A3B8", "Estructura": "#B0894F", "Albañilería": "#C2703D", "Instalaciones": "#2563EB", "Terminaciones": "#16A34A", "Cierre": "#7C3AED" };
+  return M[etapa] || "#64748B";
+}
+function GanttLectura({ T, o, tareas }) {
+  const [zoom, setZoom] = useState("dia");
+  const hoy = crHoy();
+  const manual = !!o.modoManual;
+  const hitos = o.hitos || [];
+  const lista = tareas || [];
+  if (!lista.length) return null;
+
+  const baseCal = manual
+    ? (lista.reduce((m, t) => (!m || (t.vvInicio && t.vvInicio < m)) ? t.vvInicio : m, "") || o.inicio)
+    : crPrimerHabil(o.inicio);
+  const finReal = lista.reduce((m, t) => (!m || (t.vvFin && t.vvFin > m)) ? t.vvFin : m, "") || baseCal;
+
+  const dias = [];
+  { let f = baseCal, g = 0; while (f && f <= finReal && g < 3000) { if (manual || crEsHabil(f)) dias.push(f); f = crIsoMas(f, 1); g++; } }
+  if (!dias.length) return null;
+
+  const ANCHO = zoom === "dia" ? 26 : zoom === "semana" ? 11 : 4;
+  const ancho = dias.length * ANCHO;
+  const colHoy = dias.indexOf(hoy);
+
+  const bandas = [];
+  dias.forEach(d => { const m = d.slice(0, 7); const ult = bandas[bandas.length - 1]; if (ult && ult.mes === m) ult.n++; else bandas.push({ mes: m, n: 1 }); });
+  const nomMes = (m) => { const [a, mm] = m.split("-"); return `${CR_MES[Number(mm) - 1]} ${a.slice(2)}`; };
+
+  const offAnc = (desde, hasta) => {
+    if (manual) return [Math.max(0, crDiasEntre(baseCal, desde)) * ANCHO, Math.max(3, (crDiasEntre(desde, hasta) + 1) * ANCHO)];
+    return [Math.max(0, diasHabiles(baseCal, desde)) * ANCHO, Math.max(3, (diasHabiles(desde, hasta) + 1) * ANCHO)];
+  };
+
+  return (<div style={{ marginLeft: -14, marginRight: -14, background: T.card, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: "10px 0 12px", marginTop: 10, marginBottom: 4 }}>
+    <style>{`
+      .crg-lbl{width:104px;flex:0 0 104px}
+      @media(min-width:520px){.crg-lbl{width:170px;flex:0 0 170px}}
+      .crg-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+      .crg-scroll::-webkit-scrollbar{height:6px}
+      .crg-scroll::-webkit-scrollbar-thumb{background:${T.border};border-radius:4px}
+    `}</style>
+    <div style={{ display: "flex", gap: 4, padding: "0 10px 8px", alignItems: "center" }}>
+      <span style={{ fontSize: 10, color: T.muted, fontWeight: 700, marginRight: 3 }}>LÍNEA DE TIEMPO · VER POR</span>
+      {[["dia", "Día"], ["semana", "Semana"], ["mes", "Mes"]].map(([k, l]) => (
+        <button key={k} onClick={() => setZoom(k)} style={{
+          background: zoom === k ? T.accent : T.bg, color: zoom === k ? "#fff" : T.sub,
+          border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 10px",
+          fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+        }}>{l}</button>
+      ))}
+      <span style={{ marginLeft: "auto", fontSize: 10, color: T.muted }}>{dias.length} días{manual ? "" : " hábiles"}</span>
+    </div>
+    <div style={{ display: "flex", padding: "0 10px" }}>
+      <div className="crg-lbl" style={{ minWidth: 0 }}>
+        <div style={{ height: 32 }} />
+        {lista.map(t => (
+          <div key={t.id} style={{ height: 24, display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+            {t.condicionada && <span title="No la ejecuta V+V" style={{ flexShrink: 0, fontSize: 7, fontWeight: 800, color: BRASS, border: `1px solid ${BRASS}`, borderRadius: 4, padding: "0 2px" }}>C</span>}
+            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, fontWeight: t.critica ? 800 : 600, color: t.critica ? "#B91C1C" : T.text }}>{t.nombre}</span>
+          </div>
+        ))}
+      </div>
+      <div className="crg-scroll" style={{ flex: 1, minWidth: 0, marginLeft: 6 }}>
+        <div style={{ width: ancho, minWidth: "100%", position: "relative" }}>
+          <div style={{ display: "flex", height: 14 }}>
+            {bandas.map((b, i) => (
+              <div key={i} style={{ width: b.n * ANCHO, flexShrink: 0, borderLeft: i > 0 ? `1px solid ${T.border}` : "none", fontSize: 9, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".04em", paddingLeft: 3, overflow: "hidden", whiteSpace: "nowrap" }}>{b.n * ANCHO > 34 ? nomMes(b.mes) : ""}</div>
+            ))}
+          </div>
+          <div style={{ display: "flex", height: 18, alignItems: "center" }}>
+            {dias.map((d, i) => {
+              const dd = Number(d.slice(8, 10));
+              const esHoyD = d === hoy;
+              const lunes = crDowDe(d) === 1;
+              const h = hitos.find(x => x.fecha === d);
+              const mostrar = zoom === "dia" || (zoom === "semana" && lunes);
+              return (<div key={i} title={h ? h.texto : ""} style={{
+                width: ANCHO, flexShrink: 0, textAlign: "center",
+                fontSize: zoom === "dia" ? 9 : 8, fontWeight: h || esHoyD ? 800 : 600,
+                color: h ? "#fff" : esHoyD ? "#EF4444" : lunes ? T.sub : T.muted,
+                background: h ? h.color : "transparent", borderRadius: h ? 4 : 0,
+                borderLeft: lunes && !h ? `1px solid ${T.border}` : "none", lineHeight: "16px",
+              }}>{mostrar || h ? dd : ""}</div>);
+            })}
+          </div>
+          <div style={{ position: "relative", paddingTop: 5 }}>
+            {dias.map((d, i) => crDowDe(d) === 1 ? (
+              <div key={i} style={{ position: "absolute", left: i * ANCHO, top: 0, bottom: 0, width: 1, background: T.border, opacity: .5 }} />
+            ) : null)}
+            {colHoy >= 0 && <div style={{ position: "absolute", left: colHoy * ANCHO, top: 0, bottom: 0, width: 2, background: "#EF4444", zIndex: 3, opacity: .9 }} />}
+            {hitos.map(h => { const i = dias.indexOf(h.fecha); if (i < 0) return null; const cx = i * ANCHO + ANCHO / 2; return (
+              <React.Fragment key={h.id}>
+                <div title={h.texto} style={{ position: "absolute", left: cx - 1, top: 4, bottom: 0, width: 2, background: h.color, zIndex: 4, opacity: .9 }} />
+                <div title={h.texto} style={{ position: "absolute", left: cx - 6, top: -3, width: 12, height: 12, borderRadius: "50%", background: h.color, border: `2px solid ${T.card}`, boxShadow: "0 1px 3px rgba(0,0,0,.35)", zIndex: 6 }} />
+              </React.Fragment>
+            ); })}
+            {lista.map(t => {
+              const col = t.critica ? "#B91C1C" : crColorEtapa(t.etapa);
+              const [izq, anc] = offAnc(t.vvInicio, t.vvFin);
+              const avance = Math.max(0, Math.min(100, crNum(t.avance)));
+              let bIzq = null, bAnc = null;
+              if (t.bfInicio && t.bfFin) { const [bi, ba] = offAnc(t.bfInicio, t.bfFin); bIzq = bi; bAnc = ba; }
+              return (<div key={t.id} style={{ height: 24, position: "relative" }}>
+                <div style={{ position: "absolute", left: 0, right: 0, top: 10, height: 2, background: T.bg }} />
+                <div style={{ position: "absolute", left: izq, width: anc, top: 4, height: 12, background: col, borderRadius: 3, opacity: .28, border: `1px solid ${col}` }} />
+                {avance > 0 && <div style={{ position: "absolute", left: izq, width: anc * avance / 100, top: 4, height: 12, background: col, borderRadius: 3 }} />}
+                {bIzq !== null && <div style={{ position: "absolute", left: bIzq, width: bAnc, top: 17, height: 5, border: `1.5px solid ${BRASS}`, borderRadius: 2, boxSizing: "border-box" }} />}
+              </div>);
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style={{ display: "flex", gap: 10, margin: "8px 10px 0", flexWrap: "wrap", fontSize: 9.5, color: T.sub }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 13, height: 7, background: "#B91C1C", borderRadius: 3 }} /> camino crítico</span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 13, height: 7, background: T.accent, borderRadius: 3 }} /> V+V</span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 13, height: 6, border: `1.5px solid ${BRASS}`, borderRadius: 3, boxSizing: "border-box" }} /> Belfast</span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 2, height: 9, background: "#EF4444" }} /> hoy</span>
+      <span style={{ color: T.muted }}>· solo lectura</span>
+    </div>
+  </div>);
+}
 function CronogramaScreen(props) {
   // Cualquier error acá adentro se muestra en pantalla, nunca deja el panel en blanco.
   try { return CronogramaScreenInner(props); }
@@ -4621,6 +4746,7 @@ function CronogramaScreenInner({ T, cfg, crono, gestion }) {
           </div>
           {abierta && <div style={{ borderTop: `1px solid ${T.border}`, padding: "4px 14px 13px" }}>
             {planes.find(p => p.o.id === o.id)?.error && <div style={{ fontSize: 11, color: "#B91C1C", marginTop: 10 }}>No pude calcular esta obra: {planes.find(p => p.o.id === o.id).error}</div>}
+            <GanttLectura T={T} o={o} tareas={tareas} />
             {corr !== null && corr > 0 && <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: 10, padding: "10px 11px", marginTop: 10, fontSize: 11.5, color: "#991B1B", lineHeight: 1.5 }}>El fin de obra se corrió <b>+{corr} días (~{(corr / 30.44).toFixed(1)} meses)</b> respecto del plan original. Todo corrimiento adicional queda sujeto a redeterminación de precios sobre el saldo del contrato.</div>}
             {defsPend.length > 0 && <>
               <div style={{ fontSize: 10.5, fontWeight: 800, color: "#B91C1C", textTransform: "uppercase", letterSpacing: ".05em", marginTop: 10 }}>Definiciones a responder</div>
@@ -4893,7 +5019,7 @@ function WebClientFooter({ T, cfg }) {
   return (<div style={{ background: T.navy, color: "rgba(255,255,255,.55)", flexShrink: 0, borderTop: `2px solid ${BRASS}` }}>
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "6px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6, fontSize: 10.5 }}>
       <span style={{ fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.8)" }}>{(cfg.nombre || "CLIENTE").toUpperCase()}</span>
-      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 30-07-fixavance</span>
+      <span>Ejecuta: V+V Construcciones · © {new Date().getFullYear()} · build 22-09-cond</span>
     </div>
   </div>);
 }

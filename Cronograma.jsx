@@ -295,6 +295,40 @@ const money = (n) => "$" + Math.round(numSimple(n)).toLocaleString("es-AR");
 
    Las definiciones salen del informe técnico de V+V: cuántos días antes hace falta,
    por qué la obra la necesita, y qué pasa si llega tarde.                            */
+// NIVELES: cuando una obra tiene más de un nivel (subsuelo, PB, PA, 3er piso...),
+// las tareas marcadas con porNivel:true se desdoblan una vez por nivel al crear
+// el cronograma (ver expandirNiveles), cada una con su propio tramo de fechas
+// y una fracción del % de contrato de la tarea original.
+// CONDICIONADA: tareas que no ejecuta V+V (las hace Belfast u otro contratista)
+// pero que condicionan el avance propio. Quedan de referencia, marcadas en la UI.
+const NIVEL_NOMBRES = ["Subsuelo", "Planta baja", "Planta alta", "3° piso"];
+function nombreNivel(i) { return NIVEL_NOMBRES[i] || `Nivel ${i + 1}`; }
+function expandirNiveles(plantilla, niveles) {
+  const n = Math.max(1, Math.round(numSimple(niveles)) || 1);
+  const base = (plantilla || []).map(t => ({ ...t }));
+  if (n <= 1) return base;
+  const out = [];
+  const remap = {}; // cod original de la tarea dividida → cod de su último nivel (para reencadenar lo que dependía de ella)
+  base.forEach(t => {
+    if (!t.porNivel) { out.push(t); return; }
+    let prevCod = null;
+    for (let i = 0; i < n; i++) {
+      const cod = `${t.cod}${i + 1}`;
+      out.push({
+        ...t,
+        cod,
+        nombre: `${t.nombre} — ${nombreNivel(i)}`,
+        peso: numSimple(t.peso) / n,
+        deps: i === 0 ? (t.deps || []) : [{ cod: prevCod, tipo: "FC", lag: 0 }],
+        defs: i === 0 ? (t.defs || []) : [],   // la definición del comitente se pide una sola vez, no por nivel
+      });
+      prevCod = cod;
+      if (i === n - 1) remap[t.cod] = cod;
+    }
+  });
+  // cualquier tarea que dependía del cod original de una tarea dividida, ahora depende de su último nivel
+  return out.map(t => ({ ...t, deps: (t.deps || []).map(d => remap[d.cod] ? { ...d, cod: remap[d.cod] } : d) }));
+}
 const PLANTILLA_BASE = [
   { cod: "OBR", etapa: "Preliminares", nombre: "Obrador, cerco y replanteo", dias: 7, deps: [], peso: 1.5, materiales: ["Cerco de obra", "Cartelería"], defs: [] },
   { cod: "EXC", etapa: "Preliminares", nombre: "Excavación y movimiento de suelos", dias: 9, deps: [{ cod: "OBR", tipo: "FC", lag: 0 }], peso: 2, materiales: ["Máquina y camiones"], defs: [] },
@@ -309,9 +343,9 @@ const PLANTILLA_BASE = [
       consecuencia: "Sin obra mayor, no se puede agregar un conducto de humos correcto una vez cerrada la estructura.",
       plazoReal: "Debe ser de las primeras definiciones de todo el proyecto" },
   ] },
-  { cod: "EST", etapa: "Estructura", nombre: "Estructura de hormigón armado", dias: 43, deps: [{ cod: "FUN", tipo: "FC", lag: 0 }], peso: 16, materiales: ["Hierro, encofrados y hormigón"], defs: [] },
+  { cod: "EST", etapa: "Estructura", nombre: "Estructura de hormigón armado", dias: 43, deps: [{ cod: "FUN", tipo: "FC", lag: 0 }], peso: 16, porNivel: true, materiales: ["Hierro, encofrados y hormigón"], defs: [] },
 
-  { cod: "MAM", etapa: "Albañilería", nombre: "Mampostería", dias: 32, deps: [{ cod: "EST", tipo: "CC", lag: 32 }], peso: 9, materiales: ["Ladrillos, cemento, cal", "Dinteles"], defs: [
+  { cod: "MAM", etapa: "Albañilería", nombre: "Mampostería", dias: 32, deps: [{ cod: "EST", tipo: "CC", lag: 32 }], peso: 9, porNivel: true, materiales: ["Ladrillos, cemento, cal", "Dinteles"], defs: [
     { nombre: "Carpintería: puertas y ventanas (modelo y medida exacta)", diasAntes: 60,
       porQue: "El vano —la abertura en la pared— se construye a la medida exacta del marco elegido.",
       consecuencia: "Vano mal dimensionado; rotura de mampostería para ajustar.",
@@ -321,25 +355,28 @@ const PLANTILLA_BASE = [
       consecuencia: "Apertura de pases ya cerrados; riesgo de filtraciones por pases mal ubicados.",
       plazoReal: "15 a 30 días, según stock del equipo" },
   ] },
-  { cod: "CUB", etapa: "Albañilería", nombre: "Cubierta y techos", dias: 18, deps: [{ cod: "MAM", tipo: "CC", lag: 25 }], peso: 5, materiales: ["Material de cubierta", "Aislaciones"], defs: [] },
+  // Cubierta final (teja / membrana / chapa): no es la losa de estructura (eso ya está por nivel en EST), es el
+  // cerramiento de techo que suele hacer un gremio aparte → queda condicionada. Si en una obra puntual la cubierta
+  // la ejecuta V+V, sacale el condicionada:true en esa obra.
+  { cod: "CUB", etapa: "Albañilería", nombre: "Cubierta y techos", dias: 18, deps: [{ cod: "MAM", tipo: "CC", lag: 25 }], peso: 5, condicionada: true, materiales: ["Material de cubierta", "Aislaciones"], defs: [] },
 
-  { cod: "SAN", etapa: "Instalaciones", nombre: "Instalación sanitaria (bajo losa y muros)", dias: 21, deps: [{ cod: "MAM", tipo: "CC", lag: 32 }], peso: 4, materiales: ["Cañería sanitaria", "Artefactos ya definidos"], defs: [
+  { cod: "SAN", etapa: "Instalaciones", nombre: "Instalación sanitaria (bajo losa y muros)", dias: 21, deps: [{ cod: "MAM", tipo: "CC", lag: 32 }], peso: 4, condicionada: true, materiales: ["Cañería sanitaria", "Artefactos ya definidos"], defs: [
     { nombre: "Griferías y artefactos sanitarios (bidé, inodoro, vanitory, ducha)", diasAntes: 45,
       porQue: "Cada modelo tiene una distancia entre ejes distinta; la cañería se embute con esa medida exacta.",
       consecuencia: "Rotura de revoque o cerámica ya colocada, para reubicar los caños.",
       plazoReal: "20 a 45 días" },
   ] },
-  { cod: "ELE", etapa: "Instalaciones", nombre: "Instalación eléctrica (cañerías)", dias: 21, deps: [{ cod: "MAM", tipo: "CC", lag: 36 }], peso: 4, materiales: ["Caños corrugados, cajas", "Tablero"], defs: [
+  { cod: "ELE", etapa: "Instalaciones", nombre: "Instalación eléctrica (cañerías)", dias: 21, deps: [{ cod: "MAM", tipo: "CC", lag: 36 }], peso: 4, condicionada: true, materiales: ["Caños corrugados, cajas", "Tablero"], defs: [
     { nombre: "Cantidad y ubicación de bocas eléctricas y circuitos especiales", diasAntes: 30,
       porQue: "Las cañerías eléctricas se embuten en pared o losa antes del revoque grueso. Incluye TV, datos, cortinas y domótica.",
       consecuencia: "Cableado visto, o rotura de pared para agregar una boca.",
       plazoReal: "La decisión es rápida, pero bloquea la tarea si se demora" },
   ] },
-  { cod: "GAS", etapa: "Instalaciones", nombre: "Instalación de gas", dias: 11, deps: [{ cod: "SAN", tipo: "CC", lag: 14 }], peso: 1.5, materiales: ["Cañería de gas", "Artefactos a gas"], defs: [] },
-  { cod: "AIR", etapa: "Instalaciones", nombre: "Aire acondicionado (cañerías y pases)", dias: 14, deps: [{ cod: "SAN", tipo: "CC", lag: 14 }], peso: 3, materiales: ["Equipos de A/A", "Cañería frigorífica"], defs: [] },
-  { cod: "RAD", etapa: "Instalaciones", nombre: "Piso radiante (colocación)", dias: 11, deps: [{ cod: "SAN", tipo: "FC", lag: 7 }], peso: 2, materiales: ["Caños y colector de piso radiante"], defs: [] },
+  { cod: "GAS", etapa: "Instalaciones", nombre: "Instalación de gas", dias: 11, deps: [{ cod: "SAN", tipo: "CC", lag: 14 }], peso: 1.5, condicionada: true, materiales: ["Cañería de gas", "Artefactos a gas"], defs: [] },
+  { cod: "AIR", etapa: "Instalaciones", nombre: "Aire acondicionado (cañerías y pases)", dias: 14, deps: [{ cod: "SAN", tipo: "CC", lag: 14 }], peso: 3, condicionada: true, materiales: ["Equipos de A/A", "Cañería frigorífica"], defs: [] },
+  { cod: "RAD", etapa: "Instalaciones", nombre: "Piso radiante (colocación)", dias: 11, deps: [{ cod: "SAN", tipo: "FC", lag: 7 }], peso: 2, condicionada: true, materiales: ["Caños y colector de piso radiante"], defs: [] },
 
-  { cod: "CPI", etapa: "Albañilería", nombre: "Contrapisos", dias: 14, deps: [{ cod: "RAD", tipo: "FC", lag: 0 }], peso: 4, materiales: ["Hormigón de contrapiso"], defs: [
+  { cod: "CPI", etapa: "Albañilería", nombre: "Contrapisos", dias: 14, deps: [{ cod: "RAD", tipo: "FC", lag: 0 }], peso: 4, porNivel: true, materiales: ["Hormigón de contrapiso"], defs: [
     { nombre: "Muebles de cocina (bajo mesada, alacenas, isla, electrodomésticos)", diasAntes: 90,
       porQue: "Definen la banquina de apoyo, el nivel de piso bajo el mueble y la ubicación exacta de agua, gas, desagüe y tomas eléctricas.",
       consecuencia: "Rotura de contrapiso y mampostería para reubicar instalaciones; atraso de toda la cocina.",
@@ -349,29 +386,31 @@ const PLANTILLA_BASE = [
       consecuencia: "Base mal dimensionada; hay que romper y rehacer la fundación del equipo.",
       plazoReal: "15 a 30 días" },
   ] },
-  { cod: "CAR", etapa: "Albañilería", nombre: "Carpetas", dias: 11, deps: [{ cod: "CPI", tipo: "FC", lag: 0 }], peso: 2, materiales: ["Arena, cemento", "Malla si corresponde"], defs: [
+  { cod: "CAR", etapa: "Albañilería", nombre: "Carpetas", dias: 11, deps: [{ cod: "CPI", tipo: "FC", lag: 0 }], peso: 2, porNivel: true, materiales: ["Arena, cemento", "Malla si corresponde"], defs: [
     { nombre: "Tipo y espesor de piso por ambiente (porcelanato, madera, alfombra, piedra)", diasAntes: 60,
       porQue: "El nivel de la carpeta se calcula según el espesor del piso definitivo, para que todos los ambientes queden a nivel entre sí.",
       consecuencia: "Escalón entre ambientes, o rotura de carpeta para volver a nivelar.",
       plazoReal: "30 a 60 días si es importado o de pedido especial" },
   ] },
 
-  { cod: "RGR", etapa: "Terminaciones", nombre: "Revoque grueso", dias: 21, deps: [{ cod: "CPI", tipo: "CC", lag: 11 }], peso: 4.5, materiales: ["Cal, cemento, arena"], defs: [] },
-  { cod: "CPT", etapa: "Terminaciones", nombre: "Colocación de carpinterías", dias: 14, deps: [{ cod: "RGR", tipo: "CC", lag: 18 }], peso: 6, materiales: ["CARPINTERÍAS FABRICADAS", "Herrajes y vidrios"], defs: [] },
-  { cod: "RFI", etapa: "Terminaciones", nombre: "Revoque fino y yesería", dias: 18, deps: [{ cod: "RGR", tipo: "FC", lag: 4 }], peso: 3, materiales: ["Yeso, enduido"], defs: [
+  { cod: "RGR", etapa: "Terminaciones", nombre: "Revoque grueso", dias: 21, deps: [{ cod: "CPI", tipo: "CC", lag: 11 }], peso: 4.5, porNivel: true, materiales: ["Cal, cemento, arena"], defs: [] },
+  { cod: "CPT", etapa: "Terminaciones", nombre: "Colocación de carpinterías", dias: 14, deps: [{ cod: "RGR", tipo: "CC", lag: 18 }], peso: 4.5, condicionada: true, materiales: ["CARPINTERÍAS FABRICADAS", "Herrajes y vidrios"], defs: [] },
+  { cod: "HER", etapa: "Terminaciones", nombre: "Herrería (barandas, rejas, escaleras metálicas)", dias: 7, deps: [{ cod: "CPT", tipo: "FC", lag: 0 }], peso: 1.5, condicionada: true, materiales: ["Piezas de herrería"], defs: [] },
+  { cod: "RFI", etapa: "Terminaciones", nombre: "Revoque fino", dias: 12, deps: [{ cod: "RGR", tipo: "FC", lag: 4 }], peso: 2, porNivel: true, materiales: ["Enduido"], defs: [
     { nombre: "Terminación de revoques (liso, símil piedra, textura)", diasAntes: 20,
       porQue: "Define la técnica y el espesor de aplicación, previo a la pintura.",
       consecuencia: "Atraso de pintura y de toda la terminación final.",
       plazoReal: "La decisión es rápida, pero bloquea toda la etapa si no está" },
   ] },
-  { cod: "PIS", etapa: "Terminaciones", nombre: "Colocación de pisos", dias: 18, deps: [{ cod: "CAR", tipo: "FC", lag: 0 }, { cod: "RFI", tipo: "FC", lag: 0 }], peso: 6.5, materiales: ["PIEZAS DE PISO", "Adhesivo y pastina"], defs: [] },
-  { cod: "REV", etapa: "Terminaciones", nombre: "Revestimientos de baños y cocina", dias: 14, deps: [{ cod: "PIS", tipo: "CC", lag: 7 }], peso: 3, materiales: ["REVESTIMIENTOS", "Adhesivo y pastina"], defs: [] },
+  { cod: "YES", etapa: "Terminaciones", nombre: "Yesería", dias: 6, deps: [{ cod: "RGR", tipo: "FC", lag: 4 }], peso: 1, condicionada: true, materiales: ["Yeso"], defs: [] },
+  { cod: "PIS", etapa: "Terminaciones", nombre: "Colocación de pisos", dias: 18, deps: [{ cod: "CAR", tipo: "FC", lag: 0 }, { cod: "RFI", tipo: "FC", lag: 0 }], peso: 6.5, condicionada: true, materiales: ["PIEZAS DE PISO", "Adhesivo y pastina"], defs: [] },
+  { cod: "REV", etapa: "Terminaciones", nombre: "Revestimientos de baños y cocina", dias: 14, deps: [{ cod: "PIS", tipo: "CC", lag: 7 }], peso: 3, condicionada: true, materiales: ["REVESTIMIENTOS", "Adhesivo y pastina"], defs: [] },
   { cod: "PAR", etapa: "Terminaciones", nombre: "Parrilla y hogar (terminación)", dias: 9, deps: [{ cod: "PIS", tipo: "CC", lag: 18 }], peso: 1.5, materiales: ["Parrilla u hogar"], defs: [] },
   { cod: "MUE", etapa: "Terminaciones", nombre: "Muebles de cocina (colocación)", dias: 11, deps: [{ cod: "PIS", tipo: "FC", lag: 0 }], peso: 5, materiales: ["MUEBLES DE COCINA FABRICADOS", "Electrodomésticos empotrados"], defs: [] },
   { cod: "PLA", etapa: "Terminaciones", nombre: "Placards y carpintería interior", dias: 11, deps: [{ cod: "MUE", tipo: "CC", lag: 4 }], peso: 2.5, materiales: ["Placards fabricados"], defs: [] },
-  { cod: "MES", etapa: "Terminaciones", nombre: "Mesadas y banquinas", dias: 9, deps: [{ cod: "MUE", tipo: "FC", lag: 0 }], peso: 2, materiales: ["MESADAS", "Bachas"], defs: [] },
-  { cod: "PIN", etapa: "Terminaciones", nombre: "Pintura", dias: 18, deps: [{ cod: "MUE", tipo: "CC", lag: 14 }], peso: 3.5, materiales: ["Pintura, fondos, selladores"], defs: [] },
-  { cod: "ART", etapa: "Terminaciones", nombre: "Artefactos, griferías y bachas", dias: 9, deps: [{ cod: "PIN", tipo: "CC", lag: 11 }], peso: 1.5, materiales: ["GRIFERÍAS Y ARTEFACTOS", "Bachas y accesorios"], defs: [] },
+  { cod: "MES", etapa: "Terminaciones", nombre: "Mesadas y banquinas", dias: 9, deps: [{ cod: "MUE", tipo: "FC", lag: 0 }], peso: 2, porNivel: true, materiales: ["MESADAS", "Bachas"], defs: [] },
+  { cod: "PIN", etapa: "Terminaciones", nombre: "Pintura", dias: 18, deps: [{ cod: "MUE", tipo: "CC", lag: 14 }], peso: 3.5, condicionada: true, materiales: ["Pintura, fondos, selladores"], defs: [] },
+  { cod: "ART", etapa: "Terminaciones", nombre: "Artefactos, griferías y bachas", dias: 9, deps: [{ cod: "PIN", tipo: "CC", lag: 11 }], peso: 1.5, condicionada: true, materiales: ["GRIFERÍAS Y ARTEFACTOS", "Bachas y accesorios"], defs: [] },
   { cod: "FIN", etapa: "Cierre", nombre: "Limpieza final y entrega", dias: 7, deps: [{ cod: "PIN", tipo: "FC", lag: 0 }, { cod: "ART", tipo: "FC", lag: 0 }], peso: 1, materiales: ["Material de limpieza"], defs: [] },
 ];
 
@@ -413,8 +452,8 @@ const COLOR_ETAPA = {
 };
 const TOPE_DIAS = 365;
 
-function plantillaAObra(plantilla) {
-  return (plantilla || []).map(t => ({
+function plantillaAObra(plantilla, niveles) {
+  return expandirNiveles(plantilla || [], niveles || 1).map(t => ({
     id: uid(),
     cod: t.cod || uid().slice(0, 3).toUpperCase(),
     etapa: t.etapa || "Terminaciones",
@@ -422,6 +461,7 @@ function plantillaAObra(plantilla) {
     dias: Math.max(1, numSimple(t.dias)),
     deps: (t.deps || []).map(d => ({ cod: d.cod, tipo: d.tipo === "CC" ? "CC" : "FC", lag: numSimple(d.lag) })),
     peso: numSimple(t.peso),
+    condicionada: !!t.condicionada,   // no la ejecuta V+V (Belfast u otro contratista); queda de referencia
     materiales: [...(t.materiales || [])],
     avance: 0,
     certificado: false, pagado: false,
@@ -890,6 +930,7 @@ function Gantt({ obra, plan, soloCriticas, guardarObra }) {
         {lista.map(t => (
           <div key={t.id} style={{ height: 26, display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
             {t.bloqueada && <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.danger, flexShrink: 0 }} />}
+            {t.condicionada && <span title="No la ejecuta V+V: condicionada a Belfast/otro contratista" style={{ flexShrink: 0, fontSize: 7.5, fontWeight: 800, color: BRASS, border: `1px solid ${BRASS}`, borderRadius: 4, padding: "1px 3px" }}>COND</span>}
             <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11.5, fontWeight: t.critica ? 800 : 600, color: t.critica ? T.critico : T.text }}>{t.nombre}</span>
             {!manual && <span style={{ flexShrink: 0, fontSize: 8.5, fontWeight: 800, color: t.critica ? T.critico : T.muted }}>{t.critica ? "CRÍT" : `+${t.holgura}d`}</span>}
           </div>
@@ -1166,6 +1207,7 @@ function FilaTarea({ t, plan, onEditar, onBorrar, onAddDef, onDef, onAvisar, man
           <div style={{ fontSize: 9.5, color: col, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", display: "flex", gap: 6, alignItems: "center" }}>
             <span>{t.cod}</span>
             {manual ? <span style={{ color: T.muted }}>· {t.etapa}</span> : (t.critica ? <span style={{ color: T.critico }}>· CRÍTICA</span> : <span style={{ color: T.muted }}>· holgura {t.holgura}d</span>)}
+            {t.condicionada && <span style={{ color: BRASS }}>· CONDICIONADA (no la ejecuta V+V)</span>}
           </div>
           <div style={{ fontSize: 14, fontWeight: 700, marginTop: 1 }}>{t.nombre}</div>
           <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3 }}>
@@ -2259,6 +2301,7 @@ export default function Cronograma() {
   const [nom, setNom] = useState("");
   const [ini, setIni] = useState(hoyISO());
   const [modoNuevo, setModoNuevo] = useState("auto"); // "auto" | "manual"
+  const [niveles, setNiveles] = useState(1);
   const [toast, setToast] = useState("");
   const escrito = useRef(0);
   const avisarToast = (t) => { setToast(t); setTimeout(() => setToast(""), 3800); };
@@ -2368,11 +2411,12 @@ export default function Cronograma() {
   const crearObra = () => {
     if (!nom.trim()) return;
     const manual = modoNuevo === "manual";
+    const nv = Math.max(1, Math.min(12, Math.round(numSimple(niveles)) || 1));
     const o = manual
       ? { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", modoManual: true, finBase: "", finBaseFecha: "", tareas: [] }
-      : { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", finBase: "", finBaseFecha: "", tareas: plantillaAObra(data.plantilla) };
+      : { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", finBase: "", finBaseFecha: "", niveles: nv, tareas: plantillaAObra(data.plantilla, nv) };
     guardar({ ...data, obras: [...obras, o] });
-    setNom(""); setIni(hoyISO()); setNueva(false); setModoNuevo("auto");
+    setNom(""); setIni(hoyISO()); setNueva(false); setModoNuevo("auto"); setNiveles(1);
     setObraId(o.id); setPantalla("obra");
   };
 
@@ -2495,6 +2539,17 @@ export default function Cronograma() {
               </button>
             ))}
           </div>
+          {modoNuevo === "auto" && <div style={{ marginTop: 11 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>¿Cuántos niveles tiene? (subsuelo, PB, PA...)</span>
+              <input type="number" min={1} max={12} value={niveles} onChange={e => setNiveles(Math.max(1, Math.min(12, Math.round(Number(e.target.value)) || 1)))} style={{ ...inpSm, width: 70, textAlign: "center" }} />
+            </div>
+            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.45 }}>
+              {niveles > 1
+                ? `Estructura, mampostería, contrapisos, carpetas, revoque grueso, revoque fino y mesadas se cargan una vez por nivel: ${Array.from({ length: niveles }, (_, i) => nombreNivel(i)).join(", ")}.`
+                : "Con 1 nivel el modelo se usa tal cual. Poné más si la obra tiene subsuelo, planta alta, etc.: esas tareas se desdoblan solas, una por nivel."}
+            </div>
+          </div>}
           <div style={{ marginTop: 11 }}><Btn full onClick={crearObra} disabled={!nom.trim()}>Crear cronograma</Btn></div>
           <div style={{ fontSize: 11, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>
             {modoNuevo === "manual" ? "Arranca vacía. Vas agregando tareas y en cada una ponés la fecha desde y hasta." : `Copia las ${data.plantilla?.length || 0} tareas del modelo, con sus dependencias y definiciones.`}
@@ -2617,6 +2672,7 @@ export default function Cronograma() {
 
       {pantalla === "ajustes" && (<div style={{ padding: "14px 16px 44px" }}>
         <h2 style={{ fontSize: 21, fontWeight: 800, margin: "0 0 14px", letterSpacing: "-.01em" }}>Ajustes</h2>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 11 }}>Versión instalada: <b>build 22-09-niveles</b></div>
         <div style={{ background: T.card, borderRadius: 13, padding: 14, boxShadow: SHDsm }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>Avisar con cuántos días de anticipación</div>
           <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>Una definición pasa a “urgente” cuando le quedan estos días o menos.</div>
