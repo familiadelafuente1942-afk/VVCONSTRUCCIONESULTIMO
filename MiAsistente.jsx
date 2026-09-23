@@ -284,8 +284,22 @@ export default function MiAsistente() {
   const apiKey = "";
   const scrollRef = useRef(null);
   const iaWait = useRef(null);
+  const [googleConectado, setGoogleConectado] = useState(false);
 
   useEffect(() => { (async () => { const r = await storage.get("miasistente_pin"); if (r?.value) { setPinStored(r.value); try { if (localStorage.getItem("miasistente_trust") === "1") { setPinOk(true); return; } } catch { } } else setPinNew(true); })(); }, []);
+
+  // Google Calendar: chequea si ya está conectado, y si viene de volver del
+  // consentimiento de Google (?google=ok / ?google=error) muestra el resultado.
+  async function refrescarGoogle() { try { const r = await storage.get("sebastian_google_token"); setGoogleConectado(!!(r && r.value)); } catch { setGoogleConectado(false); } }
+  useEffect(() => {
+    refrescarGoogle();
+    try {
+      const qs = new URLSearchParams(window.location.search);
+      if (qs.get("google") === "ok") { alert("✅ Conectaste tu Google Calendar. Ya te puedo agendar cosas ahí cuando me lo pidas."); refrescarGoogle(); }
+      else if (qs.get("google") === "error") { alert("No se pudo conectar Google Calendar. Probá de nuevo desde Ajustes."); }
+      if (qs.has("google")) { qs.delete("google"); const clean = window.location.pathname + (qs.toString() ? "?" + qs.toString() : ""); window.history.replaceState({}, "", clean); }
+    } catch { }
+  }, []);
 
   useEffect(() => {
     if (!pinOk) return;
@@ -514,6 +528,7 @@ Acciones:
 {"tipo":"recordar","dato":"lo que hay que recordar de Sebastián (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
 {"tipo":"agendar","tipoAgenda":"pago","titulo":"Nombre a quién pagarle","fecha":"DD/MM/AA","monto":50000,"nota":"opcional"}
+{"tipo":"calendar_crear","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","duracion_min":60,"ubicacion":"opcional","nota":"opcional"}
 {"tipo":"cargar_gasto","gastos":[{"concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"},{"concepto":"Comida","monto":8000},{"concepto":"Ferretería","monto":5000}]}
 {"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
@@ -528,6 +543,7 @@ Reglas:
 - "crear_obra" cuando dice "cargá una obra nueva", "agregá la obra X", "abrí una obra en tal dirección". Poné el nombre y lo que aclare (dirección, estado).
 - "recordar" SIEMPRE que Sebastián te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora. Si es un PAGO A REALIZAR en el futuro (ej: "el 10 tengo que pagarle a Juan 50000", "recordame pagar el alquiler el día 5"), usá "tipoAgenda":"pago" con titulo (a quién/qué), fecha y monto — le va a llegar como recordatorio igual que los demás eventos, y aparece marcado como pago en la Agenda.
+- "calendar_crear" cuando pide expresamente que lo agendes en GOOGLE CALENDAR / "mi calendario de Google" / "mi calendario del celu" (algo que quiere ver también fuera de esta app, con recordatorio real de Google) — NO para la Agenda interna de esta app, para eso usá "agendar". Estado actual: ${googleConectado ? "SÍ está conectado a Google Calendar, podés usar esta acción con confianza." : "TODAVÍA NO conectó su Google Calendar. Si pide esto, avisale en tu respuesta (sin bloque de acción) que tiene que ir a Ajustes → \"Conectar Google Calendar\" primero, una sola vez."}
 - "cargar_gasto" cuando dice "cargá un gasto de nafta 15000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto, sin obra). IMPORTANTE: si te da VARIOS gastos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "gastos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una.
 - "cargar_pago" para registrar en la planilla de Pagos cualquier pago que menciona, se lo haya pedido o simplemente esté contando ("pagale a Humberto 50000", "anotá un pago a Juan de 30 lucas", "le pagué a X"). Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método.
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
@@ -843,6 +859,22 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setMsgs(prev => [...prev, { role: "assistant", content: `${msg}${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Agenda.` }]);
       setBusy(false); return;
     }
+    if (accion && accion.tipo === "calendar_crear") {
+      setMsgs(prev => [...prev, { role: "assistant", content: limpio || `Agendando "${accion.titulo || "evento"}" en tu Google Calendar…` }]);
+      try {
+        const r = await fetch("/api/calendar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", titulo: accion.titulo, fecha: accion.fecha, hora: accion.hora, duracion_min: accion.duracion_min, ubicacion: accion.ubicacion, nota: accion.nota }) });
+        const data = await r.json().catch(() => ({}));
+        if (data.ok) {
+          setMsgs(prev => [...prev, { role: "assistant", content: `✅ Lo agendé en tu Google Calendar: "${accion.titulo || "evento"}" — ${accion.fecha}${accion.hora ? " " + accion.hora : ""}.`, mapUrl: data.htmlLink, mapLabel: "Ver en Google Calendar" }]);
+        } else if (data.error === "no_conectado") {
+          setGoogleConectado(false);
+          setMsgs(prev => [...prev, { role: "assistant", content: `Todavía no conectaste tu Google Calendar. Andá a Ajustes → "Conectar Google Calendar", aceptá el acceso y volvé a pedírmelo.` }]);
+        } else {
+          setMsgs(prev => [...prev, { role: "assistant", content: `No pude agendarlo en Google Calendar (${data.error || "error desconocido"}). Probá de nuevo.` }]);
+        }
+      } catch { setMsgs(prev => [...prev, { role: "assistant", content: "No pude conectar con Google Calendar (revisá tu internet e intentá de nuevo)." }]); }
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "generar_pdf") {
       setMsgs(prev => [...prev, { role: "assistant", content: limpio || `Generando el PDF "${accion.titulo || "documento"}"…` }]);
       const res = await generarPDF(accion);
@@ -930,7 +962,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "entrenamiento" && <EntrenamientoBody inicio={entrenoInicio} hechas={entrenoHechas} onSetInicio={(f) => persistEntreno(f, entrenoHechas)} onToggle={toggleSesion} onToggleMultiple={toggleMultiple} />}
     {vista === "suplementos" && <SuplementosBody sel={suplSel} tomados={suplTomados} onToggleSel={toggleSuplSel} onToggleHoy={toggleSuplHoy} />}
-    {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} />}
+    {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} googleConectado={googleConectado} />}
 
     <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "16px 16px 8px" }}>
@@ -1302,7 +1334,7 @@ function ModelosBody({ modelos, sel, setSel, subir, borrar }) {
   </div>);
 }
 
-function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcono, subirFondo }) {
+function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcono, subirFondo, googleConectado }) {
   const PRESETS = [
     { n: "Oficina", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813", brass: "#A17C3E", borde: "#E5E1D6", sub: "#6E695E" },
     { n: "Grafito", accent: "#B08D57", navy: "#141414", bg: "#1B1B1D", card: "#232326", text: "#ECEAE4", brass: "#B08D57", borde: "#33343A", sub: "#A8A69E" },
@@ -1322,6 +1354,11 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
   const Color = ({ k }) => (<input type="color" value={cfg[k]} onChange={e => setC(k, e.target.value)} style={{ width: 40, height: 30, border: `1px solid ${T.border}`, borderRadius: 8, background: "none", cursor: "pointer", padding: 0 }} />);
   const Sec = ({ t }) => (<div style={{ fontSize: 10.5, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.12em", margin: "18px 0 2px" }}>{t}</div>);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "10px 16px 30px" }}>
+    <div style={{ background: T.card, border: `1px solid ${googleConectado ? T.border : BRASS}`, borderRadius: 12, padding: "14px", margin: "6px 0 6px" }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 3 }}>Google Calendar {googleConectado ? "✓ conectado" : ""}</div>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.45 }}>{googleConectado ? "Ya te puedo agendar cosas directo en tu Google Calendar cuando me lo pidas por el chat." : "Conectalo una vez y después decime por el chat \"agendalo en mi Google Calendar\" para las cosas que quieras ver ahí (con recordatorio real de Google), además de la Agenda interna de la app."}</div>
+      <button onClick={() => window.open("/api/google-oauth-start", "_blank")} style={{ width: "100%", background: googleConectado ? "none" : T.accent, color: googleConectado ? T.accent : "#fff", border: googleConectado ? `1px solid ${T.accent}` : "none", borderRadius: 10, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{googleConectado ? "🔄 Reconectar Google Calendar" : "📅 Conectar Google Calendar"}</button>
+    </div>
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px", margin: "6px 0 6px" }}>
       <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 3 }}>Actualizar la app</div>
       <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.45 }}>Trae la última versión con los cambios nuevos, sin borrar ni reinstalar nada.</div>
