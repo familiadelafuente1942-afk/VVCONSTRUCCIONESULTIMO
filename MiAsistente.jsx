@@ -461,6 +461,16 @@ export default function MiAsistente() {
     if (pinInput === pinStored) { setPinOk(true); setPinInput(""); } else { alert("PIN incorrecto."); setPinInput(""); }
   }
 
+  // Los números con puntos de miles ("1.500.000") confunden al motor de voz,
+  // que a veces los interpreta como decimales y los corta mal. Los "aplanamos"
+  // (sacamos los puntos de miles y dejamos la coma decimal como punto) antes de
+  // mandarlos a hablar, para que los lea de corrido.
+  function normalizarNumerosParaVoz(texto) {
+    return String(texto || "").replace(/\b(\d{1,3}(?:\.\d{3})+)(,\d+)?\b/g, (_, entero, decimal) => {
+      const soloDigitos = entero.replace(/\./g, "");
+      return decimal ? soloDigitos + "." + decimal.slice(1) : soloDigitos;
+    });
+  }
   function pararVoz() {
     try { if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current.src = ""; currentAudioRef.current = null; } } catch { }
     try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { }
@@ -478,7 +488,8 @@ export default function MiAsistente() {
     } catch { }
   }
   async function hablar(texto) {
-    const limpio = String(texto || "").replace(/[*_#>`~]/g, "").replace(/\s+/g, " ").trim().slice(0, 900);
+    const sinMarkdown = String(texto || "").replace(/[*_#>`~]/g, "").replace(/\s+/g, " ").trim();
+    const limpio = normalizarNumerosParaVoz(sinMarkdown).slice(0, 900);
     if (!limpio) return;
     pararVoz();
     vozHablandoRef.current = true;
