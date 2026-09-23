@@ -13,6 +13,28 @@ const storage = {
   set: async (key, value) => { try { localStorage.setItem(key, value); } catch { } try { await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); } catch { } return { value }; },
   get: async (key) => { try { const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { headers: SH(), mode: "cors" }); if (r.ok) { const d = await r.json(); if (d && d.length) return { value: d[0].value }; } } catch { } try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; } },
 };
+// Keys que Mi Asistente ya lee de forma específica en otro lado — se excluyen
+// del índice genérico de "otras apps" para no duplicar ni ensuciarle el prompt a la IA.
+const KEYS_YA_LEIDAS = new Set([
+  "miasistente_pin", "sebastian_pagos", "sebastian_archivos", "sebastian_agenda", "sebastian_gastos",
+  "sebastian_contactos", "sebastian_entreno", "sebastian_suplementos", "sebastian_cfg", "sebastian_perfil",
+  "sebastian_chat", "sebastian_modelos", "sebastian_google_token",
+  "vv_obras", "vv_personal", "vv_pedidos", "vv_matpedidos", "vv_mensajes", "vv_formularios", "vv_documentacion", "vv_camaras",
+]);
+// Trae un índice liviano (nombre + primeros caracteres) de TODO lo demás que haya
+// guardado en el mismo backend — así Tita puede "ver" datos de otras apps propias
+// (que usen este mismo proyecto de Supabase) sin que haya que programarlas una por una.
+async function listarIndiceApps() {
+  try {
+    const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?select=key,value&order=key.asc&limit=500", { headers: SH(), mode: "cors" });
+    if (!r.ok) return [];
+    const rows = await r.json();
+    return rows
+      .filter(row => row.key && !KEYS_YA_LEIDAS.has(row.key))
+      .map(row => { const v = String(row.value || ""); return { key: row.key, preview: v.slice(0, 220).replace(/\s+/g, " ") }; })
+      .slice(0, 60);
+  } catch { return []; }
+}
 const uid = () => Math.random().toString(36).slice(2, 9);
 const hoyStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
 // Convierte "DD/MM", "DD/MM/AA" o "DD/MM/AAAA" a un timestamp real para poder
@@ -284,7 +306,22 @@ export default function MiAsistente() {
   const apiKey = "";
   const scrollRef = useRef(null);
   const iaWait = useRef(null);
+  const inputRef = useRef(null);
+  function autoAlturaInput(el) { if (!el) return; el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 140) + "px"; }
+  useEffect(() => { autoAlturaInput(inputRef.current); }, [input]);
   const [googleConectado, setGoogleConectado] = useState(false);
+  const [appsIndex, setAppsIndex] = useState([]);
+
+  // Índice de "otras apps": lee qué más hay guardado en el mismo backend de
+  // Supabase (otras apps tuyas que compartan este proyecto), para que Tita
+  // sepa que existen y pueda ir a buscar el detalle completo cuando lo pidas.
+  useEffect(() => {
+    if (!pinOk) return;
+    let alive = true;
+    async function cargar() { const idx = await listarIndiceApps(); if (alive) setAppsIndex(idx); }
+    cargar(); const iv = setInterval(cargar, 60000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [pinOk]);
 
   useEffect(() => { (async () => { const r = await storage.get("miasistente_pin"); if (r?.value) { setPinStored(r.value); try { if (localStorage.getItem("miasistente_trust") === "1") { setPinOk(true); return; } } catch { } } else setPinNew(true); })(); }, []);
 
@@ -433,16 +470,29 @@ export default function MiAsistente() {
       synth.speak(u);
     } catch { }
   }
+  const silencioRef = useRef(null);
   function dictar() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert("Este teléfono no permite dictar desde la app. Tocá el cuadro de texto y usá el micrófono del teclado (dictado del iPhone)."); return; }
     if (escuchando && recRef.current) { try { recRef.current.stop(); } catch { } return; }
     let rec; try { rec = new SR(); } catch { alert("No pude activar el micrófono."); return; }
-    rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = false;
+    rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = true;
     let base = input ? input + " " : "";
-    rec.onresult = (e) => { let fin = "", inter = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else inter += t; } setInput((base + fin + inter).replace(/\s+/g, " ").trimStart()); if (fin) base += fin; };
-    rec.onend = () => { setEscuchando(false); recRef.current = null; };
-    rec.onerror = () => { setEscuchando(false); recRef.current = null; };
+    let autoEnviar = false;
+    // Después de 5 segundos sin que se reconozca nada nuevo, cortamos solos y mandamos —
+    // así en el auto no hace falta tocar "Enviar".
+    function resetSilencio() {
+      if (silencioRef.current) clearTimeout(silencioRef.current);
+      silencioRef.current = setTimeout(() => { autoEnviar = true; try { rec.stop(); } catch { } }, 5000);
+    }
+    rec.onstart = () => { resetSilencio(); };
+    rec.onresult = (e) => { let fin = "", inter = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else inter += t; } setInput((base + fin + inter).replace(/\s+/g, " ").trimStart()); if (fin) base += fin; resetSilencio(); };
+    rec.onend = () => {
+      setEscuchando(false); recRef.current = null;
+      if (silencioRef.current) { clearTimeout(silencioRef.current); silencioRef.current = null; }
+      if (autoEnviar) { const textoFinal = base.replace(/\s+/g, " ").trim(); if (textoFinal) setTimeout(() => enviar(textoFinal), 30); }
+    };
+    rec.onerror = () => { setEscuchando(false); recRef.current = null; if (silencioRef.current) { clearTimeout(silencioRef.current); silencioRef.current = null; } };
     recRef.current = rec; setEscuchando(true); try { rec.start(); } catch { setEscuchando(false); }
   }
   function buildSystem() {
@@ -518,6 +568,9 @@ ${arch}
 MIS CONTACTOS FAVORITOS (usá estos para WhatsApp, mail y pagos cuando nombre a alguien de acá):
 ${con}
 
+OTRAS APLICACIONES DE SEBASTIÁN EN EL MISMO BACKEND (índice — solo un adelanto de cada una; si necesitás el contenido completo de alguna para responder algo puntual, usá la acción "traer_dato_app" con el "key" EXACTO de acá abajo):
+${appsIndex.length ? appsIndex.map(a => `· key="${a.key}": ${a.preview}${a.preview.length >= 220 ? "…" : ""}`).join("\n") : "(no se detectó, por ahora, contenido de otras apps en este mismo backend de Supabase)"}
+
 Además podés ejecutar acciones. Si necesitás una, terminá tu respuesta con UN bloque:
 <<ACCION>>{...}<<FIN>>
 Acciones:
@@ -536,6 +589,7 @@ Acciones:
 {"tipo":"preguntar_ia","texto":"lo que querés consultarle a la IA de V+V"}
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano"}
+{"tipo":"traer_dato_app","key":"el key EXACTO tal cual aparece en OTRAS APLICACIONES de acá arriba","pregunta":"qué necesitás saber de ahí adentro, en tus palabras"}
 Reglas:
 - "mandar_mail" cuando dice "mandale un mail a X que…" o "escribile un mail a X". Redactá un asunto y un cuerpo profesional y claro; se abre el mail listo para enviar. Si no sabés el email, dejalo vacío (él elige el contacto).
 - "como_llego" cuando Sebastián pregunta cuánto tarda, cuánto hay, cómo llegar o la distancia a un lugar (ej: "¿cuánto tardo hasta el Aeroparque?", "¿cómo llego a Castores 475?", "¿cuánto hay hasta Pilar?"). Poné el destino. El sistema toma su ubicación GPS, estima el tiempo y le deja un botón a Google Maps. Si el destino es una obra, usá su dirección si la sabés.
@@ -550,6 +604,7 @@ Reglas:
 - "whatsapp" cuando dice "mandale un mensaje a X que…" o "escribile a X". Uso los teléfonos de Personal; le dejo el WhatsApp listo para enviar con un toque.
 - "preguntar_ia" solo si pide expresamente consultar a la IA de V+V.
 - "traer_fotos"/"traer_plano" para mostrar fotos, videos o planos en el chat.
+- "traer_dato_app" cuando te pide algo que está en OTRA de sus apps (ej: "leeme la bitácora de Lote 132", "buscá en tal app tal cosa", "fijate en [nombre de la app]..."). Elegí el "key" que por el nombre/preview más se parezca a lo que pide (ej: si busca "Lote 132" y hay un key "bpb_bitacora_lote132" o similar, usá ese). Si no encontrás ningún key que pinte relacionado, NO inventes uno — respondé normal explicando que no encontrás esa app/dato en el índice y pedile más precisión o que confirme el nombre exacto de la app. Después de "traer_dato_app" vas a recibir el contenido completo y se lo vas a poder responder en el siguiente mensaje.
 Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
 
@@ -801,8 +856,8 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     return "La IA de V+V no respondió (puede estar sin crédito, o la respuesta automática apagada). Igual, puedo responderte yo con los datos que tengo.";
   }
 
-  async function enviar() {
-    const t = input.trim(); if ((!t && adjPend.length === 0) || busy) return;
+  async function enviar(textoOverride) {
+    const t = (textoOverride != null ? textoOverride : input).trim(); if ((!t && adjPend.length === 0) || busy) return;
     const adj = adjPend; setAdjPend([]);
     const nm = t ? [...msgs, { role: "user", content: t }] : [...msgs];
     setMsgs(nm); setInput(""); setBusy(true);
@@ -906,6 +961,21 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setMsgs(prev => [...prev, { role: "assistant", content: limpio || (num ? `Abriendo WhatsApp para ${accion.persona || "el contacto"}… si no se abrió solo, tocá el botón:` : `Preparé el WhatsApp, pero no encontré el teléfono de ${accion.persona || "el contacto"} en Favoritos ni en Personal. Tocá el botón y elegí el contacto:`), waLink: link, waLabel: num ? `Abrir WhatsApp de ${accion.persona || "contacto"}` : "Abrir WhatsApp" }]);
       setBusy(false); return;
     }
+    if (accion && accion.tipo === "traer_dato_app") {
+      setMsgs(prev => [...prev, { role: "assistant", content: limpio || `Buscando eso en "${accion.key}"…` }]);
+      try {
+        const r = await storage.get(accion.key);
+        const contenido = r?.value ? String(r.value) : "";
+        if (!contenido) {
+          setMsgs(prev => [...prev, { role: "assistant", content: `No encontré contenido guardado bajo "${accion.key}". Puede que el nombre haya cambiado o que esa app use otro backend — decime el nombre exacto de la app y vemos.` }]);
+        } else {
+          const sysDato = `Sos el asistente de Sebastián. Te paso el contenido completo guardado en su app bajo la clave "${accion.key}" (en JSON u otro formato tal cual está guardado) y lo que te preguntó sobre eso. Respondé SOLO con la info puntual que pide, clara y breve, en español rioplatense. Si el contenido no tiene lo que busca, decilo directamente. No repitas el JSON crudo.\n\nCONTENIDO:\n${contenido.slice(0, 30000)}`;
+          const resp = await callAI([{ role: "user", content: accion.pregunta || "Contame qué hay ahí." }], sysDato, apiKey, false);
+          setMsgs(prev => [...prev, { role: "assistant", content: resp }]);
+        }
+      } catch { setMsgs(prev => [...prev, { role: "assistant", content: "No pude traer ese dato (revisá la conexión e intentá de nuevo)." }]); }
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "preguntar_ia") {
       setMsgs(prev => [...prev, { role: "assistant", content: (limpio || "Consulto a la IA de V+V…") }]);
       const r = await preguntarIA(accion.texto);
@@ -994,7 +1064,15 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       {adjPend.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adjPend.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "🖼" : a.kind === "texto" ? "📊" : "📄"} {a.nombre.slice(0, 22)} <span onClick={() => setAdjPend(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={dictar} title="Hablar" style={{ background: escuchando ? "#DC2626" : T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, color: escuchando ? "#fff" : T.accent, borderRadius: 12, padding: "0 15px", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>🎤</button>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") enviar(); }} placeholder={escuchando ? "Escuchando… hablá" : adjPend.length ? "Preguntá algo sobre lo que adjuntaste…" : "Escribí o tocá el micrófono…"} style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text }} />
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } }}
+          placeholder={escuchando ? "Escuchando… hablá" : adjPend.length ? "Preguntá algo sobre lo que adjuntaste…" : "Escribí o tocá el micrófono…"}
+          rows={1}
+          style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text, resize: "none", overflowY: "auto", maxHeight: 140, lineHeight: 1.4, fontFamily: T.sans }}
+        />
         <button onClick={enviar} disabled={busy || (!input.trim() && adjPend.length === 0)} style={{ background: (busy || (!input.trim() && adjPend.length === 0)) ? T.border : T.accent, color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", fontSize: 14, fontWeight: 600, letterSpacing: "0.03em", cursor: (busy || (!input.trim() && adjPend.length === 0)) ? "default" : "pointer" }}>Enviar</button>
       </div>
     </div>
