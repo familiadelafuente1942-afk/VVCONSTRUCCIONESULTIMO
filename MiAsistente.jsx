@@ -303,6 +303,8 @@ export default function MiAsistente() {
   const [vozOn, setVozOn] = useState(false);
   const recRef = useRef(null);
   const lastSpokeRef = useRef(-1);
+  const currentAudioRef = useRef(null);
+  const vozHablandoRef = useRef(false);
   const apiKey = "";
   const scrollRef = useRef(null);
   const iaWait = useRef(null);
@@ -366,7 +368,7 @@ export default function MiAsistente() {
     return () => { document.removeEventListener("visibilitychange", h); window.removeEventListener("focus", h); window.removeEventListener("pageshow", h); window.removeEventListener("resize", h); };
   }, []);
   // Voz: leer en voz alta las respuestas nuevas cuando está activado.
-  useEffect(() => { if (vozOn) { lastSpokeRef.current = msgs.length - 1; } else { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { } } }, [vozOn]);
+  useEffect(() => { if (vozOn) { lastSpokeRef.current = msgs.length - 1; } else { pararVoz(); } }, [vozOn]);
   useEffect(() => { if (!vozOn) return; const i = msgs.length - 1; const last = msgs[i]; if (last && last.role === "assistant" && i > lastSpokeRef.current) { lastSpokeRef.current = i; hablar(last.content); } }, [msgs, vozOn]);
 
   // Memoria persistente: carga el historial del chat y el perfil al abrir.
@@ -459,16 +461,45 @@ export default function MiAsistente() {
     if (pinInput === pinStored) { setPinOk(true); setPinInput(""); } else { alert("PIN incorrecto."); setPinInput(""); }
   }
 
-  function hablar(texto) {
+  function pararVoz() {
+    try { if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current.src = ""; currentAudioRef.current = null; } } catch { }
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { }
+    vozHablandoRef.current = false;
+  }
+  // Voz robótica del navegador — solo se usa como respaldo si falla ElevenLabs.
+  function hablarNavegador(limpio) {
     try {
-      const synth = window.speechSynthesis; if (!synth || !texto) return;
+      const synth = window.speechSynthesis; if (!synth || !limpio) return;
       synth.cancel();
-      const limpio = String(texto).replace(/[*_#>`~]/g, "").replace(/\s+/g, " ").trim().slice(0, 650);
       const u = new SpeechSynthesisUtterance(limpio);
       u.lang = "es-AR"; u.rate = 1; u.pitch = 1;
       const vs = synth.getVoices() || []; const es = vs.find(v => /es[-_]AR/i.test(v.lang)) || vs.find(v => /^es/i.test(v.lang)); if (es) u.voice = es;
       synth.speak(u);
     } catch { }
+  }
+  async function hablar(texto) {
+    const limpio = String(texto || "").replace(/[*_#>`~]/g, "").replace(/\s+/g, " ").trim().slice(0, 900);
+    if (!limpio) return;
+    pararVoz();
+    vozHablandoRef.current = true;
+    try {
+      const r = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto: limpio }),
+      });
+      if (!r.ok) throw new Error("tts_error");
+      const blob = await r.blob();
+      if (!vozHablandoRef.current) return; // se canceló mientras esperábamos la respuesta
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      currentAudioRef.current = audio;
+      audio.onended = () => { URL.revokeObjectURL(url); if (currentAudioRef.current === audio) currentAudioRef.current = null; };
+      audio.onerror = () => { URL.revokeObjectURL(url); if (currentAudioRef.current === audio) currentAudioRef.current = null; };
+      await audio.play().catch(() => { hablarNavegador(limpio); });
+    } catch {
+      if (vozHablandoRef.current) hablarNavegador(limpio);
+    }
   }
   const silencioRef = useRef(null);
   function dictar() {
