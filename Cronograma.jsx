@@ -295,16 +295,18 @@ const money = (n) => "$" + Math.round(numSimple(n)).toLocaleString("es-AR");
 
    Las definiciones salen del informe técnico de V+V: cuántos días antes hace falta,
    por qué la obra la necesita, y qué pasa si llega tarde.                            */
-// NIVELES: cuando una obra tiene más de un nivel (subsuelo, PB, PA, 3er piso...),
-// las tareas marcadas con porNivel:true se desdoblan una vez por nivel al crear
-// el cronograma (ver expandirNiveles), cada una con su propio tramo de fechas
-// y una fracción del % de contrato de la tarea original.
+// NIVELES: cuando una obra tiene más de un nivel/hormigonada (platea, losa sobre subsuelo,
+// losa sobre PB, losa sobre PA...), las tareas marcadas con porNivel:true se desdoblan una
+// vez por nivel al crear el cronograma (ver expandirNiveles), cada una con su propio tramo
+// de fechas y una fracción del % de contrato de la tarea original. Los NOMBRES de cada nivel
+// los escribe V+V al crear la obra (no hay una lista fija: cada obra tiene su propia secuencia
+// de hormigonadas — "Platea, Losa sobre PB, Losa sobre PA" o "Subsuelo, Losa sobre subsuelo,
+// Losa sobre PB", según corresponda).
 // CONDICIONADA: tareas que no ejecuta V+V (las hace Belfast u otro contratista)
 // pero que condicionan el avance propio. Quedan de referencia, marcadas en la UI.
-const NIVEL_NOMBRES = ["Subsuelo", "Planta baja", "Planta alta", "3° piso"];
-function nombreNivel(i) { return NIVEL_NOMBRES[i] || `Nivel ${i + 1}`; }
-function expandirNiveles(plantilla, niveles) {
-  const n = Math.max(1, Math.round(numSimple(niveles)) || 1);
+function expandirNiveles(plantilla, nombresNiveles) {
+  const nombres = (nombresNiveles || []).map(x => String(x || "").trim()).filter(Boolean);
+  const n = nombres.length || 1;
   const base = (plantilla || []).map(t => ({ ...t }));
   if (n <= 1) return base;
   const out = [];
@@ -317,7 +319,7 @@ function expandirNiveles(plantilla, niveles) {
       out.push({
         ...t,
         cod,
-        nombre: `${t.nombre} — ${nombreNivel(i)}`,
+        nombre: `${t.nombre} — ${nombres[i] || `Nivel ${i + 1}`}`,
         peso: numSimple(t.peso) / n,
         deps: i === 0 ? (t.deps || []) : [{ cod: prevCod, tipo: "FC", lag: 0 }],
         defs: i === 0 ? (t.defs || []) : [],   // la definición del comitente se pide una sola vez, no por nivel
@@ -452,8 +454,8 @@ const COLOR_ETAPA = {
 };
 const TOPE_DIAS = 365;
 
-function plantillaAObra(plantilla, niveles) {
-  return expandirNiveles(plantilla || [], niveles || 1).map(t => ({
+function plantillaAObra(plantilla, nombresNiveles) {
+  return expandirNiveles(plantilla || [], nombresNiveles).map(t => ({
     id: uid(),
     cod: t.cod || uid().slice(0, 3).toUpperCase(),
     etapa: t.etapa || "Terminaciones",
@@ -2301,7 +2303,7 @@ export default function Cronograma() {
   const [nom, setNom] = useState("");
   const [ini, setIni] = useState(hoyISO());
   const [modoNuevo, setModoNuevo] = useState("auto"); // "auto" | "manual"
-  const [niveles, setNiveles] = useState(1);
+  const [nivelesTxt, setNivelesTxt] = useState("");
   const [toast, setToast] = useState("");
   const escrito = useRef(0);
   const avisarToast = (t) => { setToast(t); setTimeout(() => setToast(""), 3800); };
@@ -2411,12 +2413,12 @@ export default function Cronograma() {
   const crearObra = () => {
     if (!nom.trim()) return;
     const manual = modoNuevo === "manual";
-    const nv = Math.max(1, Math.min(12, Math.round(numSimple(niveles)) || 1));
+    const nombresNiv = nivelesTxt.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 12);
     const o = manual
       ? { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", modoManual: true, finBase: "", finBaseFecha: "", tareas: [] }
-      : { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", finBase: "", finBaseFecha: "", niveles: nv, tareas: plantillaAObra(data.plantilla, nv) };
+      : { id: uid(), nombre: nom.trim(), inicio: ini || hoyISO(), finanzasObraId: "", finBase: "", finBaseFecha: "", niveles: nombresNiv, tareas: plantillaAObra(data.plantilla, nombresNiv) };
     guardar({ ...data, obras: [...obras, o] });
-    setNom(""); setIni(hoyISO()); setNueva(false); setModoNuevo("auto"); setNiveles(1);
+    setNom(""); setIni(hoyISO()); setNueva(false); setModoNuevo("auto"); setNivelesTxt("");
     setObraId(o.id); setPantalla("obra");
   };
 
@@ -2540,14 +2542,14 @@ export default function Cronograma() {
             ))}
           </div>
           {modoNuevo === "auto" && <div style={{ marginTop: 11 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>¿Cuántos niveles tiene? (subsuelo, PB, PA...)</span>
-              <input type="number" min={1} max={12} value={niveles} onChange={e => { const v = e.target.value; setNiveles(v === "" ? "" : Number(v)); }} onBlur={e => setNiveles(Math.max(1, Math.min(12, Math.round(Number(e.target.value)) || 1)))} style={{ ...inpSm, width: 70, textAlign: "center" }} />
-            </div>
+            <span style={{ fontSize: 12.5, color: T.sub }}>Niveles/hormigonadas de la obra (uno por línea, en orden)</span>
+            <textarea value={nivelesTxt} onChange={e => setNivelesTxt(e.target.value)} rows={3}
+              placeholder={"Ej: Platea\nLosa sobre planta baja\nLosa sobre planta alta\n\n(o: Subsuelo / Losa sobre subsuelo / Losa sobre planta baja...)"}
+              style={{ ...inp, marginTop: 6, resize: "vertical", fontFamily: "inherit" }} />
             <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.45 }}>
-              {niveles > 1
-                ? `Estructura, mampostería, contrapisos, carpetas, revoque grueso, revoque fino y mesadas se cargan una vez por nivel: ${Array.from({ length: niveles }, (_, i) => nombreNivel(i)).join(", ")}.`
-                : "Con 1 nivel el modelo se usa tal cual. Poné más si la obra tiene subsuelo, planta alta, etc.: esas tareas se desdoblan solas, una por nivel."}
+              {nivelesTxt.split("\n").map(s => s.trim()).filter(Boolean).length > 1
+                ? `Estructura, mampostería, contrapisos, carpetas, revoque grueso, revoque fino y mesadas se cargan una vez por cada línea que escribas: ${nivelesTxt.split("\n").map(s => s.trim()).filter(Boolean).join(" · ")}.`
+                : "Dejalo vacío si la obra es de un solo nivel (usa el modelo tal cual). Escribí una línea por cada hormigonada/nivel, en el orden en que se ejecutan: esas tareas se desdoblan solas, una por línea, con el nombre que pongas."}
             </div>
           </div>}
           <div style={{ marginTop: 11 }}><Btn full onClick={crearObra} disabled={!nom.trim()}>Crear cronograma</Btn></div>
@@ -2672,7 +2674,7 @@ export default function Cronograma() {
 
       {pantalla === "ajustes" && (<div style={{ padding: "14px 16px 44px" }}>
         <h2 style={{ fontSize: 21, fontWeight: 800, margin: "0 0 14px", letterSpacing: "-.01em" }}>Ajustes</h2>
-        <div style={{ fontSize: 11, color: T.muted, marginBottom: 11 }}>Versión instalada: <b>build 24-09-niveles2</b></div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 11 }}>Versión instalada: <b>build 24-09-nombres</b></div>
         <div style={{ background: T.card, borderRadius: 13, padding: 14, boxShadow: SHDsm }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>Avisar con cuántos días de anticipación</div>
           <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>Una definición pasa a “urgente” cuando le quedan estos días o menos.</div>
