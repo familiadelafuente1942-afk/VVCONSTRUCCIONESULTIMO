@@ -2542,7 +2542,7 @@ export default function Cronograma() {
           {modoNuevo === "auto" && <div style={{ marginTop: 11 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 12.5, color: T.sub, flex: 1 }}>¿Cuántos niveles tiene? (subsuelo, PB, PA...)</span>
-              <input type="number" min={1} max={12} value={niveles} onChange={e => setNiveles(Math.max(1, Math.min(12, Math.round(Number(e.target.value)) || 1)))} style={{ ...inpSm, width: 70, textAlign: "center" }} />
+              <input type="number" min={1} max={12} value={niveles} onChange={e => { const v = e.target.value; setNiveles(v === "" ? "" : Number(v)); }} onBlur={e => setNiveles(Math.max(1, Math.min(12, Math.round(Number(e.target.value)) || 1)))} style={{ ...inpSm, width: 70, textAlign: "center" }} />
             </div>
             <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.45 }}>
               {niveles > 1
@@ -2672,7 +2672,7 @@ export default function Cronograma() {
 
       {pantalla === "ajustes" && (<div style={{ padding: "14px 16px 44px" }}>
         <h2 style={{ fontSize: 21, fontWeight: 800, margin: "0 0 14px", letterSpacing: "-.01em" }}>Ajustes</h2>
-        <div style={{ fontSize: 11, color: T.muted, marginBottom: 11 }}>Versión instalada: <b>build 22-09-niveles</b></div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 11 }}>Versión instalada: <b>build 24-09-niveles2</b></div>
         <div style={{ background: T.card, borderRadius: 13, padding: 14, boxShadow: SHDsm }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>Avisar con cuántos días de anticipación</div>
           <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>Una definición pasa a “urgente” cuando le quedan estos días o menos.</div>
