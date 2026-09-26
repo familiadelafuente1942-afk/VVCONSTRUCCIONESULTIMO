@@ -2682,6 +2682,23 @@ function contextoDatos(data) {
   const obras = ordenarObras(data.obras), gastos = data.gastos || [], movs = data.movimientos || [], propias = ordenarObras(data.propias), soc = data.sociedad || [], edif = data.edificios || [], cont = data.contactos || [], pres = data.presupuestosSoc || [];
   const nomObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "General/sin asignar";
   if (obras.length) { L.push("== OBRAS DE CLIENTE =="); obras.forEach(o => L.push(`- ${o.nombre}: ${num(o.m2) || 0} m2, precio cliente ${m(o.precioCliente)}/m2, costo ${m(o.costoM2)}/m2, plazo ${o.plazoMeses || "?"} meses`)); }
+  // Avance por rubro: el % ACUMULADO de cada rubro del último certificado de
+  // cliente cargado (lo mismo que se ve en la pantalla de "Cert. cliente").
+  try {
+    const conCerts = obras.filter(o => (o.rubros || []).length && (data.certs || []).some(c => c.obraId === o.id));
+    if (conCerts.length) {
+      L.push("== AVANCE POR RUBRO (acumulado, último certificado de cliente cargado) ==");
+      conCerts.forEach(o => {
+        const cs = (data.certs || []).filter(c => c.obraId === o.id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
+        const ult = cs[cs.length - 1]; if (!ult) return;
+        L.push(`- ${o.nombre} (certificado del ${fmtISO(ult.fecha)}):`);
+        (o.rubros || []).forEach(r => {
+          const acum = num((ult.cantidades || {})[r.id]) || 0;
+          L.push(`    · ${r.nombre} (incid. ${num(r.pct) || 0}%): acumulado ${acum}%, resta ${Math.max(0, 100 - acum)}%`);
+        });
+      });
+    }
+  } catch { }
   if (movs.length) { L.push("== COBROS Y PAGOS =="); movs.forEach(v => L.push(`- ${v.tipo === "cobro" ? "COBRO" : "PAGO"} ${m(v.monto)} · ${nomObra(v.obraId)} · ${fmtISO(v.fecha)}${v.nota ? ` · ${v.nota}` : ""}`)); }
   if (gastos.length) { L.push("== GASTOS =="); gastos.forEach(g => L.push(`- ${g.cat} ${m(g.monto)} · ${nomObra(g.obraId)} · ${fmtISO(g.fecha)}${g.nota ? ` · ${g.nota}` : ""}`)); }
   if (propias.length) { L.push("== OBRAS PARTICULARES =="); propias.forEach(p => { const costos = p.costos || []; const tot = costos.reduce((s, c) => s + num(c.montoArs || c.monto), 0); L.push(`- ${p.nombre}: invertido ~${m(tot)}. Venta estimada USD ${num(p.ventaUsd) || 0} / ARS ${num(p.ventaArs) || 0}.`); costos.forEach(c => L.push(`    · ${c.cat}: ${c.moneda === "usd" ? "USD " + Math.round(num(c.montoUsd || c.monto)).toLocaleString("es-AR") : m(c.montoArs || c.monto)}${c.nota ? ` (${c.nota})` : ""} ${fmtISO(c.ts ? new Date(c.ts).toISOString().slice(0, 10) : "")}`)); }); }
