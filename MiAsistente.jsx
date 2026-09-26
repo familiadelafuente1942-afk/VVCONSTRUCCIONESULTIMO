@@ -16,7 +16,7 @@ const storage = {
 // Keys que Mi Asistente ya lee de forma específica en otro lado — se excluyen
 // del índice genérico de "otras apps" para no duplicar ni ensuciarle el prompt a la IA.
 const KEYS_YA_LEIDAS = new Set([
-  "miasistente_pin", "sebastian_pagos", "sebastian_cobros", "sebastian_archivos", "sebastian_agenda", "sebastian_gastos",
+  "miasistente_pin", "sebastian_pagos", "sebastian_cobros", "sebastian_cierres", "sebastian_archivos", "sebastian_agenda", "sebastian_gastos",
   "sebastian_contactos", "sebastian_entreno", "sebastian_suplementos", "sebastian_cfg", "sebastian_perfil",
   "sebastian_chat", "sebastian_modelos", "sebastian_google_token",
   "vv_obras", "vv_personal", "vv_pedidos", "vv_matpedidos", "vv_mensajes", "vv_formularios", "vv_documentacion", "vv_camaras",
@@ -251,6 +251,8 @@ export default function MiAsistente() {
   const [filtroObraCobro, setFiltroObraCobro] = useState("");
   const [perfil, setPerfil] = useState("");
   const [gastos, setGastos] = useState([]);
+  const [cierres, setCierres] = useState({});
+  const cierresWrite = useRef(0);
   const chatWrite = useRef(0);
   const [archivos, setArchivos] = useState([]);
   const [contactos, setContactos] = useState([]);
@@ -354,6 +356,7 @@ export default function MiAsistente() {
       setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
       if (Date.now() - cobrosWrite.current > 4000) { const rcb = await storage.get("sebastian_cobros"); if (!alive) return; const cb = parse(rcb); setCobros(prev => JSON.stringify(cb) !== JSON.stringify(prev) ? cb : prev); }
+      if (Date.now() - cierresWrite.current > 4000) { const rci = await storage.get("sebastian_cierres"); if (!alive) return; let ci = {}; try { ci = rci?.value ? JSON.parse(rci.value) : {}; } catch { ci = {}; } if (Array.isArray(ci)) ci = {}; setCierres(prev => JSON.stringify(ci) !== JSON.stringify(prev) ? ci : prev); }
       const [ra, rag, rg, rcon, rcam, rent, rsup] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("sebastian_entreno"), storage.get("sebastian_suplementos")]);
       if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); if (rent?.value) { try { const ed = JSON.parse(rent.value); setEntrenoInicio(prev => ed.inicio || prev); setEntrenoHechas(prev => JSON.stringify(ed.hechas || {}) !== JSON.stringify(prev) ? (ed.hechas || {}) : prev); } catch { } } if (rsup?.value) { try { const sd = JSON.parse(rsup.value); setSuplSel(prev => JSON.stringify(sd.sel || []) !== JSON.stringify(prev) ? (sd.sel || []) : prev); setSuplTomados(prev => JSON.stringify(sd.tomados || {}) !== JSON.stringify(prev) ? (sd.tomados || {}) : prev); } catch { } } }
       if (!modelos.length) { const rmod = await storage.get("sebastian_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
@@ -685,6 +688,13 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     persistCobros([c, ...(cobros || [])]);
     return c;
   }
+  async function persistCierres(next) {
+    cierresWrite.current = Date.now(); setCierres(next);
+    try { localStorage.setItem("sebastian_cierres", JSON.stringify(next)); } catch { }
+    await storage.set("sebastian_cierres", JSON.stringify(next)).catch(() => { });
+  }
+  function cerrarMes(mesKey, snapshot) { persistCierres({ ...cierres, [mesKey]: { ...snapshot, ts: Date.now() } }); }
+  function reabrirMes(mesKey) { const next = { ...cierres }; delete next[mesKey]; persistCierres(next); }
   function renombrarObraPago(nombreViejo, nombreNuevo) {
     const nn = (nombreNuevo || "").trim();
     if (!nn || nn === nombreViejo) return;
@@ -1123,13 +1133,14 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["obras", "Obras"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => (p.fecha || "").slice(3) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => (c.fecha || "").slice(3) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => (g.fecha || "").slice(3) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["resultados", "Resultados"], ["obras", "Obras"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => (p.fecha || "").slice(3) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => (c.fecha || "").slice(3) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => (g.fecha || "").slice(3) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} renombrarObra={renombrarObraPago} quitarObra={quitarObraPago} />}
-    {vista === "cobros" && <CobrosBody cobros={cobros} obras={db.obras} filtroObra={filtroObraCobro} setFiltroObra={setFiltroObraCobro} exportar={exportarCobrosExcel} borrar={(id) => persistCobros((cobros || []).filter(c => c.id !== id))} onAdd={cargarCobro} />}
+    {vista === "cobros" && <CobrosBody cobros={cobros} obras={db.obras} filtroObra={filtroObraCobro} setFiltroObra={setFiltroObraCobro} exportar={exportarCobrosExcel} borrar={(id) => persistCobros((cobros || []).filter(c => c.id !== id))} onAdd={cargarCobro} onEditarFecha={(id, fecha) => persistCobros((cobros || []).map(c => c.id === id ? { ...c, fecha } : c))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
+    {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} />}
     {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: 0, direccion: "" })} borrar={borrarObra} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
@@ -1619,10 +1630,15 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
 
 const TIPOS_COBRO = [["certificado", "Certificado"], ["obra sin certificar", "Obra sin certificar"], ["ajuste", "Ajuste"]];
 
-function CobrosBody({ cobros, obras, filtroObra, setFiltroObra, exportar, borrar, onAdd }) {
+function fechaAIso(f) { const [d, m, a] = String(f || "").split("/"); if (!d || !m || !a) return ""; const anio4 = a.length === 2 ? "20" + a : a; return `${anio4}-${m}-${d}`; }
+function isoAFecha(iso) { const [a, m, d] = String(iso || "").split("-"); return a && m && d ? `${d}/${m}/${a.slice(-2)}` : ""; }
+
+function CobrosBody({ cobros, obras, filtroObra, setFiltroObra, exportar, borrar, onAdd, onEditarFecha }) {
   const [form, setForm] = useState(null);
   const mesActual = hoyStr().slice(3);
   const [mesVer, setMesVer] = useState(mesActual);
+  const [editandoFechaId, setEditandoFechaId] = useState(null);
+  const [fechaTmp, setFechaTmp] = useState("");
   const listaObra = (cobros || []).filter(c => !filtroObra || c.obra === filtroObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const lista = listaObra.filter(c => (c.fecha || "").slice(3) === mesVer);
   const obrasUnicas = [...new Set((cobros || []).map(c => c.obra).filter(Boolean))];
@@ -1641,6 +1657,8 @@ function CobrosBody({ cobros, obras, filtroObra, setFiltroObra, exportar, borrar
     {form && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo cobro</div>
       <input value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Fecha del cobro</div>
+      <input type="date" value={fechaAIso(form.fecha) || fechaAIso(hoyStr())} onChange={e => setForm({ ...form, fecha: isoAFecha(e.target.value) })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
       {obras && obras.length > 0 ? (<select value={form.obra} onChange={e => setForm({ ...form, obra: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }}>
         <option value="">Obra (opcional)</option>
         {obras.map(o => <option key={o.id} value={o.nombre}>{o.nombre}</option>)}
@@ -1686,7 +1704,18 @@ function CobrosBody({ cobros, obras, filtroObra, setFiltroObra, exportar, borrar
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{tipoLbl(c.tipo)} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(c.monto || 0).toLocaleString("es-AR")}</span></div>
-          <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{c.obra || "sin obra"} · {c.fecha}{c.nota ? ` · ${c.nota}` : ""}</div>
+          <div style={{ fontSize: 12, color: T.sub, marginTop: 3, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+            <span>{c.obra || "sin obra"} ·</span>
+            {editandoFechaId === c.id ? (<>
+              <input type="date" value={fechaAIso(fechaTmp)} onChange={e => setFechaTmp(isoAFecha(e.target.value))} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 6px", fontSize: 12, color: T.text }} />
+              <button onClick={() => { if (fechaTmp && onEditarFecha) onEditarFecha(c.id, fechaTmp); setEditandoFechaId(null); }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>OK</button>
+              <button onClick={() => setEditandoFechaId(null)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 6, padding: "3px 8px", fontSize: 11, cursor: "pointer" }}>Cancelar</button>
+            </>) : (<>
+              <span>{c.fecha}</span>
+              <button onClick={() => { setEditandoFechaId(c.id); setFechaTmp(c.fecha); }} title="Editar fecha" style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer", padding: 0 }}>✎</button>
+            </>)}
+            {c.nota ? <span>· {c.nota}</span> : null}
+          </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
           <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: c.estado === "cobrado" ? T.accent : "#B98A2E", border: `1px solid ${c.estado === "cobrado" ? T.accent : "#B98A2E"}`, borderRadius: 5, padding: "2px 7px" }}>{c.estado}</span>
@@ -1741,6 +1770,65 @@ function GastosBody({ gastos, onAdd, exportar, borrar, onFotoTicket, leyendo }) 
       <div style={{ minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{g.concepto} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(g.monto || 0).toLocaleString("es-AR")}</span></div><div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{g.fecha}</div></div>
       <button onClick={() => borrar(g.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
     </div>))}
+  </div>);
+}
+
+function mesesResultados(cobros, pagos, gastos) {
+  const set = new Set();
+  (cobros || []).forEach(c => { if (c.fecha) set.add((c.fecha || "").slice(3)); });
+  (pagos || []).forEach(p => { if (p.fecha) set.add((p.fecha || "").slice(3)); });
+  (gastos || []).forEach(g => { if (g.fecha) set.add((g.fecha || "").slice(3)); });
+  return [...set].sort((a, b) => { const [ma, ya] = a.split("/").map(Number); const [mb, yb] = b.split("/").map(Number); return (yb * 100 + mb) - (ya * 100 + ma); });
+}
+function calcularResultadoMes(mesKey, cobros, pagos, gastos) {
+  const cobrado = (cobros || []).filter(c => c.estado === "cobrado" && (c.fecha || "").slice(3) === mesKey).reduce((a, c) => a + (c.monto || 0), 0);
+  const cobradoPend = (cobros || []).filter(c => c.estado === "pendiente" && (c.fecha || "").slice(3) === mesKey).reduce((a, c) => a + (c.monto || 0), 0);
+  const pagado = (pagos || []).filter(p => p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
+  const pagadoPend = (pagos || []).filter(p => p.estado === "pendiente" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
+  const gastosTot = (gastos || []).filter(g => (g.fecha || "").slice(3) === mesKey).reduce((a, g) => a + (g.monto || 0), 0);
+  return { cobrado, cobradoPend, pagado, pagadoPend, gastos: gastosTot, resultado: cobrado - pagado - gastosTot };
+}
+function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir }) {
+  const mesActual = hoyStr().slice(3);
+  const [mesVer, setMesVer] = useState(mesActual);
+  const meses = mesesResultados(cobros, pagos, gastos);
+  const cerrado = (cierres || {})[mesVer];
+  const en = cerrado ? cerrado : calcularResultadoMes(mesVer, cobros, pagos, gastos);
+  const [mm, yy] = mesVer.split("/").map(Number);
+  const nombreMes = `${MESES_LARGOS[(mm || 1) - 1]} '${String(yy || 0).padStart(2, "0")}`;
+  const colorRes = (en.resultado || 0) >= 0 ? T.accent : "#C0392B";
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Resultado del mes</div>
+    <div style={{ background: T.card, border: `2px solid ${cerrado ? BRASS : T.border}`, borderRadius: 14, padding: "16px 16px", marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{nombreMes}</div>
+        {cerrado && <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: BRASS, border: `1px solid ${BRASS}`, borderRadius: 5, padding: "2px 7px" }}>Cerrado</span>}
+      </div>
+      <div style={{ fontFamily: T.serif, fontSize: 32, fontWeight: 700, color: colorRes, marginTop: 6 }}>${(en.resultado || 0).toLocaleString("es-AR")}</div>
+      <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Cobrado − Pagado − Gastos{cerrado ? " (cerrado el " + new Date(cerrado.ts || Date.now()).toLocaleDateString("es-AR") + ")" : ""}</div>
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Cobrado</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.cobrado || 0).toLocaleString("es-AR")}</div>{en.cobradoPend > 0 && <div style={{ fontSize: 10.5, color: "#B98A2E", marginTop: 1 }}>+${en.cobradoPend.toLocaleString("es-AR")} pend.</div>}</div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Pagado</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.pagado || 0).toLocaleString("es-AR")}</div>{en.pagadoPend > 0 && <div style={{ fontSize: 10.5, color: "#B98A2E", marginTop: 1 }}>+${en.pagadoPend.toLocaleString("es-AR")} pend.</div>}</div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Gastos</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.gastos || 0).toLocaleString("es-AR")}</div></div>
+      </div>
+      <div style={{ marginTop: 14 }}>
+        {cerrado ? (
+          <button onClick={() => { if (window.confirm("¿Reabrir este mes? El resultado va a volver a calcularse en vivo con los datos actuales.")) onReabrir(mesVer); }} style={{ width: "100%", background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Reabrir mes</button>
+        ) : (
+          <button onClick={() => { if (window.confirm(`¿Cerrar ${nombreMes} con este resultado? Vas a poder reabrirlo después si necesitás corregir algo.`)) onCerrar(mesVer, en); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cerrar mes</button>
+        )}
+      </div>
+    </div>
+
+    {meses.length > 0 && <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Historial por mes</div>
+      <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 4 }}>
+        {meses.map(mk => { const activo = mk === mesVer; const [m2, y2] = mk.split("/").map(Number); const nm = MESES_LARGOS[(m2 || 1) - 1]?.slice(0, 3) || m2; const cerradoM = (cierres || {})[mk]; return (<button key={mk} onClick={() => setMesVer(mk)} style={{ flexShrink: 0, background: activo ? T.navy : T.card, color: activo ? "#fff" : T.text, border: `1px solid ${cerradoM ? BRASS : (activo ? T.navy : T.border)}`, borderRadius: 10, padding: "9px 12px", cursor: "pointer", textAlign: "left" }}>
+          <div style={{ fontSize: 11, fontWeight: 700 }}>{nm} '{String(y2).padStart(2, "0")}{cerradoM ? " 🔒" : ""}</div>
+        </button>); })}
+      </div>
+    </div>}
+    <div style={{ textAlign: "center", color: T.muted, fontSize: 12, padding: "6px 18px", lineHeight: 1.6 }}>Este número se calcula solo con Cobrado, Pagado y Gastos de {nombreMes}. Lo pendiente no se resta ni se suma todavía.</div>
   </div>);
 }
 
