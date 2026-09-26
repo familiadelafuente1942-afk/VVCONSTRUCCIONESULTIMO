@@ -1161,10 +1161,15 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, 
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo pago</div>
       <input value={form.persona} onChange={e => setForm({ ...form, persona: e.target.value })} placeholder="¿A quién? (ej: Humberto)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
       <input value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
-      {obras && obras.length > 0 ? (<select value={form.obra} onChange={e => setForm({ ...form, obra: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }}>
-        <option value="">Obra (opcional)</option>
-        {obras.map(o => <option key={o.id} value={o.nombre}>{o.nombre}</option>)}
-      </select>) : (<input value={form.obra} onChange={e => setForm({ ...form, obra: e.target.value })} placeholder="Obra (opcional)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />)}
+      {(() => {
+        const extras = ["Valeria", "Valentina"];
+        const nombresObras = (obras || []).map(o => o.nombre).filter(Boolean);
+        const opciones = [...nombresObras, ...extras.filter(e => !nombresObras.includes(e))];
+        return (<select value={form.obra} onChange={e => setForm({ ...form, obra: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }}>
+          <option value="">Obra (opcional)</option>
+          {opciones.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
+        </select>);
+      })()}
       <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
         {[["pendiente", "Pendiente"], ["pagado", "Pagado"]].map(([k, l]) => <button key={k} onClick={() => setForm({ ...form, estado: k })} style={{ flex: 1, background: form.estado === k ? T.navy : T.bg, color: form.estado === k ? "#fff" : T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
       </div>
