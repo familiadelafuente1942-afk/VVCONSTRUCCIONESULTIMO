@@ -2675,6 +2675,10 @@ function descAccion(a) {
 }
 function contextoDatos(data) {
   const L = []; const m = (n) => "$" + Math.round(num(n) || 0).toLocaleString("es-AR");
+  // El resumen financiero (facturación por certificados, costo, utilidad, resultado
+  // operativo, caja real, imprevistos) va primero: es lo que más se pregunta y así
+  // no se pierde si el contexto se recorta más abajo por ser muy largo.
+  try { L.push("== RESUMEN FINANCIERO Y RESULTADO (certificados, facturación, caja) =="); L.push(resumenFinanciero(data)); L.push(""); } catch { }
   const obras = ordenarObras(data.obras), gastos = data.gastos || [], movs = data.movimientos || [], propias = ordenarObras(data.propias), soc = data.sociedad || [], edif = data.edificios || [], cont = data.contactos || [], pres = data.presupuestosSoc || [];
   const nomObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "General/sin asignar";
   if (obras.length) { L.push("== OBRAS DE CLIENTE =="); obras.forEach(o => L.push(`- ${o.nombre}: ${num(o.m2) || 0} m2, precio cliente ${m(o.precioCliente)}/m2, costo ${m(o.costoM2)}/m2, plazo ${o.plazoMeses || "?"} meses`)); }
@@ -2686,7 +2690,7 @@ function contextoDatos(data) {
   if (cont.length) { L.push("== AGENDA (contactos) =="); cont.forEach(c => L.push(`- ${c.nombre} (${c.tipo}) ${c.telefono || ""}`)); }
   if (pres.length) { L.push("== PRESUPUESTOS SOCIEDAD =="); pres.forEach(p => L.push(`- ${p.nombre}: ${m(p.total || p.monto)} · ${p.estado}`)); }
   const txt = L.join("\n") || "(todavía no hay datos cargados)";
-  return txt.length > 16000 ? txt.slice(0, 16000) + "\n…(recortado)" : txt;
+  return txt.length > 45000 ? txt.slice(0, 45000) + "\n…(recortado)" : txt;
 }
 function AsistenteCargaTab({ data, save }) {
   const [texto, setTexto] = useState(""); const [files, setFiles] = useState([]); const [cargando, setCargando] = useState(false); const [msgs, setMsgs] = useState(() => { try { const l = localStorage.getItem("vv_ia_chat"); return l ? JSON.parse(l) : []; } catch { return []; } }); const [acciones, setAcciones] = useState([]); const [error, setError] = useState(""); const [subLogo, setSubLogo] = useState(false); const [mostrarTexto, setMostrarTexto] = useState(false); const [escuchando, setEscuchando] = useState(false);
