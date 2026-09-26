@@ -919,6 +919,40 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     try { pdfDataUrl = doc.output("datauristring"); } catch { }
     return { ok: true, pdfDataUrl, nombreArchivo };
   }
+  async function exportarResultadosPDF(mesKey, en, esCierre) {
+    const lib = await cargarJsPDF(); if (!lib) { alert("No pude cargar el generador de PDF (revisá internet)."); return; }
+    const { jsPDF } = lib; const doc = new jsPDF({ unit: "mm", format: "a4" }); const W = 210; const M = 16; let y = 18;
+    const money = n => "$" + (Number(n) || 0).toLocaleString("es-AR");
+    const [mm, yy] = String(mesKey || "").split("/").map(Number);
+    const nombreMes = `${MESES_LARGOS[(mm || 1) - 1] || ""} '${String(yy || 0).padStart(2, "0")}`;
+    doc.setFillColor(15, 27, 45); doc.rect(0, 0, W, 26, "F");
+    doc.setTextColor(176, 137, 79); doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.text("V+V CONSTRUCCIONES", M, 14);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.text(esCierre ? "CIERRE DE MES" : "INFORME PARCIAL DE RESULTADOS", M, 20);
+    doc.setTextColor(230, 230, 230); doc.setFontSize(8); doc.text(hoyStr(), W - M, 20, { align: "right" });
+    y = 38; doc.setTextColor(15, 27, 45); doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(`Resultados — ${nombreMes}`, M, y); y += 6;
+    doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(110, 105, 94);
+    doc.text(esCierre ? `Mes cerrado el ${new Date(en.ts || Date.now()).toLocaleDateString("es-AR")}.` : "Datos en vivo a la fecha de este informe (el mes todavía no está cerrado).", M, y); y += 8;
+    doc.setDrawColor(176, 137, 79); doc.setLineWidth(0.5); doc.line(M, y, W - M, y); y += 10;
+    doc.setFontSize(10); doc.setTextColor(40, 40, 40);
+    const fila = (label, val, bold) => { doc.setFont("helvetica", bold ? "bold" : "normal"); doc.text(label, M, y); doc.text(val, W - M, y, { align: "right" }); y += 7; };
+    fila("Cobrado", money(en.cobrado));
+    fila("Pagado", money(en.pagado));
+    fila("Gastos", money(en.gastos));
+    y += 2; doc.setDrawColor(200, 200, 200); doc.line(M, y, W - M, y); y += 7;
+    doc.setFontSize(13); fila("TOTAL EMPRESA", money(en.totalEmpresa), true);
+    y += 6; doc.setFontSize(10);
+    doc.setFillColor(27, 58, 91); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+    doc.rect(M, y, W - 2 * M, 8, "F"); doc.text("Socio", M + 2, y + 5.5); doc.text("Monto", 120, y + 5.5); doc.text("%", W - M - 2, y + 5.5, { align: "right" }); y += 8;
+    doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal");
+    [["Valeria", en.valeria], ["Sebastián", en.sebastian], ["Valentina", en.valentina]].forEach(([nombre, monto], i) => {
+      if (i % 2) { doc.setFillColor(244, 247, 250); doc.rect(M, y, W - 2 * M, 7, "F"); }
+      doc.text(nombre, M + 2, y + 5); doc.text(money(monto), 120, y + 5); doc.text(pct(monto, en.totalEmpresa) + "%", W - M - 2, y + 5, { align: "right" }); y += 7;
+    });
+    doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+    doc.text("Generado desde Mi Asistente.", M, 285);
+    const nombreArchivo = `Resultados_${nombreMes.replace(/[^\w]+/g, "-")}_${esCierre ? "cierre" : "parcial"}_${hoyStr().replace(/\//g, "-")}.pdf`;
+    doc.save(nombreArchivo);
+  }
   async function subirModelo(e) {
     const f = e.target.files[0]; if (!f) return; e.target.value = "";
     const ext = (f.name.split(".").pop() || "").toLowerCase();
@@ -1140,7 +1174,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} renombrarObra={renombrarObraPago} quitarObra={quitarObraPago} />}
     {vista === "cobros" && <CobrosBody cobros={cobros} obras={db.obras} filtroObra={filtroObraCobro} setFiltroObra={setFiltroObraCobro} exportar={exportarCobrosExcel} borrar={(id) => persistCobros((cobros || []).filter(c => c.id !== id))} onAdd={cargarCobro} onEditarFecha={(id, fecha) => persistCobros((cobros || []).map(c => c.id === id ? { ...c, fecha } : c))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
-    {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} />}
+    {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} exportarPDF={exportarResultadosPDF} />}
     {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: 0, direccion: "" })} borrar={borrarObra} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
@@ -1786,9 +1820,13 @@ function calcularResultadoMes(mesKey, cobros, pagos, gastos) {
   const pagado = (pagos || []).filter(p => p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
   const pagadoPend = (pagos || []).filter(p => p.estado === "pendiente" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
   const gastosTot = (gastos || []).filter(g => (g.fecha || "").slice(3) === mesKey).reduce((a, g) => a + (g.monto || 0), 0);
-  return { cobrado, cobradoPend, pagado, pagadoPend, gastos: gastosTot, resultado: cobrado - pagado - gastosTot };
+  const valeria = (pagos || []).filter(p => p.obra === "Valeria" && p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
+  const valentina = (pagos || []).filter(p => p.obra === "Valentina" && p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
+  const sebastian = cobrado - pagado - gastosTot;
+  return { cobrado, cobradoPend, pagado, pagadoPend, gastos: gastosTot, valeria, valentina, sebastian, resultado: sebastian, totalEmpresa: sebastian + valeria + valentina };
 }
-function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir }) {
+function pct(valor, total) { if (!total) return "0"; return ((valor || 0) / total * 100).toLocaleString("es-AR", { maximumFractionDigits: 1 }); }
+function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, exportarPDF }) {
   const mesActual = hoyStr().slice(3);
   const [mesVer, setMesVer] = useState(mesActual);
   const meses = mesesResultados(cobros, pagos, gastos);
@@ -1797,6 +1835,7 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir })
   const [mm, yy] = mesVer.split("/").map(Number);
   const nombreMes = `${MESES_LARGOS[(mm || 1) - 1]} '${String(yy || 0).padStart(2, "0")}`;
   const colorRes = (en.resultado || 0) >= 0 ? T.accent : "#C0392B";
+  const colorEmpresa = (en.totalEmpresa || 0) >= 0 ? T.accent : "#C0392B";
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Resultado del mes</div>
     <div style={{ background: T.card, border: `2px solid ${cerrado ? BRASS : T.border}`, borderRadius: 14, padding: "16px 16px", marginBottom: 14 }}>
@@ -1804,18 +1843,44 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir })
         <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{nombreMes}</div>
         {cerrado && <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: BRASS, border: `1px solid ${BRASS}`, borderRadius: 5, padding: "2px 7px" }}>Cerrado</span>}
       </div>
-      <div style={{ fontFamily: T.serif, fontSize: 32, fontWeight: 700, color: colorRes, marginTop: 6 }}>${(en.resultado || 0).toLocaleString("es-AR")}</div>
+      <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 4 }}>Total Empresa</div>
+      <div style={{ fontFamily: T.serif, fontSize: 38, fontWeight: 700, color: colorEmpresa, marginTop: 2 }}>${(en.totalEmpresa || 0).toLocaleString("es-AR")}</div>
       <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Cobrado − Pagado − Gastos{cerrado ? " (cerrado el " + new Date(cerrado.ts || Date.now()).toLocaleDateString("es-AR") + ")" : ""}</div>
+
+      <div style={{ height: 1, background: T.border, margin: "14px 0" }} />
+
+      <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Cómo se dividió este mes</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+          <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Valeria</div>
+          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: T.text, marginTop: 3 }}>${(en.valeria || 0).toLocaleString("es-AR")}</div>
+          <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.valeria, en.totalEmpresa)}%</div>
+        </div>
+        <div style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+          <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Sebastián</div>
+          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: colorRes, marginTop: 3 }}>${(en.sebastian || 0).toLocaleString("es-AR")}</div>
+          <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.sebastian, en.totalEmpresa)}%</div>
+        </div>
+        <div style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+          <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Valentina</div>
+          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: T.text, marginTop: 3 }}>${(en.valentina || 0).toLocaleString("es-AR")}</div>
+          <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.valentina, en.totalEmpresa)}%</div>
+        </div>
+      </div>
+
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Cobrado</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.cobrado || 0).toLocaleString("es-AR")}</div>{en.cobradoPend > 0 && <div style={{ fontSize: 10.5, color: "#B98A2E", marginTop: 1 }}>+${en.cobradoPend.toLocaleString("es-AR")} pend.</div>}</div>
         <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Pagado</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.pagado || 0).toLocaleString("es-AR")}</div>{en.pagadoPend > 0 && <div style={{ fontSize: 10.5, color: "#B98A2E", marginTop: 1 }}>+${en.pagadoPend.toLocaleString("es-AR")} pend.</div>}</div>
         <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Gastos</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.gastos || 0).toLocaleString("es-AR")}</div></div>
       </div>
-      <div style={{ marginTop: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <button onClick={() => exportarPDF && exportarPDF(mesVer, en, !!cerrado)} style={{ flex: 1, background: "none", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>📄 Exportar PDF{cerrado ? " (cierre)" : " parcial"}</button>
+      </div>
+      <div style={{ marginTop: 8 }}>
         {cerrado ? (
           <button onClick={() => { if (window.confirm("¿Reabrir este mes? El resultado va a volver a calcularse en vivo con los datos actuales.")) onReabrir(mesVer); }} style={{ width: "100%", background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Reabrir mes</button>
         ) : (
-          <button onClick={() => { if (window.confirm(`¿Cerrar ${nombreMes} con este resultado? Vas a poder reabrirlo después si necesitás corregir algo.`)) onCerrar(mesVer, en); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cerrar mes</button>
+          <button onClick={() => { if (window.confirm(`¿Cerrar ${nombreMes} con este resultado? Vas a poder reabrirlo después si necesitás corregir algo.`)) { onCerrar(mesVer, en); if (exportarPDF) exportarPDF(mesVer, en, true); } }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cerrar mes</button>
         )}
       </div>
     </div>
