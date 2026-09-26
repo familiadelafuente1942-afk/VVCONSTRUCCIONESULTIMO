@@ -16,7 +16,7 @@ const storage = {
 // Keys que Mi Asistente ya lee de forma específica en otro lado — se excluyen
 // del índice genérico de "otras apps" para no duplicar ni ensuciarle el prompt a la IA.
 const KEYS_YA_LEIDAS = new Set([
-  "miasistente_pin", "sebastian_pagos", "sebastian_archivos", "sebastian_agenda", "sebastian_gastos",
+  "miasistente_pin", "sebastian_pagos", "sebastian_cobros", "sebastian_archivos", "sebastian_agenda", "sebastian_gastos",
   "sebastian_contactos", "sebastian_entreno", "sebastian_suplementos", "sebastian_cfg", "sebastian_perfil",
   "sebastian_chat", "sebastian_modelos", "sebastian_google_token",
   "vv_obras", "vv_personal", "vv_pedidos", "vv_matpedidos", "vv_mensajes", "vv_formularios", "vv_documentacion", "vv_camaras",
@@ -247,6 +247,8 @@ export default function MiAsistente() {
   const [trust, setTrust] = useState(true);
   const [db, setDb] = useState({ obras: [], personal: [], pedidos: [], matpedidos: [], mensajes: [], formularios: [], documentacion: [] });
   const [pagos, setPagos] = useState([]);
+  const [cobros, setCobros] = useState([]);
+  const [filtroObraCobro, setFiltroObraCobro] = useState("");
   const [perfil, setPerfil] = useState("");
   const [gastos, setGastos] = useState([]);
   const chatWrite = useRef(0);
@@ -295,6 +297,7 @@ export default function MiAsistente() {
   const [chatUnread, setChatUnread] = useState(0);
   const [filtroObra, setFiltroObra] = useState("");
   const pagosWrite = useRef(0);
+  const cobrosWrite = useRef(0);
   const [msgs, setMsgs] = useState([{ role: "assistant", content: "Hola Sebastián 👋 Soy tu asistente personal. Tengo acceso a todos los datos de V+V. Preguntame lo que quieras: un DNI, el estado de una obra, la última foto de Castores, un plano, o pedime que le consulte algo a la IA de V+V." }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -350,6 +353,7 @@ export default function MiAsistente() {
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
       setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
+      if (Date.now() - cobrosWrite.current > 4000) { const rcb = await storage.get("sebastian_cobros"); if (!alive) return; const cb = parse(rcb); setCobros(prev => JSON.stringify(cb) !== JSON.stringify(prev) ? cb : prev); }
       const [ra, rag, rg, rcon, rcam, rent, rsup] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("sebastian_entreno"), storage.get("sebastian_suplementos")]);
       if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); if (rent?.value) { try { const ed = JSON.parse(rent.value); setEntrenoInicio(prev => ed.inicio || prev); setEntrenoHechas(prev => JSON.stringify(ed.hechas || {}) !== JSON.stringify(prev) ? (ed.hechas || {}) : prev); } catch { } } if (rsup?.value) { try { const sd = JSON.parse(rsup.value); setSuplSel(prev => JSON.stringify(sd.sel || []) !== JSON.stringify(prev) ? (sd.sel || []) : prev); setSuplTomados(prev => JSON.stringify(sd.tomados || {}) !== JSON.stringify(prev) ? (sd.tomados || {}) : prev); } catch { } } }
       if (!modelos.length) { const rmod = await storage.get("sebastian_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
@@ -626,6 +630,7 @@ Acciones:
 {"tipo":"calendar_crear","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","duracion_min":60,"ubicacion":"opcional","nota":"opcional"}
 {"tipo":"cargar_gasto","gastos":[{"concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"},{"concepto":"Comida","monto":8000},{"concepto":"Ferretería","monto":5000}]}
 {"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
+{"tipo":"cargar_cobro","obra":"Castores 475","monto":800000,"tipo_cobro":"certificado|obra sin certificar|ajuste","estado":"cobrado","nota":""}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
 {"tipo":"whatsapp","persona":"Valeria","texto":"el mensaje a enviar por WhatsApp"}
 {"tipo":"preguntar_ia","texto":"lo que querés consultarle a la IA de V+V"}
@@ -642,6 +647,7 @@ Reglas:
 - "calendar_crear" cuando pide expresamente que lo agendes en GOOGLE CALENDAR / "mi calendario de Google" / "mi calendario del celu" (algo que quiere ver también fuera de esta app, con recordatorio real de Google) — NO para la Agenda interna de esta app, para eso usá "agendar". Estado actual: ${googleConectado ? "SÍ está conectado a Google Calendar, podés usar esta acción con confianza." : "TODAVÍA NO conectó su Google Calendar. Si pide esto, avisale en tu respuesta (sin bloque de acción) que tiene que ir a Ajustes → \"Conectar Google Calendar\" primero, una sola vez."}
 - "cargar_gasto" cuando dice "cargá un gasto de nafta 15000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto, sin obra). IMPORTANTE: si te da VARIOS gastos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "gastos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una.
 - "cargar_pago" para registrar en la planilla de Pagos cualquier pago que menciona, se lo haya pedido o simplemente esté contando ("pagale a Humberto 50000", "anotá un pago a Juan de 30 lucas", "le pagué a X"). Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método.
+- "cargar_cobro" para registrar en la planilla de Cobros cualquier cobro que menciona ("cobramos un certificado de Castores 475 por 800000", "nos pagaron un ajuste de Terralagos", "cargá una obra sin certificar de 300 lucas en Canning 260"). El campo "tipo_cobro" tiene que ser EXACTAMENTE uno de estos tres: "certificado", "obra sin certificar" o "ajuste" — inferilo de lo que dice (si no lo aclara, asumí "certificado"). Interpretá también obra, monto y estado (cobrado/pendiente).
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
 - "whatsapp" cuando dice "mandale un mensaje a X que…" o "escribile a X". Uso los teléfonos de Personal; le dejo el WhatsApp listo para enviar con un toque.
 - "preguntar_ia" solo si pide expresamente consultar a la IA de V+V.
@@ -667,6 +673,17 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     pagosWrite.current = Date.now(); setPagos(next);
     try { localStorage.setItem("sebastian_pagos", JSON.stringify(next)); } catch { }
     await storage.set("sebastian_pagos", JSON.stringify(next)).catch(() => { });
+  }
+  async function persistCobros(next) {
+    cobrosWrite.current = Date.now(); setCobros(next);
+    try { localStorage.setItem("sebastian_cobros", JSON.stringify(next)); } catch { }
+    await storage.set("sebastian_cobros", JSON.stringify(next)).catch(() => { });
+  }
+  function cargarCobro(a) {
+    const tc = String(a.tipo_cobro || "").toLowerCase();
+    const c = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), obra: a.obra || "", monto: Number(String(a.monto || 0).replace(/[^\d.-]/g, "")) || 0, tipo: ["certificado", "obra sin certificar", "ajuste"].includes(tc) ? tc : "certificado", estado: a.estado === "cobrado" ? "cobrado" : "pendiente", nota: a.nota || "", ts: Date.now() };
+    persistCobros([c, ...(cobros || [])]);
+    return c;
   }
   function renombrarObraPago(nombreViejo, nombreNuevo) {
     const nn = (nombreNuevo || "").trim();
@@ -832,6 +849,23 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       const cab = ["Fecha", "Persona", "Obra", "Monto", "Estado", "Método", "Nota"];
       const csv = "\uFEFF" + [cab.join(";"), ...filas.map(f => cab.map(c => `"${String(f[c] ?? "").replace(/"/g, '""')}"`).join(";"))].join("\n");
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `Pagos_${hoyStr().replace(/\//g, "-")}.csv`; a.click();
+    }
+  }
+  async function exportarCobrosExcel() {
+    const lista = (cobros || []).filter(c => !filtroObraCobro || c.obra === filtroObraCobro);
+    if (!lista.length) { alert("No hay cobros para exportar."); return; }
+    const tipoLbl = (t) => t === "obra sin certificar" ? "Obra sin certificar" : t === "ajuste" ? "Ajuste" : "Certificado";
+    const filas = lista.map(c => ({ Fecha: c.fecha, Obra: c.obra, Tipo: tipoLbl(c.tipo), Monto: c.monto, Estado: c.estado, Nota: c.nota }));
+    const XLSX = await cargarSDK();
+    if (XLSX) {
+      const ws = XLSX.utils.json_to_sheet(filas);
+      ws["!cols"] = [{ wch: 10 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 24 }];
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Cobros");
+      XLSX.writeFile(wb, `Cobros_${filtroObraCobro || "todos"}_${hoyStr().replace(/\//g, "-")}.xlsx`);
+    } else {
+      const cab = ["Fecha", "Obra", "Tipo", "Monto", "Estado", "Nota"];
+      const csv = "﻿" + [cab.join(";"), ...filas.map(f => cab.map(c => `"${String(f[c] ?? "").replace(/"/g, '""')}"`).join(";"))].join("\n");
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `Cobros_${hoyStr().replace(/\//g, "-")}.csv`; a.click();
     }
   }
   function cargarJsPDF() { return new Promise((resolve) => { if (window.jspdf) return resolve(window.jspdf); const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"; s.onload = () => resolve(window.jspdf); s.onerror = () => resolve(null); document.head.appendChild(s); }); }
@@ -1007,6 +1041,12 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setMsgs(prev => [...prev, { role: "assistant", content: nuevos.length ? `💸 Cargué ${nuevos.length} gasto${nuevos.length > 1 ? "s" : ""} (total $${total.toLocaleString("es-AR")}):\n${detalle}${limpio ? "\n\n" + limpio : ""}\n\nLos ves en la solapa Gastos.` : "No pude leer los gastos. Decímelos con concepto y monto." }]);
       setBusy(false); return;
     }
+    if (accion && accion.tipo === "cargar_cobro") {
+      const c = cargarCobro(accion);
+      const tipoLbl = c.tipo === "obra sin certificar" ? "Obra sin certificar" : c.tipo === "ajuste" ? "Ajuste" : "Certificado";
+      setMsgs(prev => [...prev, { role: "assistant", content: `✅ Cobro cargado: ${tipoLbl}${c.monto ? ` · $${c.monto.toLocaleString("es-AR")}` : ""}${c.obra ? ` · ${c.obra}` : ""} · ${c.estado} (${c.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Cobros y lo podés exportar a Excel.` }]);
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "cargar_pago") {
       const p = cargarPago(accion);
       setMsgs(prev => [...prev, { role: "assistant", content: `✅ Pago cargado: ${p.persona || "—"}${p.monto ? ` · $${p.monto.toLocaleString("es-AR")}` : ""}${p.obra ? ` · ${p.obra}` : ""} · ${p.estado}${p.metodo ? ` · ${p.metodo}` : ""} (${p.fecha}).${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Pagos y lo podés exportar a Excel.` }]);
@@ -1083,11 +1123,12 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["gastos", "Gastos"], ["obras", "Obras"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => (p.fecha || "").slice(3) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => (g.fecha || "").slice(3) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["obras", "Obras"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => (p.fecha || "").slice(3) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => (c.fecha || "").slice(3) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => (g.fecha || "").slice(3) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} renombrarObra={renombrarObraPago} quitarObra={quitarObraPago} />}
+    {vista === "cobros" && <CobrosBody cobros={cobros} obras={db.obras} filtroObra={filtroObraCobro} setFiltroObra={setFiltroObraCobro} exportar={exportarCobrosExcel} borrar={(id) => persistCobros((cobros || []).filter(c => c.id !== id))} onAdd={cargarCobro} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
     {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: 0, direccion: "" })} borrar={borrarObra} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
@@ -1573,6 +1614,86 @@ function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcon
     <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>Para que tome el ícono nuevo en iPhone/iPad: subilo acá, después en Safari tocá Compartir → “Agregar a pantalla de inicio”. Usá una imagen cuadrada (ideal 512×512).</div>
 
     <button onClick={() => { if (confirm("¿Volver al estilo original?")) saveCfg({ ...CFG_DEF, iconoUrl: cfg.iconoUrl }); }} style={{ width: "100%", marginTop: 22, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Restablecer estilo original</button>
+  </div>);
+}
+
+const TIPOS_COBRO = [["certificado", "Certificado"], ["obra sin certificar", "Obra sin certificar"], ["ajuste", "Ajuste"]];
+
+function CobrosBody({ cobros, obras, filtroObra, setFiltroObra, exportar, borrar, onAdd }) {
+  const [form, setForm] = useState(null);
+  const mesActual = hoyStr().slice(3);
+  const [mesVer, setMesVer] = useState(mesActual);
+  const listaObra = (cobros || []).filter(c => !filtroObra || c.obra === filtroObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const lista = listaObra.filter(c => (c.fecha || "").slice(3) === mesVer);
+  const obrasUnicas = [...new Set((cobros || []).map(c => c.obra).filter(Boolean))];
+  const totalPend = lista.filter(c => c.estado === "pendiente").reduce((a, c) => a + (c.monto || 0), 0);
+  const totalCob = lista.filter(c => c.estado === "cobrado").reduce((a, c) => a + (c.monto || 0), 0);
+  const meses = agruparPorMes(listaObra, "monto");
+  const grupoVer = meses.find(m => m.key === mesVer);
+  const tipoLbl = (t) => (TIPOS_COBRO.find(([k]) => k === t) || TIPOS_COBRO[0])[1];
+  function guardar() {
+    if (!form.monto) { alert("Poné al menos el monto."); return; }
+    onAdd({ monto: form.monto, obra: form.obra || "", tipo_cobro: form.tipo || "certificado", estado: form.estado || "pendiente", nota: form.nota || "", fecha: form.fecha || undefined });
+    setForm(null);
+  }
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    {!form && <button onClick={() => setForm({ monto: "", obra: "", tipo: "certificado", estado: "pendiente", nota: "" })} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Cargar cobro a mano</button>}
+    {form && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo cobro</div>
+      <input value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      {obras && obras.length > 0 ? (<select value={form.obra} onChange={e => setForm({ ...form, obra: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }}>
+        <option value="">Obra (opcional)</option>
+        {obras.map(o => <option key={o.id} value={o.nombre}>{o.nombre}</option>)}
+      </select>) : (<input value={form.obra} onChange={e => setForm({ ...form, obra: e.target.value })} placeholder="Obra (opcional)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />)}
+      <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Tipo de cobro</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        {TIPOS_COBRO.map(([k, l]) => <button key={k} onClick={() => setForm({ ...form, tipo: k })} style={{ flex: 1, background: form.tipo === k ? T.navy : T.bg, color: form.tipo === k ? "#fff" : T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 4px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+      </div>
+      <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
+        {[["pendiente", "Pendiente"], ["cobrado", "Cobrado"]].map(([k, l]) => <button key={k} onClick={() => setForm({ ...form, estado: k })} style={{ flex: 1, background: form.estado === k ? T.navy : T.bg, color: form.estado === k ? "#fff" : T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
+      </div>
+      <input value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} placeholder="Nota (opcional)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 10, boxSizing: "border-box" }} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setForm(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+        <button onClick={guardar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
+      </div>
+    </div>}
+    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+      <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 16, color: T.text }}>
+        <option value="">Todas las obras</option>
+        {obrasUnicas.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+      <button onClick={exportar} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "0 16px", fontSize: 12.5, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer", whiteSpace: "nowrap" }}>Exportar Excel</button>
+    </div>
+    <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pendiente {mesVer === mesActual ? "(este mes)" : ""}</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: "#9A6B1E", marginTop: 3 }}>${totalPend.toLocaleString("es-AR")}</div></div>
+      <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Cobrado {mesVer === mesActual ? "(este mes)" : ""}</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totalCob.toLocaleString("es-AR")}</div></div>
+    </div>
+
+    {meses.length > 0 && <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Historial por mes</div>
+      <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 4 }}>
+        {meses.map(m => { const activo = m.key === mesVer; const nombreMes = MESES_LARGOS[m.mes - 1]?.slice(0, 3) || m.mes; return (<button key={m.key} onClick={() => setMesVer(m.key)} style={{ flexShrink: 0, background: activo ? T.navy : T.card, color: activo ? "#fff" : T.text, border: `1px solid ${activo ? T.navy : T.border}`, borderRadius: 10, padding: "9px 12px", cursor: "pointer", textAlign: "left" }}>
+          <div style={{ fontSize: 11, fontWeight: 700 }}>{nombreMes} '{String(m.anio).padStart(2, "0")}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginTop: 2 }}>${m.total.toLocaleString("es-AR")}</div>
+        </button>); })}
+      </div>
+    </div>}
+
+    <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>{mesVer === mesActual ? "Este mes" : `${MESES_LARGOS[(grupoVer?.mes || 1) - 1]} '${String(grupoVer?.anio || 0).padStart(2, "0")}`}{grupoVer ? ` · ${grupoVer.items.length}` : ""}</div>
+    {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px", lineHeight: 1.6 }}>{mesVer === mesActual ? <>Todavía no cargaste cobros este mes.<br />Desde el Chat, decime por ejemplo:<br /><span style={{ color: T.sub }}>"cobramos un certificado de Castores 475 por 800000"</span></> : "Sin cobros ese mes."}</div>}
+    {lista.map(c => (<div key={c.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `2px solid ${c.estado === "cobrado" ? T.accent : "#B98A2E"}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{tipoLbl(c.tipo)} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>${(c.monto || 0).toLocaleString("es-AR")}</span></div>
+          <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{c.obra || "sin obra"} · {c.fecha}{c.nota ? ` · ${c.nota}` : ""}</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: c.estado === "cobrado" ? T.accent : "#B98A2E", border: `1px solid ${c.estado === "cobrado" ? T.accent : "#B98A2E"}`, borderRadius: 5, padding: "2px 7px" }}>{c.estado}</span>
+          <button onClick={() => borrar(c.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, cursor: "pointer" }}>✕</button>
+        </div>
+      </div>
+    </div>))}
   </div>);
 }
 
