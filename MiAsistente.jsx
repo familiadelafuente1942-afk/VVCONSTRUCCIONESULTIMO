@@ -668,6 +668,15 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     try { localStorage.setItem("sebastian_pagos", JSON.stringify(next)); } catch { }
     await storage.set("sebastian_pagos", JSON.stringify(next)).catch(() => { });
   }
+  function renombrarObraPago(nombreViejo, nombreNuevo) {
+    const nn = (nombreNuevo || "").trim();
+    if (!nn || nn === nombreViejo) return;
+    persistPagos((pagos || []).map(p => p.obra === nombreViejo ? { ...p, obra: nn } : p));
+  }
+  function quitarObraPago(nombre) {
+    if (!window.confirm(`¿Quitar "${nombre}" de los pagos? Los pagos que la tenían van a quedar como "sin obra" (no se borran los pagos).`)) return;
+    persistPagos((pagos || []).map(p => p.obra === nombre ? { ...p, obra: "" } : p));
+  }
   async function persistArch(next) { setArchivos(next); await storage.set("sebastian_archivos", JSON.stringify(next)).catch(() => { }); }
   async function persistGastos(next) { setGastos(next); try { localStorage.setItem("sebastian_gastos", JSON.stringify(next)); } catch { } await storage.set("sebastian_gastos", JSON.stringify(next)).catch(() => { }); }
   function cargarGasto(a) { const g = { id: uid() + Date.now(), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }; persistGastos([g, ...(gastos || [])]); return g; }
@@ -1078,7 +1087,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
-    {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} />}
+    {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} renombrarObra={renombrarObraPago} quitarObra={quitarObraPago} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
     {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: 0, direccion: "" })} borrar={borrarObra} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
@@ -1150,8 +1159,10 @@ function Icono({ n, size = 20 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>{p[n] || null}</svg>;
 }
 
-function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, onAdd }) {
+function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, onAdd, renombrarObra, quitarObra }) {
   const [form, setForm] = useState(null);
+  const [editandoObras, setEditandoObras] = useState(false);
+  const [nombresEdit, setNombresEdit] = useState({});
   const mesActual = hoyStr().slice(3);
   const [mesVer, setMesVer] = useState(mesActual);
   const listaObra = (pagos || []).filter(p => !filtroObra || p.obra === filtroObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
@@ -1191,13 +1202,23 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, 
         <button onClick={guardar} style={{ flex: 2, background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Guardar</button>
       </div>
     </div>}
-    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
       <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 16, color: T.text }}>
         <option value="">Todas las obras</option>
         {obrasUnicas.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
       <button onClick={exportar} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: T.rsm, padding: "0 16px", fontSize: 12.5, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer", whiteSpace: "nowrap" }}>Exportar Excel</button>
     </div>
+    {obrasUnicas.length > 0 && <button onClick={() => setEditandoObras(v => !v)} style={{ background: "none", border: "none", color: T.sub, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 12, textDecoration: "underline" }}>{editandoObras ? "Cerrar edición de obras" : "✎ Editar / borrar nombres de obra"}</button>}
+    {editandoObras && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: 12, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Nombres de obra usados en Pagos</div>
+      {obrasUnicas.map(o => (<div key={o} style={{ display: "flex", gap: 6, marginBottom: 7 }}>
+        <input defaultValue={o} onChange={e => setNombresEdit(prev => ({ ...prev, [o]: e.target.value }))} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 14, color: T.text, minWidth: 0 }} />
+        <button onClick={() => { renombrarObra(o, nombresEdit[o] != null ? nombresEdit[o] : o); }} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "0 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar</button>
+        <button onClick={() => quitarObra(o)} style={{ background: "none", color: "#B03A3A", border: "1px solid #B03A3A", borderRadius: 8, padding: "0 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Borrar</button>
+      </div>))}
+      <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.5 }}>"Guardar" cambia el nombre en todos los pagos que lo usan (sirve para corregir errores de tipeo o unificar duplicados). "Borrar" saca ese nombre; los pagos quedan sin obra, no se borran.</div>
+    </div>}
     <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pendiente {mesVer === mesActual ? "(este mes)" : ""}</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: "#9A6B1E", marginTop: 3 }}>${totalPend.toLocaleString("es-AR")}</div></div>
       <div style={{ flex: 1, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px" }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.1em" }}>Pagado {mesVer === mesActual ? "(este mes)" : ""}</div><div style={{ fontFamily: T.serif, fontSize: 21, fontWeight: 600, color: T.accent, marginTop: 3 }}>${totalPag.toLocaleString("es-AR")}</div></div>
