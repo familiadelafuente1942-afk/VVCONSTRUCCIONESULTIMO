@@ -2626,8 +2626,33 @@ function contextoDatos(data) {
   if (edif.length) { L.push("== EDIFICIOS =="); edif.forEach(e => { const tot = (e.costos || []).reduce((s, c) => s + num(c.montoArs || c.monto), 0); L.push(`- ${e.nombre}: invertido ~${m(tot)}, ${(e.unidades || []).length} unidades.`); (e.costos || []).forEach(c => L.push(`    · ${c.cat}: ${m(c.montoArs || c.monto)}`)); }); }
   if (cont.length) { L.push("== AGENDA (contactos) =="); cont.forEach(c => L.push(`- ${c.nombre} (${c.tipo}) ${c.telefono || ""}`)); }
   if (pres.length) { L.push("== PRESUPUESTOS SOCIEDAD =="); pres.forEach(p => L.push(`- ${p.nombre}: ${m(p.total || p.monto)} · ${p.estado}`)); }
+  // Planillas Excel históricas importadas (Belfast + Cobros y Pagos Generales).
+  // Viven en data.planillasHistoricas, aparte de obras/certs/movimientos, para
+  // no tocar ni mezclarse con lo que ya carga la app normalmente.
+  try {
+    const ph = data.planillasHistoricas;
+    if (ph && ph.belfast && ph.belfast.length) {
+      L.push("== PLANILLA BELFAST (obras en sociedad — presupuesto, cobros semanales y saldo ajustado por IPC) ==");
+      ph.belfast.forEach(o => {
+        L.push(`- ${o.nombre}: ${o.m2 || 0} m2 × ${m(o.precioM2)}/m2 = presupuesto ${m(o.presupuesto)}. Cobrado histórico ${m(o.totalCobradoHistorico)}. Saldo actual (ajustado por IPC) ${o.saldoActualAjustadoPorIPC != null ? m(o.saldoActualAjustadoPorIPC) : "s/d"}.`);
+        (o.historialMensualSaldo || []).forEach(h => L.push(`    · ${h.mes}: IPC ${h.ipc != null ? (h.ipc * 100).toFixed(1) + "%" : "-"}, cobros del mes ${m(h.cobrosDelMes)}, ajuste ${m(h.ajuste)}, saldo final ${m(h.saldoFinal)}`));
+        (o.cobrosSemanales || []).forEach(c => L.push(`    · cobro semanal ${fmtISO(c.fecha)}: ${m(c.monto)}`));
+      });
+      L.push("");
+    }
+    if (ph && ph.cobrosGeneralesResumen) {
+      const r = ph.cobrosGeneralesResumen;
+      L.push(`== PLANILLA COBROS Y PAGOS GENERALES (histórica, ${r.rangoFechas?.desde} a ${r.rangoFechas?.hasta}, resumen) ==`);
+      L.push(r.nota || "");
+      L.push("Totales por categoría/persona/obra:");
+      (r.porCategoria || []).forEach(c => L.push(`- ${c.categoria}: ${m(c.total)} (${c.cantidadMovimientos} movimientos)`));
+      L.push("Totales por mes:");
+      (r.porMes || []).forEach(x => L.push(`- ${x.mes}: ${m(x.total)}`));
+      L.push("");
+    }
+  } catch { }
   const txt = L.join("\n") || "(todavía no hay datos cargados)";
-  return txt.length > 45000 ? txt.slice(0, 45000) + "\n…(recortado)" : txt;
+  return txt.length > 60000 ? txt.slice(0, 60000) + "\n…(recortado)" : txt;
 }
 function AsistenteCargaTab({ data, save }) {
   const [texto, setTexto] = useState(""); const [files, setFiles] = useState([]); const [cargando, setCargando] = useState(false); const [msgs, setMsgs] = useState(() => { try { const l = localStorage.getItem("vv_ia_chat"); return l ? JSON.parse(l) : []; } catch { return []; } }); const [acciones, setAcciones] = useState([]); const [error, setError] = useState(""); const [subLogo, setSubLogo] = useState(false); const [mostrarTexto, setMostrarTexto] = useState(false); const [escuchando, setEscuchando] = useState(false);
