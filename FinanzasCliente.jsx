@@ -1067,6 +1067,199 @@ const inpLabelStyle = { fontSize: 12.5, fontWeight: 600, color: T.sub };
 function Box({ t, v, c }) { return <div style={{ background: T.bg, borderRadius: 11, padding: "10px 12px" }}><div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>{t}</div><div style={{ fontSize: 14, fontWeight: 700, color: c || T.text, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{v}</div></div>; }
 function Line({ t, v, c }) { return <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "3px 0" }}><span style={{ color: T.sub }}>{t}</span><span style={{ fontWeight: 600, color: c || T.text, fontVariantNumeric: "tabular-nums" }}>{v}</span></div>; }
 
+// ============ COBROS Y CERTIFICADO (planilla general histórica, 100% editable) ============
+// Vive en una key propia de Supabase (vv_cobros_generales), separada de vv_finanzas, para
+// no pesar cada guardado normal de la app con esta planilla vieja (100+ hojas). Se carga
+// una vez al entrar a la solapa y se guarda sola (con un pequeño debounce) al editar.
+// Podés reimportar el Excel entero cuando quieras (reemplaza todo lo que haya acá), o
+// editar celda por celda, agregar filas/columnas/hojas, directo en la app.
+const COBROS_GEN_KEY = "vv_cobros_generales";
+
+function gridCellToStr(v) { return v == null ? "" : String(v); }
+function strToGridCell(s) {
+  const t = String(s).trim();
+  if (t === "") return null;
+  const n = t.replace(/\./g, "").replace(",", ".");
+  if (/^-?\d+(\.\d+)?$/.test(n)) return Number(n);
+  return t;
+}
+// Convierte un workbook de SheetJS en { hojas: [{nombre, filas}] }, recortando filas/columnas
+// vacías al final de cada hoja (el rango "usado", igual que muestra Excel).
+function workbookAGrid(XLSX, wb) {
+  const isoOf = (d) => { const dt = (d instanceof Date) ? d : new Date(d); if (isNaN(dt)) return null; return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`; };
+  const hojas = wb.SheetNames.map(nombre => {
+    const ws = wb.Sheets[nombre];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    let maxR = -1, maxC = -1;
+    aoa.forEach((row, r) => (row || []).forEach((v, c) => { if (v !== null && String(v).trim() !== "") { if (r > maxR) maxR = r; if (c > maxC) maxC = c; } }));
+    const filas = [];
+    for (let r = 0; r <= maxR; r++) {
+      const row = aoa[r] || [];
+      const fila = [];
+      for (let c = 0; c <= maxC; c++) {
+        let v = row[c] != null ? row[c] : null;
+        if (v instanceof Date) v = isoOf(v);
+        else if (typeof v === "number") v = Math.round(v * 100) / 100;
+        fila.push(v);
+      }
+      filas.push(fila);
+    }
+    return { nombre, filas };
+  }).filter(h => h.filas.length);
+  return { hojas };
+}
+
+function CobrosGeneralesTab() {
+  const [estado, setEstado] = useState("cargando"); // cargando | listo | vacio
+  const [hojas, setHojas] = useState([]);
+  const [hojaSel, setHojaSel] = useState(0);
+  const [guardando, setGuardando] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const saveTimer = useRef(null);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await storage.get(COBROS_GEN_KEY);
+        if (r && r.value) {
+          const parsed = JSON.parse(r.value);
+          setHojas(parsed.hojas || []);
+          setEstado((parsed.hojas || []).length ? "listo" : "vacio");
+        } else setEstado("vacio");
+      } catch { setEstado("vacio"); }
+    })();
+  }, []);
+
+  function guardar(nextHojas) {
+    setHojas(nextHojas);
+    setGuardando(true);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try { await storage.set(COBROS_GEN_KEY, JSON.stringify({ hojas: nextHojas })); } catch { }
+      setGuardando(false);
+    }, 700);
+  }
+
+  async function importarExcel(e) {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    if (hojas.length && !window.confirm("Esto reemplaza TODAS las hojas que ya tenés cargadas acá por las del Excel que elegiste. ¿Seguro?")) return;
+    setImportando(true);
+    try {
+      const XLSX = await cargarXLSX();
+      const ab = await file.arrayBuffer();
+      const wb = XLSX.read(ab, { type: "array", cellDates: true });
+      const { hojas: nuevas } = workbookAGrid(XLSX, wb);
+      if (!nuevas.length) { alert("No encontré datos en ese archivo."); setImportando(false); return; }
+      guardar(nuevas);
+      setHojaSel(0);
+      setEstado("listo");
+      alert(`✓ Importado. ${nuevas.length} hoja(s) cargadas, totalmente editables.`);
+    } catch (err) { alert(err.message || "No se pudo leer el archivo."); }
+    setImportando(false);
+  }
+
+  function setCelda(hIdx, r, c, val) {
+    const next = hojas.map((h, i) => {
+      if (i !== hIdx) return h;
+      const filas = h.filas.map((fila, ri) => ri === r ? fila.map((cell, ci) => ci === c ? strToGridCell(val) : cell) : fila);
+      return { ...h, filas };
+    });
+    guardar(next);
+  }
+  function agregarFila(hIdx) {
+    const next = hojas.map((h, i) => {
+      if (i !== hIdx) return h;
+      const nCols = h.filas[0] ? h.filas[0].length : 4;
+      return { ...h, filas: [...h.filas, new Array(nCols).fill(null)] };
+    });
+    guardar(next);
+  }
+  function borrarFila(hIdx, r) {
+    if (!window.confirm("¿Borrar esta fila?")) return;
+    const next = hojas.map((h, i) => i === hIdx ? { ...h, filas: h.filas.filter((_, ri) => ri !== r) } : h);
+    guardar(next);
+  }
+  function agregarColumna(hIdx) {
+    const next = hojas.map((h, i) => i === hIdx ? { ...h, filas: h.filas.map(f => [...f, null]) } : h);
+    guardar(next);
+  }
+  function agregarHoja() {
+    const nombre = window.prompt("Nombre de la nueva hoja (ej: semana 12/10):");
+    if (!nombre) return;
+    const next = [...hojas, { nombre, filas: [["Fecha", "Descripcion", "Entrada"], [null, null, null]] }];
+    guardar(next);
+    setHojaSel(next.length - 1);
+    setEstado("listo");
+  }
+  function borrarHoja(hIdx) {
+    if (!window.confirm(`¿Borrar la hoja "${hojas[hIdx].nombre}" entera? No se puede deshacer.`)) return;
+    const next = hojas.filter((_, i) => i !== hIdx);
+    guardar(next);
+    setHojaSel(0);
+  }
+
+  const hojasFiltradas = busqueda ? hojas.map((h, i) => ({ h, i })).filter(({ h }) => sinTildes(h.nombre).includes(sinTildes(busqueda))) : hojas.map((h, i) => ({ h, i }));
+  const actual = hojas[hojaSel];
+
+  return (<div style={{ padding: "14px 16px 40px" }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4 }}>Cobros y Certificado — planilla general</div>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 10 }}>Tu planilla vieja de "Cobros y pagos generales", hoja por hoja, tal cual como en Excel — pero editable directo acá.{guardando ? " Guardando…" : ""}</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button onClick={() => fileRef.current && fileRef.current.click()} disabled={importando} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "9px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{importando ? "Leyendo…" : (hojas.length ? "↻ Reimportar Excel" : "+ Importar Excel")}</button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={importarExcel} />
+        {hojas.length > 0 && <button onClick={agregarHoja} style={{ background: "none", color: T.text, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Hoja nueva</button>}
+      </div>
+    </div>
+
+    {estado === "cargando" && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: 30 }}>Cargando…</div>}
+
+    {estado === "vacio" && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 10px" }}>Todavía no cargaste nada acá.<br />Tocá "Importar Excel" y subí tu planilla de cobros y pagos.</div>}
+
+    {estado === "listo" && hojas.length > 0 && <>
+      <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar hoja/semana…" style={{ ...inpSm, width: "100%", marginBottom: 8 }} />
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
+        {hojasFiltradas.map(({ h, i }) => (
+          <button key={i} onClick={() => setHojaSel(i)} style={{ flexShrink: 0, background: hojaSel === i ? T.navy : "transparent", color: hojaSel === i ? "#fff" : T.sub, border: `1px solid ${hojaSel === i ? T.navy : T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>{h.nombre}</button>
+        ))}
+      </div>
+
+      {actual && <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{actual.nombre}</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => agregarColumna(hojaSel)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>+ Columna</button>
+            <button onClick={() => agregarFila(hojaSel)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>+ Fila</button>
+            <button onClick={() => borrarHoja(hojaSel)} style={{ background: "none", border: "1px solid #DC2626", color: "#DC2626", borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Borrar hoja</button>
+          </div>
+        </div>
+        <div style={{ overflowX: "auto", border: `1px solid ${T.border}`, borderRadius: 10 }}>
+          <table style={{ borderCollapse: "collapse", fontSize: 11.5 }}>
+            <tbody>
+              {actual.filas.map((fila, r) => (
+                <tr key={r}>
+                  {fila.map((cell, c) => (
+                    <td key={c} style={{ border: `1px solid ${T.border}`, padding: 0 }}>
+                      <input value={gridCellToStr(cell)} onChange={e => setCelda(hojaSel, r, c, e.target.value)} style={{ width: 108, border: "none", background: r === 0 ? T.bg : "transparent", fontWeight: r === 0 ? 700 : 400, color: T.text, padding: "6px 7px", fontSize: 11.5 }} />
+                    </td>
+                  ))}
+                  <td style={{ border: "none", padding: "0 4px" }}>
+                    <button onClick={() => borrarFila(hojaSel, r)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>}
+    </>}
+  </div>);
+}
+
+
 export default function App() {
   const [data, save, refrescar] = useFinanzas();
   const [refrescando, setRefrescando] = useState(false);
@@ -1098,7 +1291,7 @@ export default function App() {
     </div>
     <div style={{ background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
       {[
-        [["ia", "✨ IA"], ["precios", "Valores", "por m²"], ["presupuesto", "Presup."], ["cliente", "Certificado"]],
+        [["ia", "✨ IA"], ["precios", "Valores", "por m²"], ["presupuesto", "Presup."], ["cliente", "Certificado"], ["cobrosgen", "Cobros y", "Certificado"]],
       ].map((fila, fi) => (
         <div key={fi} style={{ display: "flex", borderTop: fi > 0 ? `1px solid ${T.border}` : "none" }}>
           {fila.map(([k, l1, l2]) => (
@@ -1121,6 +1314,7 @@ export default function App() {
           ? <CertTab modo="cliente" obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />
           : <CertGeneral obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} modo="cliente" />}
       </div>}
+      {tab === "cobrosgen" && <CobrosGeneralesTab />}
     </div>
     {verConfig && <ConfigModal data={data} save={save} onClose={() => setVerConfig(false)} />}
   </div>);
