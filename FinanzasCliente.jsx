@@ -1069,22 +1069,30 @@ function Line({ t, v, c }) { return <div style={{ display: "flex", justifyConten
 
 // ============ COBROS Y CERTIFICADO (planilla general histórica, 100% editable) ============
 // Vive en una key propia de Supabase (vv_cobros_generales), separada de vv_finanzas, para
-// no pesar cada guardado normal de la app con esta planilla vieja (100+ hojas). Se carga
-// una vez al entrar a la solapa y se guarda sola (con un pequeño debounce) al editar.
-// Podés reimportar el Excel entero cuando quieras (reemplaza todo lo que haya acá), o
-// editar celda por celda, agregar filas/columnas/hojas, directo en la app.
+// no pesar cada guardado normal de la app con esta planilla vieja (100+ hojas).
+// Usa jspreadsheet-ce (librería libre, se trae por CDN la primera vez que se abre esta
+// solapa) para tener una planilla de verdad adentro de la app: negrita, cursiva, color de
+// letra, color de fondo/resaltado, alinear, ancho de columna arrastrando, insertar/borrar
+// filas y columnas con el botón derecho, todo como en Excel — no una tabla básica.
 const COBROS_GEN_KEY = "vv_cobros_generales";
 
-function gridCellToStr(v) { return v == null ? "" : String(v); }
-function strToGridCell(s) {
-  const t = String(s).trim();
-  if (t === "") return null;
-  const n = t.replace(/\./g, "").replace(",", ".");
-  if (/^-?\d+(\.\d+)?$/.test(n)) return Number(n);
-  return t;
+function cargarJspreadsheet() {
+  return new Promise((resolve, reject) => {
+    if (typeof window !== "undefined" && window.jspreadsheet && window.jSuites) return resolve();
+    const addCss = (href) => { if (document.querySelector(`link[href="${href}"]`)) return; const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; document.head.appendChild(l); };
+    const addScript = (src) => new Promise((res, rej) => { if (document.querySelector(`script[src="${src}"]`)) return res(); const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("no se pudo cargar " + src)); document.head.appendChild(s); });
+    addCss("https://cdn.jsdelivr.net/npm/jsuites/dist/jsuites.min.css");
+    addCss("https://cdn.jsdelivr.net/npm/jspreadsheet-ce@4/dist/jspreadsheet.min.css");
+    addScript("https://cdn.jsdelivr.net/npm/jsuites/dist/jsuites.min.js")
+      .then(() => addScript("https://cdn.jsdelivr.net/npm/jspreadsheet-ce@4/dist/index.min.js"))
+      .then(() => resolve())
+      .catch(reject);
+  });
 }
-// Convierte un workbook de SheetJS en { hojas: [{nombre, filas}] }, recortando filas/columnas
-// vacías al final de cada hoja (el rango "usado", igual que muestra Excel).
+
+// Convierte un workbook de SheetJS en { hojas: [{nombre, data}] }, recortando filas/columnas
+// vacías al final de cada hoja (el rango "usado", igual que muestra Excel). Las celdas
+// vacías quedan como "" (no null) porque jspreadsheet trabaja con strings/números.
 function workbookAGrid(XLSX, wb) {
   const isoOf = (d) => { const dt = (d instanceof Date) ? d : new Date(d); if (isNaN(dt)) return null; return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`; };
   const hojas = wb.SheetNames.map(nombre => {
@@ -1092,21 +1100,88 @@ function workbookAGrid(XLSX, wb) {
     const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
     let maxR = -1, maxC = -1;
     aoa.forEach((row, r) => (row || []).forEach((v, c) => { if (v !== null && String(v).trim() !== "") { if (r > maxR) maxR = r; if (c > maxC) maxC = c; } }));
-    const filas = [];
+    const data = [];
     for (let r = 0; r <= maxR; r++) {
       const row = aoa[r] || [];
       const fila = [];
       for (let c = 0; c <= maxC; c++) {
-        let v = row[c] != null ? row[c] : null;
+        let v = row[c] != null ? row[c] : "";
         if (v instanceof Date) v = isoOf(v);
         else if (typeof v === "number") v = Math.round(v * 100) / 100;
         fila.push(v);
       }
-      filas.push(fila);
+      data.push(fila);
     }
-    return { nombre, filas };
-  }).filter(h => h.filas.length);
+    return { nombre, data, style: {}, widths: {}, merge: {} };
+  }).filter(h => h.data.length);
   return { hojas };
+}
+
+// Una hoja = una instancia real de jspreadsheet, montada a mano en un <div> (no se
+// re-renderiza por React mientras se edita: React solo la crea una vez por hoja y la
+// lee para guardar). Así el usuario puede tipear, poner negrita, cambiar colores,
+// arrastrar el ancho de columnas, sin que cada tecla dispare un re-render de toda la app.
+function HojaGrid({ hoja, onDirty }) {
+  const contRef = useRef(null);
+  const instRef = useRef(null);
+  const lastRef = useRef("");
+  const [error, setError] = useState("");
+
+  function leerEstado() {
+    const inst = instRef.current;
+    if (!inst) return null;
+    let data = []; try { data = inst.getData(); } catch { }
+    let style = {}; try { style = inst.getStyle() || {}; } catch { }
+    let widths = {}; try { const nc = (data[0] || []).length; for (let c = 0; c < nc; c++) { try { widths[c] = inst.getWidth(c); } catch { } } } catch { }
+    return { data, style, widths };
+  }
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      try {
+        await cargarJspreadsheet();
+        if (cancelado || !contRef.current || !window.jspreadsheet) return;
+        contRef.current.innerHTML = "";
+        const dataIni = (hoja.data && hoja.data.length) ? hoja.data : [["", "", ""], ["", "", ""]];
+        const nCols = Math.max(6, ...dataIni.map(r => r.length));
+        const dataPad = dataIni.map(r => { const f = r.slice(); while (f.length < nCols) f.push(""); return f.map(v => v == null ? "" : v); });
+        const inst = window.jspreadsheet(contRef.current, {
+          data: dataPad,
+          minDimensions: [Math.max(nCols, 8), Math.max(dataIni.length + 8, 25)],
+          toolbar: true,
+          contextMenu: true,
+          tableOverflow: true,
+          tableWidth: "100%",
+          tableHeight: "60vh",
+          style: hoja.style || {},
+        });
+        instRef.current = inst;
+        Object.entries(hoja.widths || {}).forEach(([c, w]) => { try { inst.setWidth(Number(c), w); } catch { } });
+        Object.entries(hoja.merge || {}).forEach(([cell, span]) => { try { inst.setMerge(cell, span[0], span[1]); } catch { } });
+        lastRef.current = JSON.stringify(leerEstado());
+      } catch (err) { if (!cancelado) setError(err.message || "No se pudo cargar la planilla."); }
+    })();
+
+    const timer = setInterval(() => {
+      const est = leerEstado();
+      if (!est) return;
+      const s = JSON.stringify(est);
+      if (s !== lastRef.current) { lastRef.current = s; onDirty(est); }
+    }, 4000);
+
+    return () => {
+      cancelado = true;
+      clearInterval(timer);
+      const est = leerEstado();
+      if (est) { const s = JSON.stringify(est); if (s !== lastRef.current) onDirty(est); }
+      instRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoja.nombre]);
+
+  if (error) return <div style={{ color: "#DC2626", fontSize: 12, padding: 16 }}>{error}</div>;
+  return <div ref={contRef} style={{ marginTop: 4 }} />;
 }
 
 function CobrosGeneralesTab() {
@@ -1125,8 +1200,10 @@ function CobrosGeneralesTab() {
         const r = await storage.get(COBROS_GEN_KEY);
         if (r && r.value) {
           const parsed = JSON.parse(r.value);
-          setHojas(parsed.hojas || []);
-          setEstado((parsed.hojas || []).length ? "listo" : "vacio");
+          // migración: si viene de una versión vieja con "filas" en vez de "data"
+          const hs = (parsed.hojas || []).map(h => ({ nombre: h.nombre, data: h.data || h.filas || [["", "", ""]], style: h.style || {}, widths: h.widths || {}, merge: h.merge || {} }));
+          setHojas(hs);
+          setEstado(hs.length ? "listo" : "vacio");
         } else setEstado("vacio");
       } catch { setEstado("vacio"); }
     })();
@@ -1140,6 +1217,19 @@ function CobrosGeneralesTab() {
       try { await storage.set(COBROS_GEN_KEY, JSON.stringify({ hojas: nextHojas })); } catch { }
       setGuardando(false);
     }, 700);
+  }
+
+  function onDirtyHoja(hIdx, estadoNuevo) {
+    setHojas(prev => {
+      const next = prev.map((h, i) => i === hIdx ? { ...h, ...estadoNuevo } : h);
+      setGuardando(true);
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(async () => {
+        try { await storage.set(COBROS_GEN_KEY, JSON.stringify({ hojas: next })); } catch { }
+        setGuardando(false);
+      }, 700);
+      return next;
+    });
   }
 
   async function importarExcel(e) {
@@ -1161,35 +1251,10 @@ function CobrosGeneralesTab() {
     setImportando(false);
   }
 
-  function setCelda(hIdx, r, c, val) {
-    const next = hojas.map((h, i) => {
-      if (i !== hIdx) return h;
-      const filas = h.filas.map((fila, ri) => ri === r ? fila.map((cell, ci) => ci === c ? strToGridCell(val) : cell) : fila);
-      return { ...h, filas };
-    });
-    guardar(next);
-  }
-  function agregarFila(hIdx) {
-    const next = hojas.map((h, i) => {
-      if (i !== hIdx) return h;
-      const nCols = h.filas[0] ? h.filas[0].length : 4;
-      return { ...h, filas: [...h.filas, new Array(nCols).fill(null)] };
-    });
-    guardar(next);
-  }
-  function borrarFila(hIdx, r) {
-    if (!window.confirm("¿Borrar esta fila?")) return;
-    const next = hojas.map((h, i) => i === hIdx ? { ...h, filas: h.filas.filter((_, ri) => ri !== r) } : h);
-    guardar(next);
-  }
-  function agregarColumna(hIdx) {
-    const next = hojas.map((h, i) => i === hIdx ? { ...h, filas: h.filas.map(f => [...f, null]) } : h);
-    guardar(next);
-  }
   function agregarHoja() {
     const nombre = window.prompt("Nombre de la nueva hoja (ej: semana 12/10):");
     if (!nombre) return;
-    const next = [...hojas, { nombre, filas: [["Fecha", "Descripcion", "Entrada"], [null, null, null]] }];
+    const next = [...hojas, { nombre, data: [["Fecha", "Descripcion", "Entrada"], ["", "", ""]], style: {}, widths: {}, merge: {} }];
     guardar(next);
     setHojaSel(next.length - 1);
     setEstado("listo");
@@ -1207,7 +1272,7 @@ function CobrosGeneralesTab() {
   return (<div style={{ padding: "14px 16px 40px" }}>
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 14 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4 }}>Cobros y Certificado — planilla general</div>
-      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 10 }}>Tu planilla vieja de "Cobros y pagos generales", hoja por hoja, tal cual como en Excel — pero editable directo acá.{guardando ? " Guardando…" : ""}</div>
+      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 10 }}>Tu planilla vieja de "Cobros y pagos generales", hoja por hoja — con negrita, colores, alinear y ancho de columna como en Excel.{guardando ? " Guardando…" : ""}</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button onClick={() => fileRef.current && fileRef.current.click()} disabled={importando} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 8, padding: "9px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{importando ? "Leyendo…" : (hojas.length ? "↻ Reimportar Excel" : "+ Importar Excel")}</button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={importarExcel} />
@@ -1230,34 +1295,14 @@ function CobrosGeneralesTab() {
       {actual && <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{actual.nombre}</div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => agregarColumna(hojaSel)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>+ Columna</button>
-            <button onClick={() => agregarFila(hojaSel)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>+ Fila</button>
-            <button onClick={() => borrarHoja(hojaSel)} style={{ background: "none", border: "1px solid #DC2626", color: "#DC2626", borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Borrar hoja</button>
-          </div>
+          <button onClick={() => borrarHoja(hojaSel)} style={{ background: "none", border: "1px solid #DC2626", color: "#DC2626", borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Borrar hoja</button>
         </div>
-        <div style={{ overflowX: "auto", border: `1px solid ${T.border}`, borderRadius: 10 }}>
-          <table style={{ borderCollapse: "collapse", fontSize: 11.5 }}>
-            <tbody>
-              {actual.filas.map((fila, r) => (
-                <tr key={r}>
-                  {fila.map((cell, c) => (
-                    <td key={c} style={{ border: `1px solid ${T.border}`, padding: 0 }}>
-                      <input value={gridCellToStr(cell)} onChange={e => setCelda(hojaSel, r, c, e.target.value)} style={{ width: 108, border: "none", background: r === 0 ? T.bg : "transparent", fontWeight: r === 0 ? 700 : 400, color: T.text, padding: "6px 7px", fontSize: 11.5 }} />
-                    </td>
-                  ))}
-                  <td style={{ border: "none", padding: "0 4px" }}>
-                    <button onClick={() => borrarFila(hojaSel, r)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <HojaGrid key={hojaSel} hoja={actual} onDirty={(est) => onDirtyHoja(hojaSel, est)} />
       </div>}
     </>}
   </div>);
 }
+
 
 
 export default function App() {
