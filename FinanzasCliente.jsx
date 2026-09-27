@@ -1078,7 +1078,7 @@ export default function App() {
     </div>
     <div style={{ background: T.navBar, backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 50 }}>
       {[
-        [["precios", "Valores", "por m²"], ["presupuesto", "Presup."], ["cliente", "Certificado"]],
+        [["ia", "✨ IA"], ["precios", "Valores", "por m²"], ["presupuesto", "Presup."], ["cliente", "Certificado"]],
       ].map((fila, fi) => (
         <div key={fi} style={{ display: "flex", borderTop: fi > 0 ? `1px solid ${T.border}` : "none" }}>
           {fila.map(([k, l1, l2]) => (
@@ -1088,6 +1088,7 @@ export default function App() {
       ))}
     </div>
     <div className="vv-body">
+      {tab === "ia" && <AsistenteCargaTab data={data} save={save} />}
       {tab === "precios" && <TablaPreciosTab data={data} save={save} />}
       {tab === "presupuesto" && <PresupuestoTab obras={obras} data={data} save={save} certsDe={certsDe} indices={indices} />}
       {tab === "cliente" && <div>
@@ -2594,9 +2595,30 @@ function descAccion(a) {
 }
 function contextoDatos(data) {
   const L = []; const m = (n) => "$" + Math.round(num(n) || 0).toLocaleString("es-AR");
+  // El resumen financiero (facturación por certificados, costo, utilidad, resultado
+  // operativo, caja real, imprevistos) va primero: es lo que más se pregunta y así
+  // no se pierde si el contexto se recorta más abajo por ser muy largo.
+  try { L.push("== RESUMEN FINANCIERO Y RESULTADO (certificados, facturación, caja) =="); L.push(resumenFinanciero(data)); L.push(""); } catch { }
   const obras = ordenarObras(data.obras), gastos = data.gastos || [], movs = data.movimientos || [], propias = ordenarObras(data.propias), soc = data.sociedad || [], edif = data.edificios || [], cont = data.contactos || [], pres = data.presupuestosSoc || [];
   const nomObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "General/sin asignar";
   if (obras.length) { L.push("== OBRAS DE CLIENTE =="); obras.forEach(o => L.push(`- ${o.nombre}: ${num(o.m2) || 0} m2, precio cliente ${m(o.precioCliente)}/m2, costo ${m(o.costoM2)}/m2, plazo ${o.plazoMeses || "?"} meses`)); }
+  // Avance por rubro: el % ACUMULADO de cada rubro del último certificado de
+  // cliente cargado (lo mismo que se ve en la pantalla de "Certificado").
+  try {
+    const conCerts = obras.filter(o => (o.rubros || []).length && (data.certs || []).some(c => c.obraId === o.id));
+    if (conCerts.length) {
+      L.push("== AVANCE POR RUBRO (acumulado, último certificado de cliente cargado) ==");
+      conCerts.forEach(o => {
+        const cs = (data.certs || []).filter(c => c.obraId === o.id).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : (a.ts || 0) - (b.ts || 0)));
+        const ult = cs[cs.length - 1]; if (!ult) return;
+        L.push(`- ${o.nombre} (certificado del ${fmtISO(ult.fecha)}):`);
+        (o.rubros || []).forEach(r => {
+          const acum = num((ult.cantidades || {})[r.id]) || 0;
+          L.push(`    · ${r.nombre} (incid. ${num(r.pct) || 0}%): acumulado ${acum}%, resta ${Math.max(0, 100 - acum)}%`);
+        });
+      });
+    }
+  } catch { }
   if (movs.length) { L.push("== COBROS Y PAGOS =="); movs.forEach(v => L.push(`- ${v.tipo === "cobro" ? "COBRO" : "PAGO"} ${m(v.monto)} · ${nomObra(v.obraId)} · ${fmtISO(v.fecha)}${v.nota ? ` · ${v.nota}` : ""}`)); }
   if (gastos.length) { L.push("== GASTOS =="); gastos.forEach(g => L.push(`- ${g.cat} ${m(g.monto)} · ${nomObra(g.obraId)} · ${fmtISO(g.fecha)}${g.nota ? ` · ${g.nota}` : ""}`)); }
   if (propias.length) { L.push("== OBRAS PARTICULARES =="); propias.forEach(p => { const costos = p.costos || []; const tot = costos.reduce((s, c) => s + num(c.montoArs || c.monto), 0); L.push(`- ${p.nombre}: invertido ~${m(tot)}. Venta estimada USD ${num(p.ventaUsd) || 0} / ARS ${num(p.ventaArs) || 0}.`); costos.forEach(c => L.push(`    · ${c.cat}: ${c.moneda === "usd" ? "USD " + Math.round(num(c.montoUsd || c.monto)).toLocaleString("es-AR") : m(c.montoArs || c.monto)}${c.nota ? ` (${c.nota})` : ""} ${fmtISO(c.ts ? new Date(c.ts).toISOString().slice(0, 10) : "")}`)); }); }
@@ -2605,7 +2627,7 @@ function contextoDatos(data) {
   if (cont.length) { L.push("== AGENDA (contactos) =="); cont.forEach(c => L.push(`- ${c.nombre} (${c.tipo}) ${c.telefono || ""}`)); }
   if (pres.length) { L.push("== PRESUPUESTOS SOCIEDAD =="); pres.forEach(p => L.push(`- ${p.nombre}: ${m(p.total || p.monto)} · ${p.estado}`)); }
   const txt = L.join("\n") || "(todavía no hay datos cargados)";
-  return txt.length > 16000 ? txt.slice(0, 16000) + "\n…(recortado)" : txt;
+  return txt.length > 45000 ? txt.slice(0, 45000) + "\n…(recortado)" : txt;
 }
 function AsistenteCargaTab({ data, save }) {
   const [texto, setTexto] = useState(""); const [files, setFiles] = useState([]); const [cargando, setCargando] = useState(false); const [msgs, setMsgs] = useState(() => { try { const l = localStorage.getItem("vv_ia_chat"); return l ? JSON.parse(l) : []; } catch { return []; } }); const [acciones, setAcciones] = useState([]); const [error, setError] = useState(""); const [subLogo, setSubLogo] = useState(false); const [mostrarTexto, setMostrarTexto] = useState(false); const [escuchando, setEscuchando] = useState(false);
