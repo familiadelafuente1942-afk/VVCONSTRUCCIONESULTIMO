@@ -130,6 +130,11 @@ function rubrosDePlantilla(tplId, rubrosActuales, usarPctDeBase, data) {
 /* Qué plantilla se parece más a los rubros que tiene una obra */
 const sinTildes = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
+// Normaliza un nombre de obra para comparar "Los puentes 132" contra "Puentes 132",
+// o "Saenz Peña lote 01" contra "Saenz peña 01": saca tildes/mayúsculas y palabras
+// de relleno ("los","la","el","lote") que suelen variar entre la app y las planillas.
+const normObra = (x) => sinTildes(x).replace(/\b(los|la|el|lote)\b/g, "").replace(/\s+/g, " ").trim();
+
 /* Adivina el tipo mirando los rubros. Es solo la PRIMERA suposición: el tipo real
    lo fijás vos en la tarjeta de la obra y queda guardado (o.tipoRubros).
    Tolerante a propósito: sirve aunque el rubro se llame "Estructura de hormigón".
@@ -212,7 +217,7 @@ function ajusteInflacionSaldo(obra, movimientos, cacMensual, obrasTodas) {
 // bloques de columnas Cobro/Pago por obra) y devuelve los datos listos para cargar
 // como movimientos + cacMensual. No escribe nada solo; el llamador decide qué guardar.
 // (usa cargarXLSX(), definida más abajo, para traer la librería SheetJS por CDN)
-function parsePlanillaRedet(XLSX, ab) {
+function parsePlanillaRedet(XLSX, ab, fechaMinima) {
   const wb = XLSX.read(ab, { type: "array", cellDates: true });
   const ymOf = (d) => { const dt = (d instanceof Date) ? d : new Date(d); if (isNaN(dt)) return null; return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; };
   const isoOf = (d) => { const dt = (d instanceof Date) ? d : new Date(d); if (isNaN(dt)) return null; return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`; };
@@ -245,7 +250,18 @@ function parsePlanillaRedet(XLSX, ab) {
         const cell = ws[XLSX.utils.encode_cell({ r, c })];
         const v = cell ? String(cell.v || "").trim().toLowerCase() : "";
         if (v === "fecha") colFecha = c;
-        if (v === "cobro") { tieneCobro = true; bloques.push({ colCobro: c, colPago: c + 1, rowNombre: r - 1 }); }
+        if (v === "cobro") {
+          tieneCobro = true;
+          // Antes se asumía que la columna siguiente a "Cobro" siempre era "Pago" (colPago: c+1),
+          // pero hay planillas (como la de Belfast) que solo tienen columna "Cobro" por obra.
+          // Ahora solo se toma como columna de Pago si esa celda dice literalmente "pago";
+          // si no, esta obra no tiene Pago y no se lee nada de la columna de al lado (que en
+          // realidad es el "Cobro" de la obra siguiente).
+          const cellNext = ws[XLSX.utils.encode_cell({ r, c: c + 1 })];
+          const vNext = cellNext ? String(cellNext.v || "").trim().toLowerCase() : "";
+          const colPago = vNext === "pago" ? c + 1 : -1;
+          bloques.push({ colCobro: c, colPago, rowNombre: r - 1 });
+        }
       }
       if (tieneCobro) { headerRow = r; break; }
     }
@@ -258,11 +274,13 @@ function parsePlanillaRedet(XLSX, ab) {
         for (let r = headerRow + 1; r <= range.e.r; r++) {
           const cF = ws[XLSX.utils.encode_cell({ r, c: colFecha })];
           if (!cF || !(cF.v instanceof Date)) continue;
+          const fechaIso = isoOf(cF.v);
+          if (fechaMinima && fechaIso && fechaIso < fechaMinima) continue;
           const cC = ws[XLSX.utils.encode_cell({ r, c: b.colCobro })];
-          const cP = ws[XLSX.utils.encode_cell({ r, c: b.colPago })];
+          const cP = b.colPago >= 0 ? ws[XLSX.utils.encode_cell({ r, c: b.colPago })] : null;
           const cobro = cC && typeof cC.v === "number" ? cC.v : 0;
           const pago = cP && typeof cP.v === "number" ? cP.v : 0;
-          if (cobro > 0 || pago > 0) filas.push({ fecha: isoOf(cF.v), cobro, pago });
+          if (cobro > 0 || pago > 0) filas.push({ fecha: fechaIso, cobro, pago });
         }
         obras[nombre] = filas;
       });
@@ -312,16 +330,18 @@ function TablaPreciosTab({ data, save }) {
     try {
       const XLSX = await cargarXLSX();
       const ab = await file.arrayBuffer();
-      const { ipc, obras: obrasXls } = parsePlanillaRedet(XLSX, ab);
+      // Solo se importan cobros/pagos con fecha desde el 2026-09-04 en adelante (lo anterior
+      // ya está cargado en la app). El IPC mensual se importa completo, sin filtrar por fecha.
+      const FECHA_MINIMA_IMPORT = "2026-09-04";
+      const { ipc, obras: obrasXls } = parsePlanillaRedet(XLSX, ab, FECHA_MINIMA_IMPORT);
       const nMesesIpc = Object.keys(ipc).length;
       const nombresXls = Object.keys(obrasXls);
       if (!nMesesIpc && !nombresXls.length) { alert("No pude encontrar la hoja \"Inflación\" ni \"Cobros y Pagos\" en ese archivo."); setImportando(false); return; }
-      const norm = (s) => sinTildes(s);
       const obrasApp = data.obras || [];
-      const matches = nombresXls.map(nom => ({ nom, obra: obrasApp.find(o => norm(o.nombre) === norm(nom)) }));
+      const matches = nombresXls.map(nom => ({ nom, obra: obrasApp.find(o => normObra(o.nombre) === normObra(nom)) }));
       const sinMatch = matches.filter(m => !m.obra).map(m => m.nom);
       const nFilas = matches.reduce((a, m) => a + (m.obra ? (obrasXls[m.nom] || []).length : 0), 0);
-      const detalle = `Encontré en la planilla:\n· ${nMesesIpc} mes(es) de IPC\n· ${matches.filter(m => m.obra).length} obra(s) que coinciden con las tuyas (${nFilas} filas de cobro/pago)` +
+      const detalle = `Encontré en la planilla:\n· ${nMesesIpc} mes(es) de IPC\n· ${matches.filter(m => m.obra).length} obra(s) que coinciden con las tuyas (${nFilas} filas de cobro/pago desde el ${FECHA_MINIMA_IMPORT})` +
         (sinMatch.length ? `\n\nNO encontré en tu app estas obras de la planilla (no se importan): ${sinMatch.join(", ")}` : "") +
         `\n\n¿Importar?`;
       if (!window.confirm(detalle)) { setImportando(false); return; }
