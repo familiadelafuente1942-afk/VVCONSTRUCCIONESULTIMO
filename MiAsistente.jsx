@@ -948,8 +948,13 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (i % 2) { doc.setFillColor(244, 247, 250); doc.rect(M, y, W - 2 * M, 7, "F"); }
       doc.text(nombre, M + 2, y + 5); doc.text(money(monto), 120, y + 5); doc.text(pct(monto, en.totalEmpresa) + "%", W - M - 2, y + 5, { align: "right" }); y += 7;
     });
-    y += 4; doc.setFontSize(9); doc.setFont("helvetica", "italic"); doc.setTextColor(90, 90, 90);
-    doc.text(`Invertido en Terralagos: ${money(en.terralagos)} (reinversión, ya sumada a la utilidad de arriba, no es un gasto).`, M, y);
+    y += 6; doc.setFontSize(10);
+    doc.setFillColor(27, 58, 91); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+    doc.rect(M, y, W - 2 * M, 8, "F"); doc.text("Inversiones", M + 2, y + 5.5); doc.text("Monto", 120, y + 5.5); y += 8;
+    doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal");
+    doc.text("(Terralagos)", M + 2, y + 5); doc.text(money(en.terralagos), 120, y + 5); y += 7;
+    doc.setFontSize(8); doc.setFont("helvetica", "italic"); doc.setTextColor(120, 120, 120);
+    doc.text("Ya sumada a la utilidad de arriba (no es un gasto), pero restada de la parte de Sebastián porque la puso él.", M, y + 4); y += 8;
     doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
     doc.text("Generado desde Mi Asistente.", M, 285);
     const nombreArchivo = `Resultados_${nombreMes.replace(/[^\w]+/g, "-")}_${esCierre ? "cierre" : "parcial"}_${hoyStr().replace(/\//g, "-")}.pdf`;
