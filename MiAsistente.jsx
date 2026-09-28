@@ -948,6 +948,8 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       if (i % 2) { doc.setFillColor(244, 247, 250); doc.rect(M, y, W - 2 * M, 7, "F"); }
       doc.text(nombre, M + 2, y + 5); doc.text(money(monto), 120, y + 5); doc.text(pct(monto, en.totalEmpresa) + "%", W - M - 2, y + 5, { align: "right" }); y += 7;
     });
+    y += 4; doc.setFontSize(9); doc.setFont("helvetica", "italic"); doc.setTextColor(90, 90, 90);
+    doc.text(`Invertido en Terralagos: ${money(en.terralagos)} (reinversión, ya sumada a la utilidad de arriba, no es un gasto).`, M, y);
     doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
     doc.text("Generado desde Mi Asistente.", M, 285);
     const nombreArchivo = `Resultados_${nombreMes.replace(/[^\w]+/g, "-")}_${esCierre ? "cierre" : "parcial"}_${hoyStr().replace(/\//g, "-")}.pdf`;
@@ -1822,8 +1824,12 @@ function calcularResultadoMes(mesKey, cobros, pagos, gastos) {
   const gastosTot = (gastos || []).filter(g => (g.fecha || "").slice(3) === mesKey).reduce((a, g) => a + (g.monto || 0), 0);
   const valeria = (pagos || []).filter(p => p.obra === "Valeria" && p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
   const valentina = (pagos || []).filter(p => p.obra === "Valentina" && p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
-  const sebastian = cobrado - pagado - gastosTot;
-  return { cobrado, cobradoPend, pagado, pagadoPend, gastos: gastosTot, valeria, valentina, sebastian, resultado: sebastian, totalEmpresa: sebastian + valeria + valentina };
+  // Lo pagado a la obra "Terralagos" es una inversión (no un gasto real): salió de la
+  // ganancia pero se convirtió en un activo, así que se suma de vuelta a la utilidad
+  // en vez de restarla (que es lo que pasaría si solo se dejara adentro de "pagado").
+  const terralagos = (pagos || []).filter(p => p.obra === "Terralagos" && p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
+  const sebastian = cobrado - pagado - gastosTot + terralagos;
+  return { cobrado, cobradoPend, pagado, pagadoPend, gastos: gastosTot, valeria, valentina, terralagos, sebastian, resultado: sebastian, totalEmpresa: sebastian + valeria + valentina };
 }
 function pct(valor, total) { if (!total) return "0"; return ((valor || 0) / total * 100).toLocaleString("es-AR", { maximumFractionDigits: 1 }); }
 function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, exportarPDF }) {
@@ -1845,26 +1851,31 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
       </div>
       <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 4 }}>Total Empresa</div>
       <div style={{ fontFamily: T.serif, fontSize: 38, fontWeight: 700, color: colorEmpresa, marginTop: 2 }}>${(en.totalEmpresa || 0).toLocaleString("es-AR")}</div>
-      <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Cobrado − Pagado − Gastos{cerrado ? " (cerrado el " + new Date(cerrado.ts || Date.now()).toLocaleDateString("es-AR") + ")" : ""}</div>
+      <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Cobrado − Pagado − Gastos + reinvertido en Terralagos{cerrado ? " (cerrado el " + new Date(cerrado.ts || Date.now()).toLocaleDateString("es-AR") + ")" : ""}</div>
 
       <div style={{ height: 1, background: T.border, margin: "14px 0" }} />
 
       <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Cómo se dividió este mes</div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Valeria</div>
           <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: T.text, marginTop: 3 }}>${(en.valeria || 0).toLocaleString("es-AR")}</div>
           <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.valeria, en.totalEmpresa)}%</div>
         </div>
-        <div style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+        <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Sebastián</div>
           <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: colorRes, marginTop: 3 }}>${(en.sebastian || 0).toLocaleString("es-AR")}</div>
           <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.sebastian, en.totalEmpresa)}%</div>
         </div>
-        <div style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+        <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Valentina</div>
           <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: T.text, marginTop: 3 }}>${(en.valentina || 0).toLocaleString("es-AR")}</div>
           <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.valentina, en.totalEmpresa)}%</div>
+        </div>
+        <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+          <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Invertido en Terralagos</div>
+          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: T.text, marginTop: 3 }}>${(en.terralagos || 0).toLocaleString("es-AR")}</div>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>ya sumado a la utilidad</div>
         </div>
       </div>
 
