@@ -944,7 +944,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     doc.setFillColor(27, 58, 91); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(9);
     doc.rect(M, y, W - 2 * M, 8, "F"); doc.text("Socio", M + 2, y + 5.5); doc.text("Monto", 120, y + 5.5); doc.text("%", W - M - 2, y + 5.5, { align: "right" }); y += 8;
     doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal");
-    [["Valeria", en.valeria], ["Sebastián", en.sebastian], ["Valentina", en.valentina]].forEach(([nombre, monto], i) => {
+    [["Valeria", en.valeria], ["Sebastián", en.sebastianReparto], ["Valentina", en.valentina]].forEach(([nombre, monto], i) => {
       if (i % 2) { doc.setFillColor(244, 247, 250); doc.rect(M, y, W - 2 * M, 7, "F"); }
       doc.text(nombre, M + 2, y + 5); doc.text(money(monto), 120, y + 5); doc.text(pct(monto, en.totalEmpresa) + "%", W - M - 2, y + 5, { align: "right" }); y += 7;
     });
@@ -1833,7 +1833,12 @@ function calcularResultadoMes(mesKey, cobros, pagos, gastos) {
   // Valentina y con lo invertido en Terralagos. "Pagos al personal" es solo la parte que
   // de verdad es un costo operativo, sacando esos tres conceptos.
   const pagosPersonal = pagado - valeria - valentina - terralagos;
-  return { cobrado, cobradoPend, pagado, pagadoPend, pagosPersonal, gastos: gastosTot, valeria, valentina, terralagos, sebastian, resultado: sebastian, totalEmpresa: sebastian + valeria + valentina };
+  // "sebastian" (con Terralagos sumado de vuelta) es el que arma el Total Empresa: la
+  // inversión no le resta valor a la empresa en conjunto. Pero Terralagos la pagó Sebastián
+  // de su propio bolsillo/cuenta, así que en el reparto individual SÍ tiene que verse
+  // restada de su parte — por eso "sebastianReparto" es el mismo cálculo sin sumarla.
+  const sebastianReparto = sebastian - terralagos;
+  return { cobrado, cobradoPend, pagado, pagadoPend, pagosPersonal, gastos: gastosTot, valeria, valentina, terralagos, sebastian, sebastianReparto, resultado: sebastian, totalEmpresa: sebastian + valeria + valentina };
 }
 function pct(valor, total) { if (!total) return "0"; return ((valor || 0) / total * 100).toLocaleString("es-AR", { maximumFractionDigits: 1 }); }
 function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, exportarPDF }) {
@@ -1844,7 +1849,7 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
   const en = cerrado ? cerrado : calcularResultadoMes(mesVer, cobros, pagos, gastos);
   const [mm, yy] = mesVer.split("/").map(Number);
   const nombreMes = `${MESES_LARGOS[(mm || 1) - 1]} '${String(yy || 0).padStart(2, "0")}`;
-  const colorRes = (en.resultado || 0) >= 0 ? T.accent : "#C0392B";
+  const colorRes = (en.sebastianReparto || 0) >= 0 ? T.accent : "#C0392B";
   const colorEmpresa = (en.totalEmpresa || 0) >= 0 ? T.accent : "#C0392B";
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Resultado del mes</div>
@@ -1868,8 +1873,8 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
         </div>
         <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Sebastián</div>
-          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: colorRes, marginTop: 3 }}>${(en.sebastian || 0).toLocaleString("es-AR")}</div>
-          <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.sebastian, en.totalEmpresa)}%</div>
+          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: colorRes, marginTop: 3 }}>${(en.sebastianReparto || 0).toLocaleString("es-AR")}</div>
+          <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.sebastianReparto, en.totalEmpresa)}%</div>
         </div>
         <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Valentina</div>
