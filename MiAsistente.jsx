@@ -936,7 +936,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     doc.setFontSize(10); doc.setTextColor(40, 40, 40);
     const fila = (label, val, bold) => { doc.setFont("helvetica", bold ? "bold" : "normal"); doc.text(label, M, y); doc.text(val, W - M, y, { align: "right" }); y += 7; };
     fila("Cobrado", money(en.cobrado));
-    fila("Pagado", money(en.pagado));
+    fila("Pagos al personal", money(en.pagosPersonal));
     fila("Gastos", money(en.gastos));
     y += 2; doc.setDrawColor(200, 200, 200); doc.line(M, y, W - M, y); y += 7;
     doc.setFontSize(13); fila("TOTAL EMPRESA", money(en.totalEmpresa), true);
@@ -1829,7 +1829,11 @@ function calcularResultadoMes(mesKey, cobros, pagos, gastos) {
   // en vez de restarla (que es lo que pasaría si solo se dejara adentro de "pagado").
   const terralagos = (pagos || []).filter(p => p.obra === "Terralagos" && p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
   const sebastian = cobrado - pagado - gastosTot + terralagos;
-  return { cobrado, cobradoPend, pagado, pagadoPend, gastos: gastosTot, valeria, valentina, terralagos, sebastian, resultado: sebastian, totalEmpresa: sebastian + valeria + valentina };
+  // "Pagado" mezcla pagos reales a personal/contratistas con los retiros de Valeria y
+  // Valentina y con lo invertido en Terralagos. "Pagos al personal" es solo la parte que
+  // de verdad es un costo operativo, sacando esos tres conceptos.
+  const pagosPersonal = pagado - valeria - valentina - terralagos;
+  return { cobrado, cobradoPend, pagado, pagadoPend, pagosPersonal, gastos: gastosTot, valeria, valentina, terralagos, sebastian, resultado: sebastian, totalEmpresa: sebastian + valeria + valentina };
 }
 function pct(valor, total) { if (!total) return "0"; return ((valor || 0) / total * 100).toLocaleString("es-AR", { maximumFractionDigits: 1 }); }
 function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, exportarPDF }) {
@@ -1851,7 +1855,7 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
       </div>
       <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 4 }}>Total Empresa</div>
       <div style={{ fontFamily: T.serif, fontSize: 38, fontWeight: 700, color: colorEmpresa, marginTop: 2 }}>${(en.totalEmpresa || 0).toLocaleString("es-AR")}</div>
-      <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Cobrado − Pagado − Gastos + reinvertido en Terralagos{cerrado ? " (cerrado el " + new Date(cerrado.ts || Date.now()).toLocaleDateString("es-AR") + ")" : ""}</div>
+      <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Cobrado − Pagos al personal − Gastos{cerrado ? " (cerrado el " + new Date(cerrado.ts || Date.now()).toLocaleDateString("es-AR") + ")" : ""}</div>
 
       <div style={{ height: 1, background: T.border, margin: "14px 0" }} />
 
@@ -1881,7 +1885,7 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
 
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Cobrado</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.cobrado || 0).toLocaleString("es-AR")}</div>{en.cobradoPend > 0 && <div style={{ fontSize: 10.5, color: "#B98A2E", marginTop: 1 }}>+${en.cobradoPend.toLocaleString("es-AR")} pend.</div>}</div>
-        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Pagado</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.pagado || 0).toLocaleString("es-AR")}</div>{en.pagadoPend > 0 && <div style={{ fontSize: 10.5, color: "#B98A2E", marginTop: 1 }}>+${en.pagadoPend.toLocaleString("es-AR")} pend.</div>}</div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Pagos al personal</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.pagosPersonal || 0).toLocaleString("es-AR")}</div>{en.pagadoPend > 0 && <div style={{ fontSize: 10.5, color: "#B98A2E", marginTop: 1 }}>+${en.pagadoPend.toLocaleString("es-AR")} pend.</div>}</div>
         <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Gastos</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.gastos || 0).toLocaleString("es-AR")}</div></div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
