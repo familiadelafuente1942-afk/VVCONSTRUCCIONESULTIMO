@@ -784,8 +784,31 @@ async function callAI(msgs, sys, apiKey, useSearch = false) {
 
 function daysSince(s) { if (!s) return 999; const [d, m, y] = s.split("/"); return Math.ceil((new Date(`20${y}`, m - 1, d) - new Date()) / (1000 * 60 * 60 * 24)); }
 function hexLight(hex) { try { const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return `#${Math.round(r * .12 + 255 * .88).toString(16).padStart(2, '0')}${Math.round(g * .12 + 255 * .88).toString(16).padStart(2, '0')}${Math.round(b * .12 + 255 * .88).toString(16).padStart(2, '0')}`; } catch { return 'rgba(37,99,235,.14)'; } }
+// ── INTENSIDAD DEL OSCURO ────────────────────────────────────────────
+// Cuando el esquema activo es oscuro (fondo bien negro), esto permite aclararlo
+// gradualmente sin salir del modo oscuro ni tocar los 6 colores a mano uno por uno.
+// cfg.oscuroIntensidad: 100 = como estaba (bien oscuro/opaco), menos = más clarito.
+function luminanciaHex(hex) {
+  try {
+    const h = String(hex || "").replace("#", "");
+    const hh = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
+    const n = parseInt(hh, 16) || 0;
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  } catch { return 1; }
+}
+function esEsquemaOscuro(colors) { return luminanciaHex((colors || {}).bg || "#ffffff") < 0.4; }
+function hexARgbG(hex) { const h = String(hex || "").replace("#", ""); const hh = h.length === 3 ? h.split("").map(c => c + c).join("") : h; const n = parseInt(hh, 16) || 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function rgbAHexG(rgb) { return "#" + rgb.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join(""); }
+function aclararHex(hex, t) { const A = hexARgbG(hex); const GRIS = [78, 80, 86]; return rgbAHexG(A.map((v, i) => v + (GRIS[i] - v) * t)); }
+function aplicarIntensidadOscuro(colors, intensidad) {
+  if (!esEsquemaOscuro(colors)) return colors;
+  const pct = Math.max(0, Math.min(100, intensidad == null ? 100 : Number(intensidad)));
+  const t = (1 - pct / 100) * 0.62; // tope: nunca se aclara más del 62% del camino a gris medio
+  return { ...colors, bg: aclararHex(colors.bg, t), card: aclararHex(colors.card, t), border: aclararHex(colors.border, Math.min(1, t * 1.3)), navy: aclararHex(colors.navy || colors.bg, t) };
+}
 function buildThemeCSS(cfg) {
-    const c = cfg.colors || DEFAULT_COLORS;
+    const c = aplicarIntensidadOscuro(cfg.colors || DEFAULT_COLORS, cfg.oscuroIntensidad);
     const fv = FONTS.find(f => f.id === cfg.fontId)?.value || "'Plus Jakarta Sans'";
     const rv = RADIUS_OPTS.find(r => r.id === cfg.radiusId)?.r || 14;
     return `:root{--bg:${c.bg};--card:${c.card};--border:${c.border};--text:${c.text};--sub:${c.sub || '#475569'};--muted:${c.muted || '#94A3B8'};--accent:${c.accent};--al:${c.al || hexLight(c.accent)};--navy:${c.navy};--r:${rv}px;--rsm:${Math.max(4, rv - 4)}px;--font:${fv};}`;
@@ -4782,6 +4805,15 @@ function MasConfig({ cfg, setCfg, onBack }) {
           <div style={{ display:"flex", gap:4, justifyContent:"center", marginBottom:6 }}><span style={{ width:15, height:15, borderRadius:3, background:p.accent }} /><span style={{ width:15, height:15, borderRadius:3, background:p.bg, border:`1px solid ${p.border}` }} /><span style={{ width:15, height:15, borderRadius:3, background:p.navy }} /></div>
           <div style={{ fontSize:11, fontWeight:600, color:p.text }}>{p.label}</div></button>); })}
       </div>
+      {esEsquemaOscuro(c) && <>
+        <div style={{ marginTop:20, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <Eyebrow>Intensidad del oscuro</Eyebrow>
+          <span style={{ fontSize:12, fontWeight:700, color:T.accent }}>{cfg.oscuroIntensidad==null?100:cfg.oscuroIntensidad}%</span>
+        </div>
+        <div style={{ fontSize:11, color:T.muted, marginBottom:9, marginTop:-6, lineHeight:1.5 }}>100% es bien oscuro (como estaba). Bajalo para aclararlo/darle más transparencia sin salir del modo oscuro.</div>
+        <input type="range" min="20" max="100" value={cfg.oscuroIntensidad==null?100:cfg.oscuroIntensidad} onChange={e=>setCfg(p=>({...p, oscuroIntensidad:Number(e.target.value)}))} style={{ width:"100%", accentColor:T.accent }} />
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:T.muted, marginTop:2 }}><span>Más clarito</span><span>Bien oscuro</span></div>
+      </>}
       <div style={{ marginTop:20 }}><Eyebrow>Color principal</Eyebrow></div>
       <div style={{ display:"flex", alignItems:"center", gap:9, flexWrap:"wrap" }}>
         {["#1E3A5F","#101C2C","#1F5C49","#6E3B2E","#46406E","#0E5A66","#7A2E50","#B0894F","#1F2937"].map(col=>(<button key={col} onClick={()=>setAccent(col)} style={{ width:32, height:32, borderRadius:5, background:col, border:`2px solid ${c.accent===col?T.text:T.border}`, cursor:"pointer" }} />))}
