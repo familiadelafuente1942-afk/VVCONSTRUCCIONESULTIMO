@@ -1620,7 +1620,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
   const [fotos, setFotos] = useState([]);
   const [adjuntos, setAdjuntos] = useState([]);
   const [subiendo, setSubiendo] = useState(false);
-  const [pdfHtml, setPdfHtml] = useState(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const fileRef = useRef(null);
   const adjRef = useRef(null);
 
@@ -1675,106 +1675,73 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
   };
   const borrar = (id) => { if (confirm("¿Borrar este hecho de la bitácora?")) setBitacora(prev => (prev || []).filter(h => h.id !== id)); };
 
-  const exportarPDF = () => {
-    if (!obra) return;
-    const marca = "V+V CONSTRUCCIONES";
-    const hoy = hoyStr();
-    const items = hechos.map((h, i) => {
-      const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
-      const fotosH = (h.fotos || []).map(ft => `<img src="${ft.url}" />`).join("");
-      return `<div class="hecho">
-        <div class="hh"><span class="num">${hechos.length - i}</span><span class="fecha">${fFmt}</span><span class="tit">${(h.titulo || "").replace(/</g, "&lt;")}</span></div>
-        ${h.desc ? `<div class="desc">${(h.desc || "").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</div>` : ""}
-        ${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}
-        ${(h.adjuntos || []).length ? `<div class="adj"><b>Adjuntos:</b> ${(h.adjuntos || []).map(a => (a.nombre || "").replace(/</g, "&lt;")).join(" · ")}</div>` : ""}
-      </div>`;
-    }).join("");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-      @page { margin: 14mm; }
-      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      html, body { margin: 0; padding: 0; }
-      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
-      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
-      @media screen { body { padding: 14px; } }
-      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 14px; }
-      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; letter-spacing: -.01em; }
-      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
-      .meta { font-size: 11px; color: #5B6B7F; margin-top: 8px; }
-      h1 { font-size: 15px; color: #0F1B2D; margin: 4px 0 2px; }
-      .hecho { border: 1px solid #E3E8EF; border-left: 3px solid #1B3A5B; border-radius: 8px; padding: 11px 13px; margin-bottom: 11px; page-break-inside: avoid; }
-      .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; flex-wrap: wrap; }
-      .num { background: #0F1B2D; color: #fff; font-size: 10px; font-weight: 800; border-radius: 20px; padding: 1px 8px; }
-      .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
-      .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
-      .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
-      .adj { font-size: 10.5px; color: #1B3A5B; background: rgba(255,255,255,.06); border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
-      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
-      .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
-      .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
-      .vacio { font-size: 12px; color: #98A2B3; text-align: center; padding: 30px; }
-    </style></head><body><div class="sheet">
-      <div class="hdr">
-        <div class="marca">${marca}</div>
-        <div class="tipo">Historial de obra · Bitácora</div>
-        <h1>${(obra.nombre || "").replace(/</g, "&lt;")}</h1>
-        <div class="meta">Comitente: ${(cfg?.comitente || "Belfast Construction Management")} · Emitido: ${hoy} · ${hechos.length} hecho${hechos.length !== 1 ? "s" : ""} registrado${hechos.length !== 1 ? "s" : ""}</div>
-      </div>
-      ${items || '<div class="vacio">Todavía no hay hechos cargados en esta obra.</div>'}
-      <div class="foot">Documento generado por ${marca} para respaldo y justificación de adicionales de obra.</div>
-    </div></body></html>`;
-    setPdfHtml(html);
-  };
-
-  // Arma el mismo documento que exportarPDF, pero para un solo hecho — para
-  // bajar/imprimir/mandar nada más que ese, sin arrastrar el resto.
-  const exportarUnHecho = (h) => {
-    if (!obra) return;
-    const marca = "V+V CONSTRUCCIONES";
-    const hoy = hoyStr();
-    const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
-    const fotosH = (h.fotos || []).map(ft => `<img src="${ft.url}" />`).join("");
-    const item = `<div class="hecho">
-        <div class="hh"><span class="fecha">${fFmt}</span><span class="tit">${(h.titulo || "").replace(/</g, "&lt;")}</span></div>
-        ${h.desc ? `<div class="desc">${(h.desc || "").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</div>` : ""}
-        ${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}
-        ${(h.adjuntos || []).length ? `<div class="adj"><b>Adjuntos:</b> ${(h.adjuntos || []).map(a => (a.nombre || "").replace(/</g, "&lt;")).join(" · ")}</div>` : ""}
-      </div>`;
-    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-      @page { margin: 14mm; }
-      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      html, body { margin: 0; padding: 0; }
-      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
-      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
-      @media screen { body { padding: 14px; } }
-      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 14px; }
-      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; letter-spacing: -.01em; }
-      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
-      .meta { font-size: 11px; color: #5B6B7F; margin-top: 8px; }
-      h1 { font-size: 15px; color: #0F1B2D; margin: 4px 0 2px; }
-      .hecho { border: 1px solid #E3E8EF; border-left: 3px solid #1B3A5B; border-radius: 8px; padding: 11px 13px; page-break-inside: avoid; }
-      .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; flex-wrap: wrap; }
-      .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
-      .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
-      .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
-      .adj { font-size: 10.5px; color: #1B3A5B; background: rgba(255,255,255,.06); border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
-      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
-      .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
-      .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
-    </style></head><body><div class="sheet">
-      <div class="hdr">
-        <div class="marca">${marca}</div>
-        <div class="tipo">Historial de obra · Bitácora — Hecho individual</div>
-        <h1>${(obra.nombre || "").replace(/</g, "&lt;")}</h1>
-        <div class="meta">Comitente: ${(cfg?.comitente || "Belfast Construction Management")} · Emitido: ${hoy}</div>
-      </div>
-      ${item}
-      <div class="foot">Documento generado por ${marca} para respaldo y justificación de adicionales de obra.</div>
-    </div></body></html>`;
-    setPdfHtml(html);
-  };
-  // Abre el correo con el asunto y el texto de ese hecho ya cargados — no
+  async function cargarJsPDFBita() {
+    if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+    const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
+    for (const src of urls) { try { await new Promise((resolve, reject) => { const sc = document.createElement("script"); sc.src = src; sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc); }); if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF; } catch (e) { } }
+    throw new Error("PDF");
+  }
+  // lista: los hechos a incluir — todos los de la obra, o uno solo particular.
+  // Genera un PDF de verdad (no una vista de impresión): en el celu ofrece
+  // compartir/guardar con el selector nativo, y si no hay share, lo descarga
+  // directo como archivo .pdf.
+  async function exportarPDF(lista) {
+    if (!obra || !lista || !lista.length) { alert("No hay hechos para exportar."); return; }
+    setPdfBusy(true);
+    try {
+      const jsPDF = await cargarJsPDFBita();
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(); const M = 42; let y = M;
+      const marca = "V+V CONSTRUCCIONES";
+      const ensure = (n) => { if (y + n > H - M) { doc.addPage(); y = M; } };
+      const loadImg = async (url) => { try { const r = await fetch(url); const b = await r.blob(); const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); }); const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 300, h: im.naturalHeight || 200 }); im.onerror = () => res({ w: 300, h: 200 }); im.src = data; }); let fmt = "JPEG"; try { fmt = data.substring(5, data.indexOf(";")).split("/")[1].toUpperCase(); if (fmt === "JPG") fmt = "JPEG"; } catch { } return { data, ...dim, fmt }; } catch { return null; } };
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text(marca, W / 2, y, { align: "center" }); y += 15;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("HISTORIAL DE OBRA · BITÁCORA", W / 2, y, { align: "center" }); y += 16;
+      doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 18;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(15, 27, 45); doc.text(obra.nombre || "", M, y); y += 15;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(91, 107, 127);
+      doc.text(`Comitente: ${cfg?.comitente || "Belfast Construction Management"} · Emitido: ${hoyStr()} · ${lista.length} hecho${lista.length !== 1 ? "s" : ""}`, M, y); y += 22;
+      for (const h of lista) {
+        ensure(40);
+        const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
+        doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(15, 27, 45);
+        const tituloLines = doc.splitTextToSize(`${fFmt}  —  ${h.titulo || ""}`, W - 2 * M);
+        for (const l of tituloLines) { ensure(14); doc.text(l, M, y); y += 14; }
+        if (h.etapa) { doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(176, 137, 79); ensure(13); doc.text(h.etapa, M, y); y += 13; }
+        if (h.desc) {
+          doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(26, 36, 51);
+          const descLines = doc.splitTextToSize(h.desc, W - 2 * M);
+          for (const l of descLines) { ensure(13); doc.text(l, M, y); y += 13; }
+        }
+        if ((h.fotos || []).length) {
+          y += 4; let x = M; const fw = 130, fh = 98, gap = 8;
+          for (const ft of h.fotos) {
+            const im = await loadImg(ft.url); if (!im) continue;
+            if (x + fw > W - M) { x = M; y += fh + gap; }
+            ensure(fh + gap);
+            let dw = fw, dh = fw * im.h / im.w; if (dh > fh) { dh = fh; dw = fh * im.w / im.h; }
+            try { doc.addImage(im.data, im.fmt, x, y, dw, dh); } catch { }
+            x += fw + gap;
+          }
+          y += fh + 10;
+        }
+        if ((h.adjuntos || []).length) {
+          doc.setFont("helvetica", "italic"); doc.setFontSize(9); doc.setTextColor(27, 58, 91);
+          const adjLines = doc.splitTextToSize("Adjuntos: " + h.adjuntos.map(a => a.nombre || "").join(" · "), W - 2 * M);
+          for (const l of adjLines) { ensure(13); doc.text(l, M, y); y += 13; }
+        }
+        y += 8; ensure(2); doc.setDrawColor(227, 232, 239); doc.setLineWidth(0.7); doc.line(M, y, W - M, y); y += 14;
+      }
+      const blob = doc.output("blob");
+      const nombreObra = (obra.nombre || "obra").replace(/[\/:*?"<>|]/g, "-");
+      const nombreArchivo = lista.length === 1 ? `Bitacora ${nombreObra} - ${(lista[0].titulo || "hecho").replace(/[\/:*?"<>|]/g, "-").slice(0, 40)}.pdf` : `Bitacora ${nombreObra}.pdf`;
+      const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+      setPdfBusy(false);
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: file.name }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) { setPdfBusy(false); alert("No pude generar el PDF. Probá de nuevo."); }
+  }
+  // Abre el correoo con el asunto y el texto de ese hecho ya cargados — no
   // manda un PDF adjunto (eso no se puede armar solo con un mailto:), pero
   // deja todo listo para escribir y mandar en el momento.
   const mailearHecho = (h) => {
@@ -1828,7 +1795,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
           <option value="">— Elegí una obra —</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
         </select>
-        {obraId && hechos.length > 0 && <button onClick={exportarPDF} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>PDF</button>}
+        {obraId && hechos.length > 0 && <button onClick={() => exportarPDF(hechos)} disabled={pdfBusy} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: pdfBusy ? "default" : "pointer", flexShrink: 0, opacity: pdfBusy ? .6 : 1 }}>{pdfBusy ? "Generando…" : "PDF todo"}</button>}
       </div>
 
       {obraId && <>
@@ -1890,7 +1857,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
               {h.adjuntos.map(a => <button key={a.id} onClick={() => window.open(a.url, "_blank")} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", maxWidth: "100%" }}><span>{iconoArch(a.nombre, a.tipo)}</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span></button>)}
             </div>}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button onClick={() => exportarUnHecho(h)} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>📄 PDF</button>
+              <button onClick={() => exportarPDF([h])} disabled={pdfBusy} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: pdfBusy ? "default" : "pointer", opacity: pdfBusy ? .6 : 1 }}>📄 {pdfBusy ? "…" : "PDF"}</button>
               <button onClick={() => mailearHecho(h)} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✉️ Mail</button>
             </div>
           </div>
@@ -1899,14 +1866,6 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
       {!obraId && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Elegí una obra para empezar la bitácora.</div>}
     </div>
 
-    {/* overlay PDF */}
-    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 500, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: T.navy, flexShrink: 0, position: "relative", zIndex: 2 }}>
-        <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
-        <button onClick={() => { const f = document.getElementById("bita-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
-      </div>
-      <iframe id="bita-pdf" srcDoc={pdfHtml} title="Bitácora PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
-    </div>}
   </div>);
 }
 
