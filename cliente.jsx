@@ -1675,6 +1675,18 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
   };
   const borrar = (id) => { if (confirm("¿Borrar este hecho de la bitácora?")) setBitacora(prev => (prev || []).filter(h => h.id !== id)); };
 
+  // El font estándar de jsPDF (Helvetica/WinAnsi) no sabe dibujar emojis ni
+  // símbolos raros — si se los pasás tal cual, salen esos caracteres
+  // "Ø=ÜÏ" pegoteados. Por eso todo texto que viene de los hechos (título,
+  // descripción, etc.) pasa antes por acá: los emoji al inicio de línea se
+  // cambian por un guion, y cualquier otro emoji/símbolo se saca.
+  function limpiarPDF(s) {
+    if (!s) return "";
+    return String(s)
+      .replace(/^([ \t]*)[\u{1F300}-\u{1FAFF}\u2600-\u27BF\u2B00-\u2BFF]\uFE0F?[ \t]*/gmu, "$1- ")
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
+      .replace(/[\u2600-\u27BF\u2B00-\u2BFF\u200D\uFE0F]/gu, "");
+  }
   async function cargarJsPDFBita() {
     if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
     const urls = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"];
@@ -1698,19 +1710,19 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
       doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(15, 27, 45); doc.text(marca, W / 2, y, { align: "center" }); y += 15;
       doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(176, 137, 79); doc.text("HISTORIAL DE OBRA · BITÁCORA", W / 2, y, { align: "center" }); y += 16;
       doc.setDrawColor(176, 137, 79); doc.setLineWidth(1.4); doc.line(M, y, W - M, y); y += 18;
-      doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(15, 27, 45); doc.text(obra.nombre || "", M, y); y += 15;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(15, 27, 45); doc.text(limpiarPDF(obra.nombre) || "", M, y); y += 15;
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(91, 107, 127);
       doc.text(`Comitente: ${cfg?.comitente || "Belfast Construction Management"} · Emitido: ${hoyStr()} · ${lista.length} hecho${lista.length !== 1 ? "s" : ""}`, M, y); y += 22;
       for (const h of lista) {
         ensure(40);
         const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
         doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(15, 27, 45);
-        const tituloLines = doc.splitTextToSize(`${fFmt}  —  ${h.titulo || ""}`, W - 2 * M);
+        const tituloLines = doc.splitTextToSize(`${fFmt}  —  ${limpiarPDF(h.titulo)}`, W - 2 * M);
         for (const l of tituloLines) { ensure(14); doc.text(l, M, y); y += 14; }
-        if (h.etapa) { doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(176, 137, 79); ensure(13); doc.text(h.etapa, M, y); y += 13; }
+        if (h.etapa) { doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(176, 137, 79); ensure(13); doc.text(limpiarPDF(h.etapa), M, y); y += 13; }
         if (h.desc) {
           doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(26, 36, 51);
-          const descLines = doc.splitTextToSize(h.desc, W - 2 * M);
+          const descLines = doc.splitTextToSize(limpiarPDF(h.desc), W - 2 * M);
           for (const l of descLines) { ensure(13); doc.text(l, M, y); y += 13; }
         }
         if ((h.fotos || []).length) {
@@ -1727,7 +1739,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
         }
         if ((h.adjuntos || []).length) {
           doc.setFont("helvetica", "italic"); doc.setFontSize(9); doc.setTextColor(27, 58, 91);
-          const adjLines = doc.splitTextToSize("Adjuntos: " + h.adjuntos.map(a => a.nombre || "").join(" · "), W - 2 * M);
+          const adjLines = doc.splitTextToSize("Adjuntos: " + h.adjuntos.map(a => limpiarPDF(a.nombre)).join(" · "), W - 2 * M);
           for (const l of adjLines) { ensure(13); doc.text(l, M, y); y += 13; }
         }
         y += 8; ensure(2); doc.setDrawColor(227, 232, 239); doc.setLineWidth(0.7); doc.line(M, y, W - M, y); y += 14;
