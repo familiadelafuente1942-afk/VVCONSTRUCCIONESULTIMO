@@ -1737,7 +1737,11 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
       const nombreArchivo = lista.length === 1 ? `Bitacora ${nombreObra} - ${(lista[0].titulo || "hecho").replace(/[\/:*?"<>|]/g, "-").slice(0, 40)}.pdf` : `Bitacora ${nombreObra}.pdf`;
       const file = new File([blob], nombreArchivo, { type: "application/pdf" });
       setPdfBusy(false);
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: file.name }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+      // El panel "Compartir" del sistema (buscar dispositivos cercanos, etc.)
+      // solo tiene sentido en el celular. En la compu (Windows/Mac/Linux)
+      // eso confunde — ahí siempre bajamos el archivo directo.
+      const esMobil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+      if (esMobil && navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: file.name }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
       const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) { setPdfBusy(false); alert("No pude generar el PDF. Probá de nuevo."); }
   }
