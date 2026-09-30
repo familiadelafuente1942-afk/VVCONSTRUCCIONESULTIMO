@@ -1745,15 +1745,23 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
       const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (e) { setPdfBusy(false); alert("No pude generar el PDF. Probá de nuevo."); }
   }
-  // Abre el correoo con el asunto y el texto de ese hecho ya cargados — no
+  // Abre el correo con el asunto y el texto de ese hecho ya cargados — no
   // manda un PDF adjunto (eso no se puede armar solo con un mailto:), pero
-  // deja todo listo para escribir y mandar en el momento.
-  const mailearHecho = (h) => {
+  // deja todo listo para escribir y mandar en el momento. Muchas compus no
+  // tienen un programa de mail configurado como predeterminado, y ahí el
+  // mailto: no abre nada sin avisar — por eso, además, copiamos el texto al
+  // portapapeles y avisamos, para que siempre quede algo útil.
+  const mailearHecho = async (h) => {
     if (!obra) return;
     const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
     const asunto = `Bitácora — ${obra.nombre} — ${fFmt}${h.titulo ? " — " + h.titulo : ""}`;
     const cuerpo = `${h.titulo || "Hecho de obra"}\nObra: ${obra.nombre}\nFecha: ${fFmt}\n\n${h.desc || ""}`;
-    window.location.href = `mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    try { await navigator.clipboard.writeText(`Asunto: ${asunto}\n\n${cuerpo}`); } catch { }
+    const a = document.createElement("a");
+    a.href = `mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+    alert("Se copió el texto de este hecho al portapapeles.\n\nSi no se abrió tu programa de mail (es común que la compu no tenga uno configurado por defecto), pegalo directo en Gmail, Outlook web, WhatsApp, etc.");
   };
 
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
