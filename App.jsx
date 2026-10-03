@@ -5108,6 +5108,8 @@ function parseFechaCorta(s) {
   return isNaN(dt.getTime()) ? null : dt;
 }
 function fmtFechaCorta(d) { return d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}` : ""; }
+// "dd/mm/aa" (como se carga en Obras) → "yyyy-mm-dd" (como pide un <input type="date">).
+function isoFromFechaCorta(s) { const d = parseFechaCorta(s); return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : ""; }
 function sumarMeses(fecha, meses) { const d = new Date(fecha.getTime()); d.setMonth(d.getMonth() + Number(meses || 0)); return d; }
 function sumarDias(fecha, dias) { const d = new Date(fecha.getTime()); d.setDate(d.getDate() + Number(dias || 0)); return d; }
 // ── Modelos de obra (tabla madre) ───────────────────────────────────────
@@ -7640,7 +7642,7 @@ function GestionView({ db, cfg, onBack }) {
       {items.length === 0 && <EmptyMsg>Sin registros. Agregá el primero con ＋.</EmptyMsg>}
       {items.length > 0 && itemsFiltrados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Ningún registro coincide con el filtro.</div>}
       {itemsFiltrados.map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} />)}
-      <AddFab onClick={() => setMForm({ tipo: "Tarea", obra_id: obras[0]?.id || "", descripcion: "", imputable: "Estudio", fechaSolic: isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] })} label="Registro" />
+      <AddFab onClick={() => { const obIni = obras.find(o => o.id === (filtroObra !== "todas" ? filtroObra : obras[0]?.id)); setMForm({ tipo: "Tarea", obra_id: obIni?.id || obras[0]?.id || "", descripcion: "", imputable: "Estudio", fechaSolic: isoFromFechaCorta(obIni?.inicio) || isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] }); }} label="Registro" />
     </div>}
 
     {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
@@ -7770,7 +7772,7 @@ function GestionView({ db, cfg, onBack }) {
     {mForm && <Sheet title={mForm.id ? "Editar registro" : "Nuevo registro"} onClose={() => setMForm(null)}>
       <FieldRow>
         <Field label="Tipo"><Sel value={mForm.tipo} onChange={e => setMForm({ ...mForm, tipo: e.target.value })}><option>Tarea</option><option>Certificado</option><option>Pedido de información</option><option>Visita técnica</option><option>Otro</option></Sel></Field>
-        <Field label="Obra"><Sel value={mForm.obra_id} onChange={e => setMForm({ ...mForm, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        <Field label="Obra"><Sel value={mForm.obra_id} onChange={e => { const ob = obras.find(o => o.id === e.target.value); const traerInicio = !mForm.id && (!mForm.fechaSolic || mForm.fechaSolic === isoHoy() || mForm.fechaSolic === isoFromFechaCorta(obras.find(o => o.id === mForm.obra_id)?.inicio)); setMForm({ ...mForm, obra_id: e.target.value, fechaSolic: traerInicio ? (isoFromFechaCorta(ob?.inicio) || mForm.fechaSolic) : mForm.fechaSolic }); }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       </FieldRow>
       <Field label="Tarea / Descripción"><TInput value={mForm.descripcion} onChange={e => setMForm({ ...mForm, descripcion: e.target.value })} placeholder="Ej: Armado de cerco de obra" /></Field>
       <FieldRow>
