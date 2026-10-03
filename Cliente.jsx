@@ -4792,6 +4792,15 @@ async function ponerGlobito(n) {
   } catch { }
 }
 function causaTexto(it) { return it?.causa === "Otro" && it?.causaDetalle ? it.causaDetalle : (it?.causa || ""); }
+// Un registro puede ser imputable a más de una empresa a la vez. imputables
+// es el array nuevo; imputable (string) se sigue leyendo por compatibilidad
+// con registros viejos ya guardados desde la app general.
+function imputablesDe(it) {
+  if (Array.isArray(it?.imputables) && it.imputables.length) return it.imputables;
+  if (it?.imputable) return [it.imputable];
+  return [];
+}
+function imputablesTexto(it) { const l = imputablesDe(it); return l.length ? l.join(" + ") : "Sin asignar"; }
 function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, reuniones: [], ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
@@ -4825,7 +4834,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
   const total = items.length, cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
   const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
-  const grp = n => confirmados.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
+  const grp = n => confirmados.filter(i => imputablesDe(i).includes(n)).reduce((a, i) => { const lista = imputablesDe(i); return a + perItem(i) / Math.max(1, lista.length); }, 0);
   const perjB = grp(cli), perjVV = grp("V+V"), perjE = grp("Estudio"), perjT = perjB + perjVV + perjE;
   const cnt = e => items.filter(i => i.estado === e).length;
   const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
@@ -4834,7 +4843,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
 
   // ── PDF del plan de gestión completo (solo lectura, mismo criterio que V+V) ──
   function htmlReporte() {
-    const filaReg = (it) => `<tr><td>${_e(it.tipo)}</td><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8">${_e(it.etapa)}</span>` : ""}</td><td>${_e(nomObra(it.obra_id))}</td><td>${_e(it.imputable)}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "—"}</td><td>${it.desvio > 0 ? "+" : ""}${it.desvio}${(Number(it.diasClima) || 0) > 0 ? `<br/><span style="color:#94A3B8">-${it.diasClima} clima</span>` : ""}</td><td>${_e(it.estado)}${it.causa ? `<br/><span style="color:#94A3B8">${_e(causaTexto(it))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</span>` : ""}</td></tr>`;
+    const filaReg = (it) => `<tr><td>${_e(it.tipo)}</td><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8">${_e(it.etapa)}</span>` : ""}</td><td>${_e(nomObra(it.obra_id))}</td><td>${_e(imputablesTexto(it))}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "—"}</td><td>${it.desvio > 0 ? "+" : ""}${it.desvio}${(Number(it.diasClima) || 0) > 0 ? `<br/><span style="color:#94A3B8">-${it.diasClima} clima</span>` : ""}</td><td>${_e(it.estado)}${it.causa ? `<br/><span style="color:#94A3B8">${_e(causaTexto(it))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</span>` : ""}</td></tr>`;
     const filaPunit = (it) => `<tr><td>${_e(it.descripcion)}</td><td>${_e(it.dec?.tarea || "—")}</td><td>${Number(it.dec?.personas) || g.dotacion}</td><td>${money(Number(it.dec?.costoDia) || g.costoPersona)}</td><td>${money(perItem(it))}</td></tr>`;
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0;padding:12px;word-wrap:break-word}
@@ -4874,7 +4883,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{imputablesTexto(it)}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
           {(it.responsable || (it.personalIds && it.personalIds.length > 0)) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{it.responsable ? `Responsable: ${it.responsable}` : ""}{it.responsable && it.personalIds?.length ? " · " : ""}{it.personalIds?.length ? `Personal: ${it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", ")}` : ""}</div>}
           <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Inicio {fmtD(it.fechaSolic)} · {it.fechaReal ? `fin ${fmtD(it.fechaReal)}` : "sin terminar"} · estimado {it.plazo} d · <b style={{ color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>diferencia {it.desvio > 0 ? "+" : ""}{it.desvio}</b></div>
           {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${causaTexto(it)}${it.categoriaDesvio ? ` (${it.categoriaDesvio})` : ""}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (imputable: ${it.retraso} d)` : ""}</div>}
