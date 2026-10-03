@@ -7322,6 +7322,7 @@ function GestionView({ db, cfg, onBack }) {
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
   const [mForm, setMForm] = useState(null);
+  const [mError, setMError] = useState("");
   const [rForm, setRForm] = useState(null);
   const [pForm, setPForm] = useState(null);      // decisión sobre un vencido
   const [pdfPunit, setPdfPunit] = useState(null); // PDF de un punitorio confirmado
@@ -7349,7 +7350,15 @@ function GestionView({ db, cfg, onBack }) {
     // pero lo que vale plata es el retraso neto de clima.
     const retrasoBruto = m.retraso;
     const retraso = Math.max(0, retrasoBruto - (Number(base.diasClima) || 0));
-    return { ...base, plazo: plazoEf, ...m, retraso, retrasoBruto, dec: d || null };
+    // Atraso en el ARRANQUE de la tarea (se podría haber empezado antes, pero
+    // arrancó más tarde) — es un atraso distinto al de ejecución (que compara
+    // días reales vs. plazo estimado) y NO entra en el cálculo de punitorio/
+    // perjuicio de este ítem: el perjuicio de un arranque tardío no se puede
+    // asignar en el momento, se termina viendo en que la obra entera cierra
+    // más tarde. Se registra aparte, para dejarlo documentado con su causa.
+    const inicioPlanD = base.inicioPlan ? new Date(base.inicioPlan) : null;
+    const retrasoInicio = (inicioPlanD && base.fechaSolic && inicioPlanD < base.fechaSolic) ? diasHabiles(inicioPlanD, base.fechaSolic) : 0;
+    return { ...base, plazo: plazoEf, ...m, retraso, retrasoBruto, retrasoInicio, dec: d || null };
   };
   const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const items = [...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
@@ -7387,7 +7396,19 @@ function GestionView({ db, cfg, onBack }) {
 
   function decidir(id, decision, datos = {}) { upd({ punit: { ...g.punit, [id]: { decision, ...datos, ts: Date.now() } } }); setPForm(null); }
   function quitarDecision(id) { const p = { ...g.punit }; delete p[id]; upd({ punit: p }); }
-  function guardarManual() { if (!mForm.descripcion?.trim()) return; const it = { ...mForm, id: mForm.id || uid() }; const exists = (g.manual || []).some(x => x.id === it.id); upd({ manual: exists ? g.manual.map(x => x.id === it.id ? it : x) : [...(g.manual || []), it] }); setMForm(null); }
+  // Guarda SIEMPRE lo que haya, aunque no tenga fotos todavía — las fotos
+  // nunca son obligatorias, se pueden agregar después editando el registro.
+  // Lo único obligatorio es la Tarea/Descripción; si falta, se avisa en vez
+  // de no hacer nada (antes el botón "Guardar" quedaba sin reaccionar y
+  // parecía que la app estaba trabada).
+  function guardarManual() {
+    if (!mForm.descripcion?.trim()) { setMError("Falta completar \"Tarea / Descripción\" — es el único campo obligatorio para guardar."); return; }
+    setMError("");
+    const it = { ...mForm, id: mForm.id || uid() };
+    const exists = (g.manual || []).some(x => x.id === it.id);
+    upd({ manual: exists ? g.manual.map(x => x.id === it.id ? it : x) : [...(g.manual || []), it] });
+    setMForm(null);
+  }
   function guardarReunion() { const it = { ...rForm, id: rForm.id || uid() }; const exists = (g.reuniones || []).some(x => x.id === it.id); upd({ reuniones: exists ? g.reuniones.map(x => x.id === it.id ? it : x) : [it, ...(g.reuniones || [])] }); setRForm(null); }
   function borrarRegistro(id) { if (!confirm("¿Borrar este registro? No se puede deshacer.")) return; const p = { ...g.punit }; delete p[id]; upd({ manual: (g.manual || []).filter(x => x.id !== id), punit: p }); }
   function vaciarRegistro() {
@@ -7454,7 +7475,9 @@ function GestionView({ db, cfg, onBack }) {
         ${it.etapa ? `<tr><td>Etapa de obra</td><td>${_e(it.etapa)}</td></tr>` : ""}
         ${it.responsable ? `<tr><td>Responsable / cuadrilla</td><td>${_e(it.responsable)}</td></tr>` : ""}
         ${(it.personalIds && it.personalIds.length) ? `<tr><td>Personal asignado</td><td>${_e(it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", "))}</td></tr>` : ""}
-        <tr><td>Inicio</td><td>${fmtD(it.fechaSolic)}</td></tr>
+        ${it.inicioPlan ? `<tr><td>Podría haber arrancado el</td><td>${fmtD(new Date(it.inicioPlan + "T12:00:00"))}</td></tr>` : ""}
+        <tr><td>Inicio (real)</td><td>${fmtD(it.fechaSolic)}</td></tr>
+        ${(it.retrasoInicio || 0) > 0 ? `<tr><td><b>Atraso en el arranque</b></td><td style="font-weight:bold;color:#B45309">${it.retrasoInicio} días hábiles (no incluido en el perjuicio de este ítem)</td></tr>` : ""}
         <tr><td>Días estimados</td><td>${it.plazo} días hábiles${it.dec && it.plazo !== it.plazoBase ? ` (incluye prórroga acordada)` : ""}</td></tr>
         <tr><td>Fin</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Aún no terminó"}</td></tr>
         <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
@@ -7493,13 +7516,19 @@ function GestionView({ db, cfg, onBack }) {
     const totalReal = its.reduce((a, i) => a + (i.dias || 0), 0);
     const totalDesvio = totalReal - totalEstimado;
     const totalClima = its.reduce((a, i) => a + (Number(i.diasClima) || 0), 0);
+    // Atraso de ARRANQUE acumulado — informativo, no está incluido en
+    // totalDesvio ni en el perjuicio: explica por qué la obra se corre
+    // aunque cada tarea, una vez arrancada, se haya ejecutado en plazo.
+    const totalRetrasoInicio = its.reduce((a, i) => a + (Number(i.retrasoInicio) || 0), 0);
+    const porCausaInicio = {};
+    its.forEach(i => { if ((i.retrasoInicio || 0) > 0) { const c = causaTexto(i) || "Sin causa asignada"; porCausaInicio[c] = (porCausaInicio[c] || 0) + i.retrasoInicio; } });
     const porCausa = {};
     const porCategoria = { "Evitable": 0, "No evitable": 0, "Sin clasificar": 0 };
     its.forEach(i => { if (i.desvio > 0) { const c = causaTexto(i) || "Sin causa asignada"; porCausa[c] = (porCausa[c] || 0) + i.desvio; porCategoria[i.categoriaDesvio && porCategoria[i.categoriaDesvio] !== undefined ? i.categoriaDesvio : "Sin clasificar"] += i.desvio; } });
     const desde = its[0]?.fechaSolic || null;
     const ob = obras.find(o => o.id === obraId);
     const etapas = resumenEtapasModelo(ob, modelosObra, its);
-    return { its, totalEstimado, totalReal, totalDesvio, totalClima, porCausa, porCategoria, desde, etapas };
+    return { its, totalEstimado, totalReal, totalDesvio, totalClima, porCausa, porCategoria, desde, etapas, totalRetrasoInicio, porCausaInicio };
   }
   function htmlInformeObra(obraId) {
     const ob = obras.find(o => o.id === obraId);
@@ -7531,10 +7560,14 @@ function GestionView({ db, cfg, onBack }) {
       <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")}${modeloNom ? ` · Modelo: ${_e(modeloNom)}` : ""} · Inicio de obra: ${_e(ob?.inicio || "—")} · Cierre estimado: ${_e(cierreEst || "—")}${!modeloNom && ob?.duracionMeses ? ` (${ob.duracionMeses} meses)` : ""} · Emitido: ${hoyStr()}</div></div>
       <h2>Resumen</h2>
       <div><div class="stat"><div style="font-size:15px;font-weight:800">${ob?.inicio || "—"}</div><div style="font-size:9px;color:#64748B">Inicio de obra</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${cierreEst || "—"}</div><div style="font-size:9px;color:#64748B">Cierre estimado${ob?.duracionMeses ? ` (${ob.duracionMeses}m)` : ""}</div></div><div class="stat"><div style="font-size:15px;font-weight:800">${mesesTranscurridos != null ? mesesTranscurridos : "—"}</div><div style="font-size:9px;color:#64748B">Meses transcurridos desde el inicio</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:${r.totalDesvio > 0 ? "#EF4444" : "#16A34A"}">${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio}</div><div style="font-size:9px;color:#64748B">Desvío total (registro)</div></div></div>
-      <div style="margin-top:4px"><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div></div>
+      <div style="margin-top:4px"><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div>${r.totalRetrasoInicio > 0 ? `<div class="stat"><div style="font-size:15px;font-weight:800;color:#B45309">${r.totalRetrasoInicio}</div><div style="font-size:9px;color:#64748B">Días de atraso en el ARRANQUE de tareas (acumulado, no incluido arriba)</div></div>` : ""}</div>
       ${r.etapas && r.etapas.length ? `<h2>Cronograma por etapa (planificado vs. real)</h2>
       <table><tr><th>Etapa</th><th>Inicio plan.</th><th>Fin plan.</th><th>Días plan.</th><th>Inicio real</th><th>Días reales</th><th>Desvío</th></tr>
       ${r.etapas.map(filaEtapa).join("")}</table>` : ""}
+      ${r.totalRetrasoInicio > 0 ? `<h2>Atraso en el arranque de tareas (informativo)</h2>
+      <div style="font-size:10px;color:#64748B;margin-bottom:6px">No está incluido en el desvío ni en el perjuicio de cada ítem — el arranque tardío de una tarea suele no ser cuantificable en el momento, pero es lo que explica que la obra termine cerrando más tarde de lo planificado. Queda documentado acá, por causa.</div>
+      <table><tr><th>Causa</th><th>Días de atraso en el arranque</th></tr>
+      ${Object.entries(r.porCausaInicio).sort((a, b) => b[1] - a[1]).map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td></tr>`).join("")}</table>` : ""}
       <h2>Desvío por categoría</h2>
       <table><tr><th>Categoría</th><th>Días de desvío</th><th>% del desvío total</th></tr>
       ${categorias.length ? categorias.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
@@ -7608,7 +7641,8 @@ function GestionView({ db, cfg, onBack }) {
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
             <span style={{ fontSize: 10.5, color: T.muted }}>Inicio {fmtD(it.fechaSolic)} · {it.fechaReal ? `fin ${fmtD(it.fechaReal)}` : "sin terminar"} · estimado {it.plazo} d</span>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>diferencia {it.desvio > 0 ? "+" : ""}{it.desvio}</span>
-            {conRegistro && <button onClick={() => setMForm({ ...g.manual.find(x => x.id === it.id) })} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>}
+            {(it.retrasoInicio || 0) > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#B45309", background: "rgba(245,158,11,.14)", borderRadius: 10, padding: "2px 8px" }}>arrancó {it.retrasoInicio}d tarde</span>}
+            {conRegistro && <button onClick={() => { setMError(""); setMForm({ ...g.manual.find(x => x.id === it.id) }); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>}
             {conRegistro && <button onClick={() => setPdfReg(it)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
             {conRegistro && <button onClick={() => borrarRegistro(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>}
           </div>
@@ -7655,7 +7689,7 @@ function GestionView({ db, cfg, onBack }) {
       {items.length === 0 && <EmptyMsg>Sin registros. Agregá el primero con ＋.</EmptyMsg>}
       {items.length > 0 && itemsFiltrados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Ningún registro coincide con el filtro.</div>}
       {itemsFiltrados.map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} />)}
-      <AddFab onClick={() => { const obIni = obras.find(o => o.id === (filtroObra !== "todas" ? filtroObra : obras[0]?.id)); setMForm({ tipo: "Tarea", obra_id: obIni?.id || obras[0]?.id || "", descripcion: "", imputables: ["Estudio"], fechaSolic: isoFromFechaCorta(obIni?.inicio) || isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] }); }} label="Registro" />
+      <AddFab onClick={() => { setMError(""); const obIni = obras.find(o => o.id === (filtroObra !== "todas" ? filtroObra : obras[0]?.id)); setMForm({ tipo: "Tarea", obra_id: obIni?.id || obras[0]?.id || "", descripcion: "", imputables: ["Estudio"], fechaSolic: isoFromFechaCorta(obIni?.inicio) || isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] }); }} label="Registro" />
     </div>}
 
     {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
@@ -7735,6 +7769,7 @@ function GestionView({ db, cfg, onBack }) {
                 <MiniStat label="Estimado" value={`${r.totalEstimado} d`} color={T.accent} />
                 <MiniStat label="Real" value={`${r.totalReal} d`} color="#3B82F6" />
                 <MiniStat label="Desvío" value={`${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio} d`} color={r.totalDesvio > 0 ? "#EF4444" : "#16A34A"} />
+                {r.totalRetrasoInicio > 0 && <MiniStat label="Atraso arranque" value={`${r.totalRetrasoInicio} d`} color="#B45309" />}
               </div>
               {r.etapas.length > 0 && <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 10.5, color: T.muted, textTransform: "uppercase", marginBottom: 6 }}>Cronograma por etapa</div>
@@ -7782,7 +7817,7 @@ function GestionView({ db, cfg, onBack }) {
       <AddFab onClick={() => setRForm({ periodo: "", fecha: hoyStr(), participantes: "", flojo: "", mejorar: "", acciones: "" })} label="Reunión" />
     </div>}
 
-    {mForm && <Sheet title={mForm.id ? "Editar registro" : "Nuevo registro"} onClose={() => setMForm(null)}>
+    {mForm && <Sheet title={mForm.id ? "Editar registro" : "Nuevo registro"} onClose={() => { setMForm(null); setMError(""); }}>
       <FieldRow>
         <Field label="Tipo"><Sel value={mForm.tipo} onChange={e => setMForm({ ...mForm, tipo: e.target.value })}><option>Tarea</option><option>Certificado</option><option>Pedido de información</option><option>Visita técnica</option><option>Otro</option></Sel></Field>
         <Field label="Obra"><Sel value={mForm.obra_id} onChange={e => { const ob = obras.find(o => o.id === e.target.value); const traerInicio = !mForm.id && (!mForm.fechaSolic || mForm.fechaSolic === isoHoy() || mForm.fechaSolic === isoFromFechaCorta(obras.find(o => o.id === mForm.obra_id)?.inicio)); setMForm({ ...mForm, obra_id: e.target.value, fechaSolic: traerInicio ? (isoFromFechaCorta(ob?.inicio) || mForm.fechaSolic) : mForm.fechaSolic }); }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
@@ -7799,16 +7834,28 @@ function GestionView({ db, cfg, onBack }) {
       </Field>
       <Field label="Días estimados"><TInput type="number" value={mForm.plazo || ""} onChange={e => setMForm({ ...mForm, plazo: +e.target.value || 0 })} /></Field>
       <FieldRow>
-        <Field label="Inicio"><TInput type="date" value={mForm.fechaSolic} onChange={e => setMForm({ ...mForm, fechaSolic: e.target.value })} /></Field>
+        <Field label="Inicio (cuando realmente arrancó)"><TInput type="date" value={mForm.fechaSolic} onChange={e => setMForm({ ...mForm, fechaSolic: e.target.value })} /></Field>
         <Field label="Fin (si terminó)"><TInput type="date" value={mForm.fechaReal} onChange={e => setMForm({ ...mForm, fechaReal: e.target.value })} /></Field>
       </FieldRow>
+      <Field label="Podría haber arrancado el (opcional)">
+        <TInput type="date" value={mForm.inicioPlan || ""} onChange={e => setMForm({ ...mForm, inicioPlan: e.target.value })} />
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>Completá esto solo si la tarea arrancó más tarde de lo que podría haber arrancado (ej: no había material, no había cuadrilla). Mide el atraso en el ARRANQUE, separado de si después se ejecutó en plazo o no. No afecta el cálculo de punitorio — queda documentado con su causa para explicar por qué la obra se corre, aunque el perjuicio se termine viendo recién al cierre.</div>
+      </Field>
       {mForm.fechaSolic && (() => {
         const pv = previewDesvio(mForm);
         const neto = Math.max(0, Math.max(0, pv.desvio) - (Number(mForm.diasClima) || 0));
-        return (<div style={{ background: pv.desvio > 0 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.10)", border: `1px solid ${pv.desvio > 0 ? "rgba(239,68,68,.30)" : "rgba(22,163,74,.30)"}`, borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: T.text, lineHeight: 1.5 }}>
-          {mForm.fechaReal ? "Llevó" : "Lleva"} <b>{pv.dias}</b> día{pv.dias === 1 ? "" : "s"} hábil{pv.dias === 1 ? "" : "es"} contra {mForm.plazo || 0} estimado{(mForm.plazo || 0) === 1 ? "" : "s"}{pv.desvio !== 0 && <> — diferencia de <b style={{ color: pv.desvio > 0 ? "#EF4444" : "#16A34A" }}>{pv.desvio > 0 ? "+" : ""}{pv.desvio}</b> día{Math.abs(pv.desvio) === 1 ? "" : "s"}</>}.
-          {(Number(mForm.diasClima) || 0) > 0 && <><br />De esos, <b>{mForm.diasClima}</b> no cuentan (clima/fuerza mayor) → retraso imputable: <b style={{ color: neto > 0 ? "#EF4444" : "#16A34A" }}>{neto}</b> día{neto === 1 ? "" : "s"}.</>}
-        </div>);
+        const inicioPlanD = mForm.inicioPlan ? new Date(mForm.inicioPlan + "T12:00:00") : null;
+        const fechaSolicD = mForm.fechaSolic ? new Date(mForm.fechaSolic + "T12:00:00") : null;
+        const retrasoInicio = (inicioPlanD && fechaSolicD && inicioPlanD < fechaSolicD) ? diasHabiles(inicioPlanD, fechaSolicD) : 0;
+        return (<>
+          <div style={{ background: pv.desvio > 0 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.10)", border: `1px solid ${pv.desvio > 0 ? "rgba(239,68,68,.30)" : "rgba(22,163,74,.30)"}`, borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: T.text, lineHeight: 1.5 }}>
+            {mForm.fechaReal ? "Llevó" : "Lleva"} <b>{pv.dias}</b> día{pv.dias === 1 ? "" : "s"} hábil{pv.dias === 1 ? "" : "es"} contra {mForm.plazo || 0} estimado{(mForm.plazo || 0) === 1 ? "" : "s"}{pv.desvio !== 0 && <> — diferencia de <b style={{ color: pv.desvio > 0 ? "#EF4444" : "#16A34A" }}>{pv.desvio > 0 ? "+" : ""}{pv.desvio}</b> día{Math.abs(pv.desvio) === 1 ? "" : "s"}</>}.
+            {(Number(mForm.diasClima) || 0) > 0 && <><br />De esos, <b>{mForm.diasClima}</b> no cuentan (clima/fuerza mayor) → retraso imputable: <b style={{ color: neto > 0 ? "#EF4444" : "#16A34A" }}>{neto}</b> día{neto === 1 ? "" : "s"}.</>}
+          </div>
+          {retrasoInicio > 0 && <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid rgba(245,158,11,.35)", borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: T.text, lineHeight: 1.5 }}>
+            Además, arrancó <b style={{ color: "#B45309" }}>{retrasoInicio}</b> día{retrasoInicio === 1 ? "" : "s"} hábil{retrasoInicio === 1 ? "" : "es"} más tarde de cuando podría haber arrancado. Esto no suma al perjuicio de este ítem, pero queda documentado como atraso de inicio.
+          </div>}
+        </>);
       })()}
 
       <FieldRow>
@@ -7854,6 +7901,7 @@ function GestionView({ db, cfg, onBack }) {
       <input ref={mFileFinRef} type="file" accept="image/*" multiple onChange={e => agregarFotoRegistro(e, "fotosFin")} style={{ display: "none" }} />
       <button onClick={() => mFileFinRef.current?.click()} disabled={mFotoSubiendo} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}>{mFotoSubiendo ? "Subiendo…" : "＋ Foto de fin"}</button>
 
+      {mError && <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px 12px", marginTop: 6, marginBottom: 2, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{mError}</div>}
       <PBtn full onClick={guardarManual} style={{ marginTop: 6 }}>Guardar</PBtn>
     </Sheet>}
 
