@@ -638,16 +638,24 @@ async function guardarPdfComoArchivo(htmlString, nombreArchivo) {
   const parser = new DOMParser();
   const parsed = parser.parseFromString(htmlString, "text/html");
   const cont = document.createElement("div");
-  cont.style.position = "fixed"; cont.style.left = "-99999px"; cont.style.top = "0"; cont.style.width = "800px"; cont.style.background = "#fff";
+  // OJO: posicionar el contenido muy lejos de la pantalla (left:-99999px) hace
+  // que la librería que "fotografía" el contenido capture una página en
+  // blanco (bug conocido). En cambio lo dejamos en la esquina (0,0) pero con
+  // z-index bajo, tapado por el cartel de vista previa que ya cubre toda la
+  // pantalla — así nunca se ve, pero sí se puede capturar bien.
+  cont.style.position = "fixed"; cont.style.left = "0"; cont.style.top = "0"; cont.style.width = "800px"; cont.style.background = "#fff"; cont.style.zIndex = "1"; cont.style.pointerEvents = "none";
   const styleEl = parsed.querySelector("style");
   if (styleEl) { const s = document.createElement("style"); s.textContent = styleEl.textContent; cont.appendChild(s); }
   const inner = document.createElement("div");
   inner.innerHTML = parsed.body.innerHTML;
   cont.appendChild(inner);
   document.body.appendChild(cont);
-  // Esperamos a que las fotos (si las hay) terminen de cargar antes de capturar.
+  // Esperamos a que las fotos (si las hay) terminen de cargar, y a que el
+  // navegador termine de pintar el contenido, antes de capturar.
   const imgs = Array.from(cont.querySelectorAll("img"));
   await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(res => { img.onload = res; img.onerror = res; })));
+  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch { } }
+  await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
   const blob = await html2pdf().from(cont).set({
     margin: 0,
     filename: nombreArchivo,
@@ -1945,6 +1953,14 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_cierre')}</div>
                                 <input value={detail.cierre || ''} onChange={e => upd(detail.id, { cierre: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Duración contractual (meses)</div>
+                                <input type="number" value={detail.duracionMeses || ''} onChange={e => upd(detail.id, { duracionMeses: e.target.value })} placeholder="Ej: 15" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
+                            </div>
+                            {Number(detail.duracionMeses) > 0 && detail.inicio && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Cierre estimado (calculado)</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail) || "—"}</div>
+                            </div>}
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
@@ -2050,6 +2066,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                 <Field label={t(cfg, 'obras_inicio')}><TInput value={form.inicio || ""} onChange={e => setForm(p => ({ ...p, inicio: e.target.value }))} placeholder="dd/mm/aa" /></Field>
                 <Field label={t(cfg, 'obras_cierre')}><TInput value={form.cierre || ""} onChange={e => setForm(p => ({ ...p, cierre: e.target.value }))} placeholder="dd/mm/aa" /></Field>
             </FieldRow>
+            <Field label="Duración contractual (meses, opcional)"><TInput type="number" value={form.duracionMeses || ""} onChange={e => setForm(p => ({ ...p, duracionMeses: e.target.value }))} placeholder="Ej: 15" /></Field>
             <PBtn full onClick={add} disabled={!String(form.nombre || "").trim()}>{t(cfg, 'obras_nueva')}</PBtn>
         </Sheet>)}
     </div>);
@@ -4985,6 +5002,27 @@ const obraNom = (obras, id) => obras.find(o => o.id === id)?.nombre || "—";
 const personaNom = (personal, id) => personal.find(p => p.id === id)?.nombre || "—";
 const hoyStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
 const waLink = (tel, txt) => `https://wa.me/${String(tel || "").replace(/[^\d]/g, "")}${txt ? `?text=${encodeURIComponent(txt)}` : ""}`;
+// ── Fecha de inicio/cierre de obra (para Gestión de obra) ──────────────
+// obra.inicio/obra.cierre se cargan como texto "dd/mm/aa" en el módulo Obras.
+function parseFechaCorta(s) {
+  if (!s) return null;
+  const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return null;
+  let d = +m[1], mo = +m[2], y = +m[3];
+  if (y < 100) y += 2000;
+  const dt = new Date(y, mo - 1, d, 12, 0, 0);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+function fmtFechaCorta(d) { return d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}` : ""; }
+function sumarMeses(fecha, meses) { const d = new Date(fecha.getTime()); d.setMonth(d.getMonth() + Number(meses || 0)); return d; }
+// Cierre estimado = inicio + duración contractual (meses). Si la obra no
+// tiene duración cargada, se usa el campo "Cierre est." que se tipeó a mano.
+function cierreEstimadoObra(obra) {
+  const ini = parseFechaCorta(obra?.inicio);
+  const meses = Number(obra?.duracionMeses) || 0;
+  if (ini && meses > 0) return fmtFechaCorta(sumarMeses(ini, meses));
+  return obra?.cierre || "";
+}
 
 function EmptyMsg({ children }) {
   return <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "38px 18px", lineHeight: 1.65 }}>{children}</div>;
@@ -7311,6 +7349,10 @@ function GestionView({ db, cfg, onBack }) {
     const filaTarea = (it) => `<tr><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8;font-size:9.5px">${_e(it.etapa)}</span>` : ""}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "en curso"}</td><td>${it.plazo}</td><td>${it.dias}</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio}</td><td>${_e(causaTexto(it) || (it.desvio > 0 ? "Sin asignar" : "—"))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</td></tr>`;
     const causas = Object.entries(r.porCausa).sort((a, b) => b[1] - a[1]);
     const categorias = Object.entries(r.porCategoria).filter(([, d]) => d > 0).sort((a, b) => b[1] - a[1]);
+    const cierreEst = cierreEstimadoObra(ob);
+    const iniDate = parseFechaCorta(ob?.inicio);
+    const cierreDate = parseFechaCorta(cierreEst);
+    const mesesTranscurridos = iniDate ? Math.max(0, Math.round((Date.now() - iniDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44) * 10) / 10) : null;
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0;padding:12px;word-wrap:break-word}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:20px}
@@ -7326,9 +7368,10 @@ function GestionView({ db, cfg, onBack }) {
       .nota{font-size:9.5px;color:#94A3B8;margin-top:24px;border-top:1px solid #E2E8F0;padding-top:8px}
       @media(min-width:480px){.stat{width:23%}}
     </style></head><body>
-      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")} · Período: ${r.desde ? fmtD(r.desde) : "—"} a ${hoyStr()} · Emitido: ${hoyStr()}</div></div>
+      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")} · Inicio de obra: ${_e(ob?.inicio || "—")} · Cierre estimado: ${_e(cierreEst || "—")}${ob?.duracionMeses ? ` (${ob.duracionMeses} meses)` : ""} · Emitido: ${hoyStr()}</div></div>
       <h2>Resumen</h2>
-      <div><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (total)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (total)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:${r.totalDesvio > 0 ? "#EF4444" : "#16A34A"}">${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio}</div><div style="font-size:9px;color:#64748B">Desvío total</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div></div>
+      <div><div class="stat"><div style="font-size:15px;font-weight:800">${ob?.inicio || "—"}</div><div style="font-size:9px;color:#64748B">Inicio de obra</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${cierreEst || "—"}</div><div style="font-size:9px;color:#64748B">Cierre estimado${ob?.duracionMeses ? ` (${ob.duracionMeses}m)` : ""}</div></div><div class="stat"><div style="font-size:15px;font-weight:800">${mesesTranscurridos != null ? mesesTranscurridos : "—"}</div><div style="font-size:9px;color:#64748B">Meses transcurridos desde el inicio</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:${r.totalDesvio > 0 ? "#EF4444" : "#16A34A"}">${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio}</div><div style="font-size:9px;color:#64748B">Desvío total (registro)</div></div></div>
+      <div style="margin-top:4px"><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div></div>
       <h2>Desvío por categoría</h2>
       <table><tr><th>Categoría</th><th>Días de desvío</th><th>% del desvío total</th></tr>
       ${categorias.length ? categorias.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
