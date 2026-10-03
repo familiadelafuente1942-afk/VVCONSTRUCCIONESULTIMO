@@ -2161,7 +2161,7 @@ const MAS_TILES = [
   { id:"internos", label:"Chat privado" },
   { id:"infsemanal", label:"Informe semanal de obra" },
   { id:"cliente", label:"Panel cliente" },
-  { id:"gestion", label:"Plan de gestión" },
+  { id:"gestion", label:"Gestión de obra" },
   { id:"proyectos", label:"Proyectos", go:"proyectos" },
   { id:"seguimiento", label:"Seguimiento" }, { id:"materiales", label:"Materiales" },
   { id:"subcontratos", label:"Subcontratos" },
@@ -2896,14 +2896,17 @@ function BitacoraView({ db, cfg, onBack }) {
   const [etapa, setEtapa] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const [pdfHtml, setPdfHtml] = useState(null);
+  const [desvioFlag, setDesvioFlag] = useState(false);
+  const [diasDesvio, setDiasDesvio] = useState("");
+  const [causaDesvio, setCausaDesvio] = useState("");
   const fileRef = useRef(null);
   const adjRef = useRef(null);
 
   const obra = obras.find(o => o.id === obraId);
   const hechos = bitacora.filter(h => h.obra_id === obraId).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
 
-  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEtapa(""); setEdit(null); setAbrir(false); };
-  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setEtapa(h.etapa || ""); setAbrir(true); };
+  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEtapa(""); setEdit(null); setAbrir(false); setDesvioFlag(false); setDiasDesvio(""); setCausaDesvio(""); };
+  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setEtapa(h.etapa || ""); setDesvioFlag(!!h.gestionId); setDiasDesvio(h.diasDesvio ?? ""); setCausaDesvio(h.causaDesvio || ""); setAbrir(true); };
 
   const agregarFotos = async (e) => {
     const files = Array.from(e.target.files || []); if (!files.length) return;
@@ -2944,8 +2947,26 @@ function BitacoraView({ db, cfg, onBack }) {
   const guardar = () => {
     if (!titulo.trim() && !desc.trim()) { alert("Poné al menos un título o una descripción."); return; }
     if (!obraId) { alert("Elegí una obra."); return; }
-    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, etapa, ts: edit?.ts || Date.now() };
+    if (desvioFlag && (!Number(diasDesvio) || Number(diasDesvio) <= 0)) { alert("Indicá cuántos días de desvío (mayor a 0)."); return; }
+    let gestionId = edit?.gestionId || null;
+    if (desvioFlag) {
+      const addDias = (f, n) => { try { const d = new Date(f + "T12:00:00"); d.setDate(d.getDate() + Number(n)); return d.toISOString().slice(0, 10); } catch { return f; } };
+      gestionId = gestionId || uid();
+      const gBase = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(db.gestion || {}) };
+      const registro = {
+        id: gestionId, tipo: "Tarea", obra_id: obraId,
+        descripcion: (titulo.trim() || desc.trim().slice(0, 80)) + " (desde Bitácora)",
+        imputable: "Estudio", plazo: 0, fechaSolic: fecha, fechaReal: addDias(fecha, diasDesvio),
+        etapa: etapa || "", causa: causaDesvio || "", diasClima: 0, responsable: "",
+        personalIds: [], fotosInicio: fotos || [], fotosFin: [],
+      };
+      const yaExiste = (gBase.manual || []).some(x => x.id === gestionId);
+      const manualNext = yaExiste ? gBase.manual.map(x => x.id === gestionId ? { ...x, ...registro } : x) : [...(gBase.manual || []), registro];
+      db.setGestion({ ...gBase, manual: manualNext });
+    }
+    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, etapa, ts: edit?.ts || Date.now(), gestionId, diasDesvio: desvioFlag ? Number(diasDesvio) : null, causaDesvio: desvioFlag ? causaDesvio : "" };
     db.setBitacora(prev => { const otros = (prev || []).filter(h => h.id !== hecho.id); return [...otros, hecho]; });
+    if (desvioFlag) alert(`Hecho guardado. Se cargó un registro de ${diasDesvio} días de desvío en Gestión de obra: podés completarlo (plazo exacto, fechas, fotos) cuando quieras.`);
     limpiar();
   };
   const borrar = (id) => { if (confirm("¿Borrar este hecho de la bitácora?")) db.setBitacora(prev => (prev || []).filter(h => h.id !== id)); };
@@ -3079,6 +3100,24 @@ function BitacoraView({ db, cfg, onBack }) {
             </select>
             <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título (ej: Cambio de nivel de platea)" style={inp} />
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción: qué pasó, por qué, quién lo pidió, qué implica…" rows={4} style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
+            {/* desvío de tiempo → Gestión de obra */}
+            <div style={{ background: T.bg, border: `1px solid ${desvioFlag ? BRASS : T.border}`, borderRadius: 10, padding: 11 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input type="checkbox" checked={desvioFlag} onChange={e => setDesvioFlag(e.target.checked)} />
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>Este hecho implica un desvío de tiempo</span>
+              </label>
+              {desvioFlag && <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 9 }}>
+                <div style={{ fontSize: 11.5, color: T.sub, lineHeight: 1.4 }}>Se va a cargar automáticamente un registro en Gestión de obra con estos días. Después lo podés abrir ahí para completar el plazo exacto, las fechas reales y las fotos.</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: T.sub, width: 110 }}>Días de desvío</span>
+                  <input type="number" min="1" value={diasDesvio} onChange={e => setDiasDesvio(e.target.value)} placeholder="Ej: 15" style={{ ...inp, flex: 1 }} />
+                </div>
+                <select value={causaDesvio} onChange={e => setCausaDesvio(e.target.value)} style={inp}>
+                  <option value="">— Causa del desvío (opcional) —</option>
+                  {CAUSA_DESVIO.map(x => <option key={x} value={x}>{x}</option>)}
+                </select>
+              </div>}
+            </div>
             {/* fotos */}
             {fotos.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {fotos.map(ft => (
@@ -7007,36 +7046,48 @@ const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "rgba(22,163,74,.14)" }, "
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 const isoHoy = () => new Date().toISOString().slice(0, 10);
 
+const CAUSA_DESVIO = ["Clima", "Falta de material", "Falta de definición del cliente", "Mano de obra", "Error de proyecto", "Otro"];
 function GestionView({ db, cfg, onBack }) {
-  const { pedidos, obras, gestion, setGestion, matpedidos } = db;
+  const { obras, gestion, setGestion, personal } = db;
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
   const [mForm, setMForm] = useState(null);
   const [rForm, setRForm] = useState(null);
   const [pForm, setPForm] = useState(null);      // decisión sobre un vencido
   const [pdfPunit, setPdfPunit] = useState(null); // PDF de un punitorio confirmado
+  const [pdfReg, setPdfReg] = useState(null);     // PDF de un registro individual
+  const [filtroObra, setFiltroObra] = useState("todas");
+  const [filtroEtapa, setFiltroEtapa] = useState("todas");
+  const [obraInforme, setObraInforme] = useState("");
+  const [pdfInforme, setPdfInforme] = useState(null); // informe de situación de una obra
   const upd = (patch) => setGestion({ ...g, ...patch });
   const cli = cfg?.clienteNombre || "Belfast";
 
   // ── Ítems medidos ──────────────────────────────────────────────────
+  // Todo el Plan de gestión se carga DIRECTAMENTE acá (Registro), ya no se
+  // deriva de los pedidos: cada hecho (certificado, pedido, visita, etc.)
+  // se agrega a mano, queda registrado y se puede editar o borrar.
   // La decisión (punitorio sí/no/prórroga) vive en g.punit[id]; la prórroga
   // acordada extiende el plazo de ESE ítem, así el reloj refleja lo pactado.
   const conDecision = (base) => {
     const d = g.punit[base.id];
     const plazoEf = (base.plazoBase || g.plazo) + (d?.decision === "prorroga" ? (d.prorrogaDias || 0) : 0);
     const m = gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
-    return { ...base, plazo: plazoEf, ...m, dec: d || null };
+    // Los días de clima/fuerza mayor no son imputables a nadie: se descuentan
+    // del retraso ANTES de que impacte en el punitorio. El desvío/estado
+    // siguen mostrando el atraso real (para que no se "pierda" en el radar),
+    // pero lo que vale plata es el retraso neto de clima.
+    const retrasoBruto = m.retraso;
+    const retraso = Math.max(0, retrasoBruto - (Number(base.diasClima) || 0));
+    return { ...base, plazo: plazoEf, ...m, retraso, retrasoBruto, dec: d || null };
   };
-  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; return conDecision({ id: p.id, auto: true, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: p.estado === "resuelto" }); });
-  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, auto: false, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
-  const parseDmy = (f) => { const m = String(f || "").match(/^(\d{2})\/(\d{2})\/(\d{2})$/); return m ? new Date(`20${m[3]}-${m[2]}-${m[1]}T12:00:00`) : null; };
-  const itemsMat = (matpedidos || []).filter(p => p.tipo === "definicion" || p.tipo === "plano").map(p => {
-    const solic = p.ts ? new Date(p.ts) : null;
-    const real = p.cumplido ? (parseDmy(p.cumplidoFecha) || new Date()) : null;
-    const desc = (p.items || []).map(it => it.nombre).filter(Boolean).join(", ") || (p.tipo === "plano" ? "Plano" : "Definición");
-    return conDecision({ id: p.id, auto: true, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: !!p.cumplido });
-  });
-  const items = [...itemsPedidos, ...itemsMat, ...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
+  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
+  const items = [...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
+  // Filtro del listado de Registro (no toca Panel/Punitorios, que siguen viendo todo)
+  const itemsFiltrados = items.filter(it => (filtroObra === "todas" || it.obra_id === filtroObra) && (filtroEtapa === "todas" || it.etapa === filtroEtapa));
+  const etapasUsadas = ETAPAS_OBRA.filter(e => items.some(it => it.etapa === e));
+  // Top 5 tareas con mayor diferencia (días), para ir directo al problema
+  const topDesvios = items.filter(it => it.desvio > 0).sort((a, b) => b.desvio - a.desvio).slice(0, 5);
 
   // ── El corazón del cambio: el perjuicio SOLO nace de una confirmación ──
   // Un ítem vencido es un CANDIDATO. Recién cuando se confirma (qué tarea
@@ -7064,9 +7115,145 @@ function GestionView({ db, cfg, onBack }) {
   function quitarDecision(id) { const p = { ...g.punit }; delete p[id]; upd({ punit: p }); }
   function guardarManual() { if (!mForm.descripcion?.trim()) return; const it = { ...mForm, id: mForm.id || uid() }; const exists = (g.manual || []).some(x => x.id === it.id); upd({ manual: exists ? g.manual.map(x => x.id === it.id ? it : x) : [...(g.manual || []), it] }); setMForm(null); }
   function guardarReunion() { const it = { ...rForm, id: rForm.id || uid() }; const exists = (g.reuniones || []).some(x => x.id === it.id); upd({ reuniones: exists ? g.reuniones.map(x => x.id === it.id ? it : x) : [it, ...(g.reuniones || [])] }); setRForm(null); }
+  function borrarRegistro(id) { if (!confirm("¿Borrar este registro? No se puede deshacer.")) return; const p = { ...g.punit }; delete p[id]; upd({ manual: (g.manual || []).filter(x => x.id !== id), punit: p }); }
+  function vaciarRegistro() {
+    if (!(g.manual || []).length) return;
+    if (!confirm(`¿Borrar los ${g.manual.length} registros cargados?\n\nEsto deja el Registro (y los Punitorios que dependen de él) en cero. No se puede deshacer.`)) return;
+    if (!confirm("Confirmá de nuevo: se borra TODO el historial de Gestión de obra.")) return;
+    upd({ manual: [], punit: {} });
+  }
+  // ── Fotos de inicio / fin de cada registro (antes-después de la tarea) ──
+  const mFileIniRef = useRef(null), mFileFinRef = useRef(null);
+  const [mFotoSubiendo, setMFotoSubiendo] = useState(false);
+  async function agregarFotoRegistro(e, campo) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setMFotoSubiendo(true);
+    const nuevas = [];
+    for (const f of files) {
+      try {
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const comp = await compressImage(dataUrl, 1600, 0.7);
+        const url = await uploadFoto(comp, `gestion/${campo}`, `${uid()}.jpg`);
+        if (url) nuevas.push({ id: uid(), url });
+      } catch { }
+    }
+    setMForm(prev => prev ? { ...prev, [campo]: [...(prev[campo] || []), ...nuevas] } : prev);
+    setMFotoSubiendo(false);
+    if (campo === "fotosInicio" && mFileIniRef.current) mFileIniRef.current.value = "";
+    if (campo === "fotosFin" && mFileFinRef.current) mFileFinRef.current.value = "";
+  }
+  // Vista previa en vivo, mientras se completa el formulario: cuánto lleva
+  // realmente la tarea contra lo estimado, para que se vea la diferencia
+  // (ej: estimado 10, lleva 25 → diferencia +15) antes incluso de guardar.
+  function previewDesvio(f) {
+    if (!f?.fechaSolic) return null;
+    const dias = diasHabiles(new Date(f.fechaSolic), f.fechaReal ? new Date(f.fechaReal) : new Date());
+    return { dias, desvio: dias - (Number(f.plazo) || 0) };
+  }
 
   // ── PDF de reclamo individual (un documento por punitorio) ─────────
   const _e = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // ── PDF de un registro (Registro, cualquier estado) ─────────────────
+  function htmlRegistro(it) {
+    const pj = perItem(it); const d = it.dec || {};
+    return `<!doctype html><html><head><meta charset="utf-8"><style>
+      @page{size:A4;margin:22mm 18mm}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0}
+      .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:22px}
+      .marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
+      .tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
+      h1{font-size:15px;color:#0F1B2D;margin:18px 0 4px}
+      .meta{font-size:11px;color:#64748B}
+      table{width:100%;border-collapse:collapse;margin:14px 0}
+      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top}
+      th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9.5px;letter-spacing:1px}
+      .calc{background:rgba(255,255,255,.04);border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
+      .tot{font-size:16px;font-weight:bold;color:#B91C1C;margin-top:6px}
+      .nota{font-size:10px;color:#94A3B8;margin-top:26px;border-top:1px solid #E2E8F0;padding-top:8px}
+    </style></head><body>
+      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Gestión de obra · Registro</div></div>
+      <h1>${_e(it.tipo)}: ${_e(it.descripcion)}</h1>
+      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(it.imputable)} · Emitido: ${hoyStr()}</div>
+      <table>
+        <tr><th>Concepto</th><th>Detalle</th></tr>
+        ${it.etapa ? `<tr><td>Etapa de obra</td><td>${_e(it.etapa)}</td></tr>` : ""}
+        ${it.responsable ? `<tr><td>Responsable / cuadrilla</td><td>${_e(it.responsable)}</td></tr>` : ""}
+        ${(it.personalIds && it.personalIds.length) ? `<tr><td>Personal asignado</td><td>${_e(it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", "))}</td></tr>` : ""}
+        <tr><td>Inicio</td><td>${fmtD(it.fechaSolic)}</td></tr>
+        <tr><td>Días estimados</td><td>${it.plazo} días hábiles${it.dec && it.plazo !== it.plazoBase ? ` (incluye prórroga acordada)` : ""}</td></tr>
+        <tr><td>Fin</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Aún no terminó"}</td></tr>
+        <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
+        <tr><td>Diferencia (real vs. estimado)</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio} días</td></tr>
+        ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(it.causa)}</td></tr>` : ""}
+        ${(Number(it.diasClima) || 0) > 0 ? `<tr><td>Días de clima / fuerza mayor (no imputables)</td><td>${it.diasClima} días</td></tr><tr><td><b>Retraso imputable neto</b></td><td><b>${it.retraso} días</b></td></tr>` : ""}
+        <tr><td>Estado</td><td>${_e(it.estado)}</td></tr>
+      </table>
+      ${(it.fotosInicio && it.fotosInicio.length) ? `<div style="margin-top:14px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E;margin-bottom:6px">Foto de inicio</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${it.fotosInicio.map(f => `<img src="${f.url}" style="width:150px;height:150px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />`).join("")}</div>
+      </div>` : ""}
+      ${(it.fotosFin && it.fotosFin.length) ? `<div style="margin-top:14px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E;margin-bottom:6px">Foto de fin</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${it.fotosFin.map(f => `<img src="${f.url}" style="width:150px;height:150px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />`).join("")}</div>
+      </div>` : ""}
+      ${it.dec?.decision === "confirmado" ? `<div class="calc">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Punitorio confirmado</div>
+        <div style="margin-top:6px">Tarea detenida: ${_e(d.tarea || "—")}</div>
+        <div>${it.retraso} día${it.retraso === 1 ? "" : "s"} de retraso × ${Number(d.personas) || g.dotacion} persona${(Number(d.personas) || g.dotacion) === 1 ? "" : "s"} × ${money(Number(d.costoDia) || g.costoPersona)} por persona/día</div>
+        <div class="tot">Perjuicio: ${money(pj)}</div>
+        ${d.nota ? `<div style="margin-top:4px">Observaciones: ${_e(d.nota)}</div>` : ""}
+      </div>` : it.dec?.decision === "prorroga" ? `<div class="calc"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Prórroga acordada</div><div style="margin-top:6px">+${d.prorrogaDias} días hábiles${d.nota ? ` — ${_e(d.nota)}` : ""}</div></div>` : it.dec?.decision === "sin_perjuicio" ? `<div class="calc"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Sin perjuicio</div>${d.nota ? `<div style="margin-top:6px">${_e(d.nota)}</div>` : ""}</div>` : ""}
+      <div class="nota">Documento generado por el sistema de gestión V+V Construcciones. ID ${_e(it.id)}.</div>
+    </body></html>`;
+  }
+
+  // ── Informe de estado de situación de una obra ──────────────────────
+  // Resumen desde el primer registro cargado hasta hoy: cuánto se hubiese
+  // tardado en total (suma de estimados) vs. cuánto se tardó/lleva en
+  // realidad, el desvío total, y su desglose por causa — para la reunión
+  // o el informe de estado de situación con el cliente.
+  function resumenObra(obraId) {
+    const its = items.filter(it => it.obra_id === obraId).sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0));
+    const totalEstimado = its.reduce((a, i) => a + (Number(i.plazo) || 0), 0);
+    const totalReal = its.reduce((a, i) => a + (i.dias || 0), 0);
+    const totalDesvio = totalReal - totalEstimado;
+    const totalClima = its.reduce((a, i) => a + (Number(i.diasClima) || 0), 0);
+    const porCausa = {};
+    its.forEach(i => { if (i.desvio > 0) { const c = i.causa || "Sin causa asignada"; porCausa[c] = (porCausa[c] || 0) + i.desvio; } });
+    const desde = its[0]?.fechaSolic || null;
+    return { its, totalEstimado, totalReal, totalDesvio, totalClima, porCausa, desde };
+  }
+  function htmlInformeObra(obraId) {
+    const ob = obras.find(o => o.id === obraId);
+    const r = resumenObra(obraId);
+    const filaTarea = (it) => `<tr><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8;font-size:9.5px">${_e(it.etapa)}</span>` : ""}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "en curso"}</td><td>${it.plazo}</td><td>${it.dias}</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio}</td><td>${_e(it.causa || (it.desvio > 0 ? "Sin asignar" : "—"))}</td></tr>`;
+    const causas = Object.entries(r.porCausa).sort((a, b) => b[1] - a[1]);
+    return `<!doctype html><html><head><meta charset="utf-8"><style>
+      @page{size:A4;margin:20mm 16mm}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0}
+      .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:20px}
+      .marca{font-size:18px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
+      .tipo{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
+      .meta{font-size:10.5px;color:#64748B;margin-top:4px}
+      h2{font-size:13px;color:#0F1B2D;margin:20px 0 8px;border-left:4px solid #B08D3E;padding-left:8px}
+      table{width:100%;border-collapse:collapse;margin:8px 0}
+      td,th{border:1px solid #CBD5E1;padding:6px 8px;font-size:10px;text-align:left;vertical-align:top}
+      th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:8.5px;letter-spacing:.5px}
+      .tot{font-size:14px;font-weight:bold;color:#B91C1C;margin-top:6px}
+      .stat{display:inline-block;width:23%;margin-right:1%;vertical-align:top}
+      .nota{font-size:9.5px;color:#94A3B8;margin-top:24px;border-top:1px solid #E2E8F0;padding-top:8px}
+    </style></head><body>
+      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")} · Período: ${r.desde ? fmtD(r.desde) : "—"} a ${hoyStr()} · Emitido: ${hoyStr()}</div></div>
+      <h2>Resumen</h2>
+      <div><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (total)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (total)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:${r.totalDesvio > 0 ? "#EF4444" : "#16A34A"}">${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio}</div><div style="font-size:9px;color:#64748B">Desvío total</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div></div>
+      <h2>Desvío por causa</h2>
+      <table><tr><th>Causa</th><th>Días de desvío</th><th>% del desvío total</th></tr>
+      ${causas.length ? causas.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
+      <h2>Detalle de tareas (${r.its.length})</h2>
+      <table><tr><th>Tarea</th><th>Inicio</th><th>Fin</th><th>Estimado</th><th>Real</th><th>Desvío</th><th>Causa</th></tr>
+      ${r.its.length ? r.its.map(filaTarea).join("") : `<tr><td colspan="7" style="text-align:center;color:#94A3B8">Sin registros</td></tr>`}</table>
+      <div class="nota">Documento generado por el sistema de gestión V+V Construcciones. "Días estimados" y "Real" en días hábiles.</div>
+    </body></html>`;
+  }
+
   function htmlPunit(it) {
     const d = it.dec || {}; const pj = perItem(it);
     const personas = Number(d.personas) || g.dotacion, costo = Number(d.costoDia) || g.costoPersona;
@@ -7116,19 +7303,26 @@ function GestionView({ db, cfg, onBack }) {
   const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
 
   // Tarjeta compartida por Registro y Punitorios
-  const ItemCard = ({ it, conAcciones }) => {
+  const ItemCard = ({ it, conAcciones, conRegistro }) => {
     const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
     return (<Card style={{ padding: 13, marginBottom: 9 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
+          {(it.responsable || (it.personalIds && it.personalIds.length > 0)) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{it.responsable ? `Responsable: ${it.responsable}` : ""}{it.responsable && it.personalIds?.length ? " · " : ""}{it.personalIds?.length ? `Personal: ${it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", ")}` : ""}</div>}
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
-            <span style={{ fontSize: 10.5, color: T.muted }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · plazo {it.plazo} d</span>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</span>
-            {!it.auto && <button onClick={() => setMForm({ ...g.manual.find(x => x.id === it.id) })} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>editar</button>}
-            {!it.auto && <button onClick={() => { quitarDecision(it.id); upd({ manual: g.manual.filter(x => x.id !== it.id), punit: Object.fromEntries(Object.entries(g.punit).filter(([k]) => k !== it.id)) }); }} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>✕</button>}
+            <span style={{ fontSize: 10.5, color: T.muted }}>Inicio {fmtD(it.fechaSolic)} · {it.fechaReal ? `fin ${fmtD(it.fechaReal)}` : "sin terminar"} · estimado {it.plazo} d</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>diferencia {it.desvio > 0 ? "+" : ""}{it.desvio}</span>
+            {conRegistro && <button onClick={() => setMForm({ ...g.manual.find(x => x.id === it.id) })} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>editar</button>}
+            {conRegistro && <button onClick={() => setPdfReg(it)} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
+            {conRegistro && <button onClick={() => borrarRegistro(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>✕</button>}
           </div>
+          {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${it.causa}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (retraso imputable: ${it.retraso} d)` : ""}</div>}
+          {((it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)) && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
+            {(it.fotosInicio || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} title="Inicio" style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #16A34A" }} /></a>)}
+            {(it.fotosFin || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} title="Fin" style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #B08D3E" }} /></a>)}
+          </div>}
           {it.dec?.decision === "confirmado" && <div style={{ fontSize: 11, marginTop: 6, color: T.sub, lineHeight: 1.5 }}><b style={{ color: "#B91C1C" }}>Perjuicio: {money(pj)}</b> — {it.retraso} d × {Number(it.dec.personas) || g.dotacion} pers. × {money(Number(it.dec.costoDia) || g.costoPersona)}{it.dec.tarea ? <><br />Frenó: {it.dec.tarea}</> : null}</div>}
           {it.dec?.decision === "prorroga" && <div style={{ fontSize: 11, marginTop: 6, color: "#2563EB" }}>Prórroga acordada: +{it.dec.prorrogaDias} días háb.{it.dec.nota ? ` — ${it.dec.nota}` : ""}</div>}
           {it.dec?.decision === "sin_perjuicio" && it.dec.nota && <div style={{ fontSize: 11, marginTop: 6, color: T.muted }}>{it.dec.nota}</div>}
@@ -7148,7 +7342,7 @@ function GestionView({ db, cfg, onBack }) {
   };
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
-    <SubHead id="gestion" label="Plan de gestión" sub="Desempeño, desvíos y perjuicio económico" onBack={onBack} />
+    <SubHead id="gestion" label="Gestión de obra" sub="Desempeño, desvíos y perjuicio económico" onBack={onBack} />
     <div style={{ padding: "14px 20px 0" }}>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>
         {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? T.al : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer", position: "relative" }}>{l}{k === "punitorios" && enEval.length > 0 && <span style={{ position: "absolute", top: -5, right: -5, background: "#EF4444", color: "#fff", borderRadius: 10, minWidth: 17, height: 17, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{enEval.length}</span>}</button>)}
@@ -7156,10 +7350,18 @@ function GestionView({ db, cfg, onBack }) {
     </div>
 
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
-      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Los pedidos de la app se miden solos (plazo {g.plazo} días háb.). Acá se ve TODO; los vencidos se evalúan en la pestaña Punitorios. Sumá certificados u otros con ＋.</div>
-      {items.length === 0 && <EmptyMsg>Sin ítems. Cargá pedidos o agregá un registro manual.</EmptyMsg>}
-      {items.map(it => <ItemCard key={it.id} it={it} conAcciones={false} />)}
-      <AddFab onClick={() => setMForm({ tipo: "Certificado", obra_id: obras[0]?.id || "", descripcion: "", imputable: "Estudio", fechaSolic: isoHoy(), plazo: g.plazo, fechaReal: "" })} label="Registro" />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>Cargá acá cada tarea o hecho de obra (días estimados por defecto {g.plazo} háb.), con foto de inicio y de fin para dejar constancia de cuánto llevó en verdad. Quedan registrados, se pueden editar, sacar en PDF o borrar; los que se pasan del estimado se evalúan en la pestaña Punitorios.</div>
+        {items.length > 0 && <button onClick={vaciarRegistro} style={{ flexShrink: 0, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Vaciar registro</button>}
+      </div>
+      {items.length > 0 && <FieldRow>
+        <Field label="Filtrar por obra"><Sel value={filtroObra} onChange={e => setFiltroObra(e.target.value)}><option value="todas">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        <Field label="Filtrar por etapa"><Sel value={filtroEtapa} onChange={e => setFiltroEtapa(e.target.value)}><option value="todas">Todas las etapas</option>{etapasUsadas.map(e => <option key={e} value={e}>{e}</option>)}</Sel></Field>
+      </FieldRow>}
+      {items.length === 0 && <EmptyMsg>Sin registros. Agregá el primero con ＋.</EmptyMsg>}
+      {items.length > 0 && itemsFiltrados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Ningún registro coincide con el filtro.</div>}
+      {itemsFiltrados.map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} />)}
+      <AddFab onClick={() => setMForm({ tipo: "Tarea", obra_id: obras[0]?.id || "", descripcion: "", imputable: "Estudio", fechaSolic: isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", causa: "", diasClima: 0, responsable: "", personalIds: [] })} label="Registro" />
     </div>}
 
     {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
@@ -7206,6 +7408,38 @@ function GestionView({ db, cfg, onBack }) {
       <Card style={{ padding: 13, marginBottom: 14 }}>
         {["Cumplido", "En plazo", "Fuera de plazo", "Vencido"].map(s => { const e = GEST_ESTADOS[s]; return (<div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.bg}` }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: e.c }} /><span style={{ fontSize: 12.5, color: T.text }}>{s}</span></div><span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>{cnt(s)}</span></div>); })}
       </Card>
+
+      <Eyebrow>Top 5 tareas más desviadas</Eyebrow>
+      <Card style={{ padding: 13, marginBottom: 14 }}>
+        {topDesvios.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "4px 0" }}>Sin desvíos por ahora.</div>}
+        {topDesvios.map((it, i) => (<div key={it.id} onClick={() => { setTab("registro"); setFiltroObra("todas"); setFiltroEtapa("todas"); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < topDesvios.length - 1 ? `1px solid ${T.bg}` : "none", cursor: "pointer" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
+            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{obraNom(obras, it.obra_id) || "—"}{it.etapa ? ` · ${it.etapa}` : ""}{it.causa ? ` · ${it.causa}` : ""}</div>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 800, color: "#EF4444", flexShrink: 0 }}>+{it.desvio} d</span>
+        </div>))}
+      </Card>
+
+      <Eyebrow>Informe de estado de situación</Eyebrow>
+      <Card style={{ padding: 13, marginBottom: 14 }}>
+        <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Resumen de una obra desde el primer registro hasta hoy: cuánto se hubiese tardado (estimado) contra cuánto se tardó en realidad, y el desvío total desglosado por causa.</div>
+        <FieldRow>
+          <Field label="Obra"><Sel value={obraInforme} onChange={e => setObraInforme(e.target.value)}><option value="">— Elegí una obra —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        </FieldRow>
+        {obraInforme && (() => {
+          const r = resumenObra(obraInforme);
+          if (!r.its.length) return <div style={{ fontSize: 12, color: T.muted }}>Esta obra todavía no tiene registros cargados.</div>;
+          return (<>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <MiniStat label="Estimado" value={`${r.totalEstimado} d`} color={T.accent} />
+              <MiniStat label="Real" value={`${r.totalReal} d`} color="#3B82F6" />
+              <MiniStat label="Desvío" value={`${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio} d`} color={r.totalDesvio > 0 ? "#EF4444" : "#16A34A"} />
+            </div>
+            <PBtn full onClick={() => setPdfInforme(obraInforme)}>Generar informe de situación</PBtn>
+          </>);
+        })()}
+      </Card>
       <Eyebrow>Perjuicio confirmado por responsable</Eyebrow>
       <Card style={{ padding: 13 }}>
         {[[cli, perjBelfast], ["Estudio", perjEstudio], ["V+V (interno)", perjVV]].map(([n, v]) => (<div key={n} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${T.bg}` }}><span style={{ fontSize: 12.5, color: T.text }}>{n}</span><span style={{ fontSize: 13, fontWeight: 800, color: v > 0 ? "#EF4444" : T.muted }}>{money(v)}</span></div>))}
@@ -7242,18 +7476,68 @@ function GestionView({ db, cfg, onBack }) {
 
     {mForm && <Sheet title={mForm.id ? "Editar registro" : "Nuevo registro"} onClose={() => setMForm(null)}>
       <FieldRow>
-        <Field label="Tipo"><Sel value={mForm.tipo} onChange={e => setMForm({ ...mForm, tipo: e.target.value })}><option>Certificado</option><option>Pedido de información</option><option>Visita técnica</option><option>Otro</option></Sel></Field>
+        <Field label="Tipo"><Sel value={mForm.tipo} onChange={e => setMForm({ ...mForm, tipo: e.target.value })}><option>Tarea</option><option>Certificado</option><option>Pedido de información</option><option>Visita técnica</option><option>Otro</option></Sel></Field>
         <Field label="Obra"><Sel value={mForm.obra_id} onChange={e => setMForm({ ...mForm, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       </FieldRow>
-      <Field label="Descripción"><TInput value={mForm.descripcion} onChange={e => setMForm({ ...mForm, descripcion: e.target.value })} placeholder="Ej: Certificado estado de situación" /></Field>
+      <Field label="Tarea / Descripción"><TInput value={mForm.descripcion} onChange={e => setMForm({ ...mForm, descripcion: e.target.value })} placeholder="Ej: Armado de cerco de obra" /></Field>
       <FieldRow>
         <Field label="Imputable a"><Sel value={mForm.imputable} onChange={e => setMForm({ ...mForm, imputable: e.target.value })}><option value={cli}>{cli}</option><option value="Estudio">Estudio</option><option value="V+V">V+V</option></Sel></Field>
-        <Field label="Plazo (días háb.)"><TInput type="number" value={mForm.plazo} onChange={e => setMForm({ ...mForm, plazo: +e.target.value || 0 })} /></Field>
+        <Field label="Días estimados"><TInput type="number" value={mForm.plazo} onChange={e => setMForm({ ...mForm, plazo: +e.target.value || 0 })} /></Field>
       </FieldRow>
       <FieldRow>
-        <Field label="Fecha solic./visita"><TInput type="date" value={mForm.fechaSolic} onChange={e => setMForm({ ...mForm, fechaSolic: e.target.value })} /></Field>
-        <Field label="Fecha real (si entregó)"><TInput type="date" value={mForm.fechaReal} onChange={e => setMForm({ ...mForm, fechaReal: e.target.value })} /></Field>
+        <Field label="Inicio"><TInput type="date" value={mForm.fechaSolic} onChange={e => setMForm({ ...mForm, fechaSolic: e.target.value })} /></Field>
+        <Field label="Fin (si terminó)"><TInput type="date" value={mForm.fechaReal} onChange={e => setMForm({ ...mForm, fechaReal: e.target.value })} /></Field>
       </FieldRow>
+      {mForm.fechaSolic && (() => {
+        const pv = previewDesvio(mForm);
+        const neto = Math.max(0, Math.max(0, pv.desvio) - (Number(mForm.diasClima) || 0));
+        return (<div style={{ background: pv.desvio > 0 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.10)", border: `1px solid ${pv.desvio > 0 ? "rgba(239,68,68,.30)" : "rgba(22,163,74,.30)"}`, borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: T.text, lineHeight: 1.5 }}>
+          {mForm.fechaReal ? "Llevó" : "Lleva"} <b>{pv.dias}</b> día{pv.dias === 1 ? "" : "s"} hábil{pv.dias === 1 ? "" : "es"} contra {mForm.plazo || 0} estimado{(mForm.plazo || 0) === 1 ? "" : "s"}{pv.desvio !== 0 && <> — diferencia de <b style={{ color: pv.desvio > 0 ? "#EF4444" : "#16A34A" }}>{pv.desvio > 0 ? "+" : ""}{pv.desvio}</b> día{Math.abs(pv.desvio) === 1 ? "" : "s"}</>}.
+          {(Number(mForm.diasClima) || 0) > 0 && <><br />De esos, <b>{mForm.diasClima}</b> no cuentan (clima/fuerza mayor) → retraso imputable: <b style={{ color: neto > 0 ? "#EF4444" : "#16A34A" }}>{neto}</b> día{neto === 1 ? "" : "s"}.</>}
+        </div>);
+      })()}
+
+      <FieldRow>
+        <Field label="Etapa de obra (opcional)"><Sel value={mForm.etapa || ""} onChange={e => setMForm({ ...mForm, etapa: e.target.value })}><option value="">— Sin etapa —</option>{ETAPAS_OBRA.map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
+        <Field label="Responsable / cuadrilla"><TInput value={mForm.responsable || ""} onChange={e => setMForm({ ...mForm, responsable: e.target.value })} placeholder="Ej: Cuadrilla propia, Gremio electricista…" /></Field>
+      </FieldRow>
+      <FieldRow>
+        <Field label="Causa del desvío (opcional)"><Sel value={mForm.causa || ""} onChange={e => setMForm({ ...mForm, causa: e.target.value })}><option value="">— Sin especificar —</option>{CAUSA_DESVIO.map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
+        <Field label="Días de clima / fuerza mayor"><TInput type="number" value={mForm.diasClima || 0} onChange={e => setMForm({ ...mForm, diasClima: +e.target.value || 0 })} /></Field>
+      </FieldRow>
+
+      <Eyebrow>Personal asignado (opcional)</Eyebrow>
+      {(personal || []).length === 0 && <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 10 }}>No hay personal cargado todavía.</div>}
+      {(personal || []).length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 160, overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 10px", marginBottom: 14 }}>
+        {personal.filter(p => { const ids = (p.obra_ids && p.obra_ids.length) ? p.obra_ids : (p.obra_id ? [p.obra_id] : []); return !mForm.obra_id || !ids.length || ids.includes(mForm.obra_id); }).map(p => {
+          const sel = (mForm.personalIds || []).includes(p.id);
+          return (<label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", fontSize: 12.5, color: T.text, cursor: "pointer" }}>
+            <input type="checkbox" checked={sel} onChange={() => setMForm({ ...mForm, personalIds: sel ? (mForm.personalIds || []).filter(x => x !== p.id) : [...(mForm.personalIds || []), p.id] })} />
+            {p.nombre}
+          </label>);
+        })}
+      </div>}
+
+      <Eyebrow>Foto de inicio</Eyebrow>
+      {(mForm.fotosInicio || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+        {mForm.fotosInicio.map(ft => (<div key={ft.id} style={{ position: "relative" }}>
+          <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />
+          <button onClick={() => setMForm({ ...mForm, fotosInicio: mForm.fotosInicio.filter(x => x.id !== ft.id) })} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button>
+        </div>))}
+      </div>}
+      <input ref={mFileIniRef} type="file" accept="image/*" multiple onChange={e => agregarFotoRegistro(e, "fotosInicio")} style={{ display: "none" }} />
+      <button onClick={() => mFileIniRef.current?.click()} disabled={mFotoSubiendo} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>{mFotoSubiendo ? "Subiendo…" : "＋ Foto de inicio"}</button>
+
+      <Eyebrow>Foto de fin</Eyebrow>
+      {(mForm.fotosFin || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+        {mForm.fotosFin.map(ft => (<div key={ft.id} style={{ position: "relative" }}>
+          <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />
+          <button onClick={() => setMForm({ ...mForm, fotosFin: mForm.fotosFin.filter(x => x.id !== ft.id) })} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button>
+        </div>))}
+      </div>}
+      <input ref={mFileFinRef} type="file" accept="image/*" multiple onChange={e => agregarFotoRegistro(e, "fotosFin")} style={{ display: "none" }} />
+      <button onClick={() => mFileFinRef.current?.click()} disabled={mFotoSubiendo} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}>{mFotoSubiendo ? "Subiendo…" : "＋ Foto de fin"}</button>
+
       <PBtn full onClick={guardarManual} style={{ marginTop: 6 }}>Guardar</PBtn>
     </Sheet>}
 
@@ -7270,7 +7554,7 @@ function GestionView({ db, cfg, onBack }) {
     </Sheet>}
 
     {pForm && <Sheet title="Evaluar retraso" onClose={() => setPForm(null)}>
-      <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55, marginBottom: 12 }}><b style={{ color: T.text }}>{pForm.it.descripcion}</b><br />{pForm.it.retraso} día{pForm.it.retraso === 1 ? "" : "s"} de retraso sobre el plazo de {pForm.it.plazo} días hábiles.</div>
+      <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55, marginBottom: 12 }}><b style={{ color: T.text }}>{pForm.it.descripcion}</b><br />{pForm.it.retraso} día{pForm.it.retraso === 1 ? "" : "s"} de retraso imputable sobre el estimado de {pForm.it.plazo} días hábiles{(Number(pForm.it.diasClima) || 0) > 0 ? ` (ya descontados ${pForm.it.diasClima} días de clima/fuerza mayor de un retraso bruto de ${pForm.it.retrasoBruto})` : ""}.{pForm.it.causa ? <><br />Causa registrada: {pForm.it.causa}</> : null}</div>
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
         {[["confirmar", "Frenó trabajo"], ["sin", "No frenó nada"], ["prorroga", "Prórroga acordada"]].map(([m, l]) => <button key={m} onClick={() => setPForm({ ...pForm, modo: m })} style={{ flex: 1, padding: "10px 6px", borderRadius: 9, border: `1.5px solid ${pForm.modo === m ? T.accent : T.border}`, background: pForm.modo === m ? T.al : T.card, color: pForm.modo === m ? T.accent : T.sub, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
       </div>
@@ -7308,6 +7592,24 @@ function GestionView({ db, cfg, onBack }) {
         <button onClick={() => { const f = document.getElementById("punit-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
       </div>
       <iframe id="punit-pdf" srcDoc={htmlPunit(pdfPunit)} title="Reclamo punitorio" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+
+    {pdfReg && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
+      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={() => setPdfReg(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
+        <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Registro — {pdfReg.descripcion}</div>
+        <button onClick={() => { const f = document.getElementById("reg-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="reg-pdf" srcDoc={htmlRegistro(pdfReg)} title="Registro" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+
+    {pdfInforme && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
+      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={() => setPdfInforme(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
+        <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe de situación — {obraNom(obras, pdfInforme)}</div>
+        <button onClick={() => { const f = document.getElementById("informe-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="informe-pdf" srcDoc={htmlInformeObra(pdfInforme)} title="Informe de situación" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
   </div>);
 }
@@ -8368,7 +8670,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
 const WEB_NAV = [
   { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" },
   { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" },
-  { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos enviados" }, { id:"auditoria", label:"Auditoría" },
+  { id:"bitacora", label:"Bitácora" }, { id:"gestion", label:"Gestión de obra" }, { id:"matpedidos", label:"Pedidos enviados" }, { id:"auditoria", label:"Auditoría" },
     { id:"minutas", label:"Grabar reunión" }, { id:"mas", label:"Más" },
 ];
 function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
@@ -8395,6 +8697,7 @@ const BOTTOM_NAV_VV = [
   { id:"obras", label:"Obras" },
   { id:"avance", label:"Avance" },
   { id:"bitacora", label:"Bitácora" },
+  { id:"gestion", label:"Gestión" },
   { id:"matpedidos", label:"Pedidos" },
   { id:"auditoria", label:"Auditoría" },
 ];
@@ -8814,6 +9117,7 @@ function App() {
             {view==="mas" && <MasView cfg={cfg} setCfg={setCfg} sub={masSub} setSub={setMasSub} goView={go} db={db} apiKey={cfg.apiKey} />}
             {view==="informes" && <InformesView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
+            {view==="gestion" && <GestionView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
