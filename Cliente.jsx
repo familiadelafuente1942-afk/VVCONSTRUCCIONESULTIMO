@@ -1675,15 +1675,19 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
   };
   const borrar = (id) => { if (confirm("¿Borrar este hecho de la bitácora?")) setBitacora(prev => (prev || []).filter(h => h.id !== id)); };
 
-  const exportarPDF = () => {
-    if (!obra) return;
+  // lista: los hechos a incluir — todos los de la obra, o uno solo particular.
+  // Se ve dentro de la misma app, con un botón "Guardar / Imprimir" — no
+  // descarga un archivo suelto que abra el visor nativo del sistema.
+  const exportarPDF = (lista) => {
+    if (!obra || !lista || !lista.length) return;
     const marca = "V+V CONSTRUCCIONES";
     const hoy = hoyStr();
-    const items = hechos.map((h, i) => {
+    const esUno = lista.length === 1;
+    const items = lista.map((h, i) => {
       const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
       const fotosH = (h.fotos || []).map(ft => `<img src="${ft.url}" />`).join("");
       return `<div class="hecho">
-        <div class="hh"><span class="num">${hechos.length - i}</span><span class="fecha">${fFmt}</span><span class="tit">${(h.titulo || "").replace(/</g, "&lt;")}</span></div>
+        <div class="hh">${esUno ? "" : `<span class="num">${lista.length - i}</span>`}<span class="fecha">${fFmt}</span><span class="tit">${(h.titulo || "").replace(/</g, "&lt;")}</span></div>
         ${h.desc ? `<div class="desc">${(h.desc || "").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</div>` : ""}
         ${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}
         ${(h.adjuntos || []).length ? `<div class="adj"><b>Adjuntos:</b> ${(h.adjuntos || []).map(a => (a.nombre || "").replace(/</g, "&lt;")).join(" · ")}</div>` : ""}
@@ -1716,73 +1720,32 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
     </style></head><body><div class="sheet">
       <div class="hdr">
         <div class="marca">${marca}</div>
-        <div class="tipo">Historial de obra · Bitácora</div>
+        <div class="tipo">Historial de obra · Bitácora${esUno ? " — Hecho individual" : ""}</div>
         <h1>${(obra.nombre || "").replace(/</g, "&lt;")}</h1>
-        <div class="meta">Comitente: ${(cfg?.comitente || "Belfast Construction Management")} · Emitido: ${hoy} · ${hechos.length} hecho${hechos.length !== 1 ? "s" : ""} registrado${hechos.length !== 1 ? "s" : ""}</div>
+        <div class="meta">Comitente: ${(cfg?.comitente || "Belfast Construction Management")} · Emitido: ${hoy}${esUno ? "" : ` · ${lista.length} hecho${lista.length !== 1 ? "s" : ""} registrado${lista.length !== 1 ? "s" : ""}`}</div>
       </div>
       ${items || '<div class="vacio">Todavía no hay hechos cargados en esta obra.</div>'}
       <div class="foot">Documento generado por ${marca} para respaldo y justificación de adicionales de obra.</div>
     </div></body></html>`;
     setPdfHtml(html);
   };
-
-  // Arma el mismo documento que exportarPDF, pero para un solo hecho — para
-  // bajar/imprimir/mandar nada más que ese, sin arrastrar el resto.
-  const exportarUnHecho = (h) => {
-    if (!obra) return;
-    const marca = "V+V CONSTRUCCIONES";
-    const hoy = hoyStr();
-    const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
-    const fotosH = (h.fotos || []).map(ft => `<img src="${ft.url}" />`).join("");
-    const item = `<div class="hecho">
-        <div class="hh"><span class="fecha">${fFmt}</span><span class="tit">${(h.titulo || "").replace(/</g, "&lt;")}</span></div>
-        ${h.desc ? `<div class="desc">${(h.desc || "").replace(/</g, "&lt;").replace(/\n/g, "<br/>")}</div>` : ""}
-        ${fotosH ? `<div class="fotos">${fotosH}</div>` : ""}
-        ${(h.adjuntos || []).length ? `<div class="adj"><b>Adjuntos:</b> ${(h.adjuntos || []).map(a => (a.nombre || "").replace(/</g, "&lt;")).join(" · ")}</div>` : ""}
-      </div>`;
-    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-      @page { margin: 14mm; }
-      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      html, body { margin: 0; padding: 0; }
-      body { font-family: -apple-system, Arial, sans-serif; color: #1a2433; background: #eceff3; }
-      .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
-      @media screen { body { padding: 14px; } }
-      @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 14px; }
-      .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; letter-spacing: -.01em; }
-      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
-      .meta { font-size: 11px; color: #5B6B7F; margin-top: 8px; }
-      h1 { font-size: 15px; color: #0F1B2D; margin: 4px 0 2px; }
-      .hecho { border: 1px solid #E3E8EF; border-left: 3px solid #1B3A5B; border-radius: 8px; padding: 11px 13px; page-break-inside: avoid; }
-      .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; flex-wrap: wrap; }
-      .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
-      .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
-      .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
-      .adj { font-size: 10.5px; color: #1B3A5B; background: rgba(255,255,255,.06); border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
-      .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
-      .fotos img { width: 150px; height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #E3E8EF; }
-      .foot { margin-top: 16px; font-size: 9.5px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
-    </style></head><body><div class="sheet">
-      <div class="hdr">
-        <div class="marca">${marca}</div>
-        <div class="tipo">Historial de obra · Bitácora — Hecho individual</div>
-        <h1>${(obra.nombre || "").replace(/</g, "&lt;")}</h1>
-        <div class="meta">Comitente: ${(cfg?.comitente || "Belfast Construction Management")} · Emitido: ${hoy}</div>
-      </div>
-      ${item}
-      <div class="foot">Documento generado por ${marca} para respaldo y justificación de adicionales de obra.</div>
-    </div></body></html>`;
-    setPdfHtml(html);
-  };
   // Abre el correo con el asunto y el texto de ese hecho ya cargados — no
   // manda un PDF adjunto (eso no se puede armar solo con un mailto:), pero
-  // deja todo listo para escribir y mandar en el momento.
-  const mailearHecho = (h) => {
+  // deja todo listo para escribir y mandar en el momento. Muchas compus no
+  // tienen un programa de mail configurado como predeterminado, y ahí el
+  // mailto: no abre nada sin avisar — por eso, además, copiamos el texto al
+  // portapapeles y avisamos, para que siempre quede algo útil.
+  const mailearHecho = async (h) => {
     if (!obra) return;
     const fFmt = h.fecha ? h.fecha.split("-").reverse().join("/") : "";
     const asunto = `Bitácora — ${obra.nombre} — ${fFmt}${h.titulo ? " — " + h.titulo : ""}`;
     const cuerpo = `${h.titulo || "Hecho de obra"}\nObra: ${obra.nombre}\nFecha: ${fFmt}\n\n${h.desc || ""}`;
-    window.location.href = `mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    try { await navigator.clipboard.writeText(`Asunto: ${asunto}\n\n${cuerpo}`); } catch { }
+    const a = document.createElement("a");
+    a.href = `mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+    a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+    alert("Se copió el texto de este hecho al portapapeles.\n\nSi no se abrió tu programa de mail (es común que la compu no tenga uno configurado por defecto), pegalo directo en Gmail, Outlook web, WhatsApp, etc.");
   };
 
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 14, color: T.text, boxSizing: "border-box" };
@@ -1828,7 +1791,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
           <option value="">— Elegí una obra —</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
         </select>
-        {obraId && hechos.length > 0 && <button onClick={exportarPDF} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>PDF</button>}
+        {obraId && hechos.length > 0 && <button onClick={() => exportarPDF(hechos)} style={{ background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 8, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>PDF todo</button>}
       </div>
 
       {obraId && <>
@@ -1890,7 +1853,7 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
               {h.adjuntos.map(a => <button key={a.id} onClick={() => window.open(a.url, "_blank")} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", maxWidth: "100%" }}><span>{iconoArch(a.nombre, a.tipo)}</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nombre}</span></button>)}
             </div>}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button onClick={() => exportarUnHecho(h)} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>📄 PDF</button>
+              <button onClick={() => exportarPDF([h])} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>📄 PDF</button>
               <button onClick={() => mailearHecho(h)} style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✉️ Mail</button>
             </div>
           </div>
@@ -2984,7 +2947,7 @@ function Toast({ T, toast }) {
   </div>);
 }
 
-const NAV = [{ id: "inicio", label: "Inicio", icon: "M11.47 3.841a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.061l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 101.061 1.061l8.69-8.69z" }, { id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "auditoria", label: "Auditoría", icon: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z M9.5 12l1.8 1.8L15 10" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "formularios", label: "Certificados", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
+const NAV = [{ id: "inicio", label: "Inicio", icon: "M11.47 3.841a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.061l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 101.061 1.061l8.69-8.69z" }, { id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "auditoria", label: "Auditoría", icon: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z M9.5 12l1.8 1.8L15 10" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "formularios", label: "Certificados", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión de obra", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
 function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], certif = {}, bitacora = [], onPedidos, onMinutas }) {
@@ -4828,29 +4791,33 @@ async function ponerGlobito(n) {
     else await navigator.clearAppBadge();
   } catch { }
 }
-function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
+function causaTexto(it) { return it?.causa === "Otro" && it?.causaDetalle ? it.causaDetalle : (it?.causa || ""); }
+function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, reuniones: [], ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
+  const [pdfHtml, setPdfHtml] = useState(null);
+  const [filtroObra, setFiltroObra] = useState("todas");
+  const [filtroEtapa, setFiltroEtapa] = useState("todas");
   const cli = cfg?.nombre || "Belfast";
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   // Misma lectura de decisiones que V+V: acá Belfast VE lo mismo que V+V
   // decidió, con el cálculo abierto. Transparencia total, sin sorpresas.
+  // Todo se carga directamente en el Registro de V+V (ya no deriva de los
+  // pedidos), así que acá se muestra exactamente lo mismo, solo lectura.
   const conDecision = (base) => {
     const d = g.punit[base.id];
     const plazoEf = (base.plazoBase || g.plazo) + (d?.decision === "prorroga" ? (d.prorrogaDias || 0) : 0);
     const m = gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
-    return { ...base, plazo: plazoEf, ...m, dec: d || null };
+    // Mismo criterio que V+V: los días de clima/fuerza mayor no cuentan para el punitorio.
+    const retrasoBruto = m.retraso;
+    const retraso = Math.max(0, retrasoBruto - (Number(base.diasClima) || 0));
+    return { ...base, plazo: plazoEf, ...m, retraso, retrasoBruto, dec: d || null };
   };
-  const itemsPedidos = (pedidos || []).map(p => { const solic = p.ts ? new Date(p.ts) : null; const resp = (p.hilo || []).find(h => h.de === p.para); const real = resp ? new Date(resp.ts) : null; return conDecision({ id: p.id, tipo: "Pedido de información", obra_id: p.obra_id, descripcion: p.asunto, imputable: p.para === "cliente" ? cli : "V+V", fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: p.estado === "resuelto" }); });
   const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
-  const parseDmy = (f) => { const m = String(f || "").match(/^(\d{2})\/(\d{2})\/(\d{2})$/); return m ? new Date(`20${m[3]}-${m[2]}-${m[1]}T12:00:00`) : null; };
-  const itemsMat = (matpedidos || []).filter(p => p.tipo === "definicion" || p.tipo === "plano").map(p => {
-    const solic = p.ts ? new Date(p.ts) : null;
-    const real = p.cumplido ? (parseDmy(p.cumplidoFecha) || new Date()) : null;
-    const desc = (p.items || []).map(it => it.nombre).filter(Boolean).join(", ") || (p.tipo === "plano" ? "Plano" : "Definición");
-    return conDecision({ id: p.id, tipo: p.tipo === "plano" ? "Plano" : "Definición", obra_id: p.obra_id, descripcion: desc, imputable: cli, fechaSolic: solic, fechaReal: real, plazoBase: g.plazo, cerrado: !!p.cumplido });
-  });
-  const items = [...itemsPedidos, ...itemsMat, ...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
+  const items = [...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
+  const itemsFiltrados = items.filter(it => (filtroObra === "todas" || it.obra_id === filtroObra) && (filtroEtapa === "todas" || it.etapa === filtroEtapa));
+  const etapasUsadas = ETAPAS_OBRA.filter(e => items.some(it => it.etapa === e));
+  const topDesvios = items.filter(it => it.desvio > 0).sort((a, b) => b.desvio - a.desvio).slice(0, 5);
   const perItem = it => (it.dec?.decision === "confirmado") ? it.retraso * (Number(it.dec.personas) || g.dotacion) * (Number(it.dec.costoDia) || g.costoPersona) : 0;
   const esVencido = it => it.estado === "Vencido" || it.estado === "Fuera de plazo";
   const confirmados = items.filter(it => it.dec?.decision === "confirmado");
@@ -4863,6 +4830,41 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
   const cnt = e => items.filter(i => i.estado === e).length;
   const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
   const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
+  const _e = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // ── PDF del plan de gestión completo (solo lectura, mismo criterio que V+V) ──
+  function htmlReporte() {
+    const filaReg = (it) => `<tr><td>${_e(it.tipo)}</td><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8">${_e(it.etapa)}</span>` : ""}</td><td>${_e(nomObra(it.obra_id))}</td><td>${_e(it.imputable)}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "—"}</td><td>${it.desvio > 0 ? "+" : ""}${it.desvio}${(Number(it.diasClima) || 0) > 0 ? `<br/><span style="color:#94A3B8">-${it.diasClima} clima</span>` : ""}</td><td>${_e(it.estado)}${it.causa ? `<br/><span style="color:#94A3B8">${_e(causaTexto(it))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</span>` : ""}</td></tr>`;
+    const filaPunit = (it) => `<tr><td>${_e(it.descripcion)}</td><td>${_e(it.dec?.tarea || "—")}</td><td>${Number(it.dec?.personas) || g.dotacion}</td><td>${money(Number(it.dec?.costoDia) || g.costoPersona)}</td><td>${money(perItem(it))}</td></tr>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><style>
+      @page{size:A4;margin:20mm 16mm}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0}
+      .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:20px}
+      .marca{font-size:18px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
+      .tipo{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
+      .meta{font-size:10.5px;color:#64748B;margin-top:4px}
+      h2{font-size:13px;color:#0F1B2D;margin:20px 0 8px;border-left:4px solid #B08D3E;padding-left:8px}
+      table{width:100%;border-collapse:collapse;margin:8px 0}
+      td,th{border:1px solid #CBD5E1;padding:6px 8px;font-size:10px;text-align:left;vertical-align:top}
+      th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:8.5px;letter-spacing:.5px}
+      .tot{font-size:14px;font-weight:bold;color:#B91C1C;margin-top:6px}
+      .stat{display:inline-block;width:23%;margin-right:1%;vertical-align:top}
+      .nota{font-size:9.5px;color:#94A3B8;margin-top:24px;border-top:1px solid #E2E8F0;padding-top:8px}
+    </style></head><body>
+      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Gestión de obra</div><div class="meta">Cliente: ${_e(cli)} · Emitido: ${hoyStr()}</div></div>
+      <h2>Resumen</h2>
+      <div><div class="stat"><div style="font-size:15px;font-weight:800">${total}</div><div style="font-size:9px;color:#64748B">Ítems</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#16A34A">${pctCumpl}%</div><div style="font-size:9px;color:#64748B">Cumplimiento</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${diasProm}</div><div style="font-size:9px;color:#64748B">Días háb. prom.</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#EF4444">${money(perjT)}</div><div style="font-size:9px;color:#64748B">Perjuicio confirmado</div></div></div>
+      <h2>Registro (${items.length})</h2>
+      <table><tr><th>Tipo</th><th>Tarea / Descripción</th><th>Obra</th><th>Imputable</th><th>Inicio</th><th>Fin</th><th>Diferencia</th><th>Estado</th></tr>
+      ${items.length ? items.map(filaReg).join("") : `<tr><td colspan="8" style="text-align:center;color:#94A3B8">Sin registros</td></tr>`}</table>
+      ${items.some(it => (it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)) ? `<h2>Evidencia fotográfica</h2>
+      ${items.filter(it => (it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)).map(it => `<div style="margin-bottom:12px"><div style="font-size:10.5px;font-weight:bold;margin-bottom:5px">${_e(it.descripcion)}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${(it.fotosInicio || []).map(f => `<img src="${f.url}" style="width:90px;height:90px;object-fit:cover;border:2px solid #16A34A;border-radius:4px" />`).join("")}${(it.fotosFin || []).map(f => `<img src="${f.url}" style="width:90px;height:90px;object-fit:cover;border:2px solid #B08D3E;border-radius:4px" />`).join("")}</div></div>`).join("")}` : ""}
+      <h2>Punitorios confirmados (${confirmados.length})</h2>
+      <table><tr><th>Ítem</th><th>Tarea detenida</th><th>Dotación</th><th>Costo/día</th><th>Perjuicio</th></tr>
+      ${confirmados.length ? confirmados.map(filaPunit).join("") : `<tr><td colspan="5" style="text-align:center;color:#94A3B8">Sin punitorios confirmados</td></tr>`}</table>
+      <div class="tot">Perjuicio total confirmado: ${money(perjT)} (${cli}: ${money(perjB)} · Estudio: ${money(perjE)} · V+V: ${money(perjVV)})</div>
+      <div class="nota">Documento generado por el sistema de gestión V+V Construcciones.</div>
+    </body></html>`;
+  }
 
   const ItemCard = ({ it }) => {
     const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
@@ -4870,8 +4872,14 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b></div>
-          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Solic. {fmtD(it.fechaSolic)} · {it.fechaReal ? `resp. ${fmtD(it.fechaReal)}` : "sin respuesta"} · plazo {it.plazo} d · <b style={{ color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>desvío {it.desvio > 0 ? "+" : ""}{it.desvio}</b></div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
+          {(it.responsable || (it.personalIds && it.personalIds.length > 0)) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{it.responsable ? `Responsable: ${it.responsable}` : ""}{it.responsable && it.personalIds?.length ? " · " : ""}{it.personalIds?.length ? `Personal: ${it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", ")}` : ""}</div>}
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Inicio {fmtD(it.fechaSolic)} · {it.fechaReal ? `fin ${fmtD(it.fechaReal)}` : "sin terminar"} · estimado {it.plazo} d · <b style={{ color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>diferencia {it.desvio > 0 ? "+" : ""}{it.desvio}</b></div>
+          {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${causaTexto(it)}${it.categoriaDesvio ? ` (${it.categoriaDesvio})` : ""}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (imputable: ${it.retraso} d)` : ""}</div>}
+          {((it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)) && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
+            {(it.fotosInicio || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} title="Inicio" style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #16A34A" }} /></a>)}
+            {(it.fotosFin || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} title="Fin" style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #B08D3E" }} /></a>)}
+          </div>}
           {it.dec?.decision === "confirmado" && <div style={{ fontSize: 11, marginTop: 6, color: T.sub, lineHeight: 1.5 }}><b style={{ color: "#B91C1C" }}>Perjuicio: {money(pj)}</b> — {it.retraso} d × {Number(it.dec.personas) || g.dotacion} pers. × {money(Number(it.dec.costoDia) || g.costoPersona)}{it.dec.tarea ? <><br />Tarea detenida: {it.dec.tarea}</> : null}</div>}
           {it.dec?.decision === "prorroga" && <div style={{ fontSize: 11, marginTop: 6, color: "#2563EB" }}>Prórroga acordada: +{it.dec.prorrogaDias} días háb.{it.dec.nota ? ` — ${it.dec.nota}` : ""}</div>}
         </div>
@@ -4885,13 +4893,25 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
   };
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
-    <div style={{ padding: "14px 20px 0" }}>
+    <div style={{ padding: "14px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
       <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? "rgba(255,255,255,.08)" : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700 }}>{l}</button>)}</div>
+      <button onClick={() => setPdfHtml(htmlReporte())} style={{ flexShrink: 0, background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>PDF</button>
     </div>
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
-      <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Desempeño medido sobre los pedidos (plazo {g.plazo} días háb.).</div>
+      <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Tareas y hechos cargados por V+V, con foto de inicio y de fin de cada una (estimado de referencia {g.plazo} días háb.). Solo lectura — descargá el informe completo en PDF arriba.</div>
+      {items.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", fontSize: 12.5, color: T.text }}>
+          <option value="todas">Todas las obras</option>
+          {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+        </select>
+        <select value={filtroEtapa} onChange={e => setFiltroEtapa(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", fontSize: 12.5, color: T.text }}>
+          <option value="todas">Todas las etapas</option>
+          {etapasUsadas.map(e => <option key={e} value={e}>{e}</option>)}
+        </select>
+      </div>}
       {items.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin ítems.</div>}
-      {items.map(it => <ItemCard key={it.id} it={it} />)}
+      {items.length > 0 && itemsFiltrados.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Ningún registro coincide con el filtro.</div>}
+      {itemsFiltrados.map(it => <ItemCard key={it.id} it={it} />)}
     </div>}
     {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
       <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.55, marginBottom: 14 }}>Solo se imputan los retrasos que detuvieron una tarea en condiciones de avanzar, evaluados caso por caso con la dotación y el costo reales. Los retrasos marcados "en evaluación" no tienen monto asignado.</div>
@@ -4915,6 +4935,17 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
       </div>
       <Eyebrow T={T}>Por estado</Eyebrow>
       <Card T={T} style={{ padding: 13, marginBottom: 14 }}>{["Cumplido", "En plazo", "Fuera de plazo", "Vencido"].map(s => { const e = GEST_ESTADOS[s]; return (<div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: e.c }} /><span style={{ fontSize: 12.5, color: T.text }}>{s}</span></div><span style={{ fontSize: 13, fontWeight: 800 }}>{cnt(s)}</span></div>); })}</Card>
+      <Eyebrow T={T}>Top 5 tareas más desviadas</Eyebrow>
+      <Card T={T} style={{ padding: 13, marginBottom: 14 }}>
+        {topDesvios.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "4px 0" }}>Sin desvíos por ahora.</div>}
+        {topDesvios.map((it, i) => (<div key={it.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < topDesvios.length - 1 ? `1px solid ${T.border}` : "none" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
+            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{nomObra(it.obra_id)}{it.etapa ? ` · ${it.etapa}` : ""}{it.causa ? ` · ${causaTexto(it)}` : ""}</div>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 800, color: "#EF4444", flexShrink: 0 }}>+{it.desvio} d</span>
+        </div>))}
+      </Card>
       <Eyebrow T={T}>Perjuicio confirmado por responsable</Eyebrow>
       <Card T={T} style={{ padding: 13 }}>{[[cli, perjB], ["Estudio", perjE], ["V+V", perjVV]].map(([n, v]) => <div key={n} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{n}</span><span style={{ fontSize: 13, fontWeight: 800, color: v > 0 ? "#EF4444" : T.muted }}>{money(v)}</span></div>)}<div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>TOTAL</span><span style={{ fontSize: 14, fontWeight: 800, color: "#EF4444" }}>{money(perjT)}</span></div></Card>
     </div>}
@@ -4939,6 +4970,15 @@ function GestionScreen({ T, cfg, pedidos, obras, gestion, matpedidos = [] }) {
         {r.mejorar && <div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}><b>A mejorar:</b> {r.mejorar}</div>}
         {r.acciones && <div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}><b>Acciones acordadas:</b> {r.acciones}</div>}
       </Card>))}
+    </div>}
+
+    {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 320, display: "flex", flexDirection: "column" }}>
+      <div style={{ background: T.navy || "#0F1B2D", padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={() => setPdfHtml(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
+        <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700 }}>Gestión de obra</div>
+        <button onClick={() => { const f = document.getElementById("gestion-cli-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="gestion-cli-pdf" srcDoc={pdfHtml} title="Gestión de obra" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
   </div>);
 }
@@ -4970,6 +5010,7 @@ const BOTTOM_NAV = [
   { id: "obras", label: "Obras" },
   { id: "avance", label: "Avance" },
   { id: "bitacora", label: "Bitácora" },
+  { id: "gestion", label: "Gestión" },
   { id: "materiales", label: "Pedidos" },
   { id: "auditoria", label: "Auditoría" },
 ];
@@ -4982,7 +5023,7 @@ const MAS_ITEMS = [
   { id: "adicionales", label: "Tarea adicional" },
   { id: "archivos", label: "Archivos" },
   { id: "personal", label: "Personal" },
-  { id: "gestion", label: "Gestión" },
+  { id: "gestion", label: "Gestión de obra" },
   { id: "minutas", label: "Grabar reunión" },
   { id: "ajustes", label: "Ajustes" },
 ];
@@ -5391,7 +5432,7 @@ function ClienteApp() {
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "adicionales" && <AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
-          {screen === "gestion" && <GestionScreen T={T} cfg={cfg} pedidos={pedidos} obras={obras} gestion={gestion} matpedidos={matpedidos} />}
+          {screen === "gestion" && <GestionScreen T={T} cfg={cfg} obras={obras} gestion={gestion} personal={personal} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
           {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} renders={renders} setRenders={setRenders} />}
