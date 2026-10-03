@@ -3135,7 +3135,7 @@ function BitacoraView({ db, cfg, onBack }) {
       const registro = {
         id: gestionId, tipo: "Tarea", obra_id: obraId,
         descripcion: (titulo.trim() || desc.trim().slice(0, 80)) + " (desde Bitácora)",
-        imputable: "Estudio", plazo: 0, fechaSolic: fecha, fechaReal: addDias(fecha, diasDesvio),
+        imputables: ["Estudio"], plazo: 0, fechaSolic: fecha, fechaReal: addDias(fecha, diasDesvio),
         etapa: etapa || "", categoriaDesvio: categoriaDesvio || "", causa: causaDesvio || "", causaDetalle: causaDesvio === "Otro" ? causaDesvioDetalle : "", diasClima: 0, responsable: "",
         personalIds: [], fotosInicio: fotos || [], fotosFin: [],
       };
@@ -7308,6 +7308,15 @@ const CATEGORIAS_DESVIO = ["Evitable", "No evitable"];
 const CAUSAS_EVITABLE = ["Mano de obra (rendimiento/ausentismo)", "Error de proyecto / planos", "Falta de coordinación entre gremios", "Falta de materiales en obra (compra tardía)", "Rotura o falla de herramienta/equipo", "Incumplimiento de subcontratista", "Reproceso / trabajo mal ejecutado", "Falta de personal asignado", "Otro"];
 const CAUSAS_NO_EVITABLE = ["Clima", "Falta de definición del cliente", "Espera de aprobación / permiso municipal", "Falta de pago / certificación del cliente", "Provisión pendiente por parte del cliente", "Cambio de alcance / adicional solicitado", "Caso fortuito / fuerza mayor", "Otro"];
 function causaTexto(it) { return it?.causa === "Otro" && it?.causaDetalle ? it.causaDetalle : (it?.causa || ""); }
+// Un registro puede ser imputable a más de una empresa a la vez (ej: Belfast
+// y el Estudio juntos). it.imputables es el array nuevo; it.imputable (string)
+// se sigue leyendo para no perder los registros viejos ya guardados.
+function imputablesDe(it) {
+  if (Array.isArray(it?.imputables) && it.imputables.length) return it.imputables;
+  if (it?.imputable) return [it.imputable];
+  return [];
+}
+function imputablesTexto(it) { const l = imputablesDe(it); return l.length ? l.join(" + ") : "Sin asignar"; }
 function GestionView({ db, cfg, onBack }) {
   const { obras, gestion, setGestion, personal, modelosObra } = db;
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(gestion || {}) };
@@ -7368,7 +7377,11 @@ function GestionView({ db, cfg, onBack }) {
   const cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
   const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
-  const grp = (n) => confirmados.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
+  // Si un ítem es imputable a más de una empresa a la vez, el perjuicio de
+  // ESE ítem se reparte por igual entre las empresas que le corresponden —
+  // así la suma de los 3 responsables sigue dando el total real, sin
+  // duplicar plata.
+  const grp = (n) => confirmados.filter(i => imputablesDe(i).includes(n)).reduce((a, i) => { const lista = imputablesDe(i); return a + perItem(i) / Math.max(1, lista.length); }, 0);
   const perjBelfast = grp(cli), perjVV = grp("V+V"), perjEstudio = grp("Estudio"), perjTotal = perjBelfast + perjVV + perjEstudio;
   const cnt = (e) => items.filter(i => i.estado === e).length;
 
@@ -7435,7 +7448,7 @@ function GestionView({ db, cfg, onBack }) {
     </style></head><body>
       <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Gestión de obra · Registro</div></div>
       <h1>${_e(it.tipo)}: ${_e(it.descripcion)}</h1>
-      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(it.imputable)} · Emitido: ${hoyStr()}</div>
+      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(imputablesTexto(it))} · Emitido: ${hoyStr()}</div>
       <table>
         <tr><th>Concepto</th><th>Detalle</th></tr>
         ${it.etapa ? `<tr><td>Etapa de obra</td><td>${_e(it.etapa)}</td></tr>` : ""}
@@ -7556,7 +7569,7 @@ function GestionView({ db, cfg, onBack }) {
     </style></head><body>
       <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Registro de perjuicio por demora imputable</div></div>
       <h1>${_e(it.tipo)}: ${_e(it.descripcion)}</h1>
-      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(it.imputable)} · Emitido: ${hoyStr()}</div>
+      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(imputablesTexto(it))} · Emitido: ${hoyStr()}</div>
       <table>
         <tr><th>Concepto</th><th>Detalle</th></tr>
         <tr><td>Fecha de solicitud</td><td>${fmtD(it.fechaSolic)}</td></tr>
@@ -7590,7 +7603,7 @@ function GestionView({ db, cfg, onBack }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{imputablesTexto(it)}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
           {(it.responsable || (it.personalIds && it.personalIds.length > 0)) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{it.responsable ? `Responsable: ${it.responsable}` : ""}{it.responsable && it.personalIds?.length ? " · " : ""}{it.personalIds?.length ? `Personal: ${it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", ")}` : ""}</div>}
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
             <span style={{ fontSize: 10.5, color: T.muted }}>Inicio {fmtD(it.fechaSolic)} · {it.fechaReal ? `fin ${fmtD(it.fechaReal)}` : "sin terminar"} · estimado {it.plazo} d</span>
@@ -7642,7 +7655,7 @@ function GestionView({ db, cfg, onBack }) {
       {items.length === 0 && <EmptyMsg>Sin registros. Agregá el primero con ＋.</EmptyMsg>}
       {items.length > 0 && itemsFiltrados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Ningún registro coincide con el filtro.</div>}
       {itemsFiltrados.map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} />)}
-      <AddFab onClick={() => { const obIni = obras.find(o => o.id === (filtroObra !== "todas" ? filtroObra : obras[0]?.id)); setMForm({ tipo: "Tarea", obra_id: obIni?.id || obras[0]?.id || "", descripcion: "", imputable: "Estudio", fechaSolic: isoFromFechaCorta(obIni?.inicio) || isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] }); }} label="Registro" />
+      <AddFab onClick={() => { const obIni = obras.find(o => o.id === (filtroObra !== "todas" ? filtroObra : obras[0]?.id)); setMForm({ tipo: "Tarea", obra_id: obIni?.id || obras[0]?.id || "", descripcion: "", imputables: ["Estudio"], fechaSolic: isoFromFechaCorta(obIni?.inicio) || isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] }); }} label="Registro" />
     </div>}
 
     {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
@@ -7775,10 +7788,16 @@ function GestionView({ db, cfg, onBack }) {
         <Field label="Obra"><Sel value={mForm.obra_id} onChange={e => { const ob = obras.find(o => o.id === e.target.value); const traerInicio = !mForm.id && (!mForm.fechaSolic || mForm.fechaSolic === isoHoy() || mForm.fechaSolic === isoFromFechaCorta(obras.find(o => o.id === mForm.obra_id)?.inicio)); setMForm({ ...mForm, obra_id: e.target.value, fechaSolic: traerInicio ? (isoFromFechaCorta(ob?.inicio) || mForm.fechaSolic) : mForm.fechaSolic }); }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       </FieldRow>
       <Field label="Tarea / Descripción"><TInput value={mForm.descripcion} onChange={e => setMForm({ ...mForm, descripcion: e.target.value })} placeholder="Ej: Armado de cerco de obra" /></Field>
-      <FieldRow>
-        <Field label="Imputable a"><Sel value={mForm.imputable} onChange={e => setMForm({ ...mForm, imputable: e.target.value })}><option value={cli}>{cli}</option><option value="Estudio">Estudio</option><option value="V+V">V+V</option></Sel></Field>
-        <Field label="Días estimados"><TInput type="number" value={mForm.plazo || ""} onChange={e => setMForm({ ...mForm, plazo: +e.target.value || 0 })} /></Field>
-      </FieldRow>
+      <Field label="Imputable a (podés marcar más de una)">
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[cli, "Estudio", "V+V"].map(op => { const lista = Array.isArray(mForm.imputables) ? mForm.imputables : (mForm.imputable ? [mForm.imputable] : []); const marcada = lista.includes(op); return (
+            <label key={op} onClick={() => setMForm({ ...mForm, imputables: marcada ? lista.filter(x => x !== op) : [...lista, op], imputable: undefined })} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 20, border: `1.5px solid ${marcada ? T.accent : T.border}`, background: marcada ? T.al : T.bg, color: marcada ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+              <input type="checkbox" checked={marcada} readOnly style={{ width: 14, height: 14 }} />{op}
+            </label>
+          ); })}
+        </div>
+      </Field>
+      <Field label="Días estimados"><TInput type="number" value={mForm.plazo || ""} onChange={e => setMForm({ ...mForm, plazo: +e.target.value || 0 })} /></Field>
       <FieldRow>
         <Field label="Inicio"><TInput type="date" value={mForm.fechaSolic} onChange={e => setMForm({ ...mForm, fechaSolic: e.target.value })} /></Field>
         <Field label="Fin (si terminó)"><TInput type="date" value={mForm.fechaReal} onChange={e => setMForm({ ...mForm, fechaReal: e.target.value })} /></Field>
