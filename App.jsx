@@ -1796,7 +1796,90 @@ function TabGastos({ detail, upd }) {
     </div>);
 }
 
-function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg, apiKey, adicionales, setAdicionales }) {
+// ── Modelos de obra (tabla madre) ───────────────────────────────────────
+// Acá se define, una sola vez por tipo de obra ("Con subsuelo + 2 plantas",
+// "Sin subsuelo + 2 plantas", "Sin subsuelo + 3 plantas", etc.), qué etapas
+// se usan, en qué día desde el inicio de obra arranca cada una y cuántos
+// días hábiles se estima que dura. Las obras reales (en Obras) eligen uno
+// de estos modelos, y de ahí sale el cronograma estimado que Gestión
+// compara contra lo que realmente va pasando.
+function ModelosObraView({ db, cfg, onBack }) {
+  const { modelosObra, setModelosObra } = db;
+  const modelos = modelosObra || [];
+  const [editId, setEditId] = useState(null);
+  const edit = editId ? modelos.find(m => m.id === editId) : null;
+
+  function crear() {
+    const m = { id: uid(), nombre: "Nuevo modelo de obra", etapas: nuevoModeloEtapas() };
+    setModelosObra([...modelos, m]);
+    setEditId(m.id);
+  }
+  function upd(id, patch) { setModelosObra(modelos.map(m => m.id === id ? { ...m, ...patch } : m)); }
+  function borrar(id) {
+    if (!confirm("¿Borrar este modelo de obra? Las obras que lo tengan asignado quedarán sin modelo.")) return;
+    setModelosObra(modelos.filter(m => m.id !== id));
+    setEditId(null);
+  }
+  function updEtapa(modeloId, etapaNombre, patch) {
+    upd(modeloId, { etapas: (modelos.find(m => m.id === modeloId)?.etapas || nuevoModeloEtapas()).map(e => e.etapa === etapaNombre ? { ...e, ...patch } : e) });
+  }
+
+  if (edit) {
+    const dur = duracionTotalModelo(edit);
+    return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
+      <PageHead title="Modelo de obra" back onBack={() => setEditId(null)} />
+      <div style={{ padding: "0 20px 20px" }}>
+        <Field label="Nombre del modelo"><TInput value={edit.nombre || ""} onChange={e => upd(edit.id, { nombre: e.target.value })} placeholder='Ej: "Con subsuelo + 2 plantas"' /></Field>
+        <Card style={{ padding: 13, marginBottom: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", marginBottom: 4 }}>Duración total estimada del modelo</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: T.accent }}>{dur > 0 ? `${dur} días` : "—"}</div>
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3 }}>Es el punto más lejano al que llega cualquier etapa (inicio + duración), no la suma de todas — así se reflejan las superposiciones.</div>
+        </Card>
+        <Eyebrow>Etapas del modelo</Eyebrow>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 20px 10px", marginLeft: 0 }}>Activá las etapas que use este modelo. "Arranca en el día" es desde el inicio de obra — podés poner etapas que se superpongan (ej: Mampostería arrancando antes de que termine Estructura).</div>
+        {(edit.etapas || nuevoModeloEtapas()).map(cfgE => (
+          <Card key={cfgE.etapa} style={{ padding: "11px 13px", marginBottom: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+              <input type="checkbox" checked={!!cfgE.usa} onChange={e => updEtapa(edit.id, cfgE.etapa, { usa: e.target.checked })} style={{ width: 17, height: 17 }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>{cfgE.etapa}</span>
+            </label>
+            {cfgE.usa && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+              <div>
+                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Arranca en el día</div>
+                <input type="number" value={cfgE.inicioOffsetDias || ""} onChange={e => updEtapa(edit.id, cfgE.etapa, { inicioOffsetDias: e.target.value })} placeholder="0" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Dura (días hábiles)</div>
+                <input type="number" value={cfgE.duracionDias || ""} onChange={e => updEtapa(edit.id, cfgE.etapa, { duracionDias: e.target.value })} placeholder="Ej: 20" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
+              </div>
+            </div>}
+          </Card>
+        ))}
+        <PBtn full variant="danger" onClick={() => borrar(edit.id)} style={{ marginTop: 10 }}>Borrar este modelo</PBtn>
+      </div>
+    </div>);
+  }
+
+  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
+    <PageHead eyebrow="Tabla madre" title="Modelos de obra" sub="Los tipos de obra que usás (con subsuelo, sin subsuelo, cantidad de plantas) con su cronograma estándar de etapas" back onBack={onBack} />
+    <div style={{ padding: "0 20px" }}>
+      {!modelos.length && <EmptyMsg>Todavía no hay modelos cargados. Creá uno por cada tipo de obra que manejás (ej: "Con subsuelo + 2 plantas", "Sin subsuelo + 2 plantas", "Sin subsuelo + 3 plantas") y definí su cronograma estándar de etapas una sola vez.</EmptyMsg>}
+      {modelos.map(m => {
+        const n = etapasModelo(m).length, dur = duracionTotalModelo(m);
+        return (<Card key={m.id} onClick={() => setEditId(m.id)} style={{ padding: "13px 15px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{m.nombre}</div>
+            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{n} etapa{n === 1 ? "" : "s"}{dur > 0 ? ` · ${dur} días estimados` : ""}</div>
+          </div>
+          <span style={{ fontSize: 16, color: T.muted }}>›</span>
+        </Card>);
+      })}
+      <PBtn full onClick={crear} style={{ marginTop: 6 }}>+ Nuevo modelo de obra</PBtn>
+    </div>
+  </div>);
+}
+
+function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg, apiKey, adicionales, setAdicionales, modelosObra }) {
     const UBICS = getUbics(cfg);
     const defaultAp = UBICS[0]?.id || 'aep';
     const [showNew, setShowNew] = useState(false);
@@ -1954,12 +2037,19 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <input value={detail.cierre || ''} onChange={e => upd(detail.id, { cierre: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Modelo de obra</div>
+                                <select value={detail.modeloId || ''} onChange={e => upd(detail.id, { modeloId: e.target.value })} style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0, cursor: "pointer" }}>
+                                    <option value="">— Sin modelo —</option>
+                                    {(modelosObra || []).map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                                </select>
+                            </div>
+                            {!detail.modeloId && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Duración contractual (meses)</div>
                                 <input type="number" value={detail.duracionMeses || ''} onChange={e => upd(detail.id, { duracionMeses: e.target.value })} placeholder="Ej: 15" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
-                            </div>
-                            {Number(detail.duracionMeses) > 0 && detail.inicio && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            </div>}
+                            {detail.inicio && (detail.modeloId || Number(detail.duracionMeses) > 0) && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Cierre estimado (calculado)</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail) || "—"}</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail, modelosObra) || "—"}</div>
                             </div>}
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
@@ -2066,7 +2156,8 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                 <Field label={t(cfg, 'obras_inicio')}><TInput value={form.inicio || ""} onChange={e => setForm(p => ({ ...p, inicio: e.target.value }))} placeholder="dd/mm/aa" /></Field>
                 <Field label={t(cfg, 'obras_cierre')}><TInput value={form.cierre || ""} onChange={e => setForm(p => ({ ...p, cierre: e.target.value }))} placeholder="dd/mm/aa" /></Field>
             </FieldRow>
-            <Field label="Duración contractual (meses, opcional)"><TInput type="number" value={form.duracionMeses || ""} onChange={e => setForm(p => ({ ...p, duracionMeses: e.target.value }))} placeholder="Ej: 15" /></Field>
+            <Field label="Modelo de obra (opcional)"><Sel value={form.modeloId || ""} onChange={e => setForm(p => ({ ...p, modeloId: e.target.value }))}><option value="">— Sin modelo —</option>{(modelosObra || []).map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</Sel></Field>
+            {!form.modeloId && <Field label="Duración contractual (meses, opcional)"><TInput type="number" value={form.duracionMeses || ""} onChange={e => setForm(p => ({ ...p, duracionMeses: e.target.value }))} placeholder="Ej: 15" /></Field>}
             <PBtn full onClick={add} disabled={!String(form.nombre || "").trim()}>{t(cfg, 'obras_nueva')}</PBtn>
         </Sheet>)}
     </div>);
@@ -2209,6 +2300,7 @@ function MIcon({ id }){
     mensajes:<><path {...p} d="M4 5h16v11H8l-4 4z"/></>,
     pedidos:<><path {...p} d="M9 5h6M9 9h6M9 13h4"/><rect {...p} x="5" y="3" width="14" height="18" rx="2"/><path {...p} d="M9 17l1.5 1.5L13 16"/></>,
     gestion:<><path {...p} d="M4 20V10M10 20V4M16 20v-7M20 20H3"/></>,
+    modelos:<><rect {...p} x="3" y="4" width="18" height="5" rx="1"/><rect {...p} x="3" y="12" width="8" height="8" rx="1"/><rect {...p} x="13" y="12" width="8" height="8" rx="1"/></>,
     formularios:<><rect {...p} x="5" y="3" width="14" height="18" rx="2"/><path {...p} d="M9 7h6M9 11h6M9 15h4"/></>,
     proyectos:<><path {...p} d="M7 3h7l4 4v14H7z"/><path {...p} d="M14 3v4h4"/></>,
     seguimiento:<><circle {...p} cx="12" cy="12" r="9"/><path {...p} d="M12 8v4l3 2"/></>,
@@ -2245,6 +2337,7 @@ const MAS_TILES = [
   { id:"infsemanal", label:"Informe semanal de obra" },
   { id:"cliente", label:"Panel cliente" },
   { id:"gestion", label:"Gestión de obra" },
+  { id:"modelos", label:"Modelos de obra" },
   { id:"proyectos", label:"Proyectos", go:"proyectos" },
   { id:"seguimiento", label:"Seguimiento" }, { id:"materiales", label:"Materiales" },
   { id:"subcontratos", label:"Subcontratos" },
@@ -4781,6 +4874,7 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "matpedidos": return <MatPedidosView db={db} cfg={cfg} onBack={back} />;
       case "pedidos": return <PedidosView {...P} />;
       case "gestion": return <GestionView {...P} />;
+      case "modelos": return <ModelosObraView {...P} />;
       case "formularios": return <FormulariosView {...P} />;
       case "mensajes": return <MensajesVVView {...P} />;
       default: {
@@ -5015,13 +5109,60 @@ function parseFechaCorta(s) {
 }
 function fmtFechaCorta(d) { return d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}` : ""; }
 function sumarMeses(fecha, meses) { const d = new Date(fecha.getTime()); d.setMonth(d.getMonth() + Number(meses || 0)); return d; }
-// Cierre estimado = inicio + duración contractual (meses). Si la obra no
-// tiene duración cargada, se usa el campo "Cierre est." que se tipeó a mano.
-function cierreEstimadoObra(obra) {
+function sumarDias(fecha, dias) { const d = new Date(fecha.getTime()); d.setDate(d.getDate() + Number(dias || 0)); return d; }
+// ── Modelos de obra (tabla madre) ───────────────────────────────────────
+// Un modelo (ej: "Con subsuelo + 2 plantas") define, para cada etapa que
+// use, en qué día desde el inicio de obra arranca ("inicioOffsetDias") y
+// cuántos días hábiles estima que dura ("duracionDias"). El offset permite
+// que las etapas se superpongan (ej: Mampostería puede arrancar antes de
+// que termine Estructura), que es como realmente se trabaja en obra.
+function nuevoModeloEtapas() { return ETAPAS_OBRA.map(e => ({ etapa: e, usa: false, inicioOffsetDias: 0, duracionDias: 0 })); }
+function etapasModelo(modelo) { return (modelo?.etapas || []).filter(e => e.usa); }
+// Duración total estimada del modelo = el punto más lejano al que llega
+// cualquiera de sus etapas (offset + duración), no la suma de todas (porque
+// se superponen).
+function duracionTotalModelo(modelo) {
+  const usadas = etapasModelo(modelo).filter(e => (Number(e.duracionDias) || 0) > 0);
+  if (!usadas.length) return 0;
+  return Math.max(...usadas.map(e => (Number(e.inicioOffsetDias) || 0) + (Number(e.duracionDias) || 0)));
+}
+function modeloDeObra(obra, modelosObra) { return (modelosObra || []).find(m => m.id === obra?.modeloId) || null; }
+// Cierre estimado = inicio + lo que marque el modelo asignado a la obra (si
+// tiene uno con etapas cargadas); si no, se cae a la duración contractual
+// en meses cargada a mano; si no, al campo "Cierre est." tipeado a mano.
+function cierreEstimadoObra(obra, modelosObra) {
   const ini = parseFechaCorta(obra?.inicio);
-  const meses = Number(obra?.duracionMeses) || 0;
-  if (ini && meses > 0) return fmtFechaCorta(sumarMeses(ini, meses));
+  if (ini) {
+    const modelo = modeloDeObra(obra, modelosObra);
+    const diasModelo = modelo ? duracionTotalModelo(modelo) : 0;
+    if (diasModelo > 0) return fmtFechaCorta(sumarDias(ini, diasModelo));
+    const meses = Number(obra?.duracionMeses) || 0;
+    if (meses > 0) return fmtFechaCorta(sumarMeses(ini, meses));
+  }
   return obra?.cierre || "";
+}
+// Cronograma planificado vs. real de cada etapa del modelo de una obra,
+// cruzando el modelo con los registros de Gestión ya cargados (filtrados
+// por obra y por etapa). El inicio REAL de la etapa es la fecha del primer
+// registro de Gestión cargado con esa etapa — no se tipea a mano.
+function resumenEtapasModelo(obra, modelosObra, itemsObra) {
+  const modelo = modeloDeObra(obra, modelosObra);
+  if (!modelo) return [];
+  const iniObra = parseFechaCorta(obra?.inicio);
+  return etapasModelo(modelo).map(cfg => {
+    const planInicio = iniObra ? sumarDias(iniObra, Number(cfg.inicioOffsetDias) || 0) : null;
+    const duracionPlan = Number(cfg.duracionDias) || 0;
+    const planFin = planInicio && duracionPlan ? sumarDias(planInicio, duracionPlan) : null;
+    const its = (itemsObra || []).filter(it => it.etapa === cfg.etapa);
+    const iniciosReales = its.map(it => it.fechaSolic).filter(Boolean);
+    const realInicio = iniciosReales.length ? new Date(Math.min(...iniciosReales.map(d => +d))) : null;
+    const todasCerradas = its.length > 0 && its.every(it => it.fechaReal);
+    const finesReales = its.map(it => it.fechaReal).filter(Boolean);
+    const realFin = todasCerradas && finesReales.length ? new Date(Math.max(...finesReales.map(d => +d))) : null;
+    const realDias = realInicio ? diasHabiles(realInicio, realFin || new Date()) : null;
+    const desvio = (realDias != null && duracionPlan > 0) ? realDias - duracionPlan : null;
+    return { etapa: cfg.etapa, planInicio, planFin, duracionPlan, realInicio, realFin, realDias, desvio, enCurso: !!realInicio && !realFin };
+  });
 }
 
 function EmptyMsg({ children }) {
@@ -7166,7 +7307,7 @@ const CAUSAS_EVITABLE = ["Mano de obra (rendimiento/ausentismo)", "Error de proy
 const CAUSAS_NO_EVITABLE = ["Clima", "Falta de definición del cliente", "Espera de aprobación / permiso municipal", "Falta de pago / certificación del cliente", "Provisión pendiente por parte del cliente", "Cambio de alcance / adicional solicitado", "Caso fortuito / fuerza mayor", "Otro"];
 function causaTexto(it) { return it?.causa === "Otro" && it?.causaDetalle ? it.causaDetalle : (it?.causa || ""); }
 function GestionView({ db, cfg, onBack }) {
-  const { obras, gestion, setGestion, personal } = db;
+  const { obras, gestion, setGestion, personal, modelosObra } = db;
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
   const [mForm, setMForm] = useState(null);
@@ -7341,7 +7482,9 @@ function GestionView({ db, cfg, onBack }) {
     const porCategoria = { "Evitable": 0, "No evitable": 0, "Sin clasificar": 0 };
     its.forEach(i => { if (i.desvio > 0) { const c = causaTexto(i) || "Sin causa asignada"; porCausa[c] = (porCausa[c] || 0) + i.desvio; porCategoria[i.categoriaDesvio && porCategoria[i.categoriaDesvio] !== undefined ? i.categoriaDesvio : "Sin clasificar"] += i.desvio; } });
     const desde = its[0]?.fechaSolic || null;
-    return { its, totalEstimado, totalReal, totalDesvio, totalClima, porCausa, porCategoria, desde };
+    const ob = obras.find(o => o.id === obraId);
+    const etapas = resumenEtapasModelo(ob, modelosObra, its);
+    return { its, totalEstimado, totalReal, totalDesvio, totalClima, porCausa, porCategoria, desde, etapas };
   }
   function htmlInformeObra(obraId) {
     const ob = obras.find(o => o.id === obraId);
@@ -7349,10 +7492,12 @@ function GestionView({ db, cfg, onBack }) {
     const filaTarea = (it) => `<tr><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8;font-size:9.5px">${_e(it.etapa)}</span>` : ""}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "en curso"}</td><td>${it.plazo}</td><td>${it.dias}</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio}</td><td>${_e(causaTexto(it) || (it.desvio > 0 ? "Sin asignar" : "—"))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</td></tr>`;
     const causas = Object.entries(r.porCausa).sort((a, b) => b[1] - a[1]);
     const categorias = Object.entries(r.porCategoria).filter(([, d]) => d > 0).sort((a, b) => b[1] - a[1]);
-    const cierreEst = cierreEstimadoObra(ob);
+    const cierreEst = cierreEstimadoObra(ob, modelosObra);
     const iniDate = parseFechaCorta(ob?.inicio);
     const cierreDate = parseFechaCorta(cierreEst);
     const mesesTranscurridos = iniDate ? Math.max(0, Math.round((Date.now() - iniDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44) * 10) / 10) : null;
+    const modeloNom = modeloDeObra(ob, modelosObra)?.nombre || "";
+    const filaEtapa = (e) => `<tr><td>${_e(e.etapa)}</td><td>${e.planInicio ? fmtFechaCorta(e.planInicio) : "—"}</td><td>${e.planFin ? fmtFechaCorta(e.planFin) : "—"}</td><td>${e.duracionPlan || "—"}</td><td>${e.realInicio ? fmtFechaCorta(e.realInicio) : "Sin registros aún"}</td><td>${e.realDias != null ? `${e.realDias}${e.enCurso ? " (en curso)" : ""}` : "—"}</td><td style="font-weight:bold;color:${e.desvio > 0 ? "#B91C1C" : e.desvio != null ? "#15803D" : "#94A3B8"}">${e.desvio != null ? `${e.desvio > 0 ? "+" : ""}${e.desvio}` : "—"}</td></tr>`;
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0;padding:12px;word-wrap:break-word}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:20px}
@@ -7368,10 +7513,13 @@ function GestionView({ db, cfg, onBack }) {
       .nota{font-size:9.5px;color:#94A3B8;margin-top:24px;border-top:1px solid #E2E8F0;padding-top:8px}
       @media(min-width:480px){.stat{width:23%}}
     </style></head><body>
-      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")} · Inicio de obra: ${_e(ob?.inicio || "—")} · Cierre estimado: ${_e(cierreEst || "—")}${ob?.duracionMeses ? ` (${ob.duracionMeses} meses)` : ""} · Emitido: ${hoyStr()}</div></div>
+      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")}${modeloNom ? ` · Modelo: ${_e(modeloNom)}` : ""} · Inicio de obra: ${_e(ob?.inicio || "—")} · Cierre estimado: ${_e(cierreEst || "—")}${!modeloNom && ob?.duracionMeses ? ` (${ob.duracionMeses} meses)` : ""} · Emitido: ${hoyStr()}</div></div>
       <h2>Resumen</h2>
       <div><div class="stat"><div style="font-size:15px;font-weight:800">${ob?.inicio || "—"}</div><div style="font-size:9px;color:#64748B">Inicio de obra</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${cierreEst || "—"}</div><div style="font-size:9px;color:#64748B">Cierre estimado${ob?.duracionMeses ? ` (${ob.duracionMeses}m)` : ""}</div></div><div class="stat"><div style="font-size:15px;font-weight:800">${mesesTranscurridos != null ? mesesTranscurridos : "—"}</div><div style="font-size:9px;color:#64748B">Meses transcurridos desde el inicio</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:${r.totalDesvio > 0 ? "#EF4444" : "#16A34A"}">${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio}</div><div style="font-size:9px;color:#64748B">Desvío total (registro)</div></div></div>
       <div style="margin-top:4px"><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div></div>
+      ${r.etapas && r.etapas.length ? `<h2>Cronograma por etapa (planificado vs. real)</h2>
+      <table><tr><th>Etapa</th><th>Inicio plan.</th><th>Fin plan.</th><th>Días plan.</th><th>Inicio real</th><th>Días reales</th><th>Desvío</th></tr>
+      ${r.etapas.map(filaEtapa).join("")}</table>` : ""}
       <h2>Desvío por categoría</h2>
       <table><tr><th>Categoría</th><th>Días de desvío</th><th>% del desvío total</th></tr>
       ${categorias.length ? categorias.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
@@ -7559,15 +7707,29 @@ function GestionView({ db, cfg, onBack }) {
           <Field label="Obra"><Sel value={obraInforme} onChange={e => setObraInforme(e.target.value)}><option value="">— Elegí una obra —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
         </FieldRow>
         {obraInforme && (() => {
+          const ob = obras.find(o => o.id === obraInforme);
           const r = resumenObra(obraInforme);
-          if (!r.its.length) return <div style={{ fontSize: 12, color: T.muted }}>Esta obra todavía no tiene registros cargados.</div>;
+          const cierreEst = cierreEstimadoObra(ob, modelosObra);
           return (<>
-            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <MiniStat label="Estimado" value={`${r.totalEstimado} d`} color={T.accent} />
-              <MiniStat label="Real" value={`${r.totalReal} d`} color="#3B82F6" />
-              <MiniStat label="Desvío" value={`${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio} d`} color={r.totalDesvio > 0 ? "#EF4444" : "#16A34A"} />
-            </div>
-            <PBtn full onClick={() => setPdfInforme(obraInforme)}>Generar informe de situación</PBtn>
+            {(ob?.inicio || cierreEst) && <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <MiniStat label="Inicio de obra" value={ob?.inicio || "—"} color={T.accent} />
+              <MiniStat label="Cierre estimado" value={cierreEst || "—"} color="#3B82F6" />
+            </div>}
+            {!r.its.length ? <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>Esta obra todavía no tiene registros cargados.</div> : (<>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <MiniStat label="Estimado" value={`${r.totalEstimado} d`} color={T.accent} />
+                <MiniStat label="Real" value={`${r.totalReal} d`} color="#3B82F6" />
+                <MiniStat label="Desvío" value={`${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio} d`} color={r.totalDesvio > 0 ? "#EF4444" : "#16A34A"} />
+              </div>
+              {r.etapas.length > 0 && <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10.5, color: T.muted, textTransform: "uppercase", marginBottom: 6 }}>Cronograma por etapa</div>
+                {r.etapas.map(e => (<div key={e.etapa} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.bg}` }}>
+                  <div style={{ fontSize: 12, color: T.text, flex: 1, minWidth: 0 }}>{e.etapa}<div style={{ fontSize: 10, color: T.muted }}>{e.planInicio ? `Plan: ${fmtFechaCorta(e.planInicio)} · ${e.duracionPlan}d` : "Sin plan"}{e.realInicio ? ` · Real desde ${fmtFechaCorta(e.realInicio)}` : " · sin registros aún"}</div></div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: e.desvio > 0 ? "#EF4444" : e.desvio != null ? "#16A34A" : T.muted }}>{e.desvio != null ? `${e.desvio > 0 ? "+" : ""}${e.desvio}d` : "—"}</span>
+                </div>))}
+              </div>}
+            </>)}
+            {r.its.length > 0 && <PBtn full onClick={() => setPdfInforme(obraInforme)}>Generar informe de situación</PBtn>}
           </>);
         })()}
       </Card>
@@ -8999,6 +9161,7 @@ function App() {
   const [auditoriaDesdeSemana, setAuditoriaDesdeSemana] = useState(false);
   const [lics, setLics] = useStoredState("vv_lics", SAMPLE_LICS);
   const [obras, setObras] = useStoredState("vv_obras", SAMPLE_OBRAS);
+  const [modelosObra, setModelosObra] = useStoredState("vv_modelos_obra", []);
   const [personal, setPersonal] = useStoredState("vv_personal", SAMPLE_PERSONAL);
   const [materiales, setMateriales] = useStoredState("vv_materiales", []);
   const [subcontratos, setSubcontratos] = useStoredState("vv_subcontratos", []);
@@ -9072,7 +9235,7 @@ function App() {
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
-    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_cert_conformidad", setCertConformidad], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_minutas", setMinutas], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
+    const stores = [["vv_obras", setObras], ["vv_modelos_obra", setModelosObra], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_cert_conformidad", setCertConformidad], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_minutas", setMinutas], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
     let alive = true;
     const pullAll = async () => {
       for (const [key, setter] of stores) {
@@ -9230,7 +9393,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, adicionales, setAdicionales, certConformidad, setCertConformidad, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
+  const db = { lics, setLics, obras, setObras, modelosObra, setModelosObra, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, adicionales, setAdicionales, certConformidad, setCertConformidad, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
@@ -9242,7 +9405,7 @@ function App() {
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
             {view==="dashboard" && <InicioViewVV cfg={cfg} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
-            {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} adicionales={adicionales} setAdicionales={setAdicionales} />}
+            {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} adicionales={adicionales} setAdicionales={setAdicionales} modelosObra={modelosObra} />}
             {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} certifRubro={certifRubro} setCertifRubro={setCertifRubro} docrecepcion={docrecepcion} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
