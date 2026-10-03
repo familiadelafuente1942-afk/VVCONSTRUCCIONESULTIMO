@@ -631,21 +631,27 @@ function cargarHtml2Pdf() {
 }
 async function guardarPdfComoArchivo(htmlString, nombreArchivo) {
   const html2pdf = await cargarHtml2Pdf();
+  // Renderizamos el contenido DENTRO del mismo documento (no en un iframe
+  // aparte): la librería que saca la "foto" para armar el PDF no puede
+  // capturar bien el contenido de otro documento, y eso es lo que daba la
+  // página en blanco.
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(htmlString, "text/html");
   const cont = document.createElement("div");
-  cont.style.position = "fixed"; cont.style.left = "-99999px"; cont.style.top = "0";
-  // html2pdf no interpreta <style> dentro de @page/CSS compleja igual que
-  // un navegador imprimiendo, así que usamos un iframe oculto para que el
-  // documento se renderice tal cual se ve en la vista previa.
-  const ifr = document.createElement("iframe");
-  ifr.style.width = "800px"; ifr.style.height = "1131px"; ifr.style.border = "none";
-  cont.appendChild(ifr);
+  cont.style.position = "fixed"; cont.style.left = "-99999px"; cont.style.top = "0"; cont.style.width = "800px"; cont.style.background = "#fff";
+  const styleEl = parsed.querySelector("style");
+  if (styleEl) { const s = document.createElement("style"); s.textContent = styleEl.textContent; cont.appendChild(s); }
+  const inner = document.createElement("div");
+  inner.innerHTML = parsed.body.innerHTML;
+  cont.appendChild(inner);
   document.body.appendChild(cont);
-  await new Promise(res => { ifr.onload = res; ifr.srcdoc = htmlString; });
-  const doc = ifr.contentDocument;
-  const blob = await html2pdf().from(doc.body).set({
+  // Esperamos a que las fotos (si las hay) terminen de cargar antes de capturar.
+  const imgs = Array.from(cont.querySelectorAll("img"));
+  await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(res => { img.onload = res; img.onerror = res; })));
+  const blob = await html2pdf().from(cont).set({
     margin: 0,
     filename: nombreArchivo,
-    html2canvas: { scale: 2, useCORS: true, windowWidth: 800 },
+    html2canvas: { scale: 2, useCORS: true, windowWidth: 800, backgroundColor: "#ffffff" },
     jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
   }).outputPdf("blob");
   document.body.removeChild(cont);
