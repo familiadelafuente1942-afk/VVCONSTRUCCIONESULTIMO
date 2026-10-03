@@ -2898,15 +2898,17 @@ function BitacoraView({ db, cfg, onBack }) {
   const [pdfHtml, setPdfHtml] = useState(null);
   const [desvioFlag, setDesvioFlag] = useState(false);
   const [diasDesvio, setDiasDesvio] = useState("");
+  const [categoriaDesvio, setCategoriaDesvio] = useState("");
   const [causaDesvio, setCausaDesvio] = useState("");
+  const [causaDesvioDetalle, setCausaDesvioDetalle] = useState("");
   const fileRef = useRef(null);
   const adjRef = useRef(null);
 
   const obra = obras.find(o => o.id === obraId);
   const hechos = bitacora.filter(h => h.obra_id === obraId).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
 
-  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEtapa(""); setEdit(null); setAbrir(false); setDesvioFlag(false); setDiasDesvio(""); setCausaDesvio(""); };
-  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setEtapa(h.etapa || ""); setDesvioFlag(!!h.gestionId); setDiasDesvio(h.diasDesvio ?? ""); setCausaDesvio(h.causaDesvio || ""); setAbrir(true); };
+  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEtapa(""); setEdit(null); setAbrir(false); setDesvioFlag(false); setDiasDesvio(""); setCategoriaDesvio(""); setCausaDesvio(""); setCausaDesvioDetalle(""); };
+  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setEtapa(h.etapa || ""); setDesvioFlag(!!h.gestionId); setDiasDesvio(h.diasDesvio ?? ""); setCategoriaDesvio(h.categoriaDesvio || ""); setCausaDesvio(h.causaDesvio || ""); setCausaDesvioDetalle(h.causaDesvioDetalle || ""); setAbrir(true); };
 
   const agregarFotos = async (e) => {
     const files = Array.from(e.target.files || []); if (!files.length) return;
@@ -2957,14 +2959,14 @@ function BitacoraView({ db, cfg, onBack }) {
         id: gestionId, tipo: "Tarea", obra_id: obraId,
         descripcion: (titulo.trim() || desc.trim().slice(0, 80)) + " (desde Bitácora)",
         imputable: "Estudio", plazo: 0, fechaSolic: fecha, fechaReal: addDias(fecha, diasDesvio),
-        etapa: etapa || "", causa: causaDesvio || "", diasClima: 0, responsable: "",
+        etapa: etapa || "", categoriaDesvio: categoriaDesvio || "", causa: causaDesvio || "", causaDetalle: causaDesvio === "Otro" ? causaDesvioDetalle : "", diasClima: 0, responsable: "",
         personalIds: [], fotosInicio: fotos || [], fotosFin: [],
       };
       const yaExiste = (gBase.manual || []).some(x => x.id === gestionId);
       const manualNext = yaExiste ? gBase.manual.map(x => x.id === gestionId ? { ...x, ...registro } : x) : [...(gBase.manual || []), registro];
       db.setGestion({ ...gBase, manual: manualNext });
     }
-    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, etapa, ts: edit?.ts || Date.now(), gestionId, diasDesvio: desvioFlag ? Number(diasDesvio) : null, causaDesvio: desvioFlag ? causaDesvio : "" };
+    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, etapa, ts: edit?.ts || Date.now(), gestionId, diasDesvio: desvioFlag ? Number(diasDesvio) : null, categoriaDesvio: desvioFlag ? categoriaDesvio : "", causaDesvio: desvioFlag ? causaDesvio : "", causaDesvioDetalle: desvioFlag && causaDesvio === "Otro" ? causaDesvioDetalle : "" };
     db.setBitacora(prev => { const otros = (prev || []).filter(h => h.id !== hecho.id); return [...otros, hecho]; });
     if (desvioFlag) alert(`Hecho guardado. Se cargó un registro de ${diasDesvio} días de desvío en Gestión de obra: podés completarlo (plazo exacto, fechas, fotos) cuando quieras.`);
     limpiar();
@@ -3112,10 +3114,15 @@ function BitacoraView({ db, cfg, onBack }) {
                   <span style={{ fontSize: 12, color: T.sub, width: 110 }}>Días de desvío</span>
                   <input type="number" min="1" value={diasDesvio} onChange={e => setDiasDesvio(e.target.value)} placeholder="Ej: 15" style={{ ...inp, flex: 1 }} />
                 </div>
-                <select value={causaDesvio} onChange={e => setCausaDesvio(e.target.value)} style={inp}>
-                  <option value="">— Causa del desvío (opcional) —</option>
-                  {CAUSA_DESVIO.map(x => <option key={x} value={x}>{x}</option>)}
+                <select value={categoriaDesvio} onChange={e => { setCategoriaDesvio(e.target.value); setCausaDesvio(""); setCausaDesvioDetalle(""); }} style={inp}>
+                  <option value="">— Categoría del desvío (opcional) —</option>
+                  {CATEGORIAS_DESVIO.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+                <select value={causaDesvio} onChange={e => setCausaDesvio(e.target.value)} style={inp}>
+                  <option value="">— Causa específica (opcional) —</option>
+                  {(categoriaDesvio === "Evitable" ? CAUSAS_EVITABLE : categoriaDesvio === "No evitable" ? CAUSAS_NO_EVITABLE : [...CAUSAS_EVITABLE.slice(0, -1), ...CAUSAS_NO_EVITABLE.slice(0, -1), "Otro"]).map(x => <option key={x} value={x}>{x}</option>)}
+                </select>
+                {causaDesvio === "Otro" && <input value={causaDesvioDetalle} onChange={e => setCausaDesvioDetalle(e.target.value)} placeholder="Especificar la causa exacta" style={inp} />}
               </div>}
             </div>
             {/* fotos */}
@@ -7046,7 +7053,10 @@ const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "rgba(22,163,74,.14)" }, "
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 const isoHoy = () => new Date().toISOString().slice(0, 10);
 
-const CAUSA_DESVIO = ["Clima", "Falta de material", "Falta de definición del cliente", "Mano de obra", "Error de proyecto", "Otro"];
+const CATEGORIAS_DESVIO = ["Evitable", "No evitable"];
+const CAUSAS_EVITABLE = ["Mano de obra (rendimiento/ausentismo)", "Error de proyecto / planos", "Falta de coordinación entre gremios", "Falta de materiales en obra (compra tardía)", "Rotura o falla de herramienta/equipo", "Incumplimiento de subcontratista", "Reproceso / trabajo mal ejecutado", "Falta de personal asignado", "Otro"];
+const CAUSAS_NO_EVITABLE = ["Clima", "Falta de definición del cliente", "Espera de aprobación / permiso municipal", "Falta de pago / certificación del cliente", "Provisión pendiente por parte del cliente", "Cambio de alcance / adicional solicitado", "Caso fortuito / fuerza mayor", "Otro"];
+function causaTexto(it) { return it?.causa === "Otro" && it?.causaDetalle ? it.causaDetalle : (it?.causa || ""); }
 function GestionView({ db, cfg, onBack }) {
   const { obras, gestion, setGestion, personal } = db;
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(gestion || {}) };
@@ -7183,7 +7193,7 @@ function GestionView({ db, cfg, onBack }) {
         <tr><td>Fin</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Aún no terminó"}</td></tr>
         <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
         <tr><td>Diferencia (real vs. estimado)</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio} días</td></tr>
-        ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(it.causa)}</td></tr>` : ""}
+        ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(causaTexto(it))}${it.categoriaDesvio ? ` <span style="color:#94A3B8">(${_e(it.categoriaDesvio)})</span>` : ""}</td></tr>` : ""}
         ${(Number(it.diasClima) || 0) > 0 ? `<tr><td>Días de clima / fuerza mayor (no imputables)</td><td>${it.diasClima} días</td></tr><tr><td><b>Retraso imputable neto</b></td><td><b>${it.retraso} días</b></td></tr>` : ""}
         <tr><td>Estado</td><td>${_e(it.estado)}</td></tr>
       </table>
@@ -7218,15 +7228,17 @@ function GestionView({ db, cfg, onBack }) {
     const totalDesvio = totalReal - totalEstimado;
     const totalClima = its.reduce((a, i) => a + (Number(i.diasClima) || 0), 0);
     const porCausa = {};
-    its.forEach(i => { if (i.desvio > 0) { const c = i.causa || "Sin causa asignada"; porCausa[c] = (porCausa[c] || 0) + i.desvio; } });
+    const porCategoria = { "Evitable": 0, "No evitable": 0, "Sin clasificar": 0 };
+    its.forEach(i => { if (i.desvio > 0) { const c = causaTexto(i) || "Sin causa asignada"; porCausa[c] = (porCausa[c] || 0) + i.desvio; porCategoria[i.categoriaDesvio && porCategoria[i.categoriaDesvio] !== undefined ? i.categoriaDesvio : "Sin clasificar"] += i.desvio; } });
     const desde = its[0]?.fechaSolic || null;
-    return { its, totalEstimado, totalReal, totalDesvio, totalClima, porCausa, desde };
+    return { its, totalEstimado, totalReal, totalDesvio, totalClima, porCausa, porCategoria, desde };
   }
   function htmlInformeObra(obraId) {
     const ob = obras.find(o => o.id === obraId);
     const r = resumenObra(obraId);
-    const filaTarea = (it) => `<tr><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8;font-size:9.5px">${_e(it.etapa)}</span>` : ""}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "en curso"}</td><td>${it.plazo}</td><td>${it.dias}</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio}</td><td>${_e(it.causa || (it.desvio > 0 ? "Sin asignar" : "—"))}</td></tr>`;
+    const filaTarea = (it) => `<tr><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8;font-size:9.5px">${_e(it.etapa)}</span>` : ""}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "en curso"}</td><td>${it.plazo}</td><td>${it.dias}</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio}</td><td>${_e(causaTexto(it) || (it.desvio > 0 ? "Sin asignar" : "—"))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</td></tr>`;
     const causas = Object.entries(r.porCausa).sort((a, b) => b[1] - a[1]);
+    const categorias = Object.entries(r.porCategoria).filter(([, d]) => d > 0).sort((a, b) => b[1] - a[1]);
     return `<!doctype html><html><head><meta charset="utf-8"><style>
       @page{size:A4;margin:20mm 16mm}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:20px}
@@ -7244,6 +7256,9 @@ function GestionView({ db, cfg, onBack }) {
       <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")} · Período: ${r.desde ? fmtD(r.desde) : "—"} a ${hoyStr()} · Emitido: ${hoyStr()}</div></div>
       <h2>Resumen</h2>
       <div><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (total)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (total)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:${r.totalDesvio > 0 ? "#EF4444" : "#16A34A"}">${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio}</div><div style="font-size:9px;color:#64748B">Desvío total</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div></div>
+      <h2>Desvío por categoría</h2>
+      <table><tr><th>Categoría</th><th>Días de desvío</th><th>% del desvío total</th></tr>
+      ${categorias.length ? categorias.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
       <h2>Desvío por causa</h2>
       <table><tr><th>Causa</th><th>Días de desvío</th><th>% del desvío total</th></tr>
       ${causas.length ? causas.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
@@ -7318,7 +7333,7 @@ function GestionView({ db, cfg, onBack }) {
             {conRegistro && <button onClick={() => setPdfReg(it)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
             {conRegistro && <button onClick={() => borrarRegistro(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>}
           </div>
-          {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${it.causa}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (retraso imputable: ${it.retraso} d)` : ""}</div>}
+          {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${causaTexto(it)}${it.categoriaDesvio ? ` (${it.categoriaDesvio})` : ""}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (retraso imputable: ${it.retraso} d)` : ""}</div>}
           {((it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)) && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
             {(it.fotosInicio || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} title="Inicio" style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #16A34A" }} /></a>)}
             {(it.fotosFin || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} title="Fin" style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #B08D3E" }} /></a>)}
@@ -7361,7 +7376,7 @@ function GestionView({ db, cfg, onBack }) {
       {items.length === 0 && <EmptyMsg>Sin registros. Agregá el primero con ＋.</EmptyMsg>}
       {items.length > 0 && itemsFiltrados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Ningún registro coincide con el filtro.</div>}
       {itemsFiltrados.map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} />)}
-      <AddFab onClick={() => setMForm({ tipo: "Tarea", obra_id: obras[0]?.id || "", descripcion: "", imputable: "Estudio", fechaSolic: isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", causa: "", diasClima: 0, responsable: "", personalIds: [] })} label="Registro" />
+      <AddFab onClick={() => setMForm({ tipo: "Tarea", obra_id: obras[0]?.id || "", descripcion: "", imputable: "Estudio", fechaSolic: isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] })} label="Registro" />
     </div>}
 
     {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
@@ -7415,7 +7430,7 @@ function GestionView({ db, cfg, onBack }) {
         {topDesvios.map((it, i) => (<div key={it.id} onClick={() => { setTab("registro"); setFiltroObra("todas"); setFiltroEtapa("todas"); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < topDesvios.length - 1 ? `1px solid ${T.bg}` : "none", cursor: "pointer" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{obraNom(obras, it.obra_id) || "—"}{it.etapa ? ` · ${it.etapa}` : ""}{it.causa ? ` · ${it.causa}` : ""}</div>
+            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{obraNom(obras, it.obra_id) || "—"}{it.etapa ? ` · ${it.etapa}` : ""}{it.causa ? ` · ${causaTexto(it)}` : ""}</div>
           </div>
           <span style={{ fontSize: 13, fontWeight: 800, color: "#EF4444", flexShrink: 0 }}>+{it.desvio} d</span>
         </div>))}
@@ -7502,7 +7517,9 @@ function GestionView({ db, cfg, onBack }) {
         <Field label="Responsable / cuadrilla"><TInput value={mForm.responsable || ""} onChange={e => setMForm({ ...mForm, responsable: e.target.value })} placeholder="Ej: Cuadrilla propia, Gremio electricista…" /></Field>
       </FieldRow>
       <FieldRow>
-        <Field label="Causa del desvío (opcional)"><Sel value={mForm.causa || ""} onChange={e => setMForm({ ...mForm, causa: e.target.value })}><option value="">— Sin especificar —</option>{CAUSA_DESVIO.map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
+        <Field label="Categoría del desvío (opcional)"><Sel value={mForm.categoriaDesvio || ""} onChange={e => setMForm({ ...mForm, categoriaDesvio: e.target.value, causa: "", causaDetalle: "" })}><option value="">— Sin clasificar —</option>{CATEGORIAS_DESVIO.map(c => <option key={c} value={c}>{c}</option>)}</Sel></Field>
+        <Field label="Causa específica (opcional)"><Sel value={mForm.causa || ""} onChange={e => setMForm({ ...mForm, causa: e.target.value, causaDetalle: e.target.value === "Otro" ? mForm.causaDetalle : "" })}><option value="">— Sin especificar —</option>{(mForm.categoriaDesvio === "Evitable" ? CAUSAS_EVITABLE : mForm.categoriaDesvio === "No evitable" ? CAUSAS_NO_EVITABLE : [...CAUSAS_EVITABLE.slice(0, -1), ...CAUSAS_NO_EVITABLE.slice(0, -1), "Otro"]).map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
+        {mForm.causa === "Otro" && <Field label="Especificar causa"><TInput value={mForm.causaDetalle || ""} onChange={e => setMForm({ ...mForm, causaDetalle: e.target.value })} placeholder="Describí la causa exacta del desvío" /></Field>}
         <Field label="Días de clima / fuerza mayor"><TInput type="number" value={mForm.diasClima || 0} onChange={e => setMForm({ ...mForm, diasClima: +e.target.value || 0 })} /></Field>
       </FieldRow>
 
