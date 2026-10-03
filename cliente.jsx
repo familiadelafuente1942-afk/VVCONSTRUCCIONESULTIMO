@@ -5010,6 +5010,7 @@ const BOTTOM_NAV = [
   { id: "obras", label: "Obras" },
   { id: "avance", label: "Avance" },
   { id: "bitacora", label: "Bitácora" },
+  { id: "gestion", label: "Gestión" },
   { id: "materiales", label: "Pedidos" },
   { id: "auditoria", label: "Auditoría" },
 ];
