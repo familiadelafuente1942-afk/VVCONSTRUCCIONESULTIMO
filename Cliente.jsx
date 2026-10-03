@@ -4836,19 +4836,21 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
   function htmlReporte() {
     const filaReg = (it) => `<tr><td>${_e(it.tipo)}</td><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8">${_e(it.etapa)}</span>` : ""}</td><td>${_e(nomObra(it.obra_id))}</td><td>${_e(it.imputable)}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "—"}</td><td>${it.desvio > 0 ? "+" : ""}${it.desvio}${(Number(it.diasClima) || 0) > 0 ? `<br/><span style="color:#94A3B8">-${it.diasClima} clima</span>` : ""}</td><td>${_e(it.estado)}${it.causa ? `<br/><span style="color:#94A3B8">${_e(causaTexto(it))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</span>` : ""}</td></tr>`;
     const filaPunit = (it) => `<tr><td>${_e(it.descripcion)}</td><td>${_e(it.dec?.tarea || "—")}</td><td>${Number(it.dec?.personas) || g.dotacion}</td><td>${money(Number(it.dec?.costoDia) || g.costoPersona)}</td><td>${money(perItem(it))}</td></tr>`;
-    return `<!doctype html><html><head><meta charset="utf-8"><style>
-      @page{size:A4;margin:20mm 16mm}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0}
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0;padding:12px;word-wrap:break-word}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:20px}
       .marca{font-size:18px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
       .tipo{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
       .meta{font-size:10.5px;color:#64748B;margin-top:4px}
       h2{font-size:13px;color:#0F1B2D;margin:20px 0 8px;border-left:4px solid #B08D3E;padding-left:8px}
-      table{width:100%;border-collapse:collapse;margin:8px 0}
-      td,th{border:1px solid #CBD5E1;padding:6px 8px;font-size:10px;text-align:left;vertical-align:top}
+      table{width:100%;max-width:100%;border-collapse:collapse;margin:8px 0;table-layout:fixed}
+      td,th{border:1px solid #CBD5E1;padding:6px 8px;font-size:10px;text-align:left;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}
       th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:8.5px;letter-spacing:.5px}
+      img{max-width:100%}
       .tot{font-size:14px;font-weight:bold;color:#B91C1C;margin-top:6px}
-      .stat{display:inline-block;width:23%;margin-right:1%;vertical-align:top}
+      .stat{display:inline-block;width:47%;margin-right:1%;margin-bottom:8px;vertical-align:top}
       .nota{font-size:9.5px;color:#94A3B8;margin-top:24px;border-top:1px solid #E2E8F0;padding-top:8px}
+      @media(min-width:480px){.stat{width:23%}}
     </style></head><body>
       <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Gestión de obra</div><div class="meta">Cliente: ${_e(cli)} · Emitido: ${hoyStr()}</div></div>
       <h2>Resumen</h2>

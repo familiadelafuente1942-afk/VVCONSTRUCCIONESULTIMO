@@ -7166,19 +7166,21 @@ function GestionView({ db, cfg, onBack }) {
   // ── PDF de un registro (Registro, cualquier estado) ─────────────────
   function htmlRegistro(it) {
     const pj = perItem(it); const d = it.dec || {};
-    return `<!doctype html><html><head><meta charset="utf-8"><style>
-      @page{size:A4;margin:22mm 18mm}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0}
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page{size:A4;margin:22mm 18mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0;padding:14px;word-wrap:break-word}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:22px}
       .marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
       .tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
       h1{font-size:15px;color:#0F1B2D;margin:18px 0 4px}
       .meta{font-size:11px;color:#64748B}
-      table{width:100%;border-collapse:collapse;margin:14px 0}
-      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top}
+      table{width:100%;max-width:100%;border-collapse:collapse;margin:14px 0;table-layout:fixed}
+      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}
       th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9.5px;letter-spacing:1px}
+      img{max-width:100%}
       .calc{background:rgba(255,255,255,.04);border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
       .tot{font-size:16px;font-weight:bold;color:#B91C1C;margin-top:6px}
       .nota{font-size:10px;color:#94A3B8;margin-top:26px;border-top:1px solid #E2E8F0;padding-top:8px}
+      @media(max-width:480px){body{padding:10px;font-size:11.5px}.marca{font-size:16px}table,td,th{font-size:10px}}
     </style></head><body>
       <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Gestión de obra · Registro</div></div>
       <h1>${_e(it.tipo)}: ${_e(it.descripcion)}</h1>
@@ -7239,19 +7241,20 @@ function GestionView({ db, cfg, onBack }) {
     const filaTarea = (it) => `<tr><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8;font-size:9.5px">${_e(it.etapa)}</span>` : ""}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "en curso"}</td><td>${it.plazo}</td><td>${it.dias}</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio}</td><td>${_e(causaTexto(it) || (it.desvio > 0 ? "Sin asignar" : "—"))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</td></tr>`;
     const causas = Object.entries(r.porCausa).sort((a, b) => b[1] - a[1]);
     const categorias = Object.entries(r.porCategoria).filter(([, d]) => d > 0).sort((a, b) => b[1] - a[1]);
-    return `<!doctype html><html><head><meta charset="utf-8"><style>
-      @page{size:A4;margin:20mm 16mm}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0}
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0;padding:12px;word-wrap:break-word}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:20px}
       .marca{font-size:18px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
       .tipo{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
       .meta{font-size:10.5px;color:#64748B;margin-top:4px}
       h2{font-size:13px;color:#0F1B2D;margin:20px 0 8px;border-left:4px solid #B08D3E;padding-left:8px}
-      table{width:100%;border-collapse:collapse;margin:8px 0}
-      td,th{border:1px solid #CBD5E1;padding:6px 8px;font-size:10px;text-align:left;vertical-align:top}
+      table{width:100%;max-width:100%;border-collapse:collapse;margin:8px 0;table-layout:fixed}
+      td,th{border:1px solid #CBD5E1;padding:6px 8px;font-size:10px;text-align:left;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}
       th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:8.5px;letter-spacing:.5px}
       .tot{font-size:14px;font-weight:bold;color:#B91C1C;margin-top:6px}
-      .stat{display:inline-block;width:23%;margin-right:1%;vertical-align:top}
+      .stat{display:inline-block;width:47%;margin-right:1%;margin-bottom:8px;vertical-align:top}
       .nota{font-size:9.5px;color:#94A3B8;margin-top:24px;border-top:1px solid #E2E8F0;padding-top:8px}
+      @media(min-width:480px){.stat{width:23%}}
     </style></head><body>
       <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")} · Período: ${r.desde ? fmtD(r.desde) : "—"} a ${hoyStr()} · Emitido: ${hoyStr()}</div></div>
       <h2>Resumen</h2>
@@ -7272,19 +7275,19 @@ function GestionView({ db, cfg, onBack }) {
   function htmlPunit(it) {
     const d = it.dec || {}; const pj = perItem(it);
     const personas = Number(d.personas) || g.dotacion, costo = Number(d.costoDia) || g.costoPersona;
-    return `<!doctype html><html><head><meta charset="utf-8"><style>
-      @page{size:A4;margin:22mm 18mm}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0}
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page{size:A4;margin:22mm 18mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0;padding:14px;word-wrap:break-word}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:22px}
       .marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
       .tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
       h1{font-size:15px;color:#0F1B2D;margin:18px 0 4px}
       .meta{font-size:11px;color:#64748B}
-      table{width:100%;border-collapse:collapse;margin:14px 0}
-      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top}
+      table{width:100%;max-width:100%;border-collapse:collapse;margin:14px 0;table-layout:fixed}
+      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}
       th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9.5px;letter-spacing:1px}
       .calc{background:rgba(255,255,255,.04);border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
       .tot{font-size:16px;font-weight:bold;color:#B91C1C;margin-top:6px}
-      .firmas{display:flex;justify-content:space-between;margin-top:70px}
+      .firmas{display:flex;justify-content:space-between;margin-top:70px;flex-wrap:wrap;gap:10px}
       .firma{width:44%;border-top:1px solid #1a202c;padding-top:6px;font-size:10.5px;text-align:center;color:#475569}
       .nota{font-size:10px;color:#94A3B8;margin-top:26px;border-top:1px solid #E2E8F0;padding-top:8px}
     </style></head><body>
@@ -7402,12 +7405,12 @@ function GestionView({ db, cfg, onBack }) {
         <Eyebrow>Parámetros por defecto</Eyebrow>
         <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Se precargan al evaluar; en cada punitorio podés ajustar la dotación y el costo reales de ESA parada.</div>
         <FieldRow>
-          <Field label="Plazo (días háb.)"><TInput type="number" value={g.plazo} onChange={e => upd({ plazo: +e.target.value || 0 })} /></Field>
-          <Field label="Dotación típica"><TInput type="number" value={g.dotacion} onChange={e => upd({ dotacion: +e.target.value || 0 })} /></Field>
+          <Field label="Plazo (días háb.)"><TInput type="number" value={g.plazo || ""} onChange={e => upd({ plazo: +e.target.value || 0 })} /></Field>
+          <Field label="Dotación típica"><TInput type="number" value={g.dotacion || ""} onChange={e => upd({ dotacion: +e.target.value || 0 })} /></Field>
         </FieldRow>
-        <Field label="Costo diario por persona ($)"><TInput type="number" value={g.costoPersona} onChange={e => upd({ costoPersona: +e.target.value || 0 })} /></Field>
+        <Field label="Costo diario por persona ($)"><TInput type="number" value={g.costoPersona || ""} onChange={e => upd({ costoPersona: +e.target.value || 0 })} /></Field>
         <Eyebrow>Costo diario por oficio (referencia)</Eyebrow>
-        {(g.oficios || []).map((o, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{o.oficio}</span><input type="number" value={o.costo} onChange={e => upd({ oficios: g.oficios.map((x, j) => j === i ? { ...x, costo: +e.target.value || 0 } : x) })} style={{ width: 110, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 9px", fontSize: 12.5, color: T.text, textAlign: "right" }} /></div>))}
+        {(g.oficios || []).map((o, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{o.oficio}</span><input type="number" value={o.costo || ""} onChange={e => upd({ oficios: g.oficios.map((x, j) => j === i ? { ...x, costo: +e.target.value || 0 } : x) })} style={{ width: 110, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 9px", fontSize: 12.5, color: T.text, textAlign: "right" }} /></div>))}
       </Card>
     </div>}
 
@@ -7497,7 +7500,7 @@ function GestionView({ db, cfg, onBack }) {
       <Field label="Tarea / Descripción"><TInput value={mForm.descripcion} onChange={e => setMForm({ ...mForm, descripcion: e.target.value })} placeholder="Ej: Armado de cerco de obra" /></Field>
       <FieldRow>
         <Field label="Imputable a"><Sel value={mForm.imputable} onChange={e => setMForm({ ...mForm, imputable: e.target.value })}><option value={cli}>{cli}</option><option value="Estudio">Estudio</option><option value="V+V">V+V</option></Sel></Field>
-        <Field label="Días estimados"><TInput type="number" value={mForm.plazo} onChange={e => setMForm({ ...mForm, plazo: +e.target.value || 0 })} /></Field>
+        <Field label="Días estimados"><TInput type="number" value={mForm.plazo || ""} onChange={e => setMForm({ ...mForm, plazo: +e.target.value || 0 })} /></Field>
       </FieldRow>
       <FieldRow>
         <Field label="Inicio"><TInput type="date" value={mForm.fechaSolic} onChange={e => setMForm({ ...mForm, fechaSolic: e.target.value })} /></Field>
@@ -7520,7 +7523,7 @@ function GestionView({ db, cfg, onBack }) {
         <Field label="Categoría del desvío (opcional)"><Sel value={mForm.categoriaDesvio || ""} onChange={e => setMForm({ ...mForm, categoriaDesvio: e.target.value, causa: "", causaDetalle: "" })}><option value="">— Sin clasificar —</option>{CATEGORIAS_DESVIO.map(c => <option key={c} value={c}>{c}</option>)}</Sel></Field>
         <Field label="Causa específica (opcional)"><Sel value={mForm.causa || ""} onChange={e => setMForm({ ...mForm, causa: e.target.value, causaDetalle: e.target.value === "Otro" ? mForm.causaDetalle : "" })}><option value="">— Sin especificar —</option>{(mForm.categoriaDesvio === "Evitable" ? CAUSAS_EVITABLE : mForm.categoriaDesvio === "No evitable" ? CAUSAS_NO_EVITABLE : [...CAUSAS_EVITABLE.slice(0, -1), ...CAUSAS_NO_EVITABLE.slice(0, -1), "Otro"]).map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
         {mForm.causa === "Otro" && <Field label="Especificar causa"><TInput value={mForm.causaDetalle || ""} onChange={e => setMForm({ ...mForm, causaDetalle: e.target.value })} placeholder="Describí la causa exacta del desvío" /></Field>}
-        <Field label="Días de clima / fuerza mayor"><TInput type="number" value={mForm.diasClima || 0} onChange={e => setMForm({ ...mForm, diasClima: +e.target.value || 0 })} /></Field>
+        <Field label="Días de clima / fuerza mayor"><TInput type="number" value={mForm.diasClima || ""} onChange={e => setMForm({ ...mForm, diasClima: +e.target.value || 0 })} /></Field>
       </FieldRow>
 
       <Eyebrow>Personal asignado (opcional)</Eyebrow>
