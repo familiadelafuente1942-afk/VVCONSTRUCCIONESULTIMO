@@ -612,6 +612,66 @@ function getUbics(cfg) { return (cfg?.ubicaciones?.length ? cfg.ubicaciones : DE
 function getLabelUbic(cfg) { return cfg?.labelUbicacion || "Zona/Barrio"; }
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
+// ── Guardar PDF como archivo real (Guardar en Archivos en iPad, descarga en PC) ──
+// Carga html2pdf.js (jsPDF + html2canvas) desde un CDN la primera vez que se
+// necesita, para no tocar el build del proyecto. Genera el PDF a partir del
+// MISMO html que ya se usa para la vista previa/impresión.
+let _html2pdfCargando = null;
+function cargarHtml2Pdf() {
+  if (typeof window !== "undefined" && window.html2pdf) return Promise.resolve(window.html2pdf);
+  if (_html2pdfCargando) return _html2pdfCargando;
+  _html2pdfCargando = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js";
+    s.onload = () => resolve(window.html2pdf);
+    s.onerror = () => reject(new Error("No se pudo cargar el generador de PDF."));
+    document.head.appendChild(s);
+  });
+  return _html2pdfCargando;
+}
+async function guardarPdfComoArchivo(htmlString, nombreArchivo) {
+  const html2pdf = await cargarHtml2Pdf();
+  const cont = document.createElement("div");
+  cont.style.position = "fixed"; cont.style.left = "-99999px"; cont.style.top = "0";
+  // html2pdf no interpreta <style> dentro de @page/CSS compleja igual que
+  // un navegador imprimiendo, así que usamos un iframe oculto para que el
+  // documento se renderice tal cual se ve en la vista previa.
+  const ifr = document.createElement("iframe");
+  ifr.style.width = "800px"; ifr.style.height = "1131px"; ifr.style.border = "none";
+  cont.appendChild(ifr);
+  document.body.appendChild(cont);
+  await new Promise(res => { ifr.onload = res; ifr.srcdoc = htmlString; });
+  const doc = ifr.contentDocument;
+  const blob = await html2pdf().from(doc.body).set({
+    margin: 0,
+    filename: nombreArchivo,
+    html2canvas: { scale: 2, useCORS: true, windowWidth: 800 },
+    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+  }).outputPdf("blob");
+  document.body.removeChild(cont);
+  const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+  if (esIOS) {
+    // iPad/iPhone: primero intenta la hoja de compartir con "Guardar en Archivos".
+    // Si falla (Safari a veces bloquea el share si tardó mucho en generarse),
+    // abre el PDF en una pestaña: el visor nativo de iOS también tiene un
+    // ícono de compartir con "Guardar en Archivos".
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: nombreArchivo }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return;
+  }
+  // PC: descarga directa
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nombreArchivo;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 // Lee las coordenadas GPS que el drone graba DENTRO del archivo de la foto
 // (datos EXIF). Hay que leerlas del archivo original: cuando la app reduce
 // la foto para guardarla, esos datos se pierden. Así el punto en el mapa es
@@ -2896,6 +2956,7 @@ function BitacoraView({ db, cfg, onBack }) {
   const [etapa, setEtapa] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const [pdfHtml, setPdfHtml] = useState(null);
+  const [guardandoPdf, setGuardandoPdf] = useState(false);
   const [desvioFlag, setDesvioFlag] = useState(false);
   const [diasDesvio, setDiasDesvio] = useState("");
   const [categoriaDesvio, setCategoriaDesvio] = useState("");
@@ -3186,7 +3247,10 @@ function BitacoraView({ db, cfg, onBack }) {
     {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 500, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: T.navy, flexShrink: 0, position: "relative", zIndex: 2 }}>
         <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
-        <button onClick={() => { const f = document.getElementById("bita-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button disabled={guardandoPdf} onClick={async () => { setGuardandoPdf(true); try { const nombre = `Bitacora_${(obra?.nombre || "obra").replace(/[^a-zA-Z0-9]+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`; await guardarPdfComoArchivo(pdfHtml, nombre); } catch (e) { alert("No se pudo guardar el PDF. Probá de nuevo."); } setGuardandoPdf(false); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap", opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
+          <button onClick={() => { const f = document.getElementById("bita-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Imprimir</button>
+        </div>
       </div>
       <iframe id="bita-pdf" srcDoc={pdfHtml} title="Bitácora PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
