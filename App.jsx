@@ -7435,7 +7435,10 @@ function GestionView({ db, cfg, onBack }) {
         const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
         const comp = await compressImage(dataUrl, 1600, 0.7);
         const url = await uploadFoto(comp, `gestion/${campo}`, `${uid()}.jpg`);
-        if (url) nuevas.push({ id: uid(), url });
+        // f.lastModified es la fecha del archivo tal como lo guardó el celular
+        // (normalmente la fecha real en que se sacó la foto, aunque se suba
+        // después) — más confiable que la fecha de hoy si se sube más tarde.
+        if (url) nuevas.push({ id: uid(), url, fecha: f.lastModified || Date.now() });
       } catch { }
     }
     setMForm(prev => prev ? { ...prev, [campo]: [...(prev[campo] || []), ...nuevas] } : prev);
@@ -7494,11 +7497,11 @@ function GestionView({ db, cfg, onBack }) {
       </table>
       ${(it.fotosInicio && it.fotosInicio.length) ? `<div style="margin-top:14px">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E;margin-bottom:6px">Foto de inicio</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">${it.fotosInicio.map(f => `<img src="${f.url}" style="width:150px;height:150px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />`).join("")}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${it.fotosInicio.map(f => `<div style="text-align:center"><img src="${f.url}" style="width:150px;height:150px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />${f.fecha ? `<div style="font-size:9.5px;color:#64748B;margin-top:3px">${fmtFechaCorta(new Date(f.fecha))}</div>` : ""}</div>`).join("")}</div>
       </div>` : ""}
       ${(it.fotosFin && it.fotosFin.length) ? `<div style="margin-top:14px">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E;margin-bottom:6px">Foto de fin</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">${it.fotosFin.map(f => `<img src="${f.url}" style="width:150px;height:150px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />`).join("")}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${it.fotosFin.map(f => `<div style="text-align:center"><img src="${f.url}" style="width:150px;height:150px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />${f.fecha ? `<div style="font-size:9.5px;color:#64748B;margin-top:3px">${fmtFechaCorta(new Date(f.fecha))}</div>` : ""}</div>`).join("")}</div>
       </div>` : ""}
       ${it.dec?.decision === "confirmado" ? `<div class="calc">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Punitorio confirmado</div>
@@ -7657,8 +7660,8 @@ function GestionView({ db, cfg, onBack }) {
           </div>
           {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${causaTexto(it)}${it.categoriaDesvio ? ` (${it.categoriaDesvio})` : ""}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (retraso imputable: ${it.retraso} d)` : ""}</div>}
           {((it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)) && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
-            {(it.fotosInicio || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} title="Inicio" style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #16A34A" }} /></a>)}
-            {(it.fotosFin || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} title="Fin" style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #B08D3E" }} /></a>)}
+            {(it.fotosInicio || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer" style={{ textAlign: "center" }}><img src={f.url} title={f.fecha ? `Inicio · ${fmtFechaCorta(new Date(f.fecha))}` : "Inicio"} style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #16A34A", display: "block" }} />{f.fecha && <div style={{ fontSize: 8.5, color: T.muted }}>{fmtFechaCorta(new Date(f.fecha))}</div>}</a>)}
+            {(it.fotosFin || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer" style={{ textAlign: "center" }}><img src={f.url} title={f.fecha ? `Fin · ${fmtFechaCorta(new Date(f.fecha))}` : "Fin"} style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #B08D3E", display: "block" }} />{f.fecha && <div style={{ fontSize: 8.5, color: T.muted }}>{fmtFechaCorta(new Date(f.fecha))}</div>}</a>)}
           </div>}
           {it.dec?.decision === "confirmado" && <div style={{ fontSize: 11, marginTop: 6, color: T.sub, lineHeight: 1.5 }}><b style={{ color: "#B91C1C" }}>Perjuicio: {money(pj)}</b> — {it.retraso} d × {Number(it.dec.personas) || g.dotacion} pers. × {money(Number(it.dec.costoDia) || g.costoPersona)}{it.dec.tarea ? <><br />Frenó: {it.dec.tarea}</> : null}</div>}
           {it.dec?.decision === "prorroga" && <div style={{ fontSize: 11, marginTop: 6, color: "#2563EB" }}>Prórroga acordada: +{it.dec.prorrogaDias} días háb.{it.dec.nota ? ` — ${it.dec.nota}` : ""}</div>}
@@ -7893,8 +7896,9 @@ function GestionView({ db, cfg, onBack }) {
 
       <Eyebrow>Foto de inicio</Eyebrow>
       {(mForm.fotosInicio || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-        {mForm.fotosInicio.map(ft => (<div key={ft.id} style={{ position: "relative" }}>
-          <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />
+        {mForm.fotosInicio.map(ft => (<div key={ft.id} style={{ position: "relative", width: 66 }}>
+          <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}`, display: "block" }} />
+          {ft.fecha && <div style={{ fontSize: 9.5, color: T.muted, textAlign: "center", marginTop: 2 }}>{fmtFechaCorta(new Date(ft.fecha))}</div>}
           <button onClick={() => setMForm({ ...mForm, fotosInicio: mForm.fotosInicio.filter(x => x.id !== ft.id) })} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button>
         </div>))}
       </div>}
@@ -7903,8 +7907,9 @@ function GestionView({ db, cfg, onBack }) {
 
       <Eyebrow>Foto de fin</Eyebrow>
       {(mForm.fotosFin || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-        {mForm.fotosFin.map(ft => (<div key={ft.id} style={{ position: "relative" }}>
-          <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />
+        {mForm.fotosFin.map(ft => (<div key={ft.id} style={{ position: "relative", width: 66 }}>
+          <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}`, display: "block" }} />
+          {ft.fecha && <div style={{ fontSize: 9.5, color: T.muted, textAlign: "center", marginTop: 2 }}>{fmtFechaCorta(new Date(ft.fecha))}</div>}
           <button onClick={() => setMForm({ ...mForm, fotosFin: mForm.fotosFin.filter(x => x.id !== ft.id) })} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button>
         </div>))}
       </div>}
