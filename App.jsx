@@ -7344,21 +7344,27 @@ function GestionView({ db, cfg, onBack }) {
     const d = g.punit[base.id];
     const plazoEf = (base.plazoBase || g.plazo) + (d?.decision === "prorroga" ? (d.prorrogaDias || 0) : 0);
     const m = gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
+    // Atraso en el ARRANQUE de la tarea (se podría haber empezado/pedido antes,
+    // pero arrancó más tarde) — ej: el hierro se pidió tarde, aunque una vez
+    // que llegó la tarea se ejecutó en plazo. Este atraso SÍ cuenta para el
+    // desvío total y el estado del ítem (por eso puede quedar "Fuera de
+    // plazo"/candidato a punitorio aunque la ejecución haya sido impecable),
+    // pero el perjuicio en pesos sigue sin calcularse solo — requiere el paso
+    // manual de "Evaluar" → confirmar tarea detenida, dotación y costo, igual
+    // que cualquier otro candidato.
+    const inicioPlanD = base.inicioPlan ? new Date(base.inicioPlan) : null;
+    const retrasoInicio = (inicioPlanD && base.fechaSolic && inicioPlanD < base.fechaSolic) ? diasHabiles(inicioPlanD, base.fechaSolic) : 0;
+    const desvio = m.desvio + retrasoInicio;
+    let estado;
+    if (base.fechaReal || base.cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo";
+    else estado = desvio <= 0 ? "En plazo" : "Vencido";
     // Los días de clima/fuerza mayor no son imputables a nadie: se descuentan
     // del retraso ANTES de que impacte en el punitorio. El desvío/estado
     // siguen mostrando el atraso real (para que no se "pierda" en el radar),
     // pero lo que vale plata es el retraso neto de clima.
-    const retrasoBruto = m.retraso;
+    const retrasoBruto = Math.max(0, desvio);
     const retraso = Math.max(0, retrasoBruto - (Number(base.diasClima) || 0));
-    // Atraso en el ARRANQUE de la tarea (se podría haber empezado antes, pero
-    // arrancó más tarde) — es un atraso distinto al de ejecución (que compara
-    // días reales vs. plazo estimado) y NO entra en el cálculo de punitorio/
-    // perjuicio de este ítem: el perjuicio de un arranque tardío no se puede
-    // asignar en el momento, se termina viendo en que la obra entera cierra
-    // más tarde. Se registra aparte, para dejarlo documentado con su causa.
-    const inicioPlanD = base.inicioPlan ? new Date(base.inicioPlan) : null;
-    const retrasoInicio = (inicioPlanD && base.fechaSolic && inicioPlanD < base.fechaSolic) ? diasHabiles(inicioPlanD, base.fechaSolic) : 0;
-    return { ...base, plazo: plazoEf, ...m, retraso, retrasoBruto, retrasoInicio, dec: d || null };
+    return { ...base, plazo: plazoEf, ...m, desvio, estado, retraso, retrasoBruto, retrasoInicio, dec: d || null };
   };
   const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const items = [...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
@@ -7477,7 +7483,7 @@ function GestionView({ db, cfg, onBack }) {
         ${(it.personalIds && it.personalIds.length) ? `<tr><td>Personal asignado</td><td>${_e(it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", "))}</td></tr>` : ""}
         ${it.inicioPlan ? `<tr><td>Podría haber arrancado el</td><td>${fmtD(new Date(it.inicioPlan + "T12:00:00"))}</td></tr>` : ""}
         <tr><td>Inicio (real)</td><td>${fmtD(it.fechaSolic)}</td></tr>
-        ${(it.retrasoInicio || 0) > 0 ? `<tr><td><b>Atraso en el arranque</b></td><td style="font-weight:bold;color:#B45309">${it.retrasoInicio} días hábiles (no incluido en el perjuicio de este ítem)</td></tr>` : ""}
+        ${(it.retrasoInicio || 0) > 0 ? `<tr><td><b>Atraso en el arranque</b></td><td style="font-weight:bold;color:#B45309">${it.retrasoInicio} días hábiles (ya incluidos en la diferencia de abajo)</td></tr>` : ""}
         <tr><td>Días estimados</td><td>${it.plazo} días hábiles${it.dec && it.plazo !== it.plazoBase ? ` (incluye prórroga acordada)` : ""}</td></tr>
         <tr><td>Fin</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Aún no terminó"}</td></tr>
         <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
@@ -7514,11 +7520,14 @@ function GestionView({ db, cfg, onBack }) {
     const its = items.filter(it => it.obra_id === obraId).sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0));
     const totalEstimado = its.reduce((a, i) => a + (Number(i.plazo) || 0), 0);
     const totalReal = its.reduce((a, i) => a + (i.dias || 0), 0);
-    const totalDesvio = totalReal - totalEstimado;
+    // totalDesvio ya incluye el atraso de arranque de cada ítem (i.desvio =
+    // desvío de ejecución + atraso de arranque), para que el total de la obra
+    // sea la suma real de lo que muestra cada registro.
+    const totalDesvio = its.reduce((a, i) => a + (Number(i.desvio) || 0), 0);
     const totalClima = its.reduce((a, i) => a + (Number(i.diasClima) || 0), 0);
-    // Atraso de ARRANQUE acumulado — informativo, no está incluido en
-    // totalDesvio ni en el perjuicio: explica por qué la obra se corre
-    // aunque cada tarea, una vez arrancada, se haya ejecutado en plazo.
+    // Atraso de ARRANQUE acumulado — ya está sumado dentro de totalDesvio;
+    // se calcula aparte solo para poder mostrar el desglose por causa y
+    // explicar cuánto de ese desvío viene de arranques tardíos.
     const totalRetrasoInicio = its.reduce((a, i) => a + (Number(i.retrasoInicio) || 0), 0);
     const porCausaInicio = {};
     its.forEach(i => { if ((i.retrasoInicio || 0) > 0) { const c = causaTexto(i) || "Sin causa asignada"; porCausaInicio[c] = (porCausaInicio[c] || 0) + i.retrasoInicio; } });
@@ -7560,12 +7569,12 @@ function GestionView({ db, cfg, onBack }) {
       <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")}${modeloNom ? ` · Modelo: ${_e(modeloNom)}` : ""} · Inicio de obra: ${_e(ob?.inicio || "—")} · Cierre estimado: ${_e(cierreEst || "—")}${!modeloNom && ob?.duracionMeses ? ` (${ob.duracionMeses} meses)` : ""} · Emitido: ${hoyStr()}</div></div>
       <h2>Resumen</h2>
       <div><div class="stat"><div style="font-size:15px;font-weight:800">${ob?.inicio || "—"}</div><div style="font-size:9px;color:#64748B">Inicio de obra</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${cierreEst || "—"}</div><div style="font-size:9px;color:#64748B">Cierre estimado${ob?.duracionMeses ? ` (${ob.duracionMeses}m)` : ""}</div></div><div class="stat"><div style="font-size:15px;font-weight:800">${mesesTranscurridos != null ? mesesTranscurridos : "—"}</div><div style="font-size:9px;color:#64748B">Meses transcurridos desde el inicio</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:${r.totalDesvio > 0 ? "#EF4444" : "#16A34A"}">${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio}</div><div style="font-size:9px;color:#64748B">Desvío total (registro)</div></div></div>
-      <div style="margin-top:4px"><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div>${r.totalRetrasoInicio > 0 ? `<div class="stat"><div style="font-size:15px;font-weight:800;color:#B45309">${r.totalRetrasoInicio}</div><div style="font-size:9px;color:#64748B">Días de atraso en el ARRANQUE de tareas (acumulado, no incluido arriba)</div></div>` : ""}</div>
+      <div style="margin-top:4px"><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div>${r.totalRetrasoInicio > 0 ? `<div class="stat"><div style="font-size:15px;font-weight:800;color:#B45309">${r.totalRetrasoInicio}</div><div style="font-size:9px;color:#64748B">De los cuales, por arrancar tarde (ya incluido en el desvío total)</div></div>` : ""}</div>
       ${r.etapas && r.etapas.length ? `<h2>Cronograma por etapa (planificado vs. real)</h2>
       <table><tr><th>Etapa</th><th>Inicio plan.</th><th>Fin plan.</th><th>Días plan.</th><th>Inicio real</th><th>Días reales</th><th>Desvío</th></tr>
       ${r.etapas.map(filaEtapa).join("")}</table>` : ""}
-      ${r.totalRetrasoInicio > 0 ? `<h2>Atraso en el arranque de tareas (informativo)</h2>
-      <div style="font-size:10px;color:#64748B;margin-bottom:6px">No está incluido en el desvío ni en el perjuicio de cada ítem — el arranque tardío de una tarea suele no ser cuantificable en el momento, pero es lo que explica que la obra termine cerrando más tarde de lo planificado. Queda documentado acá, por causa.</div>
+      ${r.totalRetrasoInicio > 0 ? `<h2>Atraso en el arranque de tareas</h2>
+      <div style="font-size:10px;color:#64748B;margin-bottom:6px">Días en que una tarea arrancó más tarde de cuando podría haber arrancado (ej: un pedido de material hecho tarde). Ya están incluidos en el desvío total de arriba y en el estado de cada ítem — el perjuicio en pesos de cada caso se asigna igual que cualquier otro, evaluándolo en Punitorios.</div>
       <table><tr><th>Causa</th><th>Días de atraso en el arranque</th></tr>
       ${Object.entries(r.porCausaInicio).sort((a, b) => b[1] - a[1]).map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td></tr>`).join("")}</table>` : ""}
       <h2>Desvío por categoría</h2>
@@ -7839,7 +7848,7 @@ function GestionView({ db, cfg, onBack }) {
       </FieldRow>
       <Field label="Podría haber arrancado el (opcional)">
         <TInput type="date" value={mForm.inicioPlan || ""} onChange={e => setMForm({ ...mForm, inicioPlan: e.target.value })} />
-        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>Completá esto solo si la tarea arrancó más tarde de lo que podría haber arrancado (ej: no había material, no había cuadrilla). Mide el atraso en el ARRANQUE, separado de si después se ejecutó en plazo o no. No afecta el cálculo de punitorio — queda documentado con su causa para explicar por qué la obra se corre, aunque el perjuicio se termine viendo recién al cierre.</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>Completá esto solo si la tarea arrancó más tarde de lo que podría haber arrancado (ej: el pedido de material se hizo tarde, no había cuadrilla). Mide el atraso en el ARRANQUE, separado de si después se ejecutó en plazo o no — pero SÍ suma al desvío total y al estado del ítem (puede quedar "Fuera de plazo" aunque la ejecución haya sido impecable). El perjuicio en pesos de ese atraso se define igual que siempre, evaluándolo en Punitorios.</div>
       </Field>
       {mForm.fechaSolic && (() => {
         const pv = previewDesvio(mForm);
@@ -7852,9 +7861,10 @@ function GestionView({ db, cfg, onBack }) {
             {mForm.fechaReal ? "Llevó" : "Lleva"} <b>{pv.dias}</b> día{pv.dias === 1 ? "" : "s"} hábil{pv.dias === 1 ? "" : "es"} contra {mForm.plazo || 0} estimado{(mForm.plazo || 0) === 1 ? "" : "s"}{pv.desvio !== 0 && <> — diferencia de <b style={{ color: pv.desvio > 0 ? "#EF4444" : "#16A34A" }}>{pv.desvio > 0 ? "+" : ""}{pv.desvio}</b> día{Math.abs(pv.desvio) === 1 ? "" : "s"}</>}.
             {(Number(mForm.diasClima) || 0) > 0 && <><br />De esos, <b>{mForm.diasClima}</b> no cuentan (clima/fuerza mayor) → retraso imputable: <b style={{ color: neto > 0 ? "#EF4444" : "#16A34A" }}>{neto}</b> día{neto === 1 ? "" : "s"}.</>}
           </div>
-          {retrasoInicio > 0 && <div style={{ background: "rgba(245,158,11,.12)", border: "1px solid rgba(245,158,11,.35)", borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: T.text, lineHeight: 1.5 }}>
-            Además, arrancó <b style={{ color: "#B45309" }}>{retrasoInicio}</b> día{retrasoInicio === 1 ? "" : "s"} hábil{retrasoInicio === 1 ? "" : "es"} más tarde de cuando podría haber arrancado. Esto no suma al perjuicio de este ítem, pero queda documentado como atraso de inicio.
-          </div>}
+          {retrasoInicio > 0 && (() => { const total = pv.desvio + retrasoInicio; return (<div style={{ background: "rgba(245,158,11,.12)", border: "1px solid rgba(245,158,11,.35)", borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: T.text, lineHeight: 1.5 }}>
+            Además, arrancó <b style={{ color: "#B45309" }}>{retrasoInicio}</b> día{retrasoInicio === 1 ? "" : "s"} hábil{retrasoInicio === 1 ? "" : "es"} más tarde de cuando podría haber arrancado.
+            <br />Desvío total del ítem (ejecución + arranque): <b style={{ color: total > 0 ? "#EF4444" : "#16A34A" }}>{total > 0 ? "+" : ""}{total}</b> día{Math.abs(total) === 1 ? "" : "s"} → va a quedar como <b>{total > 0 ? (mForm.fechaReal ? "Fuera de plazo" : "Vencido") : (mForm.fechaReal ? "Cumplido" : "En plazo")}</b>.
+          </div>); })()}
         </>);
       })()}
 

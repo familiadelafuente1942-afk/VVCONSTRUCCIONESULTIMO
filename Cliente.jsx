@@ -4817,10 +4817,18 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
     const d = g.punit[base.id];
     const plazoEf = (base.plazoBase || g.plazo) + (d?.decision === "prorroga" ? (d.prorrogaDias || 0) : 0);
     const m = gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
+    // Mismo criterio que V+V: el atraso en el ARRANQUE (se podría haber
+    // empezado/pedido antes) suma al desvío total y al estado del ítem.
+    const inicioPlanD = base.inicioPlan ? new Date(base.inicioPlan) : null;
+    const retrasoInicio = (inicioPlanD && base.fechaSolic && inicioPlanD < base.fechaSolic) ? diasHabiles(inicioPlanD, base.fechaSolic) : 0;
+    const desvio = m.desvio + retrasoInicio;
+    let estado;
+    if (base.fechaReal || base.cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo";
+    else estado = desvio <= 0 ? "En plazo" : "Vencido";
     // Mismo criterio que V+V: los días de clima/fuerza mayor no cuentan para el punitorio.
-    const retrasoBruto = m.retraso;
+    const retrasoBruto = Math.max(0, desvio);
     const retraso = Math.max(0, retrasoBruto - (Number(base.diasClima) || 0));
-    return { ...base, plazo: plazoEf, ...m, retraso, retrasoBruto, dec: d || null };
+    return { ...base, plazo: plazoEf, ...m, desvio, estado, retraso, retrasoBruto, retrasoInicio, dec: d || null };
   };
   const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const items = [...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
