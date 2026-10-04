@@ -7828,7 +7828,7 @@ function GestionView({ db, cfg, onBack }) {
 
     {mForm && <Sheet title={mForm.id ? "Editar registro" : "Nuevo registro"} onClose={() => { setMForm(null); setMError(""); }}>
       <FieldRow>
-        <Field label="Tipo"><Sel value={mForm.tipo} onChange={e => setMForm({ ...mForm, tipo: e.target.value })}><option>Tarea</option><option>Certificado</option><option>Pedido de información</option><option>Visita técnica</option><option>Otro</option></Sel></Field>
+        <Field label="Tipo"><Sel value={mForm.tipo} onChange={e => setMForm({ ...mForm, tipo: e.target.value })}><option>Tarea</option><option>Certificado</option><option>Pedido de información</option><option>Visita técnica</option><option>Compra de materiales</option><option>Recepción de planos</option><option>Cierre de contrato de proveedores</option><option>Otro</option></Sel></Field>
         <Field label="Obra"><Sel value={mForm.obra_id} onChange={e => { const ob = obras.find(o => o.id === e.target.value); const traerInicio = !mForm.id && (!mForm.fechaSolic || mForm.fechaSolic === isoHoy() || mForm.fechaSolic === isoFromFechaCorta(obras.find(o => o.id === mForm.obra_id)?.inicio)); setMForm({ ...mForm, obra_id: e.target.value, fechaSolic: traerInicio ? (isoFromFechaCorta(ob?.inicio) || mForm.fechaSolic) : mForm.fechaSolic }); }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       </FieldRow>
       <Field label="Tarea / Descripción"><TInput value={mForm.descripcion} onChange={e => setMForm({ ...mForm, descripcion: e.target.value })} placeholder="Ej: Armado de cerco de obra" /></Field>
