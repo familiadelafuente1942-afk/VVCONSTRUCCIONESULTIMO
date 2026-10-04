@@ -31,7 +31,10 @@ const DOCS_BASE = [
 const DOC_CATS = ["Documentación técnica", "Elementos de protección", "Otros ítems"];
 
 // Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
-const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
+// Solo las etapas de obra gris + colocación de piso (lo único que hace V+V):
+// nada de techos/instalaciones/aberturas/pintura/terminaciones, eso lo hacen
+// otros subcontratistas.
+const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Contrapisos y carpetas", "Revoques", "Revestimientos y solados", "Limpieza de obra y entrega"];
 
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
@@ -4843,7 +4846,14 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
   const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
   const grp = n => confirmados.filter(i => imputablesDe(i).includes(n)).reduce((a, i) => { const lista = imputablesDe(i); return a + perItem(i) / Math.max(1, lista.length); }, 0);
-  const perjB = grp(cli), perjVV = grp("V+V"), perjE = grp("Estudio"), perjT = perjB + perjVV + perjE;
+  // El nombre del cliente acá (Ajustes → Nombre, de ESTA app) no tiene por qué
+  // coincidir letra por letra con lo que V+V tipeó como cliente en la suya —
+  // son configuraciones separadas. Por eso el TOTAL se calcula sumando todos
+  // los punitorios confirmados directo (nunca depende de que un nombre
+  // calce), y el desglose por responsable sale de los nombres que realmente
+  // aparecen en "Imputable a" de cada registro, no de una lista fija.
+  const perjT = confirmados.reduce((a, i) => a + perItem(i), 0);
+  const responsables = [...new Set(confirmados.flatMap(imputablesDe))];
   const cnt = e => items.filter(i => i.estado === e).length;
   const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
   const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
@@ -4880,7 +4890,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
       <h2>Punitorios confirmados (${confirmados.length})</h2>
       <table><tr><th>Ítem</th><th>Tarea detenida</th><th>Dotación</th><th>Costo/día</th><th>Perjuicio</th></tr>
       ${confirmados.length ? confirmados.map(filaPunit).join("") : `<tr><td colspan="5" style="text-align:center;color:#94A3B8">Sin punitorios confirmados</td></tr>`}</table>
-      <div class="tot">Perjuicio total confirmado: ${money(perjT)} (${cli}: ${money(perjB)} · Estudio: ${money(perjE)} · V+V: ${money(perjVV)})</div>
+      <div class="tot">Perjuicio total confirmado: ${money(perjT)}${responsables.length ? ` (${responsables.map(n => `${_e(n)}: ${money(grp(n))}`).join(" · ")})` : ""}</div>
       <div class="nota">Documento generado por el sistema de gestión V+V Construcciones.</div>
     </body></html>`;
   }
@@ -4966,7 +4976,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
         </div>))}
       </Card>
       <Eyebrow T={T}>Perjuicio confirmado por responsable</Eyebrow>
-      <Card T={T} style={{ padding: 13 }}>{[[cli, perjB], ["Estudio", perjE], ["V+V", perjVV]].map(([n, v]) => <div key={n} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{n}</span><span style={{ fontSize: 13, fontWeight: 800, color: v > 0 ? "#EF4444" : T.muted }}>{money(v)}</span></div>)}<div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>TOTAL</span><span style={{ fontSize: 14, fontWeight: 800, color: "#EF4444" }}>{money(perjT)}</span></div></Card>
+      <Card T={T} style={{ padding: 13 }}>{responsables.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "4px 0" }}>Sin punitorios confirmados.</div>}{responsables.map(n => <div key={n} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{n}</span><span style={{ fontSize: 13, fontWeight: 800, color: "#EF4444" }}>{money(grp(n))}</span></div>)}{responsables.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: `1px solid ${T.border}` }}><span style={{ fontSize: 13, fontWeight: 800 }}>TOTAL</span><span style={{ fontSize: 14, fontWeight: 800, color: "#EF4444" }}>{money(perjT)}</span></div>}</Card>
     </div>}
     {tab === "plan" && <div style={{ padding: "16px 20px" }}>
       {[["1. Objetivo", ["Medir tiempos de definición y certificación, detectar desvíos y valorizar el perjuicio económico de los retrasos para tomar decisiones y reclamar lo que corresponda."]],
