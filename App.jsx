@@ -7331,6 +7331,10 @@ function GestionView({ db, cfg, onBack }) {
   const [filtroEtapa, setFiltroEtapa] = useState("todas");
   const [obraInforme, setObraInforme] = useState("");
   const [pdfInforme, setPdfInforme] = useState(null); // informe de situación de una obra
+  const [selModo, setSelModo] = useState(false);       // armando PDF de registros elegidos
+  const [selIds, setSelIds] = useState([]);
+  const [pdfSel, setPdfSel] = useState(null);          // array de ids confirmado → muestra el PDF
+  const toggleSel = (id) => setSelIds(l => l.includes(id) ? l.filter(x => x !== id) : [...l, id]);
   const upd = (patch) => setGestion({ ...g, ...patch });
   const cli = cfg?.clienteNombre || "Belfast";
 
@@ -7514,6 +7518,74 @@ function GestionView({ db, cfg, onBack }) {
     </body></html>`;
   }
 
+  // ── Sección de un registro, para incrustar varios en un solo PDF ────
+  function htmlSeccionRegistro(it) {
+    const pj = perItem(it); const d = it.dec || {};
+    return `<div class="reg">
+      <h1>${_e(it.tipo)}: ${_e(it.descripcion)}</h1>
+      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(imputablesTexto(it))}</div>
+      <table>
+        <tr><th>Concepto</th><th>Detalle</th></tr>
+        ${it.etapa ? `<tr><td>Etapa de obra</td><td>${_e(it.etapa)}</td></tr>` : ""}
+        ${it.responsable ? `<tr><td>Responsable / cuadrilla</td><td>${_e(it.responsable)}</td></tr>` : ""}
+        ${(it.personalIds && it.personalIds.length) ? `<tr><td>Personal asignado</td><td>${_e(it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", "))}</td></tr>` : ""}
+        ${it.inicioPlan ? `<tr><td>Podría haber arrancado el</td><td>${fmtD(new Date(it.inicioPlan + "T12:00:00"))}</td></tr>` : ""}
+        <tr><td>Inicio (real)</td><td>${fmtD(it.fechaSolic)}</td></tr>
+        ${(it.retrasoInicio || 0) > 0 ? `<tr><td><b>Atraso en el arranque</b></td><td style="font-weight:bold;color:#B45309">${it.retrasoInicio} días hábiles (ya incluidos en la diferencia de abajo)</td></tr>` : ""}
+        <tr><td>Días estimados</td><td>${it.plazo} días hábiles${it.dec && it.plazo !== it.plazoBase ? ` (incluye prórroga acordada)` : ""}</td></tr>
+        <tr><td>Fin</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Aún no terminó"}</td></tr>
+        <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
+        <tr><td>Diferencia (real vs. estimado)</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio} días</td></tr>
+        ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(causaTexto(it))}${it.categoriaDesvio ? ` <span style="color:#94A3B8">(${_e(it.categoriaDesvio)})</span>` : ""}</td></tr>` : ""}
+        ${(Number(it.diasClima) || 0) > 0 ? `<tr><td>Días de clima / fuerza mayor (no imputables)</td><td>${it.diasClima} días</td></tr><tr><td><b>Retraso imputable neto</b></td><td><b>${it.retraso} días</b></td></tr>` : ""}
+        <tr><td>Estado</td><td>${_e(it.estado)}</td></tr>
+      </table>
+      ${(it.fotosInicio && it.fotosInicio.length) ? `<div style="margin-top:10px">
+        <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E;margin-bottom:5px">Foto de inicio</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">${it.fotosInicio.map(f => `<div style="text-align:center"><img src="${f.url}" style="width:120px;height:120px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />${f.fecha ? `<div style="font-size:9px;color:#64748B;margin-top:2px">${fmtFechaCorta(new Date(f.fecha))}</div>` : ""}</div>`).join("")}</div>
+      </div>` : ""}
+      ${(it.fotosFin && it.fotosFin.length) ? `<div style="margin-top:10px">
+        <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E;margin-bottom:5px">Foto de fin</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">${it.fotosFin.map(f => `<div style="text-align:center"><img src="${f.url}" style="width:120px;height:120px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />${f.fecha ? `<div style="font-size:9px;color:#64748B;margin-top:2px">${fmtFechaCorta(new Date(f.fecha))}</div>` : ""}</div>`).join("")}</div>
+      </div>` : ""}
+      ${d.decision === "confirmado" ? `<div class="calc">
+        <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Punitorio confirmado</div>
+        <div style="margin-top:5px">Tarea detenida: ${_e(d.tarea || "—")}</div>
+        <div>${it.retraso} día${it.retraso === 1 ? "" : "s"} de retraso × ${Number(d.personas) || g.dotacion} persona${(Number(d.personas) || g.dotacion) === 1 ? "" : "s"} × ${money(Number(d.costoDia) || g.costoPersona)} por persona/día</div>
+        <div class="tot">Perjuicio: ${money(pj)}</div>
+        ${d.nota ? `<div style="margin-top:4px">Observaciones: ${_e(d.nota)}</div>` : ""}
+      </div>` : d.decision === "prorroga" ? `<div class="calc"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Prórroga acordada</div><div style="margin-top:5px">+${d.prorrogaDias} días hábiles${d.nota ? ` — ${_e(d.nota)}` : ""}</div></div>` : d.decision === "sin_perjuicio" ? `<div class="calc"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Sin perjuicio</div>${d.nota ? `<div style="margin-top:5px">${_e(d.nota)}</div>` : ""}</div>` : ""}
+    </div>`;
+  }
+
+  // ── PDF con varios registros elegidos a mano (no todo el informe) ───
+  function htmlInformeSeleccion(ids) {
+    const sel = items.filter(it => (ids || []).includes(it.id)).sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0));
+    const obrasSel = [...new Set(sel.map(it => obraNom(obras, it.obra_id) || "—"))];
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page{size:A4;margin:22mm 18mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0;padding:14px;word-wrap:break-word}
+      .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:22px}
+      .marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
+      .tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
+      .meta{font-size:10.5px;color:#64748B;margin-top:4px}
+      h1{font-size:14.5px;color:#0F1B2D;margin:0 0 4px}
+      table{width:100%;max-width:100%;border-collapse:collapse;margin:10px 0;table-layout:fixed}
+      td,th{border:1px solid #CBD5E1;padding:6px 9px;font-size:11px;text-align:left;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}
+      th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9px;letter-spacing:1px}
+      img{max-width:100%}
+      .calc{background:rgba(255,255,255,.04);border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:10px 12px;margin:12px 0}
+      .tot{font-size:15px;font-weight:bold;color:#B91C1C;margin-top:5px}
+      .reg{margin-bottom:22px;padding-bottom:16px;border-bottom:2px dashed #CBD5E1;page-break-inside:avoid}
+      .reg:last-of-type{border-bottom:none}
+      .nota{font-size:10px;color:#94A3B8;margin-top:18px;border-top:1px solid #E2E8F0;padding-top:8px}
+      @media(max-width:480px){body{padding:10px;font-size:11.5px}.marca{font-size:16px}table,td,th{font-size:10px}}
+    </style></head><body>
+      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Gestión de obra · Registros seleccionados</div><div class="meta">${_e(obrasSel.join(", ") || "—")} · ${sel.length} registro${sel.length === 1 ? "" : "s"} · Emitido: ${hoyStr()}</div></div>
+      ${sel.length ? sel.map(htmlSeccionRegistro).join("") : `<div style="color:#94A3B8;text-align:center;padding:30px 0">Sin registros seleccionados.</div>`}
+      <div class="nota">Documento generado por el sistema de gestión V+V Construcciones.</div>
+    </body></html>`;
+  }
+
   // ── Informe de estado de situación de una obra ──────────────────────
   // Resumen desde el primer registro cargado hasta hoy: cuánto se hubiese
   // tardado en total (suma de estimados) vs. cuánto se tardó/lleva en
@@ -7642,11 +7714,12 @@ function GestionView({ db, cfg, onBack }) {
   const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
 
   // Tarjeta compartida por Registro y Punitorios
-  const ItemCard = ({ it, conAcciones, conRegistro }) => {
+  const ItemCard = ({ it, conAcciones, conRegistro, selModo, selected, onToggleSel }) => {
     const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
-    return (<Card style={{ padding: 13, marginBottom: 9 }}>
+    return (<Card onClick={selModo ? () => onToggleSel(it.id) : undefined} style={{ padding: 13, marginBottom: 9, position: "relative", cursor: selModo ? "pointer" : "default", border: selModo && selected ? `2px solid ${T.accent}` : undefined, background: selModo && selected ? T.al : undefined }}>
+      {selModo && <div style={{ position: "absolute", top: 10, right: 10, width: 22, height: 22, borderRadius: 6, border: `2px solid ${selected ? T.accent : T.border}`, background: selected ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{selected ? "✓" : ""}</div>}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ minWidth: 0, flex: 1, paddingRight: selModo ? 28 : 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
           <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{imputablesTexto(it)}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
           {(it.responsable || (it.personalIds && it.personalIds.length > 0)) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{it.responsable ? `Responsable: ${it.responsable}` : ""}{it.responsable && it.personalIds?.length ? " · " : ""}{it.personalIds?.length ? `Personal: ${it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", ")}` : ""}</div>}
@@ -7654,9 +7727,9 @@ function GestionView({ db, cfg, onBack }) {
             <span style={{ fontSize: 10.5, color: T.muted }}>Inicio {fmtD(it.fechaSolic)} · {it.fechaReal ? `fin ${fmtD(it.fechaReal)}` : "sin terminar"} · estimado {it.plazo} d</span>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>diferencia {it.desvio > 0 ? "+" : ""}{it.desvio}</span>
             {(it.retrasoInicio || 0) > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#B45309", background: "rgba(245,158,11,.14)", borderRadius: 10, padding: "2px 8px" }}>arrancó {it.retrasoInicio}d tarde</span>}
-            {conRegistro && <button onClick={() => { setMError(""); setMForm({ ...g.manual.find(x => x.id === it.id) }); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>}
-            {conRegistro && <button onClick={() => setPdfReg(it)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
-            {conRegistro && <button onClick={() => borrarRegistro(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>}
+            {conRegistro && !selModo && <button onClick={() => { setMError(""); setMForm({ ...g.manual.find(x => x.id === it.id) }); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>}
+            {conRegistro && !selModo && <button onClick={() => setPdfReg(it)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
+            {conRegistro && !selModo && <button onClick={() => borrarRegistro(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>}
           </div>
           {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${causaTexto(it)}${it.categoriaDesvio ? ` (${it.categoriaDesvio})` : ""}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (retraso imputable: ${it.retraso} d)` : ""}</div>}
           {((it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)) && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
@@ -7689,7 +7762,7 @@ function GestionView({ db, cfg, onBack }) {
       </div>
     </div>
 
-    {tab === "registro" && <div style={{ padding: "16px 20px" }}>
+    {tab === "registro" && <div style={{ padding: "16px 20px", paddingBottom: selModo ? 110 : 90 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>Cargá acá cada tarea o hecho de obra (días estimados por defecto {g.plazo} háb.), con foto de inicio y de fin para dejar constancia de cuánto llevó en verdad. Quedan registrados, se pueden editar, sacar en PDF o borrar; los que se pasan del estimado se evalúan en la pestaña Punitorios.</div>
         {items.length > 0 && <button onClick={vaciarRegistro} style={{ flexShrink: 0, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Vaciar registro</button>}
@@ -7698,10 +7771,23 @@ function GestionView({ db, cfg, onBack }) {
         <Field label="Filtrar por obra"><Sel value={filtroObra} onChange={e => setFiltroObra(e.target.value)}><option value="todas">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
         <Field label="Filtrar por etapa"><Sel value={filtroEtapa} onChange={e => setFiltroEtapa(e.target.value)}><option value="todas">Todas las etapas</option>{etapasUsadas.map(e => <option key={e} value={e}>{e}</option>)}</Sel></Field>
       </FieldRow>}
+      {items.length > 0 && <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <button onClick={() => { setSelModo(m => !m); setSelIds([]); }} style={{ background: selModo ? "rgba(239,68,68,.10)" : T.al, border: `1px solid ${selModo ? "rgba(239,68,68,.30)" : BRASS}`, color: selModo ? "#EF4444" : T.accent, borderRadius: 7, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{selModo ? "Cancelar selección" : "Armar PDF con varios registros"}</button>
+      </div>}
       {items.length === 0 && <EmptyMsg>Sin registros. Agregá el primero con ＋.</EmptyMsg>}
       {items.length > 0 && itemsFiltrados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Ningún registro coincide con el filtro.</div>}
-      {itemsFiltrados.map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} />)}
-      <AddFab onClick={() => { setMError(""); const obIni = obras.find(o => o.id === (filtroObra !== "todas" ? filtroObra : obras[0]?.id)); setMForm({ tipo: "Tarea", obra_id: obIni?.id || obras[0]?.id || "", descripcion: "", imputables: ["Estudio"], fechaSolic: isoFromFechaCorta(obIni?.inicio) || isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] }); }} label="Registro" />
+      {selModo && itemsFiltrados.length > 0 && <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 10 }}>
+        <button onClick={() => setSelIds(itemsFiltrados.map(it => it.id))} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Elegir todos los filtrados</button>
+        <button onClick={() => setSelIds(itemsFiltrados.slice(0, 5).map(it => it.id))} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Últimos 5</button>
+        <button onClick={() => setSelIds(itemsFiltrados.slice(0, 10).map(it => it.id))} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Últimos 10</button>
+        {selIds.length > 0 && <button onClick={() => setSelIds([])} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Vaciar selección</button>}
+      </div>}
+      {itemsFiltrados.map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} selModo={selModo} selected={selIds.includes(it.id)} onToggleSel={toggleSel} />)}
+      {!selModo && <AddFab onClick={() => { setMError(""); const obIni = obras.find(o => o.id === (filtroObra !== "todas" ? filtroObra : obras[0]?.id)); setMForm({ tipo: "Tarea", obra_id: obIni?.id || obras[0]?.id || "", descripcion: "", imputables: ["Estudio"], fechaSolic: isoFromFechaCorta(obIni?.inicio) || isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] }); }} label="Registro" />}
+      {selModo && <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: T.navy, borderTop: `2px solid ${BRASS}`, padding: "12px 16px", paddingBottom: "max(12px, env(safe-area-inset-bottom))", display: "flex", alignItems: "center", gap: 10, zIndex: 50 }}>
+        <div style={{ color: "#fff", fontSize: 12.5, fontWeight: 700, flex: 1 }}>{selIds.length} registro{selIds.length === 1 ? "" : "s"} elegido{selIds.length === 1 ? "" : "s"}</div>
+        <button disabled={selIds.length === 0} onClick={() => setPdfSel([...selIds])} style={{ background: selIds.length ? BRASS : T.border, border: "none", color: "#fff", borderRadius: 8, padding: "10px 16px", fontSize: 12.5, fontWeight: 700, cursor: selIds.length ? "pointer" : "default" }}>Generar PDF</button>
+      </div>}
     </div>}
 
     {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
@@ -7989,6 +8075,15 @@ function GestionView({ db, cfg, onBack }) {
         <button onClick={() => { const f = document.getElementById("informe-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
       </div>
       <iframe id="informe-pdf" srcDoc={htmlInformeObra(pdfInforme)} title="Informe de situación" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+
+    {pdfSel && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
+      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+        <button onClick={() => { setPdfSel(null); setSelModo(false); setSelIds([]); }} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
+        <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Registros seleccionados ({pdfSel.length})</div>
+        <button onClick={() => { const f = document.getElementById("sel-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+      </div>
+      <iframe id="sel-pdf" srcDoc={htmlInformeSeleccion(pdfSel)} title="Registros seleccionados" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
   </div>);
 }
