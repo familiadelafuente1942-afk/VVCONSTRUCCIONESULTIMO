@@ -1810,7 +1810,7 @@ function ModelosObraView({ db, cfg, onBack }) {
   const edit = editId ? modelos.find(m => m.id === editId) : null;
 
   function crear() {
-    const m = { id: uid(), nombre: "Nuevo modelo de obra", etapas: nuevoModeloEtapas() };
+    const m = { id: uid(), nombre: "Nuevo modelo de obra", etapas: nuevoModeloEtapas(), losas: [] };
     setModelosObra([...modelos, m]);
     setEditId(m.id);
   }
@@ -1822,6 +1822,19 @@ function ModelosObraView({ db, cfg, onBack }) {
   }
   function updEtapa(modeloId, etapaNombre, patch) {
     upd(modeloId, { etapas: (modelos.find(m => m.id === modeloId)?.etapas || nuevoModeloEtapas()).map(e => e.etapa === etapaNombre ? { ...e, ...patch } : e) });
+  }
+  // La cantidad de losas se escribe directo (es lo que define el tipo de
+  // proyecto); al cambiar el número se agregan o sacan filas solas, sin
+  // perder lo ya tipeado en las que quedan.
+  function setCantLosas(modeloId, n) {
+    const actual = modelos.find(m => m.id === modeloId)?.losas || [];
+    const cant = Math.max(0, Math.round(Number(n) || 0));
+    const losas = cant <= actual.length ? actual.slice(0, cant) : [...actual, ...Array.from({ length: cant - actual.length }, () => ({ inicioOffsetDias: 0, duracionDias: 0 }))];
+    upd(modeloId, { losas });
+  }
+  function updLosa(modeloId, idx, patch) {
+    const losas = (modelos.find(m => m.id === modeloId)?.losas || []).map((l, i) => i === idx ? { ...l, ...patch } : l);
+    upd(modeloId, { losas });
   }
 
   if (edit) {
@@ -1855,6 +1868,24 @@ function ModelosObraView({ db, cfg, onBack }) {
             </div>}
           </Card>
         ))}
+        <Eyebrow>Losas</Eyebrow>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 0 10px" }}>La cantidad de losas es lo que define el tipo de proyecto (ej: con subsuelo tiene más losas que sin subsuelo). Cambiá el número y se agregan o sacan filas solas; cada losa tiene su propio inicio y duración, igual que una etapa.</div>
+        <Field label="Cantidad de losas"><TInput type="number" value={(edit.losas || []).length || ""} onChange={e => setCantLosas(edit.id, e.target.value)} placeholder="Ej: 3" /></Field>
+        {(edit.losas || []).map((l, i) => (
+          <Card key={i} style={{ padding: "11px 13px", marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 10 }}>{nombreLosa(i)}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Arranca en el día</div>
+                <input type="number" value={l.inicioOffsetDias || ""} onChange={e => updLosa(edit.id, i, { inicioOffsetDias: e.target.value })} placeholder="0" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Dura (días hábiles)</div>
+                <input type="number" value={l.duracionDias || ""} onChange={e => updLosa(edit.id, i, { duracionDias: e.target.value })} placeholder="Ej: 10" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
+              </div>
+            </div>
+          </Card>
+        ))}
         <PBtn full variant="danger" onClick={() => borrar(edit.id)} style={{ marginTop: 10 }}>Borrar este modelo</PBtn>
       </div>
     </div>);
@@ -1865,11 +1896,11 @@ function ModelosObraView({ db, cfg, onBack }) {
     <div style={{ padding: "0 20px" }}>
       {!modelos.length && <EmptyMsg>Todavía no hay modelos cargados. Creá uno por cada tipo de obra que manejás (ej: "Con subsuelo + 2 plantas", "Sin subsuelo + 2 plantas", "Sin subsuelo + 3 plantas") y definí su cronograma estándar de etapas una sola vez.</EmptyMsg>}
       {modelos.map(m => {
-        const n = etapasModelo(m).length, dur = duracionTotalModelo(m);
+        const n = etapasModelo(m).length, dur = duracionTotalModelo(m), nLosas = (m.losas || []).length;
         return (<Card key={m.id} onClick={() => setEditId(m.id)} style={{ padding: "13px 15px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{m.nombre}</div>
-            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{n} etapa{n === 1 ? "" : "s"}{dur > 0 ? ` · ${dur} días estimados` : ""}</div>
+            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{n} etapa{n === 1 ? "" : "s"}{nLosas > 0 ? ` · ${nLosas} losa${nLosas === 1 ? "" : "s"}` : ""}{dur > 0 ? ` · ${dur} días estimados` : ""}</div>
           </div>
           <span style={{ fontSize: 16, color: T.muted }}>›</span>
         </Card>);
@@ -3006,6 +3037,7 @@ function AuditoriaView({ db, cfg, onBack, desdeSemana }) {
 function BitacoraView({ db, cfg, onBack }) {
   const obras = db.obras || [];
   const bitacora = db.bitacora || [];
+  const modelosObra = db.modelosObra || [];
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   // Mismo criterio que en Avance: comparar por identidad (qué entradas son
   // nuevas), no por fecha — más seguro, no depende de qué fecha le hayan
@@ -3275,7 +3307,7 @@ function BitacoraView({ db, cfg, onBack }) {
             </div>
             <select value={etapa} onChange={e => setEtapa(e.target.value)} style={{ ...inp, marginBottom: 8 }}>
               <option value="">— Etapa de obra (opcional) —</option>
-              {ETAPAS_OBRA.map(x => <option key={x} value={x}>{x}</option>)}
+              {etapasSelectObra(obras.find(o => o.id === obraId), modelosObra).map(x => <option key={x} value={x}>{x}</option>)}
             </select>
             <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título (ej: Cambio de nivel de platea)" style={inp} />
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción: qué pasó, por qué, quién lo pidió, qué implica…" rows={4} style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
@@ -5120,15 +5152,34 @@ function sumarDias(fecha, dias) { const d = new Date(fecha.getTime()); d.setDate
 // que termine Estructura), que es como realmente se trabaja en obra.
 function nuevoModeloEtapas() { return ETAPAS_OBRA.map(e => ({ etapa: e, usa: false, inicioOffsetDias: 0, duracionDias: 0 })); }
 function etapasModelo(modelo) { return (modelo?.etapas || []).filter(e => e.usa); }
+// Losas: a diferencia de las etapas fijas, la CANTIDAD de losas es lo que
+// define el tipo de proyecto (con subsuelo, sin subsuelo, más plantas…), así
+// que en vez de una lista fija son filas "Losa 1", "Losa 2"... que se agregan
+// o sacan solas según el número que se cargue, cada una con su propio inicio
+// y duración (igual que una etapa más).
+function losasModelo(modelo) { return modelo?.losas || []; }
+function nombreLosa(i) { return `Losa ${i + 1}`; }
 // Duración total estimada del modelo = el punto más lejano al que llega
-// cualquiera de sus etapas (offset + duración), no la suma de todas (porque
-// se superponen).
+// cualquiera de sus etapas o losas (offset + duración), no la suma de todas
+// (porque se superponen).
 function duracionTotalModelo(modelo) {
   const usadas = etapasModelo(modelo).filter(e => (Number(e.duracionDias) || 0) > 0);
-  if (!usadas.length) return 0;
-  return Math.max(...usadas.map(e => (Number(e.inicioOffsetDias) || 0) + (Number(e.duracionDias) || 0)));
+  const losas = losasModelo(modelo).filter(l => (Number(l.duracionDias) || 0) > 0);
+  const puntos = [
+    ...usadas.map(e => (Number(e.inicioOffsetDias) || 0) + (Number(e.duracionDias) || 0)),
+    ...losas.map(l => (Number(l.inicioOffsetDias) || 0) + (Number(l.duracionDias) || 0)),
+  ];
+  if (!puntos.length) return 0;
+  return Math.max(...puntos);
 }
 function modeloDeObra(obra, modelosObra) { return (modelosObra || []).find(m => m.id === obra?.modeloId) || null; }
+// Opciones de "Etapa de obra" para los selects: las 16 fijas + las losas
+// propias del modelo asignado a la obra (si tiene).
+function etapasSelectObra(obra, modelosObra) {
+  const modelo = modeloDeObra(obra, modelosObra);
+  const losas = losasModelo(modelo).map((_, i) => nombreLosa(i));
+  return [...ETAPAS_OBRA, ...losas];
+}
 // Cierre estimado = inicio + lo que marque el modelo asignado a la obra (si
 // tiene uno con etapas cargadas); si no, se cae a la duración contractual
 // en meses cargada a mano; si no, al campo "Cierre est." tipeado a mano.
@@ -5151,11 +5202,11 @@ function resumenEtapasModelo(obra, modelosObra, itemsObra) {
   const modelo = modeloDeObra(obra, modelosObra);
   if (!modelo) return [];
   const iniObra = parseFechaCorta(obra?.inicio);
-  return etapasModelo(modelo).map(cfg => {
-    const planInicio = iniObra ? sumarDias(iniObra, Number(cfg.inicioOffsetDias) || 0) : null;
-    const duracionPlan = Number(cfg.duracionDias) || 0;
+  const fila = (nombreEtapa, offsetDias, duracionDiasCfg) => {
+    const planInicio = iniObra ? sumarDias(iniObra, Number(offsetDias) || 0) : null;
+    const duracionPlan = Number(duracionDiasCfg) || 0;
     const planFin = planInicio && duracionPlan ? sumarDias(planInicio, duracionPlan) : null;
-    const its = (itemsObra || []).filter(it => it.etapa === cfg.etapa);
+    const its = (itemsObra || []).filter(it => it.etapa === nombreEtapa);
     const iniciosReales = its.map(it => it.fechaSolic).filter(Boolean);
     const realInicio = iniciosReales.length ? new Date(Math.min(...iniciosReales.map(d => +d))) : null;
     const todasCerradas = its.length > 0 && its.every(it => it.fechaReal);
@@ -5163,8 +5214,11 @@ function resumenEtapasModelo(obra, modelosObra, itemsObra) {
     const realFin = todasCerradas && finesReales.length ? new Date(Math.max(...finesReales.map(d => +d))) : null;
     const realDias = realInicio ? diasHabiles(realInicio, realFin || new Date()) : null;
     const desvio = (realDias != null && duracionPlan > 0) ? realDias - duracionPlan : null;
-    return { etapa: cfg.etapa, planInicio, planFin, duracionPlan, realInicio, realFin, realDias, desvio, enCurso: !!realInicio && !realFin };
-  });
+    return { etapa: nombreEtapa, planInicio, planFin, duracionPlan, realInicio, realFin, realDias, desvio, enCurso: !!realInicio && !realFin };
+  };
+  const filasEtapas = etapasModelo(modelo).map(cfg => fila(cfg.etapa, cfg.inicioOffsetDias, cfg.duracionDias));
+  const filasLosas = losasModelo(modelo).map((l, i) => fila(nombreLosa(i), l.inicioOffsetDias, l.duracionDias));
+  return [...filasEtapas, ...filasLosas];
 }
 
 function EmptyMsg({ children }) {
@@ -7374,7 +7428,7 @@ function GestionView({ db, cfg, onBack }) {
   const items = [...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
   // Filtro del listado de Registro (no toca Panel/Punitorios, que siguen viendo todo)
   const itemsFiltrados = items.filter(it => (filtroObra === "todas" || it.obra_id === filtroObra) && (filtroEtapa === "todas" || it.etapa === filtroEtapa));
-  const etapasUsadas = ETAPAS_OBRA.filter(e => items.some(it => it.etapa === e));
+  const etapasUsadas = [...new Set(items.map(it => it.etapa).filter(Boolean))];
   // Top 5 tareas con mayor diferencia (días), para ir directo al problema
   const topDesvios = items.filter(it => it.desvio > 0).sort((a, b) => b.desvio - a.desvio).slice(0, 5);
 
@@ -7958,7 +8012,7 @@ function GestionView({ db, cfg, onBack }) {
       })()}
 
       <FieldRow>
-        <Field label="Etapa de obra (opcional)"><Sel value={mForm.etapa || ""} onChange={e => setMForm({ ...mForm, etapa: e.target.value })}><option value="">— Sin etapa —</option>{ETAPAS_OBRA.map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
+        <Field label="Etapa de obra (opcional)"><Sel value={mForm.etapa || ""} onChange={e => setMForm({ ...mForm, etapa: e.target.value })}><option value="">— Sin etapa —</option>{etapasSelectObra(obras.find(o => o.id === mForm.obra_id), modelosObra).map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
         <Field label="Responsable / cuadrilla"><TInput value={mForm.responsable || ""} onChange={e => setMForm({ ...mForm, responsable: e.target.value })} placeholder="Ej: Cuadrilla propia, Gremio electricista…" /></Field>
       </FieldRow>
       <FieldRow>
