@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
 // Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
-const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
+const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
 
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
@@ -1821,7 +1821,12 @@ function ModelosObraView({ db, cfg, onBack }) {
     setEditId(null);
   }
   function updEtapa(modeloId, etapaNombre, patch) {
-    upd(modeloId, { etapas: (modelos.find(m => m.id === modeloId)?.etapas || nuevoModeloEtapas()).map(e => e.etapa === etapaNombre ? { ...e, ...patch } : e) });
+    const actuales = modelos.find(m => m.id === modeloId)?.etapas || [];
+    const existe = actuales.some(e => e.etapa === etapaNombre);
+    const etapas = existe
+      ? actuales.map(e => e.etapa === etapaNombre ? { ...e, ...patch } : e)
+      : [...actuales, { etapa: etapaNombre, usa: false, inicioOffsetDias: 0, duracionDias: 0, ...patch }];
+    upd(modeloId, { etapas });
   }
   // La cantidad de losas se escribe directo (es lo que define el tipo de
   // proyecto); al cambiar el número se agregan o sacan filas solas, sin
@@ -1850,7 +1855,7 @@ function ModelosObraView({ db, cfg, onBack }) {
         </Card>
         <Eyebrow>Etapas del modelo</Eyebrow>
         <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 20px 10px", marginLeft: 0 }}>Activá las etapas que use este modelo. "Arranca en el día" es desde el inicio de obra — podés poner etapas que se superpongan (ej: Mampostería arrancando antes de que termine Estructura).</div>
-        {(edit.etapas || nuevoModeloEtapas()).map(cfgE => (
+        {etapasModeloCompletas(edit).map(cfgE => (
           <Card key={cfgE.etapa} style={{ padding: "11px 13px", marginBottom: 8 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
               <input type="checkbox" checked={!!cfgE.usa} onChange={e => updEtapa(edit.id, cfgE.etapa, { usa: e.target.checked })} style={{ width: 17, height: 17 }} />
@@ -5152,6 +5157,13 @@ function sumarDias(fecha, dias) { const d = new Date(fecha.getTime()); d.setDate
 // que termine Estructura), que es como realmente se trabaja en obra.
 function nuevoModeloEtapas() { return ETAPAS_OBRA.map(e => ({ etapa: e, usa: false, inicioOffsetDias: 0, duracionDias: 0 })); }
 function etapasModelo(modelo) { return (modelo?.etapas || []).filter(e => e.usa); }
+// Para editar un modelo: siempre las 16 etapas actuales, aunque el modelo se
+// haya guardado antes de que existiera alguna (ej: si se agrega una etapa
+// nueva más adelante, los modelos viejos la muestran apagada, no se pierde).
+function etapasModeloCompletas(modelo) {
+  const guardadas = modelo?.etapas || [];
+  return ETAPAS_OBRA.map(nombre => guardadas.find(e => e.etapa === nombre) || { etapa: nombre, usa: false, inicioOffsetDias: 0, duracionDias: 0 });
+}
 // Losas: a diferencia de las etapas fijas, la CANTIDAD de losas es lo que
 // define el tipo de proyecto (con subsuelo, sin subsuelo, más plantas…), así
 // que en vez de una lista fija son filas "Losa 1", "Losa 2"... que se agregan
