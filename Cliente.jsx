@@ -34,7 +34,7 @@ const DOC_CATS = ["Documentación técnica", "Elementos de protección", "Otros 
 // Solo las etapas de obra gris + colocación de piso (lo único que hace V+V):
 // nada de techos/instalaciones/aberturas/pintura/terminaciones, eso lo hacen
 // otros subcontratistas.
-const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Contrapisos y carpetas", "Revoques", "Revestimientos y solados", "Limpieza de obra y entrega"];
+const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Contrapisos y carpetas", "Revoques interiores", "Revoques exteriores", "Albañilería (encuadres de baños y marcos de puertas)", "Revestimientos y solados", "Limpieza de obra y entrega"];
 
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
