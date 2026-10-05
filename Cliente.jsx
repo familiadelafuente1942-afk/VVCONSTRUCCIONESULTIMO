@@ -4511,11 +4511,13 @@ function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1);
 function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaReal || new Date(); const dias = diasHabiles(fechaSolic, fin); const desvio = dias - plazo; let estado; if (fechaReal || cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo"; else estado = desvio <= 0 ? "En plazo" : "Vencido"; return { dias, desvio, estado, retraso: Math.max(0, desvio) }; }
 // ── Tiempos de una obra SIN doble conteo ──────────────────────────────
 // Dos tareas que corren a la vez (y se atrasan a la vez) no suman sus
-// atrasos: el tiempo se mide sobre la línea de tiempo de la obra, contando
-// una sola vez los días en que hay más de una tarea en juego.
-//   estimado = días hábiles cubiertos por los plazos previstos de las tareas
-//   real     = días hábiles cubiertos por lo que efectivamente llevaron
-//   arranque = días hábiles perdidos por arrancar tarde (también sin repetir)
+// atrasos: se mide sobre la línea de tiempo de la obra y los días en que hay
+// más de un atraso en juego cuentan UNA sola vez.
+//   estimado = días hábiles que cubren los plazos previstos de las tareas
+//   desvío   = días hábiles de atraso (arranque tardío + ejecución pasada del
+//              plazo), sin repetir los que coinciden en el tiempo
+//   real     = estimado + desvío
+//   arranque = la parte del desvío que viene de arrancar tarde
 function addHabiles(d, n) { const c = new Date(d); c.setHours(0, 0, 0, 0); let k = 0; while (k < n) { c.setDate(c.getDate() + 1); const wd = c.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(c))) k++; } return c; }
 function habilesUnion(ivs) {
   const l = ivs.filter(([a, b]) => a && b && b > a).sort((x, y) => x[0] - y[0]);
@@ -4525,17 +4527,18 @@ function habilesUnion(ivs) {
   return tot;
 }
 function tiemposObra(its) {
-  const hoy = new Date(); const A = [], P = [], S = [];
+  const hoy = new Date(); const P = [], D = [], S = [];
   (its || []).forEach(it => {
     if (!it.fechaSolic) return;
     const ip = it.inicioPlan ? new Date(it.inicioPlan) : null;
     const iniPlan = ip && !isNaN(ip) ? ip : it.fechaSolic;
-    P.push([iniPlan, addHabiles(iniPlan, Number(it.plazo) || 0)]);
-    A.push([iniPlan < it.fechaSolic ? iniPlan : it.fechaSolic, it.fechaReal || hoy]);
-    if (iniPlan < it.fechaSolic) S.push([iniPlan, it.fechaSolic]);
+    const plazo = Number(it.plazo) || 0;
+    P.push([iniPlan, addHabiles(iniPlan, plazo)]);
+    if (iniPlan < it.fechaSolic) { S.push([iniPlan, it.fechaSolic]); D.push([iniPlan, it.fechaSolic]); }
+    D.push([addHabiles(it.fechaSolic, plazo), it.fechaReal || hoy]);
   });
-  const estimado = habilesUnion(P), real = habilesUnion(A), arranque = habilesUnion(S);
-  return { estimado, real, desvio: real - estimado, arranque };
+  const estimado = habilesUnion(P), desvio = habilesUnion(D), arranque = habilesUnion(S);
+  return { estimado, desvio, real: estimado + desvio, arranque };
 }
 const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "rgba(22,163,74,.14)" }, "En plazo": { c: "#3B82F6", b: "rgba(37,99,235,.14)" }, "Fuera de plazo": { c: "#F59E0B", b: "rgba(180,83,9,.14)" }, "Vencido": { c: "#EF4444", b: "rgba(239,68,68,.10)" } };
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
