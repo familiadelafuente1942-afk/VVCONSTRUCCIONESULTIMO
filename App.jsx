@@ -7403,6 +7403,19 @@ function GestionView({ db, cfg, onBack }) {
   const [selModo, setSelModo] = useState(false);       // armando PDF de registros elegidos
   const [selIds, setSelIds] = useState([]);
   const [pdfSel, setPdfSel] = useState(null);          // array de ids confirmado → muestra el PDF
+  const [guardandoPdf, setGuardandoPdf] = useState(false);
+  // En iPad/iPhone con la app instalada (modo standalone), el iframe.print()
+  // suele no hacer nada — iOS bloquea imprimir desde un iframe ahí adentro.
+  // "Guardar" usa el mismo generador de PDF real (html2pdf) que ya funciona
+  // bien en el resto de la app; "Imprimir" queda como atajo para PC/Safari
+  // normal, donde si funciona.
+  async function guardarPdfGestion(htmlString, nombreArchivo) {
+    setGuardandoPdf(true);
+    try { await guardarPdfComoArchivo(htmlString, nombreArchivo); }
+    catch (e) { alert("No se pudo guardar el PDF. Probá de nuevo."); }
+    setGuardandoPdf(false);
+  }
+  const slug = (s) => String(s || "").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "obra";
   const toggleSel = (id) => setSelIds(l => l.includes(id) ? l.filter(x => x !== id) : [...l, id]);
   const upd = (patch) => setGestion({ ...g, ...patch });
   const cli = cfg?.clienteNombre || "Belfast";
@@ -8123,7 +8136,8 @@ function GestionView({ db, cfg, onBack }) {
       <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfPunit(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Reclamo — {pdfPunit.descripcion}</div>
-        <button onClick={() => { const f = document.getElementById("punit-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+        <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlPunit(pdfPunit), `Reclamo_${slug(pdfPunit.descripcion)}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
+        <button onClick={() => { const f = document.getElementById("punit-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Imprimir</button>
       </div>
       <iframe id="punit-pdf" srcDoc={htmlPunit(pdfPunit)} title="Reclamo punitorio" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
@@ -8132,7 +8146,8 @@ function GestionView({ db, cfg, onBack }) {
       <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfReg(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Registro — {pdfReg.descripcion}</div>
-        <button onClick={() => { const f = document.getElementById("reg-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+        <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlRegistro(pdfReg), `Registro_${slug(pdfReg.descripcion)}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
+        <button onClick={() => { const f = document.getElementById("reg-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Imprimir</button>
       </div>
       <iframe id="reg-pdf" srcDoc={htmlRegistro(pdfReg)} title="Registro" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
@@ -8141,7 +8156,8 @@ function GestionView({ db, cfg, onBack }) {
       <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfInforme(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe de situación — {obraNom(obras, pdfInforme)}</div>
-        <button onClick={() => { const f = document.getElementById("informe-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+        <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlInformeObra(pdfInforme), `Informe_${slug(obraNom(obras, pdfInforme))}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
+        <button onClick={() => { const f = document.getElementById("informe-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Imprimir</button>
       </div>
       <iframe id="informe-pdf" srcDoc={htmlInformeObra(pdfInforme)} title="Informe de situación" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
@@ -8150,7 +8166,8 @@ function GestionView({ db, cfg, onBack }) {
       <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => { setPdfSel(null); setSelModo(false); setSelIds([]); }} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Registros seleccionados ({pdfSel.length})</div>
-        <button onClick={() => { const f = document.getElementById("sel-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
+        <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlInformeSeleccion(pdfSel), `Registros_seleccionados_${new Date().toISOString().slice(0, 10)}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
+        <button onClick={() => { const f = document.getElementById("sel-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Imprimir</button>
       </div>
       <iframe id="sel-pdf" srcDoc={htmlInformeSeleccion(pdfSel)} title="Registros seleccionados" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
