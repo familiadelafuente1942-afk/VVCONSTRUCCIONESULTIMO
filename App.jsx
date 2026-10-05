@@ -646,12 +646,13 @@ async function guardarPdfComoArchivo(htmlString, nombreArchivo) {
   // blanco (bug conocido). En cambio lo dejamos en la esquina (0,0) pero con
   // z-index bajo, tapado por el cartel de vista previa que ya cubre toda la
   // pantalla — así nunca se ve, pero sí se puede capturar bien.
-  // CORRECCIÓN (PDF en blanco): NO usar position:fixed acá. html2pdf copia el
-  // contenedor con su estilo inline, y un "fixed" copiado adentro de su propia
-  // capa de captura se dibuja vacío (probado: con fixed sale 1 página en
-  // blanco; en el flujo normal sale completo). Va en el flujo normal, al final
-  // de la página, tapado por el cartel de vista previa que cubre la pantalla.
-  cont.style.position = "relative"; cont.style.width = "800px"; cont.style.background = "#fff"; cont.style.pointerEvents = "none";
+  // El contenido a capturar (cont) va en el flujo normal, SIN position:fixed
+  // propio (probado: un "fixed" copiado por el generador sale en blanco), pero
+  // dentro de un marco fijo en la esquina (0,0) y debajo del cartel de vista
+  // previa — en iPad la captura sale corrida si el contenido no está ahí.
+  const marco = document.createElement("div");
+  marco.style.position = "fixed"; marco.style.left = "0"; marco.style.top = "0"; marco.style.width = "800px"; marco.style.zIndex = "1"; marco.style.pointerEvents = "none"; marco.style.overflow = "visible";
+  cont.style.width = "800px"; cont.style.background = "#fff";
   const styleEl = parsed.querySelector("style");
   let cssTexto = styleEl ? styleEl.textContent : "";
   // Las reglas "html,body{...}" y "@page{...}" del documento de vista previa
@@ -665,7 +666,8 @@ async function guardarPdfComoArchivo(htmlString, nombreArchivo) {
   const bodyRule = cssTexto.match(/(?:^|[}\s])body\s*\{([^}]*)\}/);
   if (bodyRule) inner.style.cssText += ";" + bodyRule[1];
   cont.appendChild(inner);
-  document.body.appendChild(cont);
+  marco.appendChild(cont);
+  document.body.appendChild(marco);
   // Esperamos a que las fotos (si las hay) terminen de cargar, y a que el
   // navegador termine de pintar el contenido, antes de capturar.
   const imgs = Array.from(cont.querySelectorAll("img"));
@@ -680,10 +682,10 @@ async function guardarPdfComoArchivo(htmlString, nombreArchivo) {
   const blob = await html2pdf().from(cont).set({
     margin: 0,
     filename: nombreArchivo,
-    html2canvas: { scale: escala, useCORS: true, windowWidth: 800, backgroundColor: "#ffffff" },
+    html2canvas: { scale: escala, useCORS: true, windowWidth: 800, x: 0, y: 0, scrollX: 0, scrollY: 0, backgroundColor: "#ffffff" },
     jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
   }).outputPdf("blob");
-  document.body.removeChild(cont);
+  document.body.removeChild(marco);
   const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const file = new File([blob], nombreArchivo, { type: "application/pdf" });
   if (esIOS) {
