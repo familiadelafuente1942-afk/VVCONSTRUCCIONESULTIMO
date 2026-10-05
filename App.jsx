@@ -7394,7 +7394,7 @@ const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMon
 const isoHoy = () => new Date().toISOString().slice(0, 10);
 
 const CATEGORIAS_DESVIO = ["Evitable", "No evitable"];
-const CAUSAS_EVITABLE = ["Mano de obra (rendimiento/ausentismo)", "Error de proyecto / planos", "Falta de coordinación entre gremios", "Falta de materiales en obra (compra tardía)", "Rotura o falla de herramienta/equipo", "Incumplimiento de subcontratista", "Reproceso / trabajo mal ejecutado", "Falta de personal asignado", "Otro"];
+const CAUSAS_EVITABLE = ["Mano de obra (rendimiento/ausentismo)", "Error de proyecto / planos", "Error de diseño", "Falta de documentación", "Error en el pliego", "Falta de contrato / subcontrato", "Falta de coordinación entre gremios", "Falta de coordinación general de obra", "Falta de materiales en obra (compra tardía)", "Falta de materiales para el subcontrato", "Rotura o falla de herramienta/equipo", "Incumplimiento de subcontratista", "Reproceso / trabajo mal ejecutado", "Falta de personal asignado", "Otro"];
 const CAUSAS_NO_EVITABLE = ["Clima", "Falta de definición del cliente", "Espera de aprobación / permiso municipal", "Falta de pago / certificación del cliente", "Provisión pendiente por parte del cliente", "Cambio de alcance / adicional solicitado", "Caso fortuito / fuerza mayor", "Otro"];
 function causaTexto(it) { return it?.causa === "Otro" && it?.causaDetalle ? it.causaDetalle : (it?.causa || ""); }
 // Un registro puede ser imputable a más de una empresa a la vez (ej: Belfast
