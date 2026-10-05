@@ -7420,13 +7420,19 @@ function afectadasTexto(it) {
   if (it?.afectadasDetalle) partes.push(una(it.afectadasDetalle, it.afectadasDetalleFin));
   return partes.filter(Boolean).join(" · ");
 }
-function afectadasLeyenda(it) {
+function afectadasLeyendaAuto(it) {
   const l = [...(Array.isArray(it?.afectadas) ? it.afectadas : []), ...(it?.afectadasDetalle ? [it.afectadasDetalle] : [])];
   if (!l.length) return "";
   const cert = [...(it?.etapa ? [it.etapa] : []), ...l].map(n => "certificado de " + String(n).toLowerCase());
   const lista = cert.length > 1 ? cert.slice(0, -1).join(", ") + " y " + cert[cert.length - 1] : cert[0];
   const nums = ["", "un", "dos", "tres", "cuatro", "cinco", "seis"];
   return `Esto atrasó el cobro de la terminación de ${cert.length > 1 ? (nums[cert.length] || cert.length) + " certificados" : "un certificado"}: ${lista}.`;
+}
+// La leyenda es editable: si se escribió una a mano (it.leyendaAfecta) se usa esa
+// (aunque sea con el impacto económico); si no, la sugerida.
+function afectadasLeyenda(it) {
+  if (typeof it?.leyendaAfecta === "string") return it.leyendaAfecta.trim();
+  return afectadasLeyendaAuto(it);
 }
 function causaTexto(it) { return causasDe(it).join(" + "); }
 // A quién se le imputa por defecto cada causa (se puede cambiar a mano en
@@ -7646,7 +7652,7 @@ function GestionView({ db, cfg, onBack }) {
         <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
         <tr><td>Diferencia (real vs. estimado)</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio} días</td></tr>
         ${afectadasTexto(it) ? `<tr><td>Tarea/etapa afectada por el retraso</td><td>${_e(afectadasTexto(it))}</td></tr>` : ""}
-        ${afectadasLeyenda(it) ? `<tr><td colspan="2" style="background:#FEF3C7;color:#92400E"><b>${_e(afectadasLeyenda(it))}</b></td></tr>` : ""}
+        ${afectadasLeyenda(it) ? `<tr><td colspan="2" style="background:#FEF3C7;color:#92400E"><b>${_e(afectadasLeyenda(it)).replace(/\n/g, "<br/>")}</b></td></tr>` : ""}
         ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(causaTexto(it))}${it.categoriaDesvio ? ` <span style="color:#94A3B8">(${_e(it.categoriaDesvio)})</span>` : ""}</td></tr>` : ""}
         ${(Number(it.diasClima) || 0) > 0 ? `<tr><td>Días de clima / fuerza mayor (no imputables)</td><td>${it.diasClima} días</td></tr><tr><td><b>Retraso imputable neto</b></td><td><b>${it.retraso} días</b></td></tr>` : ""}
         <tr><td>Estado</td><td>${_e(it.estado)}</td></tr>
@@ -7689,7 +7695,7 @@ function GestionView({ db, cfg, onBack }) {
         <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
         <tr><td>Diferencia (real vs. estimado)</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio} días</td></tr>
         ${afectadasTexto(it) ? `<tr><td>Tarea/etapa afectada por el retraso</td><td>${_e(afectadasTexto(it))}</td></tr>` : ""}
-        ${afectadasLeyenda(it) ? `<tr><td colspan="2" style="background:#FEF3C7;color:#92400E"><b>${_e(afectadasLeyenda(it))}</b></td></tr>` : ""}
+        ${afectadasLeyenda(it) ? `<tr><td colspan="2" style="background:#FEF3C7;color:#92400E"><b>${_e(afectadasLeyenda(it)).replace(/\n/g, "<br/>")}</b></td></tr>` : ""}
         ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(causaTexto(it))}${it.categoriaDesvio ? ` <span style="color:#94A3B8">(${_e(it.categoriaDesvio)})</span>` : ""}</td></tr>` : ""}
         ${(Number(it.diasClima) || 0) > 0 ? `<tr><td>Días de clima / fuerza mayor (no imputables)</td><td>${it.diasClima} días</td></tr><tr><td><b>Retraso imputable neto</b></td><td><b>${it.retraso} días</b></td></tr>` : ""}
         <tr><td>Estado</td><td>${_e(it.estado)}</td></tr>
@@ -7889,7 +7895,8 @@ function GestionView({ db, cfg, onBack }) {
             {conRegistro && !selModo && <button onClick={() => setPdfReg(it)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
             {conRegistro && !selModo && <button onClick={() => borrarRegistro(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>}
           </div>
-          {afectadasTexto(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 4 }}>Afecta a: <b>{afectadasTexto(it)}</b><div style={{ marginTop: 3, fontWeight: 700 }}>{afectadasLeyenda(it)}</div></div>}
+          {afectadasTexto(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 4 }}>Afecta a: <b>{afectadasTexto(it)}</b></div>}
+          {afectadasLeyenda(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 3, fontWeight: 700, whiteSpace: "pre-wrap" }}>{afectadasLeyenda(it)}</div>}
           {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${causaTexto(it)}${it.categoriaDesvio ? ` (${it.categoriaDesvio})` : ""}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (retraso imputable: ${it.retraso} d)` : ""}</div>}
           {((it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)) && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
             {(it.fotosInicio || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer" style={{ textAlign: "center" }}><img src={f.url} title={f.fecha ? `Inicio · ${fmtFechaCorta(new Date(f.fecha))}` : "Inicio"} style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #16A34A", display: "block" }} />{f.fecha && <div style={{ fontSize: 8.5, color: T.muted }}>{fmtFechaCorta(new Date(f.fecha))}</div>}</a>)}
@@ -8160,6 +8167,9 @@ function GestionView({ db, cfg, onBack }) {
             <input type="date" value={mForm.afectadasDetalleFin || ""} onChange={e => setMForm({ ...mForm, afectadasDetalleFin: e.target.value })} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text }} />
           </div>}
         </div>}
+        <div style={{ marginTop: 10, fontSize: 11, fontWeight: 700, color: T.sub }}>Leyenda del registro (editable — podés agregar el impacto económico)</div>
+        <textarea value={typeof mForm.leyendaAfecta === "string" ? mForm.leyendaAfecta : afectadasLeyendaAuto(mForm)} onChange={e => setMForm({ ...mForm, leyendaAfecta: e.target.value })} rows={4} placeholder="Ej: Esto atrasó el cobro de dos certificados… Perjuicio económico: …" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text, marginTop: 4, fontFamily: "inherit" }} />
+        {typeof mForm.leyendaAfecta === "string" && <button type="button" onClick={() => setMForm({ ...mForm, leyendaAfecta: undefined })} style={{ background: "none", border: "none", color: T.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "4px 0" }}>Volver al texto sugerido</button>}
         <div style={{ fontSize: 10.5, color: T.muted, marginTop: 5, lineHeight: 1.4 }}>Qué trabajo posterior se corrió por este atraso (ej: 56 días en estructura → se atrasó la mampostería). Los días se cuentan desde que terminó este registro (cuando se destrabó). Abajo del registro queda una leyenda sobre los certificados cuyo cobro se atrasó.</div>
       </Field>
       <FieldRow>

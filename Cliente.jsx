@@ -4816,13 +4816,19 @@ function afectadasTexto(it) {
   if (it?.afectadasDetalle) partes.push(una(it.afectadasDetalle, it.afectadasDetalleFin));
   return partes.filter(Boolean).join(" · ");
 }
-function afectadasLeyenda(it) {
+function afectadasLeyendaAuto(it) {
   const l = [...(Array.isArray(it?.afectadas) ? it.afectadas : []), ...(it?.afectadasDetalle ? [it.afectadasDetalle] : [])];
   if (!l.length) return "";
   const cert = [...(it?.etapa ? [it.etapa] : []), ...l].map(n => "certificado de " + String(n).toLowerCase());
   const lista = cert.length > 1 ? cert.slice(0, -1).join(", ") + " y " + cert[cert.length - 1] : cert[0];
   const nums = ["", "un", "dos", "tres", "cuatro", "cinco", "seis"];
   return `Esto atrasó el cobro de la terminación de ${cert.length > 1 ? (nums[cert.length] || cert.length) + " certificados" : "un certificado"}: ${lista}.`;
+}
+// La leyenda es editable: si se escribió una a mano (it.leyendaAfecta) se usa esa
+// (aunque sea con el impacto económico); si no, la sugerida.
+function afectadasLeyenda(it) {
+  if (typeof it?.leyendaAfecta === "string") return it.leyendaAfecta.trim();
+  return afectadasLeyendaAuto(it);
 }
 function causaTexto(it) { return causasDe(it).join(" + "); }
 // Un registro puede ser imputable a más de una empresa a la vez. imputables
@@ -4891,7 +4897,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
 
   // ── PDF del plan de gestión completo (solo lectura, mismo criterio que V+V) ──
   function htmlReporte() {
-    const filaReg = (it) => `<tr><td>${_e(it.tipo)}</td><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8">${_e(it.etapa)}</span>` : ""}</td><td>${_e(nomObra(it.obra_id))}</td><td>${_e(imputablesTexto(it))}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "—"}</td><td>${it.desvio > 0 ? "+" : ""}${it.desvio}${(Number(it.diasClima) || 0) > 0 ? `<br/><span style="color:#94A3B8">-${it.diasClima} clima</span>` : ""}</td><td>${_e(it.estado)}${it.causa ? `<br/><span style="color:#94A3B8">${_e(causaTexto(it))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</span>` : ""}${afectadasTexto(it) ? `<br/><span style="color:#B45309">Afecta: ${_e(afectadasTexto(it))}<br/><b>${_e(afectadasLeyenda(it))}</b></span>` : ""}</td></tr>`;
+    const filaReg = (it) => `<tr><td>${_e(it.tipo)}</td><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8">${_e(it.etapa)}</span>` : ""}</td><td>${_e(nomObra(it.obra_id))}</td><td>${_e(imputablesTexto(it))}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "—"}</td><td>${it.desvio > 0 ? "+" : ""}${it.desvio}${(Number(it.diasClima) || 0) > 0 ? `<br/><span style="color:#94A3B8">-${it.diasClima} clima</span>` : ""}</td><td>${_e(it.estado)}${it.causa ? `<br/><span style="color:#94A3B8">${_e(causaTexto(it))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</span>` : ""}${afectadasTexto(it) ? `<br/><span style="color:#B45309">Afecta: ${_e(afectadasTexto(it))}</span>` : ""}${afectadasLeyenda(it) ? `<br/><span style="color:#B45309"><b>${_e(afectadasLeyenda(it)).replace(/\n/g, "<br/>")}</b></span>` : ""}</td></tr>`;
     const filaPunit = (it) => `<tr><td>${_e(it.descripcion)}</td><td>${_e(it.dec?.tarea || "—")}</td><td>${Number(it.dec?.personas) || g.dotacion}</td><td>${money(Number(it.dec?.costoDia) || g.costoPersona)}</td><td>${money(perItem(it))}</td></tr>`;
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0;padding:12px;word-wrap:break-word}
@@ -4934,7 +4940,8 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
           <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{imputablesTexto(it)}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
           {(it.responsable || (it.personalIds && it.personalIds.length > 0)) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{it.responsable ? `Responsable: ${it.responsable}` : ""}{it.responsable && it.personalIds?.length ? " · " : ""}{it.personalIds?.length ? `Personal: ${it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", ")}` : ""}</div>}
           <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>Inicio {fmtD(it.fechaSolic)} · {it.fechaReal ? `fin ${fmtD(it.fechaReal)}` : "sin terminar"} · estimado {it.plazo} d · <b style={{ color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>diferencia {it.desvio > 0 ? "+" : ""}{it.desvio}</b></div>
-          {afectadasTexto(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 4 }}>Afecta a: <b>{afectadasTexto(it)}</b><div style={{ marginTop: 3, fontWeight: 700 }}>{afectadasLeyenda(it)}</div></div>}
+          {afectadasTexto(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 4 }}>Afecta a: <b>{afectadasTexto(it)}</b></div>}
+          {afectadasLeyenda(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 3, fontWeight: 700, whiteSpace: "pre-wrap" }}>{afectadasLeyenda(it)}</div>}
           {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${causaTexto(it)}${it.categoriaDesvio ? ` (${it.categoriaDesvio})` : ""}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (imputable: ${it.retraso} d)` : ""}</div>}
           {((it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)) && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
             {(it.fotosInicio || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer" style={{ textAlign: "center" }}><img src={f.url} title={f.fecha ? `Inicio · ${fmtD(new Date(f.fecha))}` : "Inicio"} style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #16A34A", display: "block" }} />{f.fecha && <div style={{ fontSize: 8.5, color: T.muted }}>{fmtD(new Date(f.fecha))}</div>}</a>)}
