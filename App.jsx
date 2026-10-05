@@ -7704,7 +7704,10 @@ function GestionView({ db, cfg, onBack }) {
   function resumenObra(obraId) {
     const its = items.filter(it => it.obra_id === obraId).sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0));
     const totalEstimado = its.reduce((a, i) => a + (Number(i.plazo) || 0), 0);
-    const totalReal = its.reduce((a, i) => a + (i.dias || 0), 0);
+    // "Real" = días de ejecución + días perdidos por arrancar tarde, así
+    // estimado + desvío = real (el desvío total ya incluye el atraso de arranque).
+    const totalRetrasoIni0 = its.reduce((a, i) => a + (Number(i.retrasoInicio) || 0), 0);
+    const totalReal = its.reduce((a, i) => a + (i.dias || 0), 0) + totalRetrasoIni0;
     // totalDesvio ya incluye el atraso de arranque de cada ítem (i.desvio =
     // desvío de ejecución + atraso de arranque), para que el total de la obra
     // sea la suma real de lo que muestra cada registro.
