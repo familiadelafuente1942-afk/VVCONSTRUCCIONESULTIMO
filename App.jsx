@@ -7389,6 +7389,34 @@ const FERIADOS = new Set([
 const _isoDe = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(cur))) n++; } return n; }
 function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaReal || new Date(); const dias = diasHabiles(fechaSolic, fin); const desvio = dias - plazo; let estado; if (fechaReal || cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo"; else estado = desvio <= 0 ? "En plazo" : "Vencido"; return { dias, desvio, estado, retraso: Math.max(0, desvio) }; }
+// ── Tiempos de una obra SIN doble conteo ──────────────────────────────
+// Dos tareas que corren a la vez (y se atrasan a la vez) no suman sus
+// atrasos: el tiempo se mide sobre la línea de tiempo de la obra, contando
+// una sola vez los días en que hay más de una tarea en juego.
+//   estimado = días hábiles cubiertos por los plazos previstos de las tareas
+//   real     = días hábiles cubiertos por lo que efectivamente llevaron
+//   arranque = días hábiles perdidos por arrancar tarde (también sin repetir)
+function addHabiles(d, n) { const c = new Date(d); c.setHours(0, 0, 0, 0); let k = 0; while (k < n) { c.setDate(c.getDate() + 1); const wd = c.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(c))) k++; } return c; }
+function habilesUnion(ivs) {
+  const l = ivs.filter(([a, b]) => a && b && b > a).sort((x, y) => x[0] - y[0]);
+  let tot = 0, cs = null, ce = null;
+  for (const [a, b] of l) { if (cs === null) { cs = a; ce = b; } else if (a <= ce) { if (b > ce) ce = b; } else { tot += diasHabiles(cs, ce); cs = a; ce = b; } }
+  if (cs !== null) tot += diasHabiles(cs, ce);
+  return tot;
+}
+function tiemposObra(its) {
+  const hoy = new Date(); const A = [], P = [], S = [];
+  (its || []).forEach(it => {
+    if (!it.fechaSolic) return;
+    const ip = it.inicioPlan ? new Date(it.inicioPlan) : null;
+    const iniPlan = ip && !isNaN(ip) ? ip : it.fechaSolic;
+    P.push([iniPlan, addHabiles(iniPlan, Number(it.plazo) || 0)]);
+    A.push([iniPlan < it.fechaSolic ? iniPlan : it.fechaSolic, it.fechaReal || hoy]);
+    if (iniPlan < it.fechaSolic) S.push([iniPlan, it.fechaSolic]);
+  });
+  const estimado = habilesUnion(P), real = habilesUnion(A), arranque = habilesUnion(S);
+  return { estimado, real, desvio: real - estimado, arranque };
+}
 const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "rgba(22,163,74,.14)" }, "En plazo": { c: "#3B82F6", b: "rgba(37,99,235,.14)" }, "Fuera de plazo": { c: "#F59E0B", b: "rgba(180,83,9,.14)" }, "Vencido": { c: "#EF4444", b: "rgba(239,68,68,.10)" } };
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 const isoHoy = () => new Date().toISOString().slice(0, 10);
@@ -7756,20 +7784,16 @@ function GestionView({ db, cfg, onBack }) {
   // o el informe de estado de situación con el cliente.
   function resumenObra(obraId) {
     const its = items.filter(it => it.obra_id === obraId).sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0));
-    const totalEstimado = its.reduce((a, i) => a + (Number(i.plazo) || 0), 0);
-    // "Real" = días de ejecución + días perdidos por arrancar tarde, así
-    // estimado + desvío = real (el desvío total ya incluye el atraso de arranque).
-    const totalRetrasoIni0 = its.reduce((a, i) => a + (Number(i.retrasoInicio) || 0), 0);
-    const totalReal = its.reduce((a, i) => a + (i.dias || 0), 0) + totalRetrasoIni0;
-    // totalDesvio ya incluye el atraso de arranque de cada ítem (i.desvio =
-    // desvío de ejecución + atraso de arranque), para que el total de la obra
-    // sea la suma real de lo que muestra cada registro.
-    const totalDesvio = its.reduce((a, i) => a + (Number(i.desvio) || 0), 0);
+    // Totales de la obra SIN doble conteo: las tareas que corren a la vez no suman
+    // sus atrasos (ver tiemposObra). Los desvíos por tarea siguen viéndose
+    // tarea por tarea; su simple suma queda en sumaDesvios solo como base de %.
+    const tt = tiemposObra(its);
+    const totalEstimado = tt.estimado;
+    const totalReal = tt.real;
+    const totalDesvio = tt.desvio;
+    const sumaDesvios = its.reduce((a, i) => a + (Number(i.desvio) || 0), 0);
     const totalClima = its.reduce((a, i) => a + (Number(i.diasClima) || 0), 0);
-    // Atraso de ARRANQUE acumulado — ya está sumado dentro de totalDesvio;
-    // se calcula aparte solo para poder mostrar el desglose por causa y
-    // explicar cuánto de ese desvío viene de arranques tardíos.
-    const totalRetrasoInicio = its.reduce((a, i) => a + (Number(i.retrasoInicio) || 0), 0);
+    const totalRetrasoInicio = tt.arranque;
     const porCausaInicio = {};
     its.forEach(i => { if ((i.retrasoInicio || 0) > 0) { const c = causaTexto(i) || "Sin causa asignada"; porCausaInicio[c] = (porCausaInicio[c] || 0) + i.retrasoInicio; } });
     const porCausa = {};
@@ -7778,7 +7802,7 @@ function GestionView({ db, cfg, onBack }) {
     const desde = its[0]?.fechaSolic || null;
     const ob = obras.find(o => o.id === obraId);
     const etapas = resumenEtapasModelo(ob, modelosObra, its);
-    return { its, totalEstimado, totalReal, totalDesvio, totalClima, porCausa, porCategoria, desde, etapas, totalRetrasoInicio, porCausaInicio };
+    return { its, totalEstimado, totalReal, totalDesvio, sumaDesvios, totalClima, porCausa, porCategoria, desde, etapas, totalRetrasoInicio, porCausaInicio };
   }
   function htmlInformeObra(obraId) {
     const ob = obras.find(o => o.id === obraId);
@@ -7820,11 +7844,11 @@ function GestionView({ db, cfg, onBack }) {
       ${Object.entries(r.porCausaInicio).sort((a, b) => b[1] - a[1]).map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td></tr>`).join("")}</table>` : ""}
       <h2>Desvío por categoría</h2>
       <table><tr><th>Categoría</th><th>Días de desvío</th><th>% del desvío total</th></tr>
-      ${categorias.length ? categorias.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
+      ${categorias.length ? categorias.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.sumaDesvios > 0 ? Math.round(d / r.sumaDesvios * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
       <h2>Desvío por causa</h2>
-      <div style="font-size:9.5px;color:#94A3B8;margin-bottom:4px">Si una demora tiene varias causas, sus días se cuentan en cada una (por eso los porcentajes pueden sumar más de 100%).</div>
+      <div style="font-size:9.5px;color:#94A3B8;margin-bottom:4px">Si una demora tiene varias causas, sus días se cuentan en cada una (por eso los porcentajes pueden sumar más de 100%). Los días son por tarea: tareas simultáneas no se suman en el desvío total de la obra.</div>
       <table><tr><th>Causa</th><th>Días de desvío</th><th>% del desvío total</th></tr>
-      ${causas.length ? causas.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
+      ${causas.length ? causas.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.sumaDesvios > 0 ? Math.round(d / r.sumaDesvios * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
       <h2>Detalle de tareas (${r.its.length})</h2>
       <table><tr><th>Tarea</th><th>Inicio</th><th>Fin</th><th>Estimado</th><th>Real</th><th>Desvío</th><th>Causa</th></tr>
       ${r.its.length ? r.its.map(filaTarea).join("") : `<tr><td colspan="7" style="text-align:center;color:#94A3B8">Sin registros</td></tr>`}</table>
