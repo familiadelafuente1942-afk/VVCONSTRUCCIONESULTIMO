@@ -7402,9 +7402,22 @@ function causasDe(it) {
   const l = Array.isArray(it?.causas) && it.causas.length ? it.causas : (it?.causa ? [it.causa] : []);
   return l.map(c => c === "Otro" && it?.causaDetalle ? it.causaDetalle : c);
 }
+// Tareas/etapas que se corrieron por el retraso de este registro, cada una con
+// (opcional) la fecha en que terminó; se muestra cuántos días hábiles pasaron
+// desde el inicio del registro que originó el retraso.
 function afectadasTexto(it) {
   const l = Array.isArray(it?.afectadas) ? it.afectadas : [];
-  return [...l, it?.afectadasDetalle ? it.afectadasDetalle : ""].filter(Boolean).join(" · ");
+  const fines = it?.afectadasFin || {};
+  const dmy = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : ""; };
+  const desde = it?.fechaSolic instanceof Date ? it.fechaSolic : (it?.fechaSolic ? new Date(it.fechaSolic) : null);
+  const una = (nombre, fin) => {
+    if (!fin) return nombre;
+    const d = desde && !isNaN(desde) ? diasHabiles(desde, new Date(fin + "T12:00:00")) : null;
+    return `${nombre} (terminó el ${dmy(fin)}${d != null ? ` · ${d} d hábiles desde el inicio del retraso` : ""})`;
+  };
+  const partes = l.map(n => una(n, fines[n]));
+  if (it?.afectadasDetalle) partes.push(una(it.afectadasDetalle, it.afectadasDetalleFin));
+  return partes.filter(Boolean).join(" · ");
 }
 function causaTexto(it) { return causasDe(it).join(" + "); }
 // A quién se le imputa por defecto cada causa (se puede cambiar a mano en
@@ -8125,6 +8138,17 @@ function GestionView({ db, cfg, onBack }) {
           })}
         </div>
         <TInput value={mForm.afectadasDetalle || ""} onChange={e => setMForm({ ...mForm, afectadasDetalle: e.target.value })} placeholder="Detalle (opcional): ej. terminación de mampostería PB" extraStyle={{ marginTop: 8 }} />
+        {((Array.isArray(mForm.afectadas) ? mForm.afectadas : []).length > 0 || mForm.afectadasDetalle) && <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub }}>¿Cuándo terminó cada una? (opcional — si todavía está en curso, dejalo vacío)</div>
+          {(Array.isArray(mForm.afectadas) ? mForm.afectadas : []).map(n => <div key={n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, fontSize: 12.5, color: T.text }}>{n}</div>
+            <input type="date" value={(mForm.afectadasFin || {})[n] || ""} onChange={e => setMForm({ ...mForm, afectadasFin: { ...(mForm.afectadasFin || {}), [n]: e.target.value } })} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text }} />
+          </div>)}
+          {mForm.afectadasDetalle && <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, fontSize: 12.5, color: T.text }}>{mForm.afectadasDetalle}</div>
+            <input type="date" value={mForm.afectadasDetalleFin || ""} onChange={e => setMForm({ ...mForm, afectadasDetalleFin: e.target.value })} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text }} />
+          </div>}
+        </div>}
         <div style={{ fontSize: 10.5, color: T.muted, marginTop: 5, lineHeight: 1.4 }}>Qué trabajo posterior se corrió por este atraso (ej: 56 días en estructura → se atrasó la mampostería).</div>
       </Field>
       <FieldRow>

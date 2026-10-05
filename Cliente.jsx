@@ -4798,9 +4798,22 @@ function causasDe(it) {
   const l = Array.isArray(it?.causas) && it.causas.length ? it.causas : (it?.causa ? [it.causa] : []);
   return l.map(x => x === "Otro" && it?.causaDetalle ? it.causaDetalle : x);
 }
+// Tareas/etapas que se corrieron por el retraso de este registro, cada una con
+// (opcional) la fecha en que terminó; se muestra cuántos días hábiles pasaron
+// desde el inicio del registro que originó el retraso.
 function afectadasTexto(it) {
   const l = Array.isArray(it?.afectadas) ? it.afectadas : [];
-  return [...l, it?.afectadasDetalle ? it.afectadasDetalle : ""].filter(Boolean).join(" · ");
+  const fines = it?.afectadasFin || {};
+  const dmy = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : ""; };
+  const desde = it?.fechaSolic instanceof Date ? it.fechaSolic : (it?.fechaSolic ? new Date(it.fechaSolic) : null);
+  const una = (nombre, fin) => {
+    if (!fin) return nombre;
+    const d = desde && !isNaN(desde) ? diasHabiles(desde, new Date(fin + "T12:00:00")) : null;
+    return `${nombre} (terminó el ${dmy(fin)}${d != null ? ` · ${d} d hábiles desde el inicio del retraso` : ""})`;
+  };
+  const partes = l.map(n => una(n, fines[n]));
+  if (it?.afectadasDetalle) partes.push(una(it.afectadasDetalle, it.afectadasDetalleFin));
+  return partes.filter(Boolean).join(" · ");
 }
 function causaTexto(it) { return causasDe(it).join(" + "); }
 // Un registro puede ser imputable a más de una empresa a la vez. imputables
