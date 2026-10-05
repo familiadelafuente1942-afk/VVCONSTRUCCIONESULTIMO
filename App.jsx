@@ -7396,7 +7396,21 @@ const isoHoy = () => new Date().toISOString().slice(0, 10);
 const CATEGORIAS_DESVIO = ["Evitable", "No evitable"];
 const CAUSAS_EVITABLE = ["Mano de obra (rendimiento/ausentismo)", "Error de proyecto / planos", "Error de diseño", "Falta de documentación", "Error en el pliego", "Falta de contrato / subcontrato", "Falta de coordinación entre gremios", "Falta de coordinación general de obra", "Falta de materiales en obra (compra tardía)", "Falta de materiales para el subcontrato", "Rotura o falla de herramienta/equipo", "Incumplimiento de subcontratista", "Reproceso / trabajo mal ejecutado", "Falta de personal asignado", "Otro"];
 const CAUSAS_NO_EVITABLE = ["Clima", "Falta de definición del cliente", "Espera de aprobación / permiso municipal", "Falta de pago / certificación del cliente", "Provisión pendiente por parte del cliente", "Cambio de alcance / adicional solicitado", "Caso fortuito / fuerza mayor", "Otro"];
-function causaTexto(it) { return it?.causa === "Otro" && it?.causaDetalle ? it.causaDetalle : (it?.causa || ""); }
+// Un registro puede tener VARIAS causas (it.causas). it.causa (texto) queda
+// como la primera, por compatibilidad con registros viejos.
+function causasDe(it) {
+  const l = Array.isArray(it?.causas) && it.causas.length ? it.causas : (it?.causa ? [it.causa] : []);
+  return l.map(c => c === "Otro" && it?.causaDetalle ? it.causaDetalle : c);
+}
+function causaTexto(it) { return causasDe(it).join(" + "); }
+// A quién se le imputa por defecto cada causa (se puede cambiar a mano en
+// "Imputable a"): "CLI" = la constructora (Belfast), "Estudio" o "V+V".
+const CAUSA_IMPUTA = {
+  "Error de diseño": ["Estudio"], "Falta de documentación": ["Estudio"], "Error en el pliego": ["Estudio"], "Error de proyecto / planos": ["Estudio"],
+  "Falta de contrato / subcontrato": ["CLI"], "Falta de materiales para el subcontrato": ["CLI"], "Falta de coordinación general de obra": ["CLI"], "Falta de coordinación entre gremios": ["CLI"],
+  "Falta de definición del cliente": ["CLI"], "Falta de pago / certificación del cliente": ["CLI"], "Provisión pendiente por parte del cliente": ["CLI"],
+  "Mano de obra (rendimiento/ausentismo)": ["V+V"], "Rotura o falla de herramienta/equipo": ["V+V"], "Incumplimiento de subcontratista": ["V+V"], "Reproceso / trabajo mal ejecutado": ["V+V"], "Falta de personal asignado": ["V+V"],
+};
 // Un registro puede ser imputable a más de una empresa a la vez (ej: Belfast
 // y el Estudio juntos). it.imputables es el array nuevo; it.imputable (string)
 // se sigue leyendo para no perder los registros viejos ya guardados.
@@ -7721,7 +7735,7 @@ function GestionView({ db, cfg, onBack }) {
     its.forEach(i => { if ((i.retrasoInicio || 0) > 0) { const c = causaTexto(i) || "Sin causa asignada"; porCausaInicio[c] = (porCausaInicio[c] || 0) + i.retrasoInicio; } });
     const porCausa = {};
     const porCategoria = { "Evitable": 0, "No evitable": 0, "Sin clasificar": 0 };
-    its.forEach(i => { if (i.desvio > 0) { const c = causaTexto(i) || "Sin causa asignada"; porCausa[c] = (porCausa[c] || 0) + i.desvio; porCategoria[i.categoriaDesvio && porCategoria[i.categoriaDesvio] !== undefined ? i.categoriaDesvio : "Sin clasificar"] += i.desvio; } });
+    its.forEach(i => { if (i.desvio > 0) { (causasDe(i).length ? causasDe(i) : ["Sin causa asignada"]).forEach(c => { porCausa[c] = (porCausa[c] || 0) + i.desvio; }); porCategoria[i.categoriaDesvio && porCategoria[i.categoriaDesvio] !== undefined ? i.categoriaDesvio : "Sin clasificar"] += i.desvio; } });
     const desde = its[0]?.fechaSolic || null;
     const ob = obras.find(o => o.id === obraId);
     const etapas = resumenEtapasModelo(ob, modelosObra, its);
@@ -7769,6 +7783,7 @@ function GestionView({ db, cfg, onBack }) {
       <table><tr><th>Categoría</th><th>Días de desvío</th><th>% del desvío total</th></tr>
       ${categorias.length ? categorias.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
       <h2>Desvío por causa</h2>
+      <div style="font-size:9.5px;color:#94A3B8;margin-bottom:4px">Si una demora tiene varias causas, sus días se cuentan en cada una (por eso los porcentajes pueden sumar más de 100%).</div>
       <table><tr><th>Causa</th><th>Días de desvío</th><th>% del desvío total</th></tr>
       ${causas.length ? causas.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
       <h2>Detalle de tareas (${r.its.length})</h2>
@@ -8075,9 +8090,26 @@ function GestionView({ db, cfg, onBack }) {
         <Field label="Responsable / cuadrilla"><TInput value={mForm.responsable || ""} onChange={e => setMForm({ ...mForm, responsable: e.target.value })} placeholder="Ej: Cuadrilla propia, Gremio electricista…" /></Field>
       </FieldRow>
       <FieldRow>
-        <Field label="Categoría del desvío (opcional)"><Sel value={mForm.categoriaDesvio || ""} onChange={e => setMForm({ ...mForm, categoriaDesvio: e.target.value, causa: "", causaDetalle: "" })}><option value="">— Sin clasificar —</option>{CATEGORIAS_DESVIO.map(c => <option key={c} value={c}>{c}</option>)}</Sel></Field>
-        <Field label="Causa específica (opcional)"><Sel value={mForm.causa || ""} onChange={e => setMForm({ ...mForm, causa: e.target.value, causaDetalle: e.target.value === "Otro" ? mForm.causaDetalle : "" })}><option value="">— Sin especificar —</option>{(mForm.categoriaDesvio === "Evitable" ? CAUSAS_EVITABLE : mForm.categoriaDesvio === "No evitable" ? CAUSAS_NO_EVITABLE : [...CAUSAS_EVITABLE.slice(0, -1), ...CAUSAS_NO_EVITABLE.slice(0, -1), "Otro"]).map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
-        {mForm.causa === "Otro" && <Field label="Especificar causa"><TInput value={mForm.causaDetalle || ""} onChange={e => setMForm({ ...mForm, causaDetalle: e.target.value })} placeholder="Describí la causa exacta del desvío" /></Field>}
+        <Field label="Categoría del desvío (opcional)"><Sel value={mForm.categoriaDesvio || ""} onChange={e => setMForm({ ...mForm, categoriaDesvio: e.target.value, causa: "", causas: [], causaDetalle: "" })}><option value="">— Sin clasificar —</option>{CATEGORIAS_DESVIO.map(c => <option key={c} value={c}>{c}</option>)}</Sel></Field>
+      </FieldRow>
+      <Field label="Causas (podés marcar varias)">
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {(mForm.categoriaDesvio === "Evitable" ? CAUSAS_EVITABLE : mForm.categoriaDesvio === "No evitable" ? CAUSAS_NO_EVITABLE : [...CAUSAS_EVITABLE.slice(0, -1), ...CAUSAS_NO_EVITABLE.slice(0, -1), "Otro"]).map(x => {
+            const lista = Array.isArray(mForm.causas) ? mForm.causas : (mForm.causa ? [mForm.causa] : []);
+            const marcada = lista.includes(x);
+            const toggle = () => {
+              const nuevas = marcada ? lista.filter(c => c !== x) : [...lista, x];
+              let imp = Array.isArray(mForm.imputables) ? mForm.imputables : (mForm.imputable ? [mForm.imputable] : []);
+              if (!marcada) (CAUSA_IMPUTA[x] || []).forEach(p => { const n = p === "CLI" ? cli : p; if (!imp.includes(n)) imp = [...imp, n]; });
+              setMForm({ ...mForm, causas: nuevas, causa: nuevas[0] || "", imputables: imp, imputable: undefined, causaDetalle: nuevas.includes("Otro") ? mForm.causaDetalle : "" });
+            };
+            return <label key={x} onClick={toggle} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 16, border: `1.5px solid ${marcada ? T.accent : T.border}`, background: marcada ? T.al : T.bg, color: marcada ? T.accent : T.sub, fontSize: 12, fontWeight: 600, cursor: "pointer" }}><input type="checkbox" checked={marcada} readOnly style={{ width: 13, height: 13 }} />{x}</label>;
+          })}
+        </div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 5, lineHeight: 1.4 }}>Al marcar una causa se sugiere a quién imputarla (ej: error de pliego → Estudio, falta de contrato de subcontrato → {cli}); arriba, en "Imputable a", lo podés ajustar y marcar las dos partes.</div>
+      </Field>
+      {(Array.isArray(mForm.causas) ? mForm.causas : []).includes("Otro") && <Field label="Especificar causa"><TInput value={mForm.causaDetalle || ""} onChange={e => setMForm({ ...mForm, causaDetalle: e.target.value })} placeholder="Describí la causa exacta del desvío" /></Field>}
+      <FieldRow>
         <Field label="Días de clima / fuerza mayor"><TInput type="number" value={mForm.diasClima || ""} onChange={e => setMForm({ ...mForm, diasClima: +e.target.value || 0 })} /></Field>
       </FieldRow>
 
