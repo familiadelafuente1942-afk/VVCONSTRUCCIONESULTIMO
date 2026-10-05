@@ -7462,9 +7462,10 @@ function GestionView({ db, cfg, onBack }) {
   const [pForm, setPForm] = useState(null);      // decisión sobre un vencido
   const [pdfPunit, setPdfPunit] = useState(null); // PDF de un punitorio confirmado
   const [pdfReg, setPdfReg] = useState(null);     // PDF de un registro individual
-  const [filtroObra, setFiltroObra] = useState("todas");
+  const [filtroObra, setFiltroObra] = useState(obras.length === 1 ? obras[0].id : "todas");
   const [filtroEtapa, setFiltroEtapa] = useState("todas");
   const [obraInforme, setObraInforme] = useState("");
+  const obraInf = filtroObra !== "todas" ? filtroObra : obraInforme;
   const [pdfInforme, setPdfInforme] = useState(null); // informe de situación de una obra
   const [selModo, setSelModo] = useState(false);       // armando PDF de registros elegidos
   const [selIds, setSelIds] = useState([]);
@@ -7529,10 +7530,12 @@ function GestionView({ db, cfg, onBack }) {
   const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const items = [...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
   // Filtro del listado de Registro (no toca Panel/Punitorios, que siguen viendo todo)
-  const itemsFiltrados = items.filter(it => (filtroObra === "todas" || it.obra_id === filtroObra) && (filtroEtapa === "todas" || it.etapa === filtroEtapa));
-  const etapasUsadas = [...new Set(items.map(it => it.etapa).filter(Boolean))];
+  // La obra elegida arriba vale para Registro, Punitorios y Panel: no hay que volver a elegirla.
+  const itemsO = filtroObra === "todas" ? items : items.filter(it => it.obra_id === filtroObra);
+  const itemsFiltrados = itemsO.filter(it => (filtroEtapa === "todas" || it.etapa === filtroEtapa));
+  const etapasUsadas = [...new Set(itemsO.map(it => it.etapa).filter(Boolean))];
   // Top 5 tareas con mayor diferencia (días), para ir directo al problema
-  const topDesvios = items.filter(it => it.desvio > 0).sort((a, b) => b.desvio - a.desvio).slice(0, 5);
+  const topDesvios = itemsO.filter(it => it.desvio > 0).sort((a, b) => b.desvio - a.desvio).slice(0, 5);
 
   // ── El corazón del cambio: el perjuicio SOLO nace de una confirmación ──
   // Un ítem vencido es un CANDIDATO. Recién cuando se confirma (qué tarea
@@ -7543,22 +7546,22 @@ function GestionView({ db, cfg, onBack }) {
     return it.retraso * (Number(it.dec.personas) || g.dotacion) * (Number(it.dec.costoDia) || g.costoPersona);
   };
   const esVencido = it => it.estado === "Vencido" || it.estado === "Fuera de plazo";
-  const enEval = items.filter(it => esVencido(it) && !it.dec);
-  const confirmados = items.filter(it => it.dec?.decision === "confirmado");
-  const sinPerj = items.filter(it => it.dec?.decision === "sin_perjuicio");
-  const prorrogas = items.filter(it => it.dec?.decision === "prorroga");
+  const enEval = itemsO.filter(it => esVencido(it) && !it.dec);
+  const confirmados = itemsO.filter(it => it.dec?.decision === "confirmado");
+  const sinPerj = itemsO.filter(it => it.dec?.decision === "sin_perjuicio");
+  const prorrogas = itemsO.filter(it => it.dec?.decision === "prorroga");
 
-  const total = items.length;
-  const cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
+  const total = itemsO.length;
+  const cumpl = itemsO.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
-  const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
+  const diasProm = total ? (itemsO.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
   // Si un ítem es imputable a más de una empresa a la vez, el perjuicio de
   // ESE ítem se reparte por igual entre las empresas que le corresponden —
   // así la suma de los 3 responsables sigue dando el total real, sin
   // duplicar plata.
   const grp = (n) => confirmados.filter(i => imputablesDe(i).includes(n)).reduce((a, i) => { const lista = imputablesDe(i); return a + perItem(i) / Math.max(1, lista.length); }, 0);
   const perjBelfast = grp(cli), perjVV = grp("V+V"), perjEstudio = grp("Estudio"), perjTotal = perjBelfast + perjVV + perjEstudio;
-  const cnt = (e) => items.filter(i => i.estado === e).length;
+  const cnt = (e) => itemsO.filter(i => i.estado === e).length;
 
   function decidir(id, decision, datos = {}) { upd({ punit: { ...g.punit, [id]: { decision, ...datos, ts: Date.now() } } }); setPForm(null); }
   function quitarDecision(id) { const p = { ...g.punit }; delete p[id]; upd({ punit: p }); }
@@ -7928,13 +7931,16 @@ function GestionView({ db, cfg, onBack }) {
       </div>
     </div>
 
+    {(tab === "registro" || tab === "punitorios" || tab === "panel") && obras.length > 0 && <div style={{ padding: "10px 20px 0" }}>
+      <Sel value={filtroObra} onChange={e => { setFiltroObra(e.target.value); setFiltroEtapa("todas"); setSelIds([]); }}><option value="todas">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel>
+    </div>}
+
     {tab === "registro" && <div style={{ padding: "16px 20px", paddingBottom: selModo ? 110 : 90 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>Cargá acá cada tarea o hecho de obra (días estimados por defecto {g.plazo} háb.), con foto de inicio y de fin para dejar constancia de cuánto llevó en verdad. Quedan registrados, se pueden editar, sacar en PDF o borrar; los que se pasan del estimado se evalúan en la pestaña Punitorios.</div>
         {items.length > 0 && <button onClick={vaciarRegistro} style={{ flexShrink: 0, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Vaciar registro</button>}
       </div>
       {items.length > 0 && <FieldRow>
-        <Field label="Filtrar por obra"><Sel value={filtroObra} onChange={e => setFiltroObra(e.target.value)}><option value="todas">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
         <Field label="Filtrar por etapa"><Sel value={filtroEtapa} onChange={e => setFiltroEtapa(e.target.value)}><option value="todas">Todas las etapas</option>{etapasUsadas.map(e => <option key={e} value={e}>{e}</option>)}</Sel></Field>
       </FieldRow>}
       {items.length > 0 && <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
@@ -8004,7 +8010,7 @@ function GestionView({ db, cfg, onBack }) {
       <Eyebrow>Top 5 tareas más desviadas</Eyebrow>
       <Card style={{ padding: 13, marginBottom: 14 }}>
         {topDesvios.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "4px 0" }}>Sin desvíos por ahora.</div>}
-        {topDesvios.map((it, i) => (<div key={it.id} onClick={() => { setTab("registro"); setFiltroObra("todas"); setFiltroEtapa("todas"); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < topDesvios.length - 1 ? `1px solid ${T.bg}` : "none", cursor: "pointer" }}>
+        {topDesvios.map((it, i) => (<div key={it.id} onClick={() => { setTab("registro"); setFiltroObra(it.obra_id || "todas"); setFiltroEtapa("todas"); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < topDesvios.length - 1 ? `1px solid ${T.bg}` : "none", cursor: "pointer" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
             <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{obraNom(obras, it.obra_id) || "—"}{it.etapa ? ` · ${it.etapa}` : ""}{it.causa ? ` · ${causaTexto(it)}` : ""}</div>
@@ -8016,12 +8022,12 @@ function GestionView({ db, cfg, onBack }) {
       <Eyebrow>Informe de estado de situación</Eyebrow>
       <Card style={{ padding: 13, marginBottom: 14 }}>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Resumen de una obra desde el primer registro hasta hoy: cuánto se hubiese tardado (estimado) contra cuánto se tardó en realidad, y el desvío total desglosado por causa.</div>
-        <FieldRow>
+        {filtroObra === "todas" && <FieldRow>
           <Field label="Obra"><Sel value={obraInforme} onChange={e => setObraInforme(e.target.value)}><option value="">— Elegí una obra —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
-        </FieldRow>
-        {obraInforme && (() => {
-          const ob = obras.find(o => o.id === obraInforme);
-          const r = resumenObra(obraInforme);
+        </FieldRow>}
+        {obraInf && (() => {
+          const ob = obras.find(o => o.id === obraInf);
+          const r = resumenObra(obraInf);
           const cierreEst = cierreEstimadoObra(ob, modelosObra);
           return (<>
             {(ob?.inicio || cierreEst) && <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
@@ -8030,10 +8036,10 @@ function GestionView({ db, cfg, onBack }) {
             </div>}
             {!r.its.length ? <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>Esta obra todavía no tiene registros cargados.</div> : (<>
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <MiniStat label="Estimado" value={`${r.totalEstimado} d`} color={T.accent} />
+                <MiniStat label="Plazo estimado" value={`${r.totalEstimado} d`} color={T.accent} />
                 <MiniStat label="Real" value={`${r.totalReal} d`} color="#3B82F6" />
                 <MiniStat label="Desvío" value={`${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio} d`} color={r.totalDesvio > 0 ? "#EF4444" : "#16A34A"} />
-                {r.totalRetrasoInicio > 0 && <MiniStat label="Atraso arranque" value={`${r.totalRetrasoInicio} d`} color="#B45309" />}
+                {r.totalRetrasoInicio > 0 && <MiniStat label="Atraso de arranque" value={`${r.totalRetrasoInicio} d`} color="#B45309" />}
               </div>
               {r.etapas.length > 0 && <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 10.5, color: T.muted, textTransform: "uppercase", marginBottom: 6 }}>Cronograma por etapa</div>
@@ -8043,7 +8049,7 @@ function GestionView({ db, cfg, onBack }) {
                 </div>))}
               </div>}
             </>)}
-            {r.its.length > 0 && <PBtn full onClick={() => setPdfInforme(obraInforme)}>Generar informe de situación</PBtn>}
+            {r.its.length > 0 && <PBtn full onClick={() => setPdfInforme(obraInf)}>Generar informe de situación</PBtn>}
           </>);
         })()}
       </Card>

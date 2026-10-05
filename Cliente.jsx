@@ -4840,11 +4840,88 @@ function imputablesDe(it) {
   return [];
 }
 function imputablesTexto(it) { const l = imputablesDe(it); return l.length ? l.join(" + ") : "Sin asignar"; }
-function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
+// ── Modelo de obra / cierre estimado (misma lógica que V+V) ──
+function parseFechaCorta(s) {
+  if (!s) return null;
+  const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return null;
+  let d = +m[1], mo = +m[2], y = +m[3];
+  if (y < 100) y += 2000;
+  const dt = new Date(y, mo - 1, d, 12, 0, 0);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+function fmtFechaCorta(d) { return d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}` : ""; }
+
+function sumarMeses(fecha, meses) { const d = new Date(fecha.getTime()); d.setMonth(d.getMonth() + Number(meses || 0)); return d; }
+function sumarDias(fecha, dias) { const d = new Date(fecha.getTime()); d.setDate(d.getDate() + Number(dias || 0)); return d; }
+
+function etapasModelo(modelo) { return (modelo?.etapas || []).filter(e => e.usa); }
+
+function losasModelo(modelo) { return modelo?.losas || []; }
+function nombreLosa(i) { return `Losa ${i + 1}`; }
+
+// Duración total estimada del modelo = el punto más lejano al que llega
+// cualquiera de sus etapas o losas (offset + duración), no la suma de todas
+// (porque se superponen).
+function duracionTotalModelo(modelo) {
+  const usadas = etapasModelo(modelo).filter(e => (Number(e.duracionDias) || 0) > 0);
+  const losas = losasModelo(modelo).filter(l => (Number(l.duracionDias) || 0) > 0);
+  const puntos = [
+    ...usadas.map(e => (Number(e.inicioOffsetDias) || 0) + (Number(e.duracionDias) || 0)),
+    ...losas.map(l => (Number(l.inicioOffsetDias) || 0) + (Number(l.duracionDias) || 0)),
+  ];
+  if (!puntos.length) return 0;
+  return Math.max(...puntos);
+}
+function modeloDeObra(obra, modelosObra) { return (modelosObra || []).find(m => m.id === obra?.modeloId) || null; }
+
+// Cierre estimado = inicio + lo que marque el modelo asignado a la obra (si
+// tiene uno con etapas cargadas); si no, se cae a la duración contractual
+// en meses cargada a mano; si no, al campo "Cierre est." tipeado a mano.
+function cierreEstimadoObra(obra, modelosObra) {
+  const ini = parseFechaCorta(obra?.inicio);
+  if (ini) {
+    const modelo = modeloDeObra(obra, modelosObra);
+    const diasModelo = modelo ? duracionTotalModelo(modelo) : 0;
+    if (diasModelo > 0) return fmtFechaCorta(sumarDias(ini, diasModelo));
+    const meses = Number(obra?.duracionMeses) || 0;
+    if (meses > 0) return fmtFechaCorta(sumarMeses(ini, meses));
+  }
+  return obra?.cierre || "";
+}
+// Cronograma planificado vs. real de cada etapa del modelo de una obra,
+// cruzando el modelo con los registros de Gestión ya cargados (filtrados
+// por obra y por etapa). El inicio REAL de la etapa es la fecha del primer
+// registro de Gestión cargado con esa etapa — no se tipea a mano.
+function resumenEtapasModelo(obra, modelosObra, itemsObra) {
+  const modelo = modeloDeObra(obra, modelosObra);
+  if (!modelo) return [];
+  const iniObra = parseFechaCorta(obra?.inicio);
+  const fila = (nombreEtapa, offsetDias, duracionDiasCfg) => {
+    const planInicio = iniObra ? sumarDias(iniObra, Number(offsetDias) || 0) : null;
+    const duracionPlan = Number(duracionDiasCfg) || 0;
+    const planFin = planInicio && duracionPlan ? sumarDias(planInicio, duracionPlan) : null;
+    const its = (itemsObra || []).filter(it => it.etapa === nombreEtapa);
+    const iniciosReales = its.map(it => it.fechaSolic).filter(Boolean);
+    const realInicio = iniciosReales.length ? new Date(Math.min(...iniciosReales.map(d => +d))) : null;
+    const todasCerradas = its.length > 0 && its.every(it => it.fechaReal);
+    const finesReales = its.map(it => it.fechaReal).filter(Boolean);
+    const realFin = todasCerradas && finesReales.length ? new Date(Math.max(...finesReales.map(d => +d))) : null;
+    const realDias = realInicio ? diasHabiles(realInicio, realFin || new Date()) : null;
+    const desvio = (realDias != null && duracionPlan > 0) ? realDias - duracionPlan : null;
+    return { etapa: nombreEtapa, planInicio, planFin, duracionPlan, realInicio, realFin, realDias, desvio, enCurso: !!realInicio && !realFin };
+  };
+  const filasEtapas = etapasModelo(modelo).map(cfg => fila(cfg.etapa, cfg.inicioOffsetDias, cfg.duracionDias));
+  const filasLosas = losasModelo(modelo).map((l, i) => fila(nombreLosa(i), l.inicioOffsetDias, l.duracionDias));
+  return [...filasEtapas, ...filasLosas];
+}
+
+
+function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = [] }) {
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, reuniones: [], ...(gestion || {}) };
   const [tab, setTab] = useState("registro");
   const [pdfHtml, setPdfHtml] = useState(null);
-  const [filtroObra, setFiltroObra] = useState("todas");
+  const [filtroObra, setFiltroObra] = useState(obras.length === 1 ? obras[0].id : "todas");
   const [filtroEtapa, setFiltroEtapa] = useState("todas");
   const cli = cfg?.nombre || "Belfast";
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
@@ -4871,16 +4948,18 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
   };
   const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const items = [...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
-  const itemsFiltrados = items.filter(it => (filtroObra === "todas" || it.obra_id === filtroObra) && (filtroEtapa === "todas" || it.etapa === filtroEtapa));
-  const etapasUsadas = [...new Set(items.map(it => it.etapa).filter(Boolean))];
-  const topDesvios = items.filter(it => it.desvio > 0).sort((a, b) => b.desvio - a.desvio).slice(0, 5);
+  // La obra elegida vale para Registro, Punitorios y Panel.
+  const itemsO = filtroObra === "todas" ? items : items.filter(it => it.obra_id === filtroObra);
+  const itemsFiltrados = itemsO.filter(it => (filtroEtapa === "todas" || it.etapa === filtroEtapa));
+  const etapasUsadas = [...new Set(itemsO.map(it => it.etapa).filter(Boolean))];
+  const topDesvios = itemsO.filter(it => it.desvio > 0).sort((a, b) => b.desvio - a.desvio).slice(0, 5);
   const perItem = it => (it.dec?.decision === "confirmado") ? it.retraso * (Number(it.dec.personas) || g.dotacion) * (Number(it.dec.costoDia) || g.costoPersona) : 0;
   const esVencido = it => it.estado === "Vencido" || it.estado === "Fuera de plazo";
-  const confirmados = items.filter(it => it.dec?.decision === "confirmado");
-  const enEval = items.filter(it => esVencido(it) && !it.dec);
-  const total = items.length, cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
+  const confirmados = itemsO.filter(it => it.dec?.decision === "confirmado");
+  const enEval = itemsO.filter(it => esVencido(it) && !it.dec);
+  const total = itemsO.length, cumpl = itemsO.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
-  const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
+  const diasProm = total ? (itemsO.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
   const grp = n => confirmados.filter(i => imputablesDe(i).includes(n)).reduce((a, i) => { const lista = imputablesDe(i); return a + perItem(i) / Math.max(1, lista.length); }, 0);
   // El nombre del cliente acá (Ajustes → Nombre, de ESTA app) no tiene por qué
   // coincidir letra por letra con lo que V+V tipeó como cliente en la suya —
@@ -4890,7 +4969,22 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
   // aparecen en "Imputable a" de cada registro, no de una lista fija.
   const perjT = confirmados.reduce((a, i) => a + perItem(i), 0);
   const responsables = [...new Set(confirmados.flatMap(imputablesDe))];
-  const cnt = e => items.filter(i => i.estado === e).length;
+  const cnt = e => itemsO.filter(i => i.estado === e).length;
+  // Resumen de la obra elegida (igual que en V+V): el "Real" suma los días de
+  // ejecución más los perdidos por arrancar tarde, así estimado + desvío = real.
+  const obraSel = filtroObra !== "todas" ? obras.find(o => o.id === filtroObra) : null;
+  const resumen = obraSel ? (() => {
+    const its = itemsO.slice().sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0));
+    const totalRetrasoInicio = its.reduce((a, i) => a + (Number(i.retrasoInicio) || 0), 0);
+    return {
+      its, totalRetrasoInicio,
+      totalEstimado: its.reduce((a, i) => a + (Number(i.plazo) || 0), 0),
+      totalReal: its.reduce((a, i) => a + (i.dias || 0), 0) + totalRetrasoInicio,
+      totalDesvio: its.reduce((a, i) => a + (Number(i.desvio) || 0), 0),
+      cierreEst: cierreEstimadoObra(obraSel, modelosObra),
+      etapas: resumenEtapasModelo(obraSel, modelosObra, its),
+    };
+  })() : null;
   const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
   const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
   const _e = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -4964,13 +5058,15 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
       <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? "rgba(255,255,255,.08)" : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700 }}>{l}</button>)}</div>
       <button onClick={() => setPdfHtml(htmlReporte())} style={{ flexShrink: 0, background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>PDF</button>
     </div>
+    {(tab === "registro" || tab === "punitorios" || tab === "panel") && obras.length > 0 && <div style={{ padding: "10px 20px 0" }}>
+      <select value={filtroObra} onChange={e => { setFiltroObra(e.target.value); setFiltroEtapa("todas"); }} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", fontSize: 12.5, color: T.text }}>
+        <option value="todas">Todas las obras</option>
+        {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+      </select>
+    </div>}
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
       <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Tareas y hechos cargados por V+V, con foto de inicio y de fin de cada una (estimado de referencia {g.plazo} días háb.). Solo lectura — descargá el informe completo en PDF arriba.</div>
-      {items.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-        <select value={filtroObra} onChange={e => setFiltroObra(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", fontSize: 12.5, color: T.text }}>
-          <option value="todas">Todas las obras</option>
-          {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
-        </select>
+      {items.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8, marginBottom: 14 }}>
         <select value={filtroEtapa} onChange={e => setFiltroEtapa(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", fontSize: 12.5, color: T.text }}>
           <option value="todas">Todas las etapas</option>
           {etapasUsadas.map(e => <option key={e} value={e}>{e}</option>)}
@@ -4997,6 +5093,24 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [] }) {
       </Card>
     </div>}
     {tab === "panel" && <div style={{ padding: "16px 20px" }}>
+      {resumen ? <>
+        <Eyebrow T={T}>Resumen de la obra</Eyebrow>
+        <Card T={T} style={{ padding: 13, marginBottom: 14 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            {[["Inicio de obra", obraSel?.inicio || "—", T.accent], ["Cierre estimado", resumen.cierreEst || "—", "#3B82F6"]].map(([l, v, c]) => <div key={l} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px" }}><div style={{ fontSize: 17, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3 }}>{l}</div></div>)}
+          </div>
+          {!resumen.its.length ? <div style={{ fontSize: 12, color: T.muted }}>Esta obra todavía no tiene registros cargados.</div> : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {[["Plazo estimado", `${resumen.totalEstimado} d`, T.accent], ["Real", `${resumen.totalReal} d`, "#3B82F6"], ["Desvío", `${resumen.totalDesvio > 0 ? "+" : ""}${resumen.totalDesvio} d`, resumen.totalDesvio > 0 ? "#EF4444" : "#16A34A"], ...(resumen.totalRetrasoInicio > 0 ? [["Atraso de arranque", `${resumen.totalRetrasoInicio} d`, "#B45309"]] : [])].map(([l, v, c]) => <div key={l} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px" }}><div style={{ fontSize: 17, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3 }}>{l}</div></div>)}
+          </div>}
+          {resumen.etapas.length > 0 && <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 10.5, color: T.muted, textTransform: "uppercase", marginBottom: 6 }}>Cronograma por etapa</div>
+            {resumen.etapas.map(e => (<div key={e.etapa} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, color: T.text, flex: 1, minWidth: 0 }}>{e.etapa}<div style={{ fontSize: 10, color: T.muted }}>{e.planInicio ? `Plan: ${fmtFechaCorta(e.planInicio)} · ${e.duracionPlan}d` : "Sin plan"}{e.realInicio ? ` · Real: ${fmtFechaCorta(e.realInicio)}${e.realDias != null ? ` · ${e.realDias}d${e.enCurso ? " (en curso)" : ""}` : ""}` : ""}</div></div>
+              <span style={{ fontSize: 13, fontWeight: 800, color: e.desvio > 0 ? "#EF4444" : e.desvio != null ? "#16A34A" : T.muted }}>{e.desvio != null ? `${e.desvio > 0 ? "+" : ""}${e.desvio}d` : "—"}</span>
+            </div>))}
+          </div>}
+        </Card>
+      </> : <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Elegí una obra arriba para ver su resumen (inicio, cierre estimado, plazo estimado, real y desvío).</div>}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginBottom: 14 }}>
         {[["Ítems", total, T.accent], ["% Cumplimiento", pctCumpl + "%", "#16A34A"], ["Días háb. prom.", diasProm, "#3B82F6"], ["Perjuicio confirmado", money(perjT), "#EF4444"]].map(([l, v, c]) => <div key={l} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px" }}><div style={{ fontSize: 17, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{l}</div></div>)}
       </div>
@@ -5253,6 +5367,7 @@ function ClienteApp() {
   const [pedidos, setPedidos] = useStored("vv_pedidos", []);
   const [personal, setPersonal] = useStored("vv_personal", []);
   const [gestion] = useStored("vv_gestion", {});
+  const [modelosObra] = useStored("vv_modelos_obra", []);
   const [crono] = useStored("vv_cronograma", { obras: [] });
   const [formularios] = useStored("vv_formularios", []);
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
@@ -5499,7 +5614,7 @@ function ClienteApp() {
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "adicionales" && <AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
-          {screen === "gestion" && <GestionScreen T={T} cfg={cfg} obras={obras} gestion={gestion} personal={personal} />}
+          {screen === "gestion" && <GestionScreen T={T} cfg={cfg} obras={obras} gestion={gestion} personal={personal} modelosObra={modelosObra} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
           {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} renders={renders} setRenders={setRenders} />}
