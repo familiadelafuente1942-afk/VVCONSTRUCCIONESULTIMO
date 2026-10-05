@@ -7402,6 +7402,10 @@ function causasDe(it) {
   const l = Array.isArray(it?.causas) && it.causas.length ? it.causas : (it?.causa ? [it.causa] : []);
   return l.map(c => c === "Otro" && it?.causaDetalle ? it.causaDetalle : c);
 }
+function afectadasTexto(it) {
+  const l = Array.isArray(it?.afectadas) ? it.afectadas : [];
+  return [...l, it?.afectadasDetalle ? it.afectadasDetalle : ""].filter(Boolean).join(" · ");
+}
 function causaTexto(it) { return causasDe(it).join(" + "); }
 // A quién se le imputa por defecto cada causa (se puede cambiar a mano en
 // "Imputable a"): "CLI" = la constructora (Belfast), "Estudio" o "V+V".
@@ -7619,6 +7623,7 @@ function GestionView({ db, cfg, onBack }) {
         <tr><td>Fin</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Aún no terminó"}</td></tr>
         <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
         <tr><td>Diferencia (real vs. estimado)</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio} días</td></tr>
+        ${afectadasTexto(it) ? `<tr><td>Tarea/etapa afectada por el retraso</td><td>${_e(afectadasTexto(it))}</td></tr>` : ""}
         ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(causaTexto(it))}${it.categoriaDesvio ? ` <span style="color:#94A3B8">(${_e(it.categoriaDesvio)})</span>` : ""}</td></tr>` : ""}
         ${(Number(it.diasClima) || 0) > 0 ? `<tr><td>Días de clima / fuerza mayor (no imputables)</td><td>${it.diasClima} días</td></tr><tr><td><b>Retraso imputable neto</b></td><td><b>${it.retraso} días</b></td></tr>` : ""}
         <tr><td>Estado</td><td>${_e(it.estado)}</td></tr>
@@ -7660,6 +7665,7 @@ function GestionView({ db, cfg, onBack }) {
         <tr><td>Fin</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Aún no terminó"}</td></tr>
         <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
         <tr><td>Diferencia (real vs. estimado)</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio} días</td></tr>
+        ${afectadasTexto(it) ? `<tr><td>Tarea/etapa afectada por el retraso</td><td>${_e(afectadasTexto(it))}</td></tr>` : ""}
         ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(causaTexto(it))}${it.categoriaDesvio ? ` <span style="color:#94A3B8">(${_e(it.categoriaDesvio)})</span>` : ""}</td></tr>` : ""}
         ${(Number(it.diasClima) || 0) > 0 ? `<tr><td>Días de clima / fuerza mayor (no imputables)</td><td>${it.diasClima} días</td></tr><tr><td><b>Retraso imputable neto</b></td><td><b>${it.retraso} días</b></td></tr>` : ""}
         <tr><td>Estado</td><td>${_e(it.estado)}</td></tr>
@@ -7744,7 +7750,7 @@ function GestionView({ db, cfg, onBack }) {
   function htmlInformeObra(obraId) {
     const ob = obras.find(o => o.id === obraId);
     const r = resumenObra(obraId);
-    const filaTarea = (it) => `<tr><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8;font-size:9.5px">${_e(it.etapa)}</span>` : ""}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "en curso"}</td><td>${it.plazo}</td><td>${it.dias}</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio}</td><td>${_e(causaTexto(it) || (it.desvio > 0 ? "Sin asignar" : "—"))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}</td></tr>`;
+    const filaTarea = (it) => `<tr><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8;font-size:9.5px">${_e(it.etapa)}</span>` : ""}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "en curso"}</td><td>${it.plazo}</td><td>${it.dias}</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio}</td><td>${_e(causaTexto(it) || (it.desvio > 0 ? "Sin asignar" : "—"))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}${afectadasTexto(it) ? `<br/><span style="color:#B45309;font-size:9.5px">Afecta: ${_e(afectadasTexto(it))}</span>` : ""}</td></tr>`;
     const causas = Object.entries(r.porCausa).sort((a, b) => b[1] - a[1]);
     const categorias = Object.entries(r.porCategoria).filter(([, d]) => d > 0).sort((a, b) => b[1] - a[1]);
     const cierreEst = cierreEstimadoObra(ob, modelosObra);
@@ -7859,6 +7865,7 @@ function GestionView({ db, cfg, onBack }) {
             {conRegistro && !selModo && <button onClick={() => setPdfReg(it)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
             {conRegistro && !selModo && <button onClick={() => borrarRegistro(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>}
           </div>
+          {afectadasTexto(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 4 }}>Afecta a: <b>{afectadasTexto(it)}</b></div>}
           {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${causaTexto(it)}${it.categoriaDesvio ? ` (${it.categoriaDesvio})` : ""}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (retraso imputable: ${it.retraso} d)` : ""}</div>}
           {((it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)) && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
             {(it.fotosInicio || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer" style={{ textAlign: "center" }}><img src={f.url} title={f.fecha ? `Inicio · ${fmtFechaCorta(new Date(f.fecha))}` : "Inicio"} style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #16A34A", display: "block" }} />{f.fecha && <div style={{ fontSize: 8.5, color: T.muted }}>{fmtFechaCorta(new Date(f.fecha))}</div>}</a>)}
@@ -8109,6 +8116,17 @@ function GestionView({ db, cfg, onBack }) {
         <div style={{ fontSize: 10.5, color: T.muted, marginTop: 5, lineHeight: 1.4 }}>Al marcar una causa se sugiere a quién imputarla (ej: error de pliego → Estudio, falta de contrato de subcontrato → {cli}); arriba, en "Imputable a", lo podés ajustar y marcar las dos partes.</div>
       </Field>
       {(Array.isArray(mForm.causas) ? mForm.causas : []).includes("Otro") && <Field label="Especificar causa"><TInput value={mForm.causaDetalle || ""} onChange={e => setMForm({ ...mForm, causaDetalle: e.target.value })} placeholder="Describí la causa exacta del desvío" /></Field>}
+      <Field label="Tarea / etapa afectada por este retraso (opcional)">
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {etapasSelectObra(obras.find(o => o.id === mForm.obra_id), modelosObra).filter(x => x !== mForm.etapa).map(x => {
+            const lista = Array.isArray(mForm.afectadas) ? mForm.afectadas : [];
+            const marcada = lista.includes(x);
+            return <label key={x} onClick={() => setMForm({ ...mForm, afectadas: marcada ? lista.filter(c => c !== x) : [...lista, x] })} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 16, border: `1.5px solid ${marcada ? "#B45309" : T.border}`, background: marcada ? "rgba(245,158,11,.14)" : T.bg, color: marcada ? "#B45309" : T.sub, fontSize: 12, fontWeight: 600, cursor: "pointer" }}><input type="checkbox" checked={marcada} readOnly style={{ width: 13, height: 13 }} />{x}</label>;
+          })}
+        </div>
+        <TInput value={mForm.afectadasDetalle || ""} onChange={e => setMForm({ ...mForm, afectadasDetalle: e.target.value })} placeholder="Detalle (opcional): ej. terminación de mampostería PB" extraStyle={{ marginTop: 8 }} />
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 5, lineHeight: 1.4 }}>Qué trabajo posterior se corrió por este atraso (ej: 56 días en estructura → se atrasó la mampostería).</div>
+      </Field>
       <FieldRow>
         <Field label="Días de clima / fuerza mayor"><TInput type="number" value={mForm.diasClima || ""} onChange={e => setMForm({ ...mForm, diasClima: +e.target.value || 0 })} /></Field>
       </FieldRow>

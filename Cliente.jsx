@@ -4794,7 +4794,11 @@ async function ponerGlobito(n) {
     else await navigator.clearAppBadge();
   } catch { }
 }
-function causaTexto(it) { return it?.causa === "Otro" && it?.causaDetalle ? it.causaDetalle : (it?.causa || ""); }
+function causasDe(it) {
+  const l = Array.isArray(it?.causas) && it.causas.length ? it.causas : (it?.causa ? [it.causa] : []);
+  return l.map(x => x === "Otro" && it?.causaDetalle ? it.causaDetalle : x);
+}
+function causaTexto(it) { return causasDe(it).join(" + "); }
 // Un registro puede ser imputable a más de una empresa a la vez. imputables
 // es el array nuevo; imputable (string) se sigue leyendo por compatibilidad
 // con registros viejos ya guardados desde la app general.
