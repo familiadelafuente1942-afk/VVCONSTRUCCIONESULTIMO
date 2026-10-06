@@ -1982,72 +1982,69 @@ function ModelosObraView({ db, cfg, onBack }) {
           <div style={{ fontSize: 20, fontWeight: 800, color: T.accent }}>{dur > 0 ? `${dur} días` : "—"}</div>
           <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3 }}>Es el punto más lejano al que llega cualquier etapa (inicio + duración), no la suma de todas — así se reflejan las superposiciones.</div>
         </Card>
-        <Eyebrow>Etapas del modelo</Eyebrow>
-        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 20px 10px", marginLeft: 0 }}>Activá las etapas que use este modelo. Cargá solo cuánto DURA cada etapa (en días hábiles): cada una arranca sola cuando termina la anterior. Si una arranca antes de que termine la anterior (ej: Mampostería con Estructura, Revoques con Contrapisos), poné en "Se superpone" cuántos días se pisan. Si tiene que esperar, poné un número negativo.</div>
-        {etapasModeloCompletas({ ...edit, etapas: calcEdit.etapas }).map(cfgE => (
-          <Card key={cfgE.etapa} style={{ padding: "11px 13px", marginBottom: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
-              <input type="checkbox" checked={!!cfgE.usa} onChange={e => updEtapa(edit.id, cfgE.etapa, { usa: e.target.checked })} style={{ width: 17, height: 17 }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>{cfgE.etapa}</span>
-            </label>
-            {cfgE.usa && cfgE.derivada && <div style={{ marginTop: 8, fontSize: 11.5, color: T.muted, lineHeight: 1.5 }}>Se calcula sola desde {cfgE.etapa === "Estructura" ? "las losas" : "las plantas de mampostería"} (más abajo): arranca el día <b style={{ color: T.text }}>{Number(cfgE.inicioOffsetDias) || 0}</b> → termina el día <b style={{ color: T.text }}>{(Number(cfgE.inicioOffsetDias) || 0) + (Number(cfgE.duracionDias) || 0)}</b></div>}
-            {cfgE.usa && !cfgE.derivada && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
-              <div>
-                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Se superpone con lo anterior (días)</div>
-                <input type="number" value={cfgE.solapeDias || ""} onChange={e => updEtapa(edit.id, cfgE.etapa, { solapeDias: e.target.value, solapePct: null })} placeholder="0" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
+        <Eyebrow>Cronograma del modelo</Eyebrow>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 0 10px" }}>Todo en un solo cronograma, ordenado por fecha de arranque. Cargá solo cuántos días DURA cada tarea (hábiles) y el resto arranca solo. "Solapa" = días que se pisa con lo anterior. Las losas se hormigonan el día indicado y su mampostería arranca 22 días después (fraguado). Si agregás una losa, aparece sola su mampostería.</div>
+        <Field label="Cantidad de losas (define el tipo de obra)"><TInput type="number" value={(edit.losas || []).length || ""} onChange={e => setCantLosas(edit.id, e.target.value)} placeholder="Ej: 3" /></Field>
+        {(() => {
+          const filas = [];
+          etapasModeloCompletas({ ...edit, etapas: calcEdit.etapas }).forEach(c => {
+            if (c.derivada) return;
+            if (c.etapa === "Estructura" && calcEdit.losas.length) return;
+            if (c.etapa === "Mampostería" && calcEdit.plantas.length) return;
+            filas.push({ k: "e:" + c.etapa, tipo: "e", c, ini: Number(c.inicioOffsetDias) || 0, orden: ETAPAS_OBRA.indexOf(c.etapa) });
+          });
+          calcEdit.losas.forEach((l, i) => filas.push({ k: "l" + i, tipo: "l", i, l, ini: Number(l.inicioOffsetDias) || 0, orden: 4.5 + i * 0.01 }));
+          calcEdit.plantas.forEach((p, i) => filas.push({ k: "p" + i, tipo: "p", i, p, ini: Number(p.inicioOffsetDias) || 0, orden: 5.5 + i * 0.01 }));
+          filas.sort((x, y) => (x.c && !x.c.usa ? 1e9 : x.ini) - (y.c && !y.c.usa ? 1e9 : y.ini) || x.orden - y.orden);
+          const total = Math.max(1, dur);
+          const bar = (ini, d, color) => (<div style={{ position: "relative", height: 7, background: T.bg, borderRadius: 4, margin: "7px 0 8px" }}><div style={{ position: "absolute", left: `${Math.min(100, ini / total * 100)}%`, width: `${Math.max(1.2, d / total * 100)}%`, top: 0, bottom: 0, background: color, borderRadius: 4 }} /></div>);
+          const inp = (lbl, val, fn, ph) => (<div><div style={lblS}>{lbl}</div><input type="number" value={val === undefined || val === null || val === 0 ? "" : val} onChange={e => fn(e.target.value)} placeholder={ph} style={inpS} /></div>);
+          return filas.map(r => {
+            if (r.tipo === "e") {
+              const c = r.c, d = Number(c.duracionDias) || 0;
+              return (<Card key={r.k} style={{ padding: "10px 13px", marginBottom: 7, opacity: c.usa ? 1 : 0.55 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+                  <input type="checkbox" checked={!!c.usa} onChange={e => updEtapa(edit.id, c.etapa, { usa: e.target.checked })} style={{ width: 17, height: 17 }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>{c.etapa}</span>
+                  {c.usa && <span style={{ fontSize: 11, color: T.muted }}>día {r.ini + 1} → {r.ini + d}</span>}
+                </label>
+                {c.usa && <>{bar(r.ini, d, T.accent)}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {inp("Dura (días)", c.duracionDias, v => updEtapa(edit.id, c.etapa, { duracionDias: v }), "Ej: 20")}
+                  {inp("Solapa (días)", c.solapeDias, v => updEtapa(edit.id, c.etapa, { solapeDias: v, solapePct: null }), "0")}
+                </div></>}
+              </Card>);
+            }
+            if (r.tipo === "l") {
+              const l = r.l, d = Number(l.duracionDias) || 0;
+              return (<Card key={r.k} style={{ padding: "10px 13px", marginBottom: 7, borderLeft: `3px solid ${T.accent}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="text" value={l.nombre || ""} onChange={e => updLosa(edit.id, r.i, { nombre: e.target.value })} placeholder={nombreLosa(r.i)} style={{ ...inpS, flex: 1, fontWeight: 700 }} />
+                  <span style={{ fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>día {r.ini + 1} → {r.ini + d}</span>
+                </div>
+                {bar(r.ini, d, T.accent)}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                  {inp("Dura (días)", l.duracionDias, v => updLosa(edit.id, r.i, { duracionDias: v }), "45")}
+                  {inp("Hormigona día", l.hormigonDia, v => updLosa(edit.id, r.i, { hormigonDia: v }), "16")}
+                  {inp("Solapa (días)", l.solapeDias, v => updLosa(edit.id, r.i, { solapeDias: v }), "0")}
+                </div>
+                <div style={{ fontSize: 11, color: T.muted, marginTop: 6 }}>Se hormigona el día <b style={{ color: T.text }}>{(Number(l.hormigonOffsetDias) || 0) + 1}</b></div>
+              </Card>);
+            }
+            const p = r.p, d = Number(p.duracionDias) || 0;
+            return (<Card key={r.k} style={{ padding: "10px 13px", marginBottom: 7, borderLeft: `3px solid ${T.muted}` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>Mampostería · {calcEdit.losas[r.i]?.nombre || nombreLosa(r.i)}</span>
+                <span style={{ fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>día {r.ini + 1} → {r.ini + d}</span>
               </div>
-              <div>
-                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Dura (días hábiles)</div>
-                <input type="number" value={cfgE.duracionDias || ""} onChange={e => updEtapa(edit.id, cfgE.etapa, { duracionDias: e.target.value })} placeholder="Ej: 20" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
-              </div>
-              <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: T.muted }}>Arranca solo: día <b style={{ color: T.text }}>{Number(cfgE.inicioOffsetDias) || 0}</b> → termina el día <b style={{ color: T.text }}>{(Number(cfgE.inicioOffsetDias) || 0) + (Number(cfgE.duracionDias) || 0)}</b></div>
-            </div>}
-          </Card>
-        ))}
-        <Eyebrow>Losas</Eyebrow>
-        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 0 10px" }}>La cantidad de losas es lo que define el tipo de proyecto (ej: con subsuelo tiene más losas que sin subsuelo). Cambiá el número y se agregan o sacan filas solas; cada losa es un ciclo completo (losa + columnas + vigas, hormigonado y curado) y arranca sola después de la anterior. Cargá cuánto dura el ciclo y a los cuántos días se hormigona.</div>
-        <Field label="Cantidad de losas"><TInput type="number" value={(edit.losas || []).length || ""} onChange={e => setCantLosas(edit.id, e.target.value)} placeholder="Ej: 3" /></Field>
-        {calcEdit.losas.map((l, i) => (
-          <Card key={i} style={{ padding: "11px 13px", marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8 }}>{nombreLosa(i)}</div>
-            <input type="text" value={l.nombre || ""} onChange={e => updLosa(edit.id, i, { nombre: e.target.value })} placeholder="Ej: Losa sobre platea" style={{ ...inpS, marginBottom: 8 }} />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <div>
-                <div style={lblS}>Dura el ciclo (días hábiles)</div>
-                <input type="number" value={l.duracionDias || ""} onChange={e => updLosa(edit.id, i, { duracionDias: e.target.value })} placeholder="Ej: 45" style={inpS} />
-              </div>
-              <div>
-                <div style={lblS}>Se hormigona a los (días)</div>
-                <input type="number" value={l.hormigonDia === undefined || l.hormigonDia === null ? "" : l.hormigonDia} onChange={e => updLosa(edit.id, i, { hormigonDia: e.target.value })} placeholder="Ej: 16" style={inpS} />
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <div style={lblS}>Se superpone con lo anterior (días)</div>
-                <input type="number" value={l.solapeDias || ""} onChange={e => updLosa(edit.id, i, { solapeDias: e.target.value })} placeholder="0" style={inpS} />
-              </div>
-              <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: T.muted }}>Arranca solo: día <b style={{ color: T.text }}>{Number(l.inicioOffsetDias) || 0}</b> → se hormigona el día <b style={{ color: T.text }}>{Number(l.hormigonOffsetDias) || 0}</b> → termina el día <b style={{ color: T.text }}>{(Number(l.inicioOffsetDias) || 0) + (Number(l.duracionDias) || 0)}</b></div>
-            </div>
-          </Card>
-        ))}
-        {calcEdit.plantas.length > 0 && <>
-          <Eyebrow>Mampostería por planta</Eyebrow>
-          <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 0 10px" }}>Hay una por cada losa. Cada una arranca unos días después de hormigonar su losa (el fraguado: recién ahí se puede desapuntalar y liberar el sector). Se superpone sola con el ciclo de la losa siguiente.</div>
-          {calcEdit.plantas.map((p, i) => (
-            <Card key={i} style={{ padding: "11px 13px", marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8 }}>Mampostería planta {i + 1}{calcEdit.losas[i]?.nombre ? ` · sobre ${calcEdit.losas[i].nombre}` : ""}</div>
+              {bar(r.ini, d, T.muted)}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <div>
-                  <div style={lblS}>Dura (días hábiles)</div>
-                  <input type="number" value={p.duracionDias === undefined || p.duracionDias === null ? "" : p.duracionDias} onChange={e => updPlanta(edit.id, i, { duracionDias: e.target.value })} placeholder="Ej: 35" style={inpS} />
-                </div>
-                <div>
-                  <div style={lblS}>Arranca a los (días) de hormigonar</div>
-                  <input type="number" value={p.despuesHormigonDias === undefined || p.despuesHormigonDias === null ? "" : p.despuesHormigonDias} onChange={e => updPlanta(edit.id, i, { despuesHormigonDias: e.target.value })} placeholder="Ej: 22" style={inpS} />
-                </div>
-                <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: T.muted }}>Arranca solo: día <b style={{ color: T.text }}>{Number(p.inicioOffsetDias) || 0}</b> → termina el día <b style={{ color: T.text }}>{(Number(p.inicioOffsetDias) || 0) + (Number(p.duracionDias) || 0)}</b></div>
+                {inp("Dura (días)", p.duracionDias, v => updPlanta(edit.id, r.i, { duracionDias: v }), "35")}
+                {inp("Fraguado tras hormigonar", p.despuesHormigonDias, v => updPlanta(edit.id, r.i, { despuesHormigonDias: v }), "22")}
               </div>
-            </Card>
-          ))}
-        </>}
+            </Card>);
+          });
+        })()}
         <PBtn full variant="danger" onClick={() => borrar(edit.id)} style={{ marginTop: 10 }}>Borrar este modelo</PBtn>
       </div>
     </div>);
@@ -2248,6 +2245,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Cierre estimado (calculado)</div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail, modelosObra) || "—"}</div>
                             </div>}
+                            {detail.inicio && detail.modeloId && <button onClick={async () => { const h = cronogramaObraHTML(detail, modelosObra); if (!h) { alert("Cargá una fecha de inicio válida (dd/mm/aa)."); return; } try { await guardarPdfComoArchivo(h, "Cronograma_" + String(detail.nombre || "obra").replace(/[^a-zA-Z0-9]+/g, "_") + ".pdf"); } catch (e) { alert("No se pudo generar el PDF. Probá de nuevo."); } }} style={{ gridColumn: "1 / -1", background: T.navy || "#0f172a", color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>📄 Cronograma de obra (PDF)</button>}
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
                             <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
@@ -5455,6 +5453,68 @@ function resumenEtapasModelo(obra, modelosObra, itemsObra) {
   const filasEtapas = etapasModelo(modelo).map(cfg => fila(cfg.etapa, cfg.inicioOffsetDias, cfg.duracionDias));
   const filasLosas = losasModelo(modelo).map((l, i) => fila(nombreLosa(i), l.inicioOffsetDias, l.duracionDias));
   return [...filasEtapas, ...filasLosas];
+}
+
+
+// Cronograma completo de una obra nueva: modelo + fecha de inicio → documento (para PDF) con
+// el orden de tareas, fechas exactas de inicio/fin (días hábiles, con feriados), hitos
+// (hormigonados, liberación de sectores) y un esquema de barras mes a mes.
+function cronogramaObraHTML(obra, modelosObra) {
+  const modelo = modeloDeObra(obra, modelosObra);
+  const ini = parseFechaCorta(obra?.inicio);
+  if (!modelo || !ini) return "";
+  const m = recalcularModelo(modelo);
+  const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const filas = [];
+  m.etapas.forEach(e => {
+    if (!e.usa || e.derivada || !(Number(e.duracionDias) > 0)) return;
+    if (e.etapa === "Estructura" && m.losas.length) return;
+    if (e.etapa === "Mampostería" && m.plantas.length) return;
+    filas.push({ n: e.etapa, ini: e.inicioOffsetDias, dur: Number(e.duracionDias), tipo: "e", sol: Number(e.solapeDias) || 0 });
+  });
+  m.losas.forEach((l, i) => { if (Number(l.duracionDias) > 0) filas.push({ n: (l.nombre || nombreLosa(i)) + " (losa + columnas + vigas)", ini: l.inicioOffsetDias, dur: Number(l.duracionDias), tipo: "l", sol: Number(l.solapeDias) || 0 }); });
+  m.plantas.forEach((p, i) => { if (Number(p.duracionDias) > 0) filas.push({ n: "Mampostería · " + (m.losas[i]?.nombre || nombreLosa(i)), ini: p.inicioOffsetDias, dur: Number(p.duracionDias), tipo: "p", sol: 0 }); });
+  filas.sort((a, b) => a.ini - b.ini || (a.tipo === "l" ? -1 : 1));
+  const total = Math.max(1, ...filas.map(r => r.ini + r.dur));
+  const fecha = (off) => addHabiles(ini, off);
+  const F = (off) => fmtFechaCorta(fecha(off));
+  const MES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  // marcas de mes sobre el eje de días hábiles
+  let marcas = "", mesPrev = -1;
+  for (let i = 0; i <= total; i++) { const d = fecha(i); const k = d.getFullYear() * 12 + d.getMonth(); if (k !== mesPrev) { marcas += `<div style="position:absolute;left:${(i / total * 100).toFixed(2)}%;top:0;bottom:0;border-left:1px solid #cbd5e1;padding-left:2px;font-size:8px;color:#64748b;white-space:nowrap">${MES[d.getMonth()]}${d.getMonth() === 0 || mesPrev === -1 ? " " + String(d.getFullYear()).slice(2) : ""}</div>`; mesPrev = k; } }
+  const col = { e: "#1D4ED8", l: "#0f766e", p: "#b45309" };
+  const trs = filas.map((r, i) => `<tr style="background:${i % 2 ? "#f8fafc" : "#fff"}"><td style="padding:5px 6px;text-align:center;color:#64748b">${i + 1}</td><td style="padding:5px 6px;font-weight:600">${esc(r.n)}</td><td style="padding:5px 6px;white-space:nowrap">${F(r.ini)}</td><td style="padding:5px 6px;white-space:nowrap">${F(r.ini + r.dur)}</td><td style="padding:5px 6px;text-align:center">${r.dur}</td><td style="padding:5px 6px;font-size:9.5px;color:#64748b">${r.tipo === "p" ? "22 d. de fraguado tras hormigonar" : r.sol > 0 ? `se superpone ${r.sol} d. con la anterior` : ""}</td></tr>`).join("");
+  const gantt = filas.map(r => `<div style="display:flex;align-items:center;margin-bottom:3px"><div style="width:190px;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px">${esc(r.n.replace(" (losa + columnas + vigas)", ""))}</div><div style="flex:1;position:relative;height:11px;background:#f1f5f9;border-radius:3px"><div style="position:absolute;left:${(r.ini / total * 100).toFixed(2)}%;width:${Math.max(0.8, r.dur / total * 100).toFixed(2)}%;top:0;bottom:0;background:${col[r.tipo]};border-radius:3px"></div></div></div>`).join("");
+  const hitos = [];
+  m.losas.forEach((l, i) => {
+    const nom = l.nombre || nombreLosa(i);
+    const h = l.hormigonOffsetDias;
+    hitos.push({ off: h, txt: `Hormigonado: ${esc(nom)}` });
+    const p = m.plantas[i];
+    if (p) hitos.push({ off: p.inicioOffsetDias, txt: `Sector liberado (se desapuntala) y arranca mampostería: ${esc(nom)}` });
+  });
+  hitos.sort((a, b) => a.off - b.off);
+  const hitosHtml = hitos.map(h => `<tr><td style="padding:4px 6px;white-space:nowrap;font-weight:700">${F(h.off)}</td><td style="padding:4px 6px">${h.txt}</td></tr>`).join("");
+  const cierre = F(total);
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;background:#fff}@page{size:A4;margin:10mm}
+body{font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#0f172a;padding:22px 26px}
+table{border-collapse:collapse;width:100%}th{background:#0f172a;color:#fff;text-align:left;padding:6px;font-size:10px}
+h2{font-size:12px;margin:18px 0 6px;color:#0f172a;border-bottom:2px solid #1D4ED8;padding-bottom:3px}
+</style></head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:8px">
+<div><div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.06em">Cronograma de obra</div><div style="font-size:20px;font-weight:800">${esc(obra.nombre || "Obra")}</div><div style="font-size:11px;color:#475569">Modelo: ${esc(modelo.nombre || "")}</div></div>
+<div style="text-align:right"><div style="font-size:10px;color:#64748b">Inicio</div><div style="font-size:15px;font-weight:800">${fmtFechaCorta(ini)}</div><div style="font-size:10px;color:#64748b;margin-top:3px">Cierre estimado</div><div style="font-size:15px;font-weight:800;color:#1D4ED8">${cierre}</div></div></div>
+<div style="margin:8px 0 0;font-size:10px;color:#475569">Plazo total estimado: <b>${total} días hábiles</b> (sin sábados, domingos ni feriados). Fechas calculadas desde el inicio según el modelo; si algo se demora, el cronograma se corre.</div>
+<h2>Esquema general</h2>
+<div style="display:flex;margin-bottom:2px"><div style="width:190px"></div><div style="flex:1;position:relative;height:12px">${marcas}</div></div>
+${gantt}
+<div style="font-size:9px;color:#64748b;margin-top:4px"><span style="color:${col.e}">■</span> Etapas &nbsp; <span style="color:${col.l}">■</span> Losas &nbsp; <span style="color:${col.p}">■</span> Mampostería por planta</div>
+<h2>Procedimiento paso a paso</h2>
+<table><tr><th style="width:24px">#</th><th>Tarea</th><th>Arranca</th><th>Termina</th><th>Días háb.</th><th>Nota</th></tr>${trs}</table>
+<h2>Hitos clave</h2>
+<table>${hitosHtml}<tr><td style="padding:4px 6px;font-weight:700">${cierre}</td><td style="padding:4px 6px">Cierre y entrega de obra</td></tr></table>
+</body></html>`;
 }
 
 function EmptyMsg({ children }) {
