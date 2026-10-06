@@ -2117,6 +2117,9 @@ function ModelosObraView({ db, cfg, onBack }) {
 }
 
 function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg, apiKey, adicionales, setAdicionales, modelosObra }) {
+    const [desbloq, setDesbloq] = useState(false);
+    const [gate, setGate] = useState(null);
+    const pedirCodigo = (fn) => { if (desbloq) fn(); else setGate({ fn }); };
     const UBICS = getUbics(cfg);
     const defaultAp = UBICS[0]?.id || 'aep';
     const [showNew, setShowNew] = useState(false);
@@ -2218,6 +2221,8 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
                     {tab !== "info" && <button onClick={() => setTab("info")} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer", marginBottom: 12 }}>← Volver a la obra</button>}
                     {tab === "info" && (<div>
+                        {!desbloq ? <button onClick={() => pedirCodigo(() => {})} style={{ width: "100%", background: T.bg, border: `1px dashed ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 12, fontWeight: 700, color: T.sub, cursor: "pointer", marginBottom: 12 }}>🔒 Solo lectura · tocá para ingresar el código y editar</button> : <div style={{ fontSize: 11.5, color: T.accent, fontWeight: 700, marginBottom: 12 }}>🔓 Edición habilitada</div>}
+                        <div style={{ pointerEvents: desbloq ? "auto" : "none", opacity: desbloq ? 1 : 0.85 }}>
                         <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 8, border: `1px solid ${T.border}` }}>
                             <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
                             <input value={detail.nombre || ''} onChange={e => upd(detail.id, { nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: T.text, padding: 0 }} />
@@ -2281,7 +2286,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail, modelosObra) || "—"}</div>
                             </div>}
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14, pointerEvents: "auto" }}>
                             <div onClick={() => setTab("fotos")} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Fotos</div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{(detail.fotos || []).length} foto{(detail.fotos || []).length === 1 ? "" : "s"} ›</div>
@@ -2312,6 +2317,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             </div>}
                         </div>
                         <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
+                        </div>
                     </div>)}
                     {tab === "fotos" && (<TabFotos detail={detail} upd={upd} fileRef={fileRef} handleFoto={handleFoto} videoRef={videoRef} handleVideo={handleVideo} apiKey={apiKey} cfg={cfg} />)}
                     {tab === "planos" && (<div>
@@ -2326,7 +2332,8 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                         </div>)}
                     </div>)}
                 </div>
-                {mostrarAdicionales && (
+                {gate && <CodigoModal titulo="Ingresá el código para poder modificar la obra." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); if (fn) fn(); }} onCancel={() => setGate(null)} />}
+{mostrarAdicionales && (
                     <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
                         <AdicionalesView db={{ obras, adicionales, setAdicionales }} cfg={cfg} onBack={() => setMostrarAdicionales(false)} obraIdFijo={detail.id} />
                     </div>
@@ -2336,7 +2343,8 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
     }
 
     return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
-        <AppHeader title={t(cfg, 'obras_titulo')} sub={`${obras.length} registros`} right={<PlusBtn onClick={() => requireAuth(() => setShowNew(true), t(cfg, 'obras_nueva'))} />} />
+        {gate && <CodigoModal titulo="Ingresá el código para poder modificar la obra." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); if (fn) fn(); }} onCancel={() => setGate(null)} />}
+        <AppHeader title={t(cfg, 'obras_titulo')} sub={`${obras.length} registros`} right={<PlusBtn onClick={() => pedirCodigo(() => setShowNew(true))} />} />
         <div style={{ padding: "14px 18px" }}>
             {OBRA_ESTADOS.map(est => {
                 const items = obras.filter(o => o.estado === est.id);
