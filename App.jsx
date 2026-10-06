@@ -2276,7 +2276,6 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                     {(modelosObra || []).map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                                 </select>
                             </div>
-                            {detail.inicio && detail.modeloId && <button onClick={async () => { const h = cronogramaObraHTML(detail, modelosObra); if (!h) { alert("Cargá una fecha de inicio válida (dd/mm/aa)."); return; } try { await guardarPdfComoArchivo(h, "Cronograma_" + String(detail.nombre || "obra").replace(/[^a-zA-Z0-9]+/g, "_") + ".pdf"); } catch (e) { alert("No se pudo generar el PDF. Probá de nuevo."); } }} style={{ gridColumn: "1 / -1", background: T.navy || "#0f172a", color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cronograma de obra</button>}
                             {!detail.modeloId && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Duración contractual (meses)</div>
                                 <input type="number" value={detail.duracionMeses || ''} onChange={e => upd(detail.id, { duracionMeses: e.target.value })} placeholder="Ej: 15" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
@@ -2286,7 +2285,11 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail, modelosObra) || "—"}</div>
                             </div>}
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14, pointerEvents: "auto" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14, pointerEvents: "auto" }}>
+                            <div onClick={async () => { if (!detail.modeloId || !detail.inicio) { alert("Para ver el cronograma elegí el Modelo de obra y cargá la fecha de Inicio (dd/mm/aa)."); return; } const h = cronogramaObraHTML(detail, modelosObra); if (!h) { alert("Cargá una fecha de inicio válida (dd/mm/aa)."); return; } try { await guardarPdfComoArchivo(h, "Cronograma_" + String(detail.nombre || "obra").replace(/[^a-zA-Z0-9]+/g, "_") + ".pdf"); } catch (e) { alert("No se pudo generar el PDF. Probá de nuevo."); } }} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Cronograma</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{detail.modeloId && detail.inicio ? "Ver PDF" : "Falta modelo/inicio"} ›</div>
+                            </div>
                             <div onClick={() => setTab("fotos")} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Fotos</div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{(detail.fotos || []).length} foto{(detail.fotos || []).length === 1 ? "" : "s"} ›</div>
