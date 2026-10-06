@@ -2499,7 +2499,7 @@ function TabGastos({ detail, upd }) {
     </div>);
 }
 
-function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId: setDetailIdProp, requireAuth = (fn) => fn(), cfg, apiKey }) {
+function Obras({ obras, setObras, modelosObra = [], lics = [], detailId: detailIdProp, setDetailId: setDetailIdProp, requireAuth = (fn) => fn(), cfg, apiKey }) {
     const [detailIdLocal, setDetailIdLocal] = useState(null);
     const detailId = detailIdProp !== undefined ? detailIdProp : detailIdLocal;
     const setDetailId = setDetailIdProp || setDetailIdLocal;
@@ -2593,7 +2593,7 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
         const e = ec(detail.estado);
         return (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap} · ${detail.sector || t(cfg, 'obras_sector')}`} back onBack={() => setDetailId(null)} />
+                <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap}`} back onBack={() => setDetailId(null)} />
                 <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "12px 18px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 600 }}>{t(cfg, 'obras_avance')}</span><span style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{detail.avance}%</span></div>
                     <div style={{ height: 8, background: T.bg, borderRadius: 4 }}><div style={{ height: 8, background: T.accent, borderRadius: 4, width: `${detail.avance}%`, transition: "width .5s" }} /></div>
@@ -2606,35 +2606,64 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
                             <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
                             <input value={detail.nombre || ''} onChange={e => upd(detail.id, { nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: T.text, padding: 0 }} />
                         </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>En ejecución (para el propietario)</div>
+                                <input value={detail.etapaActual || ''} onChange={e => upd(detail.id, { etapaActual: e.target.value })} placeholder="Ej: Estructura y mampostería" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12.5, fontWeight: 700, color: T.text, padding: 0 }} />
+                            </div>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Próxima etapa</div>
+                                <input value={detail.proximaEtapa || ''} onChange={e => upd(detail.id, { proximaEtapa: e.target.value })} placeholder="Ej: Instalaciones" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12.5, fontWeight: 700, color: T.text, padding: 0 }} />
+                            </div>
+                        </div>
+                        <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 14, border: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 10, color: T.muted, marginBottom: 8, textTransform: "uppercase" }}>Línea de tiempo (propietario) — tocá el hito en curso</div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                                {["Inicio", "Estructura", "Instalaciones", "Terminaciones"].map((h, i) => {
+                                    const actual = detail.hitoActual ?? 0;
+                                    const estado = i < actual ? "done" : i === actual ? "current" : "pend";
+                                    return (
+                                        <button key={h} onClick={() => upd(detail.id, { hitoActual: i })} style={{
+                                            flex: 1, padding: "8px 4px", borderRadius: 8, cursor: "pointer", fontSize: 10, fontWeight: 700, textAlign: "center",
+                                            border: `1.5px solid ${estado === "current" ? "var(--accent,#1D4ED8)" : T.border}`,
+                                            background: estado === "done" ? T.card : estado === "current" ? "var(--accent,#1D4ED8)" : T.card,
+                                            color: estado === "current" ? "#fff" : estado === "done" ? T.text : T.muted,
+                                        }}>{h}</button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{getLabelUbic(cfg)}</div>
                                 <select value={detail.ap} onChange={e => upd(detail.id, { ap: e.target.value })} style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0, cursor: "pointer" }}>
                                     {UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}
                                 </select>
                             </div>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_sector')}</div>
-                                <input value={detail.sector || ''} onChange={e => upd(detail.id, { sector: e.target.value })} placeholder="Sin sector" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
-                            </div>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_inicio')}</div>
                                 <input value={detail.inicio || ''} onChange={e => upd(detail.id, { inicio: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_cierre')}</div>
                                 <input value={detail.cierre || ''} onChange={e => upd(detail.id, { cierre: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Presupuesto</div>
-                                <input value={detail.monto || ''} onChange={e => upd(detail.id, { monto: e.target.value })} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Modelo de obra</div>
+                                <select value={detail.modeloId || ''} onChange={e => upd(detail.id, { modeloId: e.target.value })} style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0, cursor: "pointer" }}>
+                                    <option value="">— Sin modelo —</option>
+                                    {(modelosObra || []).map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                                </select>
                             </div>
-                            <div style={{ background: detail.pagado > 0 ? "rgba(22,163,74,.14)" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}><Ico n="money" /> Pagado</div>
-                                <input value={detail.pagado || ''} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); upd(detail.id, { pagado: v ? parseFloat(v) : 0 }); }} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: "#10B981", padding: 0 }} />
-                            </div>
+                            {detail.inicio && detail.modeloId && <button onClick={async () => { const h = cronogramaObraHTML(detail, modelosObra); if (!h) { alert("Cargá una fecha de inicio válida (dd/mm/aa)."); return; } try { await guardarPdfComoArchivo(h, "Cronograma_" + String(detail.nombre || "obra").replace(/[^a-zA-Z0-9]+/g, "_") + ".pdf"); } catch (e) { alert("No se pudo generar el PDF. Probá de nuevo."); } }} style={{ gridColumn: "1 / -1", background: T.navy || "#0f172a", color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cronograma de obra</button>}
+                            {!detail.modeloId && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Duración contractual (meses)</div>
+                                <input type="number" value={detail.duracionMeses || ''} onChange={e => upd(detail.id, { duracionMeses: e.target.value })} placeholder="Ej: 15" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
+                            </div>}
+                            {detail.inicio && (detail.modeloId || Number(detail.duracionMeses) > 0) && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Cierre estimado (calculado)</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail, modelosObra) || "—"}</div>
+                            </div>}
                         </div>
                         <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
                     </div>)}
@@ -2702,7 +2731,6 @@ function Obras({ obras, setObras, lics = [], detailId: detailIdProp, setDetailId
                 <Field label={getLabelUbic(cfg)}><Sel value={form.ap || ""} onChange={e => setForm(p => ({ ...p, ap: e.target.value }))}>{UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}</Sel></Field>
             </FieldRow>
             <FieldRow>
-                <Field label={t(cfg, 'obras_sector')}><TInput value={form.sector || ""} onChange={e => setForm(p => ({ ...p, sector: e.target.value }))} placeholder="Sector A" /></Field>
                 <Field label={`${t(cfg, 'obras_avance')} %`}><TInput type="number" value={form.avance || ""} onChange={e => setForm(p => ({ ...p, avance: e.target.value }))} placeholder="0" /></Field>
             </FieldRow>
             <FieldRow>
@@ -5039,6 +5067,220 @@ function duracionTotalModelo(modelo) {
   if (!puntos.length) return 0;
   return Math.max(...puntos);
 }
+// ── Guardar PDF como archivo real (Guardar en Archivos en iPad, descarga en PC) ──
+// Carga html2pdf.js (jsPDF + html2canvas) desde un CDN la primera vez que se
+// necesita, para no tocar el build del proyecto. Genera el PDF a partir del
+// MISMO html que ya se usa para la vista previa/impresión.
+let _html2pdfCargando = null;
+function cargarHtml2Pdf() {
+  if (typeof window !== "undefined" && window.html2pdf) return Promise.resolve(window.html2pdf);
+  if (_html2pdfCargando) return _html2pdfCargando;
+  _html2pdfCargando = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js";
+    s.onload = () => resolve(window.html2pdf);
+    s.onerror = () => reject(new Error("No se pudo cargar el generador de PDF."));
+    document.head.appendChild(s);
+  });
+  return _html2pdfCargando;
+}
+async function guardarPdfComoArchivo(htmlString, nombreArchivo) {
+  const html2pdf = await cargarHtml2Pdf();
+  // Renderizamos el contenido DENTRO del mismo documento (no en un iframe
+  // aparte): la librería que saca la "foto" para armar el PDF no puede
+  // capturar bien el contenido de otro documento, y eso es lo que daba la
+  // página en blanco.
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(htmlString, "text/html");
+  const cont = document.createElement("div");
+  // OJO: posicionar el contenido muy lejos de la pantalla (left:-99999px) hace
+  // que la librería que "fotografía" el contenido capture una página en
+  // blanco (bug conocido). En cambio lo dejamos en la esquina (0,0) pero con
+  // z-index bajo, tapado por el cartel de vista previa que ya cubre toda la
+  // pantalla — así nunca se ve, pero sí se puede capturar bien.
+  // El contenido a capturar (cont) va en el flujo normal, SIN position:fixed
+  // propio (probado: un "fixed" copiado por el generador sale en blanco), pero
+  // dentro de un marco fijo en la esquina (0,0) y debajo del cartel de vista
+  // previa — en iPad la captura sale corrida si el contenido no está ahí.
+  const marco = document.createElement("div");
+  marco.style.position = "fixed"; marco.style.left = "0"; marco.style.top = "0"; marco.style.width = "800px"; marco.style.zIndex = "1"; marco.style.pointerEvents = "none"; marco.style.overflow = "visible";
+  cont.style.width = "800px"; cont.style.background = "#fff";
+  const styleEl = parsed.querySelector("style");
+  let cssTexto = styleEl ? styleEl.textContent : "";
+  // Las reglas "html,body{...}" y "@page{...}" del documento de vista previa
+  // no deben filtrarse a la app real mientras se captura.
+  cssTexto = cssTexto.replace(/html\s*,\s*body\s*\{[^}]*\}/g, "").replace(/@page\s*\{[^}]*\}/g, "");
+  if (cssTexto) { const s = document.createElement("style"); s.textContent = cssTexto; cont.appendChild(s); }
+  const inner = document.createElement("div");
+  inner.innerHTML = parsed.body.innerHTML;
+  // La regla "body{...}" (tipografía, tamaño, margen) no aplica a un div: la
+  // pasamos como estilo directo para que el PDF se vea igual que la vista previa.
+  const bodyRule = cssTexto.match(/(?:^|[}\s])body\s*\{([^}]*)\}/);
+  if (bodyRule) inner.style.cssText += ";" + bodyRule[1];
+  cont.appendChild(inner);
+  marco.appendChild(cont);
+  document.body.appendChild(marco);
+  // Esperamos a que las fotos (si las hay) terminen de cargar, y a que el
+  // navegador termine de pintar el contenido, antes de capturar.
+  const imgs = Array.from(cont.querySelectorAll("img"));
+  await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(res => { img.onload = res; img.onerror = res; })));
+  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch { } }
+  await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
+  // iOS limita el tamaño de un canvas (~16 millones de píxeles): en un informe
+  // largo, escala 2 se pasa y el PDF sale en blanco. Bajamos la escala solo
+  // lo necesario para que quepa.
+  const altoCss = Math.max(1, cont.scrollHeight);
+  const escala = Math.max(0.8, Math.min(2, Math.floor(Math.sqrt(14000000 / (800 * altoCss)) * 100) / 100));
+  const blob = await html2pdf().from(cont).set({
+    margin: 0,
+    filename: nombreArchivo,
+    html2canvas: { scale: escala, useCORS: true, windowWidth: 800, x: 0, y: 0, scrollX: 0, scrollY: 0, backgroundColor: "#ffffff" },
+    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+  }).outputPdf("blob");
+  document.body.removeChild(marco);
+  const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const file = new File([blob], nombreArchivo, { type: "application/pdf" });
+  if (esIOS) {
+    // iPad/iPhone: primero intenta la hoja de compartir con "Guardar en Archivos".
+    // Si falla (Safari a veces bloquea el share si tardó mucho en generarse),
+    // abre el PDF en una pestaña: el visor nativo de iOS también tiene un
+    // ícono de compartir con "Guardar en Archivos".
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: nombreArchivo }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return;
+  }
+  // PC: descarga directa
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nombreArchivo;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+// Arranque AUTOMÁTICO de las etapas: se carga solo cuánto dura cada una (y, si hace falta,
+// cuántos días se superpone con lo que viene antes). El "arranca en el día" se calcula:
+// arranca = (fin de lo más lejano anterior) − superposición. Negativo = espera.
+// LOSAS: cada losa es un ciclo completo (armado de losa + columnas + vigas, hormigonado y curado hasta
+// desencofrar); arrancan una después de la otra, a continuación de Fundaciones. La cantidad de losas
+// define el tipo de obra. MAMPOSTERÍA POR PLANTA: hay una por cada losa; cada una arranca 22 días hábiles
+// (fraguado, se puede desapuntalar y liberar el sector) DESPUÉS DE HORMIGONAR esa losa, o sea que se
+// superpone sola con el ciclo de la losa siguiente. "Estructura" y "Mampostería" pasan
+// a ser el total de las losas / de las plantas cuando existen. Todo lo demás se encadena.
+// Los modelos viejos (con "arranca en el día" cargado a mano) se convierten solos, con las mismas fechas.
+function recalcularModelo(modelo) {
+  const et = (modelo?.etapas || []).map(e => ({ ...e }));
+  const lo = (modelo?.losas || []).map(l => ({ ...l }));
+  const nPl = lo.length;   // una mampostería por cada losa: se libera 22 días hábiles después de hormigonarla
+  const pl = (modelo?.plantas || []).slice(0, nPl).map(p => ({ ...p }));
+  while (pl.length < nPl) pl.push({ duracionDias: 35, despuesHormigonDias: 22 });
+  let maxEnd = 0, lastDur = 0;
+  const encadenar = (ref) => {
+    const dur = Math.max(0, Number(ref.duracionDias) || 0);
+    let solape;
+    if (ref.solapeDias === undefined || ref.solapeDias === null) {
+      const legacy = Number(ref.inicioOffsetDias) || 0;
+      solape = legacy > 0 ? maxEnd - legacy : 0;
+    } else solape = Number(ref.solapeDias) || 0;
+    if (Number(ref.solapePct) > 0) solape = Math.round(Number(ref.solapePct) / 100 * lastDur);
+    const ini = Math.max(0, maxEnd - solape);
+    ref.solapeDias = solape; ref.inicioOffsetDias = ini;
+    if (dur > 0) { maxEnd = Math.max(maxEnd, ini + dur); lastDur = dur; }
+  };
+  const etEstr = et.find(e => e.etapa === "Estructura"), etMamp = et.find(e => e.etapa === "Mampostería");
+  const procesarLosas = () => {
+    lo.forEach(l => {
+      if (l.hormigonDia === undefined || l.hormigonDia === null) l.hormigonDia = 16;
+      encadenar(l);
+      l.hormigonOffsetDias = l.inicioOffsetDias + (Number(l.hormigonDia) || 0);
+    });
+    pl.forEach((p, i) => {
+      if (p.despuesHormigonDias === undefined || p.despuesHormigonDias === null) p.despuesHormigonDias = 22;
+      if (p.duracionDias === undefined || p.duracionDias === null) p.duracionDias = 35;
+      const dur = Math.max(0, Number(p.duracionDias) || 0);
+      const ini = Math.max(0, (lo[i].hormigonOffsetDias || 0) + (Number(p.despuesHormigonDias) || 0));
+      p.inicioOffsetDias = ini;
+      if (dur > 0) maxEnd = Math.max(maxEnd, ini + dur);
+    });
+    const span = (arr, ref) => {
+      const v = arr.filter(x => (Number(x.duracionDias) || 0) > 0);
+      if (!ref || !v.length) return;
+      const a0 = Math.min(...v.map(x => x.inicioOffsetDias)), b0 = Math.max(...v.map(x => x.inicioOffsetDias + (Number(x.duracionDias) || 0)));
+      ref.inicioOffsetDias = a0; ref.duracionDias = b0 - a0; ref.derivada = true;
+    };
+    if (lo.length) span(lo, etEstr);
+    if (pl.length) span(pl, etMamp);
+  };
+  ETAPAS_OBRA.forEach(n => {
+    const e = et.find(x => x.etapa === n);
+    const derivada = (n === "Estructura" && lo.length > 0) || (n === "Mampostería" && pl.length > 0);
+    if (e && !derivada) { delete e.derivada; if (e.usa) encadenar(e); }
+    if (n === "Fundaciones") procesarLosas();
+  });
+  return { etapas: et, losas: lo, plantas: pl };
+}
+// Cronograma completo de una obra nueva: modelo + fecha de inicio → documento (para PDF) con
+// el orden de tareas, fechas exactas de inicio/fin (días hábiles, con feriados), hitos
+// (hormigonados, liberación de sectores) y un esquema de barras mes a mes.
+function cronogramaObraHTML(obra, modelosObra) {
+  const modelo = modeloDeObra(obra, modelosObra);
+  const ini = parseFechaCorta(obra?.inicio);
+  if (!modelo || !ini) return "";
+  const m = recalcularModelo(modelo);
+  const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const filas = [];
+  m.etapas.forEach(e => {
+    if (!e.usa || e.derivada || !(Number(e.duracionDias) > 0)) return;
+    if (e.etapa === "Estructura" && m.losas.length) return;
+    if (e.etapa === "Mampostería" && m.plantas.length) return;
+    filas.push({ n: e.etapa, ini: e.inicioOffsetDias, dur: Number(e.duracionDias), tipo: "e", sol: Number(e.solapeDias) || 0 });
+  });
+  m.losas.forEach((l, i) => { if (Number(l.duracionDias) > 0) filas.push({ n: (l.nombre || nombreLosa(i)) + " (losa + columnas + vigas)", ini: l.inicioOffsetDias, dur: Number(l.duracionDias), tipo: "l", sol: Number(l.solapeDias) || 0 }); });
+  m.plantas.forEach((p, i) => { if (Number(p.duracionDias) > 0) filas.push({ n: "Mampostería · " + (m.losas[i]?.nombre || nombreLosa(i)), ini: p.inicioOffsetDias, dur: Number(p.duracionDias), tipo: "p", sol: 0 }); });
+  filas.sort((a, b) => a.ini - b.ini || (a.tipo === "l" ? -1 : 1));
+  const total = Math.max(1, ...filas.map(r => r.ini + r.dur));
+  const fecha = (off) => addHabiles(ini, off);
+  const F = (off) => fmtFechaCorta(fecha(off));
+  const MES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  // marcas de mes sobre el eje de días hábiles
+  let marcas = "", mesPrev = -1;
+  for (let i = 0; i <= total; i++) { const d = fecha(i); const k = d.getFullYear() * 12 + d.getMonth(); if (k !== mesPrev) { marcas += `<div style="position:absolute;left:${(i / total * 100).toFixed(2)}%;top:0;bottom:0;border-left:1px solid #cbd5e1;padding-left:2px;font-size:8px;color:#64748b;white-space:nowrap">${MES[d.getMonth()]}${d.getMonth() === 0 || mesPrev === -1 ? " " + String(d.getFullYear()).slice(2) : ""}</div>`; mesPrev = k; } }
+  const col = { e: "#1D4ED8", l: "#0f766e", p: "#b45309" };
+  const trs = filas.map((r, i) => `<tr style="background:${i % 2 ? "#f8fafc" : "#fff"}"><td style="padding:5px 6px;text-align:center;color:#64748b">${i + 1}</td><td style="padding:5px 6px;font-weight:600">${esc(r.n)}</td><td style="padding:5px 6px;white-space:nowrap">${F(r.ini)}</td><td style="padding:5px 6px;white-space:nowrap">${F(r.ini + r.dur)}</td><td style="padding:5px 6px;text-align:center">${r.dur}</td><td style="padding:5px 6px;font-size:9.5px;color:#64748b">${r.tipo === "p" ? "22 d. de fraguado tras hormigonar" : r.sol > 0 ? `se superpone ${r.sol} d. con la anterior` : ""}</td></tr>`).join("");
+  const gantt = filas.map(r => `<div style="display:flex;align-items:center;margin-bottom:3px"><div style="width:190px;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px">${esc(r.n.replace(" (losa + columnas + vigas)", ""))}</div><div style="flex:1;position:relative;height:11px;background:#f1f5f9;border-radius:3px"><div style="position:absolute;left:${(r.ini / total * 100).toFixed(2)}%;width:${Math.max(0.8, r.dur / total * 100).toFixed(2)}%;top:0;bottom:0;background:${col[r.tipo]};border-radius:3px"></div></div></div>`).join("");
+  const hitos = [];
+  m.losas.forEach((l, i) => {
+    const nom = l.nombre || nombreLosa(i);
+    const h = l.hormigonOffsetDias;
+    hitos.push({ off: h, txt: `Hormigonado: ${esc(nom)}` });
+    const p = m.plantas[i];
+    if (p) hitos.push({ off: p.inicioOffsetDias, txt: `Sector liberado (se desapuntala) y arranca mampostería: ${esc(nom)}` });
+  });
+  hitos.sort((a, b) => a.off - b.off);
+  const hitosHtml = hitos.map(h => `<tr><td style="padding:4px 6px;white-space:nowrap;font-weight:700">${F(h.off)}</td><td style="padding:4px 6px">${h.txt}</td></tr>`).join("");
+  const cierre = F(total);
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;background:#fff}@page{size:A4;margin:10mm}
+body{font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#0f172a;padding:22px 26px}
+table{border-collapse:collapse;width:100%}th{background:#0f172a;color:#fff;text-align:left;padding:6px;font-size:10px}
+h2{font-size:12px;margin:18px 0 6px;color:#0f172a;border-bottom:2px solid #1D4ED8;padding-bottom:3px}
+</style></head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:8px">
+<div><div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.06em">Cronograma de obra</div><div style="font-size:20px;font-weight:800">${esc(obra.nombre || "Obra")}</div><div style="font-size:11px;color:#475569">Modelo: ${esc(modelo.nombre || "")}</div></div>
+<div style="text-align:right"><div style="font-size:10px;color:#64748b">Inicio</div><div style="font-size:15px;font-weight:800">${fmtFechaCorta(ini)}</div><div style="font-size:10px;color:#64748b;margin-top:3px">Cierre estimado</div><div style="font-size:15px;font-weight:800;color:#1D4ED8">${cierre}</div></div></div>
+<div style="margin:8px 0 0;font-size:10px;color:#475569">Plazo total estimado: <b>${total} días hábiles</b> (sin sábados, domingos ni feriados). Fechas calculadas desde el inicio según el modelo; si algo se demora, el cronograma se corre.</div>
+<h2>Esquema general</h2>
+<div style="display:flex;margin-bottom:2px"><div style="width:190px"></div><div style="flex:1;position:relative;height:12px">${marcas}</div></div>
+${gantt}
+<div style="font-size:9px;color:#64748b;margin-top:4px"><span style="color:${col.e}">■</span> Etapas &nbsp; <span style="color:${col.l}">■</span> Losas &nbsp; <span style="color:${col.p}">■</span> Mampostería por planta</div>
+<h2>Procedimiento paso a paso</h2>
+<table><tr><th style="width:24px">#</th><th>Tarea</th><th>Arranca</th><th>Termina</th><th>Días háb.</th><th>Nota</th></tr>${trs}</table>
+<h2>Hitos clave</h2>
+<table>${hitosHtml}<tr><td style="padding:4px 6px;font-weight:700">${cierre}</td><td style="padding:4px 6px">Cierre y entrega de obra</td></tr></table>
+</body></html>`;
+}
 function modeloDeObra(obra, modelosObra) { return (modelosObra || []).find(m => m.id === obra?.modeloId) || null; }
 
 // Cierre estimado = inicio + lo que marque el modelo asignado a la obra (si
@@ -5766,7 +6008,7 @@ function ClienteApp() {
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
           {screen === "inicio" && <InicioScreen T={T} cfg={cfg} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} gestion={gestion} modelosObra={modelosObra} avance={avance} auditoria={auditoria} adicionales={adicionales} dronevuelos={dronevuelos} definiciones={definiciones} docrecepcion={docrecepcion} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
-          {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
+          {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} modelosObra={modelosObra} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
           {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} envios={enviosProp} setEnvios={setEnviosProp} />}

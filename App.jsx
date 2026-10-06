@@ -2165,7 +2165,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         const e = ec(detail.estado);
         return (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap} · ${detail.sector || t(cfg, 'obras_sector')}`} back onBack={() => setDetailId(null)} />
+                <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap}`} back onBack={() => setDetailId(null)} />
                 <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "12px 18px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 600 }}>{t(cfg, 'obras_avance')}</span><span style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{detail.avance}%</span></div>
                     <div style={{ height: 8, background: T.bg, borderRadius: 4 }}><div style={{ height: 8, background: T.accent, borderRadius: 4, width: `${detail.avance}%`, transition: "width .5s" }} /></div>
@@ -2206,50 +2206,36 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             </div>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{getLabelUbic(cfg)}</div>
                                 <select value={detail.ap} onChange={e => upd(detail.id, { ap: e.target.value })} style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0, cursor: "pointer" }}>
                                     {UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}
                                 </select>
                             </div>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_sector')}</div>
-                                <input value={detail.sector || ''} onChange={e => upd(detail.id, { sector: e.target.value })} placeholder="Sin sector" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
-                            </div>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_inicio')}</div>
                                 <input value={detail.inicio || ''} onChange={e => upd(detail.id, { inicio: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_cierre')}</div>
                                 <input value={detail.cierre || ''} onChange={e => upd(detail.id, { cierre: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Modelo de obra</div>
                                 <select value={detail.modeloId || ''} onChange={e => upd(detail.id, { modeloId: e.target.value })} style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0, cursor: "pointer" }}>
                                     <option value="">— Sin modelo —</option>
                                     {(modelosObra || []).map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                                 </select>
                             </div>
-                            {!detail.modeloId && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            {detail.inicio && detail.modeloId && <button onClick={async () => { const h = cronogramaObraHTML(detail, modelosObra); if (!h) { alert("Cargá una fecha de inicio válida (dd/mm/aa)."); return; } try { await guardarPdfComoArchivo(h, "Cronograma_" + String(detail.nombre || "obra").replace(/[^a-zA-Z0-9]+/g, "_") + ".pdf"); } catch (e) { alert("No se pudo generar el PDF. Probá de nuevo."); } }} style={{ gridColumn: "1 / -1", background: T.navy || "#0f172a", color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cronograma de obra</button>}
+                            {!detail.modeloId && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Duración contractual (meses)</div>
                                 <input type="number" value={detail.duracionMeses || ''} onChange={e => upd(detail.id, { duracionMeses: e.target.value })} placeholder="Ej: 15" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>}
-                            {detail.inicio && (detail.modeloId || Number(detail.duracionMeses) > 0) && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                            {detail.inicio && (detail.modeloId || Number(detail.duracionMeses) > 0) && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Cierre estimado (calculado)</div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail, modelosObra) || "—"}</div>
                             </div>}
-                            {detail.inicio && detail.modeloId && <button onClick={async () => { const h = cronogramaObraHTML(detail, modelosObra); if (!h) { alert("Cargá una fecha de inicio válida (dd/mm/aa)."); return; } try { await guardarPdfComoArchivo(h, "Cronograma_" + String(detail.nombre || "obra").replace(/[^a-zA-Z0-9]+/g, "_") + ".pdf"); } catch (e) { alert("No se pudo generar el PDF. Probá de nuevo."); } }} style={{ gridColumn: "1 / -1", background: T.navy || "#0f172a", color: "#fff", border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>📄 Cronograma de obra (PDF)</button>}
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Presupuesto</div>
-                                <input value={detail.monto || ''} onChange={e => upd(detail.id, { monto: e.target.value })} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
-                            </div>
-                            <div style={{ background: detail.pagado > 0 ? "rgba(22,163,74,.14)" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}><Ico n="money" /> Pagado</div>
-                                <input value={detail.pagado || ''} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); upd(detail.id, { pagado: v ? parseFloat(v) : 0 }); }} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: "#10B981", padding: 0 }} />
-                            </div>
                         </div>
                         <div style={{ background: detail.privada ? "#FEF3E2" : T.bg, border: `1.5px solid ${detail.privada ? BRASS : T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 14 }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -2339,7 +2325,6 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                 <Field label={getLabelUbic(cfg)}><Sel value={form.ap || ""} onChange={e => setForm(p => ({ ...p, ap: e.target.value }))}>{UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}</Sel></Field>
             </FieldRow>
             <FieldRow>
-                <Field label={t(cfg, 'obras_sector')}><TInput value={form.sector || ""} onChange={e => setForm(p => ({ ...p, sector: e.target.value }))} placeholder="Sector A" /></Field>
                 <Field label={`${t(cfg, 'obras_avance')} %`}><TInput type="number" value={form.avance || ""} onChange={e => setForm(p => ({ ...p, avance: e.target.value }))} placeholder="0" /></Field>
             </FieldRow>
             <FieldRow>
