@@ -5763,6 +5763,74 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
   const scrollRef = useRef(null);
   const recRef = useRef(null);
   const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const ttsOk = typeof window !== "undefined" && "speechSynthesis" in window;
+  const [narrarAuto, setNarrarAuto] = useState(() => { try { return localStorage.getItem("vv_narrar_auto") === "1"; } catch { return false; } });
+  const [hablando, setHablando] = useState(false);
+  const ultimoNarrado = useRef(null);
+  function limpiarParaVoz(texto) {
+    return String(texto || "").replace(/```accion[\s\S]*?```/g, "").replace(/\[\[ARCHIVO:\s*\d+\]\]/g, "").replace(/[*_#`]/g, "").replace(/https?:\/\/\S+/g, "un link").replace(/\n{2,}/g, ". ").replace(/\n/g, ". ").trim();
+  }
+  function hablar(texto) {
+    if (!ttsOk) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(limpiarParaVoz(texto));
+      u.lang = "es-AR"; u.rate = 1.02;
+      const voces = window.speechSynthesis.getVoices();
+      const voz = voces.find(v => v.lang === "es-AR") || voces.find(v => (v.lang || "").startsWith("es"));
+      if (voz) u.voice = voz;
+      u.onstart = () => setHablando(true); u.onend = () => setHablando(false); u.onerror = () => setHablando(false);
+      window.speechSynthesis.speak(u);
+    } catch { }
+  }
+  function pararVoz() { try { window.speechSynthesis.cancel(); } catch { } setHablando(false); }
+  function toggleNarrarAuto() { setNarrarAuto(v => { const nv = !v; try { localStorage.setItem("vv_narrar_auto", nv ? "1" : "0"); } catch { } if (!nv) pararVoz(); return nv; }); }
+  useEffect(() => {
+    if ((!narrarAuto && !vozIniciada.current) || !ttsOk) return;
+    const ult = msgs[msgs.length - 1];
+    if (!ult || ult.role !== "assistant" || loading) return;
+    const clave = ult.id || ult.ts || msgs.length;
+    if (ultimoNarrado.current === clave) return;
+    ultimoNarrado.current = clave;
+    hablar((typeof ult.content === "string" ? ult.content : "") + (ult.accionResultado ? ". " + ult.accionResultado : ""));
+  }, [msgs, loading, narrarAuto]);
+
+  const voiceFlag = useRef(false);        // el texto del cuadro vino de la voz → se envía solo
+  const vozIniciada = useRef(false);      // la última pregunta fue por voz → se responde en voz alta
+  const dictWindow = useRef(0);           // hasta cuándo vale el dictado del teclado
+  const autoTimer = useRef(null);
+  const autoSendRef = useRef(null);
+  const taRef = useRef(null);
+  const [autoCount, setAutoCount] = useState(0);
+  const [vozMsg, setVozMsg] = useState("");
+  const cancelarAuto = () => { voiceFlag.current = false; clearInterval(autoTimer.current); setAutoCount(0); };
+  autoSendRef.current = () => send();
+  // Manos libres: 3 segundos después de terminar de hablar, se envía solo.
+  useEffect(() => {
+    clearInterval(autoTimer.current);
+    if (!voiceFlag.current || !input.trim() || loading || escuchando) { setAutoCount(0); return; }
+    let left = 3; setAutoCount(3);
+    autoTimer.current = setInterval(() => {
+      left -= 1;
+      if (left <= 0) { clearInterval(autoTimer.current); setAutoCount(0); if (autoSendRef.current) autoSendRef.current(); }
+      else setAutoCount(left);
+    }, 1000);
+    return () => clearInterval(autoTimer.current);
+  }, [input, escuchando, loading]);
+  // La pantalla queda fija: al llegar una respuesta se muestra desde su PRIMER renglón y no se mueve más.
+  useEffect(() => {
+    const el = scrollRef.current; if (!el) return;
+    const last = msgs[msgs.length - 1];
+    const go = () => {
+      if (last && last.role !== "user" && !loading) {
+        const node = el.querySelector('[data-msg-i="' + (msgs.length - 1) + '"]');
+        if (node) { el.scrollTop = Math.max(0, node.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 8); return; }
+      }
+      el.scrollTop = el.scrollHeight;
+    };
+    go(); [80, 250].forEach(t => setTimeout(go, t));
+    try { window.scrollTo(0, 0); } catch { }
+  }, [msgs, loading]);
   const cnDeb = cfg?.clienteSigla || cfg?.clienteNombre || "Belfast";
   const DEBATE_MAX = 18;
   const [debateOpen, setDebateOpen] = useState(false);
@@ -5833,7 +5901,6 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     return () => clearInterval(iv);
   }, []);
 
-  useEffect(() => { const el = scrollRef.current; if (!el) return; const go = () => { el.scrollTop = el.scrollHeight; }; go(); [60, 160, 320, 600].forEach(t => setTimeout(go, t)); requestAnimationFrame(go); }, [msgs, loading]);
 
   // Índice de TODOS los archivos de la app, para que la IA pueda encontrarlos y traerlos al chat.
   function indiceArchivos() {
@@ -5977,6 +6044,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   }
   async function send(texto) {
     const c = (texto ?? input).trim(); if ((!c && chatAdj.length === 0) || loading) return;
+    const eraVoz = voiceFlag.current; voiceFlag.current = false; clearInterval(autoTimer.current); vozIniciada.current = eraVoz; setVozMsg(""); if (eraVoz) { try { taRef.current && taRef.current.blur(); } catch { } }
     const adj = chatAdj; setChatAdj([]);
     setInput(""); const next = [...msgs, { role: "user", content: c || (adj.length ? "(archivo adjunto)" : ""), adjIA: adj.map(a => ({ nombre: a.nombre, kind: a.kind, dataUrl: a.dataUrl })) }]; setMsgs(next); setLoading(true);
     const apiMsgs = next.map((m, i) => {
@@ -5985,7 +6053,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         for (const a of adj) blocks.push(a.kind === "image" ? { type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } } : { type: "document", source: { type: "base64", media_type: "application/pdf", data: a.data } });
         return { role: "user", content: blocks };
       }
-      return { role: m.role, content: typeof m.content === "string" ? m.content : m.content };
+      return { role: m.role, content: (i === next.length - 1 && eraVoz && typeof m.content === "string") ? m.content + "\n\n[Pregunta hecha por voz: la persona está manejando y te va a escuchar. Respondé en lenguaje hablado, claro y breve (máximo ~6 renglones), sin tablas, sin listas largas ni símbolos; primero lo más importante.]" : m.content };
     });
     const r = await callAI(apiMsgs, buildSystem(), apiKey, useSearch);
     if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(r || ""))) { setMsgs(prev => [...prev, { role: "assistant", content: "⚠ Me quedé sin crédito de IA por ahora. Para que vuelva a funcionar, hay que recargar crédito de la API en console.anthropic.com (Plans & Billing)." }]); setLoading(false); return; }
@@ -6117,14 +6185,38 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
   function toggleVoz() {
-    if (!sttOk) return;
-    if (escuchando) { recRef.current?.stop(); setEscuchando(false); return; }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = false; rec.continuous = false;
-    rec.onresult = e => { const txt = e.results[0][0].transcript; setInput(p => (p ? p + " " : "") + txt); };
-    rec.onend = () => setEscuchando(false);
-    rec.onerror = () => setEscuchando(false);
-    recRef.current = rec; rec.start(); setEscuchando(true);
+    setVozMsg("");
+    // iPhone: hay que "despertar" la voz de respuesta con un toque del usuario.
+    try { if (ttsOk) { const u0 = new SpeechSynthesisUtterance(" "); u0.volume = 0; window.speechSynthesis.speak(u0); } } catch { }
+    const usarTeclado = (msg) => {
+      dictWindow.current = Date.now() + 90000;
+      setVozMsg(msg || "Tocá el micrófono 🎤 del teclado y hablá. Se envía solo 3 segundos después de que termines.");
+      try { taRef.current && taRef.current.focus(); } catch { }
+    };
+    if (escuchando) { try { recRef.current && recRef.current.stop(); } catch { } setEscuchando(false); return; }
+    if (!sttOk) { usarTeclado(); return; }
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new SR();
+      const idioma = String(navigator.language || ""); rec.lang = idioma.toLowerCase().startsWith("es") ? idioma : "es-AR";
+      rec.interimResults = false; rec.continuous = false; rec.maxAlternatives = 1;
+      dictWindow.current = 0;
+      rec.onresult = e => {
+        let txt = ""; for (let i = e.resultIndex; i < e.results.length; i++) txt += e.results[i][0].transcript;
+        txt = txt.trim(); if (!txt) return;
+        voiceFlag.current = true;
+        setInput(p => (p ? p + " " : "") + txt);
+      };
+      rec.onend = () => setEscuchando(false);
+      rec.onerror = (ev) => {
+        setEscuchando(false);
+        const er = ev && ev.error;
+        if (er === "not-allowed" || er === "service-not-allowed") usarTeclado("El micrófono de la app no está permitido en este iPhone. Usá el micrófono 🎤 del teclado (si no aparece: Ajustes › General › Teclado › Activar dictado). Se envía solo 3 segundos después.");
+        else if (er === "no-speech") setVozMsg("No te escuché. Tocá el micrófono y hablá de nuevo.");
+        else if (er !== "aborted") usarTeclado("El micrófono no respondió. Usá el micrófono 🎤 del teclado; se envía solo 3 segundos después.");
+      };
+      recRef.current = rec; rec.start(); setEscuchando(true);
+    } catch (e) { setEscuchando(false); usarTeclado(); }
   }
   const QUICK = ["📝 Redactá una minuta de la reunión que te voy a contar", "Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
@@ -6137,7 +6229,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           {QUICK.map((q, i) => <button key={i} onClick={() => send(q)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", fontSize: 13, color: T.text, textAlign: "left", cursor: "pointer", boxShadow: T.shadow }}>{q}</button>)}
         </div>
       </div>}
-      {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
+      {msgs.map((m, i) => (<div key={i} data-msg-i={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
         <div style={{ maxWidth: "84%", background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{(() => { const txt = String(m.content || ""); if (m.role === "user" || !/\[\[ARCHIVO:\s*\d+\]\]/.test(txt)) return txt; return txt.replace(/\[\[ARCHIVO:\s*\d+\]\]/g, "").replace(/\n{3,}/g, "\n\n").trim(); })()}</div>
         {m.role !== "user" && (() => {
           const ix = indiceArchivos();
@@ -6182,6 +6274,8 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         <button onClick={() => setUseSearch(s => !s)} style={{ background: useSearch ? T.al : T.bg, color: useSearch ? T.accent : T.muted, border: `1px solid ${useSearch ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="globe" /> Buscar en internet {useSearch ? "ON" : "OFF"}</button>
         {debateActive ? <button onClick={stopDebate} style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Frenar debate</button>
           : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.navy : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.navy : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="mic" /> Debate IA</button>}
+        {ttsOk && <button onClick={toggleNarrarAuto} title="Narrar todas las respuestas en voz alta" style={{ background: narrarAuto ? "#16A34A" : T.bg, color: narrarAuto ? "#fff" : T.sub, border: `1px solid ${narrarAuto ? "#16A34A" : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🔊 {narrarAuto ? "Narrando ON" : "Narrar"}</button>}
+        {hablando && <button onClick={pararVoz} style={{ background: "rgba(239,68,68,.10)", color: "#EF4444", border: "1px solid rgba(239,68,68,.30)", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Callar</button>}
         {msgs.length > 0 && <button onClick={() => setMsgs([])} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginLeft: "auto" }}>Limpiar</button>}
       </div>
       {debateOpen && !debateActive && <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 8 }}>
@@ -6193,11 +6287,17 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       </div>}
       {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}><Ico n="mic" /> Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
       {chatAdj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{chatAdj.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "" : ""} {a.nombre.slice(0, 22)} <span onClick={() => setChatAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
+      {(autoCount > 0 || vozMsg) && <div style={{ display: "flex", alignItems: "center", gap: 8, background: autoCount > 0 ? T.al : T.bg, border: `1px solid ${autoCount > 0 ? T.accent : T.border}`, borderRadius: T.rsm, padding: "9px 12px", marginBottom: 8, fontSize: 12.5, color: T.text }}>
+        <span style={{ flex: 1, lineHeight: 1.45 }}>{autoCount > 0 ? <>🎙 Enviando en <b>{autoCount}</b> s…</> : vozMsg}</span>
+        {autoCount > 0 && <button onClick={() => { cancelarAuto(); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: T.sub, cursor: "pointer" }}>Cancelar</button>}
+        {autoCount > 0 && <button onClick={() => { clearInterval(autoTimer.current); setAutoCount(0); send(); }} style={{ background: T.accent, border: "none", borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Enviar ya</button>}
+        {autoCount === 0 && vozMsg && <button onClick={() => setVozMsg("")} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer" }}>✕</button>}
+      </div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
         <input ref={chatFileRef} type="file" accept="image/*,.pdf" multiple onChange={addChatAdj} style={{ display: "none" }} />
         <button onClick={() => chatFileRef.current?.click()} title="Adjuntar foto o PDF para analizar" style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.accent, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}><Ico n="clip" /> </button>
-        {sttOk && <button onClick={toggleVoz} style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#EF4444" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#EF4444" : T.border}`, fontSize: 16, cursor: "pointer", flexShrink: 0, animation: escuchando ? "pulse 1s infinite" : "none" }}><Ico n="mic" /> </button>}
-        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={escuchando ? "Escuchando…" : "Escribí, adjuntá o usá el micrófono…"} rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        <button onClick={toggleVoz} style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#EF4444" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#EF4444" : T.border}`, fontSize: 16, cursor: "pointer", flexShrink: 0, animation: escuchando ? "pulse 1s infinite" : "none" }}><Ico n="mic" /> </button>
+        <textarea ref={taRef} value={input} onChange={e => { voiceFlag.current = Date.now() < dictWindow.current; setInput(e.target.value); }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={escuchando ? "Escuchando…" : "Escribí, adjuntá o usá el micrófono…"} rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, maxHeight: 110, minHeight: 42 }} />
         <button onClick={() => send()} disabled={loading || (!input.trim() && chatAdj.length === 0)} style={{ width: 42, height: 42, borderRadius: T.rsm, background: (input.trim() || chatAdj.length) && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, cursor: (input.trim() || chatAdj.length) ? "pointer" : "default", flexShrink: 0 }}>↑</button>
       </div>
       {!apiKey && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center", marginTop: 7 }}>Cargá tu API Key en Más → Configuración para activar la IA.</div>}

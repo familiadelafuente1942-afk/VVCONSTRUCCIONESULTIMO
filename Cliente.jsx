@@ -2907,7 +2907,7 @@ function MensajesScreen({ T, cfg, obras, mensajes, enviar, borrarMensaje, vaciar
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
         <input ref={fileRef} type="file" multiple onChange={addAdj} style={{ display: "none" }} />
         <button onClick={() => fileRef.current?.click()} style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0 }}>＋</button>
-        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí un mensaje…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        <textarea ref={taRef} value={input} onChange={e => { voiceFlag.current = Date.now() < dictWindow.current; setInput(e.target.value); }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí un mensaje…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, maxHeight: 110, minHeight: 42 }} />
         <button onClick={send} style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.accent, color: "#fff", border: "none", fontSize: 17, flexShrink: 0 }}>↑</button>
       </div>
     </div>
@@ -3168,6 +3168,44 @@ function AsistenteScreen({ T, cfg, apiKey, obras, gestion = {}, modelosObra = []
   const ttsOk = typeof window !== "undefined" && "speechSynthesis" in window;
   const [narrarAuto, setNarrarAuto] = useState(() => { try { return localStorage.getItem("cliente_narrar_auto") === "1"; } catch { return false; } });
   const [hablando, setHablando] = useState(false);
+
+  const voiceFlag = useRef(false);        // el texto del cuadro vino de la voz → se envía solo
+  const vozIniciada = useRef(false);      // la última pregunta fue por voz → se responde en voz alta
+  const dictWindow = useRef(0);           // hasta cuándo vale el dictado del teclado
+  const autoTimer = useRef(null);
+  const autoSendRef = useRef(null);
+  const taRef = useRef(null);
+  const sbox = useRef(null);
+  const [autoCount, setAutoCount] = useState(0);
+  const [vozMsg, setVozMsg] = useState("");
+  const cancelarAuto = () => { voiceFlag.current = false; clearInterval(autoTimer.current); setAutoCount(0); };
+  autoSendRef.current = () => send();
+  // Manos libres: 3 segundos después de terminar de hablar, se envía solo.
+  useEffect(() => {
+    clearInterval(autoTimer.current);
+    if (!voiceFlag.current || !input.trim() || loading || escuchando) { setAutoCount(0); return; }
+    let left = 3; setAutoCount(3);
+    autoTimer.current = setInterval(() => {
+      left -= 1;
+      if (left <= 0) { clearInterval(autoTimer.current); setAutoCount(0); if (autoSendRef.current) autoSendRef.current(); }
+      else setAutoCount(left);
+    }, 1000);
+    return () => clearInterval(autoTimer.current);
+  }, [input, escuchando, loading]);
+  // La pantalla queda fija: al llegar una respuesta se muestra desde su PRIMER renglón y no se mueve más.
+  useEffect(() => {
+    const el = sbox.current; if (!el) return;
+    const last = msgs[msgs.length - 1];
+    const go = () => {
+      if (last && last.role !== "user" && !loading) {
+        const node = el.querySelector('[data-msg-i="' + (msgs.length - 1) + '"]');
+        if (node) { el.scrollTop = Math.max(0, node.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 8); return; }
+      }
+      el.scrollTop = el.scrollHeight;
+    };
+    go(); [80, 250].forEach(t => setTimeout(go, t));
+    try { window.scrollTo(0, 0); } catch { }
+  }, [msgs, loading]);
   const ultimoNarrado = useRef(null);
   function limpiarParaVoz(texto) {
     return String(texto || "")
@@ -3200,7 +3238,7 @@ function AsistenteScreen({ T, cfg, apiKey, obras, gestion = {}, modelosObra = []
   }
   // narra sola la última respuesta de la IA, si el modo automático está prendido
   useEffect(() => {
-    if (!narrarAuto || !ttsOk) return;
+    if ((!narrarAuto && !vozIniciada.current) || !ttsOk) return;
     const ult = msgs[msgs.length - 1];
     if (!ult || ult.role !== "assistant" || loading) return;
     const clave = ult.id || ult.ts || msgs.length;
@@ -3238,14 +3276,38 @@ function AsistenteScreen({ T, cfg, apiKey, obras, gestion = {}, modelosObra = []
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
   function toggleVoz() {
-    if (!sttOk) return;
-    if (escuchando) { recRef.current?.stop(); setEscuchando(false); return; }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = false; rec.continuous = false;
-    rec.onresult = e => { const txt = e.results[0][0].transcript; setInput(p => (p ? p + " " : "") + txt); };
-    rec.onend = () => setEscuchando(false);
-    rec.onerror = () => setEscuchando(false);
-    recRef.current = rec; rec.start(); setEscuchando(true);
+    setVozMsg("");
+    // iPhone: hay que "despertar" la voz de respuesta con un toque del usuario.
+    try { if (ttsOk) { const u0 = new SpeechSynthesisUtterance(" "); u0.volume = 0; window.speechSynthesis.speak(u0); } } catch { }
+    const usarTeclado = (msg) => {
+      dictWindow.current = Date.now() + 90000;
+      setVozMsg(msg || "Tocá el micrófono 🎤 del teclado y hablá. Se envía solo 3 segundos después de que termines.");
+      try { taRef.current && taRef.current.focus(); } catch { }
+    };
+    if (escuchando) { try { recRef.current && recRef.current.stop(); } catch { } setEscuchando(false); return; }
+    if (!sttOk) { usarTeclado(); return; }
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new SR();
+      const idioma = String(navigator.language || ""); rec.lang = idioma.toLowerCase().startsWith("es") ? idioma : "es-AR";
+      rec.interimResults = false; rec.continuous = false; rec.maxAlternatives = 1;
+      dictWindow.current = 0;
+      rec.onresult = e => {
+        let txt = ""; for (let i = e.resultIndex; i < e.results.length; i++) txt += e.results[i][0].transcript;
+        txt = txt.trim(); if (!txt) return;
+        voiceFlag.current = true;
+        setInput(p => (p ? p + " " : "") + txt);
+      };
+      rec.onend = () => setEscuchando(false);
+      rec.onerror = (ev) => {
+        setEscuchando(false);
+        const er = ev && ev.error;
+        if (er === "not-allowed" || er === "service-not-allowed") usarTeclado("El micrófono de la app no está permitido en este iPhone. Usá el micrófono 🎤 del teclado (si no aparece: Ajustes › General › Teclado › Activar dictado). Se envía solo 3 segundos después.");
+        else if (er === "no-speech") setVozMsg("No te escuché. Tocá el micrófono y hablá de nuevo.");
+        else if (er !== "aborted") usarTeclado("El micrófono no respondió. Usá el micrófono 🎤 del teclado; se envía solo 3 segundos después.");
+      };
+      recRef.current = rec; rec.start(); setEscuchando(true);
+    } catch (e) { setEscuchando(false); usarTeclado(); }
   }
   const cnDeb = "V+V";
   const DEBATE_MAX = 18;
@@ -3317,7 +3379,7 @@ function AsistenteScreen({ T, cfg, apiKey, obras, gestion = {}, modelosObra = []
   }, []);
   const pend = (pedidos || []).filter(p => p.para === "cliente" && p.estado !== "resuelto");
   const pendObras = [...new Set(pend.map(p => p.obra_id ? (obras.find(o => o.id === p.obra_id)?.nombre || "") : "general").filter(Boolean))].join(", ");
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, loading]);
+  
   function sys() {
     const ob = obras.map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)})`).join("\n");
     const ped = (pedidos || []).filter(p => p.estado !== "resuelto").slice(0, 20).map(p => `· [${p.id}] "${p.asunto}" (${p.de === "cliente" ? "enviado a V+V" : "recibido de V+V"}, estado ${p.estado}) — último: ${(p.hilo || [])[(p.hilo || []).length - 1]?.texto?.slice(0, 80) || ""}`).join("\n");
@@ -3403,6 +3465,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   }
   async function send(texto) {
     const c = (texto ?? input).trim(); const adjActuales = texto != null ? [] : adj; if (!c && adjActuales.length === 0) return; if (loading) return;
+    const eraVoz = voiceFlag.current; voiceFlag.current = false; clearInterval(autoTimer.current); vozIniciada.current = eraVoz; setVozMsg(""); if (eraVoz) { try { taRef.current && taRef.current.blur(); } catch { } }
     setInput(""); if (texto == null) setAdj([]);
     // Contenido para la IA: texto + imágenes en base64 (las ve de verdad) + links de otros archivos.
     const imgs = adjActuales.filter(a => a.esImagen && a.dataUrl);
@@ -3413,7 +3476,8 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       ? [{ type: "text", text: contenidoIA || "Mirá este archivo." }, ...imgs.map(a => ({ type: "image", source: { type: "base64", media_type: (a.dataUrl.match(/^data:(.*?);/) || [, "image/jpeg"])[1], data: a.dataUrl.split(",")[1] } }))]
       : contenidoIA;
     const next = [...msgs, { role: "user", content: contentBlocks, docs: adjActuales.length ? adjActuales.map(a => ({ nombre: a.nombre, url: a.url })) : undefined }]; setMsgs(next); setLoading(true);
-    const r = await callAI(next, sys(), apiKey, true);
+    const nextIA = eraVoz ? next.map((m, ix) => ix === next.length - 1 && typeof m.content === "string" ? { ...m, content: m.content + "\n\n[Pregunta hecha por voz: la persona está manejando y te va a escuchar. Respondé en lenguaje hablado, claro y breve (máximo ~6 renglones), sin tablas, sin listas largas ni símbolos; primero lo más importante.]" } : m) : next;
+    const r = await callAI(nextIA, sys(), apiKey, true);
     const { limpio, accion } = parseAccion(r);
     let extra = {};
     if (accion && accion.tipo === "traer_plano") {
@@ -3579,7 +3643,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
       <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de V+V</div><div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{pendObras ? `Obras: ${pendObras}` : "Tocá para ver"} →</div></div>
     </div>}
-    <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px" }}>
+    <div ref={sbox} style={{ flex: 1, overflowY: "auto", padding: "16px 16px", overscrollBehavior: "contain" }}>
       {onMinutas && <button onClick={onMinutas} style={{ width: "100%", maxWidth: 760, margin: "0 auto 16px", display: "flex", alignItems: "center", gap: 12, background: T.navy, border: `1px solid ${BRASS}`, borderRadius: 12, padding: "14px 16px", cursor: "pointer" }}>
         <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Ico n="mic" s={19} c="#fff" /></div>
         <div style={{ flex: 1, textAlign: "left" }}>
@@ -3592,7 +3656,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
         <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 560, margin: "0 auto" }}>{QUICK.map((q, i) => <button key={i} onClick={() => send(q)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", fontSize: 13, color: T.text, textAlign: "left", boxShadow: T.shadow }}>{q}</button>)}</div>
       </div>}
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
-        {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
+        {msgs.map((m, i) => (<div key={i} data-msg-i={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
           <div style={{ maxWidth: "84%", background: m.role === "user" ? T.accent : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{Array.isArray(m.content) ? (m.content.find(b => b.type === "text")?.text || "") : m.content}</div>
           {m.role !== "user" && ttsOk && !narrarAuto && <button onClick={() => hablar((Array.isArray(m.content) ? (m.content.find(b => b.type === "text")?.text || "") : m.content) + (m.accionResultado ? ". " + m.accionResultado : ""))} style={{ marginTop: 5, background: "none", border: "none", color: T.muted, fontSize: 10.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>🔊 Escuchar</button>}
           {m.role !== "user" && /MINUTA DE REUNI[OÓ]N/i.test(String(m.content || "")) && <button onClick={() => descargarMinuta(m.content)} style={{ marginTop: 7, background: "#2B579A", color: "#fff", border: "none", borderRadius: 9, padding: "9px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Ico n="word" /> Descargar minuta (Word)</button>}
@@ -3635,11 +3699,17 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
       </div>}
       {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}><Ico n="mic" /> Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
       {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, maxWidth: 760, margin: "0 auto 8px" }}>{adj.map((a, i) => <span key={i} style={{ background: T.bg, borderRadius: 6, padding: "5px 9px", fontSize: 11, color: T.sub, display: "inline-flex", alignItems: "center", gap: 5 }}><Ico n="clip" /> {a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted, fontWeight: 700 }}>✕</span></span>)}</div>}
+      {(autoCount > 0 || vozMsg) && <div style={{ display: "flex", alignItems: "center", gap: 8, background: autoCount > 0 ? T.al : T.bg, border: `1px solid ${autoCount > 0 ? T.accent : T.border}`, borderRadius: T.rsm, padding: "9px 12px", marginBottom: 8, maxWidth: 760, margin: "0 auto 8px", fontSize: 12.5, color: T.text }}>
+        <span style={{ flex: 1, lineHeight: 1.45 }}>{autoCount > 0 ? <>🎙 Enviando en <b>{autoCount}</b> s…</> : vozMsg}</span>
+        {autoCount > 0 && <button onClick={() => { cancelarAuto(); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: T.sub, cursor: "pointer" }}>Cancelar</button>}
+        {autoCount > 0 && <button onClick={() => { clearInterval(autoTimer.current); setAutoCount(0); send(); }} style={{ background: T.accent, border: "none", borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Enviar ya</button>}
+        {autoCount === 0 && vozMsg && <button onClick={() => setVozMsg("")} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer" }}>✕</button>}
+      </div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, maxWidth: 760, margin: "0 auto" }}>
         <input ref={fileRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" onChange={addAdj} style={{ display: "none" }} />
         <button onClick={() => fileRef.current?.click()} disabled={subiendoAdj} title="Adjuntar archivo" style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.sub, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>{subiendoAdj ? "…" : "＋"}</button>
         <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder="Escribí tu consulta…" rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, maxHeight: 110, minHeight: 42 }} />
-        {sttOk && <button onClick={toggleVoz} title="Dictar por voz" style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#DC2626" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>🎙</button>}
+        <button onClick={toggleVoz} title="Dictar por voz" style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#DC2626" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}>🎙</button>
         <button onClick={() => send()} disabled={loading || (!input.trim() && adj.length === 0)} style={{ width: 42, height: 42, borderRadius: T.rsm, background: (input.trim() || adj.length > 0) && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, flexShrink: 0 }}>↑</button>
       </div>
     </div>
