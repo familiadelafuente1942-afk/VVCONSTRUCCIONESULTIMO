@@ -1385,8 +1385,8 @@ const MEDIOS_PEDIDO_CLI = ["Verbal", "E-mail", "Nota de pedido", "Orden de servi
 const DOCS_RESPALDO_CLI = ["Plano de definiciones", "Plano de modificaciones de tareas ya realizadas", "Croquis / detalle constructivo", "Especificación técnica", "Registro fotográfico del estado actual", "Cómputo / metrado", "Nota / e-mail del pedido", "Otro"];
 const REQUISITOS_INICIO_CLI = ["Requerimiento recibido por escrito", "Tarea definida técnicamente", "Plano de definiciones / modificaciones adjunto", "Adicional cotizado", "Incidencia en plazo acordada", "Autorización firmada por Belfast CM"];
 const RUBROS_COTIZ_CLI = [{ id: "materiales", label: "Materiales" }, { id: "manoObra", label: "Mano de obra" }, { id: "equipos", label: "Equipos / herramientas" }, { id: "subcontratos", label: "Subcontratos" }, { id: "otros", label: "Otros" }];
-function AdicionalesClienteView({ T, obras, adicionales, cfg }) {
-  const [obraId, setObraId] = useState("");
+function AdicionalesClienteView({ T, obras, adicionales, cfg, obraIdFijo }) {
+  const [obraId, setObraId] = useState(obraIdFijo || "");
   const [pdfHtml, setPdfHtml] = useState(null);
   const num = (v) => { const n = Number(String(v == null ? "" : v).replace(/[^\d.-]/g, "")); return isNaN(n) ? 0 : n; };
   const nomObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "—";
@@ -2499,7 +2499,7 @@ function TabGastos({ detail, upd }) {
     </div>);
 }
 
-function Obras({ obras, setObras, modelosObra = [], lics = [], detailId: detailIdProp, setDetailId: setDetailIdProp, requireAuth = (fn) => fn(), cfg, apiKey }) {
+function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [], detailId: detailIdProp, setDetailId: setDetailIdProp, requireAuth = (fn) => fn(), cfg, apiKey }) {
     const [detailIdLocal, setDetailIdLocal] = useState(null);
     const detailId = detailIdProp !== undefined ? detailIdProp : detailIdLocal;
     const setDetailId = setDetailIdProp || setDetailIdLocal;
@@ -2507,6 +2507,7 @@ function Obras({ obras, setObras, modelosObra = [], lics = [], detailId: detailI
     const defaultAp = UBICS[0]?.id || 'aep';
     const [showNew, setShowNew] = useState(false);
     const [tab, setTab] = useState("info");
+    const [mostrarAdic, setMostrarAdic] = useState(false);
     const [form, setForm] = useState({ nombre: "", ap: defaultAp, sector: "", estado: "curso", avance: 0, inicio: "", cierre: "" });
     const [newObs, setNewObs] = useState("");
     const fileRef = useRef(null); const archRef = useRef(null); const videoRef = useRef(null); const planoRef = useRef(null);
@@ -2601,6 +2602,7 @@ function Obras({ obras, setObras, modelosObra = [], lics = [], detailId: detailI
                     <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#B0894F)", marginTop: 10 }} />
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
+                    {tab !== "info" && <button onClick={() => setTab("info")} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer", marginBottom: 12 }}>← Volver a la obra</button>}
                     {tab === "info" && (<div>
                         <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 8, border: `1px solid ${T.border}` }}>
                             <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
@@ -2665,15 +2667,21 @@ function Obras({ obras, setObras, modelosObra = [], lics = [], detailId: detailI
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail, modelosObra) || "—"}</div>
                             </div>}
                         </div>
-                        <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
-                    </div>)}
-                    {tab === "obs" && (<div>
-                        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                            <TInput value={newObs} onChange={e => setNewObs(e.target.value)} placeholder={t(cfg, 'obras_obs_placeholder')} />
-                            <PBtn_OG onClick={() => { if (!newObs.trim()) return; const tx = newObs; setNewObs(""); upd(detail.id, { obs: [...detail.obs, { id: uid_OG(), txt: tx, fecha: new Date().toLocaleDateString("es-AR") }] }); }} disabled={!newObs.trim()} style={{ padding: "11px 16px", flexShrink: 0 }}>+</PBtn_OG>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+                            <div onClick={() => setTab("fotos")} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Fotos</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{(detail.fotos || []).length} foto{(detail.fotos || []).length === 1 ? "" : "s"} ›</div>
+                            </div>
+                            <div onClick={() => setTab("planos")} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Planos</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{(detail.planos || []).length} plano{(detail.planos || []).length === 1 ? "" : "s"} ›</div>
+                            </div>
+                            <div onClick={() => setMostrarAdic(true)} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Adicionales</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>Ver ›</div>
+                            </div>
                         </div>
-                        {[...detail.obs].reverse().map(o => (<Card_OG key={o.id} style={{ padding: "12px 14px", marginBottom: 8 }}><div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{o.txt}</div><div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>{o.fecha}</div></Card_OG>))}
-                        {(detail.obs || []).length === 0 && <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_notas')}</div>}
+                        <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
                     </div>)}
                     {tab === "fotos" && (<TabFotos detail={detail} upd={upd} fileRef={fileRef} handleFoto={handleFoto} videoRef={videoRef} handleVideo={handleVideo} apiKey={apiKey} cfg={cfg} />)}
                     {tab === "planos" && (<div>
@@ -2687,24 +2695,11 @@ function Obras({ obras, setObras, modelosObra = [], lics = [], detailId: detailI
                             <button onClick={() => upd(detail.id, { planos: (detail.planos || []).filter(x => x.id !== p.id) })} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
                         </div>)}
                     </div>)}
-                    {tab === "archivos" && (<div>
-                        <input ref={archRef} type="file" accept=".pdf,.xlsx,.xls,.docx,.doc" multiple onChange={handleArch} style={{ display: "none" }} />
-                        <PBtn_OG full onClick={() => archRef.current?.click()} style={{ marginBottom: 14 }}>{t(cfg, 'obras_agregar_arch')}</PBtn_OG>
-                        {(detail.archivos || []).map(f => (<div key={f.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 7 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 8, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><span style={{ fontSize: 9, fontWeight: 700, color: T.accent }}>{f.ext}</span></div>
-                            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{f.fecha}</div></div>
-                            <a href={f.url} download={f.nombre} style={{ textDecoration: "none" }}><button style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, width: 30, height: 30, fontSize: 13, color: T.sub, cursor: "pointer" }}>↓</button></a>
-                        </div>))}
-                        {(detail.archivos || []).length === 0 && <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_archivos')}</div>}
-                    </div>)}
-                    {tab === "informes" && <TabInformes detail={detail} upd={upd} />}
-                    {tab === "gastos" && <TabGastos detail={detail} upd={upd} />}
                 </div>
-                <div style={{ background: T.card, borderTop: `1px solid ${T.border}`, flexShrink: 0, display: "flex", overflowX: "auto" }}>
-                    {[[`info`, t(cfg, 'obras_info')], [`obs`, t(cfg, 'obras_notas')], [`fotos`, t(cfg, 'obras_fotos')], [`planos`, 'Planos'], [`archivos`, t(cfg, 'obras_archivos')], [`informes`, 'Informes'], [`gastos`, 'Gastos']].map(([id, label]) => (
-                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#B0894F)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
-                    ))}
-                </div>
+                {mostrarAdic && (<div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
+                    <div style={{ padding: "12px 18px", borderBottom: `1px solid ${T.border}`, background: T.card }}><button onClick={() => setMostrarAdic(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer" }}>← Volver a la obra</button></div>
+                    <div style={{ flex: 1, overflowY: "auto" }}><AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} obraIdFijo={detail.id} /></div>
+                </div>)}
             </div>
         );
     }
@@ -6008,7 +6003,7 @@ function ClienteApp() {
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
           {screen === "inicio" && <InicioScreen T={T} cfg={cfg} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} gestion={gestion} modelosObra={modelosObra} avance={avance} auditoria={auditoria} adicionales={adicionales} dronevuelos={dronevuelos} definiciones={definiciones} docrecepcion={docrecepcion} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
-          {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} modelosObra={modelosObra} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
+          {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} adicionales={adicionales} modelosObra={modelosObra} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
           {screen === "avance" && <AvanceView T={T} obras={obras} avance={avance} setAvance={setAvance} apiKey={vvCfg.apiKey} cfg={cfg} certif={certifSem} envios={enviosProp} setEnvios={setEnviosProp} />}
