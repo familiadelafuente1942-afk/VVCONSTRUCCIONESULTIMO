@@ -1917,27 +1917,32 @@ function ModelosObraView({ db, cfg, onBack }) {
     setEditId(null);
   }
   function updEtapa(modeloId, etapaNombre, patch) {
-    const actuales = modelos.find(m => m.id === modeloId)?.etapas || [];
+    // Primero se NORMALIZA el modelo guardado (convierte de una sola vez los arranques viejos) y recién
+    // después se aplica el cambio — así un valor a medio tipear no deja números mal calculados.
+    const base = recalcularModelo(modelos.find(m => m.id === modeloId) || {});
+    const actuales = base.etapas;
     const existe = actuales.some(e => e.etapa === etapaNombre);
     const etapas = existe
       ? actuales.map(e => e.etapa === etapaNombre ? { ...e, ...patch } : e)
       : [...actuales, { etapa: etapaNombre, usa: false, inicioOffsetDias: 0, duracionDias: 0, ...patch }];
-    const mm = recalcularModelo({ etapas, losas: modelos.find(m => m.id === modeloId)?.losas || [] });
+    const mm = recalcularModelo({ etapas, losas: base.losas });
     upd(modeloId, { etapas: mm.etapas, losas: mm.losas });
   }
   // La cantidad de losas se escribe directo (es lo que define el tipo de
   // proyecto); al cambiar el número se agregan o sacan filas solas, sin
   // perder lo ya tipeado en las que quedan.
   function setCantLosas(modeloId, n) {
-    const actual = modelos.find(m => m.id === modeloId)?.losas || [];
+    const baseM = recalcularModelo(modelos.find(m => m.id === modeloId) || {});
+    const actual = baseM.losas;
     const cant = Math.max(0, Math.round(Number(n) || 0));
     const losas = cant <= actual.length ? actual.slice(0, cant) : [...actual, ...Array.from({ length: cant - actual.length }, () => ({ inicioOffsetDias: 0, duracionDias: 0 }))];
-    const mm = recalcularModelo({ etapas: modelos.find(m => m.id === modeloId)?.etapas || [], losas });
+    const mm = recalcularModelo({ etapas: baseM.etapas, losas });
     upd(modeloId, { etapas: mm.etapas, losas: mm.losas });
   }
   function updLosa(modeloId, idx, patch) {
-    const losas = (modelos.find(m => m.id === modeloId)?.losas || []).map((l, i) => i === idx ? { ...l, ...patch } : l);
-    const mm = recalcularModelo({ etapas: modelos.find(m => m.id === modeloId)?.etapas || [], losas });
+    const baseL = recalcularModelo(modelos.find(m => m.id === modeloId) || {});
+    const losas = baseL.losas.map((l, i) => i === idx ? { ...l, ...patch } : l);
+    const mm = recalcularModelo({ etapas: baseL.etapas, losas });
     upd(modeloId, { etapas: mm.etapas, losas: mm.losas });
   }
 
