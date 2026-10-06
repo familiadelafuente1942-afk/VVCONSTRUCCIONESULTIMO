@@ -2079,7 +2079,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
     const [showNew, setShowNew] = useState(false);
     const [tab, setTab] = useState("info");
     const [mostrarAdicionales, setMostrarAdicionales] = useState(false);
-    const [form, setForm] = useState({ nombre: "", ap: defaultAp, sector: "", estado: "pendiente", avance: 0, inicio: "", cierre: "" });
+    const [form, setForm] = useState({ nombre: "", ap: defaultAp, sector: "", estado: "curso", avance: 0, inicio: "", cierre: "" });
     const [newObs, setNewObs] = useState("");
     const fileRef = useRef(null); const archRef = useRef(null); const videoRef = useRef(null); const planoRef = useRef(null);
     const detail = detailId ? obras.find(o => o.id === detailId) : null;
@@ -2093,7 +2093,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         if (!String(form.nombre || "").trim()) return;
         const apFinal = form.ap || UBICS[0]?.id || defaultAp;
         setObras(p => [...p, { ...form, ap: apFinal, id: uid(), avance: parseInt(form.avance) || 0, pagado: 0, obs: [], fotos: [], archivos: [], informes: [], docs: {} }]);
-        setForm({ nombre: "", ap: UBICS[0]?.id || defaultAp, sector: "", estado: "pendiente", avance: 0, inicio: "", cierre: "" });
+        setForm({ nombre: "", ap: UBICS[0]?.id || defaultAp, sector: "", estado: "curso", avance: 0, inicio: "", cierre: "" });
         setShowNew(false);
     }
     function upd(id, patch) {
@@ -2165,18 +2165,12 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         const e = ec(detail.estado);
         return (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap} · ${detail.sector || t(cfg, 'obras_sector')}`} back onBack={() => setDetailId(null)} right={<Badge color={e.color} bg={e.bg}>{e.label}</Badge>} />
+                <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap} · ${detail.sector || t(cfg, 'obras_sector')}`} back onBack={() => setDetailId(null)} />
                 <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "12px 18px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 600 }}>{t(cfg, 'obras_avance')}</span><span style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{detail.avance}%</span></div>
                     <div style={{ height: 8, background: T.bg, borderRadius: 4 }}><div style={{ height: 8, background: T.accent, borderRadius: 4, width: `${detail.avance}%`, transition: "width .5s" }} /></div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_inicio')}: {detail.inicio || "—"}</span><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_cierre')}: {detail.cierre || "—"}</span></div>
                     <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#1D4ED8)", marginTop: 10 }} />
-                </div>
-                <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, display: "flex", overflowX: "auto" }}>
-                    {[[`info`, t(cfg, 'obras_info')], [`obs`, t(cfg, 'obras_notas')], [`fotos`, t(cfg, 'obras_fotos')], [`planos`, 'Planos'], [`archivos`, t(cfg, 'obras_archivos')], [`informes`, 'Informes'], [`gastos`, 'Gastos']].map(([id, label]) => (
-                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#1D4ED8)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
-                    ))}
-                    <button onClick={() => setMostrarAdicionales(true)} style={{ flex: 1, minWidth: 74, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: 500, color: T.muted, borderBottom: "2px solid transparent", whiteSpace: "nowrap" }}>Adicionales</button>
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
                     {tab === "info" && (<div>
@@ -2257,10 +2251,6 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                                 <input value={detail.pagado || ''} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); upd(detail.id, { pagado: v ? parseFloat(v) : 0 }); }} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: "#10B981", padding: 0 }} />
                             </div>
                         </div>
-                        <Lbl>{t(cfg, 'obras_estado')}</Lbl>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
-                            {OBRA_ESTADOS.map(e => (<button key={e.id} onClick={() => upd(detail.id, { estado: e.id })} style={{ padding: "9px", borderRadius: T.rsm, border: `1.5px solid ${detail.estado === e.id ? e.color : T.border}`, background: detail.estado === e.id ? e.bg : T.card, color: e.color, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{e.label}</button>))}
-                        </div>
                         <div style={{ background: detail.privada ? "#FEF3E2" : T.bg, border: `1.5px solid ${detail.privada ? BRASS : T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 14 }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                 <div>
@@ -2312,6 +2302,12 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                     {tab === "informes" && <TabInformes detail={detail} upd={upd} />}
                     {tab === "gastos" && <TabGastos detail={detail} upd={upd} />}
                 </div>
+                <div style={{ background: T.card, borderTop: `1px solid ${T.border}`, flexShrink: 0, display: "flex", overflowX: "auto" }}>
+                    {[[`info`, t(cfg, 'obras_info')], [`obs`, t(cfg, 'obras_notas')], [`fotos`, t(cfg, 'obras_fotos')], [`planos`, 'Planos'], [`archivos`, t(cfg, 'obras_archivos')], [`informes`, 'Informes'], [`gastos`, 'Gastos']].map(([id, label]) => (
+                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#1D4ED8)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
+                    ))}
+                    <button onClick={() => setMostrarAdicionales(true)} style={{ flex: 1, minWidth: 74, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: 500, color: T.muted, borderBottom: "2px solid transparent", whiteSpace: "nowrap" }}>Adicionales</button>
+                </div>
                 {mostrarAdicionales && (
                     <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
                         <AdicionalesView db={{ obras, adicionales, setAdicionales }} cfg={cfg} onBack={() => setMostrarAdicionales(false)} obraIdFijo={detail.id} />
@@ -2341,7 +2337,6 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
             <Field label={t(cfg, 'obras_titulo')}><TInput value={form.nombre || ""} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Refacción Terminal B" /></Field>
             <FieldRow>
                 <Field label={getLabelUbic(cfg)}><Sel value={form.ap || ""} onChange={e => setForm(p => ({ ...p, ap: e.target.value }))}>{UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}</Sel></Field>
-                <Field label={t(cfg, 'obras_estado')}><Sel value={form.estado || ""} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))}>{OBRA_ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</Sel></Field>
             </FieldRow>
             <FieldRow>
                 <Field label={t(cfg, 'obras_sector')}><TInput value={form.sector || ""} onChange={e => setForm(p => ({ ...p, sector: e.target.value }))} placeholder="Sector A" /></Field>
