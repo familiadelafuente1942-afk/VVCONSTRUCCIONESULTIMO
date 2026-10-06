@@ -742,8 +742,26 @@ const TEMA_CLARO = { bg: "#F5F6F8", card: "#ffffff", border: "#E6E9EE", text: "#
 function hexARgbC(hex) { const h = String(hex || "").replace("#", ""); const hh = h.length === 3 ? h.split("").map(x => x + x).join("") : h; const n = parseInt(hh, 16) || 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 function rgbAHexC(rgb) { return "#" + rgb.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join(""); }
 function aclararHexC(hex, t) { const A = hexARgbC(hex); const GRIS = [76, 78, 84]; return rgbAHexC(A.map((v, i) => v + (GRIS[i] - v) * t)); }
+
+// ── BRILLO DEL FONDO (negro ↔ blanco) ────────────────────────────────
+// cfg.brillo: 0 = fondo negro con letras blancas … 100 = fondo blanco con letras negras.
+// Intermedios: gris; las letras van de blanco a negro y se mantienen siempre legibles
+// (en el punto medio el texto "salta" al lado opuesto para no perder contraste).
+function paletaBrillo(brillo) {
+  const L = Math.max(0, Math.min(100, Number(brillo))) / 100;
+  let tL = 1 - L;
+  if (Math.abs(tL - L) < 0.55) tL = L < 0.5 ? L + 0.55 : L - 0.55;
+  tL = Math.max(0, Math.min(1, tL));
+  const g = (v) => { const n = Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, "0"); return "#" + n + n + n; };
+  const mix = (a, b, k) => g(a + (b - a) * k);
+  return { bg: g(L), card: g(L < 0.5 ? L + 0.05 : L + 0.04), border: g(L < 0.5 ? L + 0.14 : L - 0.12), text: g(tL), sub: mix(tL, L, 0.3), muted: mix(tL, L, 0.52), navy: L < 0.5 ? g(L * 0.7) : "#0F172A", oscuro: L < 0.5 };
+}
 function theme(cfg) {
   const c = cfg || {};
+  if (c.brillo != null) {
+    const p = paletaBrillo(c.brillo); const accent0 = c.accent || "#B0894F";
+    return { bg: p.bg, card: p.card, border: p.border, text: p.text, sub: p.sub, muted: p.muted, accent: accent0, accentLight: hexToRgba(accent0, .14), navy: p.oscuro ? p.bg : p.navy, r: 12, rsm: 8, shadow: p.oscuro ? TEMA_OSCURO.shadow : TEMA_CLARO.shadow };
+  }
   const base = c.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO;
   const esOscuro = c.modo !== "claro";
   const pct = Math.max(0, Math.min(100, c.oscuroIntensidad == null ? 100 : Number(c.oscuroIntensidad)));
@@ -2971,19 +2989,22 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
       </div>
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Modo</label>
       <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 18 }}>
-        <button onClick={() => setCfg(p => { const n = { ...p, modo: "oscuro" }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; return n; })} style={{ flex: 1, background: (cfg.modo || "oscuro") === "oscuro" ? T.accent : T.card, color: (cfg.modo || "oscuro") === "oscuro" ? "#fff" : T.text, border: `1px solid ${(cfg.modo || "oscuro") === "oscuro" ? T.accent : T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🌙 Oscuro</button>
-        <button onClick={() => setCfg(p => { const n = { ...p, modo: "claro" }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; return n; })} style={{ flex: 1, background: cfg.modo === "claro" ? T.accent : T.card, color: cfg.modo === "claro" ? "#fff" : T.text, border: `1px solid ${cfg.modo === "claro" ? T.accent : T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>☀️ Claro</button>
+        <button onClick={() => setCfg(p => { const n = { ...p, modo: "oscuro" }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; delete n.brillo; return n; })} style={{ flex: 1, background: (cfg.modo || "oscuro") === "oscuro" ? T.accent : T.card, color: (cfg.modo || "oscuro") === "oscuro" ? "#fff" : T.text, border: `1px solid ${(cfg.modo || "oscuro") === "oscuro" ? T.accent : T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🌙 Oscuro</button>
+        <button onClick={() => setCfg(p => { const n = { ...p, modo: "claro" }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; delete n.brillo; return n; })} style={{ flex: 1, background: cfg.modo === "claro" ? T.accent : T.card, color: cfg.modo === "claro" ? "#fff" : T.text, border: `1px solid ${cfg.modo === "claro" ? T.accent : T.border}`, borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>☀️ Claro</button>
       </div>
 
-      {(cfg.modo || "oscuro") === "oscuro" && <>
+      {(() => { const bv = cfg.brillo == null ? ((cfg.modo || "oscuro") === "oscuro" ? 0 : 100) : Number(cfg.brillo); const pv = paletaBrillo(bv); return (<>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Intensidad del oscuro</label>
-          <span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cfg.oscuroIntensidad == null ? 100 : cfg.oscuroIntensidad}%</span>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Fondo: de negro a blanco</label>
+          <span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{bv}%</span>
         </div>
-        <div style={{ fontSize: 11, color: T.muted, marginBottom: 8, lineHeight: 1.5 }}>100% es bien oscuro (como estaba). Bajalo para aclararlo sin salir del modo oscuro.</div>
-        <input type="range" min="20" max="100" value={cfg.oscuroIntensidad == null ? 100 : cfg.oscuroIntensidad} onChange={e => setCfg(p => ({ ...p, oscuroIntensidad: Number(e.target.value) }))} style={{ width: "100%", accentColor: T.accent, marginBottom: 4 }} />
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: T.muted, marginBottom: 18 }}><span>Más clarito</span><span>Bien oscuro</span></div>
-      </>}
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 8, lineHeight: 1.5 }}>Deslizá: el fondo se va aclarando y las letras se van oscureciendo, de negro con letras blancas a blanco con letras negras.</div>
+        <input type="range" min="0" max="100" value={bv} onChange={e => setCfg(p => ({ ...p, brillo: Number(e.target.value) }))} style={{ width: "100%", accentColor: T.accent, marginBottom: 4 }} />
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: T.muted, marginBottom: 10 }}><span>Negro · letras blancas</span><span>Blanco · letras negras</span></div>
+        <div style={{ padding: "12px 14px", borderRadius: T.rsm, background: pv.bg, border: `1px solid ${pv.border}`, marginBottom: 8 }}><div style={{ fontSize: 13, fontWeight: 700, color: pv.text }}>Así se ve el texto</div><div style={{ fontSize: 11.5, color: pv.sub }}>Texto secundario · <span style={{ color: pv.muted }}>texto tenue</span></div></div>
+        {cfg.brillo != null && <button onClick={() => setCfg(p => { const n = { ...p }; delete n.brillo; return n; })} style={{ background: "none", border: "none", color: T.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: 0, marginBottom: 14 }}>↺ Volver al tema original</button>}
+        <div style={{ height: 10 }} />
+      </>); })()}
 
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Color principal</label>
       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 8 }}>
