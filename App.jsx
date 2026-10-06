@@ -1001,7 +1001,7 @@ function buildThemeCSS(cfg) {
     const c = colorsConBrillo(cfg);
     const fv = FONTS.find(f => f.id === cfg.fontId)?.value || "'Plus Jakarta Sans'";
     const rv = RADIUS_OPTS.find(r => r.id === cfg.radiusId)?.r || 14;
-    return `:root{--bg:${c.bg};--card:${c.card};--border:${c.border};--text:${c.text};--sub:${c.sub || '#475569'};--muted:${c.muted || '#94A3B8'};--accent:${c.accent};--al:${c.al || hexLight(c.accent)};--navy:${c.navy};--r:${rv}px;--rsm:${Math.max(4, rv - 4)}px;--font:${fv};}`;
+    return `select option{background:${c.card};color:${c.text};}:root{--bg:${c.bg};--card:${c.card};--border:${c.border};--text:${c.text};--sub:${c.sub || '#475569'};--muted:${c.muted || '#94A3B8'};--accent:${c.accent};--al:${c.al || hexLight(c.accent)};--navy:${c.navy};--r:${rv}px;--rsm:${Math.max(4, rv - 4)}px;--font:${fv};}`;
 }
 function parseMontoNum(m) {
   // OJO: en Argentina el punto es separador de MILES y la coma es el decimal.
@@ -1919,7 +1919,29 @@ function TabGastos({ detail, upd }) {
 // días hábiles se estima que dura. Las obras reales (en Obras) eligen uno
 // de estos modelos, y de ahí sale el cronograma estimado que Gestión
 // compara contra lo que realmente va pasando.
+// Código de seguridad para tocar los datos que no deben cambiarse por error.
+const CODIGO_EDICION = "1942";
+function CodigoModal({ titulo, onOk, onCancel }) {
+  const [v, setV] = React.useState("");
+  const [err, setErr] = React.useState(false);
+  const probar = () => { if (v === CODIGO_EDICION) onOk(); else { setErr(true); setV(""); } };
+  return (<div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onCancel}>
+    <div onClick={e => e.stopPropagation()} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, width: "100%", maxWidth: 320 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 4 }}>🔒 Código de seguridad</div>
+      <div style={{ fontSize: 12, color: T.sub, marginBottom: 12, lineHeight: 1.5 }}>{titulo || "Ingresá el código para poder modificar."}</div>
+      <input type="password" inputMode="numeric" autoFocus value={v} onChange={e => { setV(e.target.value); setErr(false); }} onKeyDown={e => { if (e.key === "Enter") probar(); }} placeholder="Código" style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? "#E58989" : T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 16, color: T.text, boxSizing: "border-box", letterSpacing: 4, textAlign: "center" }} />
+      {err && <div style={{ fontSize: 11.5, color: "#E58989", marginTop: 6, textAlign: "center" }}>Código incorrecto</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <button onClick={onCancel} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 700, color: T.text, cursor: "pointer" }}>Cancelar</button>
+        <button onClick={probar} style={{ flex: 1, background: T.accent, border: "none", borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Entrar</button>
+      </div>
+    </div>
+  </div>);
+}
 function ModelosObraView({ db, cfg, onBack }) {
+  const [desbloq, setDesbloq] = useState(false);
+  const [gate, setGate] = useState(null);
+  const pedir = (fn) => { if (desbloq) fn(); else setGate({ fn }); };
   const { modelosObra, setModelosObra } = db;
   const modelos = modelosObra || [];
   const [editId, setEditId] = useState(null);
@@ -2071,12 +2093,13 @@ function ModelosObraView({ db, cfg, onBack }) {
   }
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
+    {gate && <CodigoModal titulo="Los modelos de obra solo se tocan con código, para no modificarlos por error." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); fn(); }} onCancel={() => setGate(null)} />}
     <PageHead eyebrow="Tabla madre" title="Modelos de obra" sub="Los tipos de obra que usás (con subsuelo, sin subsuelo, cantidad de plantas) con su cronograma estándar de etapas" back onBack={onBack} />
     <div style={{ padding: "0 20px" }}>
       {!modelos.length && <EmptyMsg>Todavía no hay modelos cargados. Creá uno por cada tipo de obra que manejás (ej: "Con subsuelo + 2 plantas", "Sin subsuelo + 2 plantas", "Sin subsuelo + 3 plantas") y definí su cronograma estándar de etapas una sola vez.</EmptyMsg>}
       {modelos.map(m => {
         const n = etapasModelo(m).length, dur = duracionTotalModelo(m), nLosas = (m.losas || []).length;
-        return (<Card key={m.id} onClick={() => setEditId(m.id)} style={{ padding: "13px 15px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+        return (<Card key={m.id} onClick={() => pedir(() => setEditId(m.id))} style={{ padding: "13px 15px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{m.nombre}</div>
             <div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{n} etapa{n === 1 ? "" : "s"}{nLosas > 0 ? ` · ${nLosas} losa${nLosas === 1 ? "" : "s"}` : ""}{dur > 0 ? ` · ${dur} días estimados` : ""}</div>
@@ -2084,11 +2107,11 @@ function ModelosObraView({ db, cfg, onBack }) {
           <span style={{ fontSize: 16, color: T.muted }}>›</span>
         </Card>);
       })}
-      <PBtn full onClick={crear} style={{ marginTop: 6 }}>+ Nuevo modelo de obra</PBtn>
+      <PBtn full onClick={() => pedir(crear)} style={{ marginTop: 6 }}>+ Nuevo modelo de obra</PBtn>
       <div style={{ fontSize: 11.5, color: T.muted, margin: "14px 0 6px" }}>O armalo desde un modelo base (después editás lo que haga falta):</div>
-      <PBtn full variant="ghost" onClick={() => crearPlantilla("normal")} style={{ marginBottom: 6 }}>Normal sin subsuelo · 3 losas</PBtn>
-      <PBtn full variant="ghost" onClick={() => crearPlantilla("subsuelo")} style={{ marginBottom: 6 }}>Con subsuelo · 4 losas</PBtn>
-      <PBtn full variant="ghost" onClick={() => crearPlantilla("tres")} style={{ marginBottom: 6 }}>Con 3 pisos · 4 losas</PBtn>
+      <PBtn full variant="ghost" onClick={() => pedir(() => crearPlantilla("normal"))} style={{ marginBottom: 6 }}>Normal sin subsuelo · 3 losas</PBtn>
+      <PBtn full variant="ghost" onClick={() => pedir(() => crearPlantilla("subsuelo"))} style={{ marginBottom: 6 }}>Con subsuelo · 4 losas</PBtn>
+      <PBtn full variant="ghost" onClick={() => pedir(() => crearPlantilla("tres"))} style={{ marginBottom: 6 }}>Con 3 pisos · 4 losas</PBtn>
     </div>
   </div>);
 }

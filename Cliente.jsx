@@ -2517,7 +2517,29 @@ function TabGastos({ detail, upd }) {
     </div>);
 }
 
+// Código de seguridad para tocar los datos que no deben cambiarse por error.
+const CODIGO_EDICION = "1942";
+function CodigoModal({ titulo, onOk, onCancel }) {
+  const [v, setV] = React.useState("");
+  const [err, setErr] = React.useState(false);
+  const probar = () => { if (v === CODIGO_EDICION) onOk(); else { setErr(true); setV(""); } };
+  return (<div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onCancel}>
+    <div onClick={e => e.stopPropagation()} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, width: "100%", maxWidth: 320 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 4 }}>🔒 Código de seguridad</div>
+      <div style={{ fontSize: 12, color: T.sub, marginBottom: 12, lineHeight: 1.5 }}>{titulo || "Ingresá el código para poder modificar."}</div>
+      <input type="password" inputMode="numeric" autoFocus value={v} onChange={e => { setV(e.target.value); setErr(false); }} onKeyDown={e => { if (e.key === "Enter") probar(); }} placeholder="Código" style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? "#E58989" : T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 16, color: T.text, boxSizing: "border-box", letterSpacing: 4, textAlign: "center" }} />
+      {err && <div style={{ fontSize: 11.5, color: "#E58989", marginTop: 6, textAlign: "center" }}>Código incorrecto</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <button onClick={onCancel} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 700, color: T.text, cursor: "pointer" }}>Cancelar</button>
+        <button onClick={probar} style={{ flex: 1, background: T.accent, border: "none", borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Entrar</button>
+      </div>
+    </div>
+  </div>);
+}
 function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [], detailId: detailIdProp, setDetailId: setDetailIdProp, requireAuth = (fn) => fn(), cfg, apiKey }) {
+    const [desbloq, setDesbloq] = useState(false);
+    const [gate, setGate] = useState(null);
+    const pedirCodigo = (fn) => { if (desbloq) fn(); else setGate({ fn }); };
     const [detailIdLocal, setDetailIdLocal] = useState(null);
     const detailId = detailIdProp !== undefined ? detailIdProp : detailIdLocal;
     const setDetailId = setDetailIdProp || setDetailIdLocal;
@@ -2622,6 +2644,8 @@ function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [],
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
                     {tab !== "info" && <button onClick={() => setTab("info")} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer", marginBottom: 12 }}>← Volver a la obra</button>}
                     {tab === "info" && (<div>
+                        {!desbloq ? <button onClick={() => pedirCodigo(() => {})} style={{ width: "100%", background: T.bg, border: `1px dashed ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 12, fontWeight: 700, color: T.sub, cursor: "pointer", marginBottom: 12 }}>🔒 Solo lectura · tocá para ingresar el código y editar</button> : <div style={{ fontSize: 11.5, color: T.accent, fontWeight: 700, marginBottom: 12 }}>🔓 Edición habilitada</div>}
+                        <div style={{ pointerEvents: desbloq ? "auto" : "none", opacity: desbloq ? 1 : 0.85 }}>
                         <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 8, border: `1px solid ${T.border}` }}>
                             <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
                             <input value={detail.nombre || ''} onChange={e => upd(detail.id, { nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: T.text, padding: 0 }} />
@@ -2685,7 +2709,7 @@ function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [],
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail, modelosObra) || "—"}</div>
                             </div>}
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14, pointerEvents: "auto" }}>
                             <div onClick={() => setTab("fotos")} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Fotos</div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{(detail.fotos || []).length} foto{(detail.fotos || []).length === 1 ? "" : "s"} ›</div>
@@ -2700,6 +2724,7 @@ function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [],
                             </div>
                         </div>
                         <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
+                        </div>
                     </div>)}
                     {tab === "fotos" && (<TabFotos detail={detail} upd={upd} fileRef={fileRef} handleFoto={handleFoto} videoRef={videoRef} handleVideo={handleVideo} apiKey={apiKey} cfg={cfg} />)}
                     {tab === "planos" && (<div>
@@ -2714,7 +2739,8 @@ function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [],
                         </div>)}
                     </div>)}
                 </div>
-                {mostrarAdic && (<div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
+                {gate && <CodigoModal titulo="El panel está en modo solo lectura. Ingresá el código para poder modificar." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); if (fn) fn(); }} onCancel={() => setGate(null)} />}
+{mostrarAdic && (<div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
                     <div style={{ padding: "12px 18px", borderBottom: `1px solid ${T.border}`, background: T.card }}><button onClick={() => setMostrarAdic(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer" }}>← Volver a la obra</button></div>
                     <div style={{ flex: 1, overflowY: "auto" }}><AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} obraIdFijo={detail.id} /></div>
                 </div>)}
@@ -2723,7 +2749,8 @@ function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [],
     }
 
     return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
-        <AppHeader title={t(cfg, 'obras_titulo')} sub={`${obras.length} registros`} right={<PlusBtn onClick={() => requireAuth(() => setShowNew(true), t(cfg, 'obras_nueva'))} />} />
+        {gate && <CodigoModal titulo="El panel está en modo solo lectura. Ingresá el código para poder modificar." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); if (fn) fn(); }} onCancel={() => setGate(null)} />}
+        <AppHeader title={t(cfg, 'obras_titulo')} sub={`${obras.length} registros`} right={<PlusBtn onClick={() => pedirCodigo(() => setShowNew(true))} />} />
         <div style={{ padding: "14px 18px" }}>
             {OBRA_ESTADOS.map(est => {
                 const items = obras.filter(o => o.estado === est.id);
@@ -6016,7 +6043,7 @@ function ClienteApp() {
   }
 
   return (<div style={{ width: "100%", maxWidth: "100vw", height: "100dvh", background: LUXE_BG, overflowX: "hidden" }}>
-    <style>{css}</style>
+    <style>{css + `:root{--bg:${T.bg};--card:${T.card};--border:${T.border};--text:${T.text};--sub:${T.sub};--muted:${T.muted};--accent:${T.accent};--al:${T.accentLight};--navy:${T.navy};} select option{background:${T.card};color:${T.text};} body{background:${T.bg};}`}</style>
     <Toast T={T} toast={toast} />
     <div style={{ width: "100%", height: "100dvh", background: "transparent", display: "flex", flexDirection: "column", position: "relative", color: T.text, overflow: "hidden" }}>
       {screen !== "inicio" && <WebClientHeader T={T} cfg={cfg} screen={screen} setScreen={irA} aviso={aviso} />}
