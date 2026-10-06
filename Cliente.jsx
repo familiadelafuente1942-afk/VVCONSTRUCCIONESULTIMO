@@ -5695,6 +5695,7 @@ const LOGO_FALLBACK_HERO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2
 function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], onIr }) {
   const [slideIdx, setSlideIdx] = useState(0);
   const rgbT = hexARgbC(T.bg).join(",");
+  const TXC = T.text, TXR = hexARgbC(TXC).join(",");
   // Rotan TODAS las obras en curso, tengan foto cargada o no — si a una
   // le falta, se muestra igual (con un fondo liso) hasta que se le cargue.
   const obrasEnCurso = (obras || []).filter(o => o.estado === "curso" || !o.estado);
@@ -5727,7 +5728,7 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
     mensajesTotC > 0 && { n: mensajesTotC, txt: `Mensaje${mensajesTotC > 1 ? "s" : ""} de V+V`, ir: "mensajes" },
   ].filter(Boolean);
 
-  return (<div style={{ flex: 1, overflowY: "auto", background: T.bg, color: "#f2f0eb" }}>
+  return (<div style={{ flex: 1, overflowY: "auto", background: T.bg, color: TXC }}>
     <div style={{ position: "relative", height: "38vh", minHeight: 260, maxHeight: 420, background: T.bg, overflow: "hidden" }}>
       {renderActual
         ? <img key={renderActual.url} src={renderActual.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, animation: "fadeIn .6s ease" }} />
@@ -5739,26 +5740,26 @@ function InicioScreen({ T, cfg, obras, renders, mensajes, bitacora, avance, cert
         <div style={{ width: cfg?.logoSize || 60, height: cfg?.logoSize || 60, borderRadius: 14, overflow: "hidden", flexShrink: 0, background: "transparent" }}>
           <img src={cfg?.logo || LOGO_FALLBACK_HERO} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
         </div>
-        <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
+        <div onClick={() => onIr("mas")} style={{ color: `rgba(${TXR},.8)`, fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
       </div>
       <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
-        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" }}>{cfg?.nombre || "Belfast"}</div>
-        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
+        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${TXR},.55)` }}>{cfg?.nombre || "Belfast"}</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: TXC, marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
       </div>
       {listaCarrusel.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>
-        {listaCarrusel.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % listaCarrusel.length) ? BRASS : "rgba(255,255,255,.35)" }} />)}
+        {listaCarrusel.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % listaCarrusel.length) ? BRASS : `rgba(${TXR},.35)` }} />)}
       </div>}
     </div>
     <div style={{ padding: "22px 22px 30px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
-        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1, color: "#fff" }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
-        <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,240,235,.45)", lineHeight: 1.3 }}>% de avance<br />general</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1, color: TXC }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
+        <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div>
       </div>
-      <div style={{ height: 1, background: "rgba(255,255,255,.1)", marginBottom: 18 }} />
-      <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
-      {novedadesC.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
-      {novedadesC.map((n, i) => (<div key={i} onClick={() => onIr(n.ir, n.param)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
-        <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
+      <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
+      {novedadesC.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
+      {novedadesC.map((n, i) => (<div key={i} onClick={() => onIr(n.ir, n.param)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid rgba(${TXR},.07)`, cursor: "pointer" }}>
+        <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: `rgba(${TXR},.35)`, fontSize: 13 }}>›</span>
       </div>))}
       <div onClick={() => onIr("asistente")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
         <div style={{ fontSize: 9, letterSpacing: ".12em", textTransform: "uppercase", color: "#D9B27C", fontWeight: 700 }}>✦ IA Belfast</div>

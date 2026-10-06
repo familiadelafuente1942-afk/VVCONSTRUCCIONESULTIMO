@@ -9764,6 +9764,7 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
   const [slideIdx, setSlideIdx] = React.useState(0);
   const cIn = colorsConBrillo(cfg);
   const rgbIn = hexARgbG(cIn.bg).join(",");
+  const TXC = cIn.text, TXR = hexARgbG(TXC).join(",");
   const enCurso = (obras || []).filter(o => o.estado === "curso");
   const lista = enCurso.length ? enCurso : (obras || []);
   React.useEffect(() => {
@@ -9802,7 +9803,7 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
     mensajesTot > 0 && { n: mensajesTot, txt: `Mensaje${mensajesTot > 1 ? "s" : ""} de Belfast`, ir: "mas-mensajes" },
   ].filter(Boolean);
 
-  return (<div style={{ flex: 1, overflowY: "auto", background: cIn.bg, color: "#f2f0eb" }}>
+  return (<div style={{ flex: 1, overflowY: "auto", background: cIn.bg, color: TXC }}>
     <div style={{ position: "relative", height: "50vh", minHeight: 320, maxHeight: 560, background: cIn.bg, overflow: "hidden" }}>
       {fotoUrl
         ? <img key={fotoUrl} src={fotoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85 }} />
@@ -9811,35 +9812,35 @@ function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avanc
           </div>}
       <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(${rgbIn},.15) 0%, rgba(${rgbIn},.4) 45%, ${cIn.bg} 100%)` }} />
       <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ width: cfg?.logoSize || 40, height: cfg?.logoSize || 40, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", background: cIn.card, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: cfg?.logoSize || 40, height: cfg?.logoSize || 40, borderRadius: 6, overflow: "hidden", border: `1px solid rgba(${TXR},.35)`, background: cIn.card, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <img src={logoSrc} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
-        <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
+        <div onClick={() => onIr("mas")} style={{ color: `rgba(${TXR},.8)`, fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
       </div>
       <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
-        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" }}>V+V Construcciones</div>
-        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
+        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${TXR},.55)` }}>V+V Construcciones</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: TXC, marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
       </div>
       {lista.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>
-        {lista.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % lista.length) ? BRASS : "rgba(255,255,255,.35)" }} />)}
+        {lista.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % lista.length) ? BRASS : `rgba(${TXR},.35)` }} />)}
       </div>}
     </div>
     <div style={{ padding: "22px 22px 30px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
-        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 38, fontWeight: 600, color: "#fff" }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
-        <div style={{ fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(242,240,235,.45)", lineHeight: 1.3 }}>% de avance<br />general</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 38, fontWeight: 600, color: TXC }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
+        <div style={{ fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div>
       </div>
-      <div style={{ height: 1, background: "rgba(255,255,255,.1)", marginBottom: 18 }} />
+      <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
 
       {pend.length > 0 && <div onClick={() => onIr("mas-pedidos")} style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(229,137,137,.08)", border: "1px solid rgba(229,137,137,.25)", borderRadius: 6, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
         <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#E58989", color: "#0d0d0f", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{pend.length}</span>
-        <div><div style={{ fontSize: 12, fontWeight: 700, color: "#f2f0eb" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 10.5, color: "rgba(242,240,235,.5)", marginTop: 1 }}>Tocá para ver →</div></div>
+        <div><div style={{ fontSize: 12, fontWeight: 700, color: TXC }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 10.5, color: `rgba(${TXR},.5)`, marginTop: 1 }}>Tocá para ver →</div></div>
       </div>}
 
-      <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
-      {novedades.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
-      {novedades.map((n, i) => (<div key={i} onClick={() => onIr(n.ir, n.param)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
-        <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
+      {novedades.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
+      {novedades.map((n, i) => (<div key={i} onClick={() => onIr(n.ir, n.param)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid rgba(${TXR},.07)`, cursor: "pointer" }}>
+        <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: `rgba(${TXR},.35)`, fontSize: 13 }}>›</span>
       </div>))}
 
       <div onClick={() => onIr("chat")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
