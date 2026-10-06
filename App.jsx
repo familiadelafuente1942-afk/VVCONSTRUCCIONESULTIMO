@@ -1922,7 +1922,8 @@ function ModelosObraView({ db, cfg, onBack }) {
     const etapas = existe
       ? actuales.map(e => e.etapa === etapaNombre ? { ...e, ...patch } : e)
       : [...actuales, { etapa: etapaNombre, usa: false, inicioOffsetDias: 0, duracionDias: 0, ...patch }];
-    upd(modeloId, { etapas });
+    const mm = recalcularModelo({ etapas, losas: modelos.find(m => m.id === modeloId)?.losas || [] });
+    upd(modeloId, { etapas: mm.etapas, losas: mm.losas });
   }
   // La cantidad de losas se escribe directo (es lo que define el tipo de
   // proyecto); al cambiar el número se agregan o sacan filas solas, sin
@@ -1931,15 +1932,18 @@ function ModelosObraView({ db, cfg, onBack }) {
     const actual = modelos.find(m => m.id === modeloId)?.losas || [];
     const cant = Math.max(0, Math.round(Number(n) || 0));
     const losas = cant <= actual.length ? actual.slice(0, cant) : [...actual, ...Array.from({ length: cant - actual.length }, () => ({ inicioOffsetDias: 0, duracionDias: 0 }))];
-    upd(modeloId, { losas });
+    const mm = recalcularModelo({ etapas: modelos.find(m => m.id === modeloId)?.etapas || [], losas });
+    upd(modeloId, { etapas: mm.etapas, losas: mm.losas });
   }
   function updLosa(modeloId, idx, patch) {
     const losas = (modelos.find(m => m.id === modeloId)?.losas || []).map((l, i) => i === idx ? { ...l, ...patch } : l);
-    upd(modeloId, { losas });
+    const mm = recalcularModelo({ etapas: modelos.find(m => m.id === modeloId)?.etapas || [], losas });
+    upd(modeloId, { etapas: mm.etapas, losas: mm.losas });
   }
 
   if (edit) {
-    const dur = duracionTotalModelo(edit);
+    const calcEdit = recalcularModelo(edit);
+    const dur = duracionTotalModelo({ ...edit, ...calcEdit });
     return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
       <PageHead title="Modelo de obra" back onBack={() => setEditId(null)} />
       <div style={{ padding: "0 20px 20px" }}>
@@ -1950,8 +1954,8 @@ function ModelosObraView({ db, cfg, onBack }) {
           <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3 }}>Es el punto más lejano al que llega cualquier etapa (inicio + duración), no la suma de todas — así se reflejan las superposiciones.</div>
         </Card>
         <Eyebrow>Etapas del modelo</Eyebrow>
-        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 20px 10px", marginLeft: 0 }}>Activá las etapas que use este modelo. "Arranca en el día" es desde el inicio de obra — podés poner etapas que se superpongan (ej: Mampostería arrancando antes de que termine Estructura).</div>
-        {etapasModeloCompletas(edit).map(cfgE => (
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 20px 10px", marginLeft: 0 }}>Activá las etapas que use este modelo. Cargá solo cuánto DURA cada etapa (en días hábiles): cada una arranca sola cuando termina la anterior. Si una arranca antes de que termine la anterior (ej: Mampostería con Estructura, Revoques con Contrapisos), poné en "Se superpone" cuántos días se pisan. Si tiene que esperar, poné un número negativo.</div>
+        {etapasModeloCompletas({ ...edit, etapas: calcEdit.etapas }).map(cfgE => (
           <Card key={cfgE.etapa} style={{ padding: "11px 13px", marginBottom: 8 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
               <input type="checkbox" checked={!!cfgE.usa} onChange={e => updEtapa(edit.id, cfgE.etapa, { usa: e.target.checked })} style={{ width: 17, height: 17 }} />
@@ -1959,31 +1963,33 @@ function ModelosObraView({ db, cfg, onBack }) {
             </label>
             {cfgE.usa && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
               <div>
-                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Arranca en el día</div>
-                <input type="number" value={cfgE.inicioOffsetDias || ""} onChange={e => updEtapa(edit.id, cfgE.etapa, { inicioOffsetDias: e.target.value })} placeholder="0" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
+                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Se superpone con lo anterior (días)</div>
+                <input type="number" value={cfgE.solapeDias || ""} onChange={e => updEtapa(edit.id, cfgE.etapa, { solapeDias: e.target.value })} placeholder="0" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
               </div>
               <div>
                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Dura (días hábiles)</div>
                 <input type="number" value={cfgE.duracionDias || ""} onChange={e => updEtapa(edit.id, cfgE.etapa, { duracionDias: e.target.value })} placeholder="Ej: 20" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
               </div>
+              <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: T.muted }}>Arranca solo: día <b style={{ color: T.text }}>{Number(cfgE.inicioOffsetDias) || 0}</b> → termina el día <b style={{ color: T.text }}>{(Number(cfgE.inicioOffsetDias) || 0) + (Number(cfgE.duracionDias) || 0)}</b></div>
             </div>}
           </Card>
         ))}
         <Eyebrow>Losas</Eyebrow>
-        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 0 10px" }}>La cantidad de losas es lo que define el tipo de proyecto (ej: con subsuelo tiene más losas que sin subsuelo). Cambiá el número y se agregan o sacan filas solas; cada losa tiene su propio inicio y duración, igual que una etapa.</div>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 0 10px" }}>La cantidad de losas es lo que define el tipo de proyecto (ej: con subsuelo tiene más losas que sin subsuelo). Cambiá el número y se agregan o sacan filas solas; cada losa va después de Fundaciones y arranca sola; cargá su duración y, si se pisa con lo anterior, la superposición.</div>
         <Field label="Cantidad de losas"><TInput type="number" value={(edit.losas || []).length || ""} onChange={e => setCantLosas(edit.id, e.target.value)} placeholder="Ej: 3" /></Field>
-        {(edit.losas || []).map((l, i) => (
+        {calcEdit.losas.map((l, i) => (
           <Card key={i} style={{ padding: "11px 13px", marginBottom: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 10 }}>{nombreLosa(i)}</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <div>
-                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Arranca en el día</div>
-                <input type="number" value={l.inicioOffsetDias || ""} onChange={e => updLosa(edit.id, i, { inicioOffsetDias: e.target.value })} placeholder="0" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
+                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Se superpone con lo anterior (días)</div>
+                <input type="number" value={l.solapeDias || ""} onChange={e => updLosa(edit.id, i, { solapeDias: e.target.value })} placeholder="0" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
               </div>
               <div>
                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Dura (días hábiles)</div>
                 <input type="number" value={l.duracionDias || ""} onChange={e => updLosa(edit.id, i, { duracionDias: e.target.value })} placeholder="Ej: 10" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
               </div>
+              <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: T.muted }}>Arranca solo: día <b style={{ color: T.text }}>{Number(l.inicioOffsetDias) || 0}</b> → termina el día <b style={{ color: T.text }}>{(Number(l.inicioOffsetDias) || 0) + (Number(l.duracionDias) || 0)}</b></div>
             </div>
           </Card>
         ))}
@@ -5268,6 +5274,35 @@ function etapasModeloCompletas(modelo) {
 // y duración (igual que una etapa más).
 function losasModelo(modelo) { return modelo?.losas || []; }
 function nombreLosa(i) { return `Losa ${i + 1}`; }
+// Arranque AUTOMÁTICO de las etapas: se carga solo cuánto dura cada una (y, si hace falta,
+// cuántos días se superpone con lo que viene antes). El "arranca en el día" se calcula:
+// arranca = (fin de lo más lejano anterior) − superposición. Orden: las etapas en su orden
+// habitual; las losas van después de Fundaciones. Superposición negativa = espera.
+// Los modelos viejos (que traían "arranca en el día" cargado a mano) se convierten solos,
+// conservando exactamente las mismas fechas.
+function recalcularModelo(modelo) {
+  const et = (modelo?.etapas || []).map(e => ({ ...e }));
+  const lo = (modelo?.losas || []).map(l => ({ ...l }));
+  const seq = [];
+  ETAPAS_OBRA.forEach(n => {
+    const e = et.find(x => x.etapa === n);
+    if (e && e.usa) seq.push(e);
+    if (n === "Fundaciones") lo.forEach(l => seq.push(l));
+  });
+  let maxEnd = 0;
+  seq.forEach(ref => {
+    const dur = Math.max(0, Number(ref.duracionDias) || 0);
+    let solape;
+    if (ref.solapeDias === undefined || ref.solapeDias === null) {
+      const legacy = Number(ref.inicioOffsetDias) || 0;
+      solape = legacy > 0 ? maxEnd - legacy : 0;
+    } else solape = Number(ref.solapeDias) || 0;
+    const ini = Math.max(0, maxEnd - solape);
+    ref.solapeDias = solape; ref.inicioOffsetDias = ini;
+    if (dur > 0) maxEnd = Math.max(maxEnd, ini + dur);
+  });
+  return { etapas: et, losas: lo };
+}
 // Duración total estimada del modelo = el punto más lejano al que llega
 // cualquiera de sus etapas o losas (offset + duración), no la suma de todas
 // (porque se superponen).
@@ -5297,7 +5332,7 @@ function cierreEstimadoObra(obra, modelosObra) {
   if (ini) {
     const modelo = modeloDeObra(obra, modelosObra);
     const diasModelo = modelo ? duracionTotalModelo(modelo) : 0;
-    if (diasModelo > 0) return fmtFechaCorta(sumarDias(ini, diasModelo));
+    if (diasModelo > 0) return fmtFechaCorta(addHabiles(ini, diasModelo));
     const meses = Number(obra?.duracionMeses) || 0;
     if (meses > 0) return fmtFechaCorta(sumarMeses(ini, meses));
   }
@@ -5312,9 +5347,9 @@ function resumenEtapasModelo(obra, modelosObra, itemsObra) {
   if (!modelo) return [];
   const iniObra = parseFechaCorta(obra?.inicio);
   const fila = (nombreEtapa, offsetDias, duracionDiasCfg) => {
-    const planInicio = iniObra ? sumarDias(iniObra, Number(offsetDias) || 0) : null;
+    const planInicio = iniObra ? addHabiles(iniObra, Number(offsetDias) || 0) : null;
     const duracionPlan = Number(duracionDiasCfg) || 0;
-    const planFin = planInicio && duracionPlan ? sumarDias(planInicio, duracionPlan) : null;
+    const planFin = planInicio && duracionPlan ? addHabiles(planInicio, duracionPlan) : null;
     const its = (itemsObra || []).filter(it => it.etapa === nombreEtapa);
     const iniciosReales = its.map(it => it.fechaSolic).filter(Boolean);
     const realInicio = iniciosReales.length ? new Date(Math.min(...iniciosReales.map(d => +d))) : null;

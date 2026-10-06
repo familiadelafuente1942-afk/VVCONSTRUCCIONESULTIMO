@@ -5053,7 +5053,7 @@ function cierreEstimadoObra(obra, modelosObra) {
   if (ini) {
     const modelo = modeloDeObra(obra, modelosObra);
     const diasModelo = modelo ? duracionTotalModelo(modelo) : 0;
-    if (diasModelo > 0) return fmtFechaCorta(sumarDias(ini, diasModelo));
+    if (diasModelo > 0) return fmtFechaCorta(addHabiles(ini, diasModelo));
     const meses = Number(obra?.duracionMeses) || 0;
     if (meses > 0) return fmtFechaCorta(sumarMeses(ini, meses));
   }
@@ -5068,9 +5068,9 @@ function resumenEtapasModelo(obra, modelosObra, itemsObra) {
   if (!modelo) return [];
   const iniObra = parseFechaCorta(obra?.inicio);
   const fila = (nombreEtapa, offsetDias, duracionDiasCfg) => {
-    const planInicio = iniObra ? sumarDias(iniObra, Number(offsetDias) || 0) : null;
+    const planInicio = iniObra ? addHabiles(iniObra, Number(offsetDias) || 0) : null;
     const duracionPlan = Number(duracionDiasCfg) || 0;
-    const planFin = planInicio && duracionPlan ? sumarDias(planInicio, duracionPlan) : null;
+    const planFin = planInicio && duracionPlan ? addHabiles(planInicio, duracionPlan) : null;
     const its = (itemsObra || []).filter(it => it.etapa === nombreEtapa);
     const iniciosReales = its.map(it => it.fechaSolic).filter(Boolean);
     const realInicio = iniciosReales.length ? new Date(Math.min(...iniciosReales.map(d => +d))) : null;
