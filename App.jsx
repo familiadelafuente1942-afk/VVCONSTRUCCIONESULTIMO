@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 // Solo las etapas de obra gris + colocación de piso (lo único que hace V+V):
 // nada de techos/instalaciones/aberturas/pintura/terminaciones, eso lo hacen
 // otros subcontratistas.
-const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Contrapisos y carpetas", "Revoques interiores", "Revoques exteriores", "Albañilería (encuadres de baños y marcos de puertas)", "Revestimientos y solados", "Limpieza de obra y entrega"];
+const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Revoques interiores", "Revoques exteriores", "Albañilería (encuadres de baños y marcos de puertas)", "Contrapisos y carpetas", "Revestimientos y solados", "Limpieza de obra y entrega"];
 
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
@@ -1925,8 +1925,8 @@ function ModelosObraView({ db, cfg, onBack }) {
     const etapas = existe
       ? actuales.map(e => e.etapa === etapaNombre ? { ...e, ...patch } : e)
       : [...actuales, { etapa: etapaNombre, usa: false, inicioOffsetDias: 0, duracionDias: 0, ...patch }];
-    const mm = recalcularModelo({ etapas, losas: base.losas });
-    upd(modeloId, { etapas: mm.etapas, losas: mm.losas });
+    const mm = recalcularModelo({ etapas, losas: base.losas, plantas: base.plantas });
+    upd(modeloId, { etapas: mm.etapas, losas: mm.losas, plantas: mm.plantas });
   }
   // La cantidad de losas se escribe directo (es lo que define el tipo de
   // proyecto); al cambiar el número se agregan o sacan filas solas, sin
@@ -1935,19 +1935,43 @@ function ModelosObraView({ db, cfg, onBack }) {
     const baseM = recalcularModelo(modelos.find(m => m.id === modeloId) || {});
     const actual = baseM.losas;
     const cant = Math.max(0, Math.round(Number(n) || 0));
-    const losas = cant <= actual.length ? actual.slice(0, cant) : [...actual, ...Array.from({ length: cant - actual.length }, () => ({ inicioOffsetDias: 0, duracionDias: 0 }))];
-    const mm = recalcularModelo({ etapas: baseM.etapas, losas });
-    upd(modeloId, { etapas: mm.etapas, losas: mm.losas });
+    const losas = cant <= actual.length ? actual.slice(0, cant) : [...actual, ...Array.from({ length: cant - actual.length }, () => ({ inicioOffsetDias: 0, duracionDias: 45, hormigonDia: 16, nombre: "" }))];
+    const mm = recalcularModelo({ etapas: baseM.etapas, losas, plantas: baseM.plantas });
+    upd(modeloId, { etapas: mm.etapas, losas: mm.losas, plantas: mm.plantas });
   }
   function updLosa(modeloId, idx, patch) {
     const baseL = recalcularModelo(modelos.find(m => m.id === modeloId) || {});
     const losas = baseL.losas.map((l, i) => i === idx ? { ...l, ...patch } : l);
-    const mm = recalcularModelo({ etapas: baseL.etapas, losas });
-    upd(modeloId, { etapas: mm.etapas, losas: mm.losas });
+    const mm = recalcularModelo({ etapas: baseL.etapas, losas, plantas: baseL.plantas });
+    upd(modeloId, { etapas: mm.etapas, losas: mm.losas, plantas: mm.plantas });
+  }
+  function updPlanta(modeloId, idx, patch) {
+    const baseP = recalcularModelo(modelos.find(m => m.id === modeloId) || {});
+    const plantas = baseP.plantas.map((p, i) => i === idx ? { ...p, ...patch } : p);
+    const mm = recalcularModelo({ etapas: baseP.etapas, losas: baseP.losas, plantas });
+    upd(modeloId, { etapas: mm.etapas, losas: mm.losas, plantas: mm.plantas });
+  }
+  function crearPlantilla(tipo) {
+    const nombres = tipo === "subsuelo" ? ["Losa sobre platea (subsuelo)", "Losa sobre subsuelo", "Losa sobre planta baja", "Losa sobre planta alta"]
+      : tipo === "tres" ? ["Losa sobre platea", "Losa sobre planta baja", "Losa sobre planta alta", "Losa sobre tercer piso"]
+      : ["Losa sobre platea", "Losa sobre planta baja", "Losa sobre planta alta"];
+    const titulo = tipo === "subsuelo" ? "Modelo con subsuelo (4 losas)" : tipo === "tres" ? "Modelo con 3 pisos (4 losas)" : "Modelo normal sin subsuelo (3 losas)";
+    const usa = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Revoques interiores", "Revoques exteriores", "Albañilería (encuadres de baños y marcos de puertas)", "Contrapisos y carpetas", "Revestimientos y solados", "Limpieza de obra y entrega"];
+    const dur = { "Trabajos preliminares": 10, "Replanteo": 2, "Movimiento de suelo": 5, "Fundaciones": 21, "Revoques interiores": 40, "Revoques exteriores": 40, "Albañilería (encuadres de baños y marcos de puertas)": 30, "Contrapisos y carpetas": 30, "Revestimientos y solados": 60, "Limpieza de obra y entrega": 5 };
+    // desde Revoques exteriores en adelante cada tarea arranca ~10% (de la anterior) antes de que termine la anterior
+    const PCT = ["Revoques exteriores", "Albañilería (encuadres de baños y marcos de puertas)", "Contrapisos y carpetas", "Revestimientos y solados"];
+    const etapas = ETAPAS_OBRA.map(n => ({ etapa: n, usa: usa.includes(n), inicioOffsetDias: 0, duracionDias: dur[n] || 0, ...(n === "Replanteo" ? { solapeDias: 2 } : {}), ...(PCT.includes(n) ? { solapePct: 10 } : {}) }));
+    const losas = nombres.map(nombre => ({ nombre, inicioOffsetDias: 0, duracionDias: 45, hormigonDia: 16 }));
+    const mm = recalcularModelo({ etapas, losas });
+    const m = { id: uid(), nombre: titulo, etapas: mm.etapas, losas: mm.losas, plantas: mm.plantas };
+    setModelosObra([...modelos, m]);
+    setEditId(m.id);
   }
 
   if (edit) {
     const calcEdit = recalcularModelo(edit);
+    const inpS = { width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" };
+    const lblS = { fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" };
     const dur = duracionTotalModelo({ ...edit, ...calcEdit });
     return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
       <PageHead title="Modelo de obra" back onBack={() => setEditId(null)} />
@@ -1966,10 +1990,11 @@ function ModelosObraView({ db, cfg, onBack }) {
               <input type="checkbox" checked={!!cfgE.usa} onChange={e => updEtapa(edit.id, cfgE.etapa, { usa: e.target.checked })} style={{ width: 17, height: 17 }} />
               <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>{cfgE.etapa}</span>
             </label>
-            {cfgE.usa && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+            {cfgE.usa && cfgE.derivada && <div style={{ marginTop: 8, fontSize: 11.5, color: T.muted, lineHeight: 1.5 }}>Se calcula sola desde {cfgE.etapa === "Estructura" ? "las losas" : "las plantas de mampostería"} (más abajo): arranca el día <b style={{ color: T.text }}>{Number(cfgE.inicioOffsetDias) || 0}</b> → termina el día <b style={{ color: T.text }}>{(Number(cfgE.inicioOffsetDias) || 0) + (Number(cfgE.duracionDias) || 0)}</b></div>}
+            {cfgE.usa && !cfgE.derivada && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
               <div>
                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Se superpone con lo anterior (días)</div>
-                <input type="number" value={cfgE.solapeDias || ""} onChange={e => updEtapa(edit.id, cfgE.etapa, { solapeDias: e.target.value })} placeholder="0" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
+                <input type="number" value={cfgE.solapeDias || ""} onChange={e => updEtapa(edit.id, cfgE.etapa, { solapeDias: e.target.value, solapePct: null })} placeholder="0" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
               </div>
               <div>
                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Dura (días hábiles)</div>
@@ -1980,24 +2005,49 @@ function ModelosObraView({ db, cfg, onBack }) {
           </Card>
         ))}
         <Eyebrow>Losas</Eyebrow>
-        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 0 10px" }}>La cantidad de losas es lo que define el tipo de proyecto (ej: con subsuelo tiene más losas que sin subsuelo). Cambiá el número y se agregan o sacan filas solas; cada losa va después de Fundaciones y arranca sola; cargá su duración y, si se pisa con lo anterior, la superposición.</div>
+        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 0 10px" }}>La cantidad de losas es lo que define el tipo de proyecto (ej: con subsuelo tiene más losas que sin subsuelo). Cambiá el número y se agregan o sacan filas solas; cada losa es un ciclo completo (losa + columnas + vigas, hormigonado y curado) y arranca sola después de la anterior. Cargá cuánto dura el ciclo y a los cuántos días se hormigona.</div>
         <Field label="Cantidad de losas"><TInput type="number" value={(edit.losas || []).length || ""} onChange={e => setCantLosas(edit.id, e.target.value)} placeholder="Ej: 3" /></Field>
         {calcEdit.losas.map((l, i) => (
           <Card key={i} style={{ padding: "11px 13px", marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 10 }}>{nombreLosa(i)}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8 }}>{nombreLosa(i)}</div>
+            <input type="text" value={l.nombre || ""} onChange={e => updLosa(edit.id, i, { nombre: e.target.value })} placeholder="Ej: Losa sobre platea" style={{ ...inpS, marginBottom: 8 }} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <div>
-                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Se superpone con lo anterior (días)</div>
-                <input type="number" value={l.solapeDias || ""} onChange={e => updLosa(edit.id, i, { solapeDias: e.target.value })} placeholder="0" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
+                <div style={lblS}>Dura el ciclo (días hábiles)</div>
+                <input type="number" value={l.duracionDias || ""} onChange={e => updLosa(edit.id, i, { duracionDias: e.target.value })} placeholder="Ej: 45" style={inpS} />
               </div>
               <div>
-                <div style={{ fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" }}>Dura (días hábiles)</div>
-                <input type="number" value={l.duracionDias || ""} onChange={e => updLosa(edit.id, i, { duracionDias: e.target.value })} placeholder="Ej: 10" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" }} />
+                <div style={lblS}>Se hormigona a los (días)</div>
+                <input type="number" value={l.hormigonDia === undefined || l.hormigonDia === null ? "" : l.hormigonDia} onChange={e => updLosa(edit.id, i, { hormigonDia: e.target.value })} placeholder="Ej: 16" style={inpS} />
               </div>
-              <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: T.muted }}>Arranca solo: día <b style={{ color: T.text }}>{Number(l.inicioOffsetDias) || 0}</b> → termina el día <b style={{ color: T.text }}>{(Number(l.inicioOffsetDias) || 0) + (Number(l.duracionDias) || 0)}</b></div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div style={lblS}>Se superpone con lo anterior (días)</div>
+                <input type="number" value={l.solapeDias || ""} onChange={e => updLosa(edit.id, i, { solapeDias: e.target.value })} placeholder="0" style={inpS} />
+              </div>
+              <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: T.muted }}>Arranca solo: día <b style={{ color: T.text }}>{Number(l.inicioOffsetDias) || 0}</b> → se hormigona el día <b style={{ color: T.text }}>{Number(l.hormigonOffsetDias) || 0}</b> → termina el día <b style={{ color: T.text }}>{(Number(l.inicioOffsetDias) || 0) + (Number(l.duracionDias) || 0)}</b></div>
             </div>
           </Card>
         ))}
+        {calcEdit.plantas.length > 0 && <>
+          <Eyebrow>Mampostería por planta</Eyebrow>
+          <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 0 10px" }}>Hay una por cada losa. Cada una arranca unos días después de hormigonar su losa (el fraguado: recién ahí se puede desapuntalar y liberar el sector). Se superpone sola con el ciclo de la losa siguiente.</div>
+          {calcEdit.plantas.map((p, i) => (
+            <Card key={i} style={{ padding: "11px 13px", marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8 }}>Mampostería planta {i + 1}{calcEdit.losas[i]?.nombre ? ` · sobre ${calcEdit.losas[i].nombre}` : ""}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <div style={lblS}>Dura (días hábiles)</div>
+                  <input type="number" value={p.duracionDias === undefined || p.duracionDias === null ? "" : p.duracionDias} onChange={e => updPlanta(edit.id, i, { duracionDias: e.target.value })} placeholder="Ej: 35" style={inpS} />
+                </div>
+                <div>
+                  <div style={lblS}>Arranca a los (días) de hormigonar</div>
+                  <input type="number" value={p.despuesHormigonDias === undefined || p.despuesHormigonDias === null ? "" : p.despuesHormigonDias} onChange={e => updPlanta(edit.id, i, { despuesHormigonDias: e.target.value })} placeholder="Ej: 22" style={inpS} />
+                </div>
+                <div style={{ gridColumn: "1 / -1", fontSize: 11.5, color: T.muted }}>Arranca solo: día <b style={{ color: T.text }}>{Number(p.inicioOffsetDias) || 0}</b> → termina el día <b style={{ color: T.text }}>{(Number(p.inicioOffsetDias) || 0) + (Number(p.duracionDias) || 0)}</b></div>
+              </div>
+            </Card>
+          ))}
+        </>}
         <PBtn full variant="danger" onClick={() => borrar(edit.id)} style={{ marginTop: 10 }}>Borrar este modelo</PBtn>
       </div>
     </div>);
@@ -2018,6 +2068,10 @@ function ModelosObraView({ db, cfg, onBack }) {
         </Card>);
       })}
       <PBtn full onClick={crear} style={{ marginTop: 6 }}>+ Nuevo modelo de obra</PBtn>
+      <div style={{ fontSize: 11.5, color: T.muted, margin: "14px 0 6px" }}>O armalo desde un modelo base (después editás lo que haga falta):</div>
+      <PBtn full variant="ghost" onClick={() => crearPlantilla("normal")} style={{ marginBottom: 6 }}>Normal sin subsuelo · 3 losas</PBtn>
+      <PBtn full variant="ghost" onClick={() => crearPlantilla("subsuelo")} style={{ marginBottom: 6 }}>Con subsuelo · 4 losas</PBtn>
+      <PBtn full variant="ghost" onClick={() => crearPlantilla("tres")} style={{ marginBottom: 6 }}>Con 3 pisos · 4 losas</PBtn>
     </div>
   </div>);
 }
@@ -5281,32 +5335,64 @@ function losasModelo(modelo) { return modelo?.losas || []; }
 function nombreLosa(i) { return `Losa ${i + 1}`; }
 // Arranque AUTOMÁTICO de las etapas: se carga solo cuánto dura cada una (y, si hace falta,
 // cuántos días se superpone con lo que viene antes). El "arranca en el día" se calcula:
-// arranca = (fin de lo más lejano anterior) − superposición. Orden: las etapas en su orden
-// habitual; las losas van después de Fundaciones. Superposición negativa = espera.
-// Los modelos viejos (que traían "arranca en el día" cargado a mano) se convierten solos,
-// conservando exactamente las mismas fechas.
+// arranca = (fin de lo más lejano anterior) − superposición. Negativo = espera.
+// LOSAS: cada losa es un ciclo completo (armado de losa + columnas + vigas, hormigonado y curado hasta
+// desencofrar); arrancan una después de la otra, a continuación de Fundaciones. La cantidad de losas
+// define el tipo de obra. MAMPOSTERÍA POR PLANTA: hay una por cada losa; cada una arranca 22 días hábiles
+// (fraguado, se puede desapuntalar y liberar el sector) DESPUÉS DE HORMIGONAR esa losa, o sea que se
+// superpone sola con el ciclo de la losa siguiente. "Estructura" y "Mampostería" pasan
+// a ser el total de las losas / de las plantas cuando existen. Todo lo demás se encadena.
+// Los modelos viejos (con "arranca en el día" cargado a mano) se convierten solos, con las mismas fechas.
 function recalcularModelo(modelo) {
   const et = (modelo?.etapas || []).map(e => ({ ...e }));
   const lo = (modelo?.losas || []).map(l => ({ ...l }));
-  const seq = [];
-  ETAPAS_OBRA.forEach(n => {
-    const e = et.find(x => x.etapa === n);
-    if (e && e.usa) seq.push(e);
-    if (n === "Fundaciones") lo.forEach(l => seq.push(l));
-  });
-  let maxEnd = 0;
-  seq.forEach(ref => {
+  const nPl = lo.length;   // una mampostería por cada losa: se libera 22 días hábiles después de hormigonarla
+  const pl = (modelo?.plantas || []).slice(0, nPl).map(p => ({ ...p }));
+  while (pl.length < nPl) pl.push({ duracionDias: 35, despuesHormigonDias: 22 });
+  let maxEnd = 0, lastDur = 0;
+  const encadenar = (ref) => {
     const dur = Math.max(0, Number(ref.duracionDias) || 0);
     let solape;
     if (ref.solapeDias === undefined || ref.solapeDias === null) {
       const legacy = Number(ref.inicioOffsetDias) || 0;
       solape = legacy > 0 ? maxEnd - legacy : 0;
     } else solape = Number(ref.solapeDias) || 0;
+    if (Number(ref.solapePct) > 0) solape = Math.round(Number(ref.solapePct) / 100 * lastDur);
     const ini = Math.max(0, maxEnd - solape);
     ref.solapeDias = solape; ref.inicioOffsetDias = ini;
-    if (dur > 0) maxEnd = Math.max(maxEnd, ini + dur);
+    if (dur > 0) { maxEnd = Math.max(maxEnd, ini + dur); lastDur = dur; }
+  };
+  const etEstr = et.find(e => e.etapa === "Estructura"), etMamp = et.find(e => e.etapa === "Mampostería");
+  const procesarLosas = () => {
+    lo.forEach(l => {
+      if (l.hormigonDia === undefined || l.hormigonDia === null) l.hormigonDia = 16;
+      encadenar(l);
+      l.hormigonOffsetDias = l.inicioOffsetDias + (Number(l.hormigonDia) || 0);
+    });
+    pl.forEach((p, i) => {
+      if (p.despuesHormigonDias === undefined || p.despuesHormigonDias === null) p.despuesHormigonDias = 22;
+      if (p.duracionDias === undefined || p.duracionDias === null) p.duracionDias = 35;
+      const dur = Math.max(0, Number(p.duracionDias) || 0);
+      const ini = Math.max(0, (lo[i].hormigonOffsetDias || 0) + (Number(p.despuesHormigonDias) || 0));
+      p.inicioOffsetDias = ini;
+      if (dur > 0) maxEnd = Math.max(maxEnd, ini + dur);
+    });
+    const span = (arr, ref) => {
+      const v = arr.filter(x => (Number(x.duracionDias) || 0) > 0);
+      if (!ref || !v.length) return;
+      const a0 = Math.min(...v.map(x => x.inicioOffsetDias)), b0 = Math.max(...v.map(x => x.inicioOffsetDias + (Number(x.duracionDias) || 0)));
+      ref.inicioOffsetDias = a0; ref.duracionDias = b0 - a0; ref.derivada = true;
+    };
+    if (lo.length) span(lo, etEstr);
+    if (pl.length) span(pl, etMamp);
+  };
+  ETAPAS_OBRA.forEach(n => {
+    const e = et.find(x => x.etapa === n);
+    const derivada = (n === "Estructura" && lo.length > 0) || (n === "Mampostería" && pl.length > 0);
+    if (e && !derivada) { delete e.derivada; if (e.usa) encadenar(e); }
+    if (n === "Fundaciones") procesarLosas();
   });
-  return { etapas: et, losas: lo };
+  return { etapas: et, losas: lo, plantas: pl };
 }
 // Duración total estimada del modelo = el punto más lejano al que llega
 // cualquiera de sus etapas o losas (offset + duración), no la suma de todas
@@ -5317,6 +5403,7 @@ function duracionTotalModelo(modelo) {
   const puntos = [
     ...usadas.map(e => (Number(e.inicioOffsetDias) || 0) + (Number(e.duracionDias) || 0)),
     ...losas.map(l => (Number(l.inicioOffsetDias) || 0) + (Number(l.duracionDias) || 0)),
+    ...(modelo?.plantas || []).filter(p => (Number(p.duracionDias) || 0) > 0).map(p => (Number(p.inicioOffsetDias) || 0) + (Number(p.duracionDias) || 0)),
   ];
   if (!puntos.length) return 0;
   return Math.max(...puntos);

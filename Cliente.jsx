@@ -34,7 +34,7 @@ const DOC_CATS = ["Documentación técnica", "Elementos de protección", "Otros 
 // Solo las etapas de obra gris + colocación de piso (lo único que hace V+V):
 // nada de techos/instalaciones/aberturas/pintura/terminaciones, eso lo hacen
 // otros subcontratistas.
-const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Contrapisos y carpetas", "Revoques interiores", "Revoques exteriores", "Albañilería (encuadres de baños y marcos de puertas)", "Revestimientos y solados", "Limpieza de obra y entrega"];
+const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Revoques interiores", "Revoques exteriores", "Albañilería (encuadres de baños y marcos de puertas)", "Contrapisos y carpetas", "Revestimientos y solados", "Limpieza de obra y entrega"];
 
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
@@ -5039,6 +5039,7 @@ function duracionTotalModelo(modelo) {
   const puntos = [
     ...usadas.map(e => (Number(e.inicioOffsetDias) || 0) + (Number(e.duracionDias) || 0)),
     ...losas.map(l => (Number(l.inicioOffsetDias) || 0) + (Number(l.duracionDias) || 0)),
+    ...(modelo?.plantas || []).filter(p => (Number(p.duracionDias) || 0) > 0).map(p => (Number(p.inicioOffsetDias) || 0) + (Number(p.duracionDias) || 0)),
   ];
   if (!puntos.length) return 0;
   return Math.max(...puntos);
