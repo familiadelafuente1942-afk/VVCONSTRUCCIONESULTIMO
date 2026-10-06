@@ -5179,7 +5179,8 @@ function sumarDias(fecha, dias) { const d = new Date(fecha.getTime()); d.setDate
 // que las etapas se superpongan (ej: Mampostería puede arrancar antes de
 // que termine Estructura), que es como realmente se trabaja en obra.
 function nuevoModeloEtapas() { return ETAPAS_OBRA.map(e => ({ etapa: e, usa: false, inicioOffsetDias: 0, duracionDias: 0 })); }
-function etapasModelo(modelo) { return (modelo?.etapas || []).filter(e => e.usa); }
+// Solo etapas que siguen existiendo en la lista actual (ej: el "Revoques" viejo, ya dividido en interiores/exteriores, no aparece más).
+function etapasModelo(modelo) { return (modelo?.etapas || []).filter(e => e.usa && ETAPAS_OBRA.includes(e.etapa)); }
 // Para editar un modelo: siempre las 16 etapas actuales, aunque el modelo se
 // haya guardado antes de que existiera alguna (ej: si se agrega una etapa
 // nueva más adelante, los modelos viejos la muestran apagada, no se pierde).
@@ -5400,6 +5401,72 @@ function DocUpload({ onPick }) {
 }
 
 // ── ASISTENTE IA ─────────────────────────────────────────────────────
+// ── Contexto COMPLETO de la app para el asistente (IA) ──────────────────
+// Gestión de obra (registros, desvíos, punitorios, tiempos por obra, cronograma
+// por etapa), Bitácora, Avance, Auditoría, Adicionales, Drone, Definiciones,
+// Documentación recibida, Minutas y Certificados de conformidad. Así la IA
+// puede responder sobre cualquier sección. Listas acotadas a lo más reciente.
+function contextoAppExtra(db, cfg) {
+  const obras = db.obras || [];
+  const on = (id) => obraNom(obras, id);
+  const dmy = (v) => { if (!v) return ""; const d = v instanceof Date ? v : new Date(v); if (isNaN(d)) return String(v); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
+  const cut = (t, n) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n) + "…" : x; };
+  const cn = cfg?.clienteNombre || "el cliente";
+  const out = [];
+  try {
+    // ── GESTIÓN DE OBRA ──
+    const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, reuniones: [], ...(db.gestion || {}) };
+    const items = (g.manual || []).map(it => {
+      const fs = it.fechaSolic ? new Date(it.fechaSolic) : null; const fr = it.fechaReal ? new Date(it.fechaReal) : null;
+      const d = g.punit[it.id];
+      const plazoEf = (Number(it.plazo) || g.plazo) + (d?.decision === "prorroga" ? (Number(d.prorrogaDias) || 0) : 0);
+      const m = fs ? gMetricas(fs, fr, plazoEf, it.cerrado) : { dias: 0, desvio: 0 };
+      const ip = it.inicioPlan ? new Date(it.inicioPlan) : null;
+      const retrasoInicio = (ip && fs && ip < fs) ? diasHabiles(ip, fs) : 0;
+      const desvio = m.desvio + retrasoInicio;
+      const retraso = Math.max(0, Math.max(0, desvio) - (Number(it.diasClima) || 0));
+      const perj = d?.decision === "confirmado" ? retraso * (Number(d.personas) || g.dotacion) * (Number(d.costoDia) || g.costoPersona) : 0;
+      return { ...it, fechaSolic: fs, fechaReal: fr, plazo: plazoEf, dias: m.dias, desvio, retrasoInicio, retraso, dec: d || null, perj };
+    }).sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
+    const modelos = db.modelosObra || [];
+    const resObras = obras.map(o => {
+      const its = items.filter(i => i.obra_id === o.id);
+      if (!its.length && !o.modeloId) return null;
+      const tt = tiemposObra(its);
+      const conf = its.filter(i => i.dec?.decision === "confirmado");
+      const perjT = conf.reduce((a, i) => a + i.perj, 0);
+      const etapas = resumenEtapasModelo(o, modelos, its.slice().sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0)));
+      return `· ${o.nombre}: inicio de obra ${o.inicio || "—"}, cierre estimado ${cierreEstimadoObra(o, modelos) || "—"}; ${its.length} registros. TIEMPOS (sin doble conteo de tareas simultáneas): plazo estimado ${tt.estimado} d háb., desvío ${tt.desvio} d (de los cuales ${tt.arranque} por arrancar tarde), real = estimado + desvío = ${tt.real} d. Perjuicio confirmado ${money(perjT)} en ${conf.length} punitorio(s).${etapas.length ? "\n   Cronograma por etapa (plan vs real): " + etapas.map(e => `${e.etapa}: plan ${e.planInicio ? dmy(e.planInicio) : "—"} ${e.duracionPlan || 0}d, real ${e.realInicio ? "desde " + dmy(e.realInicio) + (e.realDias != null ? ` ${e.realDias}d` : "") + (e.enCurso ? " en curso" : "") : "sin registros"}${e.desvio != null ? `, desvío ${e.desvio > 0 ? "+" : ""}${e.desvio}d` : ""}`).join(" | ") : ""}`;
+    }).filter(Boolean);
+    const regs = items.slice(0, 80).map(i => `· [${i.id}] ${on(i.obra_id)} — ${i.tipo || "Tarea"}: ${cut(i.descripcion, 90)}${i.etapa ? " (etapa " + i.etapa + ")" : ""} | inicio ${dmy(i.fechaSolic)} → ${i.fechaReal ? "fin " + dmy(i.fechaReal) : "en curso"} | plazo ${i.plazo} d, llevó ${i.dias} d, desvío ${i.desvio > 0 ? "+" : ""}${i.desvio} d${i.retrasoInicio ? ` (arrancó ${i.retrasoInicio} d tarde)` : ""}${(Number(i.diasClima) || 0) > 0 ? `, ${i.diasClima} d clima descontados` : ""} | imputable a ${imputablesTexto(i)}${causaTexto(i) ? " | causa: " + causaTexto(i) + (i.categoriaDesvio ? " (" + i.categoriaDesvio + ")" : "") : ""}${afectadasTexto(i) ? " | afecta a: " + afectadasTexto(i) : ""}${afectadasLeyenda(i) ? " | leyenda: " + cut(afectadasLeyenda(i), 220) : ""}${i.responsable ? " | resp: " + i.responsable : ""} | ${i.dec ? (i.dec.decision === "confirmado" ? `PUNITORIO confirmado ${money(i.perj)} (tarea detenida: ${i.dec.tarea || "—"}, ${i.dec.personas || g.dotacion} pers. × ${money(i.dec.costoDia || g.costoPersona)}/día)` : i.dec.decision === "prorroga" ? `prórroga ${i.dec.prorrogaDias} d` : "sin perjuicio") : (i.desvio > 0 && (i.fechaReal || i.estado) ? "pendiente de evaluar" : "—")}`);
+    out.push(`GESTIÓN DE OBRA — RESUMEN POR OBRA (cifras ya calculadas por la app; usalas tal cual):\n${resObras.join("\n") || "(sin datos de gestión)"}\n\nGESTIÓN DE OBRA — REGISTROS (más recientes primero, hasta 80; "desvío" = días de atraso propio de esa tarea; las tareas simultáneas NO se suman en el desvío total de la obra):\n${regs.join("\n") || "(sin registros)"}\n\nGESTIÓN — PARÁMETROS: plazo por defecto ${g.plazo} d háb., dotación ${g.dotacion}, costo por persona/día ${money(g.costoPersona)}. Reuniones registradas: ${(g.reuniones || []).length}.`);
+  } catch (e) { out.push("GESTIÓN DE OBRA: (no se pudo leer)"); }
+  try {
+    const hs = (db.bitacora || []).slice().sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0))).slice(0, 50);
+    out.push(`BITÁCORA (hechos de obra, más recientes primero):\n${hs.map(h => `· ${h.fecha} — ${on(h.obra_id)}${h.etapa ? " (" + h.etapa + ")" : ""}: ${cut(h.titulo, 80)} — ${cut(h.desc, 200)}${h.diasDesvio ? ` [desvío ${h.diasDesvio} d${h.causaDesvio ? ", " + h.causaDesvio : ""}]` : ""}${(h.fotos || []).length ? ` · ${h.fotos.length} foto(s)` : ""}`).join("\n") || "(sin hechos)"}`);
+  } catch (e) { }
+  try {
+    const av = db.avance || {};
+    out.push(`AVANCE (informes de avance con fotos, por obra):\n${obras.map(o => { const l = (av[o.id] || []); if (!l.length) return null; const u = l[0]; return `· ${o.nombre}: ${l.length} registros; último ${u.fecha || ""}${u.avance ? " — avance " + u.avance + (String(u.avance).includes("%") ? "" : "%") : ""}${u.descripcion ? " — " + cut(u.descripcion, 180) : ""}`; }).filter(Boolean).join("\n") || "(sin registros de avance)"}`);
+  } catch (e) { }
+  try {
+    out.push(`AUDITORÍAS (más recientes primero):\n${(db.auditoria || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 30).map(a => `· ${a.tipo || "Auditoría"} N°${a.nro || ""} — ${on(a.obra_id)} (${a.fecha || ""}) resultado: ${a.resultado || "—"}${a.conclusion ? " — " + cut(a.conclusion, 160) : ""}${(a.obs || []).length ? ` · ${a.obs.length} observación(es)` : ""}`).join("\n") || "(sin auditorías)"}`);
+  } catch (e) { }
+  try {
+    out.push(`ADICIONALES:\n${(db.adicionales || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 30).map(a => `· ${a.adicionalNro ? "N°" + a.adicionalNro + " " : ""}${on(a.obra_id)} (${a.fecha || ""}) ${a.tipoAdicional || ""}: ${cut(a.requerimiento || a.descripcionTecnica, 160)} — resolución: ${a.resolucion || "—"}${a.incidenciaPlazo && a.incidenciaPlazo !== "sin" ? `, incidencia en plazo ${a.diasIncidencia || ""} d` : ""}`).join("\n") || "(sin adicionales)"}`);
+  } catch (e) { }
+  try {
+    out.push(`DRONE / VUELOS:\n${(db.dronevuelos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 20).map(v => `· ${v.fecha || ""} — ${on(v.obra_id)}${v.piloto ? ", piloto " + v.piloto : ""}${v.notas ? " — " + cut(v.notas, 120) : ""}${(v.fotos || []).length ? ` · ${v.fotos.length} foto(s)` : ""}${v.analisisIA ? " · con análisis IA: " + cut(typeof v.analisisIA === "string" ? v.analisisIA : JSON.stringify(v.analisisIA), 250) : ""}`).join("\n") || "(sin vuelos)"}`);
+  } catch (e) { }
+  try {
+    out.push(`DEFINICIONES (por obra, lo que falta definir):\n${(db.definiciones || []).map(r => { const its = r.items || []; const falt = its.filter(i => !i.tiene); return `· ${on(r.obra_id)}: ${its.length - falt.length}/${its.length} definidas${falt.length ? "; faltan: " + falt.slice(0, 15).map(i => `${i.rubro ? i.rubro + " – " : ""}${i.nombre}`).join(", ") : ""}`; }).join("\n") || "(sin datos)"}\n\nDOCUMENTACIÓN RECIBIDA (por obra):\n${(db.docrecepcion || []).map(r => { const its = r.items || []; const falt = its.filter(i => !i.recibido); return `· ${on(r.obra_id)}: ${its.length - falt.length}/${its.length} recibidos${falt.length ? "; faltan: " + falt.slice(0, 15).map(i => i.nombre).join(", ") : ""}`; }).join("\n") || "(sin datos)"}`);
+  } catch (e) { }
+  try {
+    out.push(`MINUTAS DE REUNIÓN (recientes):\n${(db.minutas || []).slice(0, 12).map(m => `· ${m.fecha || ""} — ${m.titulo || ""}${m.obra_id ? " (" + on(m.obra_id) + ")" : ""}: ${cut(m.minutaTexto || m.transcripcion, 300)}`).join("\n") || "(sin minutas)"}\n\nCERTIFICADOS DE CONFORMIDAD:\n${(db.certConformidad || []).slice(0, 30).map(c => `· ${on(c.obra_id)} — ${c.nombre} (${c.fecha || ""}${c.auditor ? ", " + c.auditor : ""})`).join("\n") || "(sin certificados)"}`);
+  } catch (e) { }
+  return out.join("\n\n");
+}
+
 function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -5578,12 +5645,14 @@ PROVEEDORES:\n${(proveedores || []).map(p => `· ${p.nombre || ""}${p.rubro ? " 
 
 HERRAMIENTAS:\n${(herramientas || []).map(h => `· ${h.nombre || ""}${h.obra_id ? " — " + obraNom(obras, h.obra_id) : ""}`).join("\n") || "(sin herramientas)"}
 
+${contextoAppExtra(db, cfg)}
+
 ARCHIVOS DISPONIBLES (podés TRAERLOS al chat):
 ${(() => { const ix = indiceArchivos(); return ix.length ? ix.map((f, i) => `[${i}] ${f.nombre} — ${f.tipo}${f.obra && f.obra !== "—" ? " · obra " + f.obra : ""}`).join("\n") : "(no hay archivos cargados todavía)"; })()}
 
 CÓMO ENTREGAR UN ARCHIVO: cuando el usuario pida un archivo, un PDF, un plano, un Word, una documentación o un adjunto, buscalo en la lista de arriba y ADJUNTALO escribiendo al final de tu respuesta una línea por archivo con este formato exacto: [[ARCHIVO:N]] (donde N es el número entre corchetes de la lista). El sistema lo convierte en un botón para abrirlo o descargarlo. NUNCA digas que no podés adjuntar archivos ni que solo leés datos: SÍ podés entregarlos con [[ARCHIVO:N]]. Si hay varios que puedan servir, ofrecé los más probables (hasta 5). Si de verdad no existe ninguno que coincida, decilo y aclarar dónde debería cargarse.
 
-Tenés acceso COMPLETO a todos estos datos de la app. Cuando te pidan un DATO PUNTUAL (un número, fecha, cantidad, teléfono, monto, cuántas fotos/videos, etc.), buscalo en estos datos y dá el valor EXACTO. No digas "no lo tengo" si el dato figura arriba. Respondé cualquier consulta sobre obras, avances, montos, fotos, videos, informes, formularios, archivos, documentación, tareas, materiales, subcontratos, proveedores, herramientas, personal y pedidos usando esta información. (Las fotos no las "ves", pero sabés cuántas hay y de qué obra; para verlas remití a la obra.)
+Tenés acceso COMPLETO a TODOS los datos de la app, incluidas las secciones GESTIÓN DE OBRA (registros, desvíos, causas, imputables, punitorios, tiempos y cronograma por etapa de cada obra), BITÁCORA, AVANCE, AUDITORÍAS, ADICIONALES, DRONE, DEFINICIONES, DOCUMENTACIÓN RECIBIDA, MINUTAS y CERTIFICADOS que figuran arriba: consultalas siempre antes de responder y nunca digas que una sección no está disponible. Sobre tiempos de una obra: plazo estimado + desvío = real, y las tareas simultáneas no suman sus atrasos (usá las cifras del RESUMEN POR OBRA tal cual). Y además: Cuando te pidan un DATO PUNTUAL (un número, fecha, cantidad, teléfono, monto, cuántas fotos/videos, etc.), buscalo en estos datos y dá el valor EXACTO. No digas "no lo tengo" si el dato figura arriba. Respondé cualquier consulta sobre obras, avances, montos, fotos, videos, informes, formularios, archivos, documentación, tareas, materiales, subcontratos, proveedores, herramientas, personal y pedidos usando esta información. (Las fotos no las "ves", pero sabés cuántas hay y de qué obra; para verlas remití a la obra.)
 
 PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} (pedir definiciones, solicitar documentación, plantear o responder un tema, cerrar un pedido, o mandarle un mensaje), respondé en lenguaje natural y AGREGÁ AL FINAL un único bloque entre \`\`\`accion y \`\`\` con JSON válido, una de estas formas:
 {"tipo":"crear_pedido","para":"cliente","asunto":"...","detalle":"...","prioridad":"alta|media|baja","obra":"nombre de la obra de la que se trata"}
@@ -5695,7 +5764,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   // ── Canal directo IA↔IA: muestra lo que consulta/responde la otra IA y responde solo ──
   const cnIA = cfg?.clienteNombre || "el cliente";
   const ctxRef = useRef("");
-  ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}${p.dni ? " DNI " + p.dni : ""}${p.cuil ? " CUIL " + p.cuil : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(db.formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obraNom(db.obras, f.obra_id)} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${[...(db.archivosGen || []).map(a => `· ${a.nombre}`), ...(db.obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`))].join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(db.tareas || []).map(t => `· ${t.nombre} — ${obraNom(db.obras, t.obra_id)} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(db.matpedidos || []).map(p => `· ${obraNom(db.obras, p.obra_id)}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}`;
+  ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}${p.dni ? " DNI " + p.dni : ""}${p.cuil ? " CUIL " + p.cuil : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(db.formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obraNom(db.obras, f.obra_id)} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${[...(db.archivosGen || []).map(a => `· ${a.nombre}`), ...(db.obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`))].join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(db.tareas || []).map(t => `· ${t.nombre} — ${obraNom(db.obras, t.obra_id)} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(db.matpedidos || []).map(p => `· ${obraNom(db.obras, p.obra_id)}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}\n\n${contextoAppExtra(db, cfg)}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
   const iaBusy = useRef(false);
@@ -9817,7 +9886,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { lics, setLics, obras, setObras, modelosObra, setModelosObra, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, adicionales, setAdicionales, certConformidad, setCertConformidad, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
+  const db = { avance, lics, setLics, obras, setObras, modelosObra, setModelosObra, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, adicionales, setAdicionales, certConformidad, setCertConformidad, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
