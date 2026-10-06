@@ -126,11 +126,11 @@ const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Aut
 // Aviso simple, no intrusivo, de que un guardado en la nube falló: guarda la clave y
 // dispara un evento que un pequeño cartel (montado una sola vez en la raíz) escucha.
 let ultimoAviso = 0;
-function avisarErrorSync(key) {
+function avisarErrorSync(key, msg) {
   const ahora = Date.now();
   if (ahora - ultimoAviso < 8000) return;
   ultimoAviso = ahora;
-  try { window.dispatchEvent(new CustomEvent("vv-sync-error", { detail: { key } })); } catch { }
+  try { window.dispatchEvent(new CustomEvent("vv-sync-error", { detail: { key, msg } })); } catch { }
 }
 
 // Registra que la app se abrió — usado por NEXO Control para saber
@@ -176,9 +176,9 @@ function SyncBanner() {
   useEffect(() => { registrarApertura("cliente"); }, []);
   const [msg, setMsg] = useState("");
   useEffect(() => {
-    const onErr = () => {
-      setMsg("No se pudo guardar en la nube. Se guardó en este aparato — revisá la conexión y volvé a intentar.");
-      setTimeout(() => setMsg(""), 7000);
+    const onErr = (ev) => {
+      setMsg((ev && ev.detail && ev.detail.msg) || "No se pudo guardar en la nube. Se guardó en este aparato — revisá la conexión y volvé a intentar.");
+      setTimeout(() => setMsg(""), 15000);
     };
     window.addEventListener("vv-sync-error", onErr);
     return () => window.removeEventListener("vv-sync-error", onErr);
@@ -211,6 +211,75 @@ const storage = {
     } catch { }
     try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; }
   },
+};
+
+// ── PROTECCIÓN CONTRA PÉRDIDA DE DATOS ─────────────────────────────────
+// Causa típica de "se me borró todo": un aparato que arranca VACÍO (Safari/iPad
+// limpia el almacenamiento local, navegador nuevo, otra URL) y guarda sus valores
+// por defecto en la nube antes de haber leído lo que había — pisa todo.
+// Ahora, ANTES de escribir cualquier clave en la nube:
+//  1) se lee lo que hay en la nube; si no se puede leer, NO se toca la nube;
+//  2) si lo que hay es mucho más grande y lo nuevo es vacío/casi vacío y este aparato
+//     todavía no había cargado esa clave desde la nube, el guardado se BLOQUEA y se avisa;
+//  3) una vez por día y por clave se guarda una COPIA (clave vv_bak__<clave>__AAAAMMDD)
+//     de lo que había en la nube, y se conservan las últimas 30.
+const vacioJ = (j) => { if (j == null) return true; const t = String(j).trim(); return !t || t === "null" || t === "[]" || t === "{}" || t === '""'; };
+const guardia = { leida: {}, pend: {}, bloq: {}, snap: {}, podado: false };
+async function leerNubeG(key) {
+  try {
+    const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { headers: SH() });
+    if (!r.ok) return { ok: false };
+    const d = await r.json();
+    return { ok: true, value: d && d.length ? d[0].value : null };
+  } catch { return { ok: false }; }
+}
+async function podarCopias() {
+  if (guardia.podado) return; guardia.podado = true;
+  try {
+    const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=like." + encodeURIComponent("vv_bak__*") + "&select=key", { headers: SH() });
+    if (!r.ok) return;
+    const lim = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
+    for (const x of await r.json()) {
+      const f = String(x.key).split("__").pop();
+      if (/^\d{8}$/.test(f) && f < lim) await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(x.key), { method: "DELETE", headers: SH() });
+    }
+  } catch { }
+}
+const setCrudo = storage.set;
+storage.set = (key, value) => {
+  if (key.endsWith("__ts")) {
+    const base = key.slice(0, -4);
+    const p = guardia.pend[base];
+    return (p ? p : Promise.resolve({ ok: true })).then(res => (res && res.bloqueado) ? { value, ok: false } : setCrudo(key, value));
+  }
+  if (key.startsWith("vv_bak__")) return setCrudo(key, value);
+  const prom = (async () => {
+    const c = await leerNubeG(key);
+    if (!c.ok) { try { localStorage.setItem(key, value); } catch { } avisarErrorSync(key, "No se pudo verificar la nube: se guardó solo en este aparato y NO se tocó la nube."); return { value, ok: false, bloqueado: true }; }
+    if (c.value && !vacioJ(c.value)) {
+      const k = "vv_bak__" + key + "__" + new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      if (!guardia.snap[k]) {
+        guardia.snap[k] = 1;
+        const ex = await leerNubeG(k);
+        if (ex.ok && !ex.value) { await setCrudo(k, c.value); podarCopias(); }
+      }
+      const achica = vacioJ(value) || (c.value.length > 500 && String(value).length < c.value.length * 0.2);
+      if (achica && !guardia.leida[key]) {
+        guardia.bloq[key] = Date.now();
+        avisarErrorSync(key, "Se BLOQUEÓ un guardado que habría borrado datos de la nube (este aparato todavía no los había cargado). Recargá la página.");
+        return { value, ok: false, bloqueado: true };
+      }
+    }
+    return setCrudo(key, value);
+  })();
+  guardia.pend[key] = prom;
+  return prom;
+};
+const getCrudo = storage.get;
+storage.get = async (key) => {
+  const r = await getCrudo(key);
+  if (!key.endsWith("__ts")) { const c = await leerNubeG(key); if (c.ok) guardia.leida[key] = true; }
+  return r;
 };
 const SUPA_BUCKET = "bco-media";
 const SUPA_STORAGE_URL = SUPA_URL + "/storage/v1";
@@ -352,7 +421,8 @@ function useStored(key, def) {
         const cloudTs = Number(rTs?.value || 0);
         let localTs = 0;
         try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
-        if (cloudTs >= localTs) {
+        let localVacio = false; try { localVacio = vacioJ(localStorage.getItem(key)); } catch { }
+            if (cloudTs >= localTs || (localVacio && !vacioJ(r.value))) {
           setV(cur => JSON.stringify(d) !== JSON.stringify(cur) ? d : cur);
           try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
         }
@@ -5457,7 +5527,6 @@ function ClienteApp() {
   const [definiciones, setDefiniciones] = useStored("vv_definiciones", []);
   const [docrecepcion, setDocrecepcion] = useStored("vv_docrecepcion", []);
   const [bitacora, setBitacora] = useStored("vv_bitacora", []);
-  useEffect(() => { if (localStorage.getItem("purge_canning_bf_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_bf_v1", "1"); } catch { } } catch { } })(); }, []);
   const [tareas, setTareas] = useStored("vv_tareas", []);
   const [mensajes, setMensajes] = useStored("vv_mensajes", []);
   const [archivosCliente, setArchivosCliente] = useStored("cliente_archivos", []);

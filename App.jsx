@@ -131,19 +131,19 @@ const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Aut
 // Aviso simple, no intrusivo, de que un guardado en la nube falló: guarda la clave y
 // dispara un evento que un pequeño cartel (montado una sola vez en la raíz) escucha.
 let ultimoAviso = 0;
-function avisarErrorSync(key) {
+function avisarErrorSync(key, msg) {
     const ahora = Date.now();
     if (ahora - ultimoAviso < 8000) return; // no lo repito si ya avisé hace poco
     ultimoAviso = ahora;
-    try { window.dispatchEvent(new CustomEvent("vv-sync-error", { detail: { key } })); } catch { }
+    try { window.dispatchEvent(new CustomEvent("vv-sync-error", { detail: { key, msg } })); } catch { }
 }
 
 function SyncBanner() {
   const [msg, setMsg] = useState("");
   useEffect(() => {
-    const onErr = () => {
-      setMsg("No se pudo guardar en la nube. Se guardó en este aparato — revisá la conexión y volvé a intentar.");
-      setTimeout(() => setMsg(""), 7000);
+    const onErr = (ev) => {
+      setMsg((ev && ev.detail && ev.detail.msg) || "No se pudo guardar en la nube. Se guardó en este aparato — revisá la conexión y volvé a intentar.");
+      setTimeout(() => setMsg(""), 15000);
     };
     window.addEventListener("vv-sync-error", onErr);
     return () => window.removeEventListener("vv-sync-error", onErr);
@@ -248,6 +248,75 @@ const storage = {
         } catch { }
         try { return { keys: Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix)) }; } catch { return { keys: [] }; }
     }
+};
+
+// ── PROTECCIÓN CONTRA PÉRDIDA DE DATOS ─────────────────────────────────
+// Causa típica de "se me borró todo": un aparato que arranca VACÍO (Safari/iPad
+// limpia el almacenamiento local, navegador nuevo, otra URL) y guarda sus valores
+// por defecto en la nube antes de haber leído lo que había — pisa todo.
+// Ahora, ANTES de escribir cualquier clave en la nube:
+//  1) se lee lo que hay en la nube; si no se puede leer, NO se toca la nube;
+//  2) si lo que hay es mucho más grande y lo nuevo es vacío/casi vacío y este aparato
+//     todavía no había cargado esa clave desde la nube, el guardado se BLOQUEA y se avisa;
+//  3) una vez por día y por clave se guarda una COPIA (clave vv_bak__<clave>__AAAAMMDD)
+//     de lo que había en la nube, y se conservan las últimas 30.
+const vacioJ = (j) => { if (j == null) return true; const t = String(j).trim(); return !t || t === "null" || t === "[]" || t === "{}" || t === '""'; };
+const guardia = { leida: {}, pend: {}, bloq: {}, snap: {}, podado: false };
+async function leerNubeG(key) {
+  try {
+    const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { headers: SH() });
+    if (!r.ok) return { ok: false };
+    const d = await r.json();
+    return { ok: true, value: d && d.length ? d[0].value : null };
+  } catch { return { ok: false }; }
+}
+async function podarCopias() {
+  if (guardia.podado) return; guardia.podado = true;
+  try {
+    const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=like." + encodeURIComponent("vv_bak__*") + "&select=key", { headers: SH() });
+    if (!r.ok) return;
+    const lim = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
+    for (const x of await r.json()) {
+      const f = String(x.key).split("__").pop();
+      if (/^\d{8}$/.test(f) && f < lim) await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(x.key), { method: "DELETE", headers: SH() });
+    }
+  } catch { }
+}
+const setCrudo = storage.set;
+storage.set = (key, value) => {
+  if (key.endsWith("__ts")) {
+    const base = key.slice(0, -4);
+    const p = guardia.pend[base];
+    return (p ? p : Promise.resolve({ ok: true })).then(res => (res && res.bloqueado) ? { value, ok: false } : setCrudo(key, value));
+  }
+  if (key.startsWith("vv_bak__")) return setCrudo(key, value);
+  const prom = (async () => {
+    const c = await leerNubeG(key);
+    if (!c.ok) { try { localStorage.setItem(key, value); } catch { } avisarErrorSync(key, "No se pudo verificar la nube: se guardó solo en este aparato y NO se tocó la nube."); return { value, ok: false, bloqueado: true }; }
+    if (c.value && !vacioJ(c.value)) {
+      const k = "vv_bak__" + key + "__" + new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      if (!guardia.snap[k]) {
+        guardia.snap[k] = 1;
+        const ex = await leerNubeG(k);
+        if (ex.ok && !ex.value) { await setCrudo(k, c.value); podarCopias(); }
+      }
+      const achica = vacioJ(value) || (c.value.length > 500 && String(value).length < c.value.length * 0.2);
+      if (achica && !guardia.leida[key]) {
+        guardia.bloq[key] = Date.now();
+        avisarErrorSync(key, "Se BLOQUEÓ un guardado que habría borrado datos de la nube (este aparato todavía no los había cargado). Recargá la página.");
+        return { value, ok: false, bloqueado: true };
+      }
+    }
+    return setCrudo(key, value);
+  })();
+  guardia.pend[key] = prom;
+  return prom;
+};
+const getCrudo = storage.get;
+storage.get = async (key) => {
+  const r = await getCrudo(key);
+  if (!key.endsWith("__ts")) { const c = await leerNubeG(key); if (c.ok) guardia.leida[key] = true; }
+  return r;
 };
 
 // ── SUPABASE STORAGE (bucket bcm-media) ─────────────────────────────
@@ -466,7 +535,8 @@ function useStoredState(key, defaultValue) {
                             const cloudTs = Number(rTs?.value || 0);
                             let localTs = 0;
                             try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
-                            if (cloudTs >= localTs) {
+                            let localVacio = false; try { localVacio = vacioJ(localStorage.getItem(key)); } catch { }
+            if (cloudTs >= localTs || (localVacio && !vacioJ(r.value))) {
                                 setState(cloudData);
                                 try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
                             }
@@ -496,7 +566,10 @@ function useStoredState(key, defaultValue) {
                     try {
                         const idsPrev = new Set((prev || []).map(o => o?.id));
                         const idsNext = new Set((next || []).map(o => o?.id));
-                        const borrados = [...idsPrev].filter(id => id && !idsNext.has(id));
+                        // Una persona borra de a UNA obra. Si de golpe "desaparecen" varias, no es un borrado
+                        // real (es una rutina, un error o una lista vieja): NO se anotan como borradas.
+                        let borrados = [...idsPrev].filter(id => id && !idsNext.has(id));
+                        if (borrados.length > 1) borrados = [];
                         let tumbas = {};
                         try { const r = await storage.get(key + "_del"); if (r?.value) tumbas = JSON.parse(r.value) || {}; } catch { }
                         if (borrados.length) {
@@ -9762,79 +9835,10 @@ function App() {
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   const [iaDialogo, setIaDialogo] = useState([]);
-  useEffect(() => { if (localStorage.getItem("purge_canning_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_v1", "1"); } catch { } } catch { } })(); }, []);
-  // Limpieza única: obras que quedaron DUPLICADAS con nombre igual pero id
-  // distinto (de antes de que la fusión entre dispositivos anduviera bien).
-  // Se deja UNA sola (la que tenga más datos cargados) y se reparan los
-  // pedidos de materiales / pedidos de información que apuntaban a la que
-  // se saca — así no quedan "huérfanos" sin obra asociada.
-  useEffect(() => { if (localStorage.getItem("purge_dup_obras_v2")) return; (async () => {
-    try {
-      const r = await storage.get("vv_obras");
-      if (!r?.value) { try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { } return; }
-      const arr = JSON.parse(r.value);
-      const grupos = new Map();
-      arr.forEach(o => { const k = (o.nombre || "").trim().toLowerCase(); if (!k) return; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(o); });
-      const remap = {}; const idsABorrar = new Set();
-      grupos.forEach(lista => {
-        if (lista.length < 2) return;
-        const orden = lista.slice().sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length);
-        const sobrevive = orden[0];
-        orden.slice(1).forEach(o => { remap[o.id] = sobrevive.id; idsABorrar.add(o.id); });
-      });
-      if (idsABorrar.size === 0) { try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { } return; }
-
-      const obrasLimpias = arr.filter(o => !idsABorrar.has(o.id));
-      let tumbas = {};
-      try { const rt = await storage.get("vv_obras_del"); if (rt?.value) tumbas = JSON.parse(rt.value) || {}; } catch { }
-      idsABorrar.forEach(id => { tumbas[id] = Date.now(); });
-      lastWrite["vv_obras"] = Date.now();
-      try { localStorage.setItem("vv_obras", JSON.stringify(obrasLimpias)); localStorage.setItem("vv_obras__ts", String(Date.now())); } catch { }
-      await storage.set("vv_obras", JSON.stringify(obrasLimpias)).catch(() => { });
-      await storage.set("vv_obras__ts", String(Date.now())).catch(() => { });
-      await storage.set("vv_obras_del", JSON.stringify(tumbas)).catch(() => { });
-      try { localStorage.setItem("vv_obras_del", JSON.stringify(tumbas)); } catch { }
-      // El mapa de "id viejo -> id que sobrevivió" queda guardado en la nube
-      // también — así Contratista, Cliente, y cualquier otra app pueden
-      // arreglar sus propios pedidos huérfanos, sin depender de que esta
-      // app (V+V) sea la primera que se abre.
-      let remapGuardado = {};
-      try { const rr = await storage.get("vv_obras_remap"); if (rr?.value) remapGuardado = JSON.parse(rr.value) || {}; } catch { }
-      remapGuardado = { ...remapGuardado, ...remap };
-      await storage.set("vv_obras_remap", JSON.stringify(remapGuardado)).catch(() => { });
-      setObras(obrasLimpias);
-
-      try {
-        const rm = await storage.get("vv_matpedidos");
-        if (rm?.value) {
-          const mats = JSON.parse(rm.value);
-          const arreglados = mats.map(p => remap[p.obra_id] ? { ...p, obra_id: remap[p.obra_id], upd: Date.now() } : p);
-          if (arreglados.some((p, i) => p.obra_id !== mats[i].obra_id)) {
-            lastWrite["vv_matpedidos"] = Date.now();
-            try { localStorage.setItem("vv_matpedidos", JSON.stringify(arreglados)); } catch { }
-            await storage.set("vv_matpedidos", JSON.stringify(arreglados)).catch(() => { });
-            setMatpedidos(arreglados);
-          }
-        }
-      } catch { }
-
-      try {
-        const rp = await storage.get("vv_pedidos");
-        if (rp?.value) {
-          const peds = JSON.parse(rp.value);
-          const arreglados = peds.map(p => remap[p.obra_id] ? { ...p, obra_id: remap[p.obra_id] } : p);
-          if (arreglados.some((p, i) => p.obra_id !== peds[i].obra_id)) {
-            lastWrite["vv_pedidos"] = Date.now();
-            try { localStorage.setItem("vv_pedidos", JSON.stringify(arreglados)); } catch { }
-            await storage.set("vv_pedidos", JSON.stringify(arreglados)).catch(() => { });
-            setPedidos(arreglados);
-          }
-        }
-      } catch { }
-
-      try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { }
-    } catch { }
-  })(); }, []);
+  // (Se eliminó la "limpieza única" de Canning 815: borraba obras por nombre en cualquier aparato nuevo.)
+  // (Se eliminó la "limpieza única" de obras duplicadas por nombre: corría en cada aparato/URL nuevo
+  //  —porque su marca vivía en localStorage— y mandaba a la "tumba" obras legítimas en TODOS los aparatos.
+  //  Las obras solo se borran ahora cuando alguien aprieta Eliminar.)
   useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
