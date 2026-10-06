@@ -2953,7 +2953,73 @@ function Toast({ T, toast }) {
 const NAV = [{ id: "inicio", label: "Inicio", icon: "M11.47 3.841a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.061l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 101.061 1.061l8.69-8.69z" }, { id: "asistente", label: "IA", icon: "M12 3a4 4 0 014 4v1a4 4 0 01-8 0V7a4 4 0 014-4zM5 21a7 7 0 0114 0" }, { id: "obras", label: "Obras", icon: "M3 21h18M5 21V7l7-4 7 4v14M10 21v-5h4v5" }, { id: "avance", label: "Avance", icon: "M3 17l6-6 4 4 8-8M21 7v6M21 7h-6" }, { id: "informes", label: "Informes", icon: "M8 3h8l2 4v14H6V7z" }, { id: "cronograma", label: "Cronogramas", icon: "M3 5h18M3 10h12M3 15h15M3 20h8" }, { id: "bitacora", label: "Bitácora", icon: "M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4" }, { id: "auditoria", label: "Auditoría", icon: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z M9.5 12l1.8 1.8L15 10" }, { id: "mensajes", label: "Mensajes", icon: "M4 5h16v11H8l-4 4z" }, { id: "materiales", label: "Pedidos recibidos", icon: "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7" }, { id: "formularios", label: "Certificados", icon: "M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" }, { id: "archivos", label: "Archivos", icon: "M3 7h6l2 2h10v10H3z" }, { id: "personal", label: "Personal", icon: "M12 9a3 3 0 100 6 3 3 0 000-6z" }, { id: "gestion", label: "Gestión de obra", icon: "M4 20V10M10 20V4M16 20v-7" }, { id: "minutas", label: "Grabar reunión", icon: "M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3z M5 11a7 7 0 0014 0 M12 18v3" }, { id: "ajustes", label: "Ajustes", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM12 4v2M12 18v2M4 12h2M18 12h2" }];
 
 // ── PANTALLA: ASISTENTE IA ───────────────────────────────────────────
-function AsistenteScreen({ T, cfg, apiKey, obras, tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], certif = {}, bitacora = [], onPedidos, onMinutas }) {
+// ── Contexto COMPLETO de la app para el asistente (IA) ──────────────────
+// Gestión de obra (registros, desvíos, punitorios, tiempos por obra, cronograma
+// por etapa), Bitácora, Avance, Auditoría, Adicionales, Drone, Definiciones,
+// Documentación recibida, Minutas y Certificados de conformidad. Así la IA
+// puede responder sobre cualquier sección (misma lectura de solo lectura que V+V). Listas acotadas a lo más reciente.
+function contextoAppExtra(db, cfg) {
+  const obras = db.obras || [];
+  const on = (id) => obras.find(o => o.id === id)?.nombre || "—";
+  const dmy = (v) => { if (!v) return ""; const d = v instanceof Date ? v : new Date(v); if (isNaN(d)) return String(v); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
+  const cut = (t, n) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n) + "…" : x; };
+  const cn = cfg?.clienteNombre || "el cliente";
+  const out = [];
+  try {
+    // ── GESTIÓN DE OBRA ──
+    const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, reuniones: [], ...(db.gestion || {}) };
+    const items = (g.manual || []).map(it => {
+      const fs = it.fechaSolic ? new Date(it.fechaSolic) : null; const fr = it.fechaReal ? new Date(it.fechaReal) : null;
+      const d = g.punit[it.id];
+      const plazoEf = (Number(it.plazo) || g.plazo) + (d?.decision === "prorroga" ? (Number(d.prorrogaDias) || 0) : 0);
+      const m = fs ? gMetricas(fs, fr, plazoEf, it.cerrado) : { dias: 0, desvio: 0 };
+      const ip = it.inicioPlan ? new Date(it.inicioPlan) : null;
+      const retrasoInicio = (ip && fs && ip < fs) ? diasHabiles(ip, fs) : 0;
+      const desvio = m.desvio + retrasoInicio;
+      const retraso = Math.max(0, Math.max(0, desvio) - (Number(it.diasClima) || 0));
+      const perj = d?.decision === "confirmado" ? retraso * (Number(d.personas) || g.dotacion) * (Number(d.costoDia) || g.costoPersona) : 0;
+      return { ...it, fechaSolic: fs, fechaReal: fr, plazo: plazoEf, dias: m.dias, desvio, retrasoInicio, retraso, dec: d || null, perj };
+    }).sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
+    const modelos = db.modelosObra || [];
+    const resObras = obras.map(o => {
+      const its = items.filter(i => i.obra_id === o.id);
+      if (!its.length && !o.modeloId) return null;
+      const tt = tiemposObra(its);
+      const conf = its.filter(i => i.dec?.decision === "confirmado");
+      const perjT = conf.reduce((a, i) => a + i.perj, 0);
+      const etapas = resumenEtapasModelo(o, modelos, its.slice().sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0)));
+      return `· ${o.nombre}: inicio de obra ${o.inicio || "—"}, cierre estimado ${cierreEstimadoObra(o, modelos) || "—"}; ${its.length} registros. TIEMPOS (sin doble conteo de tareas simultáneas): plazo estimado ${tt.estimado} d háb., desvío ${tt.desvio} d (de los cuales ${tt.arranque} por arrancar tarde), real = estimado + desvío = ${tt.real} d. Perjuicio confirmado ${money(perjT)} en ${conf.length} punitorio(s).${etapas.length ? "\n   Cronograma por etapa (plan vs real): " + etapas.map(e => `${e.etapa}: plan ${e.planInicio ? dmy(e.planInicio) : "—"} ${e.duracionPlan || 0}d, real ${e.realInicio ? "desde " + dmy(e.realInicio) + (e.realDias != null ? ` ${e.realDias}d` : "") + (e.enCurso ? " en curso" : "") : "sin registros"}${e.desvio != null ? `, desvío ${e.desvio > 0 ? "+" : ""}${e.desvio}d` : ""}`).join(" | ") : ""}`;
+    }).filter(Boolean);
+    const regs = items.slice(0, 80).map(i => `· [${i.id}] ${on(i.obra_id)} — ${i.tipo || "Tarea"}: ${cut(i.descripcion, 90)}${i.etapa ? " (etapa " + i.etapa + ")" : ""} | inicio ${dmy(i.fechaSolic)} → ${i.fechaReal ? "fin " + dmy(i.fechaReal) : "en curso"} | plazo ${i.plazo} d, llevó ${i.dias} d, desvío ${i.desvio > 0 ? "+" : ""}${i.desvio} d${i.retrasoInicio ? ` (arrancó ${i.retrasoInicio} d tarde)` : ""}${(Number(i.diasClima) || 0) > 0 ? `, ${i.diasClima} d clima descontados` : ""} | imputable a ${imputablesTexto(i)}${causaTexto(i) ? " | causa: " + causaTexto(i) + (i.categoriaDesvio ? " (" + i.categoriaDesvio + ")" : "") : ""}${afectadasTexto(i) ? " | afecta a: " + afectadasTexto(i) : ""}${afectadasLeyenda(i) ? " | leyenda: " + cut(afectadasLeyenda(i), 220) : ""}${i.responsable ? " | resp: " + i.responsable : ""} | ${i.dec ? (i.dec.decision === "confirmado" ? `PUNITORIO confirmado ${money(i.perj)} (tarea detenida: ${i.dec.tarea || "—"}, ${i.dec.personas || g.dotacion} pers. × ${money(i.dec.costoDia || g.costoPersona)}/día)` : i.dec.decision === "prorroga" ? `prórroga ${i.dec.prorrogaDias} d` : "sin perjuicio") : (i.desvio > 0 && (i.fechaReal || i.estado) ? "pendiente de evaluar" : "—")}`);
+    out.push(`GESTIÓN DE OBRA — RESUMEN POR OBRA (cifras ya calculadas por la app; usalas tal cual):\n${resObras.join("\n") || "(sin datos de gestión)"}\n\nGESTIÓN DE OBRA — REGISTROS (más recientes primero, hasta 80; "desvío" = días de atraso propio de esa tarea; las tareas simultáneas NO se suman en el desvío total de la obra):\n${regs.join("\n") || "(sin registros)"}\n\nGESTIÓN — PARÁMETROS: plazo por defecto ${g.plazo} d háb., dotación ${g.dotacion}, costo por persona/día ${money(g.costoPersona)}. Reuniones registradas: ${(g.reuniones || []).length}.`);
+  } catch (e) { out.push("GESTIÓN DE OBRA: (no se pudo leer)"); }
+  try {
+    const hs = (db.bitacora || []).slice().sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0))).slice(0, 50);
+    out.push(`BITÁCORA (hechos de obra, más recientes primero):\n${hs.map(h => `· ${h.fecha} — ${on(h.obra_id)}${h.etapa ? " (" + h.etapa + ")" : ""}: ${cut(h.titulo, 80)} — ${cut(h.desc, 200)}${h.diasDesvio ? ` [desvío ${h.diasDesvio} d${h.causaDesvio ? ", " + h.causaDesvio : ""}]` : ""}${(h.fotos || []).length ? ` · ${h.fotos.length} foto(s)` : ""}`).join("\n") || "(sin hechos)"}`);
+  } catch (e) { }
+  try {
+    const av = db.avance || {};
+    out.push(`AVANCE (informes de avance con fotos, por obra):\n${obras.map(o => { const l = (av[o.id] || []); if (!l.length) return null; const u = l[0]; return `· ${o.nombre}: ${l.length} registros; último ${u.fecha || ""}${u.avance ? " — avance " + u.avance + (String(u.avance).includes("%") ? "" : "%") : ""}${u.descripcion ? " — " + cut(u.descripcion, 180) : ""}`; }).filter(Boolean).join("\n") || "(sin registros de avance)"}`);
+  } catch (e) { }
+  try {
+    out.push(`AUDITORÍAS (más recientes primero):\n${(db.auditoria || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 30).map(a => `· ${a.tipo || "Auditoría"} N°${a.nro || ""} — ${on(a.obra_id)} (${a.fecha || ""}) resultado: ${a.resultado || "—"}${a.conclusion ? " — " + cut(a.conclusion, 160) : ""}${(a.obs || []).length ? ` · ${a.obs.length} observación(es)` : ""}`).join("\n") || "(sin auditorías)"}`);
+  } catch (e) { }
+  try {
+    out.push(`ADICIONALES:\n${(db.adicionales || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 30).map(a => `· ${a.adicionalNro ? "N°" + a.adicionalNro + " " : ""}${on(a.obra_id)} (${a.fecha || ""}) ${a.tipoAdicional || ""}: ${cut(a.requerimiento || a.descripcionTecnica, 160)} — resolución: ${a.resolucion || "—"}${a.incidenciaPlazo && a.incidenciaPlazo !== "sin" ? `, incidencia en plazo ${a.diasIncidencia || ""} d` : ""}`).join("\n") || "(sin adicionales)"}`);
+  } catch (e) { }
+  try {
+    out.push(`DRONE / VUELOS:\n${(db.dronevuelos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 20).map(v => `· ${v.fecha || ""} — ${on(v.obra_id)}${v.piloto ? ", piloto " + v.piloto : ""}${v.notas ? " — " + cut(v.notas, 120) : ""}${(v.fotos || []).length ? ` · ${v.fotos.length} foto(s)` : ""}${v.analisisIA ? " · con análisis IA: " + cut(typeof v.analisisIA === "string" ? v.analisisIA : JSON.stringify(v.analisisIA), 250) : ""}`).join("\n") || "(sin vuelos)"}`);
+  } catch (e) { }
+  try {
+    out.push(`DEFINICIONES (por obra, lo que falta definir):\n${(db.definiciones || []).map(r => { const its = r.items || []; const falt = its.filter(i => !i.tiene); return `· ${on(r.obra_id)}: ${its.length - falt.length}/${its.length} definidas${falt.length ? "; faltan: " + falt.slice(0, 15).map(i => `${i.rubro ? i.rubro + " – " : ""}${i.nombre}`).join(", ") : ""}`; }).join("\n") || "(sin datos)"}\n\nDOCUMENTACIÓN RECIBIDA (por obra):\n${(db.docrecepcion || []).map(r => { const its = r.items || []; const falt = its.filter(i => !i.recibido); return `· ${on(r.obra_id)}: ${its.length - falt.length}/${its.length} recibidos${falt.length ? "; faltan: " + falt.slice(0, 15).map(i => i.nombre).join(", ") : ""}`; }).join("\n") || "(sin datos)"}`);
+  } catch (e) { }
+  try {
+    out.push(`MINUTAS DE REUNIÓN (recientes):\n${(db.minutas || []).slice(0, 12).map(m => `· ${m.fecha || ""} — ${m.titulo || ""}${m.obra_id ? " (" + on(m.obra_id) + ")" : ""}: ${cut(m.minutaTexto || m.transcripcion, 300)}`).join("\n") || "(sin minutas)"}\n\nCERTIFICADOS DE CONFORMIDAD:\n${(db.certConformidad || []).slice(0, 30).map(c => `· ${on(c.obra_id)} — ${c.nombre} (${c.fecha || ""}${c.auditor ? ", " + c.auditor : ""})`).join("\n") || "(sin certificados)"}`);
+  } catch (e) { }
+  return out.join("\n\n");
+}
+
+function AsistenteScreen({ T, cfg, apiKey, obras, gestion = {}, modelosObra = [], avance = {}, auditoria = [], adicionales = [], dronevuelos = [], definiciones = [], docrecepcion = [], tareas, msgs, setMsgs, pedidos, setPedidos, personal, setPersonal, mensajes, contactos = [], formularios = [], matpedidos = [], documentacion = [], certif = {}, bitacora = [], onPedidos, onMinutas }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
@@ -3168,7 +3234,9 @@ TAREAS / CRONOGRAMA:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find
 
 PEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"} (${p.fecha}): ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(sin pedidos de materiales)"}
 
-Tenés acceso COMPLETO y AL DETALLE de todos estos datos (obras, avances, montos, fotos, informes con título/tipo/fecha, certificados semanales, bitácora de obra, formularios, archivos, documentación, tareas, materiales, personal, contactos, pedidos). Nunca digas "no tengo acceso", "no lo puedo ver" o "no lo tengo en mi base de datos" a algo que está en este contexto — está TODO arriba, con contenido real, no solo cantidades: informes con título y fecha, certificados semanales con su resumen, bitácora con título y descripción de cada hecho. Si te piden "los últimos informes", "la última bitácora", "el certificado semanal" o "qué se cargó últimamente", mirá la lista correspondiente (ya están ordenadas de la más nueva a la más vieja) y respondé con el contenido real, no derives el pedido a nadie. Las fotos y videos no los "ves" uno por uno, pero sabés cuántos hay y de qué obra.
+${contextoAppExtra({ obras, gestion, modelosObra, bitacora, avance, auditoria, adicionales, dronevuelos, definiciones, docrecepcion }, cfg)}
+
+Tenés acceso COMPLETO a TODAS las secciones de la app, incluidas GESTIÓN DE OBRA (registros, desvíos, causas, imputables, punitorios, tiempos y cronograma por etapa de cada obra), BITÁCORA, AVANCE, AUDITORÍAS, ADICIONALES, DRONE, DEFINICIONES y DOCUMENTACIÓN RECIBIDA: consultalas siempre antes de responder y nunca digas que una sección no está disponible. Sobre tiempos de una obra: plazo estimado + desvío = real, y las tareas simultáneas no suman sus atrasos (usá las cifras del RESUMEN POR OBRA tal cual). Y además, tenés acceso COMPLETO y AL DETALLE de todos estos datos (obras, avances, montos, fotos, informes con título/tipo/fecha, certificados semanales, bitácora de obra, formularios, archivos, documentación, tareas, materiales, personal, contactos, pedidos). Nunca digas "no tengo acceso", "no lo puedo ver" o "no lo tengo en mi base de datos" a algo que está en este contexto — está TODO arriba, con contenido real, no solo cantidades: informes con título y fecha, certificados semanales con su resumen, bitácora con título y descripción de cada hecho. Si te piden "los últimos informes", "la última bitácora", "el certificado semanal" o "qué se cargó últimamente", mirá la lista correspondiente (ya están ordenadas de la más nueva a la más vieja) y respondé con el contenido real, no derives el pedido a nadie. Las fotos y videos no los "ves" uno por uno, pero sabés cuántos hay y de qué obra.
 
 PROTOCOLO — cuando el usuario te pida una acción, respondé natural y AGREGÁ AL FINAL un bloque entre \`\`\`accion y \`\`\` con JSON, una de:
 {"tipo":"crear_pedido","para":"vv","asunto":"...","detalle":"...","prioridad":"alta|media|baja","obra":"nombre de la obra de la que se trata"}
@@ -3283,7 +3351,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
   function descartarAccion(idx) { setMsgs(prev => prev.map((x, i) => i === idx ? { ...x, accion: null, accionDescartada: true } : x)); }
   // ── Canal directo IA↔IA: muestra lo que consulta/responde V+V y responde solo ──
   const ctxRef = useRef("");
-  ctxRef.current = `OBRAS:\n${(obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${(p.sitios || []).length ? ` [en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obras.find(o => o.id === f.obra_id)?.nombre || "—"} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${(obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`)).join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find(o => o.id === t.obra_id)?.nombre || "—"} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}`;
+  ctxRef.current = `OBRAS:\n${(obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, contratado ${o.monto}, certificado ${money(o.pagado)}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (obra ${obras.find(o => o.id === p.obra_id)?.nombre || "—"})${(p.sitios || []).length ? ` [en: ${p.sitios.map(s => s.sitio).join(", ")}]` : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obras.find(o => o.id === f.obra_id)?.nombre || "—"} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${(obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`)).join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(tareas || []).map(t => `· ${t.nombre} — ${obras.find(o => o.id === t.obra_id)?.nombre || "—"} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(matpedidos || []).map(p => `· ${obras.find(o => o.id === p.obra_id)?.nombre || "—"}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}\n\n${contextoAppExtra({ obras, gestion, modelosObra, bitacora, avance, auditoria, adicionales, dronevuelos, definiciones, docrecepcion }, cfg)}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
   const iaBusy = useRef(false);
@@ -4886,7 +4954,8 @@ function fmtFechaCorta(d) { return d ? `${String(d.getDate()).padStart(2, "0")}/
 function sumarMeses(fecha, meses) { const d = new Date(fecha.getTime()); d.setMonth(d.getMonth() + Number(meses || 0)); return d; }
 function sumarDias(fecha, dias) { const d = new Date(fecha.getTime()); d.setDate(d.getDate() + Number(dias || 0)); return d; }
 
-function etapasModelo(modelo) { return (modelo?.etapas || []).filter(e => e.usa); }
+// Solo etapas que siguen existiendo en la lista actual (ej: el "Revoques" viejo, ya dividido en interiores/exteriores, no aparece más).
+function etapasModelo(modelo) { return (modelo?.etapas || []).filter(e => e.usa && ETAPAS_OBRA.includes(e.etapa)); }
 
 function losasModelo(modelo) { return modelo?.losas || []; }
 function nombreLosa(i) { return `Losa ${i + 1}`; }
@@ -5631,7 +5700,7 @@ function ClienteApp() {
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
           {screen === "inicio" && <InicioScreen T={T} cfg={cfg} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
-          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
+          {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} gestion={gestion} modelosObra={modelosObra} avance={avance} auditoria={auditoria} adicionales={adicionales} dronevuelos={dronevuelos} definiciones={definiciones} docrecepcion={docrecepcion} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
           {screen === "minutas" && <GrabarReunionCliente T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} minutas={minutas} setMinutas={setMinutas} onBack={() => setScreen("asistente")} />}
