@@ -8121,7 +8121,7 @@ function imputablesTexto(it) { const l = imputablesDe(it); return l.length ? l.j
 // suma al desvío total, a punitorios y a los informes, pero se carga en pocos toques.
 function gMetricasRetraso(it) { const d = Math.max(0, Number(it.demoraDias) || 0); return { dias: d, desvio: d, estado: d > 0 ? "Vencido" : "En plazo", retraso: d }; }
 const RETRASO_CAUSAS_RAPIDAS = ["Clima", "Falta de definición del cliente", "Falta de pago / certificación del cliente", "Provisión pendiente por parte del cliente", "Falta de materiales para el subcontrato", "Mano de obra (rendimiento/ausentismo)", "Error de proyecto / planos", "Falta de coordinación entre gremios"];
-function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota, fecha, cli, afectadas, afectadasDetalle, personas, productividad, fotos, videos, titulo }) {
+function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota, fecha, cli, afectadas, afectadasDetalle, personas, productividad, fotos, videos, titulo, leyenda }) {
   const lista = (causas || []).filter(c => c && c !== "Otro");
   const detalle = String(otra || "").trim();
   const todas = detalle ? [...lista, "Otro"] : lista;
@@ -8131,7 +8131,7 @@ function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota,
   const deb = Number(debia) || 0, dem = Number(demoro) || 0;
   const d = Math.max(1, Math.round(deb && dem ? dem - deb : (Number(dias) || 1)));
   const causaTxt = todas.map(c => c === "Otro" ? detalle : c).join(" + ");
-  return { id: uid(), tipo: "Retraso", obra_id, etapa: tarea || "", descripcion: String(titulo || "").trim() || `Retraso${tarea ? " en " + tarea : ""}${causaTxt ? ": " + causaTxt : ""}`, demoraDias: d, personas: Number(personas) || 0, productividad: Math.min(100, Math.max(0, Number(productividad) || 0)), debiaDias: deb || null, demoroDias: dem || null, fechaSolic: fecha || isoHoy(), plazo: 0, fechaReal: "", causas: todas, causa: todas[0] || "", causaDetalle: detalle, categoriaDesvio: cat, imputables: imp, afectadas: Array.isArray(afectadas) ? afectadas : [], afectadasDetalle: String(afectadasDetalle || "").trim(), diasClima: todas.length === 1 && todas[0] === "Clima" ? d : 0, nota: String(nota || "").trim(), fotosInicio: Array.isArray(fotos) ? fotos : [], videos: Array.isArray(videos) ? videos : [], fotosFin: [], personalIds: [], responsable: "", ts: Date.now() };
+  return { id: uid(), tipo: "Retraso", obra_id, etapa: tarea || "", descripcion: String(titulo || "").trim() || `Retraso${tarea ? " en " + tarea : ""}${causaTxt ? ": " + causaTxt : ""}`, demoraDias: d, personas: Number(personas) || 0, productividad: Math.min(100, Math.max(0, Number(productividad) || 0)), debiaDias: deb || null, demoroDias: dem || null, fechaSolic: fecha || isoHoy(), plazo: 0, fechaReal: "", causas: todas, causa: todas[0] || "", causaDetalle: detalle, categoriaDesvio: cat, imputables: imp, afectadas: Array.isArray(afectadas) ? afectadas : [], afectadasDetalle: String(afectadasDetalle || "").trim(), diasClima: todas.length === 1 && todas[0] === "Clima" ? d : 0, nota: String(nota || "").trim(), fotosInicio: Array.isArray(fotos) ? fotos : [], videos: Array.isArray(videos) ? videos : [], fotosFin: [], personalIds: [], responsable: "", ...(typeof leyenda === "string" ? { leyendaAfecta: leyenda } : {}), ts: Date.now() };
 }
 function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, editar, onCancelar }) {
   const omitirReset = useRef(!!editar);
@@ -8148,6 +8148,7 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
   const [causas, setCausas] = useState(editar ? (editar.causas || []).filter(c => c !== "Otro") : []); const [otra, setOtra] = useState(editar ? (editar.causaDetalle || "") : ""); const [verOtra, setVerOtra] = useState(editar ? !!editar.causaDetalle : false);
   const [afect, setAfect] = useState(editar ? (editar.afectadas || []) : []); const [afectTxt, setAfectTxt] = useState(editar ? (editar.afectadasDetalle || "") : "");
   const [productividad, setProductividad] = useState(editar ? (Number(editar.productividad) || 0) : 0);
+  const [leyenda, setLeyenda] = useState(editar && typeof editar.leyendaAfecta === "string" ? editar.leyendaAfecta : null);
   const [titulo, setTitulo] = useState(editar ? (editar.descripcion || "") : "");
   const [personas, setPersonas] = useState(editar ? (Number(editar.personas) || 0) : (Number(dotacion) || 0));
   const [fotos, setFotos] = useState(editar ? (editar.fotosInicio || []) : []); const [videos, setVideos] = useState(editar ? (editar.videos || []) : []); const [subiendo, setSubiendo] = useState(false); const [errMed, setErrMed] = useState("");
@@ -8183,15 +8184,17 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
   const puede = !!obra && desvio > 0 && (causas.length > 0 || otra.trim());
   function guardar() {
     if (!puede) return;
-    const it = armarRetraso({ obra_id: obra.id, tarea, debia, demoro, causas, otra, nota, cli, afectadas: afect, afectadasDetalle: afectTxt, personas, productividad, fotos, videos, titulo });
+    const it = armarRetraso({ obra_id: obra.id, tarea, debia, demoro, causas, otra, nota, cli, afectadas: afect, afectadasDetalle: afectTxt, personas, productividad, fotos, videos, titulo, leyenda });
     if (editar) {
-      onGuardar({ ...editar, ...it, id: editar.id, fechaSolic: editar.fechaSolic, fechaReal: editar.fechaReal, ts: editar.ts, portada: editar.portada, fotosFin: editar.fotosFin || [] });
+      const m = { ...editar, ...it, id: editar.id, fechaSolic: editar.fechaSolic, fechaReal: editar.fechaReal, ts: editar.ts, portada: editar.portada, fotosFin: editar.fotosFin || [] };
+      if (leyenda === null) delete m.leyendaAfecta;
+      onGuardar(m);
       return;
     }
     onGuardar(it);
     setOk(`Guardado: +${it.demoraDias} días${tarea ? " en " + tarea : ""}.`);
     const r = filas.find(x => nomF(x) === tarea); setDebia(r ? r.dur : 0); setDemoro(r ? r.dur : 0);
-    setCausas([]); setOtra(""); setVerOtra(false); setAfect([]); setAfectTxt(""); setNota(""); setVerNota(false); setFotos([]); setVideos([]); setTitulo(""); setProductividad(0);
+    setCausas([]); setOtra(""); setVerOtra(false); setAfect([]); setAfectTxt(""); setNota(""); setVerNota(false); setFotos([]); setVideos([]); setTitulo(""); setProductividad(0); setLeyenda(null);
     setTimeout(() => setOk(""), 3500);
   }
   const numStyle = { width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 10px", fontSize: 24, fontWeight: 800, color: T.text, textAlign: "center" };
@@ -8234,6 +8237,11 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
     {siguientes.length > 0 ? <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
       {siguientes.map((r, i) => chip(afect.includes(nomF(r)), () => setAfect(l => l.includes(nomF(r)) ? l.filter(x => x !== nomF(r)) : [...l, nomF(r)]), nomF(r), "a" + i))}
     </div> : <div style={{ marginBottom: 10 }}><TInput value={afectTxt} onChange={e => setAfectTxt(e.target.value)} placeholder="Ej: Terminación de mampostería PB" /></div>}
+    {(afect.length > 0 || afectTxt.trim() || leyenda !== null) && <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>Qué afecta (se escribe solo, podés modificarlo)</div>
+      <textarea value={leyenda !== null ? leyenda : afectadasLeyendaAuto({ etapa: tarea, afectadas: afect, afectadasDetalle: afectTxt })} onChange={e => setLeyenda(e.target.value)} rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text, resize: "vertical", boxSizing: "border-box" }} />
+      {leyenda !== null && <button type="button" onClick={() => setLeyenda(null)} style={{ background: "none", border: "none", color: T.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "4px 0 0" }}>Volver al texto automático</button>}
+    </div>}
     {!verNota ? <button type="button" onClick={() => setVerNota(true)} style={{ background: "none", border: "none", color: T.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer", padding: "0 0 12px" }}>＋ Agregar una nota</button>
       : <textarea value={nota} onChange={e => setNota(e.target.value)} rows={2} placeholder="Detalle breve (podés dictarlo con el micrófono del teclado)" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text, fontFamily: "inherit", resize: "vertical", marginBottom: 12 }} />}
     <Lbl>5 · Fotos o video del tema (opcional)</Lbl>
@@ -8478,6 +8486,7 @@ function GestionView({ db, cfg, onBack }) {
     L.push(retrasoFrase(it));
     L.push(`Motivo: ${causaTexto(it) || "sin especificar"}${imputablesTexto(it) ? ` (imputable a ${imputablesTexto(it)})` : ""}`);
     if (afectadasTexto(it)) L.push(`Atrasó: ${afectadasTexto(it)}`);
+    if (afectadasLeyenda(it)) L.push(afectadasLeyenda(it));
     if (c.personas > 0) L.push(`${c.prod > 0 ? `Personas afectadas: ${c.personas}, trabajando al ${c.prod}% de productividad` : `Personas sin poder avanzar: ${c.personas}`}`);
     if (c.diaVV > 0) L.push(`Perjuicio V+V: ${money(c.vv)}`);
     if (c.diaBel > 0) L.push(`Perjuicio ${cli}: ${money(c.bel)}`);
@@ -8496,7 +8505,7 @@ function GestionView({ db, cfg, onBack }) {
     const nombreObras = obrasIds.map(id => obraNom(obras, id) || "—").join(", ");
     const tot = lista.reduce((a, i) => { const c = costoRet(i); return { d: a.d + c.d, vv: a.vv + c.vv, bel: a.bel + c.bel, rVV: a.rVV + (imputablesDe(i).includes(cli) || imputablesDe(i).includes("Estudio") ? c.reclamoVV : 0), rBel: a.rBel + (imputablesDe(i).includes("V+V") || imputablesDe(i).includes("Estudio") ? c.reclamoBel : 0) }; }, { d: 0, vv: 0, bel: 0, rVV: 0, rBel: 0 });
     const filas = lista.map(i => { const c = costoRet(i); return `<tr><td>${fmtD(i.fechaSolic)}</td><td>${_x(i.etapa || "—")}</td><td>${i.debiaDias && i.demoroDias ? `${_x(retrasoFrase(i))}<br/>` : ""}<b>${i.fechaReal ? "+" + c.d + " d" : "va a demorar " + c.d + " d más"}</b>${c.personas ? `<br/>${c.personas} personas` : ""}</td><td>${_x(causaTexto(i) || "—")}<br/><span style="color:#94A3B8">${_x(imputablesTexto(i))}</span></td><td>${c.diaVV > 0 ? money(c.vv) : "—"}</td><td>${c.diaBel > 0 ? money(c.bel) : "—"}</td></tr>`; }).join("");
-    const detalle = lista.map(i => `<div class="calc"><b>${_x(i.descripcion)}</b> · ${fmtD(i.fechaSolic)}${i.nota ? `<br/><i>${_x(i.nota)}</i>` : ""}${afectadasTexto(i) ? `<br/>Atrasó: ${_x(afectadasTexto(i))}` : ""}<br/><br/>${_x(textoPerjuicio(i)).replace(/\n\n/g, "<br/><br/>")}${(i.fotosInicio || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${i.fotosInicio.slice(0, 6).map(f => `<img src="${f.url}" style="width:110px;height:110px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px"/>`).join("")}</div>` : ""}${(i.videos || []).length ? `<div style="margin-top:6px;font-size:10px;color:#64748B">${i.videos.length} video${i.videos.length > 1 ? "s" : ""} adjunto${i.videos.length > 1 ? "s" : ""} en la app</div>` : ""}</div>`).join("");
+    const detalle = lista.map(i => `<div class="calc"><b>${_x(i.descripcion)}</b> · ${fmtD(i.fechaSolic)}${i.nota ? `<br/><i>${_x(i.nota)}</i>` : ""}${afectadasTexto(i) ? `<br/>Atrasó: ${_x(afectadasTexto(i))}` : ""}${afectadasLeyenda(i) ? `<br/><b style="color:#92400E">${_x(afectadasLeyenda(i))}</b>` : ""}<br/><br/>${_x(textoPerjuicio(i)).replace(/\n\n/g, "<br/><br/>")}${(i.fotosInicio || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${i.fotosInicio.slice(0, 6).map(f => `<img src="${f.url}" style="width:110px;height:110px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px"/>`).join("")}</div>` : ""}${(i.videos || []).length ? `<div style="margin-top:6px;font-size:10px;color:#64748B">${i.videos.length} video${i.videos.length > 1 ? "s" : ""} adjunto${i.videos.length > 1 ? "s" : ""} en la app</div>` : ""}</div>`).join("");
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:12px;line-height:1.55;margin:0;padding:14px;word-wrap:break-word}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:18px}.marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}.tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}

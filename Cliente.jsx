@@ -5720,17 +5720,18 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = []
   const costoRet = (it) => {
     const d = Number(it.demoraDias) || 0;
     const personas = it.personas != null && it.personas !== "" ? (Number(it.personas) || 0) : (Number(g.dotacion) || 0);
-    const diaVV = personas * (Number(g.costoPersona) || 0) + (Number(g.fijosVV) || 0);
+    const prod = Math.min(100, Math.max(0, Number(it.productividad) || 0));
+    const diaVV = personas * (Number(g.costoPersona) || 0) * (1 - prod / 100) + (Number(g.fijosVV) || 0);
     const diaBel = Number(g.ggBelfast) || 0;
     const neto = Math.max(0, d - (Number(it.diasClima) || 0));
-    return { d, personas, neto, clima: Number(it.diasClima) || 0, diaVV, diaBel, vv: d * diaVV, bel: d * diaBel, reclamoVV: neto * diaVV, reclamoBel: neto * diaBel };
+    return { d, personas, prod, neto, clima: Number(it.diasClima) || 0, diaVV, diaBel, vv: d * diaVV, bel: d * diaBel, reclamoVV: neto * diaVV, reclamoBel: neto * diaBel };
   };
   const textoPerjuicio = (it) => {
     const c = costoRet(it); const imp = imputablesDe(it); const L = [];
     if (!it.fechaReal) L.push(`La tarea todavía no terminó: se estima con los ${c.d} días más que va a demorar.`);
     const fijos = Number(g.fijosVV) || 0;
     L.push(c.diaVV > 0
-      ? `Para V+V: cada día hábil de demora la cuadrilla (${c.personas} personas a ${money(g.costoPersona)} por persona y día${fijos ? `, más ${money(fijos)} de gastos fijos diarios` : ""}) sigue costando ${money(c.diaVV)} sin poder avanzar. ${c.d} días × ${money(c.diaVV)} = ${money(c.vv)}.`
+      ? `Para V+V: cada día hábil de demora la cuadrilla (${c.personas} personas a ${money(g.costoPersona)} por persona y día${c.prod > 0 ? `, trabajando al ${c.prod}% de productividad, o sea que se pierde el ${100 - c.prod}%` : ""}${fijos ? `, más ${money(fijos)} de gastos fijos diarios` : ""}) sigue costando ${money(c.diaVV)} ${c.prod > 0 ? "de pérdida por trabajar a menor ritmo" : "sin poder avanzar"}. ${c.d} días × ${money(c.diaVV)} = ${money(c.vv)}.`
       : `Para V+V: todavía no se cargaron la cuadrilla y su costo diario.`);
     L.push(c.diaBel > 0
       ? `Para ${cli}: cada día de demora suma ${money(c.diaBel)} de gastos generales de obra (dirección, estructura, alquileres y seguros) que se pagan igual aunque la obra no avance. ${c.d} días × ${money(c.diaBel)} = ${money(c.bel)}.`
@@ -5748,7 +5749,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = []
     const tot = lista.reduce((a, i) => { const c = costoRet(i); const imp = imputablesDe(i); return { d: a.d + c.d, vv: a.vv + c.vv, bel: a.bel + c.bel, rVV: a.rVV + (esBelIt(i) || imp.includes("Estudio") ? c.reclamoVV : 0), rBel: a.rBel + (imp.includes("V+V") || imp.includes("Estudio") ? c.reclamoBel : 0) }; }, { d: 0, vv: 0, bel: 0, rVV: 0, rBel: 0 });
     const nombreObras = [...new Set(lista.map(i => nomObra(i.obra_id)))].join(", ");
     const filas = lista.map(i => { const c = costoRet(i); return `<tr><td>${fmtD(i.fechaSolic)}</td><td>${_e(i.etapa || "—")}</td><td>${i.debiaDias && i.demoroDias ? `${_e(retrasoFrase(i))}<br/>` : ""}<b>${i.fechaReal ? "+" + c.d + " d" : "va a demorar " + c.d + " d más"}</b>${c.personas ? `<br/>${c.personas} personas` : ""}</td><td>${_e(causaTexto(i) || "—")}<br/><span style="color:#94A3B8">${_e(imputablesTexto(i))}</span></td><td>${c.diaVV > 0 ? money(c.vv) : "—"}</td><td>${c.diaBel > 0 ? money(c.bel) : "—"}</td></tr>`; }).join("");
-    const detalle = lista.map(i => `<div class="calc"><b>${_e(i.descripcion)}</b> · ${fmtD(i.fechaSolic)}${i.nota ? `<br/><i>${_e(i.nota)}</i>` : ""}${afectadasTexto(i) ? `<br/>Atrasó: ${_e(afectadasTexto(i))}` : ""}<br/><br/>${_e(textoPerjuicio(i)).replace(/\n\n/g, "<br/><br/>")}${(i.fotosInicio || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${i.fotosInicio.slice(0, 6).map(f => `<img src="${f.url}" style="width:110px;height:110px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px"/>`).join("")}</div>` : ""}${(i.videos || []).length ? `<div style="margin-top:6px;font-size:10px;color:#64748B">${i.videos.length} video${i.videos.length > 1 ? "s" : ""} adjunto${i.videos.length > 1 ? "s" : ""} en la app</div>` : ""}</div>`).join("");
+    const detalle = lista.map(i => `<div class="calc"><b>${_e(i.descripcion)}</b> · ${fmtD(i.fechaSolic)}${i.nota ? `<br/><i>${_e(i.nota)}</i>` : ""}${afectadasTexto(i) ? `<br/>Atrasó: ${_e(afectadasTexto(i))}` : ""}${afectadasLeyenda(i) ? `<br/><b style="color:#92400E">${_e(afectadasLeyenda(i))}</b>` : ""}<br/><br/>${_e(textoPerjuicio(i)).replace(/\n\n/g, "<br/><br/>")}${(i.fotosInicio || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${i.fotosInicio.slice(0, 6).map(f => `<img src="${f.url}" style="width:110px;height:110px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px"/>`).join("")}</div>` : ""}${(i.videos || []).length ? `<div style="margin-top:6px;font-size:10px;color:#64748B">${i.videos.length} video${i.videos.length > 1 ? "s" : ""} adjunto${i.videos.length > 1 ? "s" : ""} en la app</div>` : ""}</div>`).join("");
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:12px;line-height:1.55;margin:0;padding:14px;word-wrap:break-word}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:18px}.marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}.tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
@@ -5782,7 +5783,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = []
           </div>
           <div style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px" }}>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11.5, color: T.sub }}>
-              {c.personas > 0 && <span><b>{c.personas}</b> personas sin poder avanzar</span>}
+              {c.personas > 0 && <span><b>{c.personas}</b> personas {c.prod > 0 ? `trabajando al ${c.prod}% de productividad` : "sin poder avanzar"}</span>}
               <span>Perjuicio <b>V+V</b>: <b style={{ color: c.diaVV > 0 ? "#B91C1C" : T.muted }}>{c.diaVV > 0 ? money(c.vv) : "sin costos cargados"}</b></span>
               <span>Perjuicio <b>{cli}</b>: <b style={{ color: c.diaBel > 0 ? "#B91C1C" : T.muted }}>{c.diaBel > 0 ? money(c.bel) : "sin costos cargados"}</b></span>
             </div>
@@ -5791,6 +5792,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = []
           </div>
           {it.nota && <div style={{ fontSize: 11, color: T.sub, marginTop: 4, whiteSpace: "pre-wrap" }}>{it.nota}</div>}
           {afectadasTexto(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 4 }}>Afecta a: <b>{afectadasTexto(it)}</b></div>}
+          {afectadasLeyenda(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 3, fontWeight: 700, whiteSpace: "pre-wrap" }}>{afectadasLeyenda(it)}</div>}
           {(it.fotosInicio || []).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
             {it.fotosInicio.map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} style={{ width: 64, height: 64, borderRadius: 6, objectFit: "cover", border: `1px solid ${T.border}`, display: "block" }} /></a>)}
           </div>}
