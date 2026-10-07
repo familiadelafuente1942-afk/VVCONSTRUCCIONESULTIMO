@@ -447,6 +447,24 @@ async function uploadFoto(dataUrl, carpeta, nombre) {
     const remoteUrl = await mediaStorage.upload(path, dataUrl);
     return remoteUrl || dataUrl; // fallback a base64 si falla
 }
+// Sube un video DIRECTO como archivo (sin pasarlo por base64: en el celular eso cortaba los videos grandes),
+// con su extensión real, y verifica que lo subido pese lo mismo que el original. Devuelve la URL o null.
+async function subirVideoDirecto(file, carpeta) {
+  const nombreExt = ((String(file.name || "").match(/\.([a-zA-Z0-9]{2,4})$/) || [])[1] || "").toLowerCase();
+  const ext = nombreExt || String(file.type || "video/mp4").split("/")[1].replace("quicktime", "mov");
+  const tipo = file.type || (ext === "mov" ? "video/quicktime" : "video/mp4");
+  const path = `${carpeta}/${uid()}.${ext}`;
+  for (let intento = 0; intento < 2; intento++) {
+    try {
+      const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${path}`, { method: "POST", headers: { "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY, "Content-Type": tipo, "x-upsert": "true" }, body: file });
+      if (!r.ok) continue;
+      const url = `${SUPA_STORAGE_URL}/object/public/${SUPA_BUCKET}/${path}`;
+      let len = 0; try { const h = await fetch(url, { method: "HEAD", cache: "no-store" }); len = Number(h.headers.get("content-length") || 0); } catch { }
+      if (!len || len === file.size) return url;
+    } catch { }
+  }
+  return null;
+}
 // Comprime/redimensiona una imagen (dataURL) para que pese poco antes de subirla.
 // Una foto de celular de 4-8 MB queda en ~200-400 KB. Esto hace la subida confiable
 // y evita inflar la base de datos si llegara a caer a base64.
@@ -8161,8 +8179,8 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
       try {
         if (esVideo) {
           if (f.size > 60 * 1024 * 1024) { setErrMed(`El video "${f.name}" pesa ${(f.size / 1048576).toFixed(0)} MB. Subí videos de hasta ~60 MB.`); continue; }
-          const id = uid(); const url = await uploadFoto(await leerArchivo(f), `gestion/retrasos/videos`, id);
-          if (!mediaStorage.isRemoteUrl(url)) { setErrMed(`No se pudo subir "${f.name}" a la nube. Probá de nuevo con mejor señal.`); continue; }
+          const id = uid(); const url = await subirVideoDirecto(f, `gestion/retrasos/videos`);
+          if (!url) { setErrMed(`No se pudo subir completo "${f.name}". Probá de nuevo con mejor señal (el video no se guardó).`); continue; }
           setVideos(l => [...l, { id, url, nombre: f.name, fecha: f.lastModified || Date.now() }]);
         } else {
           const comp = await compressImage(await leerArchivo(f), 1600, 0.7);
