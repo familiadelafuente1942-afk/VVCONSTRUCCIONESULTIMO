@@ -447,12 +447,49 @@ async function uploadFoto(dataUrl, carpeta, nombre) {
     const remoteUrl = await mediaStorage.upload(path, dataUrl);
     return remoteUrl || dataUrl; // fallback a base64 si falla
 }
+// Mueve el átomo "moov" al principio de un MP4/MOV (faststart) para que el video arranque sin bajarse entero.
+async function faststartVideo(file) {
+  try {
+    const leer = async (a, b) => new Uint8Array(await file.slice(a, b).arrayBuffer());
+    const cajas = []; let pos = 0;
+    while (pos + 8 <= file.size) {
+      const h = await leer(pos, Math.min(pos + 16, file.size)); const dv = new DataView(h.buffer);
+      let size = dv.getUint32(0); const tipo = String.fromCharCode(h[4], h[5], h[6], h[7]);
+      if (size === 1 && h.length >= 16) size = Number(dv.getBigUint64(8)); else if (size === 0) size = file.size - pos;
+      if (size < 8 || pos + size > file.size) return file;
+      cajas.push({ tipo, pos, size }); pos += size;
+    }
+    const iMoov = cajas.findIndex(c => c.tipo === "moov"), iMdat = cajas.findIndex(c => c.tipo === "mdat");
+    if (iMoov < 0 || iMdat < 0 || iMoov < iMdat || cajas.some(c => c.tipo === "moof")) return file;
+    const moov = cajas[iMoov]; const mb = await leer(moov.pos, moov.pos + moov.size); const dv = new DataView(mb.buffer);
+    const tipoEn = (p) => String.fromCharCode(mb[p + 4], mb[p + 5], mb[p + 6], mb[p + 7]);
+    const S = moov.size;
+    const recorrer = (ini, fin) => {
+      let p = ini;
+      while (p + 8 <= fin) {
+        const sz = dv.getUint32(p); const t = tipoEn(p); if (sz < 8 || p + sz > fin) break;
+        if (t === "moov" || t === "trak" || t === "mdia" || t === "minf" || t === "stbl") recorrer(p + 8, p + sz);
+        else if (t === "stco") { const n = dv.getUint32(p + 12); for (let i = 0; i < n; i++) dv.setUint32(p + 16 + i * 4, dv.getUint32(p + 16 + i * 4) + S); }
+        else if (t === "co64") { const n = dv.getUint32(p + 12); for (let i = 0; i < n; i++) dv.setBigUint64(p + 16 + i * 8, dv.getBigUint64(p + 16 + i * 8) + BigInt(S)); }
+        p += sz;
+      }
+    };
+    recorrer(8, mb.length);
+    const partes = [];
+    cajas.forEach((c, i) => { if (i === iMoov) return; if (i === iMdat) partes.push(mb); partes.push(file.slice(c.pos, c.pos + c.size)); });
+    return new Blob(partes, { type: file.type });
+  } catch { return file; }
+}
 // Sube un video DIRECTO como archivo (sin pasarlo por base64: en el celular eso cortaba los videos grandes),
 // con su extensión real, y verifica que lo subido pese lo mismo que el original. Devuelve la URL o null.
 async function subirVideoDirecto(file, carpeta) {
   const nombreExt = ((String(file.name || "").match(/\.([a-zA-Z0-9]{2,4})$/) || [])[1] || "").toLowerCase();
-  const ext = nombreExt || String(file.type || "video/mp4").split("/")[1].replace("quicktime", "mov");
-  const tipo = file.type || (ext === "mov" ? "video/quicktime" : "video/mp4");
+  let ext = nombreExt || String(file.type || "video/mp4").split("/")[1].replace("quicktime", "mov");
+  // Los videos del iPhone traen el índice (moov) al FINAL: el navegador tiene que bajarlo entero antes de reproducir y se traba o se corta.
+  // Se reordena para que arranque enseguida, y se sube como mp4 (mismo contenido H.264) para que lo abra cualquier navegador.
+  const orig = file; file = await faststartVideo(file);
+  if (ext === "mov" || ext === "qt") ext = "mp4";
+  const tipo = ext === "mp4" ? "video/mp4" : (orig.type || "video/mp4");
   const path = `${carpeta}/${uid()}.${ext}`;
   for (let intento = 0; intento < 2; intento++) {
     try {
@@ -8287,10 +8324,12 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
     {ok && <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 700, color: "#16A34A", textAlign: "center" }}>✓ {ok}</div>}
   </Card>);
 }
-function GestionView({ db, cfg, onBack }) {
+function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
   const { obras, gestion, setGestion, personal, modelosObra } = db;
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(gestion || {}) };
-  const [tab, setTab] = useState("retrasos");
+  const [tab, setTab] = useState(() => { const f = ((db.gestion || {}).manual || []).find(x => x.id === focoId); return f && f.tipo !== "Retraso" ? "registro" : "retrasos"; });
+  const [foco, setFoco] = useState(focoId || null);
+  useEffect(() => { if (focoId && onFocoUsado) onFocoUsado(); /* eslint-disable-next-line */ }, []);
   const [expRet, setExpRet] = useState({});
   const [editRet, setEditRet] = useState(null);
   const [verCostos, setVerCostos] = useState(false);
@@ -8407,6 +8446,7 @@ function GestionView({ db, cfg, onBack }) {
   const itemsO = filtroObra === "todas" ? items : items.filter(it => it.obra_id === filtroObra);
   const itemsFiltrados = itemsO.filter(it => it.tipo !== "Retraso" && (filtroEtapa === "todas" || it.etapa === filtroEtapa));
   const itemsRetraso = itemsO.filter(it => it.tipo === "Retraso");
+  const itemFoco = foco ? items.find(x => x.id === foco) : null;
   const diasRetrasoTot = itemsRetraso.reduce((a, i) => a + (Number(i.demoraDias) || 0), 0);
   const etapasUsadas = [...new Set(itemsO.map(it => it.etapa).filter(Boolean))];
   // Top 5 tareas con mayor diferencia (días), para ir directo al problema
@@ -8800,7 +8840,10 @@ function GestionView({ db, cfg, onBack }) {
   const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
 
   // Tarjeta compartida por Registro y Punitorios
-  const ItemCard = ({ it, conAcciones, conRegistro, selModo, selected, onToggleSel }) => {
+  // Componente ESTABLE: antes se redefinía en cada render y React lo desmontaba entero (los videos se reiniciaban/cortaban solos).
+  const itemCardRef = useRef(null);
+  const ItemCard = useCallback((props) => itemCardRef.current(props), []);
+  itemCardRef.current = ({ it, conAcciones, conRegistro, selModo, selected, onToggleSel }) => {
     const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
     return (<Card onClick={selModo ? () => onToggleSel(it.id) : undefined} style={{ padding: 13, marginBottom: 9, position: "relative", cursor: selModo ? "pointer" : "default", border: selModo && selected ? `2px solid ${T.accent}` : undefined, background: selModo && selected ? T.al : undefined }}>
       {selModo && <div style={{ position: "absolute", top: 10, right: 10, width: 22, height: 22, borderRadius: 6, border: `2px solid ${selected ? T.accent : T.border}`, background: selected ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{selected ? "✓" : ""}</div>}
@@ -8870,18 +8913,25 @@ function GestionView({ db, cfg, onBack }) {
       </div>
     </div>
 
-    {(tab === "retrasos" || tab === "registro" || tab === "punitorios" || tab === "panel") && obras.length > 0 && <div style={{ padding: "10px 20px 0" }}>
+    {!itemFoco && (tab === "retrasos" || tab === "registro" || tab === "punitorios" || tab === "panel") && obras.length > 0 && <div style={{ padding: "10px 20px 0" }}>
       <Sel value={filtroObra} onChange={e => { setFiltroObra(e.target.value); setFiltroEtapa("todas"); setSelIds([]); }}><option value="todas">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel>
     </div>}
 
-      <Card style={{ padding: 11, margin: "12px 20px 0" }}>
+      {!itemFoco && <Card style={{ padding: 11, margin: "12px 20px 0" }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 2 }}>Aviso en el Inicio de las dos apps</div>
         <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Lo ven V+V y {cli} en su pantalla principal. Marcá cada registro con "Poner en Inicio".</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {[["marcados", "Solo los marcados"], ["semana", "Todo lo de la semana"], ["nada", "No mostrar"]].map(([k, l]) => { const a = (g.portadaModo || "marcados") === k; return <button key={k} onClick={() => upd({ portadaModo: k })} style={{ padding: "8px 12px", borderRadius: 18, border: `1.5px solid ${a ? T.accent : T.border}`, background: a ? T.al : T.bg, color: a ? T.accent : T.sub, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>; })}
         </div>
-      </Card>
+      </Card>}
     {tab === "retrasos" && <div style={{ padding: "16px 20px", paddingBottom: 90 }}>
+      {itemFoco && itemFoco.tipo === "Retraso" && <div style={{ marginBottom: 16, paddingBottom: 6, borderBottom: `2px solid ${T.accent}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: ".06em" }}>Lo que tocaste en Inicio</div>
+          <button onClick={() => setFoco(null)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Cerrar</button>
+        </div>
+        <ItemCard it={itemFoco} conAcciones={false} conRegistro={true} selModo={false} selected={false} onToggleSel={toggleSel} />
+      </div>}
       <RetrasoRapido key={filtroObra} dotacion={g.dotacion} obras={obras} modelosObra={modelosObra} obraIni={filtroObra !== "todas" ? filtroObra : (obras[0]?.id || "")} cli={cli} onGuardar={(it) => upd({ manual: [...(g.manual || []), it] })} />
       <Card style={{ padding: 13, marginBottom: 14 }}>
         <div onClick={() => setVerCostos(v => !v)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
@@ -8913,9 +8963,16 @@ function GestionView({ db, cfg, onBack }) {
         {itemsRetraso.length > 0 && <div style={{ fontSize: 12, fontWeight: 800, color: "#EF4444" }}>+{diasRetrasoTot} d hábiles</div>}
       </div>
       {itemsRetraso.length === 0 && <EmptyMsg>Todavía no hay retrasos cargados.</EmptyMsg>}
-      {itemsRetraso.map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} selModo={false} selected={false} onToggleSel={toggleSel} />)}
+      {itemsRetraso.filter(it => it.id !== foco).map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} selModo={false} selected={false} onToggleSel={toggleSel} />)}
     </div>}
     {tab === "registro" && <div style={{ padding: "16px 20px", paddingBottom: selModo ? 110 : 90 }}>
+      {itemFoco && itemFoco.tipo !== "Retraso" && <div style={{ marginBottom: 16, paddingBottom: 6, borderBottom: `2px solid ${T.accent}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: ".06em" }}>Lo que tocaste en Inicio</div>
+          <button onClick={() => setFoco(null)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Cerrar</button>
+        </div>
+        <ItemCard it={itemFoco} conAcciones={false} conRegistro={true} selModo={false} selected={false} onToggleSel={toggleSel} />
+      </div>}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>Cargá acá cada tarea o hecho de obra (días estimados por defecto {g.plazo} háb.), con foto de inicio y de fin para dejar constancia de cuánto llevó en verdad. Quedan registrados, se pueden editar, sacar en PDF o borrar; los que se pasan del estimado se evalúan en la pestaña Punitorios.</div>
         {items.length > 0 && <button onClick={vaciarRegistro} style={{ flexShrink: 0, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Vaciar registro</button>}
@@ -8934,7 +8991,7 @@ function GestionView({ db, cfg, onBack }) {
         <button onClick={() => setSelIds(itemsFiltrados.slice(0, 10).map(it => it.id))} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Últimos 10</button>
         {selIds.length > 0 && <button onClick={() => setSelIds([])} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Vaciar selección</button>}
       </div>}
-      {itemsFiltrados.map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} selModo={selModo} selected={selIds.includes(it.id)} onToggleSel={toggleSel} />)}
+      {itemsFiltrados.filter(it => it.id !== foco).map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} selModo={selModo} selected={selIds.includes(it.id)} onToggleSel={toggleSel} />)}
       {!selModo && <AddFab onClick={() => { setMError(""); const obIni = obras.find(o => o.id === (filtroObra !== "todas" ? filtroObra : obras[0]?.id)); setMForm({ tipo: "Tarea", obra_id: obIni?.id || obras[0]?.id || "", descripcion: "", imputables: ["Estudio"], fechaSolic: isoFromFechaCorta(obIni?.inicio) || isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] }); }} label="Registro" />}
       {selModo && <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: T.navy, borderTop: `2px solid ${BRASS}`, padding: "12px 16px", paddingBottom: "max(12px, env(safe-area-inset-bottom))", display: "flex", alignItems: "center", gap: 10, zIndex: 50 }}>
         <div style={{ color: "#fff", fontSize: 12.5, fontWeight: 700, flex: 1 }}>{selIds.length} registro{selIds.length === 1 ? "" : "s"} elegido{selIds.length === 1 ? "" : "s"}</div>
@@ -10450,7 +10507,7 @@ function PortadaGestion({ gestion, obras, TXC, TXR, onIr }) {
     {lista.map(it => {
       const obra = (obras || []).find(o => o.id === it.obra_id);
       const ret = it.tipo === "Retraso";
-      return (<div key={it.id} onClick={() => onIr("gestion")} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, padding: "11px 12px", marginBottom: 6, background: `rgba(${TXR},.05)`, border: `1px solid rgba(${TXR},.1)`, borderLeft: `3px solid ${ret ? "#E58989" : "#D9B27C"}`, borderRadius: 6, cursor: "pointer" }}>
+      return (<div key={it.id} onClick={() => onIr("gestion", it.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, padding: "11px 12px", marginBottom: 6, background: `rgba(${TXR},.05)`, border: `1px solid rgba(${TXR},.1)`, borderLeft: `3px solid ${ret ? "#E58989" : "#D9B27C"}`, borderRadius: 6, cursor: "pointer" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: TXC, lineHeight: 1.35 }}>{it.descripcion}</div>
           <div style={{ fontSize: 10.5, color: `rgba(${TXR},.5)`, marginTop: 3 }}>{[fmt(it.fechaSolic), obra?.nombre, it.tipo].filter(Boolean).join(" · ")}{ret ? ` · ${retrasoFrase(it)}` : ""}</div>
@@ -10607,6 +10664,7 @@ function App() {
   }, []);
   const [view, setView] = useState("dashboard");
   const [auditoriaDesdeSemana, setAuditoriaDesdeSemana] = useState(false);
+  const [gestionFoco, setGestionFoco] = useState(null);
   const [lics, setLics] = useStoredState("vv_lics", SAMPLE_LICS);
   const [obras, setObras] = useStoredState("vv_obras", SAMPLE_OBRAS);
   const [modelosObra, setModelosObra] = useStoredState("vv_modelos_obra", []);
@@ -10782,7 +10840,7 @@ function App() {
         {view!=="dashboard" && <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
-            {view==="dashboard" && <InicioViewVV cfg={cfg} gestion={gestion} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
+            {view==="dashboard" && <InicioViewVV cfg={cfg} gestion={gestion} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setGestionFoco(id==="gestion" ? (param||null) : null); setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} adicionales={adicionales} setAdicionales={setAdicionales} modelosObra={modelosObra} />}
             {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} certifRubro={certifRubro} setCertifRubro={setCertifRubro} docrecepcion={docrecepcion} />}
@@ -10792,7 +10850,7 @@ function App() {
             {view==="mas" && <MasView cfg={cfg} setCfg={setCfg} sub={masSub} setSub={setMasSub} goView={go} db={db} apiKey={cfg.apiKey} />}
             {view==="informes" && <InformesView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
-            {view==="gestion" && <GestionView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
+            {view==="gestion" && <GestionView db={db} cfg={cfg} focoId={gestionFoco} onFocoUsado={()=>setGestionFoco(null)} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
