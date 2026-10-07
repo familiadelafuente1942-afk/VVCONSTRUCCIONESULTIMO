@@ -8121,7 +8121,7 @@ function imputablesTexto(it) { const l = imputablesDe(it); return l.length ? l.j
 // suma al desvío total, a punitorios y a los informes, pero se carga en pocos toques.
 function gMetricasRetraso(it) { const d = Math.max(0, Number(it.demoraDias) || 0); return { dias: d, desvio: d, estado: d > 0 ? "Vencido" : "En plazo", retraso: d }; }
 const RETRASO_CAUSAS_RAPIDAS = ["Clima", "Falta de definición del cliente", "Falta de pago / certificación del cliente", "Provisión pendiente por parte del cliente", "Falta de materiales para el subcontrato", "Mano de obra (rendimiento/ausentismo)", "Error de proyecto / planos", "Falta de coordinación entre gremios"];
-function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota, fecha, cli, afectadas, afectadasDetalle, personas, fotos, videos, titulo }) {
+function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota, fecha, cli, afectadas, afectadasDetalle, personas, productividad, fotos, videos, titulo }) {
   const lista = (causas || []).filter(c => c && c !== "Otro");
   const detalle = String(otra || "").trim();
   const todas = detalle ? [...lista, "Otro"] : lista;
@@ -8131,7 +8131,7 @@ function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota,
   const deb = Number(debia) || 0, dem = Number(demoro) || 0;
   const d = Math.max(1, Math.round(deb && dem ? dem - deb : (Number(dias) || 1)));
   const causaTxt = todas.map(c => c === "Otro" ? detalle : c).join(" + ");
-  return { id: uid(), tipo: "Retraso", obra_id, etapa: tarea || "", descripcion: String(titulo || "").trim() || `Retraso${tarea ? " en " + tarea : ""}${causaTxt ? ": " + causaTxt : ""}`, demoraDias: d, personas: Number(personas) || 0, debiaDias: deb || null, demoroDias: dem || null, fechaSolic: fecha || isoHoy(), plazo: 0, fechaReal: "", causas: todas, causa: todas[0] || "", causaDetalle: detalle, categoriaDesvio: cat, imputables: imp, afectadas: Array.isArray(afectadas) ? afectadas : [], afectadasDetalle: String(afectadasDetalle || "").trim(), diasClima: todas.length === 1 && todas[0] === "Clima" ? d : 0, nota: String(nota || "").trim(), fotosInicio: Array.isArray(fotos) ? fotos : [], videos: Array.isArray(videos) ? videos : [], fotosFin: [], personalIds: [], responsable: "", ts: Date.now() };
+  return { id: uid(), tipo: "Retraso", obra_id, etapa: tarea || "", descripcion: String(titulo || "").trim() || `Retraso${tarea ? " en " + tarea : ""}${causaTxt ? ": " + causaTxt : ""}`, demoraDias: d, personas: Number(personas) || 0, productividad: Math.min(100, Math.max(0, Number(productividad) || 0)), debiaDias: deb || null, demoroDias: dem || null, fechaSolic: fecha || isoHoy(), plazo: 0, fechaReal: "", causas: todas, causa: todas[0] || "", causaDetalle: detalle, categoriaDesvio: cat, imputables: imp, afectadas: Array.isArray(afectadas) ? afectadas : [], afectadasDetalle: String(afectadasDetalle || "").trim(), diasClima: todas.length === 1 && todas[0] === "Clima" ? d : 0, nota: String(nota || "").trim(), fotosInicio: Array.isArray(fotos) ? fotos : [], videos: Array.isArray(videos) ? videos : [], fotosFin: [], personalIds: [], responsable: "", ts: Date.now() };
 }
 function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, editar, onCancelar }) {
   const omitirReset = useRef(!!editar);
@@ -8147,6 +8147,7 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
   const [demoro, setDemoro] = useState(editar ? (editar.demoroDias || ((editar.debiaDias || 0) + (editar.demoraDias || 0))) : (iCurso >= 0 ? filas[iCurso].dur : 0));
   const [causas, setCausas] = useState(editar ? (editar.causas || []).filter(c => c !== "Otro") : []); const [otra, setOtra] = useState(editar ? (editar.causaDetalle || "") : ""); const [verOtra, setVerOtra] = useState(editar ? !!editar.causaDetalle : false);
   const [afect, setAfect] = useState(editar ? (editar.afectadas || []) : []); const [afectTxt, setAfectTxt] = useState(editar ? (editar.afectadasDetalle || "") : "");
+  const [productividad, setProductividad] = useState(editar ? (Number(editar.productividad) || 0) : 0);
   const [titulo, setTitulo] = useState(editar ? (editar.descripcion || "") : "");
   const [personas, setPersonas] = useState(editar ? (Number(editar.personas) || 0) : (Number(dotacion) || 0));
   const [fotos, setFotos] = useState(editar ? (editar.fotosInicio || []) : []); const [videos, setVideos] = useState(editar ? (editar.videos || []) : []); const [subiendo, setSubiendo] = useState(false); const [errMed, setErrMed] = useState("");
@@ -8182,7 +8183,7 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
   const puede = !!obra && desvio > 0 && (causas.length > 0 || otra.trim());
   function guardar() {
     if (!puede) return;
-    const it = armarRetraso({ obra_id: obra.id, tarea, debia, demoro, causas, otra, nota, cli, afectadas: afect, afectadasDetalle: afectTxt, personas, fotos, videos, titulo });
+    const it = armarRetraso({ obra_id: obra.id, tarea, debia, demoro, causas, otra, nota, cli, afectadas: afect, afectadasDetalle: afectTxt, personas, productividad, fotos, videos, titulo });
     if (editar) {
       onGuardar({ ...editar, ...it, id: editar.id, fechaSolic: editar.fechaSolic, fechaReal: editar.fechaReal, ts: editar.ts, portada: editar.portada, fotosFin: editar.fotosFin || [] });
       return;
@@ -8190,7 +8191,7 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
     onGuardar(it);
     setOk(`Guardado: +${it.demoraDias} días${tarea ? " en " + tarea : ""}.`);
     const r = filas.find(x => nomF(x) === tarea); setDebia(r ? r.dur : 0); setDemoro(r ? r.dur : 0);
-    setCausas([]); setOtra(""); setVerOtra(false); setAfect([]); setAfectTxt(""); setNota(""); setVerNota(false); setFotos([]); setVideos([]); setTitulo("");
+    setCausas([]); setOtra(""); setVerOtra(false); setAfect([]); setAfectTxt(""); setNota(""); setVerNota(false); setFotos([]); setVideos([]); setTitulo(""); setProductividad(0);
     setTimeout(() => setOk(""), 3500);
   }
   const numStyle = { width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 10px", fontSize: 24, fontWeight: 800, color: T.text, textAlign: "center" };
@@ -8210,12 +8211,18 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
       <div><div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>Va a demorar</div><input type="number" inputMode="numeric" value={demoro || ""} onChange={e => setDemoro(+e.target.value || 0)} style={numStyle} /></div>
     </div>
     <div style={{ textAlign: "center", fontSize: 14, fontWeight: 800, marginBottom: 12, color: desvio > 0 ? "#EF4444" : T.muted }}>{desvio > 0 ? `La tarea va a demorar +${desvio} días más` : "Poné cuánto va a demorar: tiene que ser más que lo previsto"}</div>
-    <Lbl>Personas que no pudieron avanzar</Lbl>
+    <Lbl>Personas afectadas</Lbl>
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
       <button type="button" onClick={() => setPersonas(n => Math.max(0, (Number(n) || 0) - 1))} style={{ width: 44, height: 44, borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.bg, fontSize: 22, fontWeight: 800, color: T.text, cursor: "pointer" }}>−</button>
       <input type="number" inputMode="numeric" value={personas || ""} onChange={e => setPersonas(+e.target.value || 0)} style={{ ...numStyle, flex: 1, width: "auto" }} />
       <button type="button" onClick={() => setPersonas(n => (Number(n) || 0) + 1)} style={{ width: 44, height: 44, borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.bg, fontSize: 22, fontWeight: 800, color: T.text, cursor: "pointer" }}>＋</button>
     </div>
+    <div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>Productividad mientras tanto (%)</div>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+      <input type="number" inputMode="numeric" min="0" max="100" value={productividad || ""} placeholder="0" onChange={e => setProductividad(Math.min(100, Math.max(0, +e.target.value || 0)))} style={{ ...numStyle, flex: 1, width: "auto" }} />
+      <span style={{ fontSize: 20, fontWeight: 800, color: T.muted }}>%</span>
+    </div>
+    <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12, lineHeight: 1.45 }}>Dejalo en 0 si no pueden avanzar nada. Si trabajan pero más lento, poné cuánto rinden (ej: 70). El perjuicio se calcula sobre lo que se pierde.</div>
     <Lbl>3 · ¿Por qué se atrasó?</Lbl>
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
       {RETRASO_CAUSAS_RAPIDAS.map(c => chip(causas.includes(c), () => togC(c), c))}
@@ -8309,17 +8316,18 @@ function GestionView({ db, cfg, onBack }) {
   const costoRet = (it) => {
     const d = Number(it.demoraDias) || 0;
     const personas = it.personas != null && it.personas !== "" ? (Number(it.personas) || 0) : (Number(g.dotacion) || 0);
-    const diaVV = personas * (Number(g.costoPersona) || 0) + (Number(g.fijosVV) || 0);
+    const prod = Math.min(100, Math.max(0, Number(it.productividad) || 0));
+    const diaVV = personas * (Number(g.costoPersona) || 0) * (1 - prod / 100) + (Number(g.fijosVV) || 0);
     const diaBel = Number(g.ggBelfast) || 0;
     const neto = Math.max(0, d - (Number(it.diasClima) || 0));
-    return { d, personas, neto, clima: Number(it.diasClima) || 0, diaVV, diaBel, vv: d * diaVV, bel: d * diaBel, reclamoVV: neto * diaVV, reclamoBel: neto * diaBel };
+    return { d, personas, prod, neto, clima: Number(it.diasClima) || 0, diaVV, diaBel, vv: d * diaVV, bel: d * diaBel, reclamoVV: neto * diaVV, reclamoBel: neto * diaBel };
   };
   const textoPerjuicio = (it) => {
     const c = costoRet(it); const imp = imputablesDe(it); const L = [];
     if (!it.fechaReal) L.push(`La tarea todavía no terminó: se estima con los ${c.d} días más que va a demorar. Si cambia, se recalcula al editar el retraso.`);
     const fijos = Number(g.fijosVV) || 0;
     L.push(c.diaVV > 0
-      ? `Para V+V: cada día hábil de demora la cuadrilla (${c.personas} personas a ${money(g.costoPersona)} por persona y día${fijos ? `, más ${money(fijos)} de gastos fijos diarios` : ""}) sigue costando ${money(c.diaVV)} sin poder avanzar. ${c.d} días × ${money(c.diaVV)} = ${money(c.vv)}.`
+      ? `Para V+V: cada día hábil de demora la cuadrilla (${c.personas} personas a ${money(g.costoPersona)} por persona y día${c.prod > 0 ? `, trabajando al ${c.prod}% de productividad, o sea que se pierde el ${100 - c.prod}%` : ""}${fijos ? `, más ${money(fijos)} de gastos fijos diarios` : ""}) sigue costando ${money(c.diaVV)} ${c.prod > 0 ? "de pérdida por trabajar a menor ritmo" : "sin poder avanzar"}. ${c.d} días × ${money(c.diaVV)} = ${money(c.vv)}.`
       : `Para V+V: falta cargar la cuadrilla y su costo diario en "Costos del retraso" para valorizarlo.`);
     L.push(c.diaBel > 0
       ? `Para ${cli}: cada día de demora suma ${money(c.diaBel)} de gastos generales de obra (dirección, estructura, alquileres y seguros) que se pagan igual aunque la obra no avance. ${c.d} días × ${money(c.diaBel)} = ${money(c.bel)}.`
@@ -8470,7 +8478,7 @@ function GestionView({ db, cfg, onBack }) {
     L.push(retrasoFrase(it));
     L.push(`Motivo: ${causaTexto(it) || "sin especificar"}${imputablesTexto(it) ? ` (imputable a ${imputablesTexto(it)})` : ""}`);
     if (afectadasTexto(it)) L.push(`Atrasó: ${afectadasTexto(it)}`);
-    if (c.personas > 0) L.push(`Personas sin poder avanzar: ${c.personas}`);
+    if (c.personas > 0) L.push(`${c.prod > 0 ? `Personas afectadas: ${c.personas}, trabajando al ${c.prod}% de productividad` : `Personas sin poder avanzar: ${c.personas}`}`);
     if (c.diaVV > 0) L.push(`Perjuicio V+V: ${money(c.vv)}`);
     if (c.diaBel > 0) L.push(`Perjuicio ${cli}: ${money(c.bel)}`);
     if (it.nota) L.push(`Nota: ${it.nota}`);
@@ -8793,7 +8801,7 @@ function GestionView({ db, cfg, onBack }) {
           </div>
           {it.tipo === "Retraso" && (() => { const c = costoRet(it); return (<div style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px" }}>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11.5, color: T.sub }}>
-              {c.personas > 0 && <span><b>{c.personas}</b> personas sin poder avanzar</span>}
+              {c.personas > 0 && <span><b>{c.personas}</b> personas {c.prod > 0 ? `trabajando al ${c.prod}% de productividad` : "sin poder avanzar"}</span>}
               <span>Perjuicio <b>V+V</b>: <b style={{ color: c.diaVV > 0 ? "#B91C1C" : T.muted }}>{c.diaVV > 0 ? money(c.vv) : "sin costos cargados"}</b></span>
               <span>Perjuicio <b>{cli}</b>: <b style={{ color: c.diaBel > 0 ? "#B91C1C" : T.muted }}>{c.diaBel > 0 ? money(c.bel) : "sin costos cargados"}</b></span>
             </div>
