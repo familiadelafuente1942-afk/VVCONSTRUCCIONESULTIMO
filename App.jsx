@@ -8121,7 +8121,7 @@ function imputablesTexto(it) { const l = imputablesDe(it); return l.length ? l.j
 // suma al desvío total, a punitorios y a los informes, pero se carga en pocos toques.
 function gMetricasRetraso(it) { const d = Math.max(0, Number(it.demoraDias) || 0); return { dias: d, desvio: d, estado: d > 0 ? "Vencido" : "En plazo", retraso: d }; }
 const RETRASO_CAUSAS_RAPIDAS = ["Clima", "Falta de definición del cliente", "Falta de pago / certificación del cliente", "Provisión pendiente por parte del cliente", "Falta de materiales para el subcontrato", "Mano de obra (rendimiento/ausentismo)", "Error de proyecto / planos", "Falta de coordinación entre gremios"];
-function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota, fecha, cli, afectadas, afectadasDetalle, personas, fotos, videos }) {
+function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota, fecha, cli, afectadas, afectadasDetalle, personas, fotos, videos, titulo }) {
   const lista = (causas || []).filter(c => c && c !== "Otro");
   const detalle = String(otra || "").trim();
   const todas = detalle ? [...lista, "Otro"] : lista;
@@ -8131,7 +8131,7 @@ function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota,
   const deb = Number(debia) || 0, dem = Number(demoro) || 0;
   const d = Math.max(1, Math.round(deb && dem ? dem - deb : (Number(dias) || 1)));
   const causaTxt = todas.map(c => c === "Otro" ? detalle : c).join(" + ");
-  return { id: uid(), tipo: "Retraso", obra_id, etapa: tarea || "", descripcion: `Retraso${tarea ? " en " + tarea : ""}${causaTxt ? ": " + causaTxt : ""}`, demoraDias: d, personas: Number(personas) || 0, debiaDias: deb || null, demoroDias: dem || null, fechaSolic: fecha || isoHoy(), plazo: 0, fechaReal: "", causas: todas, causa: todas[0] || "", causaDetalle: detalle, categoriaDesvio: cat, imputables: imp, afectadas: Array.isArray(afectadas) ? afectadas : [], afectadasDetalle: String(afectadasDetalle || "").trim(), diasClima: todas.length === 1 && todas[0] === "Clima" ? d : 0, nota: String(nota || "").trim(), fotosInicio: Array.isArray(fotos) ? fotos : [], videos: Array.isArray(videos) ? videos : [], fotosFin: [], personalIds: [], responsable: "", ts: Date.now() };
+  return { id: uid(), tipo: "Retraso", obra_id, etapa: tarea || "", descripcion: String(titulo || "").trim() || `Retraso${tarea ? " en " + tarea : ""}${causaTxt ? ": " + causaTxt : ""}`, demoraDias: d, personas: Number(personas) || 0, debiaDias: deb || null, demoroDias: dem || null, fechaSolic: fecha || isoHoy(), plazo: 0, fechaReal: "", causas: todas, causa: todas[0] || "", causaDetalle: detalle, categoriaDesvio: cat, imputables: imp, afectadas: Array.isArray(afectadas) ? afectadas : [], afectadasDetalle: String(afectadasDetalle || "").trim(), diasClima: todas.length === 1 && todas[0] === "Clima" ? d : 0, nota: String(nota || "").trim(), fotosInicio: Array.isArray(fotos) ? fotos : [], videos: Array.isArray(videos) ? videos : [], fotosFin: [], personalIds: [], responsable: "", ts: Date.now() };
 }
 function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, editar, onCancelar }) {
   const omitirReset = useRef(!!editar);
@@ -8147,6 +8147,7 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
   const [demoro, setDemoro] = useState(editar ? (editar.demoroDias || ((editar.debiaDias || 0) + (editar.demoraDias || 0))) : (iCurso >= 0 ? filas[iCurso].dur : 0));
   const [causas, setCausas] = useState(editar ? (editar.causas || []).filter(c => c !== "Otro") : []); const [otra, setOtra] = useState(editar ? (editar.causaDetalle || "") : ""); const [verOtra, setVerOtra] = useState(editar ? !!editar.causaDetalle : false);
   const [afect, setAfect] = useState(editar ? (editar.afectadas || []) : []); const [afectTxt, setAfectTxt] = useState(editar ? (editar.afectadasDetalle || "") : "");
+  const [titulo, setTitulo] = useState(editar ? (editar.descripcion || "") : "");
   const [personas, setPersonas] = useState(editar ? (Number(editar.personas) || 0) : (Number(dotacion) || 0));
   const [fotos, setFotos] = useState(editar ? (editar.fotosInicio || []) : []); const [videos, setVideos] = useState(editar ? (editar.videos || []) : []); const [subiendo, setSubiendo] = useState(false); const [errMed, setErrMed] = useState("");
   const fotoRef = useRef(null), vidRef = useRef(null);
@@ -8181,7 +8182,7 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
   const puede = !!obra && desvio > 0 && (causas.length > 0 || otra.trim());
   function guardar() {
     if (!puede) return;
-    const it = armarRetraso({ obra_id: obra.id, tarea, debia, demoro, causas, otra, nota, cli, afectadas: afect, afectadasDetalle: afectTxt, personas, fotos, videos });
+    const it = armarRetraso({ obra_id: obra.id, tarea, debia, demoro, causas, otra, nota, cli, afectadas: afect, afectadasDetalle: afectTxt, personas, fotos, videos, titulo });
     if (editar) {
       onGuardar({ ...editar, ...it, id: editar.id, fechaSolic: editar.fechaSolic, fechaReal: editar.fechaReal, ts: editar.ts, portada: editar.portada, fotosFin: editar.fotosFin || [] });
       return;
@@ -8189,7 +8190,7 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
     onGuardar(it);
     setOk(`Guardado: +${it.demoraDias} días${tarea ? " en " + tarea : ""}.`);
     const r = filas.find(x => nomF(x) === tarea); setDebia(r ? r.dur : 0); setDemoro(r ? r.dur : 0);
-    setCausas([]); setOtra(""); setVerOtra(false); setAfect([]); setAfectTxt(""); setNota(""); setVerNota(false); setFotos([]); setVideos([]);
+    setCausas([]); setOtra(""); setVerOtra(false); setAfect([]); setAfectTxt(""); setNota(""); setVerNota(false); setFotos([]); setVideos([]); setTitulo("");
     setTimeout(() => setOk(""), 3500);
   }
   const numStyle = { width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 10px", fontSize: 24, fontWeight: 800, color: T.text, textAlign: "center" };
@@ -8197,6 +8198,8 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, 
     <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>{editar ? "Editar retraso" : "Registrar un retraso"}</div>
     <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.45 }}>Tarea, cuánto debía demorar, cuánto va a demorar y por qué. El cronograma no se mueve.</div>
     {obras.length > 1 && <Field label="Obra"><Sel value={obraId} onChange={e => setObraId(e.target.value)}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
+    <Lbl>Título (opcional)</Lbl>
+    <div style={{ marginBottom: 12 }}><TInput value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Si lo dejás vacío se arma solo: Retraso en … : causa" /></div>
     <Lbl>1 · ¿Qué tarea?</Lbl>
     {filas.length > 0 ? <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
       {filas.map((r, i) => chip(tarea === nomF(r), () => elegirTarea(nomF(r)), nomF(r) + (i === iCurso ? " · en curso" : ""), i))}
