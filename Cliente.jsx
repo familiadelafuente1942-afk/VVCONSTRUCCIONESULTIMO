@@ -5982,6 +5982,7 @@ function PortadaGestion({ gestion, obras, TXC, TXR, onIr }) {
         {ret && <span style={{ fontSize: 12, fontWeight: 800, color: "#E58989", whiteSpace: "nowrap" }}>+{it.demoraDias || 0} d</span>}
       </div>);
     })}
+    <div onClick={() => onIr("bitacora")} style={{ fontSize: 11, color: `rgba(${TXR},.55)`, padding: "4px 2px 0", cursor: "pointer" }}>La explicación completa está en <b style={{ color: "#D9B27C" }}>Bitácora</b> ›</div>
   </div>);
 }
 function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], onIr }) {

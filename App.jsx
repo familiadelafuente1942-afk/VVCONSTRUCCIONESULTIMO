@@ -8133,21 +8133,22 @@ function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota,
   const causaTxt = todas.map(c => c === "Otro" ? detalle : c).join(" + ");
   return { id: uid(), tipo: "Retraso", obra_id, etapa: tarea || "", descripcion: `Retraso${tarea ? " en " + tarea : ""}${causaTxt ? ": " + causaTxt : ""}`, demoraDias: d, personas: Number(personas) || 0, debiaDias: deb || null, demoroDias: dem || null, fechaSolic: fecha || isoHoy(), plazo: 0, fechaReal: "", causas: todas, causa: todas[0] || "", causaDetalle: detalle, categoriaDesvio: cat, imputables: imp, afectadas: Array.isArray(afectadas) ? afectadas : [], afectadasDetalle: String(afectadasDetalle || "").trim(), diasClima: todas.length === 1 && todas[0] === "Clima" ? d : 0, nota: String(nota || "").trim(), fotosInicio: Array.isArray(fotos) ? fotos : [], videos: Array.isArray(videos) ? videos : [], fotosFin: [], personalIds: [], responsable: "", ts: Date.now() };
 }
-function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion }) {
-  const [obraId, setObraId] = useState(obraIni || obras[0]?.id || "");
+function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, editar, onCancelar }) {
+  const omitirReset = useRef(!!editar);
+  const [obraId, setObraId] = useState((editar && editar.obra_id) || obraIni || obras[0]?.id || "");
   const obra = obras.find(o => o.id === obraId) || obras[0];
   let D = null; try { D = obra ? cronogramaFilas(obra, modelosObra) : null; } catch { D = null; }
   const filas = D ? D.filas : [];
   const nomF = (r) => r.corto || r.n;
   const hoyD = new Date(); hoyD.setHours(0, 0, 0, 0);
   const iCurso = filas.findIndex(r => +r.ini <= +hoyD && +hoyD <= +r.fin);
-  const [tarea, setTarea] = useState(iCurso >= 0 ? nomF(filas[iCurso]) : "");
-  const [debia, setDebia] = useState(iCurso >= 0 ? filas[iCurso].dur : 0);
-  const [demoro, setDemoro] = useState(iCurso >= 0 ? filas[iCurso].dur : 0);
-  const [causas, setCausas] = useState([]); const [otra, setOtra] = useState(""); const [verOtra, setVerOtra] = useState(false);
-  const [afect, setAfect] = useState([]); const [afectTxt, setAfectTxt] = useState("");
-  const [personas, setPersonas] = useState(Number(dotacion) || 0);
-  const [fotos, setFotos] = useState([]); const [videos, setVideos] = useState([]); const [subiendo, setSubiendo] = useState(false); const [errMed, setErrMed] = useState("");
+  const [tarea, setTarea] = useState(editar ? (editar.etapa || "") : (iCurso >= 0 ? nomF(filas[iCurso]) : ""));
+  const [debia, setDebia] = useState(editar ? (editar.debiaDias || 0) : (iCurso >= 0 ? filas[iCurso].dur : 0));
+  const [demoro, setDemoro] = useState(editar ? (editar.demoroDias || ((editar.debiaDias || 0) + (editar.demoraDias || 0))) : (iCurso >= 0 ? filas[iCurso].dur : 0));
+  const [causas, setCausas] = useState(editar ? (editar.causas || []).filter(c => c !== "Otro") : []); const [otra, setOtra] = useState(editar ? (editar.causaDetalle || "") : ""); const [verOtra, setVerOtra] = useState(editar ? !!editar.causaDetalle : false);
+  const [afect, setAfect] = useState(editar ? (editar.afectadas || []) : []); const [afectTxt, setAfectTxt] = useState(editar ? (editar.afectadasDetalle || "") : "");
+  const [personas, setPersonas] = useState(editar ? (Number(editar.personas) || 0) : (Number(dotacion) || 0));
+  const [fotos, setFotos] = useState(editar ? (editar.fotosInicio || []) : []); const [videos, setVideos] = useState(editar ? (editar.videos || []) : []); const [subiendo, setSubiendo] = useState(false); const [errMed, setErrMed] = useState("");
   const fotoRef = useRef(null), vidRef = useRef(null);
   const leerArchivo = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
   async function subirMedia(e, esVideo) {
@@ -8169,10 +8170,10 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion }
     }
     setSubiendo(false);
   }
-  const [nota, setNota] = useState(""); const [verNota, setVerNota] = useState(false);
+  const [nota, setNota] = useState(editar ? (editar.nota || "") : ""); const [verNota, setVerNota] = useState(editar ? !!editar.nota : false);
   const [ok, setOk] = useState("");
   const elegirTarea = (nombre) => { setTarea(nombre); const r = filas.find(x => nomF(x) === nombre); if (r) { setDebia(r.dur); setDemoro(r.dur); } setAfect([]); };
-  useEffect(() => { const i = filas.findIndex(r => +r.ini <= +hoyD && +hoyD <= +r.fin); if (i >= 0) elegirTarea(nomF(filas[i])); else { setTarea(""); setDebia(0); setDemoro(0); } /* eslint-disable-next-line */ }, [obraId]);
+  useEffect(() => { if (omitirReset.current) { omitirReset.current = false; return; } const i = filas.findIndex(r => +r.ini <= +hoyD && +hoyD <= +r.fin); if (i >= 0) elegirTarea(nomF(filas[i])); else { setTarea(""); setDebia(0); setDemoro(0); } /* eslint-disable-next-line */ }, [obraId]);
   const desvio = (Number(demoro) || 0) - (Number(debia) || 0);
   const chip = (act, onClick, txt, key) => <button key={key || txt} type="button" onClick={onClick} style={{ padding: "9px 12px", borderRadius: 18, border: `1.5px solid ${act ? T.accent : T.border}`, background: act ? T.al : T.bg, color: act ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>{txt}</button>;
   const togC = (c) => setCausas(l => l.includes(c) ? l.filter(x => x !== c) : [...l, c]);
@@ -8181,6 +8182,10 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion }
   function guardar() {
     if (!puede) return;
     const it = armarRetraso({ obra_id: obra.id, tarea, debia, demoro, causas, otra, nota, cli, afectadas: afect, afectadasDetalle: afectTxt, personas, fotos, videos });
+    if (editar) {
+      onGuardar({ ...editar, ...it, id: editar.id, fechaSolic: editar.fechaSolic, fechaReal: editar.fechaReal, ts: editar.ts, portada: editar.portada, fotosFin: editar.fotosFin || [] });
+      return;
+    }
     onGuardar(it);
     setOk(`Guardado: +${it.demoraDias} días${tarea ? " en " + tarea : ""}.`);
     const r = filas.find(x => nomF(x) === tarea); setDebia(r ? r.dur : 0); setDemoro(r ? r.dur : 0);
@@ -8189,7 +8194,7 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion }
   }
   const numStyle = { width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 10px", fontSize: 24, fontWeight: 800, color: T.text, textAlign: "center" };
   return (<Card style={{ padding: 14, marginBottom: 14 }}>
-    <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>Registrar un retraso</div>
+    <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>{editar ? "Editar retraso" : "Registrar un retraso"}</div>
     <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.45 }}>Tarea, cuánto debía demorar, cuánto demoró y por qué. El cronograma no se mueve.</div>
     {obras.length > 1 && <Field label="Obra"><Sel value={obraId} onChange={e => setObraId(e.target.value)}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
     <Lbl>1 · ¿Qué tarea?</Lbl>
@@ -8240,7 +8245,8 @@ function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion }
         <button type="button" onClick={() => setVideos(l => l.filter(x => x.id !== v.id))} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 12, cursor: "pointer", lineHeight: 1 }}>×</button>
       </div>))}
     </div>}
-    <button type="button" onClick={guardar} disabled={!puede || subiendo} style={{ width: "100%", background: puede ? T.navy : T.border, color: puede ? "#fff" : T.muted, border: `1px solid ${puede ? BRASS : T.border}`, borderRadius: 10, padding: "14px", fontSize: 15, fontWeight: 800, cursor: puede ? "pointer" : "default" }}>Guardar retraso</button>
+    <button type="button" onClick={guardar} disabled={!puede || subiendo} style={{ width: "100%", background: puede ? T.navy : T.border, color: puede ? "#fff" : T.muted, border: `1px solid ${puede ? BRASS : T.border}`, borderRadius: 10, padding: "14px", fontSize: 15, fontWeight: 800, cursor: puede ? "pointer" : "default" }}>{editar ? "Guardar cambios" : "Guardar retraso"}</button>
+    {editar && <button type="button" onClick={onCancelar} style={{ width: "100%", background: "none", border: "none", color: T.muted, fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "12px 0 0" }}>Cancelar</button>}
     {!puede && <div style={{ fontSize: 11, color: T.muted, textAlign: "center", marginTop: 6 }}>Falta {desvio <= 0 ? "indicar cuánto demoró" : "elegir la causa"}.</div>}
     {ok && <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 700, color: "#16A34A", textAlign: "center" }}>✓ {ok}</div>}
   </Card>);
@@ -8250,6 +8256,7 @@ function GestionView({ db, cfg, onBack }) {
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(gestion || {}) };
   const [tab, setTab] = useState("retrasos");
   const [expRet, setExpRet] = useState({});
+  const [editRet, setEditRet] = useState(null);
   const [verCostos, setVerCostos] = useState(false);
   const [pdfRetr, setPdfRetr] = useState(null); // ids de retrasos para el PDF de perjuicio
   const [mForm, setMForm] = useState(null);
@@ -8754,6 +8761,7 @@ function GestionView({ db, cfg, onBack }) {
             </>}
             {(it.retrasoInicio || 0) > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#B45309", background: "rgba(245,158,11,.14)", borderRadius: 10, padding: "2px 8px" }}>arrancó {it.retrasoInicio}d tarde</span>}
             {conRegistro && !selModo && it.tipo === "Retraso" && <button onClick={() => upd({ manual: (g.manual || []).map(x => x.id === it.id ? { ...x, fechaReal: x.fechaReal ? "" : isoHoy() } : x) })} style={{ background: it.fechaReal ? T.al : "rgba(22,163,74,.12)", border: `1px solid ${it.fechaReal ? T.border : "rgba(22,163,74,.35)"}`, color: it.fechaReal ? T.accent : "#16A34A", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{it.fechaReal ? "Reabrir" : "Resuelto"}</button>}
+            {conRegistro && !selModo && it.tipo === "Retraso" && <button onClick={() => setEditRet((g.manual || []).find(x => x.id === it.id) || null)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>}
             {conRegistro && !selModo && it.tipo !== "Retraso" && <button onClick={() => { setMError(""); setMForm({ ...g.manual.find(x => x.id === it.id) }); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>}
             {conRegistro && !selModo && <button onClick={() => upd({ manual: (g.manual || []).map(x => x.id === it.id ? { ...x, portada: !x.portada } : x) })} style={{ background: it.portada ? T.navy : T.bg, border: `1px solid ${it.portada ? BRASS : T.border}`, color: it.portada ? "#fff" : T.sub, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{it.portada ? "📌 En Inicio" : "Poner en Inicio"}</button>}
             {conRegistro && !selModo && <button onClick={() => it.tipo === "Retraso" ? setPdfRetr([it.id]) : setPdfReg(it)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
@@ -9185,6 +9193,10 @@ function GestionView({ db, cfg, onBack }) {
         <button onClick={() => imprimirGestion("punit-pdf", htmlPunit(pdfPunit), `Reclamo_${slug(pdfPunit.descripcion)}.pdf`)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Imprimir</button>
       </div>
       <iframe id="punit-pdf" srcDoc={htmlPunit(pdfPunit)} title="Reclamo punitorio" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+    </div>}
+
+    {editRet && <div style={{ position: "fixed", inset: 0, zIndex: 310, background: T.bg, overflowY: "auto", padding: "16px 16px 90px", paddingTop: "max(16px, env(safe-area-inset-top))" }}>
+      <RetrasoRapido key={editRet.id} editar={editRet} dotacion={g.dotacion} obras={obras} modelosObra={modelosObra} cli={cli} onCancelar={() => setEditRet(null)} onGuardar={(m) => { upd({ manual: (g.manual || []).map(x => x.id === m.id ? m : x) }); setEditRet(null); }} />
     </div>}
 
     {pdfRetr && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
@@ -10364,6 +10376,7 @@ function PortadaGestion({ gestion, obras, TXC, TXR, onIr }) {
         {ret && <span style={{ fontSize: 12, fontWeight: 800, color: "#E58989", whiteSpace: "nowrap" }}>+{it.demoraDias || 0} d</span>}
       </div>);
     })}
+    <div onClick={() => onIr("bitacora")} style={{ fontSize: 11, color: `rgba(${TXR},.55)`, padding: "4px 2px 0", cursor: "pointer" }}>La explicación completa está en <b style={{ color: "#D9B27C" }}>Bitácora</b> ›</div>
   </div>);
 }
 function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = [], avance = {}, mensajes = [], renders = {}, certif = {}, informesSem = {}, auditoria = [], onIr }) {
