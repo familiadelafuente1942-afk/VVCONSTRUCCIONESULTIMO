@@ -8459,6 +8459,25 @@ function GestionView({ db, cfg, onBack }) {
   // ── PDF de reclamo individual (un documento por punitorio) ─────────
   const _e = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   // ── PDF de un registro (Registro, cualquier estado) ─────────────────
+  // Texto para mandar un retraso por WhatsApp: qué pasó, por qué, cuánto cuesta y los links de fotos/videos.
+  function textoRetrasoWA(it) {
+    const c = costoRet(it); const L = [];
+    L.push(`*Retraso en obra — ${obraNom(obras, it.obra_id) || ""}*`);
+    if (it.etapa) L.push(`Tarea: ${it.etapa}`);
+    L.push(retrasoFrase(it));
+    L.push(`Motivo: ${causaTexto(it) || "sin especificar"}${imputablesTexto(it) ? ` (imputable a ${imputablesTexto(it)})` : ""}`);
+    if (afectadasTexto(it)) L.push(`Atrasó: ${afectadasTexto(it)}`);
+    if (c.personas > 0) L.push(`Personas sin poder avanzar: ${c.personas}`);
+    if (c.diaVV > 0) L.push(`Perjuicio V+V: ${money(c.vv)}`);
+    if (c.diaBel > 0) L.push(`Perjuicio ${cli}: ${money(c.bel)}`);
+    if (it.nota) L.push(`Nota: ${it.nota}`);
+    const fotos = (it.fotosInicio || []).map(f => f.url), vids = (it.videos || []).map(v => v.url);
+    if (fotos.length) L.push(`\nFotos:\n${fotos.join("\n")}`);
+    if (vids.length) L.push(`\nVideo:\n${vids.join("\n")}`);
+    L.push("\nLa explicación completa del cálculo está en la app (Gestión) y en la Bitácora.");
+    return L.join("\n");
+  }
+  const enviarRetrasoWA = (it) => window.open(`https://wa.me/?text=${encodeURIComponent(textoRetrasoWA(it))}`, "_blank");
   function htmlRetrasos(ids) {
     const lista = itemsRetraso.length ? items.filter(i => ids.includes(i.id)) : [];
     const _x = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -8765,6 +8784,7 @@ function GestionView({ db, cfg, onBack }) {
             {conRegistro && !selModo && it.tipo === "Retraso" && <button onClick={() => setEditRet((g.manual || []).find(x => x.id === it.id) || null)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>}
             {conRegistro && !selModo && it.tipo !== "Retraso" && <button onClick={() => { setMError(""); setMForm({ ...g.manual.find(x => x.id === it.id) }); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>}
             {conRegistro && !selModo && <button onClick={() => upd({ manual: (g.manual || []).map(x => x.id === it.id ? { ...x, portada: !x.portada } : x) })} style={{ background: it.portada ? T.navy : T.bg, border: `1px solid ${it.portada ? BRASS : T.border}`, color: it.portada ? "#fff" : T.sub, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{it.portada ? "📌 En Inicio" : "Poner en Inicio"}</button>}
+            {conRegistro && !selModo && it.tipo === "Retraso" && <button onClick={() => enviarRetrasoWA(it)} style={{ background: "#16A34A", border: "none", color: "#fff", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>WhatsApp</button>}
             {conRegistro && !selModo && <button onClick={() => it.tipo === "Retraso" ? setPdfRetr([it.id]) : setPdfReg(it)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
             {conRegistro && !selModo && <button onClick={() => borrarRegistro(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>}
           </div>

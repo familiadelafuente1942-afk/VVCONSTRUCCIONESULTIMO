@@ -5605,7 +5605,8 @@ function resumenEtapasModelo(obra, modelosObra, itemsObra) {
 
 function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = [] }) {
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, reuniones: [], ...(gestion || {}) };
-  const [tab, setTab] = useState("registro");
+  const [tab, setTab] = useState("retrasos");
+  const [expRet, setExpRet] = useState({});
   const [pdfHtml, setPdfHtml] = useState(null);
   const [filtroObra, setFiltroObra] = useState(obras.length === 1 ? obras[0].id : "todas");
   const [filtroEtapa, setFiltroEtapa] = useState("todas");
@@ -5632,7 +5633,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = []
     const retraso = Math.max(0, retrasoBruto - (Number(base.diasClima) || 0));
     return { ...base, plazo: plazoEf, ...m, desvio, estado, retraso, retrasoBruto, retrasoInicio, dec: d || null };
   };
-  const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
+  const itemsManual = (g.manual || []).filter(it => it.tipo !== "Retraso").map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const items = [...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
   // La obra elegida vale para Registro, Punitorios y Panel.
   const itemsO = filtroObra === "todas" ? items : items.filter(it => it.obra_id === filtroObra);
@@ -5672,7 +5673,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = []
     };
   })() : null;
   const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
-  const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
+  const TABS = [["retrasos", "Retraso"], ["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
   const _e = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   // ── PDF del plan de gestión completo (solo lectura, mismo criterio que V+V) ──
@@ -5711,6 +5712,95 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = []
     </body></html>`;
   }
 
+  // ── Retrasos cargados por V+V (solo lectura, mismo cálculo y mismo texto que en la app de V+V) ──
+  const retrasos = (g.manual || []).filter(i => i.tipo === "Retraso").map(i => ({ ...i, fechaSolic: i.fechaSolic ? new Date(i.fechaSolic) : null })).sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
+  const retrasosO = filtroObra === "todas" ? retrasos : retrasos.filter(i => i.obra_id === filtroObra);
+  const diasRetrasoTot = retrasosO.reduce((a, i) => a + (Number(i.demoraDias) || 0), 0);
+  const esBelIt = (it) => imputablesDe(it).some(x => x !== "Estudio" && x !== "V+V");
+  const costoRet = (it) => {
+    const d = Number(it.demoraDias) || 0;
+    const personas = it.personas != null && it.personas !== "" ? (Number(it.personas) || 0) : (Number(g.dotacion) || 0);
+    const diaVV = personas * (Number(g.costoPersona) || 0) + (Number(g.fijosVV) || 0);
+    const diaBel = Number(g.ggBelfast) || 0;
+    const neto = Math.max(0, d - (Number(it.diasClima) || 0));
+    return { d, personas, neto, clima: Number(it.diasClima) || 0, diaVV, diaBel, vv: d * diaVV, bel: d * diaBel, reclamoVV: neto * diaVV, reclamoBel: neto * diaBel };
+  };
+  const textoPerjuicio = (it) => {
+    const c = costoRet(it); const imp = imputablesDe(it); const L = [];
+    if (!it.fechaReal) L.push(`La tarea todavía no terminó: se estima con los ${c.d} días más que va a demorar.`);
+    const fijos = Number(g.fijosVV) || 0;
+    L.push(c.diaVV > 0
+      ? `Para V+V: cada día hábil de demora la cuadrilla (${c.personas} personas a ${money(g.costoPersona)} por persona y día${fijos ? `, más ${money(fijos)} de gastos fijos diarios` : ""}) sigue costando ${money(c.diaVV)} sin poder avanzar. ${c.d} días × ${money(c.diaVV)} = ${money(c.vv)}.`
+      : `Para V+V: todavía no se cargaron la cuadrilla y su costo diario.`);
+    L.push(c.diaBel > 0
+      ? `Para ${cli}: cada día de demora suma ${money(c.diaBel)} de gastos generales de obra (dirección, estructura, alquileres y seguros) que se pagan igual aunque la obra no avance. ${c.d} días × ${money(c.diaBel)} = ${money(c.bel)}.`
+      : `Para ${cli}: todavía no se cargaron sus gastos generales diarios.`);
+    const r = [];
+    if (esBelIt(it)) r.push(`V+V puede reclamar a ${cli} ${money(c.reclamoVV)}`);
+    if (imp.includes("Estudio")) r.push(`V+V (${money(c.reclamoVV)}) y ${cli} (${money(c.reclamoBel)}) pueden reclamar al Estudio`);
+    if (imp.includes("V+V")) r.push(`${cli} puede reclamar a V+V ${money(c.reclamoBel)}`);
+    if (r.length) L.push(`Responsabilidad: la causa (${causaTexto(it) || "sin especificar"}) se imputa a ${imputablesTexto(it)}. ${r.join("; ")}${c.clima ? ` (se descuentan ${c.clima} días de clima)` : ""}.`);
+    else if (c.clima >= c.d && c.d > 0) L.push("Responsabilidad: clima / fuerza mayor. No se reclama: cada parte absorbe su propio costo.");
+    else L.push("Responsabilidad: todavía sin imputar.");
+    return L.join("\n\n");
+  };
+  function htmlRetrasos(lista) {
+    const tot = lista.reduce((a, i) => { const c = costoRet(i); const imp = imputablesDe(i); return { d: a.d + c.d, vv: a.vv + c.vv, bel: a.bel + c.bel, rVV: a.rVV + (esBelIt(i) || imp.includes("Estudio") ? c.reclamoVV : 0), rBel: a.rBel + (imp.includes("V+V") || imp.includes("Estudio") ? c.reclamoBel : 0) }; }, { d: 0, vv: 0, bel: 0, rVV: 0, rBel: 0 });
+    const nombreObras = [...new Set(lista.map(i => nomObra(i.obra_id)))].join(", ");
+    const filas = lista.map(i => { const c = costoRet(i); return `<tr><td>${fmtD(i.fechaSolic)}</td><td>${_e(i.etapa || "—")}</td><td>${i.debiaDias && i.demoroDias ? `${_e(retrasoFrase(i))}<br/>` : ""}<b>${i.fechaReal ? "+" + c.d + " d" : "va a demorar " + c.d + " d más"}</b>${c.personas ? `<br/>${c.personas} personas` : ""}</td><td>${_e(causaTexto(i) || "—")}<br/><span style="color:#94A3B8">${_e(imputablesTexto(i))}</span></td><td>${c.diaVV > 0 ? money(c.vv) : "—"}</td><td>${c.diaBel > 0 ? money(c.bel) : "—"}</td></tr>`; }).join("");
+    const detalle = lista.map(i => `<div class="calc"><b>${_e(i.descripcion)}</b> · ${fmtD(i.fechaSolic)}${i.nota ? `<br/><i>${_e(i.nota)}</i>` : ""}${afectadasTexto(i) ? `<br/>Atrasó: ${_e(afectadasTexto(i))}` : ""}<br/><br/>${_e(textoPerjuicio(i)).replace(/\n\n/g, "<br/><br/>")}${(i.fotosInicio || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${i.fotosInicio.slice(0, 6).map(f => `<img src="${f.url}" style="width:110px;height:110px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px"/>`).join("")}</div>` : ""}${(i.videos || []).length ? `<div style="margin-top:6px;font-size:10px;color:#64748B">${i.videos.length} video${i.videos.length > 1 ? "s" : ""} adjunto${i.videos.length > 1 ? "s" : ""} en la app</div>` : ""}</div>`).join("");
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+      @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:12px;line-height:1.55;margin:0;padding:14px;word-wrap:break-word}
+      .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:18px}.marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}.tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
+      h1{font-size:15px;color:#0F1B2D;margin:16px 0 4px}.meta{font-size:11px;color:#64748B}
+      table{width:100%;border-collapse:collapse;margin:12px 0;table-layout:fixed}td,th{border:1px solid #CBD5E1;padding:6px 8px;font-size:10.5px;text-align:left;vertical-align:top;word-wrap:break-word}th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9px;letter-spacing:1px}
+      .calc{border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:10px 12px;margin:10px 0;font-size:11px;page-break-inside:avoid}.tot{display:flex;gap:24px;flex-wrap:wrap;margin:10px 0}.tot div{font-size:11px;color:#64748B}.tot b{display:block;font-size:17px;color:#B91C1C}
+      .nota{font-size:10px;color:#94A3B8;margin-top:22px;border-top:1px solid #E2E8F0;padding-top:8px}
+      @media(max-width:480px){body{padding:10px;font-size:11px}table,td,th{font-size:9.5px}}
+    </style></head><body>
+      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Gestión de obra · Retrasos y perjuicio económico</div></div>
+      <div class="meta">Obra: ${_e(nombreObras || "—")} · Emitido: ${hoyStr()}</div>
+      <h1>Resumen</h1>
+      <div class="tot"><div>Días hábiles de retraso<b style="color:#0F1B2D">${tot.d}</b></div><div>Perjuicio V+V<b>${money(tot.vv)}</b></div><div>Perjuicio ${_e(cli)}<b>${money(tot.bel)}</b></div></div>
+      <table><tr><th style="width:11%">Fecha</th><th style="width:20%">Tarea</th><th style="width:18%">Días</th><th style="width:25%">Causa / imputable a</th><th style="width:13%">V+V</th><th style="width:13%">${_e(cli)}</th></tr>${filas}</table>
+      <h1>Cómo se calcula cada uno</h1>
+      ${detalle}
+      <div class="calc" style="border-left-color:#0F1B2D"><b>Criterio general</b><br/>Perjuicio V+V = días hábiles de demora × (personas afectadas × costo diario por persona + gastos fijos diarios de V+V).<br/>Perjuicio ${_e(cli)} = días hábiles de demora × gastos generales diarios de obra.<br/>Los días de clima o fuerza mayor no se reclaman: cada parte absorbe su costo. Lo reclamable a cada responsable surge de la imputación de la causa.${tot.rVV > 0 ? `<br/><br/><b>Reclamable por V+V: ${money(tot.rVV)}</b>` : ""}${tot.rBel > 0 ? `<br/><b>Reclamable por ${_e(cli)}: ${money(tot.rBel)}</b>` : ""}</div>
+      <div class="nota">Documento generado desde Gestión de obra.</div>
+    </body></html>`;
+  }
+  const RetCard = ({ it }) => {
+    const c = costoRet(it);
+    return (<Card T={T} style={{ padding: 13, marginBottom: 9 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {nomObra(it.obra_id)} · imputable a <b style={{ color: T.sub }}>{imputablesTexto(it)}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 10.5, color: T.muted }}>{retrasoFrase(it)} · desde {fmtD(it.fechaSolic)} · {it.fechaReal ? `resuelto ${fmtD(new Date(it.fechaReal))}` : "sin resolver"}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: "#EF4444" }}>+{it.demoraDias || 0} d</span>
+          </div>
+          <div style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px" }}>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11.5, color: T.sub }}>
+              {c.personas > 0 && <span><b>{c.personas}</b> personas sin poder avanzar</span>}
+              <span>Perjuicio <b>V+V</b>: <b style={{ color: c.diaVV > 0 ? "#B91C1C" : T.muted }}>{c.diaVV > 0 ? money(c.vv) : "sin costos cargados"}</b></span>
+              <span>Perjuicio <b>{cli}</b>: <b style={{ color: c.diaBel > 0 ? "#B91C1C" : T.muted }}>{c.diaBel > 0 ? money(c.bel) : "sin costos cargados"}</b></span>
+            </div>
+            <button onClick={() => setExpRet(m => ({ ...m, [it.id]: !m[it.id] }))} style={{ background: "none", border: "none", color: T.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "5px 0 0" }}>{expRet[it.id] ? "Ocultar explicación" : "Ver cómo se calcula"}</button>
+            {expRet[it.id] && <div style={{ fontSize: 11, color: T.sub, lineHeight: 1.55, marginTop: 5, whiteSpace: "pre-wrap" }}>{textoPerjuicio(it)}</div>}
+          </div>
+          {it.nota && <div style={{ fontSize: 11, color: T.sub, marginTop: 4, whiteSpace: "pre-wrap" }}>{it.nota}</div>}
+          {afectadasTexto(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 4 }}>Afecta a: <b>{afectadasTexto(it)}</b></div>}
+          {(it.fotosInicio || []).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
+            {it.fotosInicio.map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} style={{ width: 64, height: 64, borderRadius: 6, objectFit: "cover", border: `1px solid ${T.border}`, display: "block" }} /></a>)}
+          </div>}
+          {(it.videos || []).length > 0 && <div style={{ marginTop: 8 }}>{it.videos.map(v => <video key={v.id} src={v.url} controls playsInline preload="metadata" style={{ width: "100%", maxHeight: 220, borderRadius: 8, background: "#000", display: "block", marginBottom: 6 }} />)}</div>}
+        </div>
+        <div style={{ flexShrink: 0 }}><Badge c={it.fechaReal ? "#16A34A" : "#EF4444"} b={it.fechaReal ? "rgba(22,163,74,.12)" : "rgba(239,68,68,.12)"}>{it.fechaReal ? "Resuelto" : "Abierto"}</Badge></div>
+      </div>
+    </Card>);
+  };
+
   const ItemCard = ({ it }) => {
     const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
     return (<Card T={T} style={{ padding: 13, marginBottom: 9 }}>
@@ -5744,11 +5834,24 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = []
       <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? "rgba(255,255,255,.08)" : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700 }}>{l}</button>)}</div>
       <button onClick={() => setPdfHtml(htmlReporte())} style={{ flexShrink: 0, background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>PDF</button>
     </div>
-    {(tab === "registro" || tab === "punitorios" || tab === "panel") && obras.length > 0 && <div style={{ padding: "10px 20px 0" }}>
+    {(tab === "retrasos" || tab === "registro" || tab === "punitorios" || tab === "panel") && obras.length > 0 && <div style={{ padding: "10px 20px 0" }}>
       <select value={filtroObra} onChange={e => { setFiltroObra(e.target.value); setFiltroEtapa("todas"); }} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", fontSize: 12.5, color: T.text }}>
         <option value="todas">Todas las obras</option>
         {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
       </select>
+    </div>}
+    {tab === "retrasos" && <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, marginBottom: 12 }}>Retrasos cargados por V+V, con el perjuicio económico de cada parte y su explicación. Solo lectura.</div>
+      {retrasosO.length > 0 && (() => { const tot = retrasosO.reduce((a, i) => { const c = costoRet(i); return { vv: a.vv + c.vv, bel: a.bel + c.bel }; }, { vv: 0, bel: 0 }); return (<Card T={T} style={{ padding: 13, marginBottom: 14, borderLeft: "4px solid #EF4444" }}>
+        <div style={{ fontSize: 11, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, marginBottom: 6 }}>Perjuicio acumulado por {diasRetrasoTot} días de retraso</div>
+        <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+          <div><div style={{ fontSize: 11, color: T.muted }}>V+V</div><div style={{ fontSize: 18, fontWeight: 800, color: "#B91C1C" }}>{money(tot.vv)}</div></div>
+          <div><div style={{ fontSize: 11, color: T.muted }}>{cli}</div><div style={{ fontSize: 18, fontWeight: 800, color: "#B91C1C" }}>{money(tot.bel)}</div></div>
+        </div>
+        <button onClick={() => setPdfHtml(htmlRetrasos(retrasosO))} style={{ marginTop: 10, background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>PDF con la explicación</button>
+      </Card>); })()}
+      {retrasosO.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px" }}>Sin retrasos registrados.</div>}
+      {retrasosO.map(it => <RetCard key={it.id} it={it} />)}
     </div>}
     {tab === "registro" && <div style={{ padding: "16px 20px" }}>
       <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Tareas y hechos cargados por V+V, con foto de inicio y de fin de cada una (estimado de referencia {g.plazo} días háb.). Solo lectura — descargá el informe completo en PDF arriba.</div>
