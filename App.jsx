@@ -1,10 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
 // Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
-// Solo las etapas de obra gris + colocación de piso (lo único que hace V+V):
-// nada de techos/instalaciones/aberturas/pintura/terminaciones, eso lo hacen
-// otros subcontratistas.
-const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Revoques interiores", "Revoques exteriores", "Albañilería (encuadres de baños y marcos de puertas)", "Contrapisos y carpetas", "Revestimientos y solados", "Limpieza de obra y entrega"];
+const ETAPAS_OBRA = ["Trabajos preliminares", "Replanteo y movimiento de suelos", "Fundaciones", "Estructura", "Mampostería", "Techos y cubiertas", "Instalación sanitaria", "Instalación eléctrica", "Instalación de gas", "Contrapisos y carpetas", "Revoques", "Aberturas", "Revestimientos y solados", "Pintura", "Terminaciones", "Limpieza de obra y entrega"];
 
 // ═══ Íconos de línea estilo iOS (reemplazan los emojis) ═══
 function Ico({ n, s = 16, c = "currentColor", st = 1.7 }) {
@@ -143,7 +140,7 @@ function SyncBanner() {
   useEffect(() => {
     const onErr = (ev) => {
       setMsg((ev && ev.detail && ev.detail.msg) || "No se pudo guardar en la nube. Se guardó en este aparato — revisá la conexión y volvé a intentar.");
-      setTimeout(() => setMsg(""), 15000);
+      setTimeout(() => setMsg(""), 7000);
     };
     window.addEventListener("vv-sync-error", onErr);
     return () => window.removeEventListener("vv-sync-error", onErr);
@@ -231,6 +228,18 @@ const storage = {
         // Fallback localStorage
         try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; }
     },
+    // Lee SOLO de la nube y distingue "no hay dato" de "no pude leer".
+    // ok:true  → el servidor respondió (value puede ser null si la clave no existe)
+    // ok:false → falló la lectura (base caída, sin internet, error HTTP): NO hay que
+    //            asumir que la nube está vacía ni escribir encima de ella.
+    getCloud: async (key) => {
+        try {
+            const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { method: "GET", headers: SH(), mode: "cors" });
+            if (!r.ok) return { ok: false, value: null };
+            const d = await r.json();
+            return { ok: true, value: (d && d.length > 0) ? d[0].value : null };
+        } catch { return { ok: false, value: null }; }
+    },
     // Lee SOLO desde localStorage — síncrono, cero latencia
     getLocal: (key) => {
         try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; }
@@ -250,16 +259,7 @@ const storage = {
     }
 };
 
-// ── PROTECCIÓN CONTRA PÉRDIDA DE DATOS ─────────────────────────────────
-// Causa típica de "se me borró todo": un aparato que arranca VACÍO (Safari/iPad
-// limpia el almacenamiento local, navegador nuevo, otra URL) y guarda sus valores
-// por defecto en la nube antes de haber leído lo que había — pisa todo.
-// Ahora, ANTES de escribir cualquier clave en la nube:
-//  1) se lee lo que hay en la nube; si no se puede leer, NO se toca la nube;
-//  2) si lo que hay es mucho más grande y lo nuevo es vacío/casi vacío y este aparato
-//     todavía no había cargado esa clave desde la nube, el guardado se BLOQUEA y se avisa;
-//  3) una vez por día y por clave se guarda una COPIA (clave vv_bak__<clave>__AAAAMMDD)
-//     de lo que había en la nube, y se conservan las últimas 30.
+// ── PROTECCIÓN CONTRA PÉRDIDA DE DATOS (igual que la app de clientes) ──
 const vacioJ = (j) => { if (j == null) return true; const t = String(j).trim(); return !t || t === "null" || t === "[]" || t === "{}" || t === '""'; };
 const guardia = { leida: {}, pend: {}, bloq: {}, snap: {}, podado: false };
 async function leerNubeG(key) {
@@ -300,10 +300,15 @@ storage.set = (key, value) => {
         const ex = await leerNubeG(k);
         if (ex.ok && !ex.value) { await setCrudo(k, c.value); podarCopias(); }
       }
-      const achica = vacioJ(value) || (c.value.length > 500 && String(value).length < c.value.length * 0.2);
-      if (achica && !guardia.leida[key]) {
+      let achica = vacioJ(value) || (c.value.length > 500 && String(value).length < c.value.length * 0.2);
+      // Regla extra para las OBRAS (se guardan fusionadas y las borradas van por "tumbas"):
+      // si la nube tiene 3+ obras y lo nuevo trae menos de la mitad, es un error → se bloquea,
+      // aunque este aparato ya haya leído antes (así no pisa una lista vieja o corta).
+      let obrasAchica = false;
+      if (key === "vv_obras") { try { const nc = JSON.parse(c.value), nn = JSON.parse(value); obrasAchica = Array.isArray(nc) && Array.isArray(nn) && nc.length >= 3 && nn.length < nc.length * 0.5; } catch { } }
+      if ((achica && !guardia.leida[key]) || obrasAchica) {
         guardia.bloq[key] = Date.now();
-        avisarErrorSync(key, "Se BLOQUEÓ un guardado que habría borrado datos de la nube (este aparato todavía no los había cargado). Recargá la página.");
+        avisarErrorSync(key, "Se BLOQUEÓ un guardado que habría borrado datos de la nube. Recargá la página (Ctrl+F5) y avisá si vuelve a pasar.");
         return { value, ok: false, bloqueado: true };
       }
     }
@@ -318,7 +323,6 @@ storage.get = async (key) => {
   if (!key.endsWith("__ts")) { const c = await leerNubeG(key); if (c.ok) guardia.leida[key] = true; }
   return r;
 };
-
 // ── SUPABASE STORAGE (bucket bcm-media) ─────────────────────────────
 // Las fotos se suben como archivos reales al bucket público.
 // La URL pública reemplaza al base64 — reduce el egress drásticamente.
@@ -447,61 +451,6 @@ async function uploadFoto(dataUrl, carpeta, nombre) {
     const remoteUrl = await mediaStorage.upload(path, dataUrl);
     return remoteUrl || dataUrl; // fallback a base64 si falla
 }
-// Mueve el átomo "moov" al principio de un MP4/MOV (faststart) para que el video arranque sin bajarse entero.
-async function faststartVideo(file) {
-  try {
-    const leer = async (a, b) => new Uint8Array(await file.slice(a, b).arrayBuffer());
-    const cajas = []; let pos = 0;
-    while (pos + 8 <= file.size) {
-      const h = await leer(pos, Math.min(pos + 16, file.size)); const dv = new DataView(h.buffer);
-      let size = dv.getUint32(0); const tipo = String.fromCharCode(h[4], h[5], h[6], h[7]);
-      if (size === 1 && h.length >= 16) size = Number(dv.getBigUint64(8)); else if (size === 0) size = file.size - pos;
-      if (size < 8 || pos + size > file.size) return file;
-      cajas.push({ tipo, pos, size }); pos += size;
-    }
-    const iMoov = cajas.findIndex(c => c.tipo === "moov"), iMdat = cajas.findIndex(c => c.tipo === "mdat");
-    if (iMoov < 0 || iMdat < 0 || iMoov < iMdat || cajas.some(c => c.tipo === "moof")) return file;
-    const moov = cajas[iMoov]; const mb = await leer(moov.pos, moov.pos + moov.size); const dv = new DataView(mb.buffer);
-    const tipoEn = (p) => String.fromCharCode(mb[p + 4], mb[p + 5], mb[p + 6], mb[p + 7]);
-    const S = moov.size;
-    const recorrer = (ini, fin) => {
-      let p = ini;
-      while (p + 8 <= fin) {
-        const sz = dv.getUint32(p); const t = tipoEn(p); if (sz < 8 || p + sz > fin) break;
-        if (t === "moov" || t === "trak" || t === "mdia" || t === "minf" || t === "stbl") recorrer(p + 8, p + sz);
-        else if (t === "stco") { const n = dv.getUint32(p + 12); for (let i = 0; i < n; i++) dv.setUint32(p + 16 + i * 4, dv.getUint32(p + 16 + i * 4) + S); }
-        else if (t === "co64") { const n = dv.getUint32(p + 12); for (let i = 0; i < n; i++) dv.setBigUint64(p + 16 + i * 8, dv.getBigUint64(p + 16 + i * 8) + BigInt(S)); }
-        p += sz;
-      }
-    };
-    recorrer(8, mb.length);
-    const partes = [];
-    cajas.forEach((c, i) => { if (i === iMoov) return; if (i === iMdat) partes.push(mb); partes.push(file.slice(c.pos, c.pos + c.size)); });
-    return new Blob(partes, { type: file.type });
-  } catch { return file; }
-}
-// Sube un video DIRECTO como archivo (sin pasarlo por base64: en el celular eso cortaba los videos grandes),
-// con su extensión real, y verifica que lo subido pese lo mismo que el original. Devuelve la URL o null.
-async function subirVideoDirecto(file, carpeta) {
-  const nombreExt = ((String(file.name || "").match(/\.([a-zA-Z0-9]{2,4})$/) || [])[1] || "").toLowerCase();
-  let ext = nombreExt || String(file.type || "video/mp4").split("/")[1].replace("quicktime", "mov");
-  // Los videos del iPhone traen el índice (moov) al FINAL: el navegador tiene que bajarlo entero antes de reproducir y se traba o se corta.
-  // Se reordena para que arranque enseguida, y se sube como mp4 (mismo contenido H.264) para que lo abra cualquier navegador.
-  const orig = file; file = await faststartVideo(file);
-  if (ext === "mov" || ext === "qt") ext = "mp4";
-  const tipo = ext === "mp4" ? "video/mp4" : (orig.type || "video/mp4");
-  const path = `${carpeta}/${uid()}.${ext}`;
-  for (let intento = 0; intento < 2; intento++) {
-    try {
-      const r = await fetch(`${SUPA_STORAGE_URL}/object/${SUPA_BUCKET}/${path}`, { method: "POST", headers: { "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY, "Content-Type": tipo, "x-upsert": "true" }, body: file });
-      if (!r.ok) continue;
-      const url = `${SUPA_STORAGE_URL}/object/public/${SUPA_BUCKET}/${path}`;
-      let len = 0; try { const h = await fetch(url, { method: "HEAD", cache: "no-store" }); len = Number(h.headers.get("content-length") || 0); } catch { }
-      if (!len || len === file.size) return url;
-    } catch { }
-  }
-  return null;
-}
 // Comprime/redimensiona una imagen (dataURL) para que pese poco antes de subirla.
 // Una foto de celular de 4-8 MB queda en ~200-400 KB. Esto hace la subida confiable
 // y evita inflar la base de datos si llegara a caer a base64.
@@ -545,6 +494,24 @@ function fusionarObras(prioridad, otras, tumbas) {
   Object.keys(tumbas || {}).forEach(id => mapa.delete(id));
   return Array.from(mapa.values());
 }
+// Copia de seguridad automática de las obras: una por día, en la misma tabla
+// (clave "respaldo_obras:AAAA-MM-DD"). Se guardan las últimas 14. Solo se crea
+// si la nube respondió bien y tiene obras, así nunca se respalda una lista vacía.
+async function respaldarObrasDelDia(json, cantidad) {
+    try {
+        if (!json || !(cantidad > 0)) return;
+        const hoy = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+        const clave = "respaldo_obras:" + hoy;
+        const ya = await storage.getCloud(clave);
+        if (!ya.ok || ya.value) return;
+        await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key: clave, value: json }) });
+        const l = await storage.list("respaldo_obras:");
+        const claves = (l?.keys || []).filter(k => k.startsWith("respaldo_obras:")).sort();
+        for (const k of claves.slice(0, Math.max(0, claves.length - 14))) {
+            try { await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(k), { method: "DELETE", headers: SH() }); } catch { }
+        }
+    } catch { }
+}
 function useStoredState(key, defaultValue) {
     const [state, setState] = useState(() => {
         const local = storage.getLocal(key);
@@ -570,10 +537,13 @@ function useStoredState(key, defaultValue) {
         (async () => {
             try {
                 if (esObras) {
-                    const [rCloud, rDel] = await Promise.all([storage.get(key), storage.get(key + "_del")]);
-                    const cloud = rCloud?.value ? JSON.parse(rCloud.value) : [];
-                    const tumbas = rDel?.value ? JSON.parse(rDel.value) : {};
-                    setState(prevLocal => fusionarObras(prevLocal, cloud, tumbas));
+                    const [rCloud, rDel] = await Promise.all([storage.getCloud(key), storage.getCloud(key + "_del")]);
+                    if (rCloud.ok && rDel.ok) {
+                        const cloud = rCloud.value ? JSON.parse(rCloud.value) : [];
+                        const tumbas = rDel.value ? JSON.parse(rDel.value) : {};
+                        setState(prevLocal => fusionarObras(prevLocal, cloud, tumbas));
+                        respaldarObrasDelDia(rCloud.value, Array.isArray(cloud) ? cloud.length : 0);
+                    }
                 } else {
                     const r = await storage.get(key);
                     if (r?.value) {
@@ -590,8 +560,7 @@ function useStoredState(key, defaultValue) {
                             const cloudTs = Number(rTs?.value || 0);
                             let localTs = 0;
                             try { localTs = Number(localStorage.getItem(key + "__ts") || 0); } catch { }
-                            let localVacio = false; try { localVacio = vacioJ(localStorage.getItem(key)); } catch { }
-            if (cloudTs >= localTs || (localVacio && !vacioJ(r.value))) {
+                            if (cloudTs >= localTs) {
                                 setState(cloudData);
                                 try { localStorage.setItem(key, r.value); localStorage.setItem(key + "__ts", String(cloudTs)); } catch { }
                             }
@@ -621,18 +590,32 @@ function useStoredState(key, defaultValue) {
                     try {
                         const idsPrev = new Set((prev || []).map(o => o?.id));
                         const idsNext = new Set((next || []).map(o => o?.id));
-                        // Una persona borra de a UNA obra. Si de golpe "desaparecen" varias, no es un borrado
-                        // real (es una rutina, un error o una lista vieja): NO se anotan como borradas.
-                        let borrados = [...idsPrev].filter(id => id && !idsNext.has(id));
-                        if (borrados.length > 1) borrados = [];
+                        const borrados = [...idsPrev].filter(id => id && !idsNext.has(id));
+                        // PROTECCIÓN 1: si se borran de golpe 3 o más obras (o más de la mitad),
+                        // se pide confirmación. Un borrado masivo por error se propaga a todos
+                        // los dispositivos como "tumbas", y así se vaciaba la lista.
+                        if (borrados.length >= 3 || (borrados.length >= 2 && borrados.length > idsPrev.size / 2)) {
+                            const sigue = window.confirm("Estás por borrar " + borrados.length + " obras de golpe. ¿Es a propósito?\n\nSi no, tocá Cancelar y no se borra nada.");
+                            if (!sigue) {
+                                if (mySeq !== obrasPersistSeq.current) return;
+                                try { localStorage.setItem(key, JSON.stringify(prev)); localStorage.setItem(key + "__ts", String(Date.now())); } catch { }
+                                setState(prev);
+                                return;
+                            }
+                        }
+                        // PROTECCIÓN 2: si no se puede LEER la nube, no se escribe en ella.
+                        // (Antes una lectura fallida se tomaba como "nube vacía" y la lista de
+                        // este dispositivo —a veces vieja o corta— pisaba todas las obras.)
+                        const [rDelC, rObrasC] = await Promise.all([storage.getCloud(key + "_del"), storage.getCloud(key)]);
+                        if (!rDelC.ok || !rObrasC.ok) { avisarErrorSync(key); return; }
                         let tumbas = {};
-                        try { const r = await storage.get(key + "_del"); if (r?.value) tumbas = JSON.parse(r.value) || {}; } catch { }
+                        try { if (rDelC.value) tumbas = JSON.parse(rDelC.value) || {}; } catch { }
                         if (borrados.length) {
                             borrados.forEach(id => { tumbas[id] = Date.now(); });
                             try { await storage.set(key + "_del", JSON.stringify(tumbas)); } catch { }
                         }
                         let cloud = [];
-                        try { const r = await storage.get(key); if (r?.value) cloud = JSON.parse(r.value) || []; } catch { }
+                        try { if (rObrasC.value) cloud = JSON.parse(rObrasC.value) || []; } catch { }
                         const fusionado = fusionarObras(next, cloud, tumbas);
                         if (mySeq !== obrasPersistSeq.current) return; // quedó vieja, se descarta
                         const json = JSON.stringify(fusionado);
@@ -742,100 +725,6 @@ function t(cfg, key) { return cfg?.textos?.[key] || DEFAULT_TEXTOS[key] || key; 
 function getUbics(cfg) { return (cfg?.ubicaciones?.length ? cfg.ubicaciones : DEFAULT_UBICACIONES); }
 function getLabelUbic(cfg) { return cfg?.labelUbicacion || "Zona/Barrio"; }
 function uid() { return Math.random().toString(36).slice(2, 9); }
-
-// ── Guardar PDF como archivo real (Guardar en Archivos en iPad, descarga en PC) ──
-// Carga html2pdf.js (jsPDF + html2canvas) desde un CDN la primera vez que se
-// necesita, para no tocar el build del proyecto. Genera el PDF a partir del
-// MISMO html que ya se usa para la vista previa/impresión.
-let _html2pdfCargando = null;
-function cargarHtml2Pdf() {
-  if (typeof window !== "undefined" && window.html2pdf) return Promise.resolve(window.html2pdf);
-  if (_html2pdfCargando) return _html2pdfCargando;
-  _html2pdfCargando = new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js";
-    s.onload = () => resolve(window.html2pdf);
-    s.onerror = () => reject(new Error("No se pudo cargar el generador de PDF."));
-    document.head.appendChild(s);
-  });
-  return _html2pdfCargando;
-}
-async function guardarPdfComoArchivo(htmlString, nombreArchivo) {
-  const html2pdf = await cargarHtml2Pdf();
-  // Renderizamos el contenido DENTRO del mismo documento (no en un iframe
-  // aparte): la librería que saca la "foto" para armar el PDF no puede
-  // capturar bien el contenido de otro documento, y eso es lo que daba la
-  // página en blanco.
-  const parser = new DOMParser();
-  const parsed = parser.parseFromString(htmlString, "text/html");
-  const cont = document.createElement("div");
-  // OJO: posicionar el contenido muy lejos de la pantalla (left:-99999px) hace
-  // que la librería que "fotografía" el contenido capture una página en
-  // blanco (bug conocido). En cambio lo dejamos en la esquina (0,0) pero con
-  // z-index bajo, tapado por el cartel de vista previa que ya cubre toda la
-  // pantalla — así nunca se ve, pero sí se puede capturar bien.
-  // El contenido a capturar (cont) va en el flujo normal, SIN position:fixed
-  // propio (probado: un "fixed" copiado por el generador sale en blanco), pero
-  // dentro de un marco fijo en la esquina (0,0) y debajo del cartel de vista
-  // previa — en iPad la captura sale corrida si el contenido no está ahí.
-  const marco = document.createElement("div");
-  marco.style.position = "fixed"; marco.style.left = "0"; marco.style.top = "0"; marco.style.width = "800px"; marco.style.zIndex = "1"; marco.style.pointerEvents = "none"; marco.style.overflow = "visible";
-  cont.style.width = "800px"; cont.style.background = "#fff";
-  const styleEl = parsed.querySelector("style");
-  let cssTexto = styleEl ? styleEl.textContent : "";
-  // Las reglas "html,body{...}" y "@page{...}" del documento de vista previa
-  // no deben filtrarse a la app real mientras se captura.
-  cssTexto = cssTexto.replace(/html\s*,\s*body\s*\{[^}]*\}/g, "").replace(/@page\s*\{[^}]*\}/g, "");
-  if (cssTexto) { const s = document.createElement("style"); s.textContent = cssTexto; cont.appendChild(s); }
-  const inner = document.createElement("div");
-  inner.innerHTML = parsed.body.innerHTML;
-  // La regla "body{...}" (tipografía, tamaño, margen) no aplica a un div: la
-  // pasamos como estilo directo para que el PDF se vea igual que la vista previa.
-  const bodyRule = cssTexto.match(/(?:^|[}\s])body\s*\{([^}]*)\}/);
-  if (bodyRule) inner.style.cssText += ";" + bodyRule[1];
-  cont.appendChild(inner);
-  marco.appendChild(cont);
-  document.body.appendChild(marco);
-  // Esperamos a que las fotos (si las hay) terminen de cargar, y a que el
-  // navegador termine de pintar el contenido, antes de capturar.
-  const imgs = Array.from(cont.querySelectorAll("img"));
-  await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(res => { img.onload = res; img.onerror = res; })));
-  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch { } }
-  await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
-  // iOS limita el tamaño de un canvas (~16 millones de píxeles): en un informe
-  // largo, escala 2 se pasa y el PDF sale en blanco. Bajamos la escala solo
-  // lo necesario para que quepa.
-  const altoCss = Math.max(1, cont.scrollHeight);
-  const escala = Math.max(0.8, Math.min(2, Math.floor(Math.sqrt(14000000 / (800 * altoCss)) * 100) / 100));
-  const blob = await html2pdf().from(cont).set({
-    margin: 0,
-    filename: nombreArchivo,
-    html2canvas: { scale: escala, useCORS: true, windowWidth: 800, x: 0, y: 0, scrollX: 0, scrollY: 0, backgroundColor: "#ffffff" },
-    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-  }).outputPdf("blob");
-  document.body.removeChild(marco);
-  const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const file = new File([blob], nombreArchivo, { type: "application/pdf" });
-  if (esIOS) {
-    // iPad/iPhone: primero intenta la hoja de compartir con "Guardar en Archivos".
-    // Si falla (Safari a veces bloquea el share si tardó mucho en generarse),
-    // abre el PDF en una pestaña: el visor nativo de iOS también tiene un
-    // ícono de compartir con "Guardar en Archivos".
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: nombreArchivo }); return; } catch (e) { if (e && e.name === "AbortError") return; }
-    }
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    return;
-  }
-  // PC: descarga directa
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = nombreArchivo;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-}
 
 // Lee las coordenadas GPS que el drone graba DENTRO del archivo de la foto
 // (datos EXIF). Hay que leerlas del archivo original: cuando la app reduce
@@ -954,63 +843,7 @@ function getMediaType(d) { const m = d.match(/data:([^;]+);/); return m ? m[1] :
 // callAI con soporte de web_search + web_fetch reales
 // useSearch=true activa búsqueda en internet Y lectura de páginas completas
 // (precios, proveedores, noticias, y también abrir un link puntual que le pases).
-// ── DRIVE GENERAL: la IA busca/lee en el Drive de todas las obras (vía /api/drive) ──
-const DRIVE_TOOLS = [
-  { name: "buscar_en_drive", description: "Busca archivos en el Drive GENERAL de todas las obras (planos, definiciones, especificaciones, actas, contratos, informes). Devuelve nombre, carpeta, fecha y id. Usala cuando el dato no esté en los datos de la app.", input_schema: { type: "object", properties: { consulta: { type: "string", description: "Palabras clave a buscar (ej: 'definición piso hall', 'plano estructura')" }, obra: { type: "string", description: "Opcional: nombre de la obra para buscar solo en su carpeta" } }, required: ["consulta"] } },
-  { name: "leer_de_drive", description: "Lee el contenido de un archivo del Drive general (Docs, Sheets, PDF, texto) usando el id que devolvió buscar_en_drive.", input_schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } },
-];
-async function driveLlamar(payload) {
-  try {
-    const r = await fetch("/api/drive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) return { error: j.error || ("Error " + r.status) };
-    return j;
-  } catch (e) { return { error: "No se pudo conectar con el Drive." }; }
-}
-// Carga en la base de la app (planos / archivos de la obra) un archivo que la IA encontró en el Drive general.
-async function driveCargarEnObra(acc, obras, setObras, side) {
-  const nom = String(acc.obra || "").toLowerCase().trim();
-  const obra = (obras || []).find(o => nom && (o.nombre || "").toLowerCase().includes(nom)) || null;
-  if (!obra) return { msg: "No pude cargarlo: no encontré esa obra en la app. Decime el nombre exacto de la obra." , docs: [] };
-  if (!acc.drive_id) return { msg: "No pude cargarlo: falta el archivo del Drive.", docs: [] };
-  const campo = acc.destino === "archivos" ? "archivos" : "planos";
-  const ya = (obra[campo] || []).find(x => x.driveId === acc.drive_id);
-  if (ya) return { msg: `Ese archivo ya estaba cargado en ${obra.nombre}.`, docs: [{ nombre: ya.nombre, url: ya.url }] };
-  const j = await driveLlamar({ action: "download", id: acc.drive_id });
-  if (j.error) return { msg: "No pude traerlo del Drive: " + j.error, docs: [] };
-  const nombre = (acc.nombre || j.nombre || "archivo").replace(/[\\/]/g, "-");
-  let url = "", enlace = false;
-  if (j.base64) {
-    const dataUrl = `data:${j.mime || "application/octet-stream"};base64,${j.base64}`;
-    const u = await uploadFoto(dataUrl, `${campo}/${obra.id}`, `${Date.now()}_${nombre.replace(/[^\w.\-]+/g, "_")}`);
-    if (u && /^https?:/.test(u)) url = u;
-  }
-  if (!url && j.link) { url = j.link; enlace = true; }
-  if (!url) return { msg: "No pude guardarlo en la nube de la app.", docs: [] };
-  const ext = (nombre.split(".").pop() || "").toLowerCase();
-  const entry = { id: Math.random().toString(36).slice(2, 9), nombre, url, fecha: new Date().toLocaleDateString("es-AR"), from: side, tipo: enlace ? "drive" : ext, driveId: acc.drive_id, origen: "Drive" + (j.carpeta ? " · " + j.carpeta : "") };
-  setObras(p => (p || []).map(o => o.id === obra.id ? { ...o, [campo]: [...(o[campo] || []), entry] } : o));
-  return { msg: `Listo: cargué "${nombre}" en ${campo === "planos" ? "Planos" : "Archivos"} de ${obra.nombre}${enlace ? " (era muy pesado: quedó como enlace al Drive)" : ""}.`, docs: [{ nombre, url }] };
-}
-async function driveToolResult(tb) {
-  const inp = tb.input || {};
-  let j;
-  if (tb.name === "buscar_en_drive") {
-    j = await driveLlamar({ action: "search", consulta: inp.consulta, obra: inp.obra });
-    if (j.error) return { type: "tool_result", tool_use_id: tb.id, is_error: true, content: j.error };
-    const rs = j.resultados || [];
-    return { type: "tool_result", tool_use_id: tb.id, content: rs.length ? rs.map(f => `id=${f.id} | ${f.nombre} | carpeta: ${f.carpeta || "(raíz)"} | ${f.modificado} | ${f.link}`).join("\n") : "Sin resultados en el Drive para esa búsqueda." };
-  }
-  if (tb.name === "leer_de_drive") {
-    j = await driveLlamar({ action: "read", id: inp.id });
-    if (j.error) return { type: "tool_result", tool_use_id: tb.id, is_error: true, content: j.error };
-    if (j.pdf) return { type: "tool_result", tool_use_id: tb.id, content: [{ type: "text", text: `Archivo: ${j.nombre} (carpeta ${j.carpeta}) — ${j.link}` }, { type: "document", source: { type: "base64", media_type: "application/pdf", data: j.pdf } }] };
-    return { type: "tool_result", tool_use_id: tb.id, content: j.texto ? `Archivo: ${j.nombre} (carpeta ${j.carpeta}) — ${j.link}\n\n${j.texto}` : `${j.nombre}: ${j.aviso || "sin contenido legible"} ${j.link || ""}` };
-  }
-  return { type: "tool_result", tool_use_id: tb.id, is_error: true, content: "Herramienta desconocida." };
-}
-
-async function callAI(msgs, sys, apiKey, useSearch = false, useDrive = false) {
+async function callAI(msgs, sys, apiKey, useSearch = false) {
     msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
     const body = {
         model: "claude-sonnet-5",
@@ -1023,7 +856,6 @@ async function callAI(msgs, sys, apiKey, useSearch = false, useDrive = false) {
         { type: "web_search_20250305", name: "web_search", max_uses: 5, user_location: { type: "approximate", city: "Buenos Aires", region: "Buenos Aires", country: "AR", timezone: "America/Argentina/Buenos_Aires" } },
         { type: "web_fetch_20250910", name: "web_fetch", max_uses: 5 },
     ];
-    if (useDrive) body.tools = [...(body.tools || []), ...DRIVE_TOOLS];
 
     // Intenta primero el proxy serverless (/api/claude, clave del lado del servidor).
     // Si no existe (hosting estático) cae a la API directa con la key de Configuración.
@@ -1050,16 +882,10 @@ async function callAI(msgs, sys, apiKey, useSearch = false, useDrive = false) {
         if (d.error) return `Error: ${d.error.message || 'Sin respuesta.'}`;
         // La búsqueda web es del lado del servidor (Anthropic la ejecuta sola).
         // Si la respuesta queda en pausa, se continúa reenviando lo acumulado.
-        let guard = 0, convo = msgs;
-        while ((d.stop_reason === 'pause_turn' || d.stop_reason === 'tool_use') && guard < 8) {
+        let guard = 0;
+        while (d.stop_reason === 'pause_turn' && guard < 4) {
             guard++;
-            convo = [...convo, { role: 'assistant', content: d.content }];
-            if (d.stop_reason === 'tool_use') {
-                const rs = [];
-                for (const tb of (d.content || []).filter(x => x.type === 'tool_use')) rs.push(await driveToolResult(tb));
-                convo = [...convo, { role: 'user', content: rs }];
-            }
-            const cont = await doFetch({ ...body, messages: convo });
+            const cont = await doFetch({ ...body, messages: [...msgs, { role: 'assistant', content: d.content }] });
             if (!cont.ok || cont.data?.error) break;
             d = cont.data;
         }
@@ -1095,31 +921,11 @@ function aplicarIntensidadOscuro(colors, intensidad) {
   const t = (1 - pct / 100) * 0.62; // tope: nunca se aclara más del 62% del camino a gris medio
   return { ...colors, bg: aclararHex(colors.bg, t), card: aclararHex(colors.card, t), border: aclararHex(colors.border, Math.min(1, t * 1.3)), navy: aclararHex(colors.navy || colors.bg, t) };
 }
-
-// ── BRILLO DEL FONDO (negro ↔ blanco) ────────────────────────────────
-// cfg.brillo: 0 = fondo negro con letras blancas … 100 = fondo blanco con letras negras.
-// Intermedios: gris; las letras van de blanco a negro y se mantienen siempre legibles
-// (en el punto medio el texto "salta" al lado opuesto para no perder contraste).
-function paletaBrillo(brillo) {
-  const L = Math.max(0, Math.min(100, Number(brillo))) / 100;
-  let tL = 1 - L;
-  if (Math.abs(tL - L) < 0.55) tL = L < 0.5 ? L + 0.55 : L - 0.55;
-  tL = Math.max(0, Math.min(1, tL));
-  const g = (v) => { const n = Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, "0"); return "#" + n + n + n; };
-  const mix = (a, b, k) => g(a + (b - a) * k);
-  return { bg: g(L), card: g(L < 0.5 ? L + 0.05 : L + 0.04), border: g(L < 0.5 ? L + 0.14 : L - 0.12), text: g(tL), sub: mix(tL, L, 0.3), muted: mix(tL, L, 0.52), navy: L < 0.5 ? g(L * 0.7) : "#0F172A", oscuro: L < 0.5 };
-}
-function colorsConBrillo(cfg) {
-  const base = cfg?.colors || DEFAULT_COLORS;
-  if (cfg?.brillo == null) return aplicarIntensidadOscuro(base, cfg?.oscuroIntensidad);
-  const p = paletaBrillo(cfg.brillo);
-  return { ...base, bg: p.bg, card: p.card, border: p.border, text: p.text, sub: p.sub, muted: p.muted, navy: p.navy };
-}
 function buildThemeCSS(cfg) {
-    const c = colorsConBrillo(cfg);
+    const c = aplicarIntensidadOscuro(cfg.colors || DEFAULT_COLORS, cfg.oscuroIntensidad);
     const fv = FONTS.find(f => f.id === cfg.fontId)?.value || "'Plus Jakarta Sans'";
     const rv = RADIUS_OPTS.find(r => r.id === cfg.radiusId)?.r || 14;
-    return `select option{background:${c.card};color:${c.text};}:root{--bg:${c.bg};--card:${c.card};--border:${c.border};--text:${c.text};--sub:${c.sub || '#475569'};--muted:${c.muted || '#94A3B8'};--accent:${c.accent};--al:${c.al || hexLight(c.accent)};--navy:${c.navy};--r:${rv}px;--rsm:${Math.max(4, rv - 4)}px;--font:${fv};}`;
+    return `:root{--bg:${c.bg};--card:${c.card};--border:${c.border};--text:${c.text};--sub:${c.sub || '#475569'};--muted:${c.muted || '#94A3B8'};--accent:${c.accent};--al:${c.al || hexLight(c.accent)};--navy:${c.navy};--r:${rv}px;--rsm:${Math.max(4, rv - 4)}px;--font:${fv};}`;
 }
 function parseMontoNum(m) {
   // OJO: en Argentina el punto es separador de MILES y la coma es el decimal.
@@ -2030,221 +1836,13 @@ function TabGastos({ detail, upd }) {
     </div>);
 }
 
-// ── Modelos de obra (tabla madre) ───────────────────────────────────────
-// Acá se define, una sola vez por tipo de obra ("Con subsuelo + 2 plantas",
-// "Sin subsuelo + 2 plantas", "Sin subsuelo + 3 plantas", etc.), qué etapas
-// se usan, en qué día desde el inicio de obra arranca cada una y cuántos
-// días hábiles se estima que dura. Las obras reales (en Obras) eligen uno
-// de estos modelos, y de ahí sale el cronograma estimado que Gestión
-// compara contra lo que realmente va pasando.
-// Código de seguridad para tocar los datos que no deben cambiarse por error.
-const CODIGO_EDICION = "1942";
-function CodigoModal({ titulo, onOk, onCancel }) {
-  const [v, setV] = React.useState("");
-  const [err, setErr] = React.useState(false);
-  const probar = () => { if (v === CODIGO_EDICION) onOk(); else { setErr(true); setV(""); } };
-  return (<div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onCancel}>
-    <div onClick={e => e.stopPropagation()} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, width: "100%", maxWidth: 320 }}>
-      <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 4 }}>🔒 Código de seguridad</div>
-      <div style={{ fontSize: 12, color: T.sub, marginBottom: 12, lineHeight: 1.5 }}>{titulo || "Ingresá el código para poder modificar."}</div>
-      <input type="password" inputMode="numeric" autoFocus value={v} onChange={e => { setV(e.target.value); setErr(false); }} onKeyDown={e => { if (e.key === "Enter") probar(); }} placeholder="Código" style={{ width: "100%", background: T.bg, border: `1.5px solid ${err ? "#E58989" : T.border}`, borderRadius: 8, padding: "11px 12px", fontSize: 16, color: T.text, boxSizing: "border-box", letterSpacing: 4, textAlign: "center" }} />
-      {err && <div style={{ fontSize: 11.5, color: "#E58989", marginTop: 6, textAlign: "center" }}>Código incorrecto</div>}
-      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-        <button onClick={onCancel} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 700, color: T.text, cursor: "pointer" }}>Cancelar</button>
-        <button onClick={probar} style={{ flex: 1, background: T.accent, border: "none", borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Entrar</button>
-      </div>
-    </div>
-  </div>);
-}
-function ModelosObraView({ db, cfg, onBack }) {
-  const [desbloq, setDesbloq] = useState(false);
-  const [gate, setGate] = useState(null);
-  const pedir = (fn) => { if (desbloq) fn(); else setGate({ fn }); };
-  const { modelosObra, setModelosObra } = db;
-  const modelos = modelosObra || [];
-  const [editId, setEditId] = useState(null);
-  const edit = editId ? modelos.find(m => m.id === editId) : null;
-
-  function crear() {
-    const m = { id: uid(), nombre: "Nuevo modelo de obra", etapas: nuevoModeloEtapas(), losas: [] };
-    setModelosObra([...modelos, m]);
-    setEditId(m.id);
-  }
-  function upd(id, patch) { setModelosObra(modelos.map(m => m.id === id ? { ...m, ...patch } : m)); }
-  function borrar(id) {
-    if (!confirm("¿Borrar este modelo de obra? Las obras que lo tengan asignado quedarán sin modelo.")) return;
-    setModelosObra(modelos.filter(m => m.id !== id));
-    setEditId(null);
-  }
-  function updEtapa(modeloId, etapaNombre, patch) {
-    // Primero se NORMALIZA el modelo guardado (convierte de una sola vez los arranques viejos) y recién
-    // después se aplica el cambio — así un valor a medio tipear no deja números mal calculados.
-    const base = recalcularModelo(modelos.find(m => m.id === modeloId) || {});
-    const actuales = base.etapas;
-    const existe = actuales.some(e => e.etapa === etapaNombre);
-    const etapas = existe
-      ? actuales.map(e => e.etapa === etapaNombre ? { ...e, ...patch } : e)
-      : [...actuales, { etapa: etapaNombre, usa: false, inicioOffsetDias: 0, duracionDias: 0, ...patch }];
-    const mm = recalcularModelo({ etapas, losas: base.losas, plantas: base.plantas });
-    upd(modeloId, { etapas: mm.etapas, losas: mm.losas, plantas: mm.plantas });
-  }
-  // La cantidad de losas se escribe directo (es lo que define el tipo de
-  // proyecto); al cambiar el número se agregan o sacan filas solas, sin
-  // perder lo ya tipeado en las que quedan.
-  function setCantLosas(modeloId, n) {
-    const baseM = recalcularModelo(modelos.find(m => m.id === modeloId) || {});
-    const actual = baseM.losas;
-    const cant = Math.max(0, Math.round(Number(n) || 0));
-    const losas = cant <= actual.length ? actual.slice(0, cant) : [...actual, ...Array.from({ length: cant - actual.length }, () => ({ inicioOffsetDias: 0, duracionDias: 45, hormigonDia: 16, nombre: "" }))];
-    const mm = recalcularModelo({ etapas: baseM.etapas, losas, plantas: baseM.plantas });
-    upd(modeloId, { etapas: mm.etapas, losas: mm.losas, plantas: mm.plantas });
-  }
-  function updLosa(modeloId, idx, patch) {
-    const baseL = recalcularModelo(modelos.find(m => m.id === modeloId) || {});
-    const losas = baseL.losas.map((l, i) => i === idx ? { ...l, ...patch } : l);
-    const mm = recalcularModelo({ etapas: baseL.etapas, losas, plantas: baseL.plantas });
-    upd(modeloId, { etapas: mm.etapas, losas: mm.losas, plantas: mm.plantas });
-  }
-  function updPlanta(modeloId, idx, patch) {
-    const baseP = recalcularModelo(modelos.find(m => m.id === modeloId) || {});
-    const plantas = baseP.plantas.map((p, i) => i === idx ? { ...p, ...patch } : p);
-    const mm = recalcularModelo({ etapas: baseP.etapas, losas: baseP.losas, plantas });
-    upd(modeloId, { etapas: mm.etapas, losas: mm.losas, plantas: mm.plantas });
-  }
-  function crearPlantilla(tipo) {
-    const nombres = tipo === "subsuelo" ? ["Losa sobre platea (subsuelo)", "Losa sobre subsuelo", "Losa sobre planta baja", "Losa sobre planta alta"]
-      : tipo === "tres" ? ["Losa sobre platea", "Losa sobre planta baja", "Losa sobre planta alta", "Losa sobre tercer piso"]
-      : ["Losa sobre platea", "Losa sobre planta baja", "Losa sobre planta alta"];
-    const titulo = tipo === "subsuelo" ? "Modelo con subsuelo (4 losas)" : tipo === "tres" ? "Modelo con 3 pisos (4 losas)" : "Modelo normal sin subsuelo (3 losas)";
-    const usa = ["Trabajos preliminares", "Replanteo", "Movimiento de suelo", "Fundaciones", "Estructura", "Mampostería", "Revoques interiores", "Revoques exteriores", "Albañilería (encuadres de baños y marcos de puertas)", "Contrapisos y carpetas", "Revestimientos y solados", "Limpieza de obra y entrega"];
-    const dur = { "Trabajos preliminares": 10, "Replanteo": 2, "Movimiento de suelo": 5, "Fundaciones": 21, "Revoques interiores": 40, "Revoques exteriores": 40, "Albañilería (encuadres de baños y marcos de puertas)": 30, "Contrapisos y carpetas": 30, "Revestimientos y solados": 60, "Limpieza de obra y entrega": 5 };
-    // desde Revoques exteriores en adelante cada tarea arranca ~10% (de la anterior) antes de que termine la anterior
-    const PCT = ["Revoques exteriores", "Albañilería (encuadres de baños y marcos de puertas)", "Contrapisos y carpetas", "Revestimientos y solados"];
-    const etapas = ETAPAS_OBRA.map(n => ({ etapa: n, usa: usa.includes(n), inicioOffsetDias: 0, duracionDias: dur[n] || 0, ...(n === "Replanteo" ? { solapeDias: 2 } : {}), ...(PCT.includes(n) ? { solapePct: 10 } : {}) }));
-    const losas = nombres.map(nombre => ({ nombre, inicioOffsetDias: 0, duracionDias: 45, hormigonDia: 16 }));
-    const mm = recalcularModelo({ etapas, losas });
-    const m = { id: uid(), nombre: titulo, etapas: mm.etapas, losas: mm.losas, plantas: mm.plantas };
-    setModelosObra([...modelos, m]);
-    setEditId(m.id);
-  }
-
-  if (edit) {
-    const calcEdit = recalcularModelo(edit);
-    const inpS = { width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text, boxSizing: "border-box" };
-    const lblS = { fontSize: 10, color: T.muted, marginBottom: 3, textTransform: "uppercase" };
-    const dur = duracionTotalModelo({ ...edit, ...calcEdit });
-    return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
-      <PageHead title="Modelo de obra" back onBack={() => setEditId(null)} />
-      <div style={{ padding: "0 20px 20px" }}>
-        <Field label="Nombre del modelo"><TInput value={edit.nombre || ""} onChange={e => upd(edit.id, { nombre: e.target.value })} placeholder='Ej: "Con subsuelo + 2 plantas"' /></Field>
-        <Card style={{ padding: 13, marginBottom: 14, textAlign: "center" }}>
-          <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", marginBottom: 4 }}>Duración total estimada del modelo</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: T.accent }}>{dur > 0 ? `${dur} días` : "—"}</div>
-          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3 }}>Es el punto más lejano al que llega cualquier etapa (inicio + duración), no la suma de todas — así se reflejan las superposiciones.</div>
-        </Card>
-        <Eyebrow>Cronograma del modelo</Eyebrow>
-        <div style={{ fontSize: 11.5, color: T.muted, lineHeight: 1.5, margin: "0 0 10px" }}>Todo en un solo cronograma, ordenado por fecha de arranque. Cargá solo cuántos días DURA cada tarea (hábiles) y el resto arranca solo. "Solapa" = días que se pisa con lo anterior. Las losas se hormigonan el día indicado y su mampostería arranca 22 días después (fraguado). Si agregás una losa, aparece sola su mampostería.</div>
-        <Field label="Cantidad de losas (define el tipo de obra)"><TInput type="number" value={(edit.losas || []).length || ""} onChange={e => setCantLosas(edit.id, e.target.value)} placeholder="Ej: 3" /></Field>
-        {(() => {
-          const filas = [];
-          etapasModeloCompletas({ ...edit, etapas: calcEdit.etapas }).forEach(c => {
-            if (c.derivada) return;
-            if (c.etapa === "Estructura" && calcEdit.losas.length) return;
-            if (c.etapa === "Mampostería" && calcEdit.plantas.length) return;
-            filas.push({ k: "e:" + c.etapa, tipo: "e", c, ini: Number(c.inicioOffsetDias) || 0, orden: ETAPAS_OBRA.indexOf(c.etapa) });
-          });
-          calcEdit.losas.forEach((l, i) => filas.push({ k: "l" + i, tipo: "l", i, l, ini: Number(l.inicioOffsetDias) || 0, orden: 4.5 + i * 0.01 }));
-          calcEdit.plantas.forEach((p, i) => filas.push({ k: "p" + i, tipo: "p", i, p, ini: Number(p.inicioOffsetDias) || 0, orden: 5.5 + i * 0.01 }));
-          filas.sort((x, y) => (x.c && !x.c.usa ? 1e9 : x.ini) - (y.c && !y.c.usa ? 1e9 : y.ini) || x.orden - y.orden);
-          const total = Math.max(1, dur);
-          const bar = (ini, d, color) => (<div style={{ position: "relative", height: 7, background: T.bg, borderRadius: 4, margin: "7px 0 8px" }}><div style={{ position: "absolute", left: `${Math.min(100, ini / total * 100)}%`, width: `${Math.max(1.2, d / total * 100)}%`, top: 0, bottom: 0, background: color, borderRadius: 4 }} /></div>);
-          const inp = (lbl, val, fn, ph) => (<div><div style={lblS}>{lbl}</div><input type="number" value={val === undefined || val === null || val === 0 ? "" : val} onChange={e => fn(e.target.value)} placeholder={ph} style={inpS} /></div>);
-          return filas.map(r => {
-            if (r.tipo === "e") {
-              const c = r.c, d = Number(c.duracionDias) || 0;
-              return (<Card key={r.k} style={{ padding: "10px 13px", marginBottom: 7, opacity: c.usa ? 1 : 0.55 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
-                  <input type="checkbox" checked={!!c.usa} onChange={e => updEtapa(edit.id, c.etapa, { usa: e.target.checked })} style={{ width: 17, height: 17 }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>{c.etapa}</span>
-                  {c.usa && <span style={{ fontSize: 11, color: T.muted }}>día {r.ini + 1} → {r.ini + d}</span>}
-                </label>
-                {c.usa && <>{bar(r.ini, d, T.accent)}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  {inp("Dura (días)", c.duracionDias, v => updEtapa(edit.id, c.etapa, { duracionDias: v }), "Ej: 20")}
-                  {inp("Solapa (días)", c.solapeDias, v => updEtapa(edit.id, c.etapa, { solapeDias: v, solapePct: null }), "0")}
-                </div></>}
-              </Card>);
-            }
-            if (r.tipo === "l") {
-              const l = r.l, d = Number(l.duracionDias) || 0;
-              return (<Card key={r.k} style={{ padding: "10px 13px", marginBottom: 7, borderLeft: `3px solid ${T.accent}` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input type="text" value={l.nombre || ""} onChange={e => updLosa(edit.id, r.i, { nombre: e.target.value })} placeholder={nombreLosa(r.i)} style={{ ...inpS, flex: 1, fontWeight: 700 }} />
-                  <span style={{ fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>día {r.ini + 1} → {r.ini + d}</span>
-                </div>
-                {bar(r.ini, d, T.accent)}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                  {inp("Dura (días)", l.duracionDias, v => updLosa(edit.id, r.i, { duracionDias: v }), "45")}
-                  {inp("Hormigona día", l.hormigonDia, v => updLosa(edit.id, r.i, { hormigonDia: v }), "16")}
-                  {inp("Solapa (días)", l.solapeDias, v => updLosa(edit.id, r.i, { solapeDias: v }), "0")}
-                </div>
-                <div style={{ fontSize: 11, color: T.muted, marginTop: 6 }}>Se hormigona el día <b style={{ color: T.text }}>{(Number(l.hormigonOffsetDias) || 0) + 1}</b></div>
-              </Card>);
-            }
-            const p = r.p, d = Number(p.duracionDias) || 0;
-            return (<Card key={r.k} style={{ padding: "10px 13px", marginBottom: 7, borderLeft: `3px solid ${T.muted}` }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1 }}>Mampostería · {calcEdit.losas[r.i]?.nombre || nombreLosa(r.i)}</span>
-                <span style={{ fontSize: 11, color: T.muted, whiteSpace: "nowrap" }}>día {r.ini + 1} → {r.ini + d}</span>
-              </div>
-              {bar(r.ini, d, T.muted)}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {inp("Dura (días)", p.duracionDias, v => updPlanta(edit.id, r.i, { duracionDias: v }), "35")}
-                {inp("Fraguado tras hormigonar", p.despuesHormigonDias, v => updPlanta(edit.id, r.i, { despuesHormigonDias: v }), "22")}
-              </div>
-            </Card>);
-          });
-        })()}
-        <PBtn full variant="danger" onClick={() => borrar(edit.id)} style={{ marginTop: 10 }}>Borrar este modelo</PBtn>
-      </div>
-    </div>);
-  }
-
-  return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
-    {gate && <CodigoModal titulo="Los modelos de obra solo se tocan con código, para no modificarlos por error." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); fn(); }} onCancel={() => setGate(null)} />}
-    <PageHead eyebrow="Tabla madre" title="Modelos de obra" sub="Los tipos de obra que usás (con subsuelo, sin subsuelo, cantidad de plantas) con su cronograma estándar de etapas" back onBack={onBack} />
-    <div style={{ padding: "0 20px" }}>
-      {!modelos.length && <EmptyMsg>Todavía no hay modelos cargados. Creá uno por cada tipo de obra que manejás (ej: "Con subsuelo + 2 plantas", "Sin subsuelo + 2 plantas", "Sin subsuelo + 3 plantas") y definí su cronograma estándar de etapas una sola vez.</EmptyMsg>}
-      {modelos.map(m => {
-        const n = etapasModelo(m).length, dur = duracionTotalModelo(m), nLosas = (m.losas || []).length;
-        return (<Card key={m.id} onClick={() => pedir(() => setEditId(m.id))} style={{ padding: "13px 15px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{m.nombre}</div>
-            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{n} etapa{n === 1 ? "" : "s"}{nLosas > 0 ? ` · ${nLosas} losa${nLosas === 1 ? "" : "s"}` : ""}{dur > 0 ? ` · ${dur} días estimados` : ""}</div>
-          </div>
-          <span style={{ fontSize: 16, color: T.muted }}>›</span>
-        </Card>);
-      })}
-      <PBtn full onClick={() => pedir(crear)} style={{ marginTop: 6 }}>+ Nuevo modelo de obra</PBtn>
-      <div style={{ fontSize: 11.5, color: T.muted, margin: "14px 0 6px" }}>O armalo desde un modelo base (después editás lo que haga falta):</div>
-      <PBtn full variant="ghost" onClick={() => pedir(() => crearPlantilla("normal"))} style={{ marginBottom: 6 }}>Normal sin subsuelo · 3 losas</PBtn>
-      <PBtn full variant="ghost" onClick={() => pedir(() => crearPlantilla("subsuelo"))} style={{ marginBottom: 6 }}>Con subsuelo · 4 losas</PBtn>
-      <PBtn full variant="ghost" onClick={() => pedir(() => crearPlantilla("tres"))} style={{ marginBottom: 6 }}>Con 3 pisos · 4 losas</PBtn>
-    </div>
-  </div>);
-}
-
-function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg, apiKey, adicionales, setAdicionales, modelosObra }) {
-    const [verCrono, setVerCrono] = useState(false);
-    const [desbloq, setDesbloq] = useState(false);
-    const [gate, setGate] = useState(null);
-    const pedirCodigo = (fn) => { if (desbloq) fn(); else setGate({ fn }); };
+function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg, apiKey, adicionales, setAdicionales }) {
     const UBICS = getUbics(cfg);
     const defaultAp = UBICS[0]?.id || 'aep';
     const [showNew, setShowNew] = useState(false);
     const [tab, setTab] = useState("info");
     const [mostrarAdicionales, setMostrarAdicionales] = useState(false);
-    const [form, setForm] = useState({ nombre: "", ap: defaultAp, sector: "", estado: "curso", avance: 0, inicio: "", cierre: "" });
+    const [form, setForm] = useState({ nombre: "", ap: defaultAp, sector: "", estado: "pendiente", avance: 0, inicio: "", cierre: "" });
     const [newObs, setNewObs] = useState("");
     const fileRef = useRef(null); const archRef = useRef(null); const videoRef = useRef(null); const planoRef = useRef(null);
     const detail = detailId ? obras.find(o => o.id === detailId) : null;
@@ -2258,7 +1856,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         if (!String(form.nombre || "").trim()) return;
         const apFinal = form.ap || UBICS[0]?.id || defaultAp;
         setObras(p => [...p, { ...form, ap: apFinal, id: uid(), avance: parseInt(form.avance) || 0, pagado: 0, obs: [], fotos: [], archivos: [], informes: [], docs: {} }]);
-        setForm({ nombre: "", ap: UBICS[0]?.id || defaultAp, sector: "", estado: "curso", avance: 0, inicio: "", cierre: "" });
+        setForm({ nombre: "", ap: UBICS[0]?.id || defaultAp, sector: "", estado: "pendiente", avance: 0, inicio: "", cierre: "" });
         setShowNew(false);
     }
     function upd(id, patch) {
@@ -2330,18 +1928,21 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
         const e = ec(detail.estado);
         return (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap}`} back onBack={() => setDetailId(null)} />
+                <AppHeader title={detail.nombre} sub={`${UBICS.find(a => a.id === detail.ap)?.code || detail.ap} · ${detail.sector || t(cfg, 'obras_sector')}`} back onBack={() => setDetailId(null)} right={<Badge color={e.color} bg={e.bg}>{e.label}</Badge>} />
                 <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "12px 18px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 600 }}>{t(cfg, 'obras_avance')}</span><span style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{detail.avance}%</span></div>
                     <div style={{ height: 8, background: T.bg, borderRadius: 4 }}><div style={{ height: 8, background: T.accent, borderRadius: 4, width: `${detail.avance}%`, transition: "width .5s" }} /></div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_inicio')}: {detail.inicio || "—"}</span><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_cierre')}: {detail.cierre || "—"}</span></div>
                     <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#1D4ED8)", marginTop: 10 }} />
                 </div>
+                <div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, display: "flex", overflowX: "auto" }}>
+                    {[[`info`, t(cfg, 'obras_info')], [`obs`, t(cfg, 'obras_notas')], [`fotos`, t(cfg, 'obras_fotos')], [`planos`, 'Planos'], [`archivos`, t(cfg, 'obras_archivos')], [`informes`, 'Informes'], [`gastos`, 'Gastos']].map(([id, label]) => (
+                        <button key={id} onClick={() => setTab(id)} style={{ flex: 1, minWidth: 52, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: tab === id ? 700 : 500, color: tab === id ? T.accent : T.muted, borderBottom: `2px solid ${tab === id ? "var(--accent,#1D4ED8)" : "transparent"}`, whiteSpace: "nowrap" }}>{label}</button>
+                    ))}
+                    <button onClick={() => setMostrarAdicionales(true)} style={{ flex: 1, minWidth: 74, padding: "10px 4px", background: "none", border: "none", fontSize: 11, fontWeight: 500, color: T.muted, borderBottom: "2px solid transparent", whiteSpace: "nowrap" }}>Adicionales</button>
+                </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
-                    {tab !== "info" && <button onClick={() => setTab("info")} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer", marginBottom: 12 }}>← Volver a la obra</button>}
                     {tab === "info" && (<div>
-                        {!desbloq ? <button onClick={() => pedirCodigo(() => {})} style={{ width: "100%", background: T.bg, border: `1px dashed ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 12, fontWeight: 700, color: T.sub, cursor: "pointer", marginBottom: 12 }}>🔒 Solo lectura · tocá para ingresar el código y editar</button> : <div style={{ fontSize: 11.5, color: T.accent, fontWeight: 700, marginBottom: 12 }}>🔓 Edición habilitada</div>}
-                        <div style={{ pointerEvents: desbloq ? "auto" : "none", opacity: desbloq ? 1 : 0.85 }}>
                         <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 8, border: `1px solid ${T.border}` }}>
                             <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Nombre de la obra</div>
                             <input value={detail.nombre || ''} onChange={e => upd(detail.id, { nombre: e.target.value })} placeholder="Nombre de la obra" style={{ width: "100%", background: "transparent", border: "none", fontSize: 14, fontWeight: 800, color: T.text, padding: 0 }} />
@@ -2374,53 +1975,38 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             </div>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{getLabelUbic(cfg)}</div>
                                 <select value={detail.ap} onChange={e => upd(detail.id, { ap: e.target.value })} style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0, cursor: "pointer" }}>
                                     {UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}
                                 </select>
                             </div>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_sector')}</div>
+                                <input value={detail.sector || ''} onChange={e => upd(detail.id, { sector: e.target.value })} placeholder="Sin sector" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
+                            </div>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_inicio')}</div>
                                 <input value={detail.inicio || ''} onChange={e => upd(detail.id, { inicio: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>{t(cfg, 'obras_cierre')}</div>
                                 <input value={detail.cierre || ''} onChange={e => upd(detail.id, { cierre: e.target.value })} placeholder="dd/mm/aa" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
-                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Modelo de obra</div>
-                                <select value={detail.modeloId || ''} onChange={e => upd(detail.id, { modeloId: e.target.value })} style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0, cursor: "pointer" }}>
-                                    <option value="">— Sin modelo —</option>
-                                    {(modelosObra || []).map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                                </select>
-                            </div>
-                            {!detail.modeloId && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Duración contractual (meses)</div>
-                                <input type="number" value={detail.duracionMeses || ''} onChange={e => upd(detail.id, { duracionMeses: e.target.value })} placeholder="Ej: 15" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
-                            </div>}
-                            {detail.inicio && (detail.modeloId || Number(detail.duracionMeses) > 0) && <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}` }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Cierre estimado (calculado)</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{cierreEstimadoObra(detail, modelosObra) || "—"}</div>
-                            </div>}
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14, pointerEvents: "auto" }}>
-                            <div onClick={() => setVerCrono(true)} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Cronograma</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{detail.modeloId && detail.inicio ? ((detail.cronoItems || []).length ? (detail.cronoItems || []).filter(x => !x.hecho).length + " pendientes" : "Abrir") : "Falta modelo/inicio"} ›</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+                            <div style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Presupuesto</div>
+                                <input value={detail.monto || ''} onChange={e => upd(detail.id, { monto: e.target.value })} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: T.text, padding: 0 }} />
                             </div>
-                            <div onClick={() => setTab("fotos")} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Fotos</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{(detail.fotos || []).length} foto{(detail.fotos || []).length === 1 ? "" : "s"} ›</div>
+                            <div style={{ background: detail.pagado > 0 ? "rgba(22,163,74,.14)" : T.bg, borderRadius: T.rsm, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}><Ico n="money" /> Pagado</div>
+                                <input value={detail.pagado || ''} onChange={e => { const v = e.target.value.replace(/[^0-9.]/g, ''); upd(detail.id, { pagado: v ? parseFloat(v) : 0 }); }} placeholder="$ 0" style={{ width: "100%", background: "transparent", border: "none", fontSize: 12, fontWeight: 600, color: "#10B981", padding: 0 }} />
                             </div>
-                            <div onClick={() => setTab("planos")} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Planos</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{(detail.planos || []).length} plano{(detail.planos || []).length === 1 ? "" : "s"} ›</div>
-                            </div>
-                            <div onClick={() => setMostrarAdicionales(true)} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Adicionales</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>Ver ›</div>
-                            </div>
+                        </div>
+                        <Lbl>{t(cfg, 'obras_estado')}</Lbl>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 14 }}>
+                            {OBRA_ESTADOS.map(e => (<button key={e.id} onClick={() => upd(detail.id, { estado: e.id })} style={{ padding: "9px", borderRadius: T.rsm, border: `1.5px solid ${detail.estado === e.id ? e.color : T.border}`, background: detail.estado === e.id ? e.bg : T.card, color: e.color, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{e.label}</button>))}
                         </div>
                         <div style={{ background: detail.privada ? "#FEF3E2" : T.bg, border: `1.5px solid ${detail.privada ? BRASS : T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 14 }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -2439,7 +2025,14 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             </div>}
                         </div>
                         <button onClick={() => { setObras(p => p.filter(o => o.id !== detail.id)); setDetailId(null); }} style={{ width: "100%", background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 600, color: "#EF4444", cursor: "pointer" }}>{t(cfg, 'obras_eliminar')}</button>
+                    </div>)}
+                    {tab === "obs" && (<div>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                            <TInput value={newObs} onChange={e => setNewObs(e.target.value)} placeholder={t(cfg, 'obras_obs_placeholder')} />
+                            <PBtn onClick={() => { if (!newObs.trim()) return; const tx = newObs; setNewObs(""); upd(detail.id, { obs: [...detail.obs, { id: uid(), txt: tx, fecha: new Date().toLocaleDateString("es-AR") }] }); }} disabled={!newObs.trim()} style={{ padding: "11px 16px", flexShrink: 0 }}>+</PBtn>
                         </div>
+                        {[...detail.obs].reverse().map(o => (<Card key={o.id} style={{ padding: "12px 14px", marginBottom: 8 }}><div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{o.txt}</div><div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>{o.fecha}</div></Card>))}
+                        {(detail.obs || []).length === 0 && <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_notas')}</div>}
                     </div>)}
                     {tab === "fotos" && (<TabFotos detail={detail} upd={upd} fileRef={fileRef} handleFoto={handleFoto} videoRef={videoRef} handleVideo={handleVideo} apiKey={apiKey} cfg={cfg} />)}
                     {tab === "planos" && (<div>
@@ -2453,10 +2046,20 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                             <button onClick={() => upd(detail.id, { planos: (detail.planos || []).filter(x => x.id !== p.id) })} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
                         </div>)}
                     </div>)}
+                    {tab === "archivos" && (<div>
+                        <input ref={archRef} type="file" accept=".pdf,.xlsx,.xls,.docx,.doc" multiple onChange={handleArch} style={{ display: "none" }} />
+                        <PBtn full onClick={() => archRef.current?.click()} style={{ marginBottom: 14 }}>{t(cfg, 'obras_agregar_arch')}</PBtn>
+                        {(detail.archivos || []).map(f => (<div key={f.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 7 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 8, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><span style={{ fontSize: 9, fontWeight: 700, color: T.accent }}>{f.ext}</span></div>
+                            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</div><div style={{ fontSize: 10, color: T.muted }}>{f.fecha}</div></div>
+                            <a href={f.url} download={f.nombre} style={{ textDecoration: "none" }}><button style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, width: 30, height: 30, fontSize: 13, color: T.sub, cursor: "pointer" }}>↓</button></a>
+                        </div>))}
+                        {(detail.archivos || []).length === 0 && <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 13 }}>{t(cfg, 'obras_sin_archivos')}</div>}
+                    </div>)}
+                    {tab === "informes" && <TabInformes detail={detail} upd={upd} />}
+                    {tab === "gastos" && <TabGastos detail={detail} upd={upd} />}
                 </div>
-                {verCrono && <CronogramaObraView obra={detail} modelosObra={modelosObra} onUpd={(patch) => upd(detail.id, patch)} onBack={() => setVerCrono(false)} />}
-                {gate && <CodigoModal titulo="Ingresá el código para poder modificar la obra." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); if (fn) fn(); }} onCancel={() => setGate(null)} />}
-{mostrarAdicionales && (
+                {mostrarAdicionales && (
                     <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
                         <AdicionalesView db={{ obras, adicionales, setAdicionales }} cfg={cfg} onBack={() => setMostrarAdicionales(false)} obraIdFijo={detail.id} />
                     </div>
@@ -2466,8 +2069,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
     }
 
     return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
-        {gate && <CodigoModal titulo="Ingresá el código para poder modificar la obra." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); if (fn) fn(); }} onCancel={() => setGate(null)} />}
-        <AppHeader title={t(cfg, 'obras_titulo')} sub={`${obras.length} registros`} right={<PlusBtn onClick={() => pedirCodigo(() => setShowNew(true))} />} />
+        <AppHeader title={t(cfg, 'obras_titulo')} sub={`${obras.length} registros`} right={<PlusBtn onClick={() => requireAuth(() => setShowNew(true), t(cfg, 'obras_nueva'))} />} />
         <div style={{ padding: "14px 18px" }}>
             {OBRA_ESTADOS.map(est => {
                 const items = obras.filter(o => o.estado === est.id);
@@ -2486,16 +2088,16 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
             <Field label={t(cfg, 'obras_titulo')}><TInput value={form.nombre || ""} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Refacción Terminal B" /></Field>
             <FieldRow>
                 <Field label={getLabelUbic(cfg)}><Sel value={form.ap || ""} onChange={e => setForm(p => ({ ...p, ap: e.target.value }))}>{UBICS.map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}</Sel></Field>
+                <Field label={t(cfg, 'obras_estado')}><Sel value={form.estado || ""} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))}>{OBRA_ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}</Sel></Field>
             </FieldRow>
             <FieldRow>
+                <Field label={t(cfg, 'obras_sector')}><TInput value={form.sector || ""} onChange={e => setForm(p => ({ ...p, sector: e.target.value }))} placeholder="Sector A" /></Field>
                 <Field label={`${t(cfg, 'obras_avance')} %`}><TInput type="number" value={form.avance || ""} onChange={e => setForm(p => ({ ...p, avance: e.target.value }))} placeholder="0" /></Field>
             </FieldRow>
             <FieldRow>
                 <Field label={t(cfg, 'obras_inicio')}><TInput value={form.inicio || ""} onChange={e => setForm(p => ({ ...p, inicio: e.target.value }))} placeholder="dd/mm/aa" /></Field>
                 <Field label={t(cfg, 'obras_cierre')}><TInput value={form.cierre || ""} onChange={e => setForm(p => ({ ...p, cierre: e.target.value }))} placeholder="dd/mm/aa" /></Field>
             </FieldRow>
-            <Field label="Modelo de obra (opcional)"><Sel value={form.modeloId || ""} onChange={e => setForm(p => ({ ...p, modeloId: e.target.value }))}><option value="">— Sin modelo —</option>{(modelosObra || []).map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</Sel></Field>
-            {!form.modeloId && <Field label="Duración contractual (meses, opcional)"><TInput type="number" value={form.duracionMeses || ""} onChange={e => setForm(p => ({ ...p, duracionMeses: e.target.value }))} placeholder="Ej: 15" /></Field>}
             <PBtn full onClick={add} disabled={!String(form.nombre || "").trim()}>{t(cfg, 'obras_nueva')}</PBtn>
         </Sheet>)}
     </div>);
@@ -2638,7 +2240,6 @@ function MIcon({ id }){
     mensajes:<><path {...p} d="M4 5h16v11H8l-4 4z"/></>,
     pedidos:<><path {...p} d="M9 5h6M9 9h6M9 13h4"/><rect {...p} x="5" y="3" width="14" height="18" rx="2"/><path {...p} d="M9 17l1.5 1.5L13 16"/></>,
     gestion:<><path {...p} d="M4 20V10M10 20V4M16 20v-7M20 20H3"/></>,
-    modelos:<><rect {...p} x="3" y="4" width="18" height="5" rx="1"/><rect {...p} x="3" y="12" width="8" height="8" rx="1"/><rect {...p} x="13" y="12" width="8" height="8" rx="1"/></>,
     formularios:<><rect {...p} x="5" y="3" width="14" height="18" rx="2"/><path {...p} d="M9 7h6M9 11h6M9 15h4"/></>,
     proyectos:<><path {...p} d="M7 3h7l4 4v14H7z"/><path {...p} d="M14 3v4h4"/></>,
     seguimiento:<><circle {...p} cx="12" cy="12" r="9"/><path {...p} d="M12 8v4l3 2"/></>,
@@ -2675,7 +2276,6 @@ const MAS_TILES = [
   { id:"infsemanal", label:"Informe semanal de obra" },
   { id:"cliente", label:"Panel cliente" },
   { id:"gestion", label:"Gestión de obra" },
-  { id:"modelos", label:"Modelos de obra" },
   { id:"proyectos", label:"Proyectos", go:"proyectos" },
   { id:"seguimiento", label:"Seguimiento" }, { id:"materiales", label:"Materiales" },
   { id:"subcontratos", label:"Subcontratos" },
@@ -3344,7 +2944,6 @@ function AuditoriaView({ db, cfg, onBack, desdeSemana }) {
 function BitacoraView({ db, cfg, onBack }) {
   const obras = db.obras || [];
   const bitacora = db.bitacora || [];
-  const modelosObra = db.modelosObra || [];
   const [obraId, setObraId] = useState(obras[0]?.id || "");
   // Mismo criterio que en Avance: comparar por identidad (qué entradas son
   // nuevas), no por fecha — más seguro, no depende de qué fecha le hayan
@@ -3411,20 +3010,14 @@ function BitacoraView({ db, cfg, onBack }) {
   const [etapa, setEtapa] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const [pdfHtml, setPdfHtml] = useState(null);
-  const [guardandoPdf, setGuardandoPdf] = useState(false);
-  const [desvioFlag, setDesvioFlag] = useState(false);
-  const [diasDesvio, setDiasDesvio] = useState("");
-  const [categoriaDesvio, setCategoriaDesvio] = useState("");
-  const [causaDesvio, setCausaDesvio] = useState("");
-  const [causaDesvioDetalle, setCausaDesvioDetalle] = useState("");
   const fileRef = useRef(null);
   const adjRef = useRef(null);
 
   const obra = obras.find(o => o.id === obraId);
   const hechos = bitacora.filter(h => h.obra_id === obraId).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
 
-  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEtapa(""); setEdit(null); setAbrir(false); setDesvioFlag(false); setDiasDesvio(""); setCategoriaDesvio(""); setCausaDesvio(""); setCausaDesvioDetalle(""); };
-  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setEtapa(h.etapa || ""); setDesvioFlag(!!h.gestionId); setDiasDesvio(h.diasDesvio ?? ""); setCategoriaDesvio(h.categoriaDesvio || ""); setCausaDesvio(h.causaDesvio || ""); setCausaDesvioDetalle(h.causaDesvioDetalle || ""); setAbrir(true); };
+  const limpiar = () => { setFecha(new Date().toISOString().slice(0, 10)); setTitulo(""); setDesc(""); setFotos([]); setAdjuntos([]); setEtapa(""); setEdit(null); setAbrir(false); };
+  const editarHecho = (h) => { setEdit(h); setFecha(h.fecha); setTitulo(h.titulo); setDesc(h.desc); setFotos(h.fotos || []); setAdjuntos(h.adjuntos || []); setEtapa(h.etapa || ""); setAbrir(true); };
 
   const agregarFotos = async (e) => {
     const files = Array.from(e.target.files || []); if (!files.length) return;
@@ -3465,26 +3058,8 @@ function BitacoraView({ db, cfg, onBack }) {
   const guardar = () => {
     if (!titulo.trim() && !desc.trim()) { alert("Poné al menos un título o una descripción."); return; }
     if (!obraId) { alert("Elegí una obra."); return; }
-    if (desvioFlag && (!Number(diasDesvio) || Number(diasDesvio) <= 0)) { alert("Indicá cuántos días de desvío (mayor a 0)."); return; }
-    let gestionId = edit?.gestionId || null;
-    if (desvioFlag) {
-      const addDias = (f, n) => { try { const d = new Date(f + "T12:00:00"); d.setDate(d.getDate() + Number(n)); return d.toISOString().slice(0, 10); } catch { return f; } };
-      gestionId = gestionId || uid();
-      const gBase = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(db.gestion || {}) };
-      const registro = {
-        id: gestionId, tipo: "Tarea", obra_id: obraId,
-        descripcion: (titulo.trim() || desc.trim().slice(0, 80)) + " (desde Bitácora)",
-        imputables: ["Estudio"], plazo: 0, fechaSolic: fecha, fechaReal: addDias(fecha, diasDesvio),
-        etapa: etapa || "", categoriaDesvio: categoriaDesvio || "", causa: causaDesvio || "", causaDetalle: causaDesvio === "Otro" ? causaDesvioDetalle : "", diasClima: 0, responsable: "",
-        personalIds: [], fotosInicio: fotos || [], fotosFin: [],
-      };
-      const yaExiste = (gBase.manual || []).some(x => x.id === gestionId);
-      const manualNext = yaExiste ? gBase.manual.map(x => x.id === gestionId ? { ...x, ...registro } : x) : [...(gBase.manual || []), registro];
-      db.setGestion({ ...gBase, manual: manualNext });
-    }
-    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, etapa, ts: edit?.ts || Date.now(), gestionId, diasDesvio: desvioFlag ? Number(diasDesvio) : null, categoriaDesvio: desvioFlag ? categoriaDesvio : "", causaDesvio: desvioFlag ? causaDesvio : "", causaDesvioDetalle: desvioFlag && causaDesvio === "Otro" ? causaDesvioDetalle : "" };
+    const hecho = { id: edit?.id || uid(), obra_id: obraId, fecha, titulo: titulo.trim(), desc: desc.trim(), fotos, adjuntos, etapa, ts: edit?.ts || Date.now() };
     db.setBitacora(prev => { const otros = (prev || []).filter(h => h.id !== hecho.id); return [...otros, hecho]; });
-    if (desvioFlag) alert(`Hecho guardado. Se cargó un registro de ${diasDesvio} días de desvío en Gestión de obra: podés completarlo (plazo exacto, fechas, fotos) cuando quieras.`);
     limpiar();
   };
   const borrar = (id) => { if (confirm("¿Borrar este hecho de la bitácora?")) db.setBitacora(prev => (prev || []).filter(h => h.id !== id)); };
@@ -3614,33 +3189,10 @@ function BitacoraView({ db, cfg, onBack }) {
             </div>
             <select value={etapa} onChange={e => setEtapa(e.target.value)} style={{ ...inp, marginBottom: 8 }}>
               <option value="">— Etapa de obra (opcional) —</option>
-              {etapasSelectObra(obras.find(o => o.id === obraId), modelosObra).map(x => <option key={x} value={x}>{x}</option>)}
+              {ETAPAS_OBRA.map(x => <option key={x} value={x}>{x}</option>)}
             </select>
             <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título (ej: Cambio de nivel de platea)" style={inp} />
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción: qué pasó, por qué, quién lo pidió, qué implica…" rows={4} style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
-            {/* desvío de tiempo → Gestión de obra */}
-            <div style={{ background: T.bg, border: `1px solid ${desvioFlag ? BRASS : T.border}`, borderRadius: 10, padding: 11 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <input type="checkbox" checked={desvioFlag} onChange={e => setDesvioFlag(e.target.checked)} />
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>Este hecho implica un desvío de tiempo</span>
-              </label>
-              {desvioFlag && <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 9 }}>
-                <div style={{ fontSize: 11.5, color: T.sub, lineHeight: 1.4 }}>Se va a cargar automáticamente un registro en Gestión de obra con estos días. Después lo podés abrir ahí para completar el plazo exacto, las fechas reales y las fotos.</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12, color: T.sub, width: 110 }}>Días de desvío</span>
-                  <input type="number" min="1" value={diasDesvio} onChange={e => setDiasDesvio(e.target.value)} placeholder="Ej: 15" style={{ ...inp, flex: 1 }} />
-                </div>
-                <select value={categoriaDesvio} onChange={e => { setCategoriaDesvio(e.target.value); setCausaDesvio(""); setCausaDesvioDetalle(""); }} style={inp}>
-                  <option value="">— Categoría del desvío (opcional) —</option>
-                  {CATEGORIAS_DESVIO.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select value={causaDesvio} onChange={e => setCausaDesvio(e.target.value)} style={inp}>
-                  <option value="">— Causa específica (opcional) —</option>
-                  {(categoriaDesvio === "Evitable" ? CAUSAS_EVITABLE : categoriaDesvio === "No evitable" ? CAUSAS_NO_EVITABLE : [...CAUSAS_EVITABLE.slice(0, -1), ...CAUSAS_NO_EVITABLE.slice(0, -1), "Otro"]).map(x => <option key={x} value={x}>{x}</option>)}
-                </select>
-                {causaDesvio === "Otro" && <input value={causaDesvioDetalle} onChange={e => setCausaDesvioDetalle(e.target.value)} placeholder="Especificar la causa exacta" style={inp} />}
-              </div>}
-            </div>
             {/* fotos */}
             {fotos.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {fotos.map(ft => (
@@ -3702,10 +3254,7 @@ function BitacoraView({ db, cfg, onBack }) {
     {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 500, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, background: T.navy, flexShrink: 0, position: "relative", zIndex: 2 }}>
         <button onClick={() => setPdfHtml(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>‹ Volver</button>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button disabled={guardandoPdf} onClick={async () => { setGuardandoPdf(true); try { const nombre = `Bitacora_${(obra?.nombre || "obra").replace(/[^a-zA-Z0-9]+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`; await guardarPdfComoArchivo(pdfHtml, nombre); } catch (e) { alert("No se pudo guardar el PDF. Probá de nuevo."); } setGuardandoPdf(false); }} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap", opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
-          <button onClick={() => { const f = document.getElementById("bita-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Imprimir</button>
-        </div>
+        <button onClick={() => { const f = document.getElementById("bita-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
       </div>
       <iframe id="bita-pdf" srcDoc={pdfHtml} title="Bitácora PDF" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
@@ -5213,7 +4762,6 @@ function MasView({ cfg, setCfg, sub, setSub, goView, db, apiKey }) {
       case "matpedidos": return <MatPedidosView db={db} cfg={cfg} onBack={back} />;
       case "pedidos": return <PedidosView {...P} />;
       case "gestion": return <GestionView {...P} />;
-      case "modelos": return <ModelosObraView {...P} />;
       case "formularios": return <FormulariosView {...P} />;
       case "mensajes": return <MensajesVVView {...P} />;
       default: {
@@ -5323,7 +4871,7 @@ function PushConfig({ T }) {
 
 function MasConfig({ cfg, setCfg, onBack }) {
   const c = cfg.colors || DEFAULT_COLORS;
-  function aplicarPreset(p){ setCfg(prev=>{ const q={ ...prev }; delete q.brillo; return ({ ...q, themeId:p.id, colors:{ accent:p.accent, al:p.al, bg:p.bg, card:p.card, border:p.border, text:p.text, sub:p.sub, muted:p.muted, navy:p.navy } }); }); }
+  function aplicarPreset(p){ setCfg(prev=>({ ...prev, themeId:p.id, colors:{ accent:p.accent, al:p.al, bg:p.bg, card:p.card, border:p.border, text:p.text, sub:p.sub, muted:p.muted, navy:p.navy } })); }
   function setAccent(val){ setCfg(prev=>({ ...prev, colors:{ ...prev.colors, accent:val, al:hexLight(val) } })); }
   function setColorKey(k,val){ setCfg(prev=>({ ...prev, colors:{ ...prev.colors, [k]:val } })); }
   return (<div style={{ flex:1, overflowY:"auto", paddingBottom:80 }}>
@@ -5377,17 +4925,15 @@ function MasConfig({ cfg, setCfg, onBack }) {
           <div style={{ display:"flex", gap:4, justifyContent:"center", marginBottom:6 }}><span style={{ width:15, height:15, borderRadius:3, background:p.accent }} /><span style={{ width:15, height:15, borderRadius:3, background:p.bg, border:`1px solid ${p.border}` }} /><span style={{ width:15, height:15, borderRadius:3, background:p.navy }} /></div>
           <div style={{ fontSize:11, fontWeight:600, color:p.text }}>{p.label}</div></button>); })}
       </div>
-      {(() => { const bv = cfg.brillo == null ? (esEsquemaOscuro(c) ? 0 : 100) : Number(cfg.brillo); const pv = paletaBrillo(bv); return (<>
+      {esEsquemaOscuro(c) && <>
         <div style={{ marginTop:20, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <Eyebrow>Fondo: de negro a blanco</Eyebrow>
-          <span style={{ fontSize:12, fontWeight:700, color:T.accent }}>{bv}%</span>
+          <Eyebrow>Intensidad del oscuro</Eyebrow>
+          <span style={{ fontSize:12, fontWeight:700, color:T.accent }}>{cfg.oscuroIntensidad==null?100:cfg.oscuroIntensidad}%</span>
         </div>
-        <div style={{ fontSize:11, color:T.muted, marginBottom:9, marginTop:-6, lineHeight:1.5 }}>Deslizá: el fondo se va aclarando y las letras se van oscureciendo, de negro con letras blancas a blanco con letras negras.</div>
-        <input type="range" min="0" max="100" value={bv} onChange={e=>setCfg(p=>({...p, brillo:Number(e.target.value)}))} style={{ width:"100%", accentColor:T.accent }} />
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:T.muted, marginTop:2 }}><span>Negro · letras blancas</span><span>Blanco · letras negras</span></div>
-        <div style={{ marginTop:10, padding:"12px 14px", borderRadius:T.rsm, background:pv.bg, border:`1px solid ${pv.border}` }}><div style={{ fontSize:13, fontWeight:700, color:pv.text }}>Así se ve el texto</div><div style={{ fontSize:11.5, color:pv.sub }}>Texto secundario · <span style={{ color:pv.muted }}>texto tenue</span></div></div>
-        {cfg.brillo != null && <button onClick={()=>setCfg(p=>{ const n={...p}; delete n.brillo; return n; })} style={{ marginTop:8, background:"none", border:"none", color:T.accent, fontSize:11.5, fontWeight:700, cursor:"pointer", padding:0 }}>↺ Volver al tema original</button>}
-      </>); })()}
+        <div style={{ fontSize:11, color:T.muted, marginBottom:9, marginTop:-6, lineHeight:1.5 }}>100% es bien oscuro (como estaba). Bajalo para aclararlo/darle más transparencia sin salir del modo oscuro.</div>
+        <input type="range" min="20" max="100" value={cfg.oscuroIntensidad==null?100:cfg.oscuroIntensidad} onChange={e=>setCfg(p=>({...p, oscuroIntensidad:Number(e.target.value)}))} style={{ width:"100%", accentColor:T.accent }} />
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:T.muted, marginTop:2 }}><span>Más clarito</span><span>Bien oscuro</span></div>
+      </>}
       <div style={{ marginTop:20 }}><Eyebrow>Color principal</Eyebrow></div>
       <div style={{ display:"flex", alignItems:"center", gap:9, flexWrap:"wrap" }}>
         {["#1E3A5F","#101C2C","#1F5C49","#6E3B2E","#46406E","#0E5A66","#7A2E50","#B0894F","#1F2937"].map(col=>(<button key={col} onClick={()=>setAccent(col)} style={{ width:32, height:32, borderRadius:5, background:col, border:`2px solid ${c.accent===col?T.text:T.border}`, cursor:"pointer" }} />))}
@@ -5437,320 +4983,6 @@ const obraNom = (obras, id) => obras.find(o => o.id === id)?.nombre || "—";
 const personaNom = (personal, id) => personal.find(p => p.id === id)?.nombre || "—";
 const hoyStr = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
 const waLink = (tel, txt) => `https://wa.me/${String(tel || "").replace(/[^\d]/g, "")}${txt ? `?text=${encodeURIComponent(txt)}` : ""}`;
-// ── Fecha de inicio/cierre de obra (para Gestión de obra) ──────────────
-// obra.inicio/obra.cierre se cargan como texto "dd/mm/aa" en el módulo Obras.
-function parseFechaCorta(s) {
-  if (!s) return null;
-  const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (!m) return null;
-  let d = +m[1], mo = +m[2], y = +m[3];
-  if (y < 100) y += 2000;
-  const dt = new Date(y, mo - 1, d, 12, 0, 0);
-  return isNaN(dt.getTime()) ? null : dt;
-}
-function fmtFechaCorta(d) { return d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}` : ""; }
-// "dd/mm/aa" (como se carga en Obras) → "yyyy-mm-dd" (como pide un <input type="date">).
-function isoFromFechaCorta(s) { const d = parseFechaCorta(s); return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : ""; }
-function sumarMeses(fecha, meses) { const d = new Date(fecha.getTime()); d.setMonth(d.getMonth() + Number(meses || 0)); return d; }
-function sumarDias(fecha, dias) { const d = new Date(fecha.getTime()); d.setDate(d.getDate() + Number(dias || 0)); return d; }
-// ── Modelos de obra (tabla madre) ───────────────────────────────────────
-// Un modelo (ej: "Con subsuelo + 2 plantas") define, para cada etapa que
-// use, en qué día desde el inicio de obra arranca ("inicioOffsetDias") y
-// cuántos días hábiles estima que dura ("duracionDias"). El offset permite
-// que las etapas se superpongan (ej: Mampostería puede arrancar antes de
-// que termine Estructura), que es como realmente se trabaja en obra.
-function nuevoModeloEtapas() { return ETAPAS_OBRA.map(e => ({ etapa: e, usa: false, inicioOffsetDias: 0, duracionDias: 0 })); }
-// Solo etapas que siguen existiendo en la lista actual (ej: el "Revoques" viejo, ya dividido en interiores/exteriores, no aparece más).
-function etapasModelo(modelo) { return (modelo?.etapas || []).filter(e => e.usa && ETAPAS_OBRA.includes(e.etapa)); }
-// Para editar un modelo: siempre las 16 etapas actuales, aunque el modelo se
-// haya guardado antes de que existiera alguna (ej: si se agrega una etapa
-// nueva más adelante, los modelos viejos la muestran apagada, no se pierde).
-function etapasModeloCompletas(modelo) {
-  const guardadas = modelo?.etapas || [];
-  return ETAPAS_OBRA.map(nombre => guardadas.find(e => e.etapa === nombre) || { etapa: nombre, usa: false, inicioOffsetDias: 0, duracionDias: 0 });
-}
-// Losas: a diferencia de las etapas fijas, la CANTIDAD de losas es lo que
-// define el tipo de proyecto (con subsuelo, sin subsuelo, más plantas…), así
-// que en vez de una lista fija son filas "Losa 1", "Losa 2"... que se agregan
-// o sacan solas según el número que se cargue, cada una con su propio inicio
-// y duración (igual que una etapa más).
-function losasModelo(modelo) { return modelo?.losas || []; }
-function nombreLosa(i) { return `Losa ${i + 1}`; }
-// Arranque AUTOMÁTICO de las etapas: se carga solo cuánto dura cada una (y, si hace falta,
-// cuántos días se superpone con lo que viene antes). El "arranca en el día" se calcula:
-// arranca = (fin de lo más lejano anterior) − superposición. Negativo = espera.
-// LOSAS: cada losa es un ciclo completo (armado de losa + columnas + vigas, hormigonado y curado hasta
-// desencofrar); arrancan una después de la otra, a continuación de Fundaciones. La cantidad de losas
-// define el tipo de obra. MAMPOSTERÍA POR PLANTA: hay una por cada losa; cada una arranca 22 días hábiles
-// (fraguado, se puede desapuntalar y liberar el sector) DESPUÉS DE HORMIGONAR esa losa, o sea que se
-// superpone sola con el ciclo de la losa siguiente. "Estructura" y "Mampostería" pasan
-// a ser el total de las losas / de las plantas cuando existen. Todo lo demás se encadena.
-// Los modelos viejos (con "arranca en el día" cargado a mano) se convierten solos, con las mismas fechas.
-function recalcularModelo(modelo) {
-  const et = (modelo?.etapas || []).map(e => ({ ...e }));
-  const lo = (modelo?.losas || []).map(l => ({ ...l }));
-  const nPl = lo.length;   // una mampostería por cada losa: se libera 22 días hábiles después de hormigonarla
-  const pl = (modelo?.plantas || []).slice(0, nPl).map(p => ({ ...p }));
-  while (pl.length < nPl) pl.push({ duracionDias: 35, despuesHormigonDias: 22 });
-  let maxEnd = 0, lastDur = 0;
-  const encadenar = (ref) => {
-    const dur = Math.max(0, Number(ref.duracionDias) || 0);
-    let solape;
-    if (ref.solapeDias === undefined || ref.solapeDias === null) {
-      const legacy = Number(ref.inicioOffsetDias) || 0;
-      solape = legacy > 0 ? maxEnd - legacy : 0;
-    } else solape = Number(ref.solapeDias) || 0;
-    if (Number(ref.solapePct) > 0) solape = Math.round(Number(ref.solapePct) / 100 * lastDur);
-    const ini = Math.max(0, maxEnd - solape);
-    ref.solapeDias = solape; ref.inicioOffsetDias = ini;
-    if (dur > 0) { maxEnd = Math.max(maxEnd, ini + dur); lastDur = dur; }
-  };
-  const etEstr = et.find(e => e.etapa === "Estructura"), etMamp = et.find(e => e.etapa === "Mampostería");
-  const procesarLosas = () => {
-    lo.forEach(l => {
-      if (l.hormigonDia === undefined || l.hormigonDia === null) l.hormigonDia = 16;
-      encadenar(l);
-      l.hormigonOffsetDias = l.inicioOffsetDias + (Number(l.hormigonDia) || 0);
-    });
-    pl.forEach((p, i) => {
-      if (p.despuesHormigonDias === undefined || p.despuesHormigonDias === null) p.despuesHormigonDias = 22;
-      if (p.duracionDias === undefined || p.duracionDias === null) p.duracionDias = 35;
-      const dur = Math.max(0, Number(p.duracionDias) || 0);
-      const ini = Math.max(0, (lo[i].hormigonOffsetDias || 0) + (Number(p.despuesHormigonDias) || 0));
-      p.inicioOffsetDias = ini;
-      if (dur > 0) maxEnd = Math.max(maxEnd, ini + dur);
-    });
-    const span = (arr, ref) => {
-      const v = arr.filter(x => (Number(x.duracionDias) || 0) > 0);
-      if (!ref || !v.length) return;
-      const a0 = Math.min(...v.map(x => x.inicioOffsetDias)), b0 = Math.max(...v.map(x => x.inicioOffsetDias + (Number(x.duracionDias) || 0)));
-      ref.inicioOffsetDias = a0; ref.duracionDias = b0 - a0; ref.derivada = true;
-    };
-    if (lo.length) span(lo, etEstr);
-    if (pl.length) span(pl, etMamp);
-  };
-  ETAPAS_OBRA.forEach(n => {
-    const e = et.find(x => x.etapa === n);
-    const derivada = (n === "Estructura" && lo.length > 0) || (n === "Mampostería" && pl.length > 0);
-    if (e && !derivada) { delete e.derivada; if (e.usa) encadenar(e); }
-    if (n === "Fundaciones") procesarLosas();
-  });
-  return { etapas: et, losas: lo, plantas: pl };
-}
-// Duración total estimada del modelo = el punto más lejano al que llega
-// cualquiera de sus etapas o losas (offset + duración), no la suma de todas
-// (porque se superponen).
-function duracionTotalModelo(modelo) {
-  const usadas = etapasModelo(modelo).filter(e => (Number(e.duracionDias) || 0) > 0);
-  const losas = losasModelo(modelo).filter(l => (Number(l.duracionDias) || 0) > 0);
-  const puntos = [
-    ...usadas.map(e => (Number(e.inicioOffsetDias) || 0) + (Number(e.duracionDias) || 0)),
-    ...losas.map(l => (Number(l.inicioOffsetDias) || 0) + (Number(l.duracionDias) || 0)),
-    ...(modelo?.plantas || []).filter(p => (Number(p.duracionDias) || 0) > 0).map(p => (Number(p.inicioOffsetDias) || 0) + (Number(p.duracionDias) || 0)),
-  ];
-  if (!puntos.length) return 0;
-  return Math.max(...puntos);
-}
-function modeloDeObra(obra, modelosObra) { return (modelosObra || []).find(m => m.id === obra?.modeloId) || null; }
-// Opciones de "Etapa de obra" para los selects: las 16 fijas + las losas
-// propias del modelo asignado a la obra (si tiene).
-function etapasSelectObra(obra, modelosObra) {
-  const modelo = modeloDeObra(obra, modelosObra);
-  const losas = losasModelo(modelo).map((_, i) => nombreLosa(i));
-  return [...ETAPAS_OBRA, ...losas];
-}
-// Cierre estimado = inicio + lo que marque el modelo asignado a la obra (si
-// tiene uno con etapas cargadas); si no, se cae a la duración contractual
-// en meses cargada a mano; si no, al campo "Cierre est." tipeado a mano.
-function cierreEstimadoObra(obra, modelosObra) {
-  const ini = parseFechaCorta(obra?.inicio);
-  if (ini) {
-    const modelo = modeloDeObra(obra, modelosObra);
-    const diasModelo = modelo ? duracionTotalModelo(modelo) : 0;
-    if (diasModelo > 0) return fmtFechaCorta(addHabiles(ini, Math.max(0, diasModelo - 1)));
-    const meses = Number(obra?.duracionMeses) || 0;
-    if (meses > 0) return fmtFechaCorta(sumarMeses(ini, meses));
-  }
-  return obra?.cierre || "";
-}
-// Cronograma planificado vs. real de cada etapa del modelo de una obra,
-// cruzando el modelo con los registros de Gestión ya cargados (filtrados
-// por obra y por etapa). El inicio REAL de la etapa es la fecha del primer
-// registro de Gestión cargado con esa etapa — no se tipea a mano.
-function resumenEtapasModelo(obra, modelosObra, itemsObra) {
-  const modelo = modeloDeObra(obra, modelosObra);
-  if (!modelo) return [];
-  const iniObra = parseFechaCorta(obra?.inicio);
-  const fila = (nombreEtapa, offsetDias, duracionDiasCfg) => {
-    const planInicio = iniObra ? addHabiles(iniObra, Number(offsetDias) || 0) : null;
-    const duracionPlan = Number(duracionDiasCfg) || 0;
-    const planFin = planInicio && duracionPlan ? addHabiles(planInicio, duracionPlan) : null;
-    const its = (itemsObra || []).filter(it => it.etapa === nombreEtapa);
-    const iniciosReales = its.map(it => it.fechaSolic).filter(Boolean);
-    const realInicio = iniciosReales.length ? new Date(Math.min(...iniciosReales.map(d => +d))) : null;
-    const todasCerradas = its.length > 0 && its.every(it => it.fechaReal);
-    const finesReales = its.map(it => it.fechaReal).filter(Boolean);
-    const realFin = todasCerradas && finesReales.length ? new Date(Math.max(...finesReales.map(d => +d))) : null;
-    const realDias = realInicio ? diasHabiles(realInicio, realFin || new Date()) : null;
-    const desvio = (realDias != null && duracionPlan > 0) ? realDias - duracionPlan : null;
-    return { etapa: nombreEtapa, planInicio, planFin, duracionPlan, realInicio, realFin, realDias, desvio, enCurso: !!realInicio && !realFin };
-  };
-  const filasEtapas = etapasModelo(modelo).map(cfg => fila(cfg.etapa, cfg.inicioOffsetDias, cfg.duracionDias));
-  const filasLosas = losasModelo(modelo).map((l, i) => fila(nombreLosa(i), l.inicioOffsetDias, l.duracionDias));
-  return [...filasEtapas, ...filasLosas];
-}
-
-
-// Cronograma de una obra: modelo + fecha de inicio → filas con FECHAS EXACTAS (días hábiles, con feriados).
-// El cronograma no se mueve: sobre él se cargan ítems (pedidos, definiciones, retrasos, notas) por fecha.
-function cronogramaFilas(obra, modelosObra) {
-  const modelo = modeloDeObra(obra, modelosObra);
-  const ini = parseFechaCorta(obra?.inicio);
-  if (!modelo || !ini) return null;
-  const m = recalcularModelo(modelo);
-  const filas = [];
-  m.etapas.forEach(e => {
-    if (!e.usa || e.derivada || !(Number(e.duracionDias) > 0)) return;
-    if (e.etapa === "Estructura" && m.losas.length) return;
-    if (e.etapa === "Mampostería" && m.plantas.length) return;
-    filas.push({ n: e.etapa, off: e.inicioOffsetDias, dur: Number(e.duracionDias), tipo: "e", sol: Number(e.solapeDias) || 0 });
-  });
-  m.losas.forEach((l, i) => { if (Number(l.duracionDias) > 0) filas.push({ n: (l.nombre || nombreLosa(i)) + " (losa + columnas + vigas)", corto: l.nombre || nombreLosa(i), off: l.inicioOffsetDias, dur: Number(l.duracionDias), tipo: "l", sol: Number(l.solapeDias) || 0, hormigonOff: l.hormigonOffsetDias }); });
-  m.plantas.forEach((p, i) => { if (Number(p.duracionDias) > 0) filas.push({ n: "Mampostería · " + (m.losas[i]?.nombre || nombreLosa(i)), off: p.inicioOffsetDias, dur: Number(p.duracionDias), tipo: "p", sol: 0 }); });
-  filas.sort((a, b) => a.off - b.off || (a.tipo === "l" ? -1 : 1));
-  const total = Math.max(1, ...filas.map(r => r.off + r.dur));
-  const fecha = (off) => addHabiles(ini, off);
-  filas.forEach(r => { r.ini = fecha(r.off); r.fin = fecha(Math.max(r.off, r.off + r.dur - 1)); if (r.hormigonOff != null) r.hormigon = fecha(r.hormigonOff); });
-  return { filas, total, ini, fecha, cierre: fecha(Math.max(0, total - 1)) };
-}
-function cronoISOaDate(s) { const [y, mm, d] = String(s || "").split("-").map(Number); return y ? new Date(y, mm - 1, d) : null; }
-// A qué tarea pertenece un ítem: la última que haya arrancado y todavía no haya terminado ese día.
-function cronoFilaDeItem(filas, it) {
-  const d = cronoISOaDate(it.fecha); if (!d) return -1;
-  let mejor = -1;
-  filas.forEach((r, i) => { if (+r.ini <= +d && +d <= +r.fin) { if (mejor < 0 || +r.ini >= +filas[mejor].ini) mejor = i; } });
-  return mejor;
-}
-const CRONO_TIPOS = ["Pedido", "Definición", "Retraso", "Nota"];
-const CRONO_COLOR = { "Pedido": "#1D4ED8", "Definición": "#7C3AED", "Retraso": "#DC2626", "Nota": "#64748B" };
-function cronogramaObraHTML(obra, modelosObra) {
-  const D = cronogramaFilas(obra, modelosObra);
-  if (!D) return "";
-  const modelo = modeloDeObra(obra, modelosObra);
-  const { filas, total, ini, fecha, cierre } = D;
-  const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const F = (d) => fmtFechaCorta(d);
-  const FC = (d) => { const x = new Date(d); return String(x.getDate()).padStart(2, "0") + "/" + String(x.getMonth() + 1).padStart(2, "0"); };
-  const MES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-  const dias = []; for (let i = 0; i <= total; i++) dias.push(fecha(i));
-  const idxDe = (d) => { let k = 0; for (let i = 0; i < dias.length; i++) { if (+dias[i] <= +d) k = i; else break; } return k; };
-  const pct = (i) => (Math.max(0, Math.min(total, i)) / total * 100).toFixed(2);
-  let marcas = "", mesPrev = -1;
-  dias.forEach((d, i) => { const k = d.getFullYear() * 12 + d.getMonth(); if (k !== mesPrev) { marcas += `<div style="position:absolute;left:${pct(i)}%;top:0;bottom:0;border-left:1px solid #cbd5e1;padding-left:2px;font-size:7.5px;color:#64748b;white-space:nowrap">${MES[d.getMonth()]} ${String(d.getFullYear()).slice(2)}</div>`; mesPrev = k; } });
-  const col = { e: "#1D4ED8", l: "#0f766e", p: "#b45309" };
-  const items = (obra.cronoItems || []).slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
-  const porFila = filas.map(() => []); const sueltos = [];
-  items.forEach(it => { const k = cronoFilaDeItem(filas, it); (k >= 0 ? porFila[k] : sueltos).push(it); });
-  const itHtml = (it) => { const c = CRONO_COLOR[it.tipo] || "#64748b"; const d = cronoISOaDate(it.fecha); return `<span style="color:${c};font-weight:800">${esc((it.tipo || "").toUpperCase())}</span> ${d ? F(d) : ""} · ${esc(it.texto)}${it.quien ? ` <i style="color:#64748b">(${esc(it.quien)})</i>` : ""} · <b style="color:${it.hecho ? "#16A34A" : "#B45309"}">${it.hecho ? "✓ resuelto" : "pendiente"}</b>`; };
-  const hoyIdx = (() => { const h = new Date(); h.setHours(0, 0, 0, 0); return (+h >= +dias[0] && +h <= +dias[dias.length - 1]) ? idxDe(h) : -1; })();
-  const gantt = filas.map((r, i) => {
-    const marks = porFila[i].map(it => { const d = cronoISOaDate(it.fecha); return d ? `<div title="${esc(it.texto)}" style="position:absolute;left:${pct(idxDe(d))}%;top:-2px;width:7px;height:7px;margin-left:-3px;border-radius:50%;background:${CRONO_COLOR[it.tipo] || "#64748b"};border:1px solid #fff"></div>` : ""; }).join("");
-    const horm = r.hormigon ? `<div style="position:absolute;left:${pct(idxDe(r.hormigon))}%;top:-1px;width:9px;height:9px;margin-left:-4px;background:#facc15;border:1px solid #0f172a;transform:rotate(45deg)"></div>` : "";
-    return `<div style="display:flex;align-items:center;margin-bottom:3px"><div style="width:170px;font-size:8.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px">${esc((r.corto || r.n))}</div><div style="flex:1;position:relative;height:9px;background:#f1f5f9;border-radius:3px"><div style="position:absolute;left:${pct(r.off)}%;width:${Math.max(0.8, r.dur / total * 100).toFixed(2)}%;top:0;bottom:0;background:${col[r.tipo]};border-radius:3px"></div>${horm}${marks}${hoyIdx >= 0 ? `<div style="position:absolute;left:${pct(hoyIdx)}%;top:-3px;bottom:-3px;border-left:1.5px solid #dc2626"></div>` : ""}</div><div style="width:92px;font-size:8px;color:#334155;text-align:right;white-space:nowrap;padding-left:5px"><b>${FC(r.ini)}</b> → <b>${FC(r.fin)}</b></div></div>`;
-  }).join("");
-  const trs = filas.map((r, i) => {
-    const base = `<tr style="background:${i % 2 ? "#f8fafc" : "#fff"}"><td style="padding:5px 6px;text-align:center;color:#64748b">${i + 1}</td><td style="padding:5px 6px;font-weight:600">${esc(r.n)}${r.hormigon ? `<div style="font-weight:700;color:#a16207;font-size:9.5px">◆ Hormigonado: ${F(r.hormigon)}</div>` : ""}</td><td style="padding:5px 6px;white-space:nowrap">${F(r.ini)}</td><td style="padding:5px 6px;white-space:nowrap">${F(r.fin)}</td><td style="padding:5px 6px;text-align:center">${r.dur}</td><td style="padding:5px 6px;font-size:9.5px;color:#64748b">${r.tipo === "p" ? "22 d. de fraguado tras hormigonar" : r.sol > 0 ? `se superpone ${r.sol} d. con la anterior` : ""}</td></tr>`;
-    const sub = porFila[i].map(it => `<tr style="background:${i % 2 ? "#f8fafc" : "#fff"}"><td></td><td colspan="5" style="padding:2px 6px 5px 18px;font-size:9.5px">▸ ${itHtml(it)}</td></tr>`).join("");
-    return base + sub;
-  }).join("");
-  const sueltosHtml = sueltos.length ? `<h2>Otros pedidos y definiciones (fuera de las fechas de las tareas)</h2><table>${sueltos.map(it => `<tr><td style="padding:3px 6px;font-size:10px">▸ ${itHtml(it)}</td></tr>`).join("")}</table>` : "";
-  const pendTot = items.filter(i => !i.hecho).length;
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;background:#fff}@page{size:A4;margin:10mm}
-body{font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#0f172a;padding:22px 26px}
-table{border-collapse:collapse;width:100%}th{background:#0f172a;color:#fff;text-align:left;padding:6px;font-size:10px}
-h2{font-size:12px;margin:18px 0 6px;color:#0f172a;border-bottom:2px solid #1D4ED8;padding-bottom:3px}
-</style></head><body>
-<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #0f172a;padding-bottom:8px">
-<div><div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.06em">Cronograma de obra</div><div style="font-size:20px;font-weight:800">${esc(obra.nombre || "Obra")}</div><div style="font-size:11px;color:#475569">Modelo: ${esc(modelo.nombre || "")}</div></div>
-<div style="text-align:right"><div style="font-size:10px;color:#64748b">Inicio</div><div style="font-size:15px;font-weight:800">${F(ini)}</div><div style="font-size:10px;color:#64748b;margin-top:3px">Cierre estimado</div><div style="font-size:15px;font-weight:800;color:#1D4ED8">${F(cierre)}</div></div></div>
-<div style="margin:8px 0 0;font-size:10px;color:#475569">Plazo total estimado: <b>${total} días hábiles</b> (sin sábados, domingos ni feriados).${items.length ? ` Ítems cargados: <b>${items.length}</b> (${pendTot} pendientes).` : ""}</div>
-<h2>Línea de tiempo con fechas</h2>
-<div style="display:flex;margin-bottom:2px"><div style="width:170px"></div><div style="flex:1;position:relative;height:11px">${marcas}</div><div style="width:92px"></div></div>
-${gantt}
-<div style="font-size:8.5px;color:#64748b;margin-top:5px"><span style="color:${col.e}">■</span> Etapas &nbsp; <span style="color:${col.l}">■</span> Losas &nbsp; <span style="color:${col.p}">■</span> Mampostería &nbsp; <span style="color:#a16207">◆</span> Hormigonado &nbsp; <span style="color:#1D4ED8">●</span> Pedido &nbsp; <span style="color:#7C3AED">●</span> Definición &nbsp; <span style="color:#DC2626">●</span> Retraso &nbsp; <span style="color:#dc2626">│</span> Hoy</div>
-<h2>Procedimiento paso a paso (fechas exactas)</h2>
-<table><tr><th style="width:24px">#</th><th>Tarea</th><th>Arranca</th><th>Termina</th><th>Días háb.</th><th>Nota</th></tr>${trs}</table>
-${sueltosHtml}
-<div style="margin-top:12px;font-size:11px"><b>${F(cierre)}</b> · Cierre y entrega de obra</div>
-</body></html>`;
-}
-// Pantalla del cronograma: se abre, se le cargan ítems por fecha (pedidos, definiciones, retrasos) y quedan ubicados en la tarea que se esté ejecutando ese día.
-function CronogramaObraView({ obra, modelosObra, onUpd, onBack }) {
-  const hoyISO = (() => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); })();
-  const [f, setF] = useState({ fecha: hoyISO, tipo: "Pedido", texto: "", quien: "" });
-  const [generando, setGenerando] = useState(false);
-  const D = cronogramaFilas(obra, modelosObra);
-  const items = (obra.cronoItems || []);
-  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 16, color: T.text, boxSizing: "border-box" };
-  const agregar = () => {
-    if (!f.texto.trim()) return;
-    onUpd({ cronoItems: [...items, { id: Math.random().toString(36).slice(2, 9), fecha: f.fecha, tipo: f.tipo, texto: f.texto.trim(), quien: f.quien.trim(), hecho: false }] });
-    setF(p => ({ ...p, texto: "", quien: "" }));
-  };
-  const toggle = (id) => onUpd({ cronoItems: items.map(x => x.id === id ? { ...x, hecho: !x.hecho } : x) });
-  const borrar = (id) => { if (window.confirm("¿Borrar este ítem?")) onUpd({ cronoItems: items.filter(x => x.id !== id) }); };
-  const pdf = async () => { setGenerando(true); try { await guardarPdfComoArchivo(cronogramaObraHTML(obra, modelosObra), "Cronograma_" + String(obra.nombre || "obra").replace(/[^a-zA-Z0-9]+/g, "_") + ".pdf"); } catch (e) { alert("No se pudo generar el PDF. Probá de nuevo."); } setGenerando(false); };
-  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-  const ItemRow = ({ it }) => { const c = CRONO_COLOR[it.tipo] || "#64748b"; const d = cronoISOaDate(it.fecha); return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 0 8px 10px", borderTop: `1px solid ${T.border}` }}>
-      <input type="checkbox" checked={!!it.hecho} onChange={() => toggle(it.id)} style={{ width: 20, height: 20, marginTop: 1, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 10.5, fontWeight: 800, color: c, textTransform: "uppercase", letterSpacing: ".04em" }}>{it.tipo} · {d ? fmtFechaCorta(d) : ""}{it.hecho ? " · resuelto" : ""}</div>
-        <div style={{ fontSize: 13, color: T.text, textDecoration: it.hecho ? "line-through" : "none", opacity: it.hecho ? .6 : 1, lineHeight: 1.45, wordBreak: "break-word" }}>{it.texto}</div>
-        {it.quien && <div style={{ fontSize: 11, color: T.muted }}>A quién / dónde: {it.quien}</div>}
-      </div>
-      <button onClick={() => borrar(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 15, cursor: "pointer", flexShrink: 0 }}>✕</button>
-    </div>); };
-  const porFila = D ? D.filas.map(() => []) : []; const sueltos = [];
-  if (D) items.slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach(it => { const k = cronoFilaDeItem(D.filas, it); (k >= 0 ? porFila[k] : sueltos).push(it); });
-  return (<div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
-    <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, background: T.card, display: "flex", alignItems: "center", gap: 10 }}>
-      <button onClick={onBack} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer" }}>← Volver</button>
-      <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Cronograma · {obra.nombre}</div>{D && <div style={{ fontSize: 11, color: T.muted }}>{fmtFechaCorta(D.ini)} → {fmtFechaCorta(D.cierre)} · {D.total} días háb.</div>}</div>
-      {D && <button onClick={pdf} disabled={generando} style={{ background: T.accent, border: "none", borderRadius: T.rsm, padding: "9px 13px", fontSize: 12, fontWeight: 700, color: "#fff", cursor: "pointer" }}>{generando ? "…" : "PDF"}</button>}
-    </div>
-    <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 40px" }}>
-      {!D && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 10px", lineHeight: 1.6 }}>Para ver el cronograma elegí el <b>Modelo de obra</b> y cargá la <b>fecha de Inicio</b> de esta obra.</div>}
-      {D && <>
-        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 12, marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>Cargar un ítem en el cronograma</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-            <input type="date" value={f.fecha} onChange={e => setF(p => ({ ...p, fecha: e.target.value }))} style={inp} />
-            <select value={f.tipo} onChange={e => setF(p => ({ ...p, tipo: e.target.value }))} style={inp}>{CRONO_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}</select>
-          </div>
-          <textarea value={f.texto} onChange={e => setF(p => ({ ...p, texto: e.target.value }))} rows={2} placeholder="Ej: Pedir hierro del 12 para la losa de planta baja" style={{ ...inp, marginBottom: 8, resize: "none" }} />
-          <input value={f.quien} onChange={e => setF(p => ({ ...p, quien: e.target.value }))} placeholder="A quién / dónde pedirlo (opcional)" style={{ ...inp, marginBottom: 8 }} />
-          <button onClick={agregar} disabled={!f.texto.trim()} style={{ width: "100%", background: f.texto.trim() ? T.accent : T.border, border: "none", borderRadius: T.rsm, padding: "12px", fontSize: 14, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Agregar al cronograma</button>
-        </div>
-        {D.filas.map((r, i) => { const enCurso = +hoy >= +r.ini && +hoy <= +r.fin; const color = r.tipo === "l" ? "#0f766e" : r.tipo === "p" ? "#b45309" : "#1D4ED8"; return (
-          <div key={i} style={{ background: T.card, border: `1px solid ${enCurso ? T.accent : T.border}`, borderLeft: `4px solid ${color}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ flex: 1, fontSize: 13, fontWeight: 800, color: T.text }}>{r.n}</div>
-              {enCurso && <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: T.accent, borderRadius: 10, padding: "3px 8px" }}>EN CURSO</span>}
-            </div>
-            <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{fmtFechaCorta(r.ini)} → {fmtFechaCorta(r.fin)} · {r.dur} días háb.</div>
-            {r.hormigon && <div style={{ fontSize: 12, fontWeight: 700, color: "#a16207", marginTop: 2 }}>◆ Hormigonado: {fmtFechaCorta(r.hormigon)}</div>}
-            {porFila[i].map(it => <ItemRow key={it.id} it={it} />)}
-          </div>); })}
-        {sueltos.length > 0 && <div style={{ background: T.card, border: `1px dashed ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", marginBottom: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: T.text }}>Fuera de las fechas de las tareas</div>
-          {sueltos.map(it => <ItemRow key={it.id} it={it} />)}
-        </div>}
-      </>}
-    </div>
-  </div>);
-}
 
 function EmptyMsg({ children }) {
   return <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "38px 18px", lineHeight: 1.65 }}>{children}</div>;
@@ -5896,72 +5128,6 @@ function DocUpload({ onPick }) {
 }
 
 // ── ASISTENTE IA ─────────────────────────────────────────────────────
-// ── Contexto COMPLETO de la app para el asistente (IA) ──────────────────
-// Gestión de obra (registros, desvíos, punitorios, tiempos por obra, cronograma
-// por etapa), Bitácora, Avance, Auditoría, Adicionales, Drone, Definiciones,
-// Documentación recibida, Minutas y Certificados de conformidad. Así la IA
-// puede responder sobre cualquier sección. Listas acotadas a lo más reciente.
-function contextoAppExtra(db, cfg) {
-  const obras = db.obras || [];
-  const on = (id) => obraNom(obras, id);
-  const dmy = (v) => { if (!v) return ""; const d = v instanceof Date ? v : new Date(v); if (isNaN(d)) return String(v); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
-  const cut = (t, n) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n) + "…" : x; };
-  const cn = cfg?.clienteNombre || "el cliente";
-  const out = [];
-  try {
-    // ── GESTIÓN DE OBRA ──
-    const g = { plazo: 5, dotacion: 7, costoPersona: 60000, manual: [], punit: {}, reuniones: [], ...(db.gestion || {}) };
-    const items = (g.manual || []).map(it => {
-      const fs = it.fechaSolic ? new Date(it.fechaSolic) : null; const fr = it.fechaReal ? new Date(it.fechaReal) : null;
-      const d = g.punit[it.id];
-      const plazoEf = (Number(it.plazo) || g.plazo) + (d?.decision === "prorroga" ? (Number(d.prorrogaDias) || 0) : 0);
-      const m = it.tipo === "Retraso" ? gMetricasRetraso(it) : fs ? gMetricas(fs, fr, plazoEf, it.cerrado) : { dias: 0, desvio: 0 };
-      const ip = it.inicioPlan ? new Date(it.inicioPlan) : null;
-      const retrasoInicio = (ip && fs && ip < fs) ? diasHabiles(ip, fs) : 0;
-      const desvio = m.desvio + retrasoInicio;
-      const retraso = Math.max(0, Math.max(0, desvio) - (Number(it.diasClima) || 0));
-      const perj = d?.decision === "confirmado" ? retraso * (Number(d.personas) || g.dotacion) * (Number(d.costoDia) || g.costoPersona) : 0;
-      return { ...it, fechaSolic: fs, fechaReal: fr, plazo: plazoEf, dias: m.dias, desvio, retrasoInicio, retraso, dec: d || null, perj };
-    }).sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
-    const modelos = db.modelosObra || [];
-    const resObras = obras.map(o => {
-      const its = items.filter(i => i.obra_id === o.id);
-      if (!its.length && !o.modeloId) return null;
-      const tt = tiemposObra(its);
-      const conf = its.filter(i => i.dec?.decision === "confirmado");
-      const perjT = conf.reduce((a, i) => a + i.perj, 0);
-      const etapas = resumenEtapasModelo(o, modelos, its.slice().sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0)));
-      return `· ${o.nombre}: inicio de obra ${o.inicio || "—"}, cierre estimado ${cierreEstimadoObra(o, modelos) || "—"}; ${its.length} registros. TIEMPOS (sin doble conteo de tareas simultáneas): plazo estimado ${tt.estimado} d háb., desvío ${tt.desvio} d (de los cuales ${tt.arranque} por arrancar tarde), real = estimado + desvío = ${tt.real} d. Perjuicio confirmado ${money(perjT)} en ${conf.length} punitorio(s).${etapas.length ? "\n   Cronograma por etapa (plan vs real): " + etapas.map(e => `${e.etapa}: plan ${e.planInicio ? dmy(e.planInicio) : "—"} ${e.duracionPlan || 0}d, real ${e.realInicio ? "desde " + dmy(e.realInicio) + (e.realDias != null ? ` ${e.realDias}d` : "") + (e.enCurso ? " en curso" : "") : "sin registros"}${e.desvio != null ? `, desvío ${e.desvio > 0 ? "+" : ""}${e.desvio}d` : ""}`).join(" | ") : ""}`;
-    }).filter(Boolean);
-    const regs = items.slice(0, 80).map(i => `· [${i.id}] ${on(i.obra_id)} — ${i.tipo || "Tarea"}: ${cut(i.descripcion, 90)}${i.etapa ? " (etapa " + i.etapa + ")" : ""} | inicio ${dmy(i.fechaSolic)} → ${i.fechaReal ? "fin " + dmy(i.fechaReal) : "en curso"} | plazo ${i.plazo} d, llevó ${i.dias} d, desvío ${i.desvio > 0 ? "+" : ""}${i.desvio} d${i.retrasoInicio ? ` (arrancó ${i.retrasoInicio} d tarde)` : ""}${(Number(i.diasClima) || 0) > 0 ? `, ${i.diasClima} d clima descontados` : ""} | imputable a ${imputablesTexto(i)}${causaTexto(i) ? " | causa: " + causaTexto(i) + (i.categoriaDesvio ? " (" + i.categoriaDesvio + ")" : "") : ""}${afectadasTexto(i) ? " | afecta a: " + afectadasTexto(i) : ""}${afectadasLeyenda(i) ? " | leyenda: " + cut(afectadasLeyenda(i), 220) : ""}${i.responsable ? " | resp: " + i.responsable : ""} | ${i.dec ? (i.dec.decision === "confirmado" ? `PUNITORIO confirmado ${money(i.perj)} (tarea detenida: ${i.dec.tarea || "—"}, ${i.dec.personas || g.dotacion} pers. × ${money(i.dec.costoDia || g.costoPersona)}/día)` : i.dec.decision === "prorroga" ? `prórroga ${i.dec.prorrogaDias} d` : "sin perjuicio") : (i.desvio > 0 && (i.fechaReal || i.estado) ? "pendiente de evaluar" : "—")}`);
-    out.push(`GESTIÓN DE OBRA — RESUMEN POR OBRA (cifras ya calculadas por la app; usalas tal cual):\n${resObras.join("\n") || "(sin datos de gestión)"}\n\nGESTIÓN DE OBRA — REGISTROS (más recientes primero, hasta 80; "desvío" = días de atraso propio de esa tarea; las tareas simultáneas NO se suman en el desvío total de la obra):\n${regs.join("\n") || "(sin registros)"}\n\nGESTIÓN — PARÁMETROS: plazo por defecto ${g.plazo} d háb., dotación ${g.dotacion}, costo por persona/día ${money(g.costoPersona)}. Reuniones registradas: ${(g.reuniones || []).length}.`);
-  } catch (e) { out.push("GESTIÓN DE OBRA: (no se pudo leer)"); }
-  try {
-    const hs = (db.bitacora || []).slice().sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0))).slice(0, 50);
-    out.push(`BITÁCORA (hechos de obra, más recientes primero):\n${hs.map(h => `· ${h.fecha} — ${on(h.obra_id)}${h.etapa ? " (" + h.etapa + ")" : ""}: ${cut(h.titulo, 80)} — ${cut(h.desc, 200)}${h.diasDesvio ? ` [desvío ${h.diasDesvio} d${h.causaDesvio ? ", " + h.causaDesvio : ""}]` : ""}${(h.fotos || []).length ? ` · ${h.fotos.length} foto(s)` : ""}`).join("\n") || "(sin hechos)"}`);
-  } catch (e) { }
-  try {
-    const av = db.avance || {};
-    out.push(`AVANCE (informes de avance con fotos, por obra):\n${obras.map(o => { const l = (av[o.id] || []); if (!l.length) return null; const u = l[0]; return `· ${o.nombre}: ${l.length} registros; último ${u.fecha || ""}${u.avance ? " — avance " + u.avance + (String(u.avance).includes("%") ? "" : "%") : ""}${u.descripcion ? " — " + cut(u.descripcion, 180) : ""}`; }).filter(Boolean).join("\n") || "(sin registros de avance)"}`);
-  } catch (e) { }
-  try {
-    out.push(`AUDITORÍAS (más recientes primero):\n${(db.auditoria || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 30).map(a => `· ${a.tipo || "Auditoría"} N°${a.nro || ""} — ${on(a.obra_id)} (${a.fecha || ""}) resultado: ${a.resultado || "—"}${a.conclusion ? " — " + cut(a.conclusion, 160) : ""}${(a.obs || []).length ? ` · ${a.obs.length} observación(es)` : ""}`).join("\n") || "(sin auditorías)"}`);
-  } catch (e) { }
-  try {
-    out.push(`ADICIONALES:\n${(db.adicionales || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 30).map(a => `· ${a.adicionalNro ? "N°" + a.adicionalNro + " " : ""}${on(a.obra_id)} (${a.fecha || ""}) ${a.tipoAdicional || ""}: ${cut(a.requerimiento || a.descripcionTecnica, 160)} — resolución: ${a.resolucion || "—"}${a.incidenciaPlazo && a.incidenciaPlazo !== "sin" ? `, incidencia en plazo ${a.diasIncidencia || ""} d` : ""}`).join("\n") || "(sin adicionales)"}`);
-  } catch (e) { }
-  try {
-    out.push(`DRONE / VUELOS:\n${(db.dronevuelos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 20).map(v => `· ${v.fecha || ""} — ${on(v.obra_id)}${v.piloto ? ", piloto " + v.piloto : ""}${v.notas ? " — " + cut(v.notas, 120) : ""}${(v.fotos || []).length ? ` · ${v.fotos.length} foto(s)` : ""}${v.analisisIA ? " · con análisis IA: " + cut(typeof v.analisisIA === "string" ? v.analisisIA : JSON.stringify(v.analisisIA), 250) : ""}`).join("\n") || "(sin vuelos)"}`);
-  } catch (e) { }
-  try {
-    out.push(`DEFINICIONES (por obra, lo que falta definir):\n${(db.definiciones || []).map(r => { const its = r.items || []; const falt = its.filter(i => !i.tiene); return `· ${on(r.obra_id)}: ${its.length - falt.length}/${its.length} definidas${falt.length ? "; faltan: " + falt.slice(0, 15).map(i => `${i.rubro ? i.rubro + " – " : ""}${i.nombre}`).join(", ") : ""}`; }).join("\n") || "(sin datos)"}\n\nDOCUMENTACIÓN RECIBIDA (por obra):\n${(db.docrecepcion || []).map(r => { const its = r.items || []; const falt = its.filter(i => !i.recibido); return `· ${on(r.obra_id)}: ${its.length - falt.length}/${its.length} recibidos${falt.length ? "; faltan: " + falt.slice(0, 15).map(i => i.nombre).join(", ") : ""}`; }).join("\n") || "(sin datos)"}`);
-  } catch (e) { }
-  try {
-    out.push(`MINUTAS DE REUNIÓN (recientes):\n${(db.minutas || []).slice(0, 12).map(m => `· ${m.fecha || ""} — ${m.titulo || ""}${m.obra_id ? " (" + on(m.obra_id) + ")" : ""}: ${cut(m.minutaTexto || m.transcripcion, 300)}`).join("\n") || "(sin minutas)"}\n\nCERTIFICADOS DE CONFORMIDAD:\n${(db.certConformidad || []).slice(0, 30).map(c => `· ${on(c.obra_id)} — ${c.nombre} (${c.fecha || ""}${c.auditor ? ", " + c.auditor : ""})`).join("\n") || "(sin certificados)"}`);
-  } catch (e) { }
-  return out.join("\n\n");
-}
-
 function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -5973,74 +5139,6 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
   const scrollRef = useRef(null);
   const recRef = useRef(null);
   const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
-  const ttsOk = typeof window !== "undefined" && "speechSynthesis" in window;
-  const [narrarAuto, setNarrarAuto] = useState(() => { try { return localStorage.getItem("vv_narrar_auto") === "1"; } catch { return false; } });
-  const [hablando, setHablando] = useState(false);
-  const ultimoNarrado = useRef(null);
-  function limpiarParaVoz(texto) {
-    return String(texto || "").replace(/```accion[\s\S]*?```/g, "").replace(/\[\[ARCHIVO:\s*\d+\]\]/g, "").replace(/[*_#`]/g, "").replace(/https?:\/\/\S+/g, "un link").replace(/\n{2,}/g, ". ").replace(/\n/g, ". ").trim();
-  }
-  function hablar(texto) {
-    if (!ttsOk) return;
-    try {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(limpiarParaVoz(texto));
-      u.lang = "es-AR"; u.rate = 1.02;
-      const voces = window.speechSynthesis.getVoices();
-      const voz = voces.find(v => v.lang === "es-AR") || voces.find(v => (v.lang || "").startsWith("es"));
-      if (voz) u.voice = voz;
-      u.onstart = () => setHablando(true); u.onend = () => setHablando(false); u.onerror = () => setHablando(false);
-      window.speechSynthesis.speak(u);
-    } catch { }
-  }
-  function pararVoz() { try { window.speechSynthesis.cancel(); } catch { } setHablando(false); }
-  function toggleNarrarAuto() { setNarrarAuto(v => { const nv = !v; try { localStorage.setItem("vv_narrar_auto", nv ? "1" : "0"); } catch { } if (!nv) pararVoz(); return nv; }); }
-  useEffect(() => {
-    if ((!narrarAuto && !vozIniciada.current) || !ttsOk) return;
-    const ult = msgs[msgs.length - 1];
-    if (!ult || ult.role !== "assistant" || loading) return;
-    const clave = ult.id || ult.ts || msgs.length;
-    if (ultimoNarrado.current === clave) return;
-    ultimoNarrado.current = clave;
-    hablar((typeof ult.content === "string" ? ult.content : "") + (ult.accionResultado ? ". " + ult.accionResultado : ""));
-  }, [msgs, loading, narrarAuto]);
-
-  const voiceFlag = useRef(false);        // el texto del cuadro vino de la voz → se envía solo
-  const vozIniciada = useRef(false);      // la última pregunta fue por voz → se responde en voz alta
-  const dictWindow = useRef(0);           // hasta cuándo vale el dictado del teclado
-  const autoTimer = useRef(null);
-  const autoSendRef = useRef(null);
-  const taRef = useRef(null);
-  const [autoCount, setAutoCount] = useState(0);
-  const [vozMsg, setVozMsg] = useState("");
-  const cancelarAuto = () => { voiceFlag.current = false; clearInterval(autoTimer.current); setAutoCount(0); };
-  autoSendRef.current = () => send();
-  // Manos libres: 3 segundos después de terminar de hablar, se envía solo.
-  useEffect(() => {
-    clearInterval(autoTimer.current);
-    if (!voiceFlag.current || !input.trim() || loading || escuchando) { setAutoCount(0); return; }
-    let left = 3; setAutoCount(3);
-    autoTimer.current = setInterval(() => {
-      left -= 1;
-      if (left <= 0) { clearInterval(autoTimer.current); setAutoCount(0); if (autoSendRef.current) autoSendRef.current(); }
-      else setAutoCount(left);
-    }, 1000);
-    return () => clearInterval(autoTimer.current);
-  }, [input, escuchando, loading]);
-  // La pantalla queda fija: al llegar una respuesta se muestra desde su PRIMER renglón y no se mueve más.
-  useEffect(() => {
-    const el = scrollRef.current; if (!el) return;
-    const last = msgs[msgs.length - 1];
-    const go = () => {
-      if (last && last.role !== "user" && !loading) {
-        const node = el.querySelector('[data-msg-i="' + (msgs.length - 1) + '"]');
-        if (node) { el.scrollTop = Math.max(0, node.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 8); return; }
-      }
-      el.scrollTop = el.scrollHeight;
-    };
-    go(); [80, 250].forEach(t => setTimeout(go, t));
-    try { window.scrollTo(0, 0); } catch { }
-  }, [msgs, loading]);
   const cnDeb = cfg?.clienteSigla || cfg?.clienteNombre || "Belfast";
   const DEBATE_MAX = 18;
   const [debateOpen, setDebateOpen] = useState(false);
@@ -6111,6 +5209,7 @@ function ChatIA({ db, cfg, apiKey, msgs, setMsgs }) {
     return () => clearInterval(iv);
   }, []);
 
+  useEffect(() => { const el = scrollRef.current; if (!el) return; const go = () => { el.scrollTop = el.scrollHeight; }; go(); [60, 160, 320, 600].forEach(t => setTimeout(go, t)); requestAnimationFrame(go); }, [msgs, loading]);
 
   // Índice de TODOS los archivos de la app, para que la IA pueda encontrarlos y traerlos al chat.
   function indiceArchivos() {
@@ -6173,12 +5272,7 @@ REGLA CLAVE de comunicación — elegí bien la acción:
 - Si te piden MANDAR UN WHATSAPP a alguien del personal (ej: "mandale un WhatsApp al jefe de obra de Castores que…"), usá "whatsapp" con la persona/rol, la obra si ayuda, y el texto. Uso los teléfonos cargados en Personal. Te dejo el botón de WhatsApp listo para enviar.
 - Si te piden VER, MANDAR o PASAR FOTOS o VIDEOS de una obra (ej: "mandame la última foto de Castores", "pasame las fotos de Golf", "mandame el último video de A 37"), usá "traer_fotos" con la obra y la cantidad (1 = la última, o el número que pidan). Poné videos:true si piden videos. Las fotos/videos aparecen directo en el chat para verlas, descargarlas o compartirlas.
 - Si te piden un PLANO (PDF o CAD) de una obra (ej: "necesito el plano de replanteo de platea de Castores 475", "pasame el plano de estructura de Golf"), usá "traer_plano" con la obra y "buscar" (palabras clave del plano). El plano aparece en el chat para abrir o descargar. Los planos los suben Belfast y V+V en cada obra.
-- Si te dicen que HAY UN RETRASO (ej: "en Lote 132 los revoques se atrasan 5 días por falta de definición"), usá "registrar_retraso" con la obra, la tarea afectada, cuántos días DEBÍA demorar y cuántos DEMORÓ (o solo los días de retraso si no te dan esos datos) y la causa. Se guarda solo en Gestión de obra → Retraso, sin pedir confirmación. No lo uses para registros históricos con fechas de inicio y fin: eso va en el Registro.
 Nunca digas que no podés comunicarte: SÍ podés.
-
-DRIVE GENERAL DE OBRAS: además de los datos de la app, tenés acceso al Drive donde V+V y ${cn} guardan la documentación de TODAS las obras (herramientas "buscar_en_drive" y "leer_de_drive"). ORDEN para resolver una consulta o una definición: 1) mirá primero los datos de la app; 2) si no está ahí, BUSCÁ EN EL DRIVE (probá con 2 o 3 palabras clave distintas y, si la obra es clara, indicala) y leé el archivo más relevante; respondé citando de qué archivo y carpeta salió y su link; 3) SOLO si tampoco está en el Drive, no inventes: decí que no figura y GENERÁ EL PEDIDO / la consulta a la otra parte según las reglas de acciones de abajo. Si el Drive no está conectado y la herramienta devuelve error, decilo en una frase y seguí con el paso 3.
-
-CARGAR EN LA APP LO QUE ENCUENTRES: si te piden un archivo (plano, definición, especificación, etc.) de una obra y NO está cargado en la app (mirá PLANOS POR OBRA y ARCHIVOS), buscalo en el Drive; cuando lo encuentres, CARGALO en la obra agregando al final un bloque entre \`\`\`accion y \`\`\` con {"tipo":"cargar_desde_drive","drive_id":"ID_DE_buscar_en_drive","obra":"nombre de la obra tal como figura en OBRAS","destino":"planos" (si es un plano) o "archivos" (cualquier otro documento),"nombre":"nombre del archivo"}. Se carga solo, sin pedir confirmación, y queda visible para V+V y para Belfast en esa obra; en el texto decí en una frase qué cargaste. Los planos de Electricidad, Estructura, etc. van a "planos". Si hay varios candidatos parecidos, elegí el más reciente y que coincida con la obra y el rubro; no cargues archivos que no coincidan con lo pedido.
 
 OBRAS:\n${ob || "(sin obras)"}
 
@@ -6212,14 +5306,12 @@ PROVEEDORES:\n${(proveedores || []).map(p => `· ${p.nombre || ""}${p.rubro ? " 
 
 HERRAMIENTAS:\n${(herramientas || []).map(h => `· ${h.nombre || ""}${h.obra_id ? " — " + obraNom(obras, h.obra_id) : ""}`).join("\n") || "(sin herramientas)"}
 
-${contextoAppExtra(db, cfg)}
-
 ARCHIVOS DISPONIBLES (podés TRAERLOS al chat):
 ${(() => { const ix = indiceArchivos(); return ix.length ? ix.map((f, i) => `[${i}] ${f.nombre} — ${f.tipo}${f.obra && f.obra !== "—" ? " · obra " + f.obra : ""}`).join("\n") : "(no hay archivos cargados todavía)"; })()}
 
 CÓMO ENTREGAR UN ARCHIVO: cuando el usuario pida un archivo, un PDF, un plano, un Word, una documentación o un adjunto, buscalo en la lista de arriba y ADJUNTALO escribiendo al final de tu respuesta una línea por archivo con este formato exacto: [[ARCHIVO:N]] (donde N es el número entre corchetes de la lista). El sistema lo convierte en un botón para abrirlo o descargarlo. NUNCA digas que no podés adjuntar archivos ni que solo leés datos: SÍ podés entregarlos con [[ARCHIVO:N]]. Si hay varios que puedan servir, ofrecé los más probables (hasta 5). Si de verdad no existe ninguno que coincida, decilo y aclarar dónde debería cargarse.
 
-Tenés acceso COMPLETO a TODOS los datos de la app, incluidas las secciones GESTIÓN DE OBRA (registros, desvíos, causas, imputables, punitorios, tiempos y cronograma por etapa de cada obra), BITÁCORA, AVANCE, AUDITORÍAS, ADICIONALES, DRONE, DEFINICIONES, DOCUMENTACIÓN RECIBIDA, MINUTAS y CERTIFICADOS que figuran arriba: consultalas siempre antes de responder y nunca digas que una sección no está disponible. Sobre tiempos de una obra: plazo estimado + desvío = real, y las tareas simultáneas no suman sus atrasos (usá las cifras del RESUMEN POR OBRA tal cual). Y además: Cuando te pidan un DATO PUNTUAL (un número, fecha, cantidad, teléfono, monto, cuántas fotos/videos, etc.), buscalo en estos datos y dá el valor EXACTO. No digas "no lo tengo" si el dato figura arriba. Respondé cualquier consulta sobre obras, avances, montos, fotos, videos, informes, formularios, archivos, documentación, tareas, materiales, subcontratos, proveedores, herramientas, personal y pedidos usando esta información. (Las fotos no las "ves", pero sabés cuántas hay y de qué obra; para verlas remití a la obra.)
+Tenés acceso COMPLETO a todos estos datos de la app. Cuando te pidan un DATO PUNTUAL (un número, fecha, cantidad, teléfono, monto, cuántas fotos/videos, etc.), buscalo en estos datos y dá el valor EXACTO. No digas "no lo tengo" si el dato figura arriba. Respondé cualquier consulta sobre obras, avances, montos, fotos, videos, informes, formularios, archivos, documentación, tareas, materiales, subcontratos, proveedores, herramientas, personal y pedidos usando esta información. (Las fotos no las "ves", pero sabés cuántas hay y de qué obra; para verlas remití a la obra.)
 
 PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} (pedir definiciones, solicitar documentación, plantear o responder un tema, cerrar un pedido, o mandarle un mensaje), respondé en lenguaje natural y AGREGÁ AL FINAL un único bloque entre \`\`\`accion y \`\`\` con JSON válido, una de estas formas:
 {"tipo":"crear_pedido","para":"cliente","asunto":"...","detalle":"...","prioridad":"alta|media|baja","obra":"nombre de la obra de la que se trata"}
@@ -6230,7 +5322,6 @@ PROTOCOLO DE ACCIONES — cuando el usuario te pida gestionar un tema con ${cn} 
 {"tipo":"pedido_materiales","obra":"nombre de la obra","items":[{"nombre":"Cemento","cantidad":"50","unidad":"bolsas"},{"nombre":"Hierro del 8","cantidad":"20","unidad":"u"}],"nota":"opcional"}
 {"tipo":"whatsapp","persona":"nombre o rol de la persona (ej: jefe de obra)","obra":"opcional: obra para ubicarlo","texto":"el mensaje a enviar por WhatsApp"}
 {"tipo":"traer_fotos","obra":"nombre de la obra","cantidad":1,"videos":false}
-{"tipo":"registrar_retraso","obra":"nombre de la obra","tarea":"tarea o etapa afectada (ej: Revoques interiores)","debia":15,"demoro":25,"dias":10,"causa":"una causa de la lista de Gestión o texto libre (ej: Clima, Falta de definición del cliente)","nota":"opcional"}
 {"tipo":"traer_plano","obra":"nombre de la obra","buscar":"palabras clave del plano (ej: replanteo platea)"}
 {"tipo":"cargar_personal","sitio":"nombre del barrio/sitio","personal":"todos" | ["Nombre1","Nombre2"], "obra":"opcional: todos los de esa obra"}
 {"tipo":"agregar_personal","personas":[{"nombre":"Juan Pérez","dni":"20345678","cuil":"20-20345678-9","rol":"Oficial","empresa":"","telefono":"","obra":"Castores 475","aseguradora":"","poliza":"","vigencia":""}]}
@@ -6260,7 +5351,6 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   }
   async function send(texto) {
     const c = (texto ?? input).trim(); if ((!c && chatAdj.length === 0) || loading) return;
-    const eraVoz = voiceFlag.current; voiceFlag.current = false; clearInterval(autoTimer.current); vozIniciada.current = eraVoz; setVozMsg(""); if (eraVoz) { try { taRef.current && taRef.current.blur(); } catch { } }
     const adj = chatAdj; setChatAdj([]);
     setInput(""); const next = [...msgs, { role: "user", content: c || (adj.length ? "(archivo adjunto)" : ""), adjIA: adj.map(a => ({ nombre: a.nombre, kind: a.kind, dataUrl: a.dataUrl })) }]; setMsgs(next); setLoading(true);
     const apiMsgs = next.map((m, i) => {
@@ -6269,29 +5359,13 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         for (const a of adj) blocks.push(a.kind === "image" ? { type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } } : { type: "document", source: { type: "base64", media_type: "application/pdf", data: a.data } });
         return { role: "user", content: blocks };
       }
-      return { role: m.role, content: (i === next.length - 1 && eraVoz && typeof m.content === "string") ? m.content + "\n\n[Pregunta hecha por voz: la persona está manejando y te va a escuchar. Respondé en lenguaje hablado, claro y breve (máximo ~6 renglones), sin tablas, sin listas largas ni símbolos; primero lo más importante.]" : m.content };
+      return { role: m.role, content: typeof m.content === "string" ? m.content : m.content };
     });
-    const r = await callAI(apiMsgs, buildSystem(), apiKey, useSearch, true);
+    const r = await callAI(apiMsgs, buildSystem(), apiKey, useSearch);
     if (/credit balance|too low to access|Plans & Billing|purchase credits|is too low/i.test(String(r || ""))) { setMsgs(prev => [...prev, { role: "assistant", content: "⚠ Me quedé sin crédito de IA por ahora. Para que vuelva a funcionar, hay que recargar crédito de la API en console.anthropic.com (Plans & Billing)." }]); setLoading(false); return; }
     const { limpio, accion } = parseAccion(r);
     let extra = {};
-    if (accion && accion.tipo === "registrar_retraso") {
-      const obs = db.obras || [];
-      const nm = String(accion.obra || "").toLowerCase().trim();
-      const target = nm ? obs.find(o => (o.nombre || "").toLowerCase().includes(nm)) : null;
-      let res;
-      if (!target) res = "No encontré esa obra. Decime el nombre exacto y lo registro.";
-      else {
-        const it = armarRetraso({ obra_id: target.id, tarea: accion.tarea || "", dias: accion.dias, debia: accion.debia, demoro: accion.demoro, causas: accion.causa ? [accion.causa] : [], otra: accion.causa && ![...CAUSAS_EVITABLE, ...CAUSAS_NO_EVITABLE].includes(accion.causa) ? accion.causa : "", nota: accion.nota || "", cli: cfg?.clienteNombre || "Belfast" });
-        if (it.causas.length === 1 && it.causas[0] === "Otro" && !it.causaDetalle) it.causas = [];
-        db.setGestion(p => ({ ...(p || {}), manual: [...(((p || {}).manual) || []), it] }));
-        res = `Registré un retraso de +${it.demoraDias} días hábiles${accion.tarea ? " en " + accion.tarea : ""} de ${target.nombre}${it.causa ? " (" + causaTexto(it) + ")" : ""}. Lo ves en Gestión de obra → Retraso.`;
-      }
-      extra = { accionDone: true, accionResultado: res };
-    } else if (accion && accion.tipo === "cargar_desde_drive") {
-      const rr = await driveCargarEnObra(accion, db.obras, db.setObras, "vv");
-      extra = { accionDone: true, accionResultado: rr.msg, docs: rr.docs };
-    } else if (accion && accion.tipo === "traer_plano") {
+    if (accion && accion.tipo === "traer_plano") {
       const obs = db.obras || [];
       const target = accion.obra ? obs.find(o => (o.nombre || "").toLowerCase().includes(String(accion.obra).toLowerCase())) : obs[0];
       const planos = (target && target.planos) || [];
@@ -6349,7 +5423,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
   // ── Canal directo IA↔IA: muestra lo que consulta/responde la otra IA y responde solo ──
   const cnIA = cfg?.clienteNombre || "el cliente";
   const ctxRef = useRef("");
-  ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}${p.dni ? " DNI " + p.dni : ""}${p.cuil ? " CUIL " + p.cuil : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(db.formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obraNom(db.obras, f.obra_id)} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${[...(db.archivosGen || []).map(a => `· ${a.nombre}`), ...(db.obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`))].join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(db.tareas || []).map(t => `· ${t.nombre} — ${obraNom(db.obras, t.obra_id)} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(db.matpedidos || []).map(p => `· ${obraNom(db.obras, p.obra_id)}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}\n\n${contextoAppExtra(db, cfg)}`;
+  ctxRef.current = `OBRAS:\n${(db.obras || []).map(o => `· ${o.nombre} (${o.sector}, ${o.estado}, avance ${o.avance}%, monto ${o.monto}, pagado ${money(o.pagado)}, inicio ${o.inicio}, cierre ${o.cierre}, ${(o.fotos || []).length} fotos, ${(o.videos || []).length} videos, ${(o.informes || []).length} informes)`).join("\n") || "(sin obras)"}\n\nPERSONAL:\n${(db.personal || []).map(p => `· ${p.nombre} — ${p.rol || ""} (${obraNom(db.obras, p.obra_id)})${p.telefono ? " tel " + p.telefono : ""}${p.dni ? " DNI " + p.dni : ""}${p.cuil ? " CUIL " + p.cuil : ""}`).join("\n") || "(sin personal)"}\n\nPEDIDOS:\n${(db.pedidos || []).map(p => `· ${p.asunto} (${p.estado})`).join("\n") || "(sin pedidos)"}\n\nFORMULARIOS:\n${(db.formularios || []).map(f => `· ${(FORM_TPLS.find(t => t.id === f.tplId) || {}).nombre || "Formulario"} — ${obraNom(db.obras, f.obra_id)} (${f.fecha}${f.resultado ? ", " + f.resultado : ""})`).join("\n") || "(sin formularios)"}\n\nARCHIVOS:\n${[...(db.archivosGen || []).map(a => `· ${a.nombre}`), ...(db.obras || []).flatMap(o => (o.archivos || []).map(a => `· ${a.nombre} (${o.nombre})`))].join("\n") || "(sin archivos)"}\n\nTAREAS:\n${(db.tareas || []).map(t => `· ${t.nombre} — ${obraNom(db.obras, t.obra_id)} (${t.avance || 0}%)`).join("\n") || "(sin tareas)"}\n\nPEDIDOS DE MATERIALES:\n${(db.matpedidos || []).map(p => `· ${obraNom(db.obras, p.obra_id)}: ${(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).join(", ")}`).join("\n") || "(ninguno)"}`;
   const apiKeyRef = useRef(apiKey); apiKeyRef.current = apiKey;
   const iaSeen = useRef(-1);
   const iaBusy = useRef(false);
@@ -6370,8 +5444,8 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           try {
           arr = arr.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           await storage.set("ia_dialogo", JSON.stringify(arr)).catch(() => { });
-          const sysResp = `Sos el asistente de datos de V+V Construcciones. Quien te consulta suele ser Tita (asistente personal de Sebastián) o la asistente de Nicolás: son de V+V, de la casa, NO son el cliente ni una empresa externa. ESTOS SON TUS DATOS:\n${ctxRef.current}\n\nRespondé la consulta usando SOLO estos datos, breve y concreto (español rioplatense). Si el dato NO está en tus datos, buscalo en el Drive general de obras (herramientas buscar_en_drive y leer_de_drive) y respondé con lo que encuentres, citando el archivo. Solo si tampoco está en el Drive, respondé ÚNICAMENTE con la palabra NO_DATO. Nunca inventes. No agregues bloques de acción ni JSON.`;
-          const resp = await callAI([{ role: "user", content: `Te consulta ${pend.from === "sebastian" ? "TITA, la asistente personal de Sebastián (el Presidente de V+V). NO es un cliente: es de la casa, tratala con confianza" : pend.from === "nicolas" ? "la asistente personal de Nicolás (CEO de V+V). NO es un cliente: es de la casa" : "la IA de " + cnIA}: "${pend.texto}"` }], sysResp, apiKeyRef.current, false, true);
+          const sysResp = `Sos el asistente de datos de V+V Construcciones. Quien te consulta suele ser Tita (asistente personal de Sebastián) o la asistente de Nicolás: son de V+V, de la casa, NO son el cliente ni una empresa externa. ESTOS SON TUS DATOS:\n${ctxRef.current}\n\nRespondé la consulta usando SOLO estos datos, breve y concreto (español rioplatense). Si el dato NO está en tus datos, respondé ÚNICAMENTE con la palabra NO_DATO. Nunca inventes. No agregues bloques de acción ni JSON.`;
+          const resp = await callAI([{ role: "user", content: `Te consulta ${pend.from === "sebastian" ? "TITA, la asistente personal de Sebastián (el Presidente de V+V). NO es un cliente: es de la casa, tratala con confianza" : pend.from === "nicolas" ? "la asistente personal de Nicolás (CEO de V+V). NO es un cliente: es de la casa" : "la IA de " + cnIA}: "${pend.texto}"` }], sysResp, apiKeyRef.current, false);
           let arr2 = []; try { const r2 = await storage.get("ia_dialogo"); if (r2?.value) arr2 = JSON.parse(r2.value); } catch { }
           arr2 = arr2.map(m => m.id === pend.id ? { ...m, answered: true } : m);
           if (/credit balance|too low to access|purchase credits|is too low/i.test(String(resp||""))) { iaBusy.current=false; return; }
@@ -6417,38 +5491,14 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
   function toggleVoz() {
-    setVozMsg("");
-    // iPhone: hay que "despertar" la voz de respuesta con un toque del usuario.
-    try { if (ttsOk) { const u0 = new SpeechSynthesisUtterance(" "); u0.volume = 0; window.speechSynthesis.speak(u0); } } catch { }
-    const usarTeclado = (msg) => {
-      dictWindow.current = Date.now() + 90000;
-      setVozMsg(msg || "Tocá el micrófono 🎤 del teclado y hablá. Se envía solo 3 segundos después de que termines.");
-      try { taRef.current && taRef.current.focus(); } catch { }
-    };
-    if (escuchando) { try { recRef.current && recRef.current.stop(); } catch { } setEscuchando(false); return; }
-    if (!sttOk) { usarTeclado(); return; }
-    try {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const rec = new SR();
-      const idioma = String(navigator.language || ""); rec.lang = idioma.toLowerCase().startsWith("es") ? idioma : "es-AR";
-      rec.interimResults = false; rec.continuous = false; rec.maxAlternatives = 1;
-      dictWindow.current = 0;
-      rec.onresult = e => {
-        let txt = ""; for (let i = e.resultIndex; i < e.results.length; i++) txt += e.results[i][0].transcript;
-        txt = txt.trim(); if (!txt) return;
-        voiceFlag.current = true;
-        setInput(p => (p ? p + " " : "") + txt);
-      };
-      rec.onend = () => setEscuchando(false);
-      rec.onerror = (ev) => {
-        setEscuchando(false);
-        const er = ev && ev.error;
-        if (er === "not-allowed" || er === "service-not-allowed") usarTeclado("El micrófono de la app no está permitido en este iPhone. Usá el micrófono 🎤 del teclado (si no aparece: Ajustes › General › Teclado › Activar dictado). Se envía solo 3 segundos después.");
-        else if (er === "no-speech") setVozMsg("No te escuché. Tocá el micrófono y hablá de nuevo.");
-        else if (er !== "aborted") usarTeclado("El micrófono no respondió. Usá el micrófono 🎤 del teclado; se envía solo 3 segundos después.");
-      };
-      recRef.current = rec; rec.start(); setEscuchando(true);
-    } catch (e) { setEscuchando(false); usarTeclado(); }
+    if (!sttOk) return;
+    if (escuchando) { recRef.current?.stop(); setEscuchando(false); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR(); rec.lang = "es-AR"; rec.interimResults = false; rec.continuous = false;
+    rec.onresult = e => { const txt = e.results[0][0].transcript; setInput(p => (p ? p + " " : "") + txt); };
+    rec.onend = () => setEscuchando(false);
+    rec.onerror = () => setEscuchando(false);
+    recRef.current = rec; rec.start(); setEscuchando(true);
   }
   const QUICK = ["📝 Redactá una minuta de la reunión que te voy a contar", "Redactá una nota de pedido de información para Belfast CM", "Resumime el estado de todas las obras", "¿Qué documentación está por vencer?", "Calculá cuánto falta cobrar de la cartera"];
 
@@ -6461,7 +5511,7 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
           {QUICK.map((q, i) => <button key={i} onClick={() => send(q)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", fontSize: 13, color: T.text, textAlign: "left", cursor: "pointer", boxShadow: T.shadow }}>{q}</button>)}
         </div>
       </div>}
-      {msgs.map((m, i) => (<div key={i} data-msg-i={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
+      {msgs.map((m, i) => (<div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 11 }}>
         <div style={{ maxWidth: "84%", background: m.role === "user" ? T.navy : T.card, color: m.role === "user" ? "#fff" : T.text, border: m.role === "user" ? "none" : `1px solid ${T.border}`, borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", padding: "11px 14px", fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", boxShadow: T.shadow }}>{(() => { const txt = String(m.content || ""); if (m.role === "user" || !/\[\[ARCHIVO:\s*\d+\]\]/.test(txt)) return txt; return txt.replace(/\[\[ARCHIVO:\s*\d+\]\]/g, "").replace(/\n{3,}/g, "\n\n").trim(); })()}</div>
         {m.role !== "user" && (() => {
           const ix = indiceArchivos();
@@ -6506,8 +5556,6 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
         <button onClick={() => setUseSearch(s => !s)} style={{ background: useSearch ? T.al : T.bg, color: useSearch ? T.accent : T.muted, border: `1px solid ${useSearch ? T.accent : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="globe" /> Buscar en internet {useSearch ? "ON" : "OFF"}</button>
         {debateActive ? <button onClick={stopDebate} style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Frenar debate</button>
           : <button onClick={() => setDebateOpen(v => !v)} style={{ background: debateOpen ? T.navy : T.bg, color: debateOpen ? "#fff" : T.sub, border: `1px solid ${debateOpen ? T.navy : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}><Ico n="mic" /> Debate IA</button>}
-        {ttsOk && <button onClick={toggleNarrarAuto} title="Narrar todas las respuestas en voz alta" style={{ background: narrarAuto ? "#16A34A" : T.bg, color: narrarAuto ? "#fff" : T.sub, border: `1px solid ${narrarAuto ? "#16A34A" : T.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>🔊 {narrarAuto ? "Narrando ON" : "Narrar"}</button>}
-        {hablando && <button onClick={pararVoz} style={{ background: "rgba(239,68,68,.10)", color: "#EF4444", border: "1px solid rgba(239,68,68,.30)", borderRadius: 20, padding: "5px 11px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⏹ Callar</button>}
         {msgs.length > 0 && <button onClick={() => setMsgs([])} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer", marginLeft: "auto" }}>Limpiar</button>}
       </div>
       {debateOpen && !debateActive && <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 12px", marginBottom: 8 }}>
@@ -6519,17 +5567,11 @@ Usá solo ids reales de la lista. Si no hay acción concreta, no agregues el blo
       </div>}
       {debateActive && <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, marginBottom: 8, textAlign: "center" }}><Ico n="mic" /> Debate en curso… las dos IA están conversando (dejá las dos apps abiertas).</div>}
       {chatAdj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{chatAdj.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "" : ""} {a.nombre.slice(0, 22)} <span onClick={() => setChatAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
-      {(autoCount > 0 || vozMsg) && <div style={{ display: "flex", alignItems: "center", gap: 8, background: autoCount > 0 ? T.al : T.bg, border: `1px solid ${autoCount > 0 ? T.accent : T.border}`, borderRadius: T.rsm, padding: "9px 12px", marginBottom: 8, fontSize: 12.5, color: T.text }}>
-        <span style={{ flex: 1, lineHeight: 1.45 }}>{autoCount > 0 ? <>🎙 Enviando en <b>{autoCount}</b> s…</> : vozMsg}</span>
-        {autoCount > 0 && <button onClick={() => { cancelarAuto(); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: T.sub, cursor: "pointer" }}>Cancelar</button>}
-        {autoCount > 0 && <button onClick={() => { clearInterval(autoTimer.current); setAutoCount(0); send(); }} style={{ background: T.accent, border: "none", borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: "#fff", cursor: "pointer" }}>Enviar ya</button>}
-        {autoCount === 0 && vozMsg && <button onClick={() => setVozMsg("")} style={{ background: "none", border: "none", color: T.muted, fontSize: 14, cursor: "pointer" }}>✕</button>}
-      </div>}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
         <input ref={chatFileRef} type="file" accept="image/*,.pdf" multiple onChange={addChatAdj} style={{ display: "none" }} />
         <button onClick={() => chatFileRef.current?.click()} title="Adjuntar foto o PDF para analizar" style={{ width: 42, height: 42, borderRadius: T.rsm, background: T.bg, color: T.accent, border: `1px solid ${T.border}`, fontSize: 17, flexShrink: 0, cursor: "pointer" }}><Ico n="clip" /> </button>
-        <button onClick={toggleVoz} style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#EF4444" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#EF4444" : T.border}`, fontSize: 16, cursor: "pointer", flexShrink: 0, animation: escuchando ? "pulse 1s infinite" : "none" }}><Ico n="mic" /> </button>
-        <textarea ref={taRef} value={input} onChange={e => { voiceFlag.current = Date.now() < dictWindow.current; setInput(e.target.value); }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={escuchando ? "Escuchando…" : "Escribí, adjuntá o usá el micrófono…"} rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, maxHeight: 110, minHeight: 42 }} />
+        {sttOk && <button onClick={toggleVoz} style={{ width: 42, height: 42, borderRadius: T.rsm, background: escuchando ? "#EF4444" : T.bg, color: escuchando ? "#fff" : T.sub, border: `1px solid ${escuchando ? "#EF4444" : T.border}`, fontSize: 16, cursor: "pointer", flexShrink: 0, animation: escuchando ? "pulse 1s infinite" : "none" }}><Ico n="mic" /> </button>}
+        <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={escuchando ? "Escuchando…" : "Escribí, adjuntá o usá el micrófono…"} rows={1} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 13.5, color: T.text, maxHeight: 110, minHeight: 42 }} />
         <button onClick={() => send()} disabled={loading || (!input.trim() && chatAdj.length === 0)} style={{ width: 42, height: 42, borderRadius: T.rsm, background: (input.trim() || chatAdj.length) && !loading ? T.accent : T.border, color: "#fff", border: "none", fontSize: 17, cursor: (input.trim() || chatAdj.length) ? "pointer" : "default", flexShrink: 0 }}>↑</button>
       </div>
       {!apiKey && <div style={{ fontSize: 10.5, color: T.muted, textAlign: "center", marginTop: 7 }}>Cargá tu API Key en Más → Configuración para activar la IA.</div>}
@@ -8075,337 +7117,26 @@ const FERIADOS = new Set([
 const _isoDe = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function diasHabiles(d1, d2) { if (!d1 || !d2) return 0; const a = new Date(d1); a.setHours(0, 0, 0, 0); const b = new Date(d2); b.setHours(0, 0, 0, 0); if (b <= a) return 0; let n = 0; const cur = new Date(a); while (cur < b) { cur.setDate(cur.getDate() + 1); const wd = cur.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(cur))) n++; } return n; }
 function gMetricas(fechaSolic, fechaReal, plazo, cerrado) { const fin = fechaReal || new Date(); const dias = diasHabiles(fechaSolic, fin); const desvio = dias - plazo; let estado; if (fechaReal || cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo"; else estado = desvio <= 0 ? "En plazo" : "Vencido"; return { dias, desvio, estado, retraso: Math.max(0, desvio) }; }
-// ── Tiempos de una obra SIN doble conteo ──────────────────────────────
-// Dos tareas que corren a la vez (y se atrasan a la vez) no suman sus
-// atrasos: se mide sobre la línea de tiempo de la obra y los días en que hay
-// más de un atraso en juego cuentan UNA sola vez.
-//   estimado = días hábiles que cubren los plazos previstos de las tareas
-//   desvío   = días hábiles de atraso (arranque tardío + ejecución pasada del
-//              plazo), sin repetir los que coinciden en el tiempo
-//   real     = estimado + desvío
-//   arranque = la parte del desvío que viene de arrancar tarde
-function addHabiles(d, n) { const c = new Date(d); c.setHours(0, 0, 0, 0); let k = 0; while (k < n) { c.setDate(c.getDate() + 1); const wd = c.getDay(); if (wd !== 0 && wd !== 6 && !FERIADOS.has(_isoDe(c))) k++; } return c; }
-function habilesUnion(ivs) {
-  const l = ivs.filter(([a, b]) => a && b && b > a).sort((x, y) => x[0] - y[0]);
-  let tot = 0, cs = null, ce = null;
-  for (const [a, b] of l) { if (cs === null) { cs = a; ce = b; } else if (a <= ce) { if (b > ce) ce = b; } else { tot += diasHabiles(cs, ce); cs = a; ce = b; } }
-  if (cs !== null) tot += diasHabiles(cs, ce);
-  return tot;
-}
-function tiemposObra(its) {
-  const hoy = new Date(); const P = [], D = [], S = [];
-  (its || []).forEach(it => {
-    if (!it.fechaSolic) return;
-    if (it.tipo === "Retraso") { const dd = Number(it.demoraDias) || 0; if (dd > 0) D.push([it.fechaSolic, addHabiles(it.fechaSolic, dd)]); return; }
-    const ip = it.inicioPlan ? new Date(it.inicioPlan) : null;
-    const iniPlan = ip && !isNaN(ip) ? ip : it.fechaSolic;
-    const plazo = Number(it.plazo) || 0;
-    P.push([iniPlan, addHabiles(iniPlan, plazo)]);
-    if (iniPlan < it.fechaSolic) { S.push([iniPlan, it.fechaSolic]); D.push([iniPlan, it.fechaSolic]); }
-    D.push([addHabiles(it.fechaSolic, plazo), it.fechaReal || hoy]);
-  });
-  const estimado = habilesUnion(P), desvio = habilesUnion(D), arranque = habilesUnion(S);
-  return { estimado, desvio, real: estimado + desvio, arranque };
-}
 const GEST_ESTADOS = { "Cumplido": { c: "#16A34A", b: "rgba(22,163,74,.14)" }, "En plazo": { c: "#3B82F6", b: "rgba(37,99,235,.14)" }, "Fuera de plazo": { c: "#F59E0B", b: "rgba(180,83,9,.14)" }, "Vencido": { c: "#EF4444", b: "rgba(239,68,68,.10)" } };
 const fmtD = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "—";
 const isoHoy = () => new Date().toISOString().slice(0, 10);
 
-const CATEGORIAS_DESVIO = ["Evitable", "No evitable"];
-const CAUSAS_EVITABLE = ["Mano de obra (rendimiento/ausentismo)", "Error de proyecto / planos", "Error de diseño", "Falta de documentación", "Error en el pliego", "Falta de contrato / subcontrato", "Falta de coordinación entre gremios", "Falta de coordinación general de obra", "Falta de materiales en obra (compra tardía)", "Falta de materiales para el subcontrato", "Rotura o falla de herramienta/equipo", "Incumplimiento de subcontratista", "Reproceso / trabajo mal ejecutado", "Falta de personal asignado", "Otro"];
-const CAUSAS_NO_EVITABLE = ["Clima", "Falta de definición del cliente", "Espera de aprobación / permiso municipal", "Falta de pago / certificación del cliente", "Provisión pendiente por parte del cliente", "Cambio de alcance / adicional solicitado", "Caso fortuito / fuerza mayor", "Otro"];
-// Un registro puede tener VARIAS causas (it.causas). it.causa (texto) queda
-// como la primera, por compatibilidad con registros viejos.
-function causasDe(it) {
-  const l = Array.isArray(it?.causas) && it.causas.length ? it.causas : (it?.causa ? [it.causa] : []);
-  return l.map(c => c === "Otro" && it?.causaDetalle ? it.causaDetalle : c);
-}
-// Tareas/etapas que se corrieron por el retraso de este registro, cada una con
-// (opcional) la fecha en que terminó; se muestra cuántos días hábiles tardó en
-// terminar DESPUÉS de que terminó la tarea que originó el retraso.
-function afectadasTexto(it) {
-  const l = Array.isArray(it?.afectadas) ? it.afectadas : [];
-  const fines = it?.afectadasFin || {};
-  const dmy = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : ""; };
-  // Punto de partida: cuando terminó la tarea que originó el retraso (se destrabó).
-  const desde = it?.fechaReal instanceof Date ? it.fechaReal : (it?.fechaReal ? new Date(it.fechaReal) : null);
-  const una = (nombre, fin) => {
-    if (!fin) return nombre;
-    const d = desde && !isNaN(desde) ? diasHabiles(desde, new Date(fin + "T12:00:00")) : null;
-    return `${nombre} (terminó el ${dmy(fin)}${d != null && d > 0 ? ` · ${d} d hábiles después de destrabarse el retraso` : ""})`;
-  };
-  const partes = l.map(n => una(n, fines[n]));
-  if (it?.afectadasDetalle) partes.push(una(it.afectadasDetalle, it.afectadasDetalleFin));
-  return partes.filter(Boolean).join(" · ");
-}
-function afectadasLeyendaAuto(it) {
-  const l = [...(Array.isArray(it?.afectadas) ? it.afectadas : []), ...(it?.afectadasDetalle ? [it.afectadasDetalle] : [])];
-  if (!l.length) return "";
-  const cert = [...(it?.etapa ? [it.etapa] : []), ...l].map(n => "certificado de " + String(n).toLowerCase());
-  const lista = cert.length > 1 ? cert.slice(0, -1).join(", ") + " y " + cert[cert.length - 1] : cert[0];
-  const nums = ["", "un", "dos", "tres", "cuatro", "cinco", "seis"];
-  return `Esto atrasó el cobro de la terminación de ${cert.length > 1 ? (nums[cert.length] || cert.length) + " certificados" : "un certificado"}: ${lista}.`;
-}
-// La leyenda es editable: si se escribió una a mano (it.leyendaAfecta) se usa esa
-// (aunque sea con el impacto económico); si no, la sugerida.
-function afectadasLeyenda(it) {
-  if (typeof it?.leyendaAfecta === "string") return it.leyendaAfecta.trim();
-  return afectadasLeyendaAuto(it);
-}
-function causaTexto(it) { return causasDe(it).join(" + "); }
-// A quién se le imputa por defecto cada causa (se puede cambiar a mano en
-// "Imputable a"): "CLI" = la constructora (Belfast), "Estudio" o "V+V".
-const CAUSA_IMPUTA = {
-  "Error de diseño": ["Estudio"], "Falta de documentación": ["Estudio"], "Error en el pliego": ["Estudio"], "Error de proyecto / planos": ["Estudio"],
-  "Falta de contrato / subcontrato": ["CLI"], "Falta de materiales para el subcontrato": ["CLI"], "Falta de coordinación general de obra": ["CLI"], "Falta de coordinación entre gremios": ["CLI"],
-  "Falta de definición del cliente": ["CLI"], "Falta de pago / certificación del cliente": ["CLI"], "Provisión pendiente por parte del cliente": ["CLI"],
-  "Mano de obra (rendimiento/ausentismo)": ["V+V"], "Rotura o falla de herramienta/equipo": ["V+V"], "Incumplimiento de subcontratista": ["V+V"], "Reproceso / trabajo mal ejecutado": ["V+V"], "Falta de personal asignado": ["V+V"],
-};
-// Un registro puede ser imputable a más de una empresa a la vez (ej: Belfast
-// y el Estudio juntos). it.imputables es el array nuevo; it.imputable (string)
-// se sigue leyendo para no perder los registros viejos ya guardados.
-function imputablesDe(it) {
-  if (Array.isArray(it?.imputables) && it.imputables.length) return it.imputables;
-  if (it?.imputable) return [it.imputable];
-  return [];
-}
-function imputablesTexto(it) { const l = imputablesDe(it); return l.length ? l.join(" + ") : "Sin asignar"; }
-// ── RETRASO RÁPIDO ─────────────────────────────────────────────────────
-// Un "Retraso" es un registro simple de lo que pasa HOY: qué tarea, cuántos días hábiles
-// se demora y por qué. Vive en el mismo listado de Gestión (g.manual, tipo "Retraso"), así
-// suma al desvío total, a punitorios y a los informes, pero se carga en pocos toques.
-function gMetricasRetraso(it) { const d = Math.max(0, Number(it.demoraDias) || 0); return { dias: d, desvio: d, estado: d > 0 ? "Vencido" : "En plazo", retraso: d }; }
-const RETRASO_CAUSAS_RAPIDAS = ["Clima", "Falta de definición del cliente", "Falta de pago / certificación del cliente", "Provisión pendiente por parte del cliente", "Falta de materiales para el subcontrato", "Mano de obra (rendimiento/ausentismo)", "Error de proyecto / planos", "Falta de coordinación entre gremios"];
-function armarRetraso({ obra_id, tarea, dias, debia, demoro, causas, otra, nota, fecha, cli, afectadas, afectadasDetalle, personas, productividad, fotos, videos, titulo, leyenda }) {
-  const lista = (causas || []).filter(c => c && c !== "Otro");
-  const detalle = String(otra || "").trim();
-  const todas = detalle ? [...lista, "Otro"] : lista;
-  let imp = [];
-  todas.forEach(c => (CAUSA_IMPUTA[c] || []).forEach(x => { const n = x === "CLI" ? (cli || "Belfast") : x; if (!imp.includes(n)) imp.push(n); }));
-  const cat = todas.length ? (CAUSAS_EVITABLE.includes(todas[0]) ? "Evitable" : CAUSAS_NO_EVITABLE.includes(todas[0]) ? "No evitable" : "") : "";
-  const deb = Number(debia) || 0, dem = Number(demoro) || 0;
-  const d = Math.max(1, Math.round(deb && dem ? dem - deb : (Number(dias) || 1)));
-  const causaTxt = todas.map(c => c === "Otro" ? detalle : c).join(" + ");
-  return { id: uid(), tipo: "Retraso", obra_id, etapa: tarea || "", descripcion: String(titulo || "").trim() || `Retraso${tarea ? " en " + tarea : ""}${causaTxt ? ": " + causaTxt : ""}`, demoraDias: d, personas: Number(personas) || 0, productividad: Math.min(100, Math.max(0, Number(productividad) || 0)), debiaDias: deb || null, demoroDias: dem || null, fechaSolic: fecha || isoHoy(), plazo: 0, fechaReal: "", causas: todas, causa: todas[0] || "", causaDetalle: detalle, categoriaDesvio: cat, imputables: imp, afectadas: Array.isArray(afectadas) ? afectadas : [], afectadasDetalle: String(afectadasDetalle || "").trim(), diasClima: todas.length === 1 && todas[0] === "Clima" ? d : 0, nota: String(nota || "").trim(), fotosInicio: Array.isArray(fotos) ? fotos : [], videos: Array.isArray(videos) ? videos : [], fotosFin: [], personalIds: [], responsable: "", ...(typeof leyenda === "string" ? { leyendaAfecta: leyenda } : {}), ts: Date.now() };
-}
-function RetrasoRapido({ obras, modelosObra, obraIni, onGuardar, cli, dotacion, editar, onCancelar }) {
-  const omitirReset = useRef(!!editar);
-  const [obraId, setObraId] = useState((editar && editar.obra_id) || obraIni || obras[0]?.id || "");
-  const obra = obras.find(o => o.id === obraId) || obras[0];
-  let D = null; try { D = obra ? cronogramaFilas(obra, modelosObra) : null; } catch { D = null; }
-  const filas = D ? D.filas : [];
-  const nomF = (r) => r.corto || r.n;
-  const hoyD = new Date(); hoyD.setHours(0, 0, 0, 0);
-  const iCurso = filas.findIndex(r => +r.ini <= +hoyD && +hoyD <= +r.fin);
-  const [tarea, setTarea] = useState(editar ? (editar.etapa || "") : (iCurso >= 0 ? nomF(filas[iCurso]) : ""));
-  const [debia, setDebia] = useState(editar ? (editar.debiaDias || 0) : (iCurso >= 0 ? filas[iCurso].dur : 0));
-  const [demoro, setDemoro] = useState(editar ? (editar.demoroDias || ((editar.debiaDias || 0) + (editar.demoraDias || 0))) : (iCurso >= 0 ? filas[iCurso].dur : 0));
-  const [causas, setCausas] = useState(editar ? (editar.causas || []).filter(c => c !== "Otro") : []); const [otra, setOtra] = useState(editar ? (editar.causaDetalle || "") : ""); const [verOtra, setVerOtra] = useState(editar ? !!editar.causaDetalle : false);
-  const [afect, setAfect] = useState(editar ? (editar.afectadas || []) : []); const [afectTxt, setAfectTxt] = useState(editar ? (editar.afectadasDetalle || "") : "");
-  const [productividad, setProductividad] = useState(editar ? (Number(editar.productividad) || 0) : 0);
-  const [leyenda, setLeyenda] = useState(editar && typeof editar.leyendaAfecta === "string" ? editar.leyendaAfecta : null);
-  const [titulo, setTitulo] = useState(editar ? (editar.descripcion || "") : "");
-  const [personas, setPersonas] = useState(editar ? (Number(editar.personas) || 0) : (Number(dotacion) || 0));
-  const [fotos, setFotos] = useState(editar ? (editar.fotosInicio || []) : []); const [videos, setVideos] = useState(editar ? (editar.videos || []) : []); const [subiendo, setSubiendo] = useState(false); const [errMed, setErrMed] = useState("");
-  const fotoRef = useRef(null), vidRef = useRef(null);
-  const leerArchivo = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
-  async function subirMedia(e, esVideo) {
-    const files = Array.from(e.target.files || []); e.target.value = ""; if (!files.length) return;
-    setSubiendo(true); setErrMed("");
-    for (const f of files) {
-      try {
-        if (esVideo) {
-          if (f.size > 60 * 1024 * 1024) { setErrMed(`El video "${f.name}" pesa ${(f.size / 1048576).toFixed(0)} MB. Subí videos de hasta ~60 MB.`); continue; }
-          const id = uid(); const url = await subirVideoDirecto(f, `gestion/retrasos/videos`);
-          if (!url) { setErrMed(`No se pudo subir completo "${f.name}". Probá de nuevo con mejor señal (el video no se guardó).`); continue; }
-          setVideos(l => [...l, { id, url, nombre: f.name, fecha: f.lastModified || Date.now() }]);
-        } else {
-          const comp = await compressImage(await leerArchivo(f), 1600, 0.7);
-          const url = await uploadFoto(comp, `gestion/retrasos`, `${uid()}.jpg`);
-          if (url) setFotos(l => [...l, { id: uid(), url, fecha: f.lastModified || Date.now() }]);
-        }
-      } catch { setErrMed("No se pudo subir un archivo. Probá de nuevo."); }
-    }
-    setSubiendo(false);
-  }
-  const [nota, setNota] = useState(editar ? (editar.nota || "") : ""); const [verNota, setVerNota] = useState(editar ? !!editar.nota : false);
-  const [ok, setOk] = useState("");
-  const elegirTarea = (nombre) => { setTarea(nombre); const r = filas.find(x => nomF(x) === nombre); if (r) { setDebia(r.dur); setDemoro(r.dur); } setAfect([]); };
-  useEffect(() => { if (omitirReset.current) { omitirReset.current = false; return; } const i = filas.findIndex(r => +r.ini <= +hoyD && +hoyD <= +r.fin); if (i >= 0) elegirTarea(nomF(filas[i])); else { setTarea(""); setDebia(0); setDemoro(0); } /* eslint-disable-next-line */ }, [obraId]);
-  const desvio = (Number(demoro) || 0) - (Number(debia) || 0);
-  const chip = (act, onClick, txt, key) => <button key={key || txt} type="button" onClick={onClick} style={{ padding: "9px 12px", borderRadius: 18, border: `1.5px solid ${act ? T.accent : T.border}`, background: act ? T.al : T.bg, color: act ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>{txt}</button>;
-  const togC = (c) => setCausas(l => l.includes(c) ? l.filter(x => x !== c) : [...l, c]);
-  const siguientes = filas.filter(r => nomF(r) !== tarea);
-  const puede = !!obra && desvio > 0 && (causas.length > 0 || otra.trim());
-  function guardar() {
-    if (!puede) return;
-    const it = armarRetraso({ obra_id: obra.id, tarea, debia, demoro, causas, otra, nota, cli, afectadas: afect, afectadasDetalle: afectTxt, personas, productividad, fotos, videos, titulo, leyenda });
-    if (editar) {
-      const m = { ...editar, ...it, id: editar.id, fechaSolic: editar.fechaSolic, fechaReal: editar.fechaReal, ts: editar.ts, portada: editar.portada, fotosFin: editar.fotosFin || [] };
-      if (leyenda === null) delete m.leyendaAfecta;
-      onGuardar(m);
-      return;
-    }
-    onGuardar(it);
-    setOk(`Guardado: +${it.demoraDias} días${tarea ? " en " + tarea : ""}.`);
-    const r = filas.find(x => nomF(x) === tarea); setDebia(r ? r.dur : 0); setDemoro(r ? r.dur : 0);
-    setCausas([]); setOtra(""); setVerOtra(false); setAfect([]); setAfectTxt(""); setNota(""); setVerNota(false); setFotos([]); setVideos([]); setTitulo(""); setProductividad(0); setLeyenda(null);
-    setTimeout(() => setOk(""), 3500);
-  }
-  const numStyle = { width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 10px", fontSize: 24, fontWeight: 800, color: T.text, textAlign: "center" };
-  return (<Card style={{ padding: 14, marginBottom: 14 }}>
-    <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>{editar ? "Editar retraso" : "Registrar un retraso"}</div>
-    <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 12, lineHeight: 1.45 }}>Tarea, cuánto debía demorar, cuánto va a demorar y por qué. El cronograma no se mueve.</div>
-    {obras.length > 1 && <Field label="Obra"><Sel value={obraId} onChange={e => setObraId(e.target.value)}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>}
-    <Lbl>Título (opcional)</Lbl>
-    <div style={{ marginBottom: 12 }}><TInput value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Si lo dejás vacío se arma solo: Retraso en … : causa" /></div>
-    <Lbl>1 · ¿Qué tarea?</Lbl>
-    {filas.length > 0 ? <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-      {filas.map((r, i) => chip(tarea === nomF(r), () => elegirTarea(nomF(r)), nomF(r) + (i === iCurso ? " · en curso" : ""), i))}
-    </div> : <div style={{ marginBottom: 12 }}><TInput value={tarea} onChange={e => setTarea(e.target.value)} placeholder="Ej: Revoques interiores" /></div>}
-    <Lbl>2 · Días hábiles</Lbl>
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 8 }}>
-      <div><div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>Debía demorar</div><input type="number" inputMode="numeric" value={debia || ""} onChange={e => setDebia(+e.target.value || 0)} style={numStyle} /></div>
-      <div><div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>Va a demorar</div><input type="number" inputMode="numeric" value={demoro || ""} onChange={e => setDemoro(+e.target.value || 0)} style={numStyle} /></div>
-    </div>
-    <div style={{ textAlign: "center", fontSize: 14, fontWeight: 800, marginBottom: 12, color: desvio > 0 ? "#EF4444" : T.muted }}>{desvio > 0 ? `La tarea va a demorar +${desvio} días más` : "Poné cuánto va a demorar: tiene que ser más que lo previsto"}</div>
-    <Lbl>Personas afectadas</Lbl>
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-      <button type="button" onClick={() => setPersonas(n => Math.max(0, (Number(n) || 0) - 1))} style={{ width: 44, height: 44, borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.bg, fontSize: 22, fontWeight: 800, color: T.text, cursor: "pointer" }}>−</button>
-      <input type="number" inputMode="numeric" value={personas || ""} onChange={e => setPersonas(+e.target.value || 0)} style={{ ...numStyle, flex: 1, width: "auto" }} />
-      <button type="button" onClick={() => setPersonas(n => (Number(n) || 0) + 1)} style={{ width: 44, height: 44, borderRadius: 10, border: `1.5px solid ${T.border}`, background: T.bg, fontSize: 22, fontWeight: 800, color: T.text, cursor: "pointer" }}>＋</button>
-    </div>
-    <div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>Productividad mientras tanto (%)</div>
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-      <input type="number" inputMode="numeric" min="0" max="100" value={productividad || ""} placeholder="0" onChange={e => setProductividad(Math.min(100, Math.max(0, +e.target.value || 0)))} style={{ ...numStyle, flex: 1, width: "auto" }} />
-      <span style={{ fontSize: 20, fontWeight: 800, color: T.muted }}>%</span>
-    </div>
-    <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 12, lineHeight: 1.45 }}>Dejalo en 0 si no pueden avanzar nada. Si trabajan pero más lento, poné cuánto rinden (ej: 70). El perjuicio se calcula sobre lo que se pierde.</div>
-    <Lbl>3 · ¿Por qué se atrasó?</Lbl>
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-      {RETRASO_CAUSAS_RAPIDAS.map(c => chip(causas.includes(c), () => togC(c), c))}
-      {chip(verOtra, () => setVerOtra(v => !v), "Otra…")}
-    </div>
-    {verOtra && <div style={{ marginBottom: 6 }}><TInput value={otra} onChange={e => setOtra(e.target.value)} placeholder="Escribí la causa" /></div>}
-    <div style={{ height: 8 }} />
-    <Lbl>4 · ¿Qué atrasó? (opcional)</Lbl>
-    {siguientes.length > 0 ? <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-      {siguientes.map((r, i) => chip(afect.includes(nomF(r)), () => setAfect(l => l.includes(nomF(r)) ? l.filter(x => x !== nomF(r)) : [...l, nomF(r)]), nomF(r), "a" + i))}
-    </div> : <div style={{ marginBottom: 10 }}><TInput value={afectTxt} onChange={e => setAfectTxt(e.target.value)} placeholder="Ej: Terminación de mampostería PB" /></div>}
-    {(afect.length > 0 || afectTxt.trim() || leyenda !== null) && <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 11, color: T.muted, marginBottom: 4 }}>Qué afecta (se escribe solo, podés modificarlo)</div>
-      <textarea value={leyenda !== null ? leyenda : afectadasLeyendaAuto({ etapa: tarea, afectadas: afect, afectadasDetalle: afectTxt })} onChange={e => setLeyenda(e.target.value)} rows={3} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text, resize: "vertical", boxSizing: "border-box" }} />
-      {leyenda !== null && <button type="button" onClick={() => setLeyenda(null)} style={{ background: "none", border: "none", color: T.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "4px 0 0" }}>Volver al texto automático</button>}
-    </div>}
-    {!verNota ? <button type="button" onClick={() => setVerNota(true)} style={{ background: "none", border: "none", color: T.accent, fontSize: 12.5, fontWeight: 700, cursor: "pointer", padding: "0 0 12px" }}>＋ Agregar una nota</button>
-      : <textarea value={nota} onChange={e => setNota(e.target.value)} rows={2} placeholder="Detalle breve (podés dictarlo con el micrófono del teclado)" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text, fontFamily: "inherit", resize: "vertical", marginBottom: 12 }} />}
-    <Lbl>5 · Fotos o video del tema (opcional)</Lbl>
-    <input ref={fotoRef} type="file" accept="image/*" multiple onChange={e => subirMedia(e, false)} style={{ display: "none" }} />
-    <input ref={vidRef} type="file" accept="video/*" onChange={e => subirMedia(e, true)} style={{ display: "none" }} />
-    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-      <button type="button" disabled={subiendo} onClick={() => fotoRef.current?.click()} style={{ flex: 1, background: T.bg, border: `1.5px solid ${T.border}`, color: T.accent, borderRadius: 10, padding: "12px 8px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>📷 Fotos</button>
-      <button type="button" disabled={subiendo} onClick={() => vidRef.current?.click()} style={{ flex: 1, background: T.bg, border: `1.5px solid ${T.border}`, color: T.accent, borderRadius: 10, padding: "12px 8px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🎥 Video</button>
-    </div>
-    {subiendo && <div style={{ fontSize: 12, color: T.muted, marginBottom: 8 }}>Subiendo… esperá antes de guardar.</div>}
-    {errMed && <div style={{ fontSize: 12, color: "#EF4444", marginBottom: 8 }}>{errMed}</div>}
-    {(fotos.length > 0 || videos.length > 0) && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-      {fotos.map(ft => (<div key={ft.id} style={{ position: "relative", width: 66 }}>
-        <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}`, display: "block" }} />
-        <button type="button" onClick={() => setFotos(l => l.filter(x => x.id !== ft.id))} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 12, cursor: "pointer", lineHeight: 1 }}>×</button>
-      </div>))}
-      {videos.map(v => (<div key={v.id} style={{ position: "relative", width: 66 }}>
-        <div style={{ width: 66, height: 66, borderRadius: 8, background: "#000", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, border: `1px solid ${T.border}` }}>▶</div>
-        <button type="button" onClick={() => setVideos(l => l.filter(x => x.id !== v.id))} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 12, cursor: "pointer", lineHeight: 1 }}>×</button>
-      </div>))}
-    </div>}
-    <button type="button" onClick={guardar} disabled={!puede || subiendo} style={{ width: "100%", background: puede ? T.navy : T.border, color: puede ? "#fff" : T.muted, border: `1px solid ${puede ? BRASS : T.border}`, borderRadius: 10, padding: "14px", fontSize: 15, fontWeight: 800, cursor: puede ? "pointer" : "default" }}>{editar ? "Guardar cambios" : "Guardar retraso"}</button>
-    {editar && <button type="button" onClick={onCancelar} style={{ width: "100%", background: "none", border: "none", color: T.muted, fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "12px 0 0" }}>Cancelar</button>}
-    {!puede && <div style={{ fontSize: 11, color: T.muted, textAlign: "center", marginTop: 6 }}>Falta {desvio <= 0 ? "indicar cuánto va a demorar" : "elegir la causa"}.</div>}
-    {ok && <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 700, color: "#16A34A", textAlign: "center" }}>✓ {ok}</div>}
-  </Card>);
-}
-function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
-  const { obras, gestion, setGestion, personal, modelosObra } = db;
+const CAUSA_DESVIO = ["Clima", "Falta de material", "Falta de definición del cliente", "Mano de obra", "Error de proyecto", "Otro"];
+function GestionView({ db, cfg, onBack }) {
+  const { obras, gestion, setGestion, personal } = db;
   const g = { plazo: 5, dotacion: 7, costoPersona: 60000, oficios: [{ oficio: "Oficial albañil", costo: 60000 }, { oficio: "Ayudante", costo: 45000 }, { oficio: "Oficial especializado", costo: 75000 }], manual: [], reuniones: [], punit: {}, ...(gestion || {}) };
-  const [tab, setTab] = useState(() => { const f = ((db.gestion || {}).manual || []).find(x => x.id === focoId); return f && f.tipo !== "Retraso" ? "registro" : "retrasos"; });
-  const [foco, setFoco] = useState(focoId || null);
-  useEffect(() => { if (focoId && onFocoUsado) onFocoUsado(); /* eslint-disable-next-line */ }, []);
-  const [expRet, setExpRet] = useState({});
-  const [editRet, setEditRet] = useState(null);
-  const [verCostos, setVerCostos] = useState(false);
-  const [pdfRetr, setPdfRetr] = useState(null); // ids de retrasos para el PDF de perjuicio
+  const [tab, setTab] = useState("registro");
   const [mForm, setMForm] = useState(null);
-  const [mError, setMError] = useState("");
   const [rForm, setRForm] = useState(null);
   const [pForm, setPForm] = useState(null);      // decisión sobre un vencido
   const [pdfPunit, setPdfPunit] = useState(null); // PDF de un punitorio confirmado
   const [pdfReg, setPdfReg] = useState(null);     // PDF de un registro individual
-  const [filtroObra, setFiltroObra] = useState(obras.length === 1 ? obras[0].id : "todas");
+  const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroEtapa, setFiltroEtapa] = useState("todas");
   const [obraInforme, setObraInforme] = useState("");
-  const obraInf = filtroObra !== "todas" ? filtroObra : obraInforme;
   const [pdfInforme, setPdfInforme] = useState(null); // informe de situación de una obra
-  const [selModo, setSelModo] = useState(false);       // armando PDF de registros elegidos
-  const [selIds, setSelIds] = useState([]);
-  const [pdfSel, setPdfSel] = useState(null);          // array de ids confirmado → muestra el PDF
-  const [guardandoPdf, setGuardandoPdf] = useState(false);
-  // En iPad/iPhone con la app instalada (modo standalone), el iframe.print()
-  // suele no hacer nada — iOS bloquea imprimir desde un iframe ahí adentro.
-  // "Guardar" usa el mismo generador de PDF real (html2pdf) que ya funciona
-  // bien en el resto de la app; "Imprimir" queda como atajo para PC/Safari
-  // normal, donde si funciona.
-  async function guardarPdfGestion(htmlString, nombreArchivo) {
-    setGuardandoPdf(true);
-    try { await guardarPdfComoArchivo(htmlString, nombreArchivo); }
-    catch (e) { alert("No se pudo guardar el PDF. Probá de nuevo."); }
-    setGuardandoPdf(false);
-  }
-  const slug = (s) => String(s || "").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "obra";
-  // En iPad/iPhone, "Imprimir" desde el recuadro embebido sale en blanco: ahí
-  // se genera el PDF real y la hoja de compartir de iOS ya trae "Imprimir".
-  const esIOSGest = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  function imprimirGestion(iframeId, htmlString, nombreArchivo) {
-    if (esIOSGest()) { guardarPdfGestion(htmlString, nombreArchivo); return; }
-    const f = document.getElementById(iframeId);
-    if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); }
-  }
-  const toggleSel = (id) => setSelIds(l => l.includes(id) ? l.filter(x => x !== id) : [...l, id]);
   const upd = (patch) => setGestion({ ...g, ...patch });
   const cli = cfg?.clienteNombre || "Belfast";
-
-  // ── Perjuicio económico de un retraso ──────────────────────────────────
-  // V+V (contratista): cada día de demora la cuadrilla sigue en obra sin poder avanzar.
-  //   día V+V = personas afectadas × costo diario por persona + gastos fijos diarios de V+V.
-  // Belfast: cada día de demora suma sus gastos generales de obra (dirección, estructura, alquileres, seguros).
-  // Los días de clima / fuerza mayor no se reclaman: cada parte absorbe su costo.
-  const costoRet = (it) => {
-    const d = Number(it.demoraDias) || 0;
-    const personas = it.personas != null && it.personas !== "" ? (Number(it.personas) || 0) : (Number(g.dotacion) || 0);
-    const prod = Math.min(100, Math.max(0, Number(it.productividad) || 0));
-    const diaVV = personas * (Number(g.costoPersona) || 0) * (1 - prod / 100) + (Number(g.fijosVV) || 0);
-    const diaBel = Number(g.ggBelfast) || 0;
-    const neto = Math.max(0, d - (Number(it.diasClima) || 0));
-    return { d, personas, prod, neto, clima: Number(it.diasClima) || 0, diaVV, diaBel, vv: d * diaVV, bel: d * diaBel, reclamoVV: neto * diaVV, reclamoBel: neto * diaBel };
-  };
-  const textoPerjuicio = (it) => {
-    const c = costoRet(it); const imp = imputablesDe(it); const L = [];
-    if (!it.fechaReal) L.push(`La tarea todavía no terminó: se estima con los ${c.d} días más que va a demorar. Si cambia, se recalcula al editar el retraso.`);
-    const fijos = Number(g.fijosVV) || 0;
-    L.push(c.diaVV > 0
-      ? `Para V+V: cada día hábil de demora la cuadrilla (${c.personas} personas a ${money(g.costoPersona)} por persona y día${c.prod > 0 ? `, trabajando al ${c.prod}% de productividad, o sea que se pierde el ${100 - c.prod}%` : ""}${fijos ? `, más ${money(fijos)} de gastos fijos diarios` : ""}) sigue costando ${money(c.diaVV)} ${c.prod > 0 ? "de pérdida por trabajar a menor ritmo" : "sin poder avanzar"}. ${c.d} días × ${money(c.diaVV)} = ${money(c.vv)}.`
-      : `Para V+V: falta cargar la cuadrilla y su costo diario en "Costos del retraso" para valorizarlo.`);
-    L.push(c.diaBel > 0
-      ? `Para ${cli}: cada día de demora suma ${money(c.diaBel)} de gastos generales de obra (dirección, estructura, alquileres y seguros) que se pagan igual aunque la obra no avance. ${c.d} días × ${money(c.diaBel)} = ${money(c.bel)}.`
-      : `Para ${cli}: falta cargar sus gastos generales diarios en "Costos del retraso" para valorizarlo.`);
-    const r = [];
-    if (imp.includes(cli)) r.push(`V+V puede reclamar a ${cli} ${money(c.reclamoVV)}`);
-    if (imp.includes("Estudio")) r.push(`V+V (${money(c.reclamoVV)}) y ${cli} (${money(c.reclamoBel)}) pueden reclamar al Estudio`);
-    if (imp.includes("V+V")) r.push(`${cli} puede reclamar a V+V ${money(c.reclamoBel)}`);
-    if (r.length) L.push(`Responsabilidad: la causa (${causaTexto(it) || "sin especificar"}) se imputa a ${imputablesTexto(it)}. ${r.join("; ")}${c.clima ? ` (se descuentan ${c.clima} días de clima)` : ""}.`);
-    else if (c.clima >= c.d && c.d > 0) L.push("Responsabilidad: clima / fuerza mayor. No se reclama: cada parte absorbe su propio costo.");
-    else L.push("Responsabilidad: todavía sin imputar. Elegí la causa para saber a quién corresponde el reclamo.");
-    return L.join("\n\n");
-  };
 
   // ── Ítems medidos ──────────────────────────────────────────────────
   // Todo el Plan de gestión se carga DIRECTAMENTE acá (Registro), ya no se
@@ -8416,41 +7147,22 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
   const conDecision = (base) => {
     const d = g.punit[base.id];
     const plazoEf = (base.plazoBase || g.plazo) + (d?.decision === "prorroga" ? (d.prorrogaDias || 0) : 0);
-    const m = base.tipo === "Retraso" ? gMetricasRetraso(base) : gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
-    // Atraso en el ARRANQUE de la tarea (se podría haber empezado/pedido antes,
-    // pero arrancó más tarde) — ej: el hierro se pidió tarde, aunque una vez
-    // que llegó la tarea se ejecutó en plazo. Este atraso SÍ cuenta para el
-    // desvío total y el estado del ítem (por eso puede quedar "Fuera de
-    // plazo"/candidato a punitorio aunque la ejecución haya sido impecable),
-    // pero el perjuicio en pesos sigue sin calcularse solo — requiere el paso
-    // manual de "Evaluar" → confirmar tarea detenida, dotación y costo, igual
-    // que cualquier otro candidato.
-    const inicioPlanD = base.inicioPlan ? new Date(base.inicioPlan) : null;
-    const retrasoInicio = (inicioPlanD && base.fechaSolic && inicioPlanD < base.fechaSolic) ? diasHabiles(inicioPlanD, base.fechaSolic) : 0;
-    const desvio = m.desvio + retrasoInicio;
-    let estado;
-    if (base.fechaReal || base.cerrado) estado = desvio <= 0 ? "Cumplido" : "Fuera de plazo";
-    else estado = desvio <= 0 ? "En plazo" : "Vencido";
+    const m = gMetricas(base.fechaSolic, base.fechaReal, plazoEf, base.cerrado);
     // Los días de clima/fuerza mayor no son imputables a nadie: se descuentan
     // del retraso ANTES de que impacte en el punitorio. El desvío/estado
     // siguen mostrando el atraso real (para que no se "pierda" en el radar),
     // pero lo que vale plata es el retraso neto de clima.
-    const retrasoBruto = Math.max(0, desvio);
+    const retrasoBruto = m.retraso;
     const retraso = Math.max(0, retrasoBruto - (Number(base.diasClima) || 0));
-    return { ...base, plazo: plazoEf, ...m, desvio, estado, retraso, retrasoBruto, retrasoInicio, dec: d || null };
+    return { ...base, plazo: plazoEf, ...m, retraso, retrasoBruto, dec: d || null };
   };
   const itemsManual = (g.manual || []).map(it => { const solic = it.fechaSolic ? new Date(it.fechaSolic) : null; const real = it.fechaReal ? new Date(it.fechaReal) : null; return conDecision({ ...it, fechaSolic: solic, fechaReal: real, plazoBase: it.plazo || g.plazo, cerrado: !!real }); });
   const items = [...itemsManual].sort((a, b) => (b.fechaSolic || 0) - (a.fechaSolic || 0));
   // Filtro del listado de Registro (no toca Panel/Punitorios, que siguen viendo todo)
-  // La obra elegida arriba vale para Registro, Punitorios y Panel: no hay que volver a elegirla.
-  const itemsO = filtroObra === "todas" ? items : items.filter(it => it.obra_id === filtroObra);
-  const itemsFiltrados = itemsO.filter(it => it.tipo !== "Retraso" && (filtroEtapa === "todas" || it.etapa === filtroEtapa));
-  const itemsRetraso = itemsO.filter(it => it.tipo === "Retraso");
-  const itemFoco = foco ? items.find(x => x.id === foco) : null;
-  const diasRetrasoTot = itemsRetraso.reduce((a, i) => a + (Number(i.demoraDias) || 0), 0);
-  const etapasUsadas = [...new Set(itemsO.map(it => it.etapa).filter(Boolean))];
+  const itemsFiltrados = items.filter(it => (filtroObra === "todas" || it.obra_id === filtroObra) && (filtroEtapa === "todas" || it.etapa === filtroEtapa));
+  const etapasUsadas = ETAPAS_OBRA.filter(e => items.some(it => it.etapa === e));
   // Top 5 tareas con mayor diferencia (días), para ir directo al problema
-  const topDesvios = itemsO.filter(it => it.desvio > 0).sort((a, b) => b.desvio - a.desvio).slice(0, 5);
+  const topDesvios = items.filter(it => it.desvio > 0).sort((a, b) => b.desvio - a.desvio).slice(0, 5);
 
   // ── El corazón del cambio: el perjuicio SOLO nace de una confirmación ──
   // Un ítem vencido es un CANDIDATO. Recién cuando se confirma (qué tarea
@@ -8461,38 +7173,22 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
     return it.retraso * (Number(it.dec.personas) || g.dotacion) * (Number(it.dec.costoDia) || g.costoPersona);
   };
   const esVencido = it => it.estado === "Vencido" || it.estado === "Fuera de plazo";
-  const enEval = itemsO.filter(it => esVencido(it) && !it.dec);
-  const confirmados = itemsO.filter(it => it.dec?.decision === "confirmado");
-  const sinPerj = itemsO.filter(it => it.dec?.decision === "sin_perjuicio");
-  const prorrogas = itemsO.filter(it => it.dec?.decision === "prorroga");
+  const enEval = items.filter(it => esVencido(it) && !it.dec);
+  const confirmados = items.filter(it => it.dec?.decision === "confirmado");
+  const sinPerj = items.filter(it => it.dec?.decision === "sin_perjuicio");
+  const prorrogas = items.filter(it => it.dec?.decision === "prorroga");
 
-  const total = itemsO.length;
-  const cumpl = itemsO.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
+  const total = items.length;
+  const cumpl = items.filter(i => i.estado === "Cumplido" || i.estado === "En plazo").length;
   const pctCumpl = total ? Math.round(cumpl / total * 100) : 0;
-  const diasProm = total ? (itemsO.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
-  // Si un ítem es imputable a más de una empresa a la vez, el perjuicio de
-  // ESE ítem se reparte por igual entre las empresas que le corresponden —
-  // así la suma de los 3 responsables sigue dando el total real, sin
-  // duplicar plata.
-  const grp = (n) => confirmados.filter(i => imputablesDe(i).includes(n)).reduce((a, i) => { const lista = imputablesDe(i); return a + perItem(i) / Math.max(1, lista.length); }, 0);
+  const diasProm = total ? (items.reduce((a, i) => a + i.dias, 0) / total).toFixed(1) : "—";
+  const grp = (n) => confirmados.filter(i => i.imputable === n).reduce((a, i) => a + perItem(i), 0);
   const perjBelfast = grp(cli), perjVV = grp("V+V"), perjEstudio = grp("Estudio"), perjTotal = perjBelfast + perjVV + perjEstudio;
-  const cnt = (e) => itemsO.filter(i => i.estado === e).length;
+  const cnt = (e) => items.filter(i => i.estado === e).length;
 
   function decidir(id, decision, datos = {}) { upd({ punit: { ...g.punit, [id]: { decision, ...datos, ts: Date.now() } } }); setPForm(null); }
   function quitarDecision(id) { const p = { ...g.punit }; delete p[id]; upd({ punit: p }); }
-  // Guarda SIEMPRE lo que haya, aunque no tenga fotos todavía — las fotos
-  // nunca son obligatorias, se pueden agregar después editando el registro.
-  // Lo único obligatorio es la Tarea/Descripción; si falta, se avisa en vez
-  // de no hacer nada (antes el botón "Guardar" quedaba sin reaccionar y
-  // parecía que la app estaba trabada).
-  function guardarManual() {
-    if (!mForm.descripcion?.trim()) { setMError("Falta completar \"Tarea / Descripción\" — es el único campo obligatorio para guardar."); return; }
-    setMError("");
-    const it = { ...mForm, id: mForm.id || uid() };
-    const exists = (g.manual || []).some(x => x.id === it.id);
-    upd({ manual: exists ? g.manual.map(x => x.id === it.id ? it : x) : [...(g.manual || []), it] });
-    setMForm(null);
-  }
+  function guardarManual() { if (!mForm.descripcion?.trim()) return; const it = { ...mForm, id: mForm.id || uid() }; const exists = (g.manual || []).some(x => x.id === it.id); upd({ manual: exists ? g.manual.map(x => x.id === it.id ? it : x) : [...(g.manual || []), it] }); setMForm(null); }
   function guardarReunion() { const it = { ...rForm, id: rForm.id || uid() }; const exists = (g.reuniones || []).some(x => x.id === it.id); upd({ reuniones: exists ? g.reuniones.map(x => x.id === it.id ? it : x) : [it, ...(g.reuniones || [])] }); setRForm(null); }
   function borrarRegistro(id) { if (!confirm("¿Borrar este registro? No se puede deshacer.")) return; const p = { ...g.punit }; delete p[id]; upd({ manual: (g.manual || []).filter(x => x.id !== id), punit: p }); }
   function vaciarRegistro() {
@@ -8513,10 +7209,7 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
         const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
         const comp = await compressImage(dataUrl, 1600, 0.7);
         const url = await uploadFoto(comp, `gestion/${campo}`, `${uid()}.jpg`);
-        // f.lastModified es la fecha del archivo tal como lo guardó el celular
-        // (normalmente la fecha real en que se sacó la foto, aunque se suba
-        // después) — más confiable que la fecha de hoy si se sube más tarde.
-        if (url) nuevas.push({ id: uid(), url, fecha: f.lastModified || Date.now() });
+        if (url) nuevas.push({ id: uid(), url });
       } catch { }
     }
     setMForm(prev => prev ? { ...prev, [campo]: [...(prev[campo] || []), ...nuevas] } : prev);
@@ -8536,100 +7229,46 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
   // ── PDF de reclamo individual (un documento por punitorio) ─────────
   const _e = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   // ── PDF de un registro (Registro, cualquier estado) ─────────────────
-  // Texto para mandar un retraso por WhatsApp: qué pasó, por qué, cuánto cuesta y los links de fotos/videos.
-  function textoRetrasoWA(it) {
-    const c = costoRet(it); const L = [];
-    L.push(`*Retraso en obra — ${obraNom(obras, it.obra_id) || ""}*`);
-    if (it.etapa) L.push(`Tarea: ${it.etapa}`);
-    L.push(retrasoFrase(it));
-    L.push(`Motivo: ${causaTexto(it) || "sin especificar"}${imputablesTexto(it) ? ` (imputable a ${imputablesTexto(it)})` : ""}`);
-    if (afectadasTexto(it)) L.push(`Atrasó: ${afectadasTexto(it)}`);
-    if (afectadasLeyenda(it)) L.push(afectadasLeyenda(it));
-    if (c.personas > 0) L.push(`${c.prod > 0 ? `Personas afectadas: ${c.personas}, trabajando al ${c.prod}% de productividad` : `Personas sin poder avanzar: ${c.personas}`}`);
-    if (c.diaVV > 0) L.push(`Perjuicio V+V: ${money(c.vv)}`);
-    if (c.diaBel > 0) L.push(`Perjuicio ${cli}: ${money(c.bel)}`);
-    if (it.nota) L.push(`Nota: ${it.nota}`);
-    const fotos = (it.fotosInicio || []).map(f => f.url), vids = (it.videos || []).map(v => v.url);
-    if (fotos.length) L.push(`\n📷 ${fotos.length} foto${fotos.length > 1 ? "s" : ""}:\n${fotos.map((u, i) => `Foto ${i + 1}: ${u}`).join("\n\n")}`);
-    if (vids.length) L.push(`\n🎥 ${vids.length} video${vids.length > 1 ? "s" : ""}:\n${vids.map((u, i) => `Video ${i + 1} de ${vids.length}: ${u}`).join("\n\n")}`);
-    L.push("\nLa explicación completa del cálculo está en la app (Gestión) y en la Bitácora.");
-    return L.join("\n");
-  }
-  const enviarRetrasoWA = (it) => window.open(`https://wa.me/?text=${encodeURIComponent(textoRetrasoWA(it))}`, "_blank");
-  function htmlRetrasos(ids) {
-    const lista = itemsRetraso.length ? items.filter(i => ids.includes(i.id)) : [];
-    const _x = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const obrasIds = [...new Set(lista.map(i => i.obra_id))];
-    const nombreObras = obrasIds.map(id => obraNom(obras, id) || "—").join(", ");
-    const tot = lista.reduce((a, i) => { const c = costoRet(i); return { d: a.d + c.d, vv: a.vv + c.vv, bel: a.bel + c.bel, rVV: a.rVV + (imputablesDe(i).includes(cli) || imputablesDe(i).includes("Estudio") ? c.reclamoVV : 0), rBel: a.rBel + (imputablesDe(i).includes("V+V") || imputablesDe(i).includes("Estudio") ? c.reclamoBel : 0) }; }, { d: 0, vv: 0, bel: 0, rVV: 0, rBel: 0 });
-    const filas = lista.map(i => { const c = costoRet(i); return `<tr><td>${fmtD(i.fechaSolic)}</td><td>${_x(i.etapa || "—")}</td><td>${i.debiaDias && i.demoroDias ? `${_x(retrasoFrase(i))}<br/>` : ""}<b>${i.fechaReal ? "+" + c.d + " d" : "va a demorar " + c.d + " d más"}</b>${c.personas ? `<br/>${c.personas} personas` : ""}</td><td>${_x(causaTexto(i) || "—")}<br/><span style="color:#94A3B8">${_x(imputablesTexto(i))}</span></td><td>${c.diaVV > 0 ? money(c.vv) : "—"}</td><td>${c.diaBel > 0 ? money(c.bel) : "—"}</td></tr>`; }).join("");
-    const detalle = lista.map(i => `<div class="calc"><b>${_x(i.descripcion)}</b> · ${fmtD(i.fechaSolic)}${i.nota ? `<br/><i>${_x(i.nota)}</i>` : ""}${afectadasTexto(i) ? `<br/>Atrasó: ${_x(afectadasTexto(i))}` : ""}${afectadasLeyenda(i) ? `<br/><b style="color:#92400E">${_x(afectadasLeyenda(i))}</b>` : ""}<br/><br/>${_x(textoPerjuicio(i)).replace(/\n\n/g, "<br/><br/>")}${(i.fotosInicio || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${i.fotosInicio.slice(0, 6).map(f => `<img src="${f.url}" style="width:110px;height:110px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px"/>`).join("")}</div>` : ""}${(i.videos || []).length ? `<div style="margin-top:6px;font-size:10px;color:#64748B">${i.videos.length} video${i.videos.length > 1 ? "s" : ""} adjunto${i.videos.length > 1 ? "s" : ""} en la app</div>` : ""}</div>`).join("");
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-      @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:12px;line-height:1.55;margin:0;padding:14px;word-wrap:break-word}
-      .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:18px}.marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}.tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
-      h1{font-size:15px;color:#0F1B2D;margin:16px 0 4px}.meta{font-size:11px;color:#64748B}
-      table{width:100%;border-collapse:collapse;margin:12px 0;table-layout:fixed}td,th{border:1px solid #CBD5E1;padding:6px 8px;font-size:10.5px;text-align:left;vertical-align:top;word-wrap:break-word}th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9px;letter-spacing:1px}
-      .calc{border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:10px 12px;margin:10px 0;font-size:11px;page-break-inside:avoid}.tot{display:flex;gap:24px;flex-wrap:wrap;margin:10px 0}.tot div{font-size:11px;color:#64748B}.tot b{display:block;font-size:17px;color:#B91C1C}
-      .nota{font-size:10px;color:#94A3B8;margin-top:22px;border-top:1px solid #E2E8F0;padding-top:8px}
-      @media(max-width:480px){body{padding:10px;font-size:11px}table,td,th{font-size:9.5px}}
-    </style></head><body>
-      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Gestión de obra · Retrasos y perjuicio económico</div></div>
-      <div class="meta">Obra: ${_x(nombreObras || "—")} · Emitido: ${hoyStr()}</div>
-      <h1>Resumen</h1>
-      <div class="tot"><div>Días hábiles de retraso<b style="color:#0F1B2D">${tot.d}</b></div><div>Perjuicio V+V<b>${money(tot.vv)}</b></div><div>Perjuicio ${_x(cli)}<b>${money(tot.bel)}</b></div></div>
-      <table><tr><th style="width:11%">Fecha</th><th style="width:20%">Tarea</th><th style="width:18%">Días</th><th style="width:25%">Causa / imputable a</th><th style="width:13%">V+V</th><th style="width:13%">${_x(cli)}</th></tr>${filas}</table>
-      <h1>Cómo se calcula cada uno</h1>
-      ${detalle}
-      <div class="calc" style="border-left-color:#0F1B2D"><b>Criterio general</b><br/>Perjuicio V+V = días hábiles de demora × (personas afectadas × costo diario por persona + gastos fijos diarios de V+V).<br/>Perjuicio ${_x(cli)} = días hábiles de demora × gastos generales diarios de obra.<br/>Los días de clima o fuerza mayor no se reclaman: cada parte absorbe su costo. Lo reclamable a cada responsable surge de la imputación de la causa.${tot.rVV > 0 ? `<br/><br/><b>Reclamable por V+V: ${money(tot.rVV)}</b>` : ""}${tot.rBel > 0 ? `<br/><b>Reclamable por ${_x(cli)}: ${money(tot.rBel)}</b>` : ""}</div>
-      <div class="nota">Documento generado desde Gestión de obra. Los valores diarios son los vigentes al momento de la emisión.</div>
-    </body></html>`;
-  }
   function htmlRegistro(it) {
     const pj = perItem(it); const d = it.dec || {};
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-      @page{size:A4;margin:22mm 18mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0;padding:14px;word-wrap:break-word}
+    return `<!doctype html><html><head><meta charset="utf-8"><style>
+      @page{size:A4;margin:22mm 18mm}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:22px}
       .marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
       .tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
       h1{font-size:15px;color:#0F1B2D;margin:18px 0 4px}
       .meta{font-size:11px;color:#64748B}
-      table{width:100%;max-width:100%;border-collapse:collapse;margin:14px 0;table-layout:fixed}
-      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}
+      table{width:100%;border-collapse:collapse;margin:14px 0}
+      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top}
       th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9.5px;letter-spacing:1px}
-      img{max-width:100%}
       .calc{background:rgba(255,255,255,.04);border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
       .tot{font-size:16px;font-weight:bold;color:#B91C1C;margin-top:6px}
       .nota{font-size:10px;color:#94A3B8;margin-top:26px;border-top:1px solid #E2E8F0;padding-top:8px}
-      @media(max-width:480px){body{padding:10px;font-size:11.5px}.marca{font-size:16px}table,td,th{font-size:10px}}
     </style></head><body>
       <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Gestión de obra · Registro</div></div>
       <h1>${_e(it.tipo)}: ${_e(it.descripcion)}</h1>
-      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(imputablesTexto(it))} · Emitido: ${hoyStr()}</div>
+      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(it.imputable)} · Emitido: ${hoyStr()}</div>
       <table>
         <tr><th>Concepto</th><th>Detalle</th></tr>
         ${it.etapa ? `<tr><td>Etapa de obra</td><td>${_e(it.etapa)}</td></tr>` : ""}
         ${it.responsable ? `<tr><td>Responsable / cuadrilla</td><td>${_e(it.responsable)}</td></tr>` : ""}
         ${(it.personalIds && it.personalIds.length) ? `<tr><td>Personal asignado</td><td>${_e(it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", "))}</td></tr>` : ""}
-        ${it.inicioPlan ? `<tr><td>Podría haber arrancado el</td><td>${fmtD(new Date(it.inicioPlan + "T12:00:00"))}</td></tr>` : ""}
-        <tr><td>Inicio (real)</td><td>${fmtD(it.fechaSolic)}</td></tr>
-        ${(it.retrasoInicio || 0) > 0 ? `<tr><td><b>Atraso en el arranque</b></td><td style="font-weight:bold;color:#B45309">${it.retrasoInicio} días hábiles (ya incluidos en la diferencia de abajo)</td></tr>` : ""}
+        <tr><td>Inicio</td><td>${fmtD(it.fechaSolic)}</td></tr>
         <tr><td>Días estimados</td><td>${it.plazo} días hábiles${it.dec && it.plazo !== it.plazoBase ? ` (incluye prórroga acordada)` : ""}</td></tr>
         <tr><td>Fin</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Aún no terminó"}</td></tr>
         <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
         <tr><td>Diferencia (real vs. estimado)</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio} días</td></tr>
-        ${afectadasTexto(it) ? `<tr><td>Tarea/etapa afectada por el retraso</td><td>${_e(afectadasTexto(it))}</td></tr>` : ""}
-        ${afectadasLeyenda(it) ? `<tr><td colspan="2" style="background:#FEF3C7;color:#92400E"><b>${_e(afectadasLeyenda(it)).replace(/\n/g, "<br/>")}</b></td></tr>` : ""}
-        ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(causaTexto(it))}${it.categoriaDesvio ? ` <span style="color:#94A3B8">(${_e(it.categoriaDesvio)})</span>` : ""}</td></tr>` : ""}
+        ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(it.causa)}</td></tr>` : ""}
         ${(Number(it.diasClima) || 0) > 0 ? `<tr><td>Días de clima / fuerza mayor (no imputables)</td><td>${it.diasClima} días</td></tr><tr><td><b>Retraso imputable neto</b></td><td><b>${it.retraso} días</b></td></tr>` : ""}
         <tr><td>Estado</td><td>${_e(it.estado)}</td></tr>
       </table>
       ${(it.fotosInicio && it.fotosInicio.length) ? `<div style="margin-top:14px">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E;margin-bottom:6px">Foto de inicio</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">${it.fotosInicio.map(f => `<div style="text-align:center"><img src="${f.url}" style="width:150px;height:150px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />${f.fecha ? `<div style="font-size:9.5px;color:#64748B;margin-top:3px">${fmtFechaCorta(new Date(f.fecha))}</div>` : ""}</div>`).join("")}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${it.fotosInicio.map(f => `<img src="${f.url}" style="width:150px;height:150px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />`).join("")}</div>
       </div>` : ""}
       ${(it.fotosFin && it.fotosFin.length) ? `<div style="margin-top:14px">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E;margin-bottom:6px">Foto de fin</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">${it.fotosFin.map(f => `<div style="text-align:center"><img src="${f.url}" style="width:150px;height:150px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />${f.fecha ? `<div style="font-size:9.5px;color:#64748B;margin-top:3px">${fmtFechaCorta(new Date(f.fecha))}</div>` : ""}</div>`).join("")}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${it.fotosFin.map(f => `<img src="${f.url}" style="width:150px;height:150px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />`).join("")}</div>
       </div>` : ""}
       ${it.dec?.decision === "confirmado" ? `<div class="calc">
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Punitorio confirmado</div>
@@ -8642,76 +7281,6 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
     </body></html>`;
   }
 
-  // ── Sección de un registro, para incrustar varios en un solo PDF ────
-  function htmlSeccionRegistro(it) {
-    const pj = perItem(it); const d = it.dec || {};
-    return `<div class="reg">
-      <h1>${_e(it.tipo)}: ${_e(it.descripcion)}</h1>
-      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(imputablesTexto(it))}</div>
-      <table>
-        <tr><th>Concepto</th><th>Detalle</th></tr>
-        ${it.etapa ? `<tr><td>Etapa de obra</td><td>${_e(it.etapa)}</td></tr>` : ""}
-        ${it.responsable ? `<tr><td>Responsable / cuadrilla</td><td>${_e(it.responsable)}</td></tr>` : ""}
-        ${(it.personalIds && it.personalIds.length) ? `<tr><td>Personal asignado</td><td>${_e(it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", "))}</td></tr>` : ""}
-        ${it.inicioPlan ? `<tr><td>Podría haber arrancado el</td><td>${fmtD(new Date(it.inicioPlan + "T12:00:00"))}</td></tr>` : ""}
-        <tr><td>Inicio (real)</td><td>${fmtD(it.fechaSolic)}</td></tr>
-        ${(it.retrasoInicio || 0) > 0 ? `<tr><td><b>Atraso en el arranque</b></td><td style="font-weight:bold;color:#B45309">${it.retrasoInicio} días hábiles (ya incluidos en la diferencia de abajo)</td></tr>` : ""}
-        <tr><td>Días estimados</td><td>${it.plazo} días hábiles${it.dec && it.plazo !== it.plazoBase ? ` (incluye prórroga acordada)` : ""}</td></tr>
-        <tr><td>Fin</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "Aún no terminó"}</td></tr>
-        <tr><td>Días hábiles reales</td><td>${it.dias}</td></tr>
-        <tr><td>Diferencia (real vs. estimado)</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio} días</td></tr>
-        ${afectadasTexto(it) ? `<tr><td>Tarea/etapa afectada por el retraso</td><td>${_e(afectadasTexto(it))}</td></tr>` : ""}
-        ${afectadasLeyenda(it) ? `<tr><td colspan="2" style="background:#FEF3C7;color:#92400E"><b>${_e(afectadasLeyenda(it)).replace(/\n/g, "<br/>")}</b></td></tr>` : ""}
-        ${it.causa ? `<tr><td>Causa del desvío</td><td>${_e(causaTexto(it))}${it.categoriaDesvio ? ` <span style="color:#94A3B8">(${_e(it.categoriaDesvio)})</span>` : ""}</td></tr>` : ""}
-        ${(Number(it.diasClima) || 0) > 0 ? `<tr><td>Días de clima / fuerza mayor (no imputables)</td><td>${it.diasClima} días</td></tr><tr><td><b>Retraso imputable neto</b></td><td><b>${it.retraso} días</b></td></tr>` : ""}
-        <tr><td>Estado</td><td>${_e(it.estado)}</td></tr>
-      </table>
-      ${(it.fotosInicio && it.fotosInicio.length) ? `<div style="margin-top:10px">
-        <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E;margin-bottom:5px">Foto de inicio</div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap">${it.fotosInicio.map(f => `<div style="text-align:center"><img src="${f.url}" style="width:120px;height:120px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />${f.fecha ? `<div style="font-size:9px;color:#64748B;margin-top:2px">${fmtFechaCorta(new Date(f.fecha))}</div>` : ""}</div>`).join("")}</div>
-      </div>` : ""}
-      ${(it.fotosFin && it.fotosFin.length) ? `<div style="margin-top:10px">
-        <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E;margin-bottom:5px">Foto de fin</div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap">${it.fotosFin.map(f => `<div style="text-align:center"><img src="${f.url}" style="width:120px;height:120px;object-fit:cover;border:1px solid #CBD5E1;border-radius:4px" />${f.fecha ? `<div style="font-size:9px;color:#64748B;margin-top:2px">${fmtFechaCorta(new Date(f.fecha))}</div>` : ""}</div>`).join("")}</div>
-      </div>` : ""}
-      ${d.decision === "confirmado" ? `<div class="calc">
-        <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Punitorio confirmado</div>
-        <div style="margin-top:5px">Tarea detenida: ${_e(d.tarea || "—")}</div>
-        <div>${it.retraso} día${it.retraso === 1 ? "" : "s"} de retraso × ${Number(d.personas) || g.dotacion} persona${(Number(d.personas) || g.dotacion) === 1 ? "" : "s"} × ${money(Number(d.costoDia) || g.costoPersona)} por persona/día</div>
-        <div class="tot">Perjuicio: ${money(pj)}</div>
-        ${d.nota ? `<div style="margin-top:4px">Observaciones: ${_e(d.nota)}</div>` : ""}
-      </div>` : d.decision === "prorroga" ? `<div class="calc"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Prórroga acordada</div><div style="margin-top:5px">+${d.prorrogaDias} días hábiles${d.nota ? ` — ${_e(d.nota)}` : ""}</div></div>` : d.decision === "sin_perjuicio" ? `<div class="calc"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#B08D3E">Sin perjuicio</div>${d.nota ? `<div style="margin-top:5px">${_e(d.nota)}</div>` : ""}</div>` : ""}
-    </div>`;
-  }
-
-  // ── PDF con varios registros elegidos a mano (no todo el informe) ───
-  function htmlInformeSeleccion(ids) {
-    const sel = items.filter(it => (ids || []).includes(it.id)).sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0));
-    const obrasSel = [...new Set(sel.map(it => obraNom(obras, it.obra_id) || "—"))];
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-      @page{size:A4;margin:22mm 18mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0;padding:14px;word-wrap:break-word}
-      .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:22px}
-      .marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
-      .tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
-      .meta{font-size:10.5px;color:#64748B;margin-top:4px}
-      h1{font-size:14.5px;color:#0F1B2D;margin:0 0 4px}
-      table{width:100%;max-width:100%;border-collapse:collapse;margin:10px 0;table-layout:fixed}
-      td,th{border:1px solid #CBD5E1;padding:6px 9px;font-size:11px;text-align:left;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}
-      th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9px;letter-spacing:1px}
-      img{max-width:100%}
-      .calc{background:rgba(255,255,255,.04);border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:10px 12px;margin:12px 0}
-      .tot{font-size:15px;font-weight:bold;color:#B91C1C;margin-top:5px}
-      .reg{margin-bottom:22px;padding-bottom:16px;border-bottom:2px dashed #CBD5E1;page-break-inside:avoid}
-      .reg:last-of-type{border-bottom:none}
-      .nota{font-size:10px;color:#94A3B8;margin-top:18px;border-top:1px solid #E2E8F0;padding-top:8px}
-      @media(max-width:480px){body{padding:10px;font-size:11.5px}.marca{font-size:16px}table,td,th{font-size:10px}}
-    </style></head><body>
-      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Gestión de obra · Registros seleccionados</div><div class="meta">${_e(obrasSel.join(", ") || "—")} · ${sel.length} registro${sel.length === 1 ? "" : "s"} · Emitido: ${hoyStr()}</div></div>
-      ${sel.length ? sel.map(htmlSeccionRegistro).join("") : `<div style="color:#94A3B8;text-align:center;padding:30px 0">Sin registros seleccionados.</div>`}
-      <div class="nota">Documento generado por el sistema de gestión V+V Construcciones.</div>
-    </body></html>`;
-  }
-
   // ── Informe de estado de situación de una obra ──────────────────────
   // Resumen desde el primer registro cargado hasta hoy: cuánto se hubiese
   // tardado en total (suma de estimados) vs. cuánto se tardó/lleva en
@@ -8719,71 +7288,40 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
   // o el informe de estado de situación con el cliente.
   function resumenObra(obraId) {
     const its = items.filter(it => it.obra_id === obraId).sort((a, b) => (a.fechaSolic || 0) - (b.fechaSolic || 0));
-    // Totales de la obra SIN doble conteo: las tareas que corren a la vez no suman
-    // sus atrasos (ver tiemposObra). Los desvíos por tarea siguen viéndose
-    // tarea por tarea; su simple suma queda en sumaDesvios solo como base de %.
-    const tt = tiemposObra(its);
-    const totalEstimado = tt.estimado;
-    const totalReal = tt.real;
-    const totalDesvio = tt.desvio;
-    const sumaDesvios = its.reduce((a, i) => a + (Number(i.desvio) || 0), 0);
+    const totalEstimado = its.reduce((a, i) => a + (Number(i.plazo) || 0), 0);
+    const totalReal = its.reduce((a, i) => a + (i.dias || 0), 0);
+    const totalDesvio = totalReal - totalEstimado;
     const totalClima = its.reduce((a, i) => a + (Number(i.diasClima) || 0), 0);
-    const totalRetrasoInicio = tt.arranque;
-    const porCausaInicio = {};
-    its.forEach(i => { if ((i.retrasoInicio || 0) > 0) { const c = causaTexto(i) || "Sin causa asignada"; porCausaInicio[c] = (porCausaInicio[c] || 0) + i.retrasoInicio; } });
     const porCausa = {};
-    const porCategoria = { "Evitable": 0, "No evitable": 0, "Sin clasificar": 0 };
-    its.forEach(i => { if (i.desvio > 0) { (causasDe(i).length ? causasDe(i) : ["Sin causa asignada"]).forEach(c => { porCausa[c] = (porCausa[c] || 0) + i.desvio; }); porCategoria[i.categoriaDesvio && porCategoria[i.categoriaDesvio] !== undefined ? i.categoriaDesvio : "Sin clasificar"] += i.desvio; } });
+    its.forEach(i => { if (i.desvio > 0) { const c = i.causa || "Sin causa asignada"; porCausa[c] = (porCausa[c] || 0) + i.desvio; } });
     const desde = its[0]?.fechaSolic || null;
-    const ob = obras.find(o => o.id === obraId);
-    const etapas = resumenEtapasModelo(ob, modelosObra, its);
-    return { its, totalEstimado, totalReal, totalDesvio, sumaDesvios, totalClima, porCausa, porCategoria, desde, etapas, totalRetrasoInicio, porCausaInicio };
+    return { its, totalEstimado, totalReal, totalDesvio, totalClima, porCausa, desde };
   }
   function htmlInformeObra(obraId) {
     const ob = obras.find(o => o.id === obraId);
     const r = resumenObra(obraId);
-    const filaTarea = (it) => `<tr><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8;font-size:9.5px">${_e(it.etapa)}</span>` : ""}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "en curso"}</td><td>${it.plazo}</td><td>${it.dias}</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio}</td><td>${_e(causaTexto(it) || (it.desvio > 0 ? "Sin asignar" : "—"))}${it.categoriaDesvio ? ` (${_e(it.categoriaDesvio)})` : ""}${afectadasTexto(it) ? `<br/><span style="color:#B45309;font-size:9.5px">Afecta: ${_e(afectadasTexto(it))}</span>` : ""}</td></tr>`;
+    const filaTarea = (it) => `<tr><td>${_e(it.descripcion)}${it.etapa ? `<br/><span style="color:#94A3B8;font-size:9.5px">${_e(it.etapa)}</span>` : ""}</td><td>${fmtD(it.fechaSolic)}</td><td>${it.fechaReal ? fmtD(it.fechaReal) : "en curso"}</td><td>${it.plazo}</td><td>${it.dias}</td><td style="font-weight:bold;color:${it.desvio > 0 ? "#B91C1C" : "#15803D"}">${it.desvio > 0 ? "+" : ""}${it.desvio}</td><td>${_e(it.causa || (it.desvio > 0 ? "Sin asignar" : "—"))}</td></tr>`;
     const causas = Object.entries(r.porCausa).sort((a, b) => b[1] - a[1]);
-    const categorias = Object.entries(r.porCategoria).filter(([, d]) => d > 0).sort((a, b) => b[1] - a[1]);
-    const cierreEst = cierreEstimadoObra(ob, modelosObra);
-    const iniDate = parseFechaCorta(ob?.inicio);
-    const cierreDate = parseFechaCorta(cierreEst);
-    const mesesTranscurridos = iniDate ? Math.max(0, Math.round((Date.now() - iniDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44) * 10) / 10) : null;
-    const modeloNom = modeloDeObra(ob, modelosObra)?.nombre || "";
-    const filaEtapa = (e) => `<tr><td>${_e(e.etapa)}</td><td>${e.planInicio ? fmtFechaCorta(e.planInicio) : "—"}</td><td>${e.planFin ? fmtFechaCorta(e.planFin) : "—"}</td><td>${e.duracionPlan || "—"}</td><td>${e.realInicio ? fmtFechaCorta(e.realInicio) : "Sin registros aún"}</td><td>${e.realDias != null ? `${e.realDias}${e.enCurso ? " (en curso)" : ""}` : "—"}</td><td style="font-weight:bold;color:${e.desvio > 0 ? "#B91C1C" : e.desvio != null ? "#15803D" : "#94A3B8"}">${e.desvio != null ? `${e.desvio > 0 ? "+" : ""}${e.desvio}` : "—"}</td></tr>`;
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-      @page{size:A4;margin:20mm 16mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0;padding:12px;word-wrap:break-word}
+    return `<!doctype html><html><head><meta charset="utf-8"><style>
+      @page{size:A4;margin:20mm 16mm}body{font-family:Georgia,serif;color:#1a202c;font-size:11.5px;line-height:1.5;margin:0}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:20px}
       .marca{font-size:18px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
       .tipo{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
       .meta{font-size:10.5px;color:#64748B;margin-top:4px}
       h2{font-size:13px;color:#0F1B2D;margin:20px 0 8px;border-left:4px solid #B08D3E;padding-left:8px}
-      table{width:100%;max-width:100%;border-collapse:collapse;margin:8px 0;table-layout:fixed}
-      td,th{border:1px solid #CBD5E1;padding:6px 8px;font-size:10px;text-align:left;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}
+      table{width:100%;border-collapse:collapse;margin:8px 0}
+      td,th{border:1px solid #CBD5E1;padding:6px 8px;font-size:10px;text-align:left;vertical-align:top}
       th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:8.5px;letter-spacing:.5px}
       .tot{font-size:14px;font-weight:bold;color:#B91C1C;margin-top:6px}
-      .stat{display:inline-block;width:47%;margin-right:1%;margin-bottom:8px;vertical-align:top}
+      .stat{display:inline-block;width:23%;margin-right:1%;vertical-align:top}
       .nota{font-size:9.5px;color:#94A3B8;margin-top:24px;border-top:1px solid #E2E8F0;padding-top:8px}
-      @media(min-width:480px){.stat{width:23%}}
     </style></head><body>
-      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")}${modeloNom ? ` · Modelo: ${_e(modeloNom)}` : ""} · Inicio de obra: ${_e(ob?.inicio || "—")} · Cierre estimado: ${_e(cierreEst || "—")}${!modeloNom && ob?.duracionMeses ? ` (${ob.duracionMeses} meses)` : ""} · Emitido: ${hoyStr()}</div></div>
+      <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Informe de estado de situación</div><div class="meta">Obra: ${_e(ob?.nombre || "—")} · Período: ${r.desde ? fmtD(r.desde) : "—"} a ${hoyStr()} · Emitido: ${hoyStr()}</div></div>
       <h2>Resumen</h2>
-      <div><div class="stat"><div style="font-size:15px;font-weight:800">${ob?.inicio || "—"}</div><div style="font-size:9px;color:#64748B">Inicio de obra</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${cierreEst || "—"}</div><div style="font-size:9px;color:#64748B">Cierre estimado${ob?.duracionMeses ? ` (${ob.duracionMeses}m)` : ""}</div></div><div class="stat"><div style="font-size:15px;font-weight:800">${mesesTranscurridos != null ? mesesTranscurridos : "—"}</div><div style="font-size:9px;color:#64748B">Meses transcurridos desde el inicio</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:${r.totalDesvio > 0 ? "#EF4444" : "#16A34A"}">${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio}</div><div style="font-size:9px;color:#64748B">Desvío total (registro)</div></div></div>
-      <div style="margin-top:4px"><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (registro)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div>${r.totalRetrasoInicio > 0 ? `<div class="stat"><div style="font-size:15px;font-weight:800;color:#B45309">${r.totalRetrasoInicio}</div><div style="font-size:9px;color:#64748B">De los cuales, por arrancar tarde (ya incluido en el desvío total)</div></div>` : ""}</div>
-      ${r.etapas && r.etapas.length ? `<h2>Cronograma por etapa (planificado vs. real)</h2>
-      <table><tr><th>Etapa</th><th>Inicio plan.</th><th>Fin plan.</th><th>Días plan.</th><th>Inicio real</th><th>Días reales</th><th>Desvío</th></tr>
-      ${r.etapas.map(filaEtapa).join("")}</table>` : ""}
-      ${r.totalRetrasoInicio > 0 ? `<h2>Atraso en el arranque de tareas</h2>
-      <div style="font-size:10px;color:#64748B;margin-bottom:6px">Días en que una tarea arrancó más tarde de cuando podría haber arrancado (ej: un pedido de material hecho tarde). Ya están incluidos en el desvío total de arriba y en el estado de cada ítem — el perjuicio en pesos de cada caso se asigna igual que cualquier otro, evaluándolo en Punitorios.</div>
-      <table><tr><th>Causa</th><th>Días de atraso en el arranque</th></tr>
-      ${Object.entries(r.porCausaInicio).sort((a, b) => b[1] - a[1]).map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td></tr>`).join("")}</table>` : ""}
-      <h2>Desvío por categoría</h2>
-      <table><tr><th>Categoría</th><th>Días de desvío</th><th>% del desvío total</th></tr>
-      ${categorias.length ? categorias.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.sumaDesvios > 0 ? Math.round(d / r.sumaDesvios * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
+      <div><div class="stat"><div style="font-size:15px;font-weight:800">${r.totalEstimado}</div><div style="font-size:9px;color:#64748B">Días estimados (total)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#3B82F6">${r.totalReal}</div><div style="font-size:9px;color:#64748B">Días reales (total)</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:${r.totalDesvio > 0 ? "#EF4444" : "#16A34A"}">${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio}</div><div style="font-size:9px;color:#64748B">Desvío total</div></div><div class="stat"><div style="font-size:15px;font-weight:800;color:#F59E0B">${r.totalClima}</div><div style="font-size:9px;color:#64748B">Días de clima descontados</div></div></div>
       <h2>Desvío por causa</h2>
-      <div style="font-size:9.5px;color:#94A3B8;margin-bottom:4px">Si una demora tiene varias causas, sus días se cuentan en cada una (por eso los porcentajes pueden sumar más de 100%). Los días son por tarea: tareas simultáneas no se suman en el desvío total de la obra.</div>
       <table><tr><th>Causa</th><th>Días de desvío</th><th>% del desvío total</th></tr>
-      ${causas.length ? causas.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.sumaDesvios > 0 ? Math.round(d / r.sumaDesvios * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
+      ${causas.length ? causas.map(([c, d]) => `<tr><td>${_e(c)}</td><td>${d}</td><td>${r.totalDesvio > 0 ? Math.round(d / r.totalDesvio * 100) : 0}%</td></tr>`).join("") : `<tr><td colspan="3" style="text-align:center;color:#94A3B8">Sin desvíos registrados</td></tr>`}</table>
       <h2>Detalle de tareas (${r.its.length})</h2>
       <table><tr><th>Tarea</th><th>Inicio</th><th>Fin</th><th>Estimado</th><th>Real</th><th>Desvío</th><th>Causa</th></tr>
       ${r.its.length ? r.its.map(filaTarea).join("") : `<tr><td colspan="7" style="text-align:center;color:#94A3B8">Sin registros</td></tr>`}</table>
@@ -8794,25 +7332,25 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
   function htmlPunit(it) {
     const d = it.dec || {}; const pj = perItem(it);
     const personas = Number(d.personas) || g.dotacion, costo = Number(d.costoDia) || g.costoPersona;
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-      @page{size:A4;margin:22mm 18mm}*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0;padding:14px;word-wrap:break-word}
+    return `<!doctype html><html><head><meta charset="utf-8"><style>
+      @page{size:A4;margin:22mm 18mm}body{font-family:Georgia,serif;color:#1a202c;font-size:12.5px;line-height:1.55;margin:0}
       .hdr{border-bottom:3px solid #B08D3E;padding-bottom:14px;margin-bottom:22px}
       .marca{font-size:19px;font-weight:bold;color:#0F1B2D;letter-spacing:.5px}
       .tipo{font-size:10.5px;text-transform:uppercase;letter-spacing:2px;color:#B08D3E;margin-top:3px}
       h1{font-size:15px;color:#0F1B2D;margin:18px 0 4px}
       .meta{font-size:11px;color:#64748B}
-      table{width:100%;max-width:100%;border-collapse:collapse;margin:14px 0;table-layout:fixed}
-      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}
+      table{width:100%;border-collapse:collapse;margin:14px 0}
+      td,th{border:1px solid #CBD5E1;padding:7px 10px;font-size:11.5px;text-align:left;vertical-align:top}
       th{background:#0F1B2D;color:#fff;font-weight:normal;text-transform:uppercase;font-size:9.5px;letter-spacing:1px}
       .calc{background:rgba(255,255,255,.04);border:1px solid #CBD5E1;border-left:4px solid #B08D3E;padding:12px 14px;margin:16px 0}
       .tot{font-size:16px;font-weight:bold;color:#B91C1C;margin-top:6px}
-      .firmas{display:flex;justify-content:space-between;margin-top:70px;flex-wrap:wrap;gap:10px}
+      .firmas{display:flex;justify-content:space-between;margin-top:70px}
       .firma{width:44%;border-top:1px solid #1a202c;padding-top:6px;font-size:10.5px;text-align:center;color:#475569}
       .nota{font-size:10px;color:#94A3B8;margin-top:26px;border-top:1px solid #E2E8F0;padding-top:8px}
     </style></head><body>
       <div class="hdr"><div class="marca">V+V CONSTRUCCIONES</div><div class="tipo">Registro de perjuicio por demora imputable</div></div>
       <h1>${_e(it.tipo)}: ${_e(it.descripcion)}</h1>
-      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(imputablesTexto(it))} · Emitido: ${hoyStr()}</div>
+      <div class="meta">Obra: ${_e(obraNom(obras, it.obra_id) || "—")} · Imputable a: ${_e(it.imputable)} · Emitido: ${hoyStr()}</div>
       <table>
         <tr><th>Concepto</th><th>Detalle</th></tr>
         <tr><td>Fecha de solicitud</td><td>${fmtD(it.fechaSolic)}</td></tr>
@@ -8836,56 +7374,29 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
     </body></html>`;
   }
 
-  const TABS = [["retrasos", "Retraso"], ["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
+  const TABS = [["registro", "Registro"], ["punitorios", "Punitorios"], ["panel", "Panel"], ["plan", "Plan"], ["reunion", "Reunión"]];
   const DEC_BADGE = { confirmado: { t: "Punitorio", c: "#B91C1C", b: "rgba(239,68,68,.10)" }, sin_perjuicio: { t: "Sin perjuicio", c: "#64748B", b: "rgba(255,255,255,.06)" }, prorroga: { t: "Prórroga", c: "#2563EB", b: "rgba(37,99,235,.14)" } };
 
   // Tarjeta compartida por Registro y Punitorios
-  // Componente ESTABLE: antes se redefinía en cada render y React lo desmontaba entero (los videos se reiniciaban/cortaban solos).
-  const itemCardRef = useRef(null);
-  const ItemCard = useCallback((props) => itemCardRef.current(props), []);
-  itemCardRef.current = ({ it, conAcciones, conRegistro, selModo, selected, onToggleSel }) => {
+  const ItemCard = ({ it, conAcciones, conRegistro }) => {
     const e = GEST_ESTADOS[it.estado] || GEST_ESTADOS["En plazo"]; const pj = perItem(it); const db2 = it.dec ? DEC_BADGE[it.dec.decision] : null;
-    return (<Card onClick={selModo ? () => onToggleSel(it.id) : undefined} style={{ padding: 13, marginBottom: 9, position: "relative", cursor: selModo ? "pointer" : "default", border: selModo && selected ? `2px solid ${T.accent}` : undefined, background: selModo && selected ? T.al : undefined }}>
-      {selModo && <div style={{ position: "absolute", top: 10, right: 10, width: 22, height: 22, borderRadius: 6, border: `2px solid ${selected ? T.accent : T.border}`, background: selected ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{selected ? "✓" : ""}</div>}
+    return (<Card style={{ padding: 13, marginBottom: 9 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-        <div style={{ minWidth: 0, flex: 1, paddingRight: selModo ? 28 : 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{imputablesTexto(it)}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
+          <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{it.tipo} · {obraNom(obras, it.obra_id) || "—"} · imputable a <b style={{ color: T.sub }}>{it.imputable}</b>{it.etapa ? ` · ${it.etapa}` : ""}</div>
           {(it.responsable || (it.personalIds && it.personalIds.length > 0)) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{it.responsable ? `Responsable: ${it.responsable}` : ""}{it.responsable && it.personalIds?.length ? " · " : ""}{it.personalIds?.length ? `Personal: ${it.personalIds.map(id => (personal || []).find(p => p.id === id)?.nombre).filter(Boolean).join(", ")}` : ""}</div>}
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
-            {it.tipo === "Retraso" ? <>
-              <span style={{ fontSize: 10.5, color: T.muted }}>{retrasoFrase(it)} · desde {fmtD(it.fechaSolic)} · {it.fechaReal ? `resuelto ${fmtD(it.fechaReal)}` : "sin resolver"}</span>
-              <span style={{ fontSize: 10.5, fontWeight: 800, color: "#EF4444" }}>+{it.demoraDias} d</span>
-            </> : <>
-              <span style={{ fontSize: 10.5, color: T.muted }}>Inicio {fmtD(it.fechaSolic)} · {it.fechaReal ? `fin ${fmtD(it.fechaReal)}` : "sin terminar"} · estimado {it.plazo} d</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>diferencia {it.desvio > 0 ? "+" : ""}{it.desvio}</span>
-            </>}
-            {(it.retrasoInicio || 0) > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#B45309", background: "rgba(245,158,11,.14)", borderRadius: 10, padding: "2px 8px" }}>arrancó {it.retrasoInicio}d tarde</span>}
-            {conRegistro && !selModo && it.tipo === "Retraso" && <button onClick={() => upd({ manual: (g.manual || []).map(x => x.id === it.id ? { ...x, fechaReal: x.fechaReal ? "" : isoHoy() } : x) })} style={{ background: it.fechaReal ? T.al : "rgba(22,163,74,.12)", border: `1px solid ${it.fechaReal ? T.border : "rgba(22,163,74,.35)"}`, color: it.fechaReal ? T.accent : "#16A34A", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{it.fechaReal ? "Reabrir" : "Resuelto"}</button>}
-            {conRegistro && !selModo && it.tipo === "Retraso" && <button onClick={() => setEditRet((g.manual || []).find(x => x.id === it.id) || null)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>}
-            {conRegistro && !selModo && it.tipo !== "Retraso" && <button onClick={() => { setMError(""); setMForm({ ...g.manual.find(x => x.id === it.id) }); }} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Editar</button>}
-            {conRegistro && !selModo && <button onClick={() => upd({ manual: (g.manual || []).map(x => x.id === it.id ? { ...x, portada: !x.portada } : x) })} style={{ background: it.portada ? T.navy : T.bg, border: `1px solid ${it.portada ? BRASS : T.border}`, color: it.portada ? "#fff" : T.sub, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{it.portada ? "📌 En Inicio" : "Poner en Inicio"}</button>}
-            {conRegistro && !selModo && it.tipo === "Retraso" && <button onClick={() => enviarRetrasoWA(it)} style={{ background: "#16A34A", border: "none", color: "#fff", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>WhatsApp</button>}
-            {conRegistro && !selModo && <button onClick={() => it.tipo === "Retraso" ? setPdfRetr([it.id]) : setPdfReg(it)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
-            {conRegistro && !selModo && <button onClick={() => borrarRegistro(it.id)} style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✕</button>}
+            <span style={{ fontSize: 10.5, color: T.muted }}>Inicio {fmtD(it.fechaSolic)} · {it.fechaReal ? `fin ${fmtD(it.fechaReal)}` : "sin terminar"} · estimado {it.plazo} d</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: it.desvio > 0 ? "#EF4444" : "#16A34A" }}>diferencia {it.desvio > 0 ? "+" : ""}{it.desvio}</span>
+            {conRegistro && <button onClick={() => setMForm({ ...g.manual.find(x => x.id === it.id) })} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>editar</button>}
+            {conRegistro && <button onClick={() => setPdfReg(it)} style={{ background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>PDF</button>}
+            {conRegistro && <button onClick={() => borrarRegistro(it.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11, cursor: "pointer" }}>✕</button>}
           </div>
-          {it.tipo === "Retraso" && (() => { const c = costoRet(it); return (<div style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px" }}>
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11.5, color: T.sub }}>
-              {c.personas > 0 && <span><b>{c.personas}</b> personas {c.prod > 0 ? `trabajando al ${c.prod}% de productividad` : "sin poder avanzar"}</span>}
-              <span>Perjuicio <b>V+V</b>: <b style={{ color: c.diaVV > 0 ? "#B91C1C" : T.muted }}>{c.diaVV > 0 ? money(c.vv) : "sin costos cargados"}</b></span>
-              <span>Perjuicio <b>{cli}</b>: <b style={{ color: c.diaBel > 0 ? "#B91C1C" : T.muted }}>{c.diaBel > 0 ? money(c.bel) : "sin costos cargados"}</b></span>
-            </div>
-            <button onClick={() => setExpRet(m => ({ ...m, [it.id]: !m[it.id] }))} style={{ background: "none", border: "none", color: T.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "5px 0 0" }}>{expRet[it.id] ? "Ocultar explicación" : "Ver cómo se calcula"}</button>
-            {expRet[it.id] && <div style={{ fontSize: 11, color: T.sub, lineHeight: 1.55, marginTop: 5, whiteSpace: "pre-wrap" }}>{textoPerjuicio(it)}</div>}
-          </div>); })()}
-          <VideosLista videos={it.videos} T={T} onWA={(v, i) => window.open(`https://wa.me/?text=${encodeURIComponent(`Video ${i + 1} de ${it.videos.length} — ${it.descripcion}\n${v.url}`)}`, "_blank")} />
-          {it.tipo === "Retraso" && it.nota && <div style={{ fontSize: 11, color: T.sub, marginTop: 4, whiteSpace: "pre-wrap" }}>{it.nota}</div>}
-          {afectadasTexto(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 4 }}>Afecta a: <b>{afectadasTexto(it)}</b></div>}
-          {afectadasLeyenda(it) && <div style={{ fontSize: 10.5, color: "#B45309", marginTop: 3, fontWeight: 700, whiteSpace: "pre-wrap" }}>{afectadasLeyenda(it)}</div>}
-          {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${causaTexto(it)}${it.categoriaDesvio ? ` (${it.categoriaDesvio})` : ""}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (retraso imputable: ${it.retraso} d)` : ""}</div>}
+          {(it.causa || (Number(it.diasClima) || 0) > 0) && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{it.causa ? `Causa: ${it.causa}` : ""}{it.causa && (Number(it.diasClima) || 0) > 0 ? " · " : ""}{(Number(it.diasClima) || 0) > 0 ? `${it.diasClima} d de clima descontados (retraso imputable: ${it.retraso} d)` : ""}</div>}
           {((it.fotosInicio && it.fotosInicio.length) || (it.fotosFin && it.fotosFin.length)) && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
-            {(it.fotosInicio || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer" style={{ textAlign: "center" }}><img src={f.url} title={f.fecha ? `Inicio · ${fmtFechaCorta(new Date(f.fecha))}` : "Inicio"} style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #16A34A", display: "block" }} />{f.fecha && <div style={{ fontSize: 8.5, color: T.muted }}>{fmtFechaCorta(new Date(f.fecha))}</div>}</a>)}
-            {(it.fotosFin || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer" style={{ textAlign: "center" }}><img src={f.url} title={f.fecha ? `Fin · ${fmtFechaCorta(new Date(f.fecha))}` : "Fin"} style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #B08D3E", display: "block" }} />{f.fecha && <div style={{ fontSize: 8.5, color: T.muted }}>{fmtFechaCorta(new Date(f.fecha))}</div>}</a>)}
+            {(it.fotosInicio || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} title="Inicio" style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #16A34A" }} /></a>)}
+            {(it.fotosFin || []).slice(0, 4).map(f => <a key={f.id} href={f.url} target="_blank" rel="noreferrer"><img src={f.url} title="Fin" style={{ width: 42, height: 42, borderRadius: 6, objectFit: "cover", border: "2px solid #B08D3E" }} /></a>)}
           </div>}
           {it.dec?.decision === "confirmado" && <div style={{ fontSize: 11, marginTop: 6, color: T.sub, lineHeight: 1.5 }}><b style={{ color: "#B91C1C" }}>Perjuicio: {money(pj)}</b> — {it.retraso} d × {Number(it.dec.personas) || g.dotacion} pers. × {money(Number(it.dec.costoDia) || g.costoPersona)}{it.dec.tarea ? <><br />Frenó: {it.dec.tarea}</> : null}</div>}
           {it.dec?.decision === "prorroga" && <div style={{ fontSize: 11, marginTop: 6, color: "#2563EB" }}>Prórroga acordada: +{it.dec.prorrogaDias} días háb.{it.dec.nota ? ` — ${it.dec.nota}` : ""}</div>}
@@ -8908,95 +7419,24 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="gestion" label="Gestión de obra" sub="Desempeño, desvíos y perjuicio económico" onBack={onBack} />
     <div style={{ padding: "14px 20px 0" }}>
-      <div style={{ display: "flex", gap: 4, overflowX: "auto", overflowY: "visible", paddingTop: 7, paddingBottom: 4 }}>
-        {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? T.al : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer", position: "relative", overflow: "visible" }}>{l}{k === "punitorios" && enEval.length > 0 && <span style={{ position: "absolute", top: -7, right: -7, background: "#EF4444", color: "#fff", borderRadius: 10, minWidth: 17, height: 17, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxShadow: "0 0 0 2px " + T.bg }}>{enEval.length}</span>}</button>)}
+      <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>
+        {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 8, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? T.al : T.card, color: tab === k ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer", position: "relative" }}>{l}{k === "punitorios" && enEval.length > 0 && <span style={{ position: "absolute", top: -5, right: -5, background: "#EF4444", color: "#fff", borderRadius: 10, minWidth: 17, height: 17, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>{enEval.length}</span>}</button>)}
       </div>
     </div>
 
-    {!itemFoco && (tab === "retrasos" || tab === "registro" || tab === "punitorios" || tab === "panel") && obras.length > 0 && <div style={{ padding: "10px 20px 0" }}>
-      <Sel value={filtroObra} onChange={e => { setFiltroObra(e.target.value); setFiltroEtapa("todas"); setSelIds([]); }}><option value="todas">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel>
-    </div>}
-
-      {!itemFoco && <Card style={{ padding: 11, margin: "12px 20px 0" }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 2 }}>Aviso en el Inicio de las dos apps</div>
-        <div style={{ fontSize: 10.5, color: T.muted, marginBottom: 8 }}>Lo ven V+V y {cli} en su pantalla principal. Marcá cada registro con "Poner en Inicio".</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {[["marcados", "Solo los marcados"], ["semana", "Todo lo de la semana"], ["nada", "No mostrar"]].map(([k, l]) => { const a = (g.portadaModo || "marcados") === k; return <button key={k} onClick={() => upd({ portadaModo: k })} style={{ padding: "8px 12px", borderRadius: 18, border: `1.5px solid ${a ? T.accent : T.border}`, background: a ? T.al : T.bg, color: a ? T.accent : T.sub, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>; })}
-        </div>
-      </Card>}
-    {tab === "retrasos" && <div style={{ padding: "16px 20px", paddingBottom: 90 }}>
-      {itemFoco && itemFoco.tipo === "Retraso" && <div style={{ marginBottom: 16, paddingBottom: 6, borderBottom: `2px solid ${T.accent}` }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: ".06em" }}>Lo que tocaste en Inicio</div>
-          <button onClick={() => setFoco(null)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Cerrar</button>
-        </div>
-        <ItemCard it={itemFoco} conAcciones={false} conRegistro={true} selModo={false} selected={false} onToggleSel={toggleSel} />
-      </div>}
-      <RetrasoRapido key={filtroObra} dotacion={g.dotacion} obras={obras} modelosObra={modelosObra} obraIni={filtroObra !== "todas" ? filtroObra : (obras[0]?.id || "")} cli={cli} onGuardar={(it) => upd({ manual: [...(g.manual || []), it] })} />
-      <Card style={{ padding: 13, marginBottom: 14 }}>
-        <div onClick={() => setVerCostos(v => !v)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
-          <div><div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>Costos del retraso</div><div style={{ fontSize: 11, color: T.muted }}>Con esto se calcula el perjuicio de cada retraso</div></div>
-          <span style={{ color: T.accent, fontSize: 12, fontWeight: 700 }}>{verCostos ? "cerrar" : "ajustar"}</span>
-        </div>
-        {verCostos && <div style={{ marginTop: 12 }}>
-          <FieldRow>
-            <Field label="Personas habituales en obra"><TInput type="number" value={g.dotacion || ""} onChange={e => upd({ dotacion: +e.target.value || 0 })} /></Field>
-            <Field label="Costo por persona y día ($)"><TInput type="number" value={g.costoPersona || ""} onChange={e => upd({ costoPersona: +e.target.value || 0 })} /></Field>
-          </FieldRow>
-          <FieldRow>
-            <Field label="Otros gastos fijos V+V por día ($)"><TInput type="number" value={g.fijosVV || ""} onChange={e => upd({ fijosVV: +e.target.value || 0 })} placeholder="equipos, andamios, supervisión" /></Field>
-            <Field label={`Gastos generales de ${cli} por día ($)`}><TInput type="number" value={g.ggBelfast || ""} onChange={e => upd({ ggBelfast: +e.target.value || 0 })} placeholder="dirección, estructura, seguros" /></Field>
-          </FieldRow>
-          <div style={{ fontSize: 10.5, color: T.muted, lineHeight: 1.5 }}>Son valores por día hábil. El costo por persona es el mismo que usa Punitorios.</div>
-        </div>}
-      </Card>
-      {itemsRetraso.length > 0 && (() => { const tot = itemsRetraso.reduce((a, i) => { const c = costoRet(i); return { vv: a.vv + c.vv, bel: a.bel + c.bel }; }, { vv: 0, bel: 0 }); return (<Card style={{ padding: 13, marginBottom: 14, borderLeft: "4px solid #EF4444" }}>
-        <div style={{ fontSize: 11, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, marginBottom: 6 }}>Perjuicio acumulado por {diasRetrasoTot} días de retraso</div>
-        <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
-          <div><div style={{ fontSize: 11, color: T.muted }}>V+V</div><div style={{ fontSize: 18, fontWeight: 800, color: "#B91C1C" }}>{money(tot.vv)}</div></div>
-          <div><div style={{ fontSize: 11, color: T.muted }}>{cli}</div><div style={{ fontSize: 18, fontWeight: 800, color: "#B91C1C" }}>{money(tot.bel)}</div></div>
-        </div>
-        <button onClick={() => setPdfRetr(itemsRetraso.map(i => i.id))} style={{ marginTop: 10, background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>PDF con la explicación</button>
-      </Card>); })()}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>Retrasos registrados</div>
-        {itemsRetraso.length > 0 && <div style={{ fontSize: 12, fontWeight: 800, color: "#EF4444" }}>+{diasRetrasoTot} d hábiles</div>}
-      </div>
-      {itemsRetraso.length === 0 && <EmptyMsg>Todavía no hay retrasos cargados.</EmptyMsg>}
-      {itemsRetraso.filter(it => it.id !== foco).map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} selModo={false} selected={false} onToggleSel={toggleSel} />)}
-    </div>}
-    {tab === "registro" && <div style={{ padding: "16px 20px", paddingBottom: selModo ? 110 : 90 }}>
-      {itemFoco && itemFoco.tipo !== "Retraso" && <div style={{ marginBottom: 16, paddingBottom: 6, borderBottom: `2px solid ${T.accent}` }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.accent, textTransform: "uppercase", letterSpacing: ".06em" }}>Lo que tocaste en Inicio</div>
-          <button onClick={() => setFoco(null)} style={{ background: "none", border: "none", color: T.muted, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Cerrar</button>
-        </div>
-        <ItemCard it={itemFoco} conAcciones={false} conRegistro={true} selModo={false} selected={false} onToggleSel={toggleSel} />
-      </div>}
+    {tab === "registro" && <div style={{ padding: "16px 20px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
         <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>Cargá acá cada tarea o hecho de obra (días estimados por defecto {g.plazo} háb.), con foto de inicio y de fin para dejar constancia de cuánto llevó en verdad. Quedan registrados, se pueden editar, sacar en PDF o borrar; los que se pasan del estimado se evalúan en la pestaña Punitorios.</div>
         {items.length > 0 && <button onClick={vaciarRegistro} style={{ flexShrink: 0, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: 7, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Vaciar registro</button>}
       </div>
       {items.length > 0 && <FieldRow>
+        <Field label="Filtrar por obra"><Sel value={filtroObra} onChange={e => setFiltroObra(e.target.value)}><option value="todas">Todas las obras</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
         <Field label="Filtrar por etapa"><Sel value={filtroEtapa} onChange={e => setFiltroEtapa(e.target.value)}><option value="todas">Todas las etapas</option>{etapasUsadas.map(e => <option key={e} value={e}>{e}</option>)}</Sel></Field>
       </FieldRow>}
-      {items.length > 0 && <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-        <button onClick={() => { setSelModo(m => !m); setSelIds([]); }} style={{ background: selModo ? "rgba(239,68,68,.10)" : T.al, border: `1px solid ${selModo ? "rgba(239,68,68,.30)" : BRASS}`, color: selModo ? "#EF4444" : T.accent, borderRadius: 7, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{selModo ? "Cancelar selección" : "Armar PDF con varios registros"}</button>
-      </div>}
       {items.length === 0 && <EmptyMsg>Sin registros. Agregá el primero con ＋.</EmptyMsg>}
       {items.length > 0 && itemsFiltrados.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "8px 0 16px" }}>Ningún registro coincide con el filtro.</div>}
-      {selModo && itemsFiltrados.length > 0 && <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 10 }}>
-        <button onClick={() => setSelIds(itemsFiltrados.map(it => it.id))} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Elegir todos los filtrados</button>
-        <button onClick={() => setSelIds(itemsFiltrados.slice(0, 5).map(it => it.id))} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Últimos 5</button>
-        <button onClick={() => setSelIds(itemsFiltrados.slice(0, 10).map(it => it.id))} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Últimos 10</button>
-        {selIds.length > 0 && <button onClick={() => setSelIds([])} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Vaciar selección</button>}
-      </div>}
-      {itemsFiltrados.filter(it => it.id !== foco).map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} selModo={selModo} selected={selIds.includes(it.id)} onToggleSel={toggleSel} />)}
-      {!selModo && <AddFab onClick={() => { setMError(""); const obIni = obras.find(o => o.id === (filtroObra !== "todas" ? filtroObra : obras[0]?.id)); setMForm({ tipo: "Tarea", obra_id: obIni?.id || obras[0]?.id || "", descripcion: "", imputables: ["Estudio"], fechaSolic: isoFromFechaCorta(obIni?.inicio) || isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", categoriaDesvio: "", causa: "", causaDetalle: "", diasClima: 0, responsable: "", personalIds: [] }); }} label="Registro" />}
-      {selModo && <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: T.navy, borderTop: `2px solid ${BRASS}`, padding: "12px 16px", paddingBottom: "max(12px, env(safe-area-inset-bottom))", display: "flex", alignItems: "center", gap: 10, zIndex: 50 }}>
-        <div style={{ color: "#fff", fontSize: 12.5, fontWeight: 700, flex: 1 }}>{selIds.length} registro{selIds.length === 1 ? "" : "s"} elegido{selIds.length === 1 ? "" : "s"}</div>
-        <button disabled={selIds.length === 0} onClick={() => setPdfSel([...selIds])} style={{ background: selIds.length ? BRASS : T.border, border: "none", color: "#fff", borderRadius: 8, padding: "10px 16px", fontSize: 12.5, fontWeight: 700, cursor: selIds.length ? "pointer" : "default" }}>Generar PDF</button>
-      </div>}
+      {itemsFiltrados.map(it => <ItemCard key={it.id} it={it} conAcciones={false} conRegistro={true} />)}
+      <AddFab onClick={() => setMForm({ tipo: "Tarea", obra_id: obras[0]?.id || "", descripcion: "", imputable: "Estudio", fechaSolic: isoHoy(), plazo: g.plazo, fechaReal: "", fotosInicio: [], fotosFin: [], etapa: "", causa: "", diasClima: 0, responsable: "", personalIds: [] })} label="Registro" />
     </div>}
 
     {tab === "punitorios" && <div style={{ padding: "16px 20px" }}>
@@ -9022,12 +7462,12 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
         <Eyebrow>Parámetros por defecto</Eyebrow>
         <div style={{ fontSize: 11, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Se precargan al evaluar; en cada punitorio podés ajustar la dotación y el costo reales de ESA parada.</div>
         <FieldRow>
-          <Field label="Plazo (días háb.)"><TInput type="number" value={g.plazo || ""} onChange={e => upd({ plazo: +e.target.value || 0 })} /></Field>
-          <Field label="Dotación típica"><TInput type="number" value={g.dotacion || ""} onChange={e => upd({ dotacion: +e.target.value || 0 })} /></Field>
+          <Field label="Plazo (días háb.)"><TInput type="number" value={g.plazo} onChange={e => upd({ plazo: +e.target.value || 0 })} /></Field>
+          <Field label="Dotación típica"><TInput type="number" value={g.dotacion} onChange={e => upd({ dotacion: +e.target.value || 0 })} /></Field>
         </FieldRow>
-        <Field label="Costo diario por persona ($)"><TInput type="number" value={g.costoPersona || ""} onChange={e => upd({ costoPersona: +e.target.value || 0 })} /></Field>
+        <Field label="Costo diario por persona ($)"><TInput type="number" value={g.costoPersona} onChange={e => upd({ costoPersona: +e.target.value || 0 })} /></Field>
         <Eyebrow>Costo diario por oficio (referencia)</Eyebrow>
-        {(g.oficios || []).map((o, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{o.oficio}</span><input type="number" value={o.costo || ""} onChange={e => upd({ oficios: g.oficios.map((x, j) => j === i ? { ...x, costo: +e.target.value || 0 } : x) })} style={{ width: 110, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 9px", fontSize: 12.5, color: T.text, textAlign: "right" }} /></div>))}
+        {(g.oficios || []).map((o, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "5px 0" }}><span style={{ fontSize: 12.5, color: T.text }}>{o.oficio}</span><input type="number" value={o.costo} onChange={e => upd({ oficios: g.oficios.map((x, j) => j === i ? { ...x, costo: +e.target.value || 0 } : x) })} style={{ width: 110, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 9px", fontSize: 12.5, color: T.text, textAlign: "right" }} /></div>))}
       </Card>
     </div>}
 
@@ -9047,10 +7487,10 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
       <Eyebrow>Top 5 tareas más desviadas</Eyebrow>
       <Card style={{ padding: 13, marginBottom: 14 }}>
         {topDesvios.length === 0 && <div style={{ fontSize: 12, color: T.muted, padding: "4px 0" }}>Sin desvíos por ahora.</div>}
-        {topDesvios.map((it, i) => (<div key={it.id} onClick={() => { setTab("registro"); setFiltroObra(it.obra_id || "todas"); setFiltroEtapa("todas"); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < topDesvios.length - 1 ? `1px solid ${T.bg}` : "none", cursor: "pointer" }}>
+        {topDesvios.map((it, i) => (<div key={it.id} onClick={() => { setTab("registro"); setFiltroObra("todas"); setFiltroEtapa("todas"); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < topDesvios.length - 1 ? `1px solid ${T.bg}` : "none", cursor: "pointer" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text }}>{it.descripcion}</div>
-            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{obraNom(obras, it.obra_id) || "—"}{it.etapa ? ` · ${it.etapa}` : ""}{it.causa ? ` · ${causaTexto(it)}` : ""}</div>
+            <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{obraNom(obras, it.obra_id) || "—"}{it.etapa ? ` · ${it.etapa}` : ""}{it.causa ? ` · ${it.causa}` : ""}</div>
           </div>
           <span style={{ fontSize: 13, fontWeight: 800, color: "#EF4444", flexShrink: 0 }}>+{it.desvio} d</span>
         </div>))}
@@ -9059,34 +7499,19 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
       <Eyebrow>Informe de estado de situación</Eyebrow>
       <Card style={{ padding: 13, marginBottom: 14 }}>
         <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 10, lineHeight: 1.5 }}>Resumen de una obra desde el primer registro hasta hoy: cuánto se hubiese tardado (estimado) contra cuánto se tardó en realidad, y el desvío total desglosado por causa.</div>
-        {filtroObra === "todas" && <FieldRow>
+        <FieldRow>
           <Field label="Obra"><Sel value={obraInforme} onChange={e => setObraInforme(e.target.value)}><option value="">— Elegí una obra —</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
-        </FieldRow>}
-        {obraInf && (() => {
-          const ob = obras.find(o => o.id === obraInf);
-          const r = resumenObra(obraInf);
-          const cierreEst = cierreEstimadoObra(ob, modelosObra);
+        </FieldRow>
+        {obraInforme && (() => {
+          const r = resumenObra(obraInforme);
+          if (!r.its.length) return <div style={{ fontSize: 12, color: T.muted }}>Esta obra todavía no tiene registros cargados.</div>;
           return (<>
-            {(ob?.inicio || cierreEst) && <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <MiniStat label="Inicio de obra" value={ob?.inicio || "—"} color={T.accent} />
-              <MiniStat label="Cierre estimado" value={cierreEst || "—"} color="#3B82F6" />
-            </div>}
-            {!r.its.length ? <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>Esta obra todavía no tiene registros cargados.</div> : (<>
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <MiniStat label="Plazo estimado" value={`${r.totalEstimado} d`} color={T.accent} />
-                <MiniStat label="Real" value={`${r.totalReal} d`} color="#3B82F6" />
-                <MiniStat label="Desvío" value={`${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio} d`} color={r.totalDesvio > 0 ? "#EF4444" : "#16A34A"} />
-                {r.totalRetrasoInicio > 0 && <MiniStat label="Atraso de arranque" value={`${r.totalRetrasoInicio} d`} color="#B45309" />}
-              </div>
-              {r.etapas.length > 0 && <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10.5, color: T.muted, textTransform: "uppercase", marginBottom: 6 }}>Cronograma por etapa</div>
-                {r.etapas.map(e => (<div key={e.etapa} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.bg}` }}>
-                  <div style={{ fontSize: 12, color: T.text, flex: 1, minWidth: 0 }}>{e.etapa}<div style={{ fontSize: 10, color: T.muted }}>{e.planInicio ? `Plan: ${fmtFechaCorta(e.planInicio)} · ${e.duracionPlan}d` : "Sin plan"}{e.realInicio ? ` · Real desde ${fmtFechaCorta(e.realInicio)}` : " · sin registros aún"}</div></div>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: e.desvio > 0 ? "#EF4444" : e.desvio != null ? "#16A34A" : T.muted }}>{e.desvio != null ? `${e.desvio > 0 ? "+" : ""}${e.desvio}d` : "—"}</span>
-                </div>))}
-              </div>}
-            </>)}
-            {r.its.length > 0 && <PBtn full onClick={() => setPdfInforme(obraInf)}>Generar informe de situación</PBtn>}
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <MiniStat label="Estimado" value={`${r.totalEstimado} d`} color={T.accent} />
+              <MiniStat label="Real" value={`${r.totalReal} d`} color="#3B82F6" />
+              <MiniStat label="Desvío" value={`${r.totalDesvio > 0 ? "+" : ""}${r.totalDesvio} d`} color={r.totalDesvio > 0 ? "#EF4444" : "#16A34A"} />
+            </div>
+            <PBtn full onClick={() => setPdfInforme(obraInforme)}>Generar informe de situación</PBtn>
           </>);
         })()}
       </Card>
@@ -9124,99 +7549,36 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
       <AddFab onClick={() => setRForm({ periodo: "", fecha: hoyStr(), participantes: "", flojo: "", mejorar: "", acciones: "" })} label="Reunión" />
     </div>}
 
-    {mForm && <Sheet title={mForm.id ? "Editar registro" : "Nuevo registro"} onClose={() => { setMForm(null); setMError(""); }}>
+    {mForm && <Sheet title={mForm.id ? "Editar registro" : "Nuevo registro"} onClose={() => setMForm(null)}>
       <FieldRow>
-        <Field label="Tipo"><Sel value={mForm.tipo} onChange={e => setMForm({ ...mForm, tipo: e.target.value })}><option>Tarea</option><option>Certificado</option><option>Pedido de información</option><option>Visita técnica</option><option>Compra de materiales</option><option>Recepción de planos</option><option>Cierre de contrato de proveedores</option><option>Otro</option></Sel></Field>
-        <Field label="Obra"><Sel value={mForm.obra_id} onChange={e => { const ob = obras.find(o => o.id === e.target.value); const traerInicio = !mForm.id && (!mForm.fechaSolic || mForm.fechaSolic === isoHoy() || mForm.fechaSolic === isoFromFechaCorta(obras.find(o => o.id === mForm.obra_id)?.inicio)); setMForm({ ...mForm, obra_id: e.target.value, fechaSolic: traerInicio ? (isoFromFechaCorta(ob?.inicio) || mForm.fechaSolic) : mForm.fechaSolic }); }}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+        <Field label="Tipo"><Sel value={mForm.tipo} onChange={e => setMForm({ ...mForm, tipo: e.target.value })}><option>Tarea</option><option>Certificado</option><option>Pedido de información</option><option>Visita técnica</option><option>Otro</option></Sel></Field>
+        <Field label="Obra"><Sel value={mForm.obra_id} onChange={e => setMForm({ ...mForm, obra_id: e.target.value })}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       </FieldRow>
       <Field label="Tarea / Descripción"><TInput value={mForm.descripcion} onChange={e => setMForm({ ...mForm, descripcion: e.target.value })} placeholder="Ej: Armado de cerco de obra" /></Field>
-      <Field label="Imputable a (podés marcar más de una)">
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {[cli, "Estudio", "V+V"].map(op => { const lista = Array.isArray(mForm.imputables) ? mForm.imputables : (mForm.imputable ? [mForm.imputable] : []); const marcada = lista.includes(op); return (
-            <label key={op} onClick={() => setMForm({ ...mForm, imputables: marcada ? lista.filter(x => x !== op) : [...lista, op], imputable: undefined })} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 20, border: `1.5px solid ${marcada ? T.accent : T.border}`, background: marcada ? T.al : T.bg, color: marcada ? T.accent : T.sub, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
-              <input type="checkbox" checked={marcada} readOnly style={{ width: 14, height: 14 }} />{op}
-            </label>
-          ); })}
-        </div>
-      </Field>
-      <Field label="Días estimados"><TInput type="number" value={mForm.plazo || ""} onChange={e => setMForm({ ...mForm, plazo: +e.target.value || 0 })} /></Field>
       <FieldRow>
-        <Field label="Inicio (cuando realmente arrancó)"><TInput type="date" value={mForm.fechaSolic} onChange={e => setMForm({ ...mForm, fechaSolic: e.target.value })} /></Field>
+        <Field label="Imputable a"><Sel value={mForm.imputable} onChange={e => setMForm({ ...mForm, imputable: e.target.value })}><option value={cli}>{cli}</option><option value="Estudio">Estudio</option><option value="V+V">V+V</option></Sel></Field>
+        <Field label="Días estimados"><TInput type="number" value={mForm.plazo} onChange={e => setMForm({ ...mForm, plazo: +e.target.value || 0 })} /></Field>
+      </FieldRow>
+      <FieldRow>
+        <Field label="Inicio"><TInput type="date" value={mForm.fechaSolic} onChange={e => setMForm({ ...mForm, fechaSolic: e.target.value })} /></Field>
         <Field label="Fin (si terminó)"><TInput type="date" value={mForm.fechaReal} onChange={e => setMForm({ ...mForm, fechaReal: e.target.value })} /></Field>
       </FieldRow>
-      <Field label="Podría haber arrancado el (opcional)">
-        <TInput type="date" value={mForm.inicioPlan || ""} onChange={e => setMForm({ ...mForm, inicioPlan: e.target.value })} />
-        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>Completá esto solo si la tarea arrancó más tarde de lo que podría haber arrancado (ej: el pedido de material se hizo tarde, no había cuadrilla). Mide el atraso en el ARRANQUE, separado de si después se ejecutó en plazo o no — pero SÍ suma al desvío total y al estado del ítem (puede quedar "Fuera de plazo" aunque la ejecución haya sido impecable). El perjuicio en pesos de ese atraso se define igual que siempre, evaluándolo en Punitorios.</div>
-      </Field>
       {mForm.fechaSolic && (() => {
         const pv = previewDesvio(mForm);
         const neto = Math.max(0, Math.max(0, pv.desvio) - (Number(mForm.diasClima) || 0));
-        const inicioPlanD = mForm.inicioPlan ? new Date(mForm.inicioPlan + "T12:00:00") : null;
-        const fechaSolicD = mForm.fechaSolic ? new Date(mForm.fechaSolic + "T12:00:00") : null;
-        const retrasoInicio = (inicioPlanD && fechaSolicD && inicioPlanD < fechaSolicD) ? diasHabiles(inicioPlanD, fechaSolicD) : 0;
-        return (<>
-          <div style={{ background: pv.desvio > 0 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.10)", border: `1px solid ${pv.desvio > 0 ? "rgba(239,68,68,.30)" : "rgba(22,163,74,.30)"}`, borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: T.text, lineHeight: 1.5 }}>
-            {mForm.fechaReal ? "Llevó" : "Lleva"} <b>{pv.dias}</b> día{pv.dias === 1 ? "" : "s"} hábil{pv.dias === 1 ? "" : "es"} contra {mForm.plazo || 0} estimado{(mForm.plazo || 0) === 1 ? "" : "s"}{pv.desvio !== 0 && <> — diferencia de <b style={{ color: pv.desvio > 0 ? "#EF4444" : "#16A34A" }}>{pv.desvio > 0 ? "+" : ""}{pv.desvio}</b> día{Math.abs(pv.desvio) === 1 ? "" : "s"}</>}.
-            {(Number(mForm.diasClima) || 0) > 0 && <><br />De esos, <b>{mForm.diasClima}</b> no cuentan (clima/fuerza mayor) → retraso imputable: <b style={{ color: neto > 0 ? "#EF4444" : "#16A34A" }}>{neto}</b> día{neto === 1 ? "" : "s"}.</>}
-          </div>
-          {retrasoInicio > 0 && (() => { const total = pv.desvio + retrasoInicio; return (<div style={{ background: "rgba(245,158,11,.12)", border: "1px solid rgba(245,158,11,.35)", borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: T.text, lineHeight: 1.5 }}>
-            Además, arrancó <b style={{ color: "#B45309" }}>{retrasoInicio}</b> día{retrasoInicio === 1 ? "" : "s"} hábil{retrasoInicio === 1 ? "" : "es"} más tarde de cuando podría haber arrancado.
-            <br />Desvío total del ítem (ejecución + arranque): <b style={{ color: total > 0 ? "#EF4444" : "#16A34A" }}>{total > 0 ? "+" : ""}{total}</b> día{Math.abs(total) === 1 ? "" : "s"} → va a quedar como <b>{total > 0 ? (mForm.fechaReal ? "Fuera de plazo" : "Vencido") : (mForm.fechaReal ? "Cumplido" : "En plazo")}</b>.
-          </div>); })()}
-        </>);
+        return (<div style={{ background: pv.desvio > 0 ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.10)", border: `1px solid ${pv.desvio > 0 ? "rgba(239,68,68,.30)" : "rgba(22,163,74,.30)"}`, borderRadius: T.rsm, padding: "10px 13px", marginBottom: 12, fontSize: 12, color: T.text, lineHeight: 1.5 }}>
+          {mForm.fechaReal ? "Llevó" : "Lleva"} <b>{pv.dias}</b> día{pv.dias === 1 ? "" : "s"} hábil{pv.dias === 1 ? "" : "es"} contra {mForm.plazo || 0} estimado{(mForm.plazo || 0) === 1 ? "" : "s"}{pv.desvio !== 0 && <> — diferencia de <b style={{ color: pv.desvio > 0 ? "#EF4444" : "#16A34A" }}>{pv.desvio > 0 ? "+" : ""}{pv.desvio}</b> día{Math.abs(pv.desvio) === 1 ? "" : "s"}</>}.
+          {(Number(mForm.diasClima) || 0) > 0 && <><br />De esos, <b>{mForm.diasClima}</b> no cuentan (clima/fuerza mayor) → retraso imputable: <b style={{ color: neto > 0 ? "#EF4444" : "#16A34A" }}>{neto}</b> día{neto === 1 ? "" : "s"}.</>}
+        </div>);
       })()}
 
       <FieldRow>
-        <Field label="Etapa de obra (opcional)"><Sel value={mForm.etapa || ""} onChange={e => setMForm({ ...mForm, etapa: e.target.value })}><option value="">— Sin etapa —</option>{etapasSelectObra(obras.find(o => o.id === mForm.obra_id), modelosObra).map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
+        <Field label="Etapa de obra (opcional)"><Sel value={mForm.etapa || ""} onChange={e => setMForm({ ...mForm, etapa: e.target.value })}><option value="">— Sin etapa —</option>{ETAPAS_OBRA.map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
         <Field label="Responsable / cuadrilla"><TInput value={mForm.responsable || ""} onChange={e => setMForm({ ...mForm, responsable: e.target.value })} placeholder="Ej: Cuadrilla propia, Gremio electricista…" /></Field>
       </FieldRow>
       <FieldRow>
-        <Field label="Categoría del desvío (opcional)"><Sel value={mForm.categoriaDesvio || ""} onChange={e => setMForm({ ...mForm, categoriaDesvio: e.target.value, causa: "", causas: [], causaDetalle: "" })}><option value="">— Sin clasificar —</option>{CATEGORIAS_DESVIO.map(c => <option key={c} value={c}>{c}</option>)}</Sel></Field>
-      </FieldRow>
-      <Field label="Causas (podés marcar varias)">
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {(mForm.categoriaDesvio === "Evitable" ? CAUSAS_EVITABLE : mForm.categoriaDesvio === "No evitable" ? CAUSAS_NO_EVITABLE : [...CAUSAS_EVITABLE.slice(0, -1), ...CAUSAS_NO_EVITABLE.slice(0, -1), "Otro"]).map(x => {
-            const lista = Array.isArray(mForm.causas) ? mForm.causas : (mForm.causa ? [mForm.causa] : []);
-            const marcada = lista.includes(x);
-            const toggle = () => {
-              const nuevas = marcada ? lista.filter(c => c !== x) : [...lista, x];
-              let imp = Array.isArray(mForm.imputables) ? mForm.imputables : (mForm.imputable ? [mForm.imputable] : []);
-              if (!marcada) (CAUSA_IMPUTA[x] || []).forEach(p => { const n = p === "CLI" ? cli : p; if (!imp.includes(n)) imp = [...imp, n]; });
-              setMForm({ ...mForm, causas: nuevas, causa: nuevas[0] || "", imputables: imp, imputable: undefined, causaDetalle: nuevas.includes("Otro") ? mForm.causaDetalle : "" });
-            };
-            return <label key={x} onClick={toggle} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 16, border: `1.5px solid ${marcada ? T.accent : T.border}`, background: marcada ? T.al : T.bg, color: marcada ? T.accent : T.sub, fontSize: 12, fontWeight: 600, cursor: "pointer" }}><input type="checkbox" checked={marcada} readOnly style={{ width: 13, height: 13 }} />{x}</label>;
-          })}
-        </div>
-        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 5, lineHeight: 1.4 }}>Al marcar una causa se sugiere a quién imputarla (ej: error de pliego → Estudio, falta de contrato de subcontrato → {cli}); arriba, en "Imputable a", lo podés ajustar y marcar las dos partes.</div>
-      </Field>
-      {(Array.isArray(mForm.causas) ? mForm.causas : []).includes("Otro") && <Field label="Especificar causa"><TInput value={mForm.causaDetalle || ""} onChange={e => setMForm({ ...mForm, causaDetalle: e.target.value })} placeholder="Describí la causa exacta del desvío" /></Field>}
-      <Field label="Tarea / etapa afectada por este retraso (opcional)">
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {etapasSelectObra(obras.find(o => o.id === mForm.obra_id), modelosObra).filter(x => x !== mForm.etapa).map(x => {
-            const lista = Array.isArray(mForm.afectadas) ? mForm.afectadas : [];
-            const marcada = lista.includes(x);
-            return <label key={x} onClick={() => setMForm({ ...mForm, afectadas: marcada ? lista.filter(c => c !== x) : [...lista, x] })} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 16, border: `1.5px solid ${marcada ? "#B45309" : T.border}`, background: marcada ? "rgba(245,158,11,.14)" : T.bg, color: marcada ? "#B45309" : T.sub, fontSize: 12, fontWeight: 600, cursor: "pointer" }}><input type="checkbox" checked={marcada} readOnly style={{ width: 13, height: 13 }} />{x}</label>;
-          })}
-        </div>
-        <TInput value={mForm.afectadasDetalle || ""} onChange={e => setMForm({ ...mForm, afectadasDetalle: e.target.value })} placeholder="Detalle (opcional): ej. terminación de mampostería PB" extraStyle={{ marginTop: 8 }} />
-        {((Array.isArray(mForm.afectadas) ? mForm.afectadas : []).length > 0 || mForm.afectadasDetalle) && <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.sub }}>¿Cuándo terminó cada una? (opcional — si todavía está en curso, dejalo vacío)</div>
-          {(Array.isArray(mForm.afectadas) ? mForm.afectadas : []).map(n => <div key={n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ flex: 1, fontSize: 12.5, color: T.text }}>{n}</div>
-            <input type="date" value={(mForm.afectadasFin || {})[n] || ""} onChange={e => setMForm({ ...mForm, afectadasFin: { ...(mForm.afectadasFin || {}), [n]: e.target.value } })} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text }} />
-          </div>)}
-          {mForm.afectadasDetalle && <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ flex: 1, fontSize: 12.5, color: T.text }}>{mForm.afectadasDetalle}</div>
-            <input type="date" value={mForm.afectadasDetalleFin || ""} onChange={e => setMForm({ ...mForm, afectadasDetalleFin: e.target.value })} style={{ background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 10px", fontSize: 13, color: T.text }} />
-          </div>}
-        </div>}
-        <div style={{ marginTop: 10, fontSize: 11, fontWeight: 700, color: T.sub }}>Leyenda del registro (editable — podés agregar el impacto económico)</div>
-        <textarea value={typeof mForm.leyendaAfecta === "string" ? mForm.leyendaAfecta : afectadasLeyendaAuto(mForm)} onChange={e => setMForm({ ...mForm, leyendaAfecta: e.target.value })} rows={4} placeholder="Ej: Esto atrasó el cobro de dos certificados… Perjuicio económico: …" style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 12px", fontSize: 13, color: T.text, marginTop: 4, fontFamily: "inherit" }} />
-        {typeof mForm.leyendaAfecta === "string" && <button type="button" onClick={() => setMForm({ ...mForm, leyendaAfecta: undefined })} style={{ background: "none", border: "none", color: T.accent, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "4px 0" }}>Volver al texto sugerido</button>}
-        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 5, lineHeight: 1.4 }}>Qué trabajo posterior se corrió por este atraso (ej: 56 días en estructura → se atrasó la mampostería). Los días se cuentan desde que terminó este registro (cuando se destrabó). Abajo del registro queda una leyenda sobre los certificados cuyo cobro se atrasó.</div>
-      </Field>
-      <FieldRow>
-        <Field label="Días de clima / fuerza mayor"><TInput type="number" value={mForm.diasClima || ""} onChange={e => setMForm({ ...mForm, diasClima: +e.target.value || 0 })} /></Field>
+        <Field label="Causa del desvío (opcional)"><Sel value={mForm.causa || ""} onChange={e => setMForm({ ...mForm, causa: e.target.value })}><option value="">— Sin especificar —</option>{CAUSA_DESVIO.map(x => <option key={x} value={x}>{x}</option>)}</Sel></Field>
+        <Field label="Días de clima / fuerza mayor"><TInput type="number" value={mForm.diasClima || 0} onChange={e => setMForm({ ...mForm, diasClima: +e.target.value || 0 })} /></Field>
       </FieldRow>
 
       <Eyebrow>Personal asignado (opcional)</Eyebrow>
@@ -9233,9 +7595,8 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
 
       <Eyebrow>Foto de inicio</Eyebrow>
       {(mForm.fotosInicio || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-        {mForm.fotosInicio.map(ft => (<div key={ft.id} style={{ position: "relative", width: 66 }}>
-          <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}`, display: "block" }} />
-          {ft.fecha && <div style={{ fontSize: 9.5, color: T.muted, textAlign: "center", marginTop: 2 }}>{fmtFechaCorta(new Date(ft.fecha))}</div>}
+        {mForm.fotosInicio.map(ft => (<div key={ft.id} style={{ position: "relative" }}>
+          <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />
           <button onClick={() => setMForm({ ...mForm, fotosInicio: mForm.fotosInicio.filter(x => x.id !== ft.id) })} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button>
         </div>))}
       </div>}
@@ -9244,16 +7605,14 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
 
       <Eyebrow>Foto de fin</Eyebrow>
       {(mForm.fotosFin || []).length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-        {mForm.fotosFin.map(ft => (<div key={ft.id} style={{ position: "relative", width: 66 }}>
-          <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}`, display: "block" }} />
-          {ft.fecha && <div style={{ fontSize: 9.5, color: T.muted, textAlign: "center", marginTop: 2 }}>{fmtFechaCorta(new Date(ft.fecha))}</div>}
+        {mForm.fotosFin.map(ft => (<div key={ft.id} style={{ position: "relative" }}>
+          <img src={ft.url} style={{ width: 66, height: 66, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} />
           <button onClick={() => setMForm({ ...mForm, fotosFin: mForm.fotosFin.filter(x => x.id !== ft.id) })} style={{ position: "absolute", top: -6, right: -6, background: "#EF4444", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: 1 }}>✕</button>
         </div>))}
       </div>}
       <input ref={mFileFinRef} type="file" accept="image/*" multiple onChange={e => agregarFotoRegistro(e, "fotosFin")} style={{ display: "none" }} />
       <button onClick={() => mFileFinRef.current?.click()} disabled={mFotoSubiendo} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginBottom: 6 }}>{mFotoSubiendo ? "Subiendo…" : "＋ Foto de fin"}</button>
 
-      {mError && <div style={{ background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "9px 12px", marginTop: 6, marginBottom: 2, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{mError}</div>}
       <PBtn full onClick={guardarManual} style={{ marginTop: 6 }}>Guardar</PBtn>
     </Sheet>}
 
@@ -9305,32 +7664,16 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
       <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfPunit(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Reclamo — {pdfPunit.descripcion}</div>
-        <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlPunit(pdfPunit), `Reclamo_${slug(pdfPunit.descripcion)}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
-        <button onClick={() => imprimirGestion("punit-pdf", htmlPunit(pdfPunit), `Reclamo_${slug(pdfPunit.descripcion)}.pdf`)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Imprimir</button>
+        <button onClick={() => { const f = document.getElementById("punit-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
       </div>
       <iframe id="punit-pdf" srcDoc={htmlPunit(pdfPunit)} title="Reclamo punitorio" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
-    </div>}
-
-    {editRet && <div style={{ position: "fixed", inset: 0, zIndex: 310, background: T.bg, overflowY: "auto", padding: "16px 16px 90px", paddingTop: "max(16px, env(safe-area-inset-top))" }}>
-      <RetrasoRapido key={editRet.id} editar={editRet} dotacion={g.dotacion} obras={obras} modelosObra={modelosObra} cli={cli} onCancelar={() => setEditRet(null)} onGuardar={(m) => { upd({ manual: (g.manual || []).map(x => x.id === m.id ? m : x) }); setEditRet(null); }} />
-    </div>}
-
-    {pdfRetr && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
-        <button onClick={() => setPdfRetr(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
-        <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700 }}>Retrasos y perjuicio</div>
-        <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlRetrasos(pdfRetr), "Retrasos_y_perjuicio.pdf")} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
-        <button onClick={() => imprimirGestion("retr-pdf", htmlRetrasos(pdfRetr), "Retrasos_y_perjuicio.pdf")} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Imprimir</button>
-      </div>
-      <iframe id="retr-pdf" srcDoc={htmlRetrasos(pdfRetr)} title="Retrasos" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
 
     {pdfReg && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
       <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfReg(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Registro — {pdfReg.descripcion}</div>
-        <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlRegistro(pdfReg), `Registro_${slug(pdfReg.descripcion)}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
-        <button onClick={() => imprimirGestion("reg-pdf", htmlRegistro(pdfReg), `Registro_${slug(pdfReg.descripcion)}.pdf`)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Imprimir</button>
+        <button onClick={() => { const f = document.getElementById("reg-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
       </div>
       <iframe id="reg-pdf" srcDoc={htmlRegistro(pdfReg)} title="Registro" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
@@ -9339,20 +7682,9 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
       <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfInforme(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe de situación — {obraNom(obras, pdfInforme)}</div>
-        <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlInformeObra(pdfInforme), `Informe_${slug(obraNom(obras, pdfInforme))}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
-        <button onClick={() => imprimirGestion("informe-pdf", htmlInformeObra(pdfInforme), `Informe_${slug(obraNom(obras, pdfInforme))}.pdf`)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Imprimir</button>
+        <button onClick={() => { const f = document.getElementById("informe-pdf"); if (f?.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar / Imprimir</button>
       </div>
       <iframe id="informe-pdf" srcDoc={htmlInformeObra(pdfInforme)} title="Informe de situación" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
-    </div>}
-
-    {pdfSel && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
-        <button onClick={() => { setPdfSel(null); setSelModo(false); setSelIds([]); }} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
-        <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Registros seleccionados ({pdfSel.length})</div>
-        <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlInformeSeleccion(pdfSel), `Registros_seleccionados_${new Date().toISOString().slice(0, 10)}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
-        <button onClick={() => imprimirGestion("sel-pdf", htmlInformeSeleccion(pdfSel), `Registros_seleccionados_${new Date().toISOString().slice(0, 10)}.pdf`)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Imprimir</button>
-      </div>
-      <iframe id="sel-pdf" srcDoc={htmlInformeSeleccion(pdfSel)} title="Registros seleccionados" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
   </div>);
 }
@@ -10413,7 +8745,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
 const WEB_NAV = [
   { id:"chat", label:"IA" }, { id:"dashboard", label:"Inicio" },
   { id:"obras", label:"Obras" }, { id:"avance", label:"Avance" },
-  { id:"bitacora", label:"Bitácora" }, { id:"gestion", label:"Gestión de obra" }, { id:"matpedidos", label:"Pedidos enviados" }, { id:"auditoria", label:"Auditoría" },
+  { id:"bitacora", label:"Bitácora" }, { id:"matpedidos", label:"Pedidos enviados" }, { id:"auditoria", label:"Auditoría" },
     { id:"minutas", label:"Grabar reunión" }, { id:"mas", label:"Más" },
 ];
 function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
@@ -10440,7 +8772,6 @@ const BOTTOM_NAV_VV = [
   { id:"obras", label:"Obras" },
   { id:"avance", label:"Avance" },
   { id:"bitacora", label:"Bitácora" },
-  { id:"gestion", label:"Gestión" },
   { id:"matpedidos", label:"Pedidos" },
   { id:"auditoria", label:"Auditoría" },
 ];
@@ -10464,66 +8795,10 @@ function BottomNavVV({ view, go, badges = {} }) {
 // rotando), % de avance, pendientes de hoy y acceso a la IA. Mismo
 // lenguaje que Cliente — real, no una lista de obras.
 const VV_LOGO_FALLBACK = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAwMDAgQDAwMEBAQFBgoGBgUFBgwICQcKDgwPDg4MDQ0PERYTDxAVEQ0NExoTFRcYGRkZDxIbHRsYHRYYGRj/2wBDAQQEBAYFBgsGBgsYEA0QGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBj/wAARCALQAtADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD4FooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAoqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oAloqLe3rRvb1oASiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAoopQCc4BOKAEopcHjg89KTBzjBzQAUUYPpSkEHBBB9DQAlFGCOoooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACgAk4AzSgE9ATXofw9+CfxM+J8kK+EvCl7c2rsFN/Mvk2yjJBPmt8pwRg4zQB55tOcYOfSrNnZ3mo3cNjY2s93cyHbFDCjSOx9FUda+4vh7+wPawvFefE3xZ9pHBOnaKu1enIeZ1z7fKv/AAIV9S+CPhd8P/hzp62vg3wnpumEAAzrH5k8nu0rAsT9TQB+fHgH9jT4weMJ4Z9Y0+38Laa4DNcao48zB9IUy5P1Ar6q+H37GHwl8GiK61+C68XagnzF9RIS3DeqQqcY6ff3evHQfRh5Ock59f8A9Zo7H6UAYGu/s9/Bv4geHYYfEvw90aVgnlpcWsP2WZVU8KJYtrbeOma+c/HX/BOLw9d+bc/DjxvfaZI2SLHWYxPFknOBKgVlUdMFWJx1r7b0f/kCQfQ/zNXqAPyD8afsY/H3wa883/CH/wBt2UWT9q0eZJwwHfZkOP8AvnNeEalp2o6XqUtjqljdWd3EQskFzE0bocA4KtyOCK/fFsg5A/GuZ8VfDzwP46s/snjLwjo+txc4+22qSMOOoYjKn3BoA/CnBzjFFfqL44/4J9fCHxCHm8I6hrHhK5Y5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pXn8RXO0UARlWz0o2t6VJRQAs889wUMpzsXavsKi2t6VJRQBFsb0o2N6VLRQBZguTHotzZk48x0YD1xnNUirelSUUARbG9KkjjDOquyoCeWIzilooA17fT/D64a51ln9Vjhcf0qW4svDDqfs2rTR+geNj/SsOigCW6t4IZdtvdJcp/eVGT9CKrFWJ6frUlFAEWxvSjY3pUtFAEWxvSjY3pUtFAEWxvSnBCcA8c9fSn0UARlGycc10Xhu40nT0e5vZ1FyTtVSjHavc8DrWDRQB6D/AMJLomeL3/yG/wDhSf8ACS6J/wA/v/kN/wDCvP6KAPQP+El0T/n9/wDIb/4Uf8JLon/P7/5Df/CvP6KAPQP+El0T/n9/8hv/AIUf8JLon/P7/wCQ3/wrz+igD0D/AISXRP8An9/8hv8A4Ux/EejmRSt7gD/pm/8AhXBUUAegf8JLov8Az+/+Q3/wo/4SXRP+f3/yG/8AhXn9FAHoH/CS6J/z+/8AkN/8KP8AhJdE/wCf3/yG/wDhXn9FAHoH/CS6J/z+/wDkN/8ACj/hJdE/5/f/ACG/+Fef0UAd8viPRhOzG84Ix/q3/wAKd/wkui4H+m/+Q3/wrz+igD0D/hJdE/5/f/Ib/wCFH/CS6J/z+/8AkN/8K8/ooA9A/wCEl0T/AJ/f/Ib/AOFH/CS6J/z+/wDkN/8ACvP6KACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAP/2Q==";
-// Lista de videos de un retraso: "Video 1, Video 2…" y se abre UNO solo por vez (así no se traba el celular con varios cargando juntos).
-function VideosLista({ videos, T, onWA }) {
-  const lista = videos || [];
-  if (!lista.length) return null;
-  return (<div style={{ marginTop: 8 }}>
-    {lista.length > 1 && <div style={{ fontSize: 11.5, fontWeight: 800, color: T.text, marginBottom: 6 }}>🎥 {lista.length} videos</div>}
-    {lista.map((v, i) => (<div key={v.id} style={{ marginBottom: 10, borderRadius: 8, overflow: "hidden", border: `1px solid ${T.border}` }}>
-      <video src={v.url + "#t=0.1"} controls playsInline preload="metadata" style={{ width: "100%", maxHeight: 240, background: "#000", display: "block" }} />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "6px 10px", background: T.card || T.bg }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: T.muted }}>Video {i + 1}{lista.length > 1 ? ` de ${lista.length}` : ""}</span>
-        <span style={{ display: "flex", gap: 12 }}>
-          <a href={v.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>Abrir aparte</a>
-          {onWA && <button type="button" onClick={() => onWA(v, i)} style={{ background: "none", border: "none", color: "#16A34A", fontWeight: 700, fontSize: 11, cursor: "pointer", padding: 0 }}>WhatsApp</button>}
-        </span>
-      </div>
-    </div>))}
-  </div>);
-}
-// Frase del retraso: en futuro mientras la tarea no terminó, en pasado cuando ya se resolvió.
-function retrasoFrase(it) {
-  const d = Number(it.demoraDias) || 0, deb = Number(it.debiaDias) || 0, dem = Number(it.demoroDias) || 0, fin = !!it.fechaReal;
-  if (deb && dem) return fin ? `Debía demorar ${deb} d · demoró ${dem} d` : `Debía demorar ${deb} d · va a demorar ${d} d más (${dem} d en total)`;
-  return fin ? `Demoró ${d} d más` : `Va a demorar ${d} d más`;
-}
-// Registros de Gestión que se muestran en el Inicio de las dos apps.
-// Modo (g.portadaModo): "marcados" (default, los que V+V marcó con el pin), "semana" (todo lo de la semana + marcados) o "nada".
-function gestionPortada(gestion) {
-  const g = gestion || {}; const modo = g.portadaModo || "marcados";
-  if (modo === "nada") return [];
-  const d = new Date(); const day = d.getDay(); d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day)); d.setHours(0, 0, 0, 0);
-  const lunes = d.getTime();
-  return (g.manual || []).filter(it => it.portada || (modo === "semana" && it.fechaSolic && new Date(it.fechaSolic).getTime() >= lunes))
-    .sort((a, b) => (new Date(b.fechaSolic || 0)) - (new Date(a.fechaSolic || 0))).slice(0, 5);
-}
-function PortadaGestion({ gestion, obras, TXC, TXR, onIr }) {
-  const lista = gestionPortada(gestion);
-  if (!lista.length) return null;
-  const fmt = (f) => { if (!f) return ""; const x = new Date(f); return isNaN(x) ? "" : `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}`; };
-  return (<div style={{ marginBottom: 18 }}>
-    <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Gestión de obra</div>
-    {lista.map(it => {
-      const obra = (obras || []).find(o => o.id === it.obra_id);
-      const ret = it.tipo === "Retraso";
-      return (<div key={it.id} onClick={() => onIr("gestion", it.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, padding: "11px 12px", marginBottom: 6, background: `rgba(${TXR},.05)`, border: `1px solid rgba(${TXR},.1)`, borderLeft: `3px solid ${ret ? "#E58989" : "#D9B27C"}`, borderRadius: 6, cursor: "pointer" }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: TXC, lineHeight: 1.35 }}>{it.descripcion}</div>
-          <div style={{ fontSize: 10.5, color: `rgba(${TXR},.5)`, marginTop: 3 }}>{[fmt(it.fechaSolic), obra?.nombre, it.tipo].filter(Boolean).join(" · ")}{ret ? ` · ${retrasoFrase(it)}` : ""}</div>
-          {ret && it.nota && <div style={{ fontSize: 11, color: `rgba(${TXR},.6)`, marginTop: 3 }}>{it.nota}</div>}
-        </div>
-        {ret && <span style={{ fontSize: 12, fontWeight: 800, color: "#E58989", whiteSpace: "nowrap" }}>+{it.demoraDias || 0} d</span>}
-      </div>);
-    })}
-    <div onClick={() => onIr("bitacora")} style={{ fontSize: 11, color: `rgba(${TXR},.55)`, padding: "4px 2px 0", cursor: "pointer" }}>La explicación completa está en <b style={{ color: "#D9B27C" }}>Bitácora</b> ›</div>
-  </div>);
-}
-function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = [], avance = {}, mensajes = [], renders = {}, certif = {}, informesSem = {}, auditoria = [], onIr }) {
+function InicioViewVV({ cfg, obras, personal, pedidos = [], bitacora = [], avance = {}, mensajes = [], renders = {}, certif = {}, informesSem = {}, auditoria = [], onIr }) {
   const [slideIdx, setSlideIdx] = React.useState(0);
-  const cIn = colorsConBrillo(cfg);
+  const cIn = aplicarIntensidadOscuro(cfg?.colors || DEFAULT_COLORS, cfg?.oscuroIntensidad);
   const rgbIn = hexARgbG(cIn.bg).join(",");
-  const TXC = cIn.text, TXR = hexARgbG(TXC).join(",");
   const enCurso = (obras || []).filter(o => o.estado === "curso");
   const lista = enCurso.length ? enCurso : (obras || []);
   React.useEffect(() => {
@@ -10562,7 +8837,7 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = 
     mensajesTot > 0 && { n: mensajesTot, txt: `Mensaje${mensajesTot > 1 ? "s" : ""} de Belfast`, ir: "mas-mensajes" },
   ].filter(Boolean);
 
-  return (<div style={{ flex: 1, overflowY: "auto", background: cIn.bg, color: TXC }}>
+  return (<div style={{ flex: 1, overflowY: "auto", background: cIn.bg, color: "#f2f0eb" }}>
     <div style={{ position: "relative", height: "50vh", minHeight: 320, maxHeight: 560, background: cIn.bg, overflow: "hidden" }}>
       {fotoUrl
         ? <img key={fotoUrl} src={fotoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85 }} />
@@ -10571,36 +8846,35 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = 
           </div>}
       <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(${rgbIn},.15) 0%, rgba(${rgbIn},.4) 45%, ${cIn.bg} 100%)` }} />
       <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ width: cfg?.logoSize || 40, height: cfg?.logoSize || 40, borderRadius: 6, overflow: "hidden", border: `1px solid rgba(${TXR},.35)`, background: cIn.card, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: cfg?.logoSize || 40, height: cfg?.logoSize || 40, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,.35)", background: cIn.card, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <img src={logoSrc} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
-        <div onClick={() => onIr("mas")} style={{ color: `rgba(${TXR},.8)`, fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
+        <div onClick={() => onIr("mas")} style={{ color: "rgba(255,255,255,.8)", fontSize: 16, cursor: "pointer", padding: "4px 8px", letterSpacing: 2 }}>•••</div>
       </div>
       <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
-        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${TXR},.55)` }}>V+V Construcciones</div>
-        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: TXC, marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
+        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,.55)" }}>V+V Construcciones</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: "#fff", marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
       </div>
       {lista.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>
-        {lista.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % lista.length) ? BRASS : `rgba(${TXR},.35)` }} />)}
+        {lista.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % lista.length) ? BRASS : "rgba(255,255,255,.35)" }} />)}
       </div>}
     </div>
     <div style={{ padding: "22px 22px 30px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
-        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 38, fontWeight: 600, color: TXC }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
-        <div style={{ fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 38, fontWeight: 600, color: "#fff" }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
+        <div style={{ fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(242,240,235,.45)", lineHeight: 1.3 }}>% de avance<br />general</div>
       </div>
-      <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
+      <div style={{ height: 1, background: "rgba(255,255,255,.1)", marginBottom: 18 }} />
 
       {pend.length > 0 && <div onClick={() => onIr("mas-pedidos")} style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(229,137,137,.08)", border: "1px solid rgba(229,137,137,.25)", borderRadius: 6, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
         <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#E58989", color: "#0d0d0f", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{pend.length}</span>
-        <div><div style={{ fontSize: 12, fontWeight: 700, color: TXC }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 10.5, color: `rgba(${TXR},.5)`, marginTop: 1 }}>Tocá para ver →</div></div>
+        <div><div style={{ fontSize: 12, fontWeight: 700, color: "#f2f0eb" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 10.5, color: "rgba(242,240,235,.5)", marginTop: 1 }}>Tocá para ver →</div></div>
       </div>}
 
-      <PortadaGestion gestion={gestion} obras={obras} TXC={TXC} TXR={TXR} onIr={onIr} />
-      <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
-      {novedades.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
-      {novedades.map((n, i) => (<div key={i} onClick={() => onIr(n.ir, n.param)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid rgba(${TXR},.07)`, cursor: "pointer" }}>
-        <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: `rgba(${TXR},.35)`, fontSize: 13 }}>›</span>
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(242,240,235,.4)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
+      {novedades.length === 0 && <div style={{ fontSize: 12, color: "rgba(242,240,235,.4)", padding: "8px 0" }}>Sin novedades todavía.</div>}
+      {novedades.map((n, i) => (<div key={i} onClick={() => onIr(n.ir, n.param)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.07)", cursor: "pointer" }}>
+        <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: "rgba(242,240,235,.35)", fontSize: 13 }}>›</span>
       </div>))}
 
       <div onClick={() => onIr("chat")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
@@ -10664,10 +8938,8 @@ function App() {
   }, []);
   const [view, setView] = useState("dashboard");
   const [auditoriaDesdeSemana, setAuditoriaDesdeSemana] = useState(false);
-  const [gestionFoco, setGestionFoco] = useState(null);
   const [lics, setLics] = useStoredState("vv_lics", SAMPLE_LICS);
   const [obras, setObras] = useStoredState("vv_obras", SAMPLE_OBRAS);
-  const [modelosObra, setModelosObra] = useStoredState("vv_modelos_obra", []);
   const [personal, setPersonal] = useStoredState("vv_personal", SAMPLE_PERSONAL);
   const [materiales, setMateriales] = useStoredState("vv_materiales", []);
   const [subcontratos, setSubcontratos] = useStoredState("vv_subcontratos", []);
@@ -10741,7 +9013,7 @@ function App() {
   // Sincronización entre dispositivos: cada 10s trae lo último de la nube de todos los
   // datos compartidos. No pisa una clave recién editada en ESTE equipo (margen de 7s).
   useEffect(() => {
-    const stores = [["vv_obras", setObras], ["vv_modelos_obra", setModelosObra], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_cert_conformidad", setCertConformidad], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_minutas", setMinutas], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
+    const stores = [["vv_obras", setObras], ["vv_personal", setPersonal], ["vv_lics", setLics], ["vv_materiales", setMateriales], ["vv_subcontratos", setSubcontratos], ["vv_contactos", setContactos], ["vv_proveedores", setProveedores], ["vv_herramientas", setHerramientas], ["vv_tareas", setTareas], ["vv_presentismo", setPresentismo], ["vv_archivos", setArchivosGen], ["vv_vigilancia", setVigilancia], ["vv_camaras", setCamaras], ["vv_avance", setAvance], ["vv_formularios", setFormularios], ["vv_documentacion", setDocumentacion], ["vv_cert_conformidad", setCertConformidad], ["vv_matpedidos", setMatpedidos], ["vv_drone", setDronevuelos], ["vv_minutas", setMinutas], ["vv_gestion", setGestion], ["vv_cfg", setCfg]];
     let alive = true;
     const pullAll = async () => {
       for (const [key, setter] of stores) {
@@ -10775,10 +9047,79 @@ function App() {
   useEffect(() => { (async () => { try { const r = await storage.get("ia_debate"); if (r?.value) { const d = JSON.parse(r.value); if (d && d.active) { d.active = false; try { localStorage.setItem("ia_debate", JSON.stringify(d)); } catch { } await storage.set("ia_debate", JSON.stringify(d)).catch(() => { }); } } } catch { } })(); }, []);
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem("vv_seen") || "{}"); } catch { return {}; } });
   const [iaDialogo, setIaDialogo] = useState([]);
-  // (Se eliminó la "limpieza única" de Canning 815: borraba obras por nombre en cualquier aparato nuevo.)
-  // (Se eliminó la "limpieza única" de obras duplicadas por nombre: corría en cada aparato/URL nuevo
-  //  —porque su marca vivía en localStorage— y mandaba a la "tumba" obras legítimas en TODOS los aparatos.
-  //  Las obras solo se borran ahora cuando alguien aprieta Eliminar.)
+  useEffect(() => { if (localStorage.getItem("purge_canning_v1")) return; (async () => { try { const r = await storage.get("vv_obras"); if (r?.value) { const arr = JSON.parse(r.value); const filtered = arr.filter(o => !(o.nombre || "").toLowerCase().includes("canning 815")); if (filtered.length !== arr.length) { lastWrite["vv_obras"] = Date.now(); try { localStorage.setItem("vv_obras", JSON.stringify(filtered)); } catch { } await storage.set("vv_obras", JSON.stringify(filtered)).catch(() => { }); setObras(filtered); } } try { localStorage.setItem("purge_canning_v1", "1"); } catch { } } catch { } })(); }, []);
+  // Limpieza única: obras que quedaron DUPLICADAS con nombre igual pero id
+  // distinto (de antes de que la fusión entre dispositivos anduviera bien).
+  // Se deja UNA sola (la que tenga más datos cargados) y se reparan los
+  // pedidos de materiales / pedidos de información que apuntaban a la que
+  // se saca — así no quedan "huérfanos" sin obra asociada.
+  useEffect(() => { if (localStorage.getItem("purge_dup_obras_v2")) return; (async () => {
+    try {
+      const r = await storage.get("vv_obras");
+      if (!r?.value) { try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { } return; }
+      const arr = JSON.parse(r.value);
+      const grupos = new Map();
+      arr.forEach(o => { const k = (o.nombre || "").trim().toLowerCase(); if (!k) return; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(o); });
+      const remap = {}; const idsABorrar = new Set();
+      grupos.forEach(lista => {
+        if (lista.length < 2) return;
+        const orden = lista.slice().sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length);
+        const sobrevive = orden[0];
+        orden.slice(1).forEach(o => { remap[o.id] = sobrevive.id; idsABorrar.add(o.id); });
+      });
+      if (idsABorrar.size === 0) { try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { } return; }
+
+      const obrasLimpias = arr.filter(o => !idsABorrar.has(o.id));
+      let tumbas = {};
+      try { const rt = await storage.get("vv_obras_del"); if (rt?.value) tumbas = JSON.parse(rt.value) || {}; } catch { }
+      idsABorrar.forEach(id => { tumbas[id] = Date.now(); });
+      lastWrite["vv_obras"] = Date.now();
+      try { localStorage.setItem("vv_obras", JSON.stringify(obrasLimpias)); localStorage.setItem("vv_obras__ts", String(Date.now())); } catch { }
+      await storage.set("vv_obras", JSON.stringify(obrasLimpias)).catch(() => { });
+      await storage.set("vv_obras__ts", String(Date.now())).catch(() => { });
+      await storage.set("vv_obras_del", JSON.stringify(tumbas)).catch(() => { });
+      try { localStorage.setItem("vv_obras_del", JSON.stringify(tumbas)); } catch { }
+      // El mapa de "id viejo -> id que sobrevivió" queda guardado en la nube
+      // también — así Contratista, Cliente, y cualquier otra app pueden
+      // arreglar sus propios pedidos huérfanos, sin depender de que esta
+      // app (V+V) sea la primera que se abre.
+      let remapGuardado = {};
+      try { const rr = await storage.get("vv_obras_remap"); if (rr?.value) remapGuardado = JSON.parse(rr.value) || {}; } catch { }
+      remapGuardado = { ...remapGuardado, ...remap };
+      await storage.set("vv_obras_remap", JSON.stringify(remapGuardado)).catch(() => { });
+      setObras(obrasLimpias);
+
+      try {
+        const rm = await storage.get("vv_matpedidos");
+        if (rm?.value) {
+          const mats = JSON.parse(rm.value);
+          const arreglados = mats.map(p => remap[p.obra_id] ? { ...p, obra_id: remap[p.obra_id], upd: Date.now() } : p);
+          if (arreglados.some((p, i) => p.obra_id !== mats[i].obra_id)) {
+            lastWrite["vv_matpedidos"] = Date.now();
+            try { localStorage.setItem("vv_matpedidos", JSON.stringify(arreglados)); } catch { }
+            await storage.set("vv_matpedidos", JSON.stringify(arreglados)).catch(() => { });
+            setMatpedidos(arreglados);
+          }
+        }
+      } catch { }
+
+      try {
+        const rp = await storage.get("vv_pedidos");
+        if (rp?.value) {
+          const peds = JSON.parse(rp.value);
+          const arreglados = peds.map(p => remap[p.obra_id] ? { ...p, obra_id: remap[p.obra_id] } : p);
+          if (arreglados.some((p, i) => p.obra_id !== peds[i].obra_id)) {
+            lastWrite["vv_pedidos"] = Date.now();
+            try { localStorage.setItem("vv_pedidos", JSON.stringify(arreglados)); } catch { }
+            await storage.set("vv_pedidos", JSON.stringify(arreglados)).catch(() => { });
+            setPedidos(arreglados);
+          }
+        }
+      } catch { }
+
+      try { localStorage.setItem("purge_dup_obras_v2", "1"); } catch { }
+    } catch { }
+  })(); }, []);
   useEffect(() => { let alive = true; const pull = async () => { try { const r = await storage.get("ia_dialogo"); if (r?.value) { const arr = JSON.parse(r.value); if (alive) setIaDialogo(arr); } } catch { } }; pull(); const iv = setInterval(pull, 4000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); }; }, []);
   function markSeen(cat) { setSeen(prev => { const n = { ...prev, [cat]: Date.now() }; try { localStorage.setItem("vv_seen", JSON.stringify(n)); } catch { } return n; }); }
   const unreadMensajes = (mensajes || []).filter(m => m.from && m.from !== "vv" && (m.ts || 0) > (seen.mensajes || 0)).length;
@@ -10830,7 +9171,7 @@ function App() {
     if (v === "informes") markSeen("informes");
     if (v === "chat") markSeen("ia");
   };
-  const db = { avance, lics, setLics, obras, setObras, modelosObra, setModelosObra, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, adicionales, setAdicionales, certConformidad, setCertConformidad, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
+  const db = { lics, setLics, obras, setObras, personal, setPersonal, materiales, setMateriales, subcontratos, setSubcontratos, contactos, setContactos, proveedores, setProveedores, herramientas, setHerramientas, tareas, setTareas, presentismo, setPresentismo, archivosGen, setArchivosGen, vigilancia, setVigilancia, mensajes, setMensajes, clienteArchivos, pedidos, setPedidos, camaras, setCamaras, gestion, setGestion, formularios, setFormularios, documentacion, setDocumentacion, adicionales, setAdicionales, certConformidad, setCertConformidad, matpedidos, setMatpedidos, dronevuelos, setDronevuelos, minutas, setMinutas, definiciones, setDefiniciones, docrecepcion, setDocrecepcion, bitacora, setBitacora, internos, setInternos, informesSem, setInformesSem, auditoria, setAuditoria, plantillas, setPlantillas };
 
   return (
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
@@ -10840,9 +9181,9 @@ function App() {
         {view!=="dashboard" && <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
-            {view==="dashboard" && <InicioViewVV cfg={cfg} gestion={gestion} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setGestionFoco(id==="gestion" ? (param||null) : null); setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
+            {view==="dashboard" && <InicioViewVV cfg={cfg} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
-            {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} adicionales={adicionales} setAdicionales={setAdicionales} modelosObra={modelosObra} />}
+            {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} adicionales={adicionales} setAdicionales={setAdicionales} />}
             {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} certifRubro={certifRubro} setCertifRubro={setCertifRubro} docrecepcion={docrecepcion} />}
             {view==="cargar" && <CargarView obras={obras} cfg={cfg} apiKey={cfg.apiKey} />}
             {view==="personal" && <PersonalView personal={personal} setPersonal={setPersonal} obras={obras} cfg={cfg} />}
@@ -10850,7 +9191,6 @@ function App() {
             {view==="mas" && <MasView cfg={cfg} setCfg={setCfg} sub={masSub} setSub={setMasSub} goView={go} db={db} apiKey={cfg.apiKey} />}
             {view==="informes" && <InformesView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
-            {view==="gestion" && <GestionView db={db} cfg={cfg} focoId={gestionFoco} onFocoUsado={()=>setGestionFoco(null)} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}

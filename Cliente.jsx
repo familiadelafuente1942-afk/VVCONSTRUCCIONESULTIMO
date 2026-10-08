@@ -263,10 +263,15 @@ storage.set = (key, value) => {
         const ex = await leerNubeG(k);
         if (ex.ok && !ex.value) { await setCrudo(k, c.value); podarCopias(); }
       }
-      const achica = vacioJ(value) || (c.value.length > 500 && String(value).length < c.value.length * 0.2);
-      if (achica && !guardia.leida[key]) {
+      let achica = vacioJ(value) || (c.value.length > 500 && String(value).length < c.value.length * 0.2);
+      // Regla extra para las OBRAS (se guardan fusionadas y las borradas van por "tumbas"):
+      // si la nube tiene 3+ obras y lo nuevo trae menos de la mitad, es un error → se bloquea,
+      // aunque este aparato ya haya leído antes (así no pisa una lista vieja o corta).
+      let obrasAchica = false;
+      if (key === "vv_obras") { try { const nc = JSON.parse(c.value), nn = JSON.parse(value); obrasAchica = Array.isArray(nc) && Array.isArray(nn) && nc.length >= 3 && nn.length < nc.length * 0.5; } catch { } }
+      if ((achica && !guardia.leida[key]) || obrasAchica) {
         guardia.bloq[key] = Date.now();
-        avisarErrorSync(key, "Se BLOQUEÓ un guardado que habría borrado datos de la nube (este aparato todavía no los había cargado). Recargá la página.");
+        avisarErrorSync(key, "Se BLOQUEÓ un guardado que habría borrado datos de la nube. Recargá la página (Ctrl+F5) y avisá si vuelve a pasar.");
         return { value, ok: false, bloqueado: true };
       }
     }
