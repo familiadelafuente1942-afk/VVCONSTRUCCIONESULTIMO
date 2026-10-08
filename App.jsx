@@ -9338,7 +9338,7 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
     </Sheet>}
 
     {pdfPunit && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: `calc(14px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`, display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfPunit(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Reclamo — {pdfPunit.descripcion}</div>
         <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlPunit(pdfPunit), `Reclamo_${slug(pdfPunit.descripcion)}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
@@ -9347,12 +9347,12 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
       <iframe id="punit-pdf" srcDoc={htmlPunit(pdfPunit)} title="Reclamo punitorio" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
     </div>}
 
-    {editRet && <div style={{ position: "fixed", inset: 0, zIndex: 310, background: T.bg, overflowY: "auto", padding: "16px 16px 90px", paddingTop: "max(16px, env(safe-area-inset-top))" }}>
+    {editRet && <div style={{ position: "fixed", inset: 0, zIndex: 310, background: T.bg, overflowY: "auto", padding: "16px 16px 90px", paddingTop: `calc(16px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))` }}>
       <RetrasoRapido key={editRet.id} editar={editRet} dotacion={g.dotacion} obras={obras} modelosObra={modelosObra} cli={cli} onCancelar={() => setEditRet(null)} onGuardar={(m) => { upd({ manual: (g.manual || []).map(x => x.id === m.id ? m : x) }); setEditRet(null); }} />
     </div>}
 
     {pdfRetr && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: `calc(14px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`, display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfRetr(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700 }}>Retrasos y perjuicio</div>
         <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlRetrasos(pdfRetr), "Retrasos_y_perjuicio.pdf")} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
@@ -9362,7 +9362,7 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
     </div>}
 
     {pdfReg && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: `calc(14px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`, display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfReg(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Registro — {pdfReg.descripcion}</div>
         <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlRegistro(pdfReg), `Registro_${slug(pdfReg.descripcion)}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
@@ -9372,7 +9372,7 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
     </div>}
 
     {pdfInforme && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: `calc(14px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`, display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfInforme(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Informe de situación — {obraNom(obras, pdfInforme)}</div>
         <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlInformeObra(pdfInforme), `Informe_${slug(obraNom(obras, pdfInforme))}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
@@ -9382,7 +9382,7 @@ function GestionView({ db, cfg, onBack, focoId, onFocoUsado }) {
     </div>}
 
     {pdfSel && <div style={{ position: "fixed", inset: 0, zIndex: 300, background: T.bg, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ background: T.navy, padding: "14px 16px", paddingTop: `calc(14px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`, display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => { setPdfSel(null); setSelModo(false); setSelIds([]); }} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Registros seleccionados ({pdfSel.length})</div>
         <button disabled={guardandoPdf} onClick={() => guardarPdfGestion(htmlInformeSeleccion(pdfSel), `Registros_seleccionados_${new Date().toISOString().slice(0, 10)}.pdf`)} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: guardandoPdf ? .6 : 1 }}>{guardandoPdf ? "Generando…" : "Guardar"}</button>
@@ -10456,7 +10456,7 @@ function WebHeader({ cfg, view, go, pendientes, badges = {} }) {
   const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const tieneLogo = l1 || l2;
   return (
     <header style={{ position:"sticky", top:0, zIndex:200, flexShrink:0 }}>
-      <div style={{ background:T.navy, color:"#fff", paddingTop:"env(safe-area-inset-top)" }}>
+      <div style={{ background:T.navy, color:"#fff", paddingTop:`max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)` }}>
         <div style={{ maxWidth:1180, margin:"0 auto", padding:"10px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
           <span style={{ fontSize:9.5, fontWeight:700, letterSpacing:"0.22em", textTransform:"uppercase", color:"rgba(255,255,255,.6)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>Construcción · Obra · Gestión integral</span>
           <span style={{ fontSize:10.5, color:"rgba(255,255,255,.5)", whiteSpace:"nowrap" }}>{cfg?.ciudad || "Buenos Aires, Argentina"}</span>
@@ -10606,7 +10606,7 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = 
             <img src={logoSrc} alt="" style={{ width: "50%", maxWidth: 200, opacity: .45 }} />
           </div>}
       <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(${rgbIn},.15) 0%, rgba(${rgbIn},.4) 45%, ${cIn.bg} 100%)` }} />
-      <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ position: "absolute", top: `calc(max(env(safe-area-inset-top), ${SAFE_TOP_PX}px) + 16px)`, left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ width: cfg?.logoSize || 40, height: cfg?.logoSize || 40, borderRadius: 6, overflow: "hidden", border: `1px solid rgba(${TXR},.35)`, background: cIn.card, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <img src={logoSrc} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
@@ -10652,7 +10652,7 @@ function WebHero({ cfg, obras, personal }) {
   const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const tieneLogo = l1 || l2;
   return (
     <div style={{ background:LUXE_HERO, color:"#fff", borderBottom:`2px solid ${BRASS}`, flexShrink:0, position:"relative" }}>
-      <div style={{ maxWidth:1180, margin:"0 auto", padding:"calc(env(safe-area-inset-top) + 16px) 24px 0" }}>
+      <div style={{ maxWidth:1180, margin:"0 auto", padding:`calc(max(env(safe-area-inset-top), ${SAFE_TOP_PX}px) + 16px) 24px 0` }}>
         <div style={{ width:44, height:44, borderRadius:6, overflow:"hidden", border:"1px solid rgba(255,255,255,.35)", background:"#0a0a0a", display:"flex", alignItems:"center", justifyContent:"center" }}>
           {tieneLogo ? <img src={l1 || l2} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <span style={{ fontSize:11, fontWeight:800, color:"#fff" }}>V+V</span>}
         </div>

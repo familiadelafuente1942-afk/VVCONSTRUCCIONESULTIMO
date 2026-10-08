@@ -4188,7 +4188,7 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem =
     .filter(a => a.html && (!filtro || a._obraId === filtro))
     .sort((a, b) => (b.ts || 0) - (a.ts || 0));
   if (docAbierto) return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "calc(10px + env(safe-area-inset-top)) 12px 10px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 12px 10px` }}>
       <button onClick={() => setDocAbierto(null)} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>← Volver</button>
       <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{docAbierto.titulo}</span>
       <button onClick={() => { const f = document.getElementById("doc-cliente"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Imprimir / PDF</button>
@@ -5956,7 +5956,7 @@ function GestionScreen({ T, cfg, obras, gestion, personal = [], modelosObra = []
     </div>}
 
     {pdfHtml && <div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 320, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: T.navy || "#0F1B2D", padding: "14px 16px", paddingTop: "max(14px, env(safe-area-inset-top))", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ background: T.navy || "#0F1B2D", padding: "14px 16px", paddingTop: `calc(14px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`, display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={() => setPdfHtml(null)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: 0 }}>‹</button>
         <div style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: 700 }}>Gestión de obra</div>
         <button onClick={() => { const f = document.getElementById("gestion-cli-pdf"); if (f?.contentWindow) f.contentWindow.print(); }} style={{ background: BRASS, border: "none", color: "#fff", borderRadius: 8, padding: "9px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}>Guardar / Imprimir</button>
@@ -5975,7 +5975,7 @@ function WebClientHeader({ T, cfg, screen, setScreen, aviso }) {
   });
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 200, flexShrink: 0 }}>
-      <div style={{ background: T.navy, color: "#fff", paddingTop: "env(safe-area-inset-top)" }}>
+      <div style={{ background: T.navy, color: "#fff", paddingTop: `max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)` }}>
         <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", padding: "10px 16px", display: "flex", justifyContent: "center", alignItems: "center" }}>
           <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: BRASS, whiteSpace: "nowrap" }}>Panel de Cliente</span>
         </div>
@@ -6169,7 +6169,7 @@ function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, ava
             <img src={LOGO_FALLBACK_HERO} alt="" style={{ width: "56%", maxWidth: 220, opacity: .5, filter: "grayscale(.2)" }} />
           </div>}
       <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(${rgbT},.15) 0%, rgba(${rgbT},.4) 45%, ${T.bg} 100%)` }} />
-      <div style={{ position: "absolute", top: "calc(env(safe-area-inset-top) + 16px)", left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ position: "absolute", top: `calc(max(env(safe-area-inset-top), ${SAFE_TOP_PX}px) + 16px)`, left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ width: cfg?.logoSize || 60, height: cfg?.logoSize || 60, borderRadius: 14, overflow: "hidden", flexShrink: 0, background: "transparent" }}>
           <img src={cfg?.logo || LOGO_FALLBACK_HERO} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
         </div>
