@@ -12,6 +12,42 @@ import React, { useState, useEffect, useRef } from "react";
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Authorization": "Bearer " + SUPA_KEY });
+
+// Registra que la app se abrió — usado por NEXO Control para saber
+// cuántas personas usan cada vista. Tabla liviana propia (no bco_storage).
+// Si falla, avisa por el canal de errores (no en silencio).
+function registrarApertura(appTag) {
+  try {
+    fetch(SUPA_URL + "/rest/v1/aperturas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Prefer": "return=minimal" },
+      body: JSON.stringify({ app: appTag }),
+    }).then(r => {
+      if (!r.ok) r.text().then(t => reportarError("No se pudo registrar apertura: HTTP " + r.status, t)).catch(() => {});
+    }).catch(e => reportarError("No se pudo registrar apertura (red)", String(e)));
+  } catch (e) {}
+}
+
+// Vigía de errores — avisa a NEXO Control si algo se rompe en el navegador.
+function reportarError(mensaje, detalle) {
+  try {
+    fetch(SUPA_URL + "/rest/v1/app_errores", {
+      method: "POST",
+      headers: { ...SH(), "Prefer": "return=minimal" },
+      body: JSON.stringify({
+        app: "propietario",
+        mensaje: String(mensaje || "").slice(0, 500),
+        detalle: String(detalle || "").slice(0, 2000),
+        url: (typeof location !== "undefined" ? location.href : ""),
+        dispositivo: (typeof navigator !== "undefined" ? navigator.userAgent : ""),
+      }),
+    }).catch(() => {});
+  } catch (e) {}
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (ev) => { reportarError(ev.message, ev.error && ev.error.stack); });
+  window.addEventListener("unhandledrejection", (ev) => { reportarError("Promise rechazada: " + ((ev.reason && ev.reason.message) || ev.reason), ev.reason && ev.reason.stack); });
+}
 // Margen superior seguro (iPad/iPhone con la app instalada): evita que la hora tape los botones.
 const SAFE_TOP_PX = (() => { try { return (window.navigator.standalone || window.matchMedia("(display-mode: standalone)").matches) ? 50 : 0; } catch (e) { return 0; } })();
 const TOPPAD = (extra) => `calc(${extra}px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`;
@@ -986,6 +1022,7 @@ function Panel({ onPreview, obra, nombreCliente, tareas, auditoria, formularios,
 }
 
 export default function ClientePropietarioApp() {
+  useEffect(() => { registrarApertura("propietario"); }, []);
   const [estado, setEstado] = useState("cargando"); // cargando | entrada | panel | error
   const [obra, setObra] = useState(null);
   const [nombreCliente, setNombreCliente] = useState("");
