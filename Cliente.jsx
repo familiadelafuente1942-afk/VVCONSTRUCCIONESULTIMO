@@ -2813,7 +2813,7 @@ function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [],
                 </div>
                 {verCrono && <CronogramaObraView obra={detail} modelosObra={modelosObra} onUpd={(patch) => upd(detail.id, patch)} onBack={() => setVerCrono(false)} />}
                 {gate && <CodigoModal titulo="El panel está en modo solo lectura. Ingresá el código para poder modificar." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); if (fn) fn(); }} onCancel={() => setGate(null)} />}
-{mostrarAdic && (<div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
+{mostrarAdic && (<div style={{ position: "fixed", inset: 0, paddingTop: `max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)`, boxSizing: "border-box", background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
                     <div style={{ padding: "12px 18px", borderBottom: `1px solid ${T.border}`, background: T.card }}><button onClick={() => setMostrarAdic(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer" }}>← Volver a la obra</button></div>
                     <div style={{ flex: 1, overflowY: "auto" }}><AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} obraIdFijo={detail.id} /></div>
                 </div>)}
@@ -5527,7 +5527,7 @@ function CronogramaObraView({ obra, modelosObra, onUpd, onBack }) {
     </div>); };
   const porFila = D ? D.filas.map(() => []) : []; const sueltos = [];
   if (D) items.slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach(it => { const k = cronoFilaDeItem(D.filas, it); (k >= 0 ? porFila[k] : sueltos).push(it); });
-  return (<div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
+  return (<div style={{ position: "fixed", inset: 0, paddingTop: `max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)`, boxSizing: "border-box", background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
     <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, background: T.card, display: "flex", alignItems: "center", gap: 10 }}>
       <button onClick={onBack} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer" }}>← Volver</button>
       <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Cronograma · {obra.nombre}</div>{D && <div style={{ fontSize: 11, color: T.muted }}>{fmtFechaCorta(D.ini)} → {fmtFechaCorta(D.cierre)} · {D.total} días háb.</div>}</div>

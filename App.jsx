@@ -1756,7 +1756,7 @@ function RegistroVisitas({ visitas, onUpdate, licId }) {
 
         {/* Vista ampliada de foto */}
         {vistaFoto && (
-            <div onClick={() => setVistaFoto(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 16 }}>
+            <div onClick={() => setVistaFoto(null)} style={{ position: "fixed", inset: 0, paddingTop: `max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)`, boxSizing: "border-box", background: "rgba(0,0,0,.92)", zIndex: 999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 16 }}>
                 <img src={vistaFoto.url} alt="" style={{ maxWidth: "100%", maxHeight: "75vh", objectFit: "contain", borderRadius: 10 }} />
                 {vistaFoto.desc && <div style={{ color: "#fff", fontSize: 13, marginTop: 12, textAlign: "center", maxWidth: 340, lineHeight: 1.5 }}>{vistaFoto.desc}</div>}
                 <div style={{ color: "rgba(255,255,255,.6)", fontSize: 11, marginTop: 6 }}>
@@ -2493,7 +2493,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
                 {verCrono && <CronogramaObraView obra={detail} modelosObra={modelosObra} onUpd={(patch) => upd(detail.id, patch)} onBack={() => setVerCrono(false)} />}
                 {gate && <CodigoModal titulo="Ingresá el código para poder modificar la obra." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); if (fn) fn(); }} onCancel={() => setGate(null)} />}
 {mostrarAdicionales && (
-                    <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
+                    <div style={{ position: "fixed", inset: 0, paddingTop: `max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)`, boxSizing: "border-box", background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
                         <AdicionalesView db={{ obras, adicionales, setAdicionales }} cfg={cfg} onBack={() => setMostrarAdicionales(false)} obraIdFijo={detail.id} />
                     </div>
                 )}
@@ -5750,7 +5750,7 @@ function CronogramaObraView({ obra, modelosObra, onUpd, onBack }) {
     </div>); };
   const porFila = D ? D.filas.map(() => []) : []; const sueltos = [];
   if (D) items.slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach(it => { const k = cronoFilaDeItem(D.filas, it); (k >= 0 ? porFila[k] : sueltos).push(it); });
-  return (<div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
+  return (<div style={{ position: "fixed", inset: 0, paddingTop: `max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)`, boxSizing: "border-box", background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
     <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, background: T.card, display: "flex", alignItems: "center", gap: 10 }}>
       <button onClick={onBack} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer" }}>← Volver</button>
       <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Cronograma · {obra.nombre}</div>{D && <div style={{ fontSize: 11, color: T.muted }}>{fmtFechaCorta(D.ini)} → {fmtFechaCorta(D.cierre)} · {D.total} días háb.</div>}</div>
