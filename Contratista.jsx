@@ -986,7 +986,6 @@ export default function ContratistaApp() {
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</span>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: alertaDm(f.dm) ? T.warn : T.sub, whiteSpace: "nowrap" }}>{txtDm(f.dm)}</span>
                 <span style={{ fontSize: 10, fontWeight: 800, color: T.sub, background: T.bg, borderRadius: 20, padding: "2px 8px" }}>{f.total}</span>
-                <button onClick={(e) => { e.stopPropagation(); setConfOcultar({ id: f.id, nombre: f.nombre }); }} aria-label={"Ocultar " + f.nombre} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 8, width: 28, height: 28, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
               </div>))}
           </div>
           <div style={{ fontSize: 10, color: T.muted, marginTop: 8, lineHeight: 1.45 }}>En ámbar, las obras que hace 7 días o más que no piden materiales. Tocá una para ver sus pedidos.</div>
@@ -1025,7 +1024,6 @@ export default function ContratistaApp() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
                 <div style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, color: T.head, flex: 1, minWidth: 0 }}>{g.nombre}</div>
                 <div style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: BRASS, borderRadius: 20, padding: "3px 10px" }}>{g.pedidos.length}</div>
-                <button onClick={() => setConfOcultar({ id: g.obra_id, nombre: g.nombre })} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 8, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Ocultar</button>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 11 }}>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 9px" }}>Último pedido: {d === null ? "—" : txt(d)}</span>
