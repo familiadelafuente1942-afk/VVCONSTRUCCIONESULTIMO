@@ -798,13 +798,16 @@ function InicioProp({ obra, nombreCliente, renders, avance, certif, certConformi
       <div style={{ position: "relative", height: "62vh", minHeight: 400, maxHeight: 560, overflow: "hidden" }}>
         {fotosR.map((f, i) => <div key={f.id || i} style={{ position: "absolute", inset: 0, backgroundImage: `url("${f.url}")`, backgroundSize: "cover", backgroundPosition: "center", opacity: actual && i === idx % fotosR.length ? 1 : 0, transition: "opacity 1.4s" }} />)}
         <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,0) 35%, rgba(0,0,0,.2) 70%, ${T.bg})` }} />
-        <div style={{ position: "absolute", top: TOPPAD(14), left: 18, right: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 10.5, letterSpacing: ".28em", textTransform: "uppercase", color: "rgba(255,255,255,.85)", fontWeight: 700 }}>{(config && config.nombre) || "Belfast"}</div>
+        <div style={{ position: "absolute", top: TOPPAD(14), right: 18 }}>
           <button onClick={() => onIr("mas")} style={{ background: "rgba(255,255,255,.14)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,.25)", color: "#fff", borderRadius: 20, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>•••</button>
         </div>
-        <div style={{ position: "absolute", left: 18, right: 18, bottom: 0 }}>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,.75)", marginBottom: 6 }}>Hola, {nombreCliente}</div>
-          <div style={{ fontFamily: FONT.serif, fontSize: 38, fontWeight: 600, lineHeight: 1.02, color: "#fff", marginBottom: 14, letterSpacing: "-.02em" }}>{obra.nombre}</div>
+        <div style={{ position: "absolute", top: TOPPAD(20), left: 18, right: 18, bottom: 14, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+          <div style={{ width: 116, height: 116, borderRadius: "50%", border: `2px solid ${T.brass}`, overflow: "hidden", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 24px rgba(0,0,0,.5)", flexShrink: 0 }}>
+            {logo ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={48} c="#0d0d0f" />}
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,.8)", marginTop: 18, letterSpacing: ".2em", textTransform: "uppercase" }}>Hola, {nombreCliente}</div>
+          <div style={{ fontFamily: FONT.serif, fontSize: 36, fontWeight: 600, lineHeight: 1.05, color: "#fff", marginTop: 8, letterSpacing: "-.02em", textShadow: "0 2px 14px rgba(0,0,0,.5)" }}>{obra.nombre}</div>
+          {(obra.sector || obra.inicio) && <div style={{ fontSize: 12, color: "rgba(255,255,255,.75)", marginTop: 6 }}>{obra.sector || ""}{obra.sector && obra.inicio ? " · " : ""}{obra.inicio ? `Inicio ${obra.inicio}` : ""}</div>}
         </div>
       </div>
       <div style={{ margin: "0 14px", marginTop: -2, background: "rgba(255,255,255,.07)", backdropFilter: "blur(14px)", border: `1px solid ${T.border}`, borderRadius: 22, padding: 18, boxShadow: T.shadow }}>
@@ -831,20 +834,20 @@ function InicioProp({ obra, nombreCliente, renders, avance, certif, certConformi
     </div>);
   }
   return (<div style={{ background: T.bg, color: T.text }}>
-    <div style={{ position: "relative", height: "40vh", minHeight: 270, maxHeight: 430, background: T.bg, overflow: "hidden" }}>
+    <div style={{ position: "relative", height: "46vh", minHeight: 340, maxHeight: 460, background: T.bg, overflow: "hidden" }}>
       {fotosR.map((f, i) => <div key={f.id || i} style={{ position: "absolute", inset: 0, backgroundImage: `url("${f.url}")`, backgroundSize: "cover", backgroundPosition: "center", opacity: actual && i === idx % fotosR.length ? .88 : 0, transition: "opacity 1.4s ease" }} />)}
       {!fotosR.length && <div style={{ position: "absolute", inset: 0, background: `linear-gradient(135deg,${T.bg},#17150f)` }} />}
       <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(${rgbBg},.35) 0%, rgba(${rgbBg},.25) 40%, ${T.bg} 100%)` }} />
-      <div style={{ position: "absolute", top: TOPPAD(14), left: 22, right: 22, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ width: 52, height: 52, borderRadius: "50%", border: `2px solid ${T.brass}`, overflow: "hidden", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 12px rgba(0,0,0,.45)" }}>
-          {logo ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={22} c="#0d0d0f" />}
-        </div>
+      <div style={{ position: "absolute", top: TOPPAD(14), right: 18 }}>
         <button onClick={() => onIr("mas")} style={{ background: "rgba(0,0,0,.35)", border: "1px solid rgba(255,255,255,.18)", color: "#fff", borderRadius: 20, padding: "6px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", letterSpacing: ".04em" }}>•••</button>
       </div>
-      <div style={{ position: "absolute", bottom: 22, left: 22, right: 22 }}>
-        <div style={{ fontSize: 10, letterSpacing: ".22em", textTransform: "uppercase", color: "rgba(242,240,235,.6)" }}>Hola, {nombreCliente}</div>
-        <div style={{ fontFamily: FONT.serif, fontWeight: 600, fontSize: 27, color: T.text, marginTop: 5, lineHeight: 1.15 }}>{obra.nombre}</div>
-        {(obra.sector || obra.inicio) && <div style={{ fontSize: 11.5, color: "rgba(242,240,235,.6)", marginTop: 5 }}>{obra.sector || ""}{obra.sector && obra.inicio ? " · " : ""}{obra.inicio ? `Inicio ${obra.inicio}` : ""}</div>}
+      <div style={{ position: "absolute", top: TOPPAD(18), left: 22, right: 22, bottom: 18, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+        <div style={{ width: 104, height: 104, borderRadius: "50%", border: `2px solid ${T.brass}`, overflow: "hidden", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 18px rgba(0,0,0,.5)", flexShrink: 0 }}>
+          {logo ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={44} c="#0d0d0f" />}
+        </div>
+        <div style={{ fontSize: 10.5, letterSpacing: ".22em", textTransform: "uppercase", color: "rgba(242,240,235,.75)", marginTop: 16 }}>Hola, {nombreCliente}</div>
+        <div style={{ fontFamily: FONT.serif, fontWeight: 600, fontSize: 27, color: "#f2f0eb", marginTop: 6, lineHeight: 1.15, textShadow: "0 2px 12px rgba(0,0,0,.45)" }}>{obra.nombre}</div>
+        {(obra.sector || obra.inicio) && <div style={{ fontSize: 11.5, color: "rgba(242,240,235,.7)", marginTop: 5 }}>{obra.sector || ""}{obra.sector && obra.inicio ? " · " : ""}{obra.inicio ? `Inicio ${obra.inicio}` : ""}</div>}
       </div>
       {fotosR.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 18, display: "flex", gap: 4 }}>
         {fotosR.map((f, i) => <span key={f.id || i} style={{ width: 5, height: 5, borderRadius: "50%", background: i === idx % fotosR.length ? T.brass : "rgba(255,255,255,.35)" }} />)}
