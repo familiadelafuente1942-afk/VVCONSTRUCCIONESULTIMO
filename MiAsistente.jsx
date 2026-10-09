@@ -833,6 +833,40 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setDb(d => ({ ...d, obras: next })); if (obraEdit && obraEdit.id === id) setObraEdit(null);
     })();
   }
+  // Unifica dos obras duplicadas: pasa todo (pagos, cobros, fotos, planos, informes, tareas) a la que se conserva y saca la otra.
+  async function unificarObras(idKeep, idQuitar) {
+    if (!idKeep || !idQuitar || idKeep === idQuitar) return;
+    let arr = []; let leido = false;
+    try { const r = await storage.get("vv_obras"); if (r?.value) { arr = JSON.parse(r.value); leido = true; } } catch { }
+    if (!leido || !Array.isArray(arr)) { alert("No pude leer las obras de la nube. No se cambió nada, probá de nuevo con conexión."); return; }
+    const keep = arr.find(o => o.id === idKeep), quitar = arr.find(o => o.id === idQuitar);
+    if (!keep || !quitar) { alert("No encontré una de las dos obras. Actualizá la app y probá de nuevo."); return; }
+    const nPag = (pagos || []).filter(p => p.obra === quitar.nombre).length;
+    const nCob = (cobros || []).filter(c => c.obra === quitar.nombre).length;
+    if (!window.confirm(`¿Unificar "${quitar.nombre}" dentro de "${keep.nombre}"?\n\nSe pasan ${nPag} pagos y ${nCob} cobros a "${keep.nombre}", junto con fotos, planos, informes y tareas. Después "${quitar.nombre}" se saca de la lista (también para el equipo).`)) return;
+    // Respaldos previos en la nube (obras, pagos y cobros), por si hay que volver atrás.
+    const tsB = Date.now();
+    try {
+      await storage.set("vv_bak__vv_obras__" + tsB, JSON.stringify(arr));
+      await storage.set("vv_bak__sebastian_pagos__" + tsB, JSON.stringify(pagos || []));
+      await storage.set("vv_bak__sebastian_cobros__" + tsB, JSON.stringify(cobros || []));
+    } catch { }
+    const unir = (a, b) => [...(a || []), ...(b || [])];
+    const unida = { ...keep, direccion: keep.direccion || quitar.direccion || "", fotos: unir(keep.fotos, quitar.fotos), videos: unir(keep.videos, quitar.videos), planos: unir(keep.planos, quitar.planos), informes: unir(keep.informes, quitar.informes), tareas: unir(keep.tareas, quitar.tareas) };
+    const next = arr.filter(o => o.id !== idQuitar).map(o => o.id === idKeep ? unida : o);
+    // Primero se pasan los pagos y cobros (no se borra nada, solo cambian de obra)...
+    persistPagos((pagos || []).map(p => p.obra === quitar.nombre ? { ...p, obra: keep.nombre } : p));
+    persistCobros((cobros || []).map(c => c.obra === quitar.nombre ? { ...c, obra: keep.nombre } : c));
+    // ...y recién después se saca la obra duplicada, verificando que la nube quedó bien.
+    try { await storage.set("vv_obras", JSON.stringify(next)); } catch { }
+    let ok = false;
+    try { localStorage.removeItem("vv_obras"); } catch { }
+    try { const r2 = await storage.get("vv_obras"); const l2 = r2?.value ? JSON.parse(r2.value) : null; ok = Array.isArray(l2) && l2.some(o => o.id === idKeep) && !l2.some(o => o.id === idQuitar); } catch { }
+    if (!ok) { alert("Los pagos y cobros ya se pasaron a \"" + keep.nombre + "\", pero no pude confirmar en la nube que la obra duplicada se haya sacado. No se perdió nada. Actualizá la app y, si sigue duplicada, repetí Unificar."); return; }
+    try { localStorage.setItem("vv_obras", JSON.stringify(next)); } catch { }
+    setDb(d => ({ ...d, obras: next }));
+    alert(`Listo: "${quitar.nombre}" quedó unificada en "${keep.nombre}" (${nPag} pagos y ${nCob} cobros pasados).`);
+  }
   function crearObra(a) {
     const nueva = { id: uid() + Date.now(), nombre: a.nombre || a.obra || "Obra nueva", estado: a.estado || "En curso", avance: Number(a.avance) || 0, direccion: a.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [] };
     (async () => {
@@ -1182,7 +1216,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "cobros" && <CobrosBody cobros={cobros} obras={db.obras} filtroObra={filtroObraCobro} setFiltroObra={setFiltroObraCobro} exportar={exportarCobrosExcel} borrar={(id) => persistCobros((cobros || []).filter(c => c.id !== id))} onAdd={cargarCobro} onEditarFecha={(id, fecha) => persistCobros((cobros || []).map(c => c.id === id ? { ...c, fecha } : c))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
     {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} exportarPDF={exportarResultadosPDF} />}
-    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: 0, direccion: "" })} borrar={borrarObra} />}
+    {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: 0, direccion: "" })} borrar={borrarObra} onUnificar={unificarObras} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "entrenamiento" && <EntrenamientoBody inicio={entrenoInicio} hechas={entrenoHechas} onSetInicio={(f) => persistEntreno(f, entrenoHechas)} onToggle={toggleSesion} onToggleMultiple={toggleMultiple} />}
@@ -1525,7 +1559,8 @@ function ArchivosBody({ archivos, cat, setCat, archRef, subir, subiendo, borrar 
   </div>);
 }
 
-function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, borrar }) {
+function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, borrar, onUnificar }) {
+  const [unif, setUnif] = useState(null);   // { id, destino }
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     {obraEdit && obraEdit._new && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 11, padding: "13px", marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Nueva obra</div>
@@ -1562,9 +1597,21 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, borrar }) {
         </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "" })} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+          {(obras || []).length > 1 && <button onClick={() => setUnif(unif && unif.id === o.id ? null : { id: o.id, destino: "" })} style={{ background: "none", color: T.navy, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Unificar</button>}
           <button onClick={() => borrar(o.id)} style={{ background: "none", color: "#B03A3A", border: "1px solid #B03A3A", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Borrar</button>
         </div>
       </div>)}
+      {unif && unif.id === o.id && !(obraEdit && obraEdit.id === o.id) && <div style={{ marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 12, color: T.sub, marginBottom: 7, lineHeight: 1.45 }}>Pasar todo de <b style={{ color: T.text }}>{o.nombre}</b> (pagos, cobros, fotos, planos…) a esta otra obra, que es la que se conserva:</div>
+        <select value={unif.destino} onChange={e => setUnif({ ...unif, destino: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text, marginBottom: 8 }}>
+          <option value="">Elegí la obra que queda…</option>
+          {(obras || []).filter(x => x.id !== o.id).map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+        </select>
+        <div style={{ display: "flex", gap: 7 }}>
+          <button onClick={() => setUnif(null)} style={{ flex: 1, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+          <button disabled={!unif.destino} onClick={async () => { await onUnificar(unif.destino, o.id); setUnif(null); }} style={{ flex: 1.4, background: unif.destino ? T.accent : T.border, color: "#fff", border: "none", borderRadius: 9, padding: "10px", fontSize: 13, fontWeight: 700, cursor: unif.destino ? "pointer" : "default" }}>Unificar</button>
+        </div>
+      </div>}
     </div>))}
     <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>⚠ Los cambios en obras se sincronizan con la app de V+V (los ve tu equipo).</div>
   </div>);
