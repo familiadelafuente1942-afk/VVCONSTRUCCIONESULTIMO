@@ -122,9 +122,39 @@ if (typeof window !== "undefined") {
   window.addEventListener("unhandledrejection", (ev) => { reportarError("Promise rechazada: " + ((ev.reason && ev.reason.message) || ev.reason), ev.reason && ev.reason.stack); });
 }
 
+// Protección de datos compartidos: antes de escribir en la nube se verifica que
+// se pueda leer, y se bloquea cualquier guardado que borraría la mayoría de la lista.
+const GUARD_KEYS = ["vv_matpedidos", "vv_docrecepcion", "vv_definiciones"];
+function avisar(msg) { try { window.dispatchEvent(new CustomEvent("contratista-aviso", { detail: msg })); } catch { } }
+async function leerNubeEstricto(key) {
+  try {
+    const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?key=eq." + encodeURIComponent(key) + "&select=value&limit=1", { method: "GET", headers: SH(), mode: "cors" });
+    if (!r.ok) return { ok: false };
+    const d = await r.json();
+    return { ok: true, value: d && d.length ? d[0].value : null };
+  } catch { return { ok: false }; }
+}
+const _largo = (v) => { try { const a = JSON.parse(v); return Array.isArray(a) ? a.length : -1; } catch { return -1; } };
+async function respaldoDiario(key, valorNube) {
+  try {
+    const d = new Date(); const f = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+    const bk = `vv_bak__${key}__${f}`;
+    const ya = await leerNubeEstricto(bk);
+    if (ya.ok && !ya.value && valorNube) await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key: bk, value: valorNube }) });
+  } catch { }
+}
 const storage = {
   set: async (key, value) => {
     try { localStorage.setItem(key, value); } catch { }
+    if (GUARD_KEYS.includes(key)) {
+      const c = await leerNubeEstricto(key);
+      if (!c.ok) { avisar("No se pudo verificar la nube: se guardó solo en este aparato y NO se tocó la nube. Revisá la conexión."); return { value, local: true }; }
+      if (c.value) {
+        const nube = _largo(c.value), nuevo = _largo(value);
+        if (nube >= 3 && nuevo >= 0 && nuevo < nube * 0.5) { avisar("Se bloqueó un guardado que borraba la mayor parte de los datos. Actualizá la app e intentá de nuevo."); return { value: c.value, bloqueado: true }; }
+        respaldoDiario(key, c.value);
+      }
+    }
     try { await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); } catch { }
     return { value };
   },
@@ -156,17 +186,34 @@ async function subirArchivoDef(file) {
 }
 
 let BRASS = "#B0894F";
-let T = { navy: "#0F1B2D", accent: "#1B3A5B", al: "#EAF0F7", bg: "#F5F7FA", card: "#FFFFFF", border: "#E3E8EF", text: "#0F1B2D", sub: "#5B6B7F", muted: "#94A3B8", rsm: 12, shadow: "0 1px 3px rgba(15,27,45,.06)" };
+const FONTS = { elegante: "'Fraunces',Georgia,'Times New Roman',serif", moderna: "-apple-system,'Segoe UI',system-ui,Helvetica,Arial,sans-serif", clasica: "Georgia,'Times New Roman',serif" };
+let SERIF = FONTS.elegante;
+let T = { navy: "#B0894F", accent: "#B0894F", al: "rgba(176,137,79,.14)", bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", head: "#f2f0eb", sub: "rgba(242,240,235,.62)", muted: "rgba(242,240,235,.42)", rsm: 12, shadow: "0 10px 30px rgba(0,0,0,.35)", brassLight: "#D9B27C", warn: "#E0A458", warnBg: "rgba(217,119,6,.14)", warnBd: "rgba(217,119,6,.38)", ok: "#5CC98A", okBg: "rgba(22,163,74,.14)", okBd: "rgba(22,163,74,.38)", danger: "#F08080", dangerBg: "rgba(239,68,68,.12)", dangerBd: "rgba(239,68,68,.35)", oscuro: true };
+const _OSC = { warn: "#E0A458", warnBg: "rgba(217,119,6,.14)", warnBd: "rgba(217,119,6,.38)", ok: "#5CC98A", okBg: "rgba(22,163,74,.14)", okBd: "rgba(22,163,74,.38)", danger: "#F08080", dangerBg: "rgba(239,68,68,.12)", dangerBd: "rgba(239,68,68,.35)", oscuro: true, rsm: 12 };
+const _CLA = { warn: "#B45309", warnBg: "#FFFBEB", warnBd: "#FDE68A", ok: "#15803D", okBg: "#ECFDF5", okBd: "#A7F3D0", danger: "#B91C1C", dangerBg: "#FEF2F2", dangerBd: "#FECACA", oscuro: false, rsm: 12 };
 const PALETAS = {
-  institucional: { nombre: "Institucional", navy: "#0F1B2D", accent: "#1B3A5B", al: "#EAF0F7", bg: "#F5F7FA", brass: "#B0894F" },
-  grafito: { nombre: "Grafito", navy: "#1F2937", accent: "#374151", al: "#EEF1F5", bg: "#F4F5F7", brass: "#9CA3AF" },
-  pino: { nombre: "Verde pino", navy: "#14342B", accent: "#22463A", al: "#E7F0EB", bg: "#F4F7F5", brass: "#C79A3E" },
-  vino: { nombre: "Vino", navy: "#3B1220", accent: "#6B2338", al: "#F6E9EE", bg: "#FAF5F6", brass: "#C79A3E" },
-  arena: { nombre: "Arena", navy: "#3A2E1E", accent: "#6B5637", al: "#F3EDE2", bg: "#FAF7F1", brass: "#C79A3E" },
-  negro: { nombre: "Negro", navy: "#111214", accent: "#2A2C31", al: "#EDEEF0", bg: "#F5F5F6", brass: "#C9A25A" },
+  bronce: { nombre: "Bronce", ..._OSC, navy: "#B0894F", accent: "#B0894F", al: "rgba(176,137,79,.14)", bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", head: "#f2f0eb", sub: "rgba(242,240,235,.62)", muted: "rgba(242,240,235,.42)", brass: "#B0894F", brassLight: "#D9B27C", shadow: "0 10px 30px rgba(0,0,0,.35)" },
+  marfil: { nombre: "Marfil", ..._CLA, navy: "#1b1a18", accent: "#8a6a35", al: "#efe8da", bg: "#f3f1ec", card: "#ffffff", border: "#e1dcd1", text: "#1b1a18", head: "#1b1a18", sub: "rgba(27,26,24,.62)", muted: "rgba(27,26,24,.45)", brass: "#8a6a35", brassLight: "#b0894f", shadow: "0 8px 24px rgba(60,50,30,.10)" },
+  acero: { nombre: "Acero", ..._OSC, navy: "#3f7fbd", accent: "#4f93d1", al: "rgba(79,147,209,.15)", bg: "#0a111d", card: "#0f1a2b", border: "#1d2c45", text: "#e9f0f8", head: "#e9f0f8", sub: "rgba(233,240,248,.62)", muted: "rgba(233,240,248,.42)", brass: "#4f93d1", brassLight: "#9cc7ec", shadow: "0 10px 30px rgba(0,5,20,.45)" },
+  bosque: { nombre: "Bosque", ..._OSC, navy: "#3f8f69", accent: "#5fa77f", al: "rgba(95,167,127,.15)", bg: "#0b1410", card: "#101c17", border: "#1d2f27", text: "#eaf2ec", head: "#eaf2ec", sub: "rgba(234,242,236,.62)", muted: "rgba(234,242,236,.42)", brass: "#5fa77f", brassLight: "#a8d4bb", shadow: "0 10px 30px rgba(0,10,5,.45)" },
+  grafito: { nombre: "Grafito", ..._OSC, navy: "#6b6b78", accent: "#c9c9d1", al: "rgba(201,201,209,.12)", bg: "#141416", card: "#1c1c20", border: "#2c2c32", text: "#f4f4f6", head: "#f4f4f6", sub: "rgba(244,244,246,.62)", muted: "rgba(244,244,246,.42)", brass: "#c9c9d1", brassLight: "#e6e6ec", shadow: "0 10px 30px rgba(0,0,0,.45)" },
 };
-function aplicarTema(id) { const p = PALETAS[id] || PALETAS.institucional; T.navy = p.navy; T.accent = p.accent; T.al = p.al; T.bg = p.bg; BRASS = p.brass; try { localStorage.setItem("contratista_tema", id); } catch { } }
-try { aplicarTema(localStorage.getItem("contratista_tema") || "institucional"); } catch { }
+const ACENTOS = ["#B0894F", "#4f93d1", "#5fa77f", "#c8574f", "#9078d6", "#d98a3d"];
+function mezclar(hex, p) { const h = String(hex).replace("#", ""); if (h.length !== 6) return hex; const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); return "#" + c.map(v => Math.round(v + (255 - v) * p).toString(16).padStart(2, "0")).join(""); }
+function aplicarEstilo(e) {
+  const est = e || {};
+  const p = PALETAS[est.tema] || PALETAS.bronce;
+  Object.assign(T, p); BRASS = p.brass;
+  if (est.acento) { T.accent = est.acento; BRASS = est.acento; T.brassLight = mezclar(est.acento, .35); if (p.oscuro) T.navy = est.acento; T.al = p.oscuro ? "rgba(255,255,255,.08)" : p.al; }
+  SERIF = FONTS[est.fuente] || FONTS.elegante;
+}
+function leerEstilo() {
+  try { const j = localStorage.getItem("contratista_estilo"); if (j) { const e = JSON.parse(j); if (e && typeof e === "object") return e; } } catch { }
+  return { tema: "bronce", acento: "", fuente: "elegante" };
+}
+function guardarEstilo(e) { try { localStorage.setItem("contratista_estilo", JSON.stringify(e)); } catch { } }
+aplicarEstilo(leerEstilo());
+
 
 function origenLabel(p) { return p.de === "vv" ? "V+V" : p.de === "cliente" ? "Belfast" : (p.empresa || "Contratista"); }
 
@@ -182,9 +229,9 @@ function TipoIcon({ tipo, size = 22, color = "currentColor" }) {
 }
 
 const TIPOS_PEDIDO = [
-  { id: "material", label: "Materiales", sing: "material", icon: "box", color: "#1B3A5B" },
+  { id: "material", label: "Materiales", sing: "material", icon: "box", color: "#4f93d1" },
   { id: "definicion", label: "Definiciones", sing: "definición", icon: "ruler", color: "#B0894F" },
-  { id: "plano", label: "Planos", sing: "plano", icon: "plans", color: "#3B6E9E" },
+  { id: "plano", label: "Planos", sing: "plano", icon: "plans", color: "#8a7fd6" },
 ];
 const tipoDe = (id) => TIPOS_PEDIDO.find(t => t.id === id) || TIPOS_PEDIDO[0];
 const itemsTexto = (p) => (p.items || []).map(it => (p.tipo && p.tipo !== "material") ? `${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}` : `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
@@ -496,7 +543,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
       </div>
 
       {grupos.map(g => (<div key={g.rubro} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 13, marginBottom: 10 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy, marginBottom: 8 }}>{g.rubro}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: T.head, marginBottom: 8 }}>{g.rubro}</div>
         {g.items.map(it => { const est = estadoDe(it); const estLbl = est === "respondida" ? "TENEMOS" : est === "pedida" ? "PEDIDA" : "FALTA"; const estColor = est === "respondida" ? "#16A34A" : est === "pedida" ? "#B0894F" : "#B45309";
         return (<div key={it.id} style={{ padding: "9px 0", borderTop: `1px solid ${T.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -508,7 +555,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
           <input defaultValue={it.obs || ""} onBlur={e => setObs(it.id, e.target.value)} placeholder="Observación (opcional)…" style={{ width: "100%", marginTop: 6, marginLeft: 34, maxWidth: "calc(100% - 34px)", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 10px", fontSize: 12, color: T.text, boxSizing: "border-box" }} />
 
           {abierto === it.id && <div style={{ marginTop: 10, marginLeft: 34, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 800, color: T.navy, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Seguimiento</div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: T.head, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Seguimiento</div>
             {(it.historial || []).length === 0 && <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 10 }}>Todavía no se pidió esta definición — tildala con ★ y mandala por PDF o WhatsApp para empezar el seguimiento.</div>}
             {(it.historial || []).slice().reverse().map((h, i) => (<div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: h.tipo === "respondida" ? "#16A34A" : BRASS, marginTop: 5, flexShrink: 0 }} />
@@ -520,7 +567,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
             </div>))}
 
             {!it.tiene && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
-              <div style={{ fontSize: 10.5, fontWeight: 800, color: T.navy, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Cargar respuesta</div>
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: T.head, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Cargar respuesta</div>
               <textarea value={abierto === it.id ? respTexto : ""} onChange={e => setRespTexto(e.target.value)} placeholder="Escribí la respuesta que llegó (o dejá vacío si solo adjuntás un archivo)…" rows={2} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 10px", fontSize: 12, color: T.text, boxSizing: "border-box", resize: "vertical", marginBottom: 8 }} />
               <div style={{ display: "flex", gap: 8 }}>
                 <label style={{ flex: 1, textAlign: "center", background: T.card, border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
@@ -546,7 +593,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
       {/* ── Google Form ── */}
       <div style={{ border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.card }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gformCfg ? 10 : (reg?.formId ? 10 : 0) }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.navy }}><Ico n="list" /> Formulario para el jefe de obra</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.head }}><Ico n="list" /> Formulario para el jefe de obra</div>
           <button onClick={() => setGformCfg(v => !v)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 9px", fontSize: 11, fontWeight: 700, color: T.sub, cursor: "pointer" }}>⚙︎ {gformUrl ? "Configurado" : "Configurar"}</button>
         </div>
 
@@ -569,7 +616,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
 
       {/* observaciones del jefe (de las respuestas del form) */}
       {reg?.gformObs && Object.keys(reg.gformObs).some(k => reg.gformObs[k]) && <div style={{ border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, marginBottom: 9, background: T.al }}>
-        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.navy, marginBottom: 6 }}>Observaciones del jefe de obra</div>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.head, marginBottom: 6 }}>Observaciones del jefe de obra</div>
         {Object.keys(reg.gformObs).filter(k => reg.gformObs[k]).map(k => (
           <div key={k} style={{ fontSize: 12, color: T.text, marginBottom: 4, lineHeight: 1.4 }}><b>{k}:</b> {reg.gformObs[k]}</div>
         ))}
@@ -668,7 +715,7 @@ export default function ContratistaApp() {
   const [tmpEmpresa, setTmpEmpresa] = useState("");
   const [obras, setObras] = useState([]);
   const [matpedidos, setMatpedidos] = useState([]);
-  const [vista, setVista] = useState("pedidos"); // "pedidos" | "recepcion" | "definiciones"
+  const [vista, setVista] = useState("inicio"); // "inicio" | "pedidos" | "recepcion" | "definiciones"
   const [fObra, setFObra] = useState("");   // filtro obra ("" = todas)
   const [diagOpen, setDiagOpen] = useState(false);   // panel de diagnóstico temporal
   const [fTipo, setFTipo] = useState("");   // filtro tipo ("" = todos)
@@ -680,7 +727,19 @@ export default function ContratistaApp() {
   const [form, setForm] = useState(null);
   const [editEmpresa, setEditEmpresa] = useState(false);
   const [estiloOpen, setEstiloOpen] = useState(false);
-  const [temaId, setTemaId] = useState(() => { try { return localStorage.getItem("contratista_tema") || "institucional"; } catch { return "institucional"; } });
+  const [estilo, setEstilo] = useState(() => leerEstilo());
+  aplicarEstilo(estilo);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [nuevoOpen, setNuevoOpen] = useState(false);
+  const [aviso, setAviso] = useState("");
+  useEffect(() => {
+    const h = (e) => { setAviso(String(e.detail || "")); setTimeout(() => setAviso(""), 9000); };
+    window.addEventListener("contratista-aviso", h);
+    return () => window.removeEventListener("contratista-aviso", h);
+  }, []);
+  useEffect(() => {
+    try { if (!document.getElementById("fonts-fraunces")) { const l = document.createElement("link"); l.id = "fonts-fraunces"; l.rel = "stylesheet"; l.href = "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap"; document.head.appendChild(l); } } catch { }
+  }, []);
   const lastWrite = useRef(0);
   const lastWriteDoc = useRef(0);
   async function persistDoc(next) {
@@ -807,193 +866,242 @@ export default function ContratistaApp() {
   lista.forEach(p => { let g = grupos.find(x => x.obra_id === p.obra_id); if (!g) { g = { obra_id: p.obra_id, nombre: obraNom(p.obra_id) || "Sin obra", pedidos: [] }; grupos.push(g); } g.pedidos.push(p); });
   grupos.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
+  const tabs = [["inicio", "Inicio", "building"], ["pedidos", "Pedidos", "list"], ["recepcion", "Recepción", "doc"], ["definiciones", "Definiciones", "ruler"]];
+  const FONT_UI = "Inter, system-ui, sans-serif";
+  const hoyISO = new Date().toISOString().slice(0, 10);
+  const mios = listaTodos.filter(p => p.de === "contratista" && p.empresa === empresa);
+  const porAvisar = mios.filter(p => !p.waEnviado).length;
+  const filasEstado = (obras || []).map(o => {
+    const ped = listaTodos.filter(p => p.obra_id === o.id);
+    const ultMat = ped.filter(p => (p.tipo || "material") === "material").reduce((m, x) => Math.max(m, x.ts || 0), 0);
+    return { id: o.id, nombre: o.nombre, total: ped.length, dm: ultMat ? Math.floor((Date.now() - ultMat) / 86400000) : null };
+  }).filter(f => f.total > 0 || f.dm === null);
+  const alertaDm = (n) => n === null || n >= 7;
+  const obrasSinPedir = filasEstado.filter(f => alertaDm(f.dm)).length;
+  const proximas = listaTodos.filter(p => p.fecha_necesita && p.fecha_necesita >= hoyISO).sort((a, b) => String(a.fecha_necesita).localeCompare(String(b.fecha_necesita))).slice(0, 3);
+  const lblS = { fontSize: 10.5, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: ".1em" };
+  const topPad = (n) => `calc(${n}px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`;
+  const btnIco = { background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 12, width: 40, height: 40, cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center" };
+  const txtDm = (n) => n === null ? "sin pedidos de material" : n === 0 ? "pidió hoy" : n === 1 ? "pidió ayer" : `hace ${n} días`;
+  const aplicarYGuardar = (n) => { guardarEstilo(n); setEstilo(n); };
+
   if (!empresa || editEmpresa) {
-    return (<div style={{ minHeight: "100vh", background: T.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "Inter, system-ui, sans-serif" }}>
-      <div style={{ width: "100%", maxWidth: 420, background: T.card, borderRadius: 16, padding: "28px 24px", boxShadow: "0 8px 30px rgba(15,27,45,.1)", borderTop: `3px solid ${BRASS}` }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>V+V Construcciones</div>
-        <div style={{ fontSize: 21, fontWeight: 800, color: T.text, marginBottom: 6 }}>Pedidos de materiales</div>
-        <div style={{ fontSize: 13, color: T.sub, marginBottom: 20, lineHeight: 1.5 }}>Ingresá el nombre de tu empresa para cargar pedidos de materiales de las obras.</div>
-        <input value={tmpEmpresa} onChange={e => setTmpEmpresa(e.target.value)} onKeyDown={e => { if (e.key === "Enter") guardarEmpresa(); }} placeholder="Nombre de tu empresa" autoFocus style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 15px", fontSize: 15, color: T.text, marginBottom: 14, boxSizing: "border-box" }} />
-        <button onClick={guardarEmpresa} disabled={!tmpEmpresa.trim()} style={{ width: "100%", background: tmpEmpresa.trim() ? T.navy : T.border, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: T.rsm, padding: "13px", fontSize: 14, fontWeight: 700, cursor: tmpEmpresa.trim() ? "pointer" : "default" }}>Entrar</button>
+    return (<div style={{ minHeight: "100vh", background: T.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, paddingTop: topPad(24), fontFamily: FONT_UI }}>
+      <div style={{ width: 92, height: 92, borderRadius: "50%", border: `2px solid ${BRASS}`, background: T.card, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20, boxShadow: T.shadow }}><Ico n="building" s={40} c={BRASS} /></div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: ".22em", textTransform: "uppercase", marginBottom: 8 }}>V+V Construcciones</div>
+      <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 600, color: T.head, marginBottom: 8, textAlign: "center" }}>Pedidos de materiales</div>
+      <div style={{ fontSize: 13, color: T.sub, marginBottom: 24, lineHeight: 1.5, textAlign: "center", maxWidth: 320 }}>Ingresá el nombre de tu empresa para cargar pedidos de las obras.</div>
+      <div style={{ width: "100%", maxWidth: 400, background: T.card, border: `1px solid ${T.border}`, borderRadius: 18, padding: 20, boxShadow: T.shadow }}>
+        <input value={tmpEmpresa} onChange={e => setTmpEmpresa(e.target.value)} onKeyDown={e => { if (e.key === "Enter") guardarEmpresa(); }} placeholder="Nombre de tu empresa" autoFocus style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "14px 15px", fontSize: 15, color: T.text, marginBottom: 14, boxSizing: "border-box" }} />
+        <button onClick={guardarEmpresa} disabled={!tmpEmpresa.trim()} style={{ width: "100%", background: tmpEmpresa.trim() ? BRASS : T.border, color: "#fff", border: "none", borderRadius: T.rsm, padding: "14px", fontSize: 14.5, fontWeight: 800, cursor: tmpEmpresa.trim() ? "pointer" : "default" }}>Entrar</button>
+        {editEmpresa && <button onClick={() => { setEditEmpresa(false); setTmpEmpresa(""); }} style={{ width: "100%", background: "none", border: "none", color: T.muted, fontSize: 12, marginTop: 12, cursor: "pointer", textDecoration: "underline" }}>Cancelar</button>}
       </div>
     </div>);
   }
 
-  return (<div style={{ minHeight: "100vh", background: T.bg, fontFamily: "Inter, system-ui, sans-serif", maxWidth: 620, margin: "0 auto" }}>
-    <div style={{ background: T.navy, color: "#fff", padding: `calc(16px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 20px 16px`, borderBottom: `2px solid ${BRASS}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", rowGap: 10 }}>
-      <div>
-        <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: "0.1em", textTransform: "uppercase" }}>Pedidos de materiales · v2</div>
-        <div style={{ fontSize: 15, fontWeight: 800 }}>{empresa}</div>
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }} title="Actualizar y traer lo último" style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.2)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>↻ Actualizar</button>
-        <button onClick={() => setEstiloOpen(true)} title="Cambiar estilo" style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.2)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><Ico n="sparkle" /> Estilo</button>
-        <button onClick={() => { setTmpEmpresa(empresa); setEditEmpresa(true); }} style={{ background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.2)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Cambiar</button>
-      </div>
+  const encabezado = (titulo) => (<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: `${topPad(16)} 20px 14px` }}>
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: BRASS, letterSpacing: ".16em", textTransform: "uppercase" }}>{empresa}</div>
+      <div style={{ fontFamily: SERIF, fontSize: 26, fontWeight: 600, color: T.head, lineHeight: 1.15, marginTop: 2 }}>{titulo}</div>
     </div>
-    {estiloOpen && <div onClick={() => setEstiloOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,27,45,.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", padding: "18px 20px 26px", width: "100%", maxWidth: 620, boxShadow: "0 -6px 24px rgba(0,0,0,.15)" }}>
-        <div style={{ width: 40, height: 4, background: T.border, borderRadius: 4, margin: "0 auto 16px" }} />
-        <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 3 }}>Estilo de la app</div>
-        <div style={{ fontSize: 12, color: T.sub, marginBottom: 16 }}>Elegí una paleta. Se guarda en este dispositivo.</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {Object.entries(PALETAS).map(([id, p]) => (<button key={id} onClick={() => { aplicarTema(id); setTemaId(id); setEstiloOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, background: T.bg, border: `2px solid ${temaId === id ? p.brass : T.border}`, borderRadius: 12, padding: "11px 12px", cursor: "pointer", textAlign: "left" }}>
-            <div style={{ display: "flex", flexShrink: 0 }}><span style={{ width: 20, height: 20, borderRadius: "50% 0 0 50%", background: p.navy }} /><span style={{ width: 20, height: 20, borderRadius: "0 50% 50% 0", background: p.brass }} /></div>
-            <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{p.nombre}{temaId === id ? " ✓" : ""}</span>
-          </button>))}
+    <button onClick={() => setMenuOpen(true)} aria-label="Más opciones" style={btnIco}>•••</button>
+  </div>);
+
+  const tarjetaPedido = (p) => { const mio = p.de === "contratista" && p.empresa === empresa; const tp = tipoDe(p.tipo); return (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 14, marginBottom: 10, boxShadow: T.shadow }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, minWidth: 0 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 800, color: "#fff", background: tp.color, borderRadius: 6, padding: "3px 8px", marginRight: 7, verticalAlign: "middle" }}><TipoIcon tipo={p.tipo} size={12} color="#fff" /> {tp.label}</span>
+        <span style={{ fontWeight: 800, color: T.head }}>{obraNom(p.obra_id)}</span><span style={{ color: T.muted, fontWeight: 600 }}> · {p.fecha}</span>
+      </div>
+      <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : p.de === "cliente" ? "#7C3AED" : BRASS, borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap" }}>{origenLabel(p)}</span>
+    </div>
+    <div style={{ fontSize: 13, color: T.sub, marginTop: 8, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{itemsTexto(p).map(l => `• ${l}`).join("\n")}</div>
+    {(p.solicitante || p.empresa) && <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 9, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 9px", fontSize: 11, fontWeight: 700, color: T.sub }}><Ico n="user" s={12} c={T.sub} /> Pidió: {p.solicitante || p.empresa}{p.solicitante && p.empresa ? ` (${p.empresa})` : ""}</div>}
+    {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 6, fontStyle: "italic" }}>{p.nota}</div>}
+    {p.fecha_necesita && <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 9, flexWrap: "wrap" }}>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 8, padding: "5px 10px", fontSize: 11.5, fontWeight: 700 }}><Ico n="cal2" /> Necesito en obra: {fmtISO(p.fecha_necesita)}</div>
+      <a href={icsEntrega(p)} download={`Entrega-${obraNom(p.obra_id).replace(/[^\w]/g, "_")}.ics`} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.navy, color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}><Ico n="bell" /> Agendar + alerta</a>
+    </div>}
+    {mio && <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 9 }}><button onClick={() => editar(p)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 8, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button><button onClick={() => borrar(p.id)} style={{ background: T.dangerBg, border: `1px solid ${T.dangerBd}`, color: T.danger, borderRadius: 8, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Eliminar</button></div>}
+    {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: T.ok, marginTop: 8 }}><Ico n="send" /> Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
+    <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 10, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> Mandar por WhatsApp al encargado</button>
+    {waFor === p.id && <div style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
+      <div style={{ ...lblS, marginBottom: 8 }}>Enviar a…</div>
+      {encargados(p.obra_id).map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}><Ico n="send" /> {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
+      <a href={waLink(waText(p))} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Elegir contacto…</a>
+      {encargados(p.obra_id).length === 0 && <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>No hay encargado con teléfono cargado para esta obra. Usá "Elegir contacto" o pedile a V+V que cargue el teléfono del encargado.</div>}
+    </div>}
+  </div>); };
+
+  const selBtn = (on) => ({ border: `2px solid ${on ? BRASS : T.border}`, background: T.bg, color: T.text, borderRadius: 12, cursor: "pointer", fontFamily: "inherit" });
+
+  return (<div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: FONT_UI, maxWidth: 620, margin: "0 auto", position: "relative" }}>
+    {aviso && <div onClick={() => setAviso("")} style={{ position: "fixed", top: topPad(8), left: 12, right: 12, zIndex: 700, maxWidth: 596, margin: "0 auto", background: T.dangerBg, border: `1px solid ${T.dangerBd}`, color: T.danger, backdropFilter: "blur(10px)", borderRadius: 12, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, lineHeight: 1.4, boxShadow: T.shadow, cursor: "pointer" }}>{aviso}</div>}
+
+    {vista === "inicio" && <div>
+      <div style={{ position: "relative", padding: `${topPad(18)} 20px 26px`, textAlign: "center", background: `radial-gradient(120% 90% at 50% 0%, ${T.al} 0%, transparent 70%)` }}>
+        <button onClick={() => setMenuOpen(true)} aria-label="Más opciones" style={{ ...btnIco, position: "absolute", right: 18, top: topPad(14) }}>•••</button>
+        <div style={{ width: 96, height: 96, borderRadius: "50%", border: `2px solid ${BRASS}`, background: T.card, display: "flex", alignItems: "center", justifyContent: "center", margin: "6px auto 16px", boxShadow: T.shadow }}><Ico n="building" s={42} c={BRASS} /></div>
+        <div style={{ fontSize: 10.5, letterSpacing: ".22em", textTransform: "uppercase", color: T.muted }}>Hola{persona ? `, ${persona.split(/[\s—-]/)[0]}` : ""}</div>
+        <div style={{ fontFamily: SERIF, fontSize: 29, fontWeight: 600, color: T.head, marginTop: 6, lineHeight: 1.12 }}>{empresa}</div>
+        <div style={{ fontSize: 12, color: T.sub, marginTop: 6 }}>Pedidos de materiales · V+V Construcciones</div>
+      </div>
+      <div style={{ padding: "0 20px 110px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 9, marginBottom: 22 }}>
+          {[[mios.length, "Mis pedidos", T.head], [porAvisar, "Por avisar", porAvisar ? T.warn : T.head], [obrasSinPedir, "Obras sin pedir", obrasSinPedir ? T.warn : T.head]].map(([n, l, c]) => <div key={l} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "13px 8px", textAlign: "center" }}>
+            <div style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 600, color: c, lineHeight: 1 }}>{n}</div>
+            <div style={{ fontSize: 10, color: T.muted, marginTop: 6, fontWeight: 700, letterSpacing: ".04em" }}>{l}</div></div>)}
         </div>
+        <div style={{ ...lblS, marginBottom: 10 }}>Qué querés pedir</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 9, marginBottom: 24 }}>
+          {TIPOS_PEDIDO.map(t => <button key={t.id} onClick={() => nuevo(t.id)} style={{ background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 6px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center", boxShadow: T.shadow }}>
+            <span style={{ width: 46, height: 46, borderRadius: "50%", background: T.bg, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 9px" }}><TipoIcon tipo={t.id} size={24} color={t.color} /></span>{t.label}</button>)}
+        </div>
+        {proximas.length > 0 && <div style={{ marginBottom: 24 }}>
+          <div style={{ ...lblS, marginBottom: 10 }}>Próximas entregas</div>
+          {proximas.map(p => <div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "11px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ textAlign: "center", minWidth: 44 }}><div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 600, color: BRASS, lineHeight: 1 }}>{String(p.fecha_necesita).slice(8, 10)}</div><div style={{ fontSize: 9.5, color: T.muted, fontWeight: 700, marginTop: 3 }}>{["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"][(+String(p.fecha_necesita).slice(5, 7) || 1) - 1]}</div></div>
+            <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.head, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{obraNom(p.obra_id)}</div><div style={{ fontSize: 11.5, color: T.sub, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{itemsTexto(p).join(", ")}</div></div>
+          </div>)}
+        </div>}
+        {filasEstado.length > 0 && <div style={{ marginBottom: 24 }}>
+          <div style={{ ...lblS, marginBottom: 10 }}>Estado por obra</div>
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "6px 8px" }}>
+            {filasEstado.slice().sort((a, b) => (b.dm === null ? 9999 : b.dm) - (a.dm === null ? 9999 : a.dm)).map((f, i, arr) => (
+              <div key={f.id} onClick={() => { setFObra(f.id); setVista("pedidos"); }} style={{ display: "flex", alignItems: "center", gap: 9, padding: "11px 8px", borderBottom: i < arr.length - 1 ? `1px solid ${T.border}` : "none", cursor: "pointer" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: alertaDm(f.dm) ? T.warn : T.ok, flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: alertaDm(f.dm) ? T.warn : T.sub, whiteSpace: "nowrap" }}>{txtDm(f.dm)}</span>
+                <span style={{ fontSize: 10, fontWeight: 800, color: T.sub, background: T.bg, borderRadius: 20, padding: "2px 8px" }}>{f.total}</span>
+              </div>))}
+          </div>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 8, lineHeight: 1.45 }}>En ámbar, las obras que hace 7 días o más que no piden materiales. Tocá una para ver sus pedidos.</div>
+        </div>}
+        {listaTodos.length > 0 && <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}><div style={lblS}>Últimos pedidos</div><button onClick={() => setVista("pedidos")} style={{ background: "none", border: "none", color: BRASS, fontWeight: 700, fontSize: 11.5, cursor: "pointer", padding: 0 }}>Ver todos ›</button></div>
+          {listaTodos.slice(0, 3).map(tarjetaPedido)}
+        </div>}
+        {listaTodos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "24px 18px" }}>Todavía no hay pedidos. Elegí arriba qué querés pedir.</div>}
       </div>
     </div>}
 
-    <div style={{ padding: "16px 20px 90px" }}>
-      {/* solapas */}
-      <div style={{ display: "flex", gap: 7, marginBottom: 16 }}>
-        {[["pedidos", "Pedidos"], ["recepcion", "Recepción de docs"], ["definiciones", "Definiciones"]].map(([k, l]) => (
-          <button key={k} onClick={() => setVista(k)} style={{ flex: 1, background: vista === k ? T.navy : "transparent", color: vista === k ? "#fff" : T.sub, border: `1px solid ${vista === k ? T.navy : T.border}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>
-        ))}
-      </div>
-
-      {vista === "recepcion" ? <RecepcionDocs obras={obras} empresa={empresa} docrecepcion={docrecepcion} persistDoc={persistDoc} /> : vista === "definiciones" ? <DefinicionesView obras={obras} empresa={empresa} definiciones={definiciones} persistDef={persistDef} /> : <>
-      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 9 }}>Qué querés pedir</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-        {TIPOS_PEDIDO.map(t => (
-          <button key={t.id} onClick={() => nuevo(t.id)} style={{ flex: 1, background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 6px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", textAlign: "center", borderTop: `3px solid ${t.color}` }}>
-            <div style={{ marginBottom: 5, display: "flex", justifyContent: "center" }}><TipoIcon tipo={t.id} size={26} color={t.color} /></div>{t.label}
-          </button>
-        ))}
-      </div>
-
-      {listaTodos.length > 0 && <div style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Registro de pedidos</div>
-          <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub }}>{lista.length} pedido{lista.length !== 1 ? "s" : ""} · {grupos.length} obra{grupos.length !== 1 ? "s" : ""}</div>
-        </div>
-        {/* tipo */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 7 }}>
-          <button onClick={() => setFTipo("")} style={{ background: fTipo === "" ? T.accent : T.card, color: fTipo === "" ? "#fff" : T.sub, border: `1px solid ${fTipo === "" ? T.accent : T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Todo</button>
-          {TIPOS_PEDIDO.map(t => (
-            <button key={t.id} onClick={() => setFTipo(fTipo === t.id ? "" : t.id)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, background: fTipo === t.id ? t.color : T.card, color: fTipo === t.id ? "#fff" : T.sub, border: `1px solid ${fTipo === t.id ? t.color : T.border}`, borderRadius: 8, padding: "6px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-              <TipoIcon tipo={t.id} size={13} color={fTipo === t.id ? "#fff" : t.color} />{t.label}
-            </button>
-          ))}
-        </div>
-        {/* obra */}
-        {obrasConPedidos.length > 1 && <select value={fObra} onChange={e => setFObra(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 11px", fontSize: 12.5, fontWeight: 600, color: T.text }}>
-          <option value="">Todas las obras</option>
-          {obrasConPedidos.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
-        </select>}
-      </div>}
-      {listaTodos.length > 0 && (() => {
-        // Panel general: estado de cada obra según hace cuánto pidió materiales.
-        const filas = (obras || []).map(o => {
-          const ped = listaTodos.filter(p => p.obra_id === o.id);
-          const mats = ped.filter(p => (p.tipo || "material") === "material");
-          const ultMat = mats.reduce((m, x) => Math.max(m, x.ts || 0), 0);
-          const dm = ultMat ? Math.floor((Date.now() - ultMat) / 86400000) : null;
-          return { id: o.id, nombre: o.nombre, total: ped.length, dm };
-        }).filter(f => f.total > 0 || f.dm === null);
-        if (!filas.length) return null;
-        const orden = filas.slice().sort((a, b) => (b.dm === null ? 9999 : b.dm) - (a.dm === null ? 9999 : a.dm));
-        const txt = (n) => n === null ? "sin pedidos de material" : n === 0 ? "pidió hoy" : n === 1 ? "pidió ayer" : `hace ${n} días`;
-        const alerta = (n) => n === null || n >= 7;
-        return <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 11, marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.navy, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Estado por obra</div>
-          {orden.map(f => (
-            <div key={f.id} onClick={() => setFObra(fObra === f.id ? "" : f.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: fObra === f.id ? T.al : "transparent" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: alerta(f.dm) ? "#D97706" : "#16A34A", flexShrink: 0 }} />
-              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: alerta(f.dm) ? "#B45309" : T.sub, whiteSpace: "nowrap" }}>{txt(f.dm)}</span>
-              <span style={{ fontSize: 10, fontWeight: 800, color: T.sub, background: T.bg, borderRadius: 20, padding: "2px 8px", flexShrink: 0 }}>{f.total}</span>
-            </div>
-          ))}
-          <div style={{ fontSize: 10, color: T.muted, marginTop: 6, lineHeight: 1.45 }}>Tocá una obra para filtrar. En ámbar, las que hace 7 días o más que no piden materiales.</div>
-        </div>;
-      })()}
-      {/* Diagnóstico: mientras estamos resolviendo el bug de obras que no
-          matchean con sus pedidos, esto muestra los datos crudos — así se
-          puede ver a simple vista qué id tiene cada obra, y a qué id
-          apunta cada pedido, sin adivinar. Se puede sacar después. */}
-      <div style={{ marginBottom: 14 }}>
-        <button onClick={() => setDiagOpen(v => !v)} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, cursor: "pointer", textDecoration: "underline", padding: 0 }}>{diagOpen ? "Ocultar diagnóstico" : "Ver diagnóstico (ids crudos)"}</button>
-        {diagOpen && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 11, marginTop: 8, fontSize: 10.5, fontFamily: "monospace" }}>
-          <div style={{ fontWeight: 800, marginBottom: 4, color: T.navy }}>OBRAS ({(obras || []).length}):</div>
-          {(obras || []).map(o => <div key={o.id} style={{ marginBottom: 2, color: T.text }}>{o.nombre} → <span style={{ color: T.sub }}>{o.id}</span></div>)}
-          <div style={{ fontWeight: 800, margin: "10px 0 4px", color: T.navy }}>PEDIDOS DE MATERIAL ({(matpedidos || []).length}):</div>
-          {(matpedidos || []).map(p => {
-            const obraMatch = (obras || []).find(o => o.id === p.obra_id);
-            if (obraMatch) return <div key={p.id} style={{ marginBottom: 2, color: T.text }}>{obraMatch.nombre} → obra_id: <span style={{ color: T.sub }}>{p.obra_id}</span></div>;
-            // Huérfano: se puede ver qué pidieron y reasignarlo a mano,
-            // tocando la obra correcta — no hay forma de adivinarlo solo.
-            return <div key={p.id} style={{ marginBottom: 8, padding: "6px 0", borderTop: `1px dashed ${T.border}` }}>
-              <div style={{ color: "#B91C1C", marginBottom: 2 }}>⚠ SIN OBRA (huérfano) → obra_id: {p.obra_id || "(vacío)"} — {p.fecha || ""}</div>
-              <div style={{ color: T.sub, marginBottom: 4 }}>Pidió: {(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).filter(Boolean).join(", ") || "(sin items)"}</div>
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {(obras || []).map(o => <button key={o.id} onClick={async () => {
-                  const nuevos = (matpedidos || []).map(x => x.id === p.id ? { ...x, obra_id: o.id, upd: Date.now() } : x);
-                  setMatpedidos(nuevos);
-                  lastWrite.current = Date.now();
-                  try { localStorage.setItem("vv_matpedidos", JSON.stringify(nuevos)); } catch { }
-                  await storage.set("vv_matpedidos", JSON.stringify(nuevos)).catch(() => { });
-                  alert(`Reasignado a ${o.nombre}.`);
-                }} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer" }}>→ {o.nombre}</button>)}
+    {vista !== "inicio" && <div>
+      {encabezado(vista === "pedidos" ? "Pedidos" : vista === "recepcion" ? "Recepción de documentos" : "Definiciones")}
+      <div style={{ padding: "0 20px 110px" }}>
+        {vista === "recepcion" ? <RecepcionDocs obras={obras} empresa={empresa} docrecepcion={docrecepcion} persistDoc={persistDoc} /> : vista === "definiciones" ? <DefinicionesView obras={obras} empresa={empresa} definiciones={definiciones} persistDef={persistDef} /> : <>
+          <div style={{ display: "flex", gap: 6, marginBottom: 9, flexWrap: "wrap" }}>
+            <button onClick={() => setFTipo("")} style={{ background: fTipo === "" ? BRASS : T.card, color: fTipo === "" ? "#fff" : T.sub, border: `1px solid ${fTipo === "" ? BRASS : T.border}`, borderRadius: 20, padding: "7px 14px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Todo</button>
+            {TIPOS_PEDIDO.map(t => <button key={t.id} onClick={() => setFTipo(fTipo === t.id ? "" : t.id)} style={{ display: "flex", alignItems: "center", gap: 5, background: fTipo === t.id ? t.color : T.card, color: fTipo === t.id ? "#fff" : T.sub, border: `1px solid ${fTipo === t.id ? t.color : T.border}`, borderRadius: 20, padding: "7px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}><TipoIcon tipo={t.id} size={13} color={fTipo === t.id ? "#fff" : t.color} />{t.label}</button>)}
+          </div>
+          {obrasConPedidos.length > 1 && <select value={fObra} onChange={e => setFObra(e.target.value)} style={{ width: "100%", background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "11px 12px", fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 14 }}>
+            <option value="">Todas las obras</option>
+            {obrasConPedidos.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+          </select>}
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, margin: "0 0 12px" }}>{lista.length} pedido{lista.length !== 1 ? "s" : ""} · {grupos.length} obra{grupos.length !== 1 ? "s" : ""}</div>
+          {listaTodos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Todavía no hay pedidos. Tocá el botón + para cargar el primero.</div>}
+          {listaTodos.length > 0 && lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 18px" }}>Ningún pedido con esos filtros.<br /><button onClick={() => { setFObra(""); setFTipo(""); }} style={{ marginTop: 8, background: "none", border: "none", color: BRASS, fontWeight: 700, fontSize: 12.5, cursor: "pointer", textDecoration: "underline" }}>Ver todos</button></div>}
+          {grupos.map(g => {
+            const ult = g.pedidos.reduce((m, x) => Math.max(m, x.ts || 0), 0);
+            const d = ult ? Math.floor((Date.now() - ult) / 86400000) : null;
+            const ultMat = g.pedidos.filter(x => (x.tipo || "material") === "material").reduce((m, x) => Math.max(m, x.ts || 0), 0);
+            const dm = ultMat ? Math.floor((Date.now() - ultMat) / 86400000) : null;
+            const txt = (n) => n === 0 ? "hoy" : n === 1 ? "ayer" : `hace ${n} días`;
+            const alerta = dm === null || dm >= 7;
+            return (<div key={g.obra_id} style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
+                <div style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, color: T.head, flex: 1, minWidth: 0 }}>{g.nombre}</div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: BRASS, borderRadius: 20, padding: "3px 10px" }}>{g.pedidos.length}</div>
               </div>
-            </div>;
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 11 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 9px" }}>Último pedido: {d === null ? "—" : txt(d)}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: alerta ? T.warn : T.ok, background: alerta ? T.warnBg : T.okBg, border: `1px solid ${alerta ? T.warnBd : T.okBd}`, borderRadius: 8, padding: "4px 9px" }}>Materiales: {dm === null ? "sin pedidos" : txt(dm)}</span>
+              </div>
+              {g.pedidos.map(tarjetaPedido)}
+            </div>);
           })}
-        </div>}
+          <div style={{ marginTop: 6 }}>
+            <button onClick={() => setDiagOpen(v => !v)} style={{ background: "none", border: "none", color: T.muted, fontSize: 10.5, cursor: "pointer", textDecoration: "underline", padding: 0 }}>{diagOpen ? "Ocultar diagnóstico" : "Ver diagnóstico (ids crudos)"}</button>
+            {diagOpen && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 11, marginTop: 8, fontSize: 10.5, fontFamily: "monospace" }}>
+              <div style={{ fontWeight: 800, marginBottom: 4, color: T.head }}>OBRAS ({(obras || []).length}):</div>
+              {(obras || []).map(o => <div key={o.id} style={{ marginBottom: 2, color: T.text }}>{o.nombre} → <span style={{ color: T.sub }}>{o.id}</span></div>)}
+              <div style={{ fontWeight: 800, margin: "10px 0 4px", color: T.head }}>PEDIDOS DE MATERIAL ({(matpedidos || []).length}):</div>
+              {(matpedidos || []).map(p => {
+                const obraMatch = (obras || []).find(o => o.id === p.obra_id);
+                if (obraMatch) return <div key={p.id} style={{ marginBottom: 2, color: T.text }}>{obraMatch.nombre} → obra_id: <span style={{ color: T.sub }}>{p.obra_id}</span></div>;
+                return <div key={p.id} style={{ marginBottom: 8, padding: "6px 0", borderTop: `1px dashed ${T.border}` }}>
+                  <div style={{ color: T.danger, marginBottom: 2 }}>⚠ SIN OBRA (huérfano) → obra_id: {p.obra_id || "(vacío)"} — {p.fecha || ""}</div>
+                  <div style={{ color: T.sub, marginBottom: 4 }}>Pidió: {(p.items || []).map(it => `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim()).filter(Boolean).join(", ") || "(sin items)"}</div>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    {(obras || []).map(o => <button key={o.id} onClick={async () => {
+                      const nuevos = (matpedidos || []).map(x => x.id === p.id ? { ...x, obra_id: o.id, upd: Date.now() } : x);
+                      setMatpedidos(nuevos);
+                      lastWrite.current = Date.now();
+                      try { localStorage.setItem("vv_matpedidos", JSON.stringify(nuevos)); } catch { }
+                      await storage.set("vv_matpedidos", JSON.stringify(nuevos)).catch(() => { });
+                      alert(`Reasignado a ${o.nombre}.`);
+                    }} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer" }}>→ {o.nombre}</button>)}
+                  </div>
+                </div>;
+              })}
+            </div>}
+          </div>
+        </>}
       </div>
-      {listaTodos.length === 0 && <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Registro de pedidos (0)</div>}
-      {listaTodos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "40px 18px" }}>Todavía no hay pedidos. Elegí arriba qué querés pedir.</div>}
-      {listaTodos.length > 0 && lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 18px" }}>Ningún pedido con esos filtros.<br /><button onClick={() => { setFObra(""); setFTipo(""); }} style={{ marginTop: 8, background: "none", border: "none", color: T.accent, fontWeight: 700, fontSize: 12.5, cursor: "pointer", textDecoration: "underline" }}>Ver todos</button></div>}
-      {grupos.map(g => (<div key={g.obra_id} style={{ marginBottom: 18 }}>
-        {/* encabezado de la obra */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, paddingBottom: 6, borderBottom: `2px solid ${T.navy}` }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: T.navy, flex: 1, minWidth: 0 }}>{g.nombre}</div>
-          <div style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: T.navy, borderRadius: 20, padding: "3px 10px" }}>{g.pedidos.length} pedido{g.pedidos.length !== 1 ? "s" : ""}</div>
-        </div>
-        {(() => {
-          const ult = g.pedidos.reduce((m, x) => Math.max(m, x.ts || 0), 0);
-          const d = ult ? Math.floor((Date.now() - ult) / 86400000) : null;
-          const mats = g.pedidos.filter(x => (x.tipo || "material") === "material");
-          const ultMat = mats.reduce((m, x) => Math.max(m, x.ts || 0), 0);
-          const dm = ultMat ? Math.floor((Date.now() - ultMat) / 86400000) : null;
-          const txt = (n) => n === 0 ? "hoy" : n === 1 ? "ayer" : `hace ${n} días`;
-          const alerta = dm === null || dm >= 7;
-          return <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "3px 8px" }}>Último pedido: {d === null ? "—" : txt(d)}</span>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: alerta ? "#B45309" : "#15803D", background: alerta ? "#FFFBEB" : "#ECFDF5", border: `1px solid ${alerta ? "#FDE68A" : "#A7F3D0"}`, borderRadius: 6, padding: "3px 8px" }}>Materiales: {dm === null ? "sin pedidos" : txt(dm)}</span>
-          </div>;
-        })()}
-        {g.pedidos.map(p => { const mio = p.de === "contratista" && p.empresa === empresa; return (<div key={p.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${mio ? BRASS : tipoDe(p.tipo).color}`, borderRadius: T.rsm, padding: 13, marginBottom: 9, boxShadow: T.shadow }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}><span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 800, color: "#fff", background: tipoDe(p.tipo).color, borderRadius: 5, padding: "2px 7px", marginRight: 7, verticalAlign: "middle" }}><TipoIcon tipo={p.tipo} size={12} color="#fff" /> {tipoDe(p.tipo).label}</span><span style={{ fontWeight: 800, color: T.navy }}>{obraNom(p.obra_id)}</span><span style={{ color: T.muted, fontWeight: 600 }}> · {p.fecha}</span></div>
-          <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: p.de === "vv" ? T.accent : p.de === "cliente" ? "#7C3AED" : BRASS, borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap" }}>{origenLabel(p)}</span>
-        </div>
-        <div style={{ fontSize: 12.5, color: T.sub, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{itemsTexto(p).map(l => `• ${l}`).join("\n")}</div>
-        {(p.solicitante || p.empresa) && <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 7, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, color: T.sub }}><Ico n="user" s={12} c={T.sub} /> Pidió: {p.solicitante || p.empresa}{p.solicitante && p.empresa ? ` (${p.empresa})` : ""}</div>}
-        {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, fontStyle: "italic" }}>{p.nota}</div>}
-        {p.fecha_necesita && <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.al, color: T.accent, borderRadius: 7, padding: "4px 9px", fontSize: 11.5, fontWeight: 700 }}><Ico n="cal2" /> Necesito en obra: {fmtISO(p.fecha_necesita)}</div>
-          <a href={icsEntrega(p)} download={`Entrega-${obraNom(p.obra_id).replace(/[^\w]/g, "_")}.ics`} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: T.navy, color: "#fff", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}><Ico n="bell" /> Agendar + alerta</a>
-        </div>}
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginTop: 7, gap: 8 }}>
-          {mio && <div style={{ display: "flex", gap: 6, flexShrink: 0 }}><button onClick={() => editar(p)} style={{ background: T.al, border: `1px solid ${T.border}`, color: T.accent, borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Editar</button><button onClick={() => borrar(p.id)} style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 7, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Eliminar</button></div>}
-        </div>
-        {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 6 }}><Ico n="send" /> Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
-        <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ width: "100%", marginTop: 9, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> Mandar por WhatsApp al encargado</button>
-        {waFor === p.id && <div style={{ marginTop: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 11px" }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Enviar a…</div>
-          {encargados(p.obra_id).map(j => <a key={j.id} href={waLink(waText(p), j.telefono)} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: "#25D366", color: "#fff", borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none", marginBottom: 7 }}><Ico n="send" /> {j.nombre}{j.rol ? ` · ${j.rol}` : ""}</a>)}
-          <a href={waLink(waText(p))} target="_blank" rel="noreferrer" onClick={() => { marcarEnviado(p.id); setWaFor(null); }} style={{ display: "block", background: T.card, color: T.accent, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 12px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>Elegir contacto…</a>
-          {encargados(p.obra_id).length === 0 && <div style={{ fontSize: 10, color: T.muted, marginTop: 7, lineHeight: 1.5 }}>No hay encargado con teléfono cargado para esta obra. Usá "Elegir contacto" o pedile a V+V que cargue el teléfono del encargado.</div>}
-        </div>}
-      </div>); })}
-      </div>))}
-    </>}
-    </div>
+    </div>}
 
-    {form && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={() => setForm(null)}>
+    {vista === "pedidos" && <button onClick={() => setNuevoOpen(true)} aria-label="Nuevo pedido" style={{ position: "fixed", right: "max(18px, calc(50% - 292px))", bottom: "calc(88px + env(safe-area-inset-bottom))", width: 56, height: 56, borderRadius: "50%", background: BRASS, color: "#fff", border: "none", fontSize: 30, lineHeight: 1, cursor: "pointer", boxShadow: "0 8px 22px rgba(0,0,0,.4)", zIndex: 60 }}>＋</button>}
+
+    <nav style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 80, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
+      <div style={{ pointerEvents: "auto", width: "100%", maxWidth: 620, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", paddingBottom: "calc(env(safe-area-inset-bottom) + 4px)" }}>
+        {tabs.map(([k, l, ic]) => { const act = vista === k; return (<button key={k} onClick={() => setVista(k)} style={{ flex: 1, background: "none", border: "none", borderTop: `2px solid ${act ? BRASS : "transparent"}`, marginTop: -1, padding: "9px 2px 7px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: act ? BRASS : T.sub }}>
+          <Ico n={ic} s={20} c={act ? BRASS : T.sub} st={act ? 1.9 : 1.6} /><span style={{ fontSize: 10, fontWeight: act ? 800 : 600 }}>{l}</span></button>); })}
+      </div>
+    </nav>
+
+    {menuOpen && <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: "18px 18px 0 0", padding: "16px 20px calc(22px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 620 }}>
+        <div style={{ width: 40, height: 4, background: T.border, borderRadius: 4, margin: "0 auto 14px" }} />
+        <div style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, color: T.head }}>{empresa}</div>
+        <div style={{ fontSize: 12, color: T.sub, margin: "2px 0 14px" }}>{persona || "Contratista"}</div>
+        {[["↻", "Actualizar y traer lo último", () => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }], ["✦", "Personalizar estilo", () => { setMenuOpen(false); setEstiloOpen(true); }], ["⇄", "Cambiar de empresa", () => { setMenuOpen(false); setTmpEmpresa(empresa); setEditEmpresa(true); }]].map(([ic, l, fn]) => <button key={l} onClick={fn} style={{ width: "100%", display: "flex", alignItems: "center", gap: 13, background: T.bg, border: `1px solid ${T.border}`, color: T.text, borderRadius: 12, padding: "14px", marginBottom: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "left" }}><span style={{ width: 30, textAlign: "center", color: BRASS, fontSize: 17 }}>{ic}</span>{l}</button>)}
+      </div>
+    </div>}
+
+    {nuevoOpen && <div onClick={() => setNuevoOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: "18px 18px 0 0", padding: "16px 20px calc(22px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 620 }}>
+        <div style={{ width: 40, height: 4, background: T.border, borderRadius: 4, margin: "0 auto 14px" }} />
+        <div style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, color: T.head, marginBottom: 12 }}>Qué querés pedir</div>
+        {TIPOS_PEDIDO.map(t => <button key={t.id} onClick={() => { setNuevoOpen(false); nuevo(t.id); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 13, background: T.bg, border: `1px solid ${T.border}`, color: T.text, borderRadius: 12, padding: "13px 14px", marginBottom: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "left" }}><TipoIcon tipo={t.id} size={24} color={t.color} />{t.label}</button>)}
+      </div>
+    </div>}
+
+    {estiloOpen && <div onClick={() => setEstiloOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.3)", zIndex: 450, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: "18px 18px 0 0", padding: "16px 20px calc(22px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 620, maxHeight: "72vh", overflowY: "auto", boxShadow: "0 -10px 40px rgba(0,0,0,.4)" }}>
+        <div style={{ width: 40, height: 4, background: T.border, borderRadius: 4, margin: "0 auto 14px" }} />
+        <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, color: T.head }}>Personalizar app</div>
+        <div style={{ fontSize: 12, color: T.sub, margin: "3px 0 4px" }}>Los cambios se ven al instante y quedan guardados en este dispositivo.</div>
+        <div style={{ ...lblS, margin: "16px 0 8px" }}>Tema</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8 }}>
+          {Object.entries(PALETAS).map(([id, p]) => <button key={id} onClick={() => aplicarYGuardar({ ...estilo, tema: id, acento: "" })} style={{ ...selBtn((estilo.tema || "bronce") === id), padding: "8px 2px" }}>
+            <div style={{ width: 30, height: 30, borderRadius: "50%", margin: "0 auto 5px", background: p.bg, border: `3px solid ${p.brass}`, boxShadow: "0 0 0 1px rgba(128,128,128,.4)" }} /><div style={{ fontSize: 10.5, fontWeight: 700 }}>{p.nombre}</div></button>)}
+        </div>
+        <div style={{ ...lblS, margin: "16px 0 8px" }}>Color de acento</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+          <button onClick={() => aplicarYGuardar({ ...estilo, acento: "" })} style={{ ...selBtn(!estilo.acento), padding: "7px 11px", fontSize: 11.5, fontWeight: 700 }}>Del tema</button>
+          {ACENTOS.map(c => <button key={c} onClick={() => aplicarYGuardar({ ...estilo, acento: c })} aria-label={c} style={{ width: 32, height: 32, borderRadius: "50%", background: c, border: `3px solid ${estilo.acento === c ? T.text : "transparent"}`, cursor: "pointer", padding: 0 }} />)}
+          <input type="color" value={estilo.acento || BRASS} onChange={e => aplicarYGuardar({ ...estilo, acento: e.target.value })} style={{ width: 36, height: 36, border: "none", background: "none", padding: 0, cursor: "pointer" }} />
+        </div>
+        <div style={{ ...lblS, margin: "16px 0 8px" }}>Tipografía de títulos</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+          {[["elegante", "Elegante"], ["moderna", "Moderna"], ["clasica", "Clásica"]].map(([k, n]) => <button key={k} onClick={() => aplicarYGuardar({ ...estilo, fuente: k })} style={{ ...selBtn((estilo.fuente || "elegante") === k), padding: "10px 4px", fontFamily: FONTS[k], fontSize: 15, fontWeight: 600 }}>{n}</button>)}
+        </div>
+        <button onClick={() => setEstiloOpen(false)} style={{ width: "100%", background: BRASS, color: "#fff", border: "none", borderRadius: 12, padding: 14, fontSize: 14.5, fontWeight: 800, cursor: "pointer", marginTop: 20 }}>Listo</button>
+      </div>
+    </div>}
+
+    {form && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 460, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={() => setForm(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 620, padding: 20, maxHeight: "90vh", overflowY: "auto" }}>
-        <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 14 }}>{form.id ? `Editar pedido de ${tipoDe(form.tipo).label.toLowerCase()}` : `Nuevo pedido de ${tipoDe(form.tipo).label.toLowerCase()}`}</div>
+        <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, color: T.head, marginBottom: 14 }}>{form.id ? `Editar pedido de ${tipoDe(form.tipo).label.toLowerCase()}` : `Nuevo pedido de ${tipoDe(form.tipo).label.toLowerCase()}`}</div>
         <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Obra</label>
         <select value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 13px", fontSize: 14, color: T.text, margin: "6px 0 14px", boxSizing: "border-box" }}>
           {obras.length === 0 && <option value="">(sin obras cargadas)</option>}
