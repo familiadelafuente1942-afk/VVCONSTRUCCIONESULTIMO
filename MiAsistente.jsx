@@ -55,6 +55,16 @@ function fechaAOrden(fecha, hora) {
 }
 const BUCKET = "bco-media";
 const MESES_LARGOS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+// Clave de mes "MM/AA" a partir de una fecha "D/M/AA" o "DD/MM/AA" (tolera días/meses sin cero y años de 4 cifras).
+function mesKeyDe(fecha) {
+  const p = String(fecha || "").split("/").map(n => parseInt(n, 10));
+  if (!p[0] || !p[1]) return "";
+  let y = p[2]; if (y == null || isNaN(y)) y = new Date().getFullYear() % 100; else if (y >= 100) y = y % 100;
+  return `${String(p[1]).padStart(2, "0")}/${String(y).padStart(2, "0")}`;
+}
+// Nombre de obra normalizado (sin tildes, mayúsculas, espacios de más) para comparar sin errores de tipeo.
+const normObra = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+const esTerralagos = (obra) => normObra(obra).startsWith("terralagos");
 // Agrupa una lista (gastos o pagos) por mes calendario a partir de "fecha" (DD/MM/AA).
 // Devuelve del mes más nuevo al más viejo, con el total de "campoMonto" de cada uno.
 function agruparPorMes(lista, campoMonto) {
@@ -559,7 +569,7 @@ export default function MiAsistente() {
     const entrenoTxt = !entrenoInicio ? "(todavía no arrancó el plan de entrenamiento)" : `Plan de estabilización lumbar/glúteos/core, 6 semanas, 3 sesiones por semana (lun/mié/vie). Llevás ${hechasCount}/18 sesiones hechas.${proximaSesion ? `\nPróxima sesión: ${proximaSesion.fecha} (semana ${proximaSesion.semana}, tipo ${proximaSesion.tipo}) — ejercicios: ${proximaSesion.ejercicios.map(e => e.n).join(", ")}.` : "\n¡Plan completo!"}`;
     const gs = (gastos || []).slice(0, 40).map(g => `· ${g.fecha} — ${g.concepto} $${(g.monto || 0).toLocaleString("es-AR")}`).join("\n") || "(sin gastos)";
     const totDia = (gastos || []).filter(g => g.fecha === hoyG).reduce((a, g) => a + (g.monto || 0), 0);
-    const totMes = (gastos || []).filter(g => (g.fecha || "").slice(3) === mesG).reduce((a, g) => a + (g.monto || 0), 0);
+    const totMes = (gastos || []).filter(g => mesKeyDe(g.fecha) === mesG).reduce((a, g) => a + (g.monto || 0), 0);
     const totalPend = (pagos || []).filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
     const ag = (agenda || []).slice(0, 30).map(e => `· ${e.fecha}${e.hora ? " " + e.hora : ""} — ${e.tipo === "pago" ? `💰 PAGO a ${e.titulo}${e.monto ? ` ($${e.monto.toLocaleString("es-AR")})` : ""}` : e.titulo}${e.nota ? " (" + e.nota + ")" : ""}`).join("\n") || "(agenda vacía)";
     const arch = (archivos || []).slice(0, 40).map(f => `· [${f.categoria}] ${f.nombre}`).join("\n") || "(sin archivos)";
@@ -1208,7 +1218,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["resultados", "Resultados"], ["obras", "Obras"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => (p.fecha || "").slice(3) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => (c.fecha || "").slice(3) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => (g.fecha || "").slice(3) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["resultados", "Resultados"], ["obras", "Obras"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
@@ -1293,7 +1303,7 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, 
   const mesActual = hoyStr().slice(3);
   const [mesVer, setMesVer] = useState(mesActual);
   const listaObra = (pagos || []).filter(p => !filtroObra || p.obra === filtroObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  const lista = listaObra.filter(p => (p.fecha || "").slice(3) === mesVer);
+  const lista = listaObra.filter(p => mesKeyDe(p.fecha) === mesVer);
   const obrasUnicas = [...new Set((pagos || []).map(p => p.obra).filter(Boolean))];
   const totalPend = lista.filter(p => p.estado === "pendiente").reduce((a, p) => a + (p.monto || 0), 0);
   const totalPag = lista.filter(p => p.estado === "pagado").reduce((a, p) => a + (p.monto || 0), 0);
@@ -1728,7 +1738,7 @@ function CobrosBody({ cobros, obras, filtroObra, setFiltroObra, exportar, borrar
   const [editandoFechaId, setEditandoFechaId] = useState(null);
   const [fechaTmp, setFechaTmp] = useState("");
   const listaObra = (cobros || []).filter(c => !filtroObra || c.obra === filtroObra).sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  const lista = listaObra.filter(c => (c.fecha || "").slice(3) === mesVer);
+  const lista = listaObra.filter(c => mesKeyDe(c.fecha) === mesVer);
   const obrasUnicas = [...new Set((cobros || []).map(c => c.obra).filter(Boolean))];
   const totalPend = lista.filter(c => c.estado === "pendiente").reduce((a, c) => a + (c.monto || 0), 0);
   const totalCob = lista.filter(c => c.estado === "cobrado").reduce((a, c) => a + (c.monto || 0), 0);
@@ -1821,9 +1831,9 @@ function GastosBody({ gastos, onAdd, exportar, borrar, onFotoTicket, leyendo }) 
   const [mesVer, setMesVer] = React.useState(mesActual);
   const lista = (gastos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const totDia = lista.filter(g => g.fecha === hoy).reduce((a, g) => a + (g.monto || 0), 0);
-  const totMes = lista.filter(g => (g.fecha || "").slice(3) === mesActual).reduce((a, g) => a + (g.monto || 0), 0);
+  const totMes = lista.filter(g => mesKeyDe(g.fecha) === mesActual).reduce((a, g) => a + (g.monto || 0), 0);
   const meses = agruparPorMes(lista, "monto");
-  const listaMesVer = lista.filter(g => (g.fecha || "").slice(3) === mesVer);
+  const listaMesVer = lista.filter(g => mesKeyDe(g.fecha) === mesVer);
   const grupoVer = meses.find(m => m.key === mesVer);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <input ref={ticketRef} type="file" accept="image/*" capture="environment" onChange={e => { const file = e.target.files && e.target.files[0]; e.target.value = ""; if (file && onFotoTicket) onFotoTicket(file); }} style={{ display: "none" }} />
@@ -1863,23 +1873,23 @@ function GastosBody({ gastos, onAdd, exportar, borrar, onFotoTicket, leyendo }) 
 
 function mesesResultados(cobros, pagos, gastos) {
   const set = new Set();
-  (cobros || []).forEach(c => { if (c.fecha) set.add((c.fecha || "").slice(3)); });
-  (pagos || []).forEach(p => { if (p.fecha) set.add((p.fecha || "").slice(3)); });
-  (gastos || []).forEach(g => { if (g.fecha) set.add((g.fecha || "").slice(3)); });
+  (cobros || []).forEach(c => { if (c.fecha) set.add(mesKeyDe(c.fecha)); });
+  (pagos || []).forEach(p => { if (p.fecha) set.add(mesKeyDe(p.fecha)); });
+  (gastos || []).forEach(g => { if (g.fecha) set.add(mesKeyDe(g.fecha)); });
   return [...set].sort((a, b) => { const [ma, ya] = a.split("/").map(Number); const [mb, yb] = b.split("/").map(Number); return (yb * 100 + mb) - (ya * 100 + ma); });
 }
 function calcularResultadoMes(mesKey, cobros, pagos, gastos) {
-  const cobrado = (cobros || []).filter(c => c.estado === "cobrado" && (c.fecha || "").slice(3) === mesKey).reduce((a, c) => a + (c.monto || 0), 0);
-  const cobradoPend = (cobros || []).filter(c => c.estado === "pendiente" && (c.fecha || "").slice(3) === mesKey).reduce((a, c) => a + (c.monto || 0), 0);
-  const pagado = (pagos || []).filter(p => p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
-  const pagadoPend = (pagos || []).filter(p => p.estado === "pendiente" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
-  const gastosTot = (gastos || []).filter(g => (g.fecha || "").slice(3) === mesKey).reduce((a, g) => a + (g.monto || 0), 0);
-  const valeria = (pagos || []).filter(p => p.obra === "Valeria" && p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
-  const valentina = (pagos || []).filter(p => p.obra === "Valentina" && p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
+  const cobrado = (cobros || []).filter(c => c.estado === "cobrado" && mesKeyDe(c.fecha) === mesKey).reduce((a, c) => a + (c.monto || 0), 0);
+  const cobradoPend = (cobros || []).filter(c => c.estado === "pendiente" && mesKeyDe(c.fecha) === mesKey).reduce((a, c) => a + (c.monto || 0), 0);
+  const pagado = (pagos || []).filter(p => p.estado === "pagado" && mesKeyDe(p.fecha) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
+  const pagadoPend = (pagos || []).filter(p => p.estado === "pendiente" && mesKeyDe(p.fecha) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
+  const gastosTot = (gastos || []).filter(g => mesKeyDe(g.fecha) === mesKey).reduce((a, g) => a + (g.monto || 0), 0);
+  const valeria = (pagos || []).filter(p => normObra(p.obra) === "valeria" && p.estado === "pagado" && mesKeyDe(p.fecha) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
+  const valentina = (pagos || []).filter(p => normObra(p.obra) === "valentina" && p.estado === "pagado" && mesKeyDe(p.fecha) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
   // Lo pagado a la obra "Terralagos" es una inversión (no un gasto real): salió de la
   // ganancia pero se convirtió en un activo, así que se suma de vuelta a la utilidad
   // en vez de restarla (que es lo que pasaría si solo se dejara adentro de "pagado").
-  const terralagos = (pagos || []).filter(p => p.obra === "Terralagos" && p.estado === "pagado" && (p.fecha || "").slice(3) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
+  const terralagos = (pagos || []).filter(p => esTerralagos(p.obra) && p.estado === "pagado" && mesKeyDe(p.fecha) === mesKey).reduce((a, p) => a + (p.monto || 0), 0);
   const sebastian = cobrado - pagado - gastosTot + terralagos;
   // "Pagado" mezcla pagos reales a personal/contratistas con los retiros de Valeria y
   // Valentina y con lo invertido en Terralagos. "Pagos al personal" es solo la parte que
