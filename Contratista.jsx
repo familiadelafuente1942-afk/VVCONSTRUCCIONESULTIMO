@@ -207,6 +207,15 @@ function aplicarEstilo(e) {
   if (est.acento) { T.accent = est.acento; BRASS = est.acento; T.brassLight = mezclar(est.acento, .35); if (p.oscuro) T.navy = est.acento; T.al = p.oscuro ? "rgba(255,255,255,.08)" : p.al; }
   SERIF = FONTS[est.fuente] || FONTS.elegante;
 }
+function achicarLogo(file, max = 256) {
+  return new Promise((res) => {
+    try {
+      const fr = new FileReader();
+      fr.onload = () => { const im = new Image(); im.onload = () => { const k = Math.min(1, max / Math.max(im.width, im.height)); const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k)); c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL("image/png")); }; im.onerror = () => res(null); im.src = fr.result; };
+      fr.onerror = () => res(null); fr.readAsDataURL(file);
+    } catch { res(null); }
+  });
+}
 function leerEstilo() {
   try { const j = localStorage.getItem("contratista_estilo"); if (j) { const e = JSON.parse(j); if (e && typeof e === "object") return e; } } catch { }
   return { tema: "bronce", acento: "", fuente: "elegante" };
@@ -713,7 +722,7 @@ export default function ContratistaApp() {
   const [persona, setPersona] = useState(() => { try { return localStorage.getItem("contratista_persona") || ""; } catch { return ""; } });
   const setPersonaP = (v) => { setPersona(v); try { localStorage.setItem("contratista_persona", v); } catch { } };
   const [tmpEmpresa, setTmpEmpresa] = useState("");
-  const [obras, setObras] = useState([]);
+  const [obrasTodas, setObras] = useState([]);
   const [matpedidos, setMatpedidos] = useState([]);
   const [vista, setVista] = useState("inicio"); // "inicio" | "pedidos" | "recepcion" | "definiciones"
   const [fObra, setFObra] = useState("");   // filtro obra ("" = todas)
@@ -729,6 +738,7 @@ export default function ContratistaApp() {
   const [estiloOpen, setEstiloOpen] = useState(false);
   const [estilo, setEstilo] = useState(() => leerEstilo());
   aplicarEstilo(estilo);
+  const obras = obrasTodas.filter(o => !((estilo.ocultas) || []).includes(o.id));
   const [menuOpen, setMenuOpen] = useState(false);
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [aviso, setAviso] = useState("");
@@ -855,7 +865,7 @@ export default function ContratistaApp() {
     const r = await storage.get("vv_matpedidos"); let arr = []; if (r?.value) { try { arr = JSON.parse(r.value); } catch { } }
     await persistMat(arr.map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: quien || (empresa) } : x));
   }
-  const listaTodos = (matpedidos || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const listaTodos = (matpedidos || []).filter(p => !((estilo.ocultas) || []).includes(p.obra_id)).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const lista = listaTodos.filter(p =>
     (!fObra || p.obra_id === fObra) &&
     (!fTipo || (p.tipo || "material") === fTipo)
@@ -887,7 +897,7 @@ export default function ContratistaApp() {
 
   if (!empresa || editEmpresa) {
     return (<div style={{ minHeight: "100vh", background: T.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, paddingTop: topPad(24), fontFamily: FONT_UI }}>
-      <div style={{ width: 92, height: 92, borderRadius: "50%", border: `2px solid ${BRASS}`, background: T.card, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20, boxShadow: T.shadow }}><Ico n="building" s={40} c={BRASS} /></div>
+      <div style={{ width: 92, height: 92, borderRadius: "50%", border: `2px solid ${BRASS}`, overflow: "hidden", background: estilo.logo ? "#fff" : T.card, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20, boxShadow: T.shadow }}>{estilo.logo ? <img src={estilo.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={40} c={BRASS} />}</div>
       <div style={{ fontSize: 11, fontWeight: 700, color: BRASS, letterSpacing: ".22em", textTransform: "uppercase", marginBottom: 8 }}>V+V Construcciones</div>
       <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 600, color: T.head, marginBottom: 8, textAlign: "center" }}>Pedidos de materiales</div>
       <div style={{ fontSize: 13, color: T.sub, marginBottom: 24, lineHeight: 1.5, textAlign: "center", maxWidth: 320 }}>Ingresá el nombre de tu empresa para cargar pedidos de las obras.</div>
@@ -941,10 +951,10 @@ export default function ContratistaApp() {
     {vista === "inicio" && <div>
       <div style={{ position: "relative", padding: `${topPad(18)} 20px 26px`, textAlign: "center", background: `radial-gradient(120% 90% at 50% 0%, ${T.al} 0%, transparent 70%)` }}>
         <button onClick={() => setMenuOpen(true)} aria-label="Más opciones" style={{ ...btnIco, position: "absolute", right: 18, top: topPad(14) }}>•••</button>
-        <div style={{ width: 96, height: 96, borderRadius: "50%", border: `2px solid ${BRASS}`, background: T.card, display: "flex", alignItems: "center", justifyContent: "center", margin: "6px auto 16px", boxShadow: T.shadow }}><Ico n="building" s={42} c={BRASS} /></div>
-        <div style={{ fontSize: 10.5, letterSpacing: ".22em", textTransform: "uppercase", color: T.muted }}>Hola{persona ? `, ${persona.split(/[\s—-]/)[0]}` : ""}</div>
-        <div style={{ fontFamily: SERIF, fontSize: 29, fontWeight: 600, color: T.head, marginTop: 6, lineHeight: 1.12 }}>{empresa}</div>
-        <div style={{ fontSize: 12, color: T.sub, marginTop: 6 }}>Pedidos de materiales · V+V Construcciones</div>
+        <div style={{ width: 96, height: 96, borderRadius: "50%", border: `2px solid ${BRASS}`, overflow: "hidden", background: estilo.logo ? "#fff" : T.card, display: "flex", alignItems: "center", justifyContent: "center", margin: "6px auto 16px", boxShadow: T.shadow }}>{estilo.logo ? <img src={estilo.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={42} c={BRASS} />}</div>
+        <div style={{ fontSize: 10.5, letterSpacing: ".22em", textTransform: "uppercase", color: T.muted }}>{estilo.saludo || "Hola"}{persona ? `, ${persona.split(/[\s—-]/)[0]}` : ""}</div>
+        <div style={{ fontFamily: SERIF, fontSize: 29, fontWeight: 600, color: T.head, marginTop: 6, lineHeight: 1.12 }}>{estilo.nombre || empresa}</div>
+        <div style={{ fontSize: 12, color: T.sub, marginTop: 6 }}>{estilo.subtitulo || "Pedidos de materiales · V+V Construcciones"}</div>
       </div>
       <div style={{ padding: "0 20px 110px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 9, marginBottom: 22 }}>
@@ -1080,6 +1090,26 @@ export default function ContratistaApp() {
         <div style={{ width: 40, height: 4, background: T.border, borderRadius: 4, margin: "0 auto 14px" }} />
         <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, color: T.head }}>Personalizar app</div>
         <div style={{ fontSize: 12, color: T.sub, margin: "3px 0 4px" }}>Los cambios se ven al instante y quedan guardados en este dispositivo.</div>
+        <div style={{ ...lblS, margin: "16px 0 8px" }}>Logo</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", border: `2px solid ${BRASS}`, overflow: "hidden", background: estilo.logo ? "#fff" : T.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{estilo.logo ? <img src={estilo.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={28} c={BRASS} />}</div>
+          <label style={{ flex: 1, textAlign: "center", background: BRASS, color: "#fff", borderRadius: 12, padding: "12px 10px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{estilo.logo ? "Cambiar logo" : "Subir logo"}
+            <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => { const f = e.target.files && e.target.files[0]; if (!f) return; const d = await achicarLogo(f); if (d) aplicarYGuardar({ ...estilo, logo: d }); else setAviso("No se pudo leer esa imagen. Probá con otra."); e.target.value = ""; }} /></label>
+          {estilo.logo && <button onClick={() => aplicarYGuardar({ ...estilo, logo: "" })} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 12, padding: "12px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Quitar</button>}
+        </div>
+        <div style={{ ...lblS, margin: "16px 0 8px" }}>Textos</div>
+        {[["saludo", "Saludo", "Hola"], ["nombre", "Nombre que se muestra", empresa], ["subtitulo", "Subtítulo", "Pedidos de materiales · V+V Construcciones"]].map(([k, l, ph]) => <div key={k} style={{ marginBottom: 9 }}>
+          <div style={{ fontSize: 11, color: T.muted, marginBottom: 4, fontWeight: 700 }}>{l}</div>
+          <input id={"estilo-" + k} value={estilo[k] || ""} onChange={e => aplicarYGuardar({ ...estilo, [k]: e.target.value })} placeholder={ph} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "11px 13px", fontSize: 14, color: T.text, boxSizing: "border-box" }} />
+        </div>)}
+        {obrasTodas.length > 0 && <>
+          <div style={{ ...lblS, margin: "16px 0 4px" }}>Obras que se muestran</div>
+          <div style={{ fontSize: 11, color: T.muted, marginBottom: 8, lineHeight: 1.4 }}>Apagá las que no querés ver. No se borra nada, solo se ocultan en este celular.</div>
+          {obrasTodas.map(o => { const oculta = (estilo.ocultas || []).includes(o.id); return <button key={o.id} onClick={() => aplicarYGuardar({ ...estilo, ocultas: oculta ? (estilo.ocultas || []).filter(x => x !== o.id) : [...(estilo.ocultas || []), o.id] })} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: T.bg, border: `1px solid ${T.border}`, color: oculta ? T.muted : T.text, borderRadius: 10, padding: "11px 13px", marginBottom: 6, fontSize: 13.5, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: oculta ? "line-through" : "none" }}>{o.nombre}</span>
+            <span style={{ width: 38, height: 22, borderRadius: 20, background: oculta ? T.border : BRASS, position: "relative", flexShrink: 0 }}><span style={{ position: "absolute", top: 2, left: oculta ? 2 : 18, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s" }} /></span>
+          </button>; })}
+        </>}
         <div style={{ ...lblS, margin: "16px 0 8px" }}>Tema</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8 }}>
           {Object.entries(PALETAS).map(([id, p]) => <button key={id} onClick={() => aplicarYGuardar({ ...estilo, tema: id, acento: "" })} style={{ ...selBtn((estilo.tema || "bronce") === id), padding: "8px 2px" }}>
