@@ -741,6 +741,8 @@ export default function ContratistaApp() {
   const obras = obrasTodas.filter(o => !((estilo.ocultas) || []).includes(o.id));
   const [menuOpen, setMenuOpen] = useState(false);
   const [nuevoOpen, setNuevoOpen] = useState(false);
+  const [obrasOpen, setObrasOpen] = useState(false);
+  const [confOcultar, setConfOcultar] = useState(null);
   const [aviso, setAviso] = useState("");
   useEffect(() => {
     const h = (e) => { setAviso(String(e.detail || "")); setTimeout(() => setAviso(""), 9000); };
@@ -943,6 +945,7 @@ export default function ContratistaApp() {
     </div>}
   </div>); };
 
+  const ocultarObra = (id) => { const nuevas = [...((estilo.ocultas) || []).filter(x => x !== id), id]; aplicarYGuardar({ ...estilo, ocultas: nuevas }); setConfOcultar(null); if (fObra === id) setFObra(""); };
   const selBtn = (on) => ({ border: `2px solid ${on ? BRASS : T.border}`, background: T.bg, color: T.text, borderRadius: 12, cursor: "pointer", fontFamily: "inherit" });
 
   return (<div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: FONT_UI, maxWidth: 620, margin: "0 auto", position: "relative" }}>
@@ -983,6 +986,7 @@ export default function ContratistaApp() {
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.nombre}</span>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: alertaDm(f.dm) ? T.warn : T.sub, whiteSpace: "nowrap" }}>{txtDm(f.dm)}</span>
                 <span style={{ fontSize: 10, fontWeight: 800, color: T.sub, background: T.bg, borderRadius: 20, padding: "2px 8px" }}>{f.total}</span>
+                <button onClick={(e) => { e.stopPropagation(); setConfOcultar({ id: f.id, nombre: f.nombre }); }} aria-label={"Ocultar " + f.nombre} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 8, width: 28, height: 28, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
               </div>))}
           </div>
           <div style={{ fontSize: 10, color: T.muted, marginTop: 8, lineHeight: 1.45 }}>En ámbar, las obras que hace 7 días o más que no piden materiales. Tocá una para ver sus pedidos.</div>
@@ -1021,6 +1025,7 @@ export default function ContratistaApp() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
                 <div style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, color: T.head, flex: 1, minWidth: 0 }}>{g.nombre}</div>
                 <div style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: BRASS, borderRadius: 20, padding: "3px 10px" }}>{g.pedidos.length}</div>
+                <button onClick={() => setConfOcultar({ id: g.obra_id, nombre: g.nombre })} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, borderRadius: 8, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Ocultar</button>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 11 }}>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 9px" }}>Último pedido: {d === null ? "—" : txt(d)}</span>
@@ -1073,7 +1078,7 @@ export default function ContratistaApp() {
         <div style={{ width: 40, height: 4, background: T.border, borderRadius: 4, margin: "0 auto 14px" }} />
         <div style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, color: T.head }}>{empresa}</div>
         <div style={{ fontSize: 12, color: T.sub, margin: "2px 0 14px" }}>{persona || "Contratista"}</div>
-        {[["↻", "Actualizar y traer lo último", () => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }], ["✦", "Personalizar estilo", () => { setMenuOpen(false); setEstiloOpen(true); }], ["⇄", "Cambiar de empresa", () => { setMenuOpen(false); setTmpEmpresa(empresa); setEditEmpresa(true); }]].map(([ic, l, fn]) => <button key={l} onClick={fn} style={{ width: "100%", display: "flex", alignItems: "center", gap: 13, background: T.bg, border: `1px solid ${T.border}`, color: T.text, borderRadius: 12, padding: "14px", marginBottom: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "left" }}><span style={{ width: 30, textAlign: "center", color: BRASS, fontSize: 17 }}>{ic}</span>{l}</button>)}
+        {[["↻", "Actualizar y traer lo último", () => { try { if (window.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) { } location.replace(location.pathname + "?sync=" + Date.now()); }], ["▤", "Mostrar u ocultar obras", () => { setMenuOpen(false); setObrasOpen(true); }], ["✦", "Personalizar estilo", () => { setMenuOpen(false); setEstiloOpen(true); }], ["⇄", "Cambiar de empresa", () => { setMenuOpen(false); setTmpEmpresa(empresa); setEditEmpresa(true); }]].map(([ic, l, fn]) => <button key={l} onClick={fn} style={{ width: "100%", display: "flex", alignItems: "center", gap: 13, background: T.bg, border: `1px solid ${T.border}`, color: T.text, borderRadius: 12, padding: "14px", marginBottom: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "left" }}><span style={{ width: 30, textAlign: "center", color: BRASS, fontSize: 17 }}>{ic}</span>{l}</button>)}
       </div>
     </div>}
 
@@ -1082,6 +1087,32 @@ export default function ContratistaApp() {
         <div style={{ width: 40, height: 4, background: T.border, borderRadius: 4, margin: "0 auto 14px" }} />
         <div style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, color: T.head, marginBottom: 12 }}>Qué querés pedir</div>
         {TIPOS_PEDIDO.map(t => <button key={t.id} onClick={() => { setNuevoOpen(false); nuevo(t.id); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 13, background: T.bg, border: `1px solid ${T.border}`, color: T.text, borderRadius: 12, padding: "13px 14px", marginBottom: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "left" }}><TipoIcon tipo={t.id} size={24} color={t.color} />{t.label}</button>)}
+      </div>
+    </div>}
+
+    {obrasOpen && <div onClick={() => setObrasOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 450, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: "18px 18px 0 0", padding: "16px 20px calc(22px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 620, maxHeight: "78vh", overflowY: "auto" }}>
+        <div style={{ width: 40, height: 4, background: T.border, borderRadius: 4, margin: "0 auto 14px" }} />
+        <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 600, color: T.head }}>Obras que se muestran</div>
+        <div style={{ fontSize: 12, color: T.sub, margin: "4px 0 14px", lineHeight: 1.45 }}>Apagá las que no tienen que aparecer. Dejan de verse en toda la app, con sus pedidos. No se borra nada de V+V ni de Belfast, y las podés volver a prender cuando quieras.</div>
+        {obrasTodas.length === 0 && <div style={{ fontSize: 13, color: T.muted, padding: "10px 0" }}>Todavía no se cargaron obras.</div>}
+        {obrasTodas.map(o => { const oculta = (estilo.ocultas || []).includes(o.id); return <button key={o.id} onClick={() => aplicarYGuardar({ ...estilo, ocultas: oculta ? (estilo.ocultas || []).filter(x => x !== o.id) : [...(estilo.ocultas || []), o.id] })} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: T.bg, border: `1px solid ${T.border}`, color: oculta ? T.muted : T.text, borderRadius: 12, padding: "13px 14px", marginBottom: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
+          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: oculta ? "line-through" : "none" }}>{o.nombre}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}><span style={{ fontSize: 10.5, color: oculta ? T.danger : T.ok, fontWeight: 800 }}>{oculta ? "OCULTA" : "VISIBLE"}</span><span style={{ width: 38, height: 22, borderRadius: 20, background: oculta ? T.border : BRASS, position: "relative" }}><span style={{ position: "absolute", top: 2, left: oculta ? 2 : 18, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s" }} /></span></span>
+        </button>; })}
+        <button onClick={() => setObrasOpen(false)} style={{ width: "100%", background: BRASS, color: "#fff", border: "none", borderRadius: 12, padding: 14, fontSize: 14.5, fontWeight: 800, cursor: "pointer", marginTop: 10 }}>Listo</button>
+      </div>
+    </div>}
+
+    {confOcultar && <div onClick={() => setConfOcultar(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 470, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 18, padding: 22, width: "100%", maxWidth: 380 }}>
+        <div style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 600, color: T.head, marginBottom: 8 }}>¿Ocultar esta obra?</div>
+        <div style={{ fontSize: 13.5, color: T.text, fontWeight: 700, marginBottom: 6 }}>{confOcultar.nombre}</div>
+        <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.5, marginBottom: 18 }}>Deja de aparecer en esta app, con sus pedidos. No se borra nada. La podés volver a mostrar desde el menú ••• → Mostrar u ocultar obras.</div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => setConfOcultar(null)} style={{ flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
+          <button onClick={() => ocultarObra(confOcultar.id)} style={{ flex: 1.4, background: T.danger, border: "none", color: "#fff", borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Ocultar</button>
+        </div>
       </div>
     </div>}
 
@@ -1102,14 +1133,6 @@ export default function ContratistaApp() {
           <div style={{ fontSize: 11, color: T.muted, marginBottom: 4, fontWeight: 700 }}>{l}</div>
           <input id={"estilo-" + k} value={estilo[k] || ""} onChange={e => aplicarYGuardar({ ...estilo, [k]: e.target.value })} placeholder={ph} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "11px 13px", fontSize: 14, color: T.text, boxSizing: "border-box" }} />
         </div>)}
-        {obrasTodas.length > 0 && <>
-          <div style={{ ...lblS, margin: "16px 0 4px" }}>Obras que se muestran</div>
-          <div style={{ fontSize: 11, color: T.muted, marginBottom: 8, lineHeight: 1.4 }}>Apagá las que no querés ver. No se borra nada, solo se ocultan en este celular.</div>
-          {obrasTodas.map(o => { const oculta = (estilo.ocultas || []).includes(o.id); return <button key={o.id} onClick={() => aplicarYGuardar({ ...estilo, ocultas: oculta ? (estilo.ocultas || []).filter(x => x !== o.id) : [...(estilo.ocultas || []), o.id] })} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: T.bg, border: `1px solid ${T.border}`, color: oculta ? T.muted : T.text, borderRadius: 10, padding: "11px 13px", marginBottom: 6, fontSize: 13.5, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
-            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: oculta ? "line-through" : "none" }}>{o.nombre}</span>
-            <span style={{ width: 38, height: 22, borderRadius: 20, background: oculta ? T.border : BRASS, position: "relative", flexShrink: 0 }}><span style={{ position: "absolute", top: 2, left: oculta ? 2 : 18, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s" }} /></span>
-          </button>; })}
-        </>}
         <div style={{ ...lblS, margin: "16px 0 8px" }}>Tema</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8 }}>
           {Object.entries(PALETAS).map(([id, p]) => <button key={id} onClick={() => aplicarYGuardar({ ...estilo, tema: id, acento: "" })} style={{ ...selBtn((estilo.tema || "bronce") === id), padding: "8px 2px" }}>
