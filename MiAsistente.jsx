@@ -532,7 +532,7 @@ export default function MiAsistente() {
   const silencioRef = useRef(null);
   function dictar() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert("Este teléfono no permite dictar desde la app. Tocá el cuadro de texto y usá el micrófono del teclado (dictado del iPhone)."); return; }
+    if (!SR) { alert("Este teléfono no permite dictar desde la app. Tocá el cuadro de texto y usá el micrófono del teclado (dictado del iPhone)."); try { inputRef.current && inputRef.current.focus(); } catch { } return; }
     if (escuchando && recRef.current) { try { recRef.current.stop(); } catch { } return; }
     let rec; try { rec = new SR(); } catch { alert("No pude activar el micrófono."); return; }
     rec.lang = "es-AR"; rec.interimResults = true; rec.continuous = true;
@@ -551,8 +551,26 @@ export default function MiAsistente() {
       if (silencioRef.current) { clearTimeout(silencioRef.current); silencioRef.current = null; }
       if (autoEnviar) { const textoFinal = base.replace(/\s+/g, " ").trim(); if (textoFinal) setTimeout(() => enviar(textoFinal), 30); }
     };
-    rec.onerror = () => { setEscuchando(false); recRef.current = null; if (silencioRef.current) { clearTimeout(silencioRef.current); silencioRef.current = null; } };
-    recRef.current = rec; setEscuchando(true); try { rec.start(); } catch { setEscuchando(false); }
+    rec.onerror = (ev) => {
+      setEscuchando(false); recRef.current = null; if (silencioRef.current) { clearTimeout(silencioRef.current); silencioRef.current = null; }
+      const er = ev && ev.error;
+      if (er === "no-speech" || er === "aborted") return;
+      const msg = (er === "not-allowed" || er === "service-not-allowed")
+        ? "El micrófono está bloqueado para esta app. Activalo en Ajustes del teléfono (Safari/Chrome → Micrófono, y Ajustes → Privacidad → Reconocimiento de voz). Mientras tanto, tocá el cuadro de texto y usá el micrófono del teclado."
+        : er === "audio-capture" ? "No encuentro el micrófono. Revisá que no lo esté usando otra app."
+        : er === "network" ? "Sin conexión para dictar. Revisá internet o usá el micrófono del teclado."
+        : "No pude dictar (" + (er || "error") + "). Usá el micrófono del teclado.";
+      alert(msg);
+      try { inputRef.current && inputRef.current.focus(); } catch { }
+    };
+    recRef.current = rec; setEscuchando(true);
+    try { rec.start(); } catch (e1) {
+      // Si quedó una sesión vieja colgada, la cortamos y reintentamos una vez.
+      setEscuchando(false); recRef.current = null;
+      try { rec.abort(); } catch { }
+      alert("No pude activar el dictado. Probá de nuevo o usá el micrófono del teclado.");
+      try { inputRef.current && inputRef.current.focus(); } catch { }
+    }
   }
   function buildSystem() {
     const o = db.obras || [];
