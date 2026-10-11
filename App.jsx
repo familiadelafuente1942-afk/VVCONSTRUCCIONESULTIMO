@@ -9903,21 +9903,43 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
   // ══ CERTIFICADO SEMANAL — junta los avances de la semana + la bitácora. Cierra los VIERNES ══
   const [semData, setSemData] = React.useState(null);
   const rangoViernes = () => { const d = new Date(); const diff = (d.getDay() - 5 + 7) % 7; const fin = new Date(d); fin.setDate(d.getDate() - diff); const ini = new Date(fin); ini.setDate(fin.getDate() - 6); const iso = (x) => x.toISOString().slice(0, 10); return { desde: iso(ini), hasta: iso(fin) }; };
-  const [semDesde, setSemDesde] = React.useState(() => rangoViernes().desde);
-  const [semHasta, setSemHasta] = React.useState(() => rangoViernes().hasta);
-  const isoDeAvance = (f) => { const [d, m, a] = String(f || "").split("/"); return a ? `20${a}-${m}-${d}` : ""; };
+  const semTocado = React.useRef(false);
+  const [semDesde, setSemDesdeRaw] = React.useState(() => rangoViernes().desde);
+  const setSemDesde = (v) => { semTocado.current = true; setSemDesdeRaw(v); };
+  const [semHasta, setSemHastaRaw] = React.useState(() => rangoViernes().hasta);
+  const setSemHasta = (v) => { semTocado.current = true; setSemHastaRaw(v); };
+  React.useEffect(() => {
+    // Si la app quedó abierta varios días, el rango por defecto se actualiza solo (salvo que lo hayas cambiado a mano).
+    const refrescar = () => { if (semTocado.current || document.visibilityState === "hidden") return; const r = rangoViernes(); setSemDesdeRaw(r.desde); setSemHastaRaw(r.hasta); };
+    document.addEventListener("visibilitychange", refrescar); window.addEventListener("focus", refrescar);
+    return () => { document.removeEventListener("visibilitychange", refrescar); window.removeEventListener("focus", refrescar); };
+  }, []);
+  const isoDeAvance = (f, ts) => {
+    const t = String(f || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+    const [d, m, a] = t.split("/");
+    if (a && m && d) { const aa = a.length === 2 ? `20${a}` : a; return `${aa}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; }
+    if (ts) { const x = new Date(ts); if (!isNaN(x)) return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; }
+    return "";
+  };
   const fmtDMY = (iso) => { const [a, m, d] = String(iso || "").split("-"); return a ? `${d}/${m}/${a.slice(2)}` : String(iso || ""); };
 
   async function armarSemanal() {
     if (!obraId) { alert("Elegí una obra."); return; }
     const dentro = (iso) => iso && iso >= semDesde && iso <= semHasta;
-    const av = ((avance || {})[obraId] || []).filter(h => dentro(isoDeAvance(h.fecha))).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    const avTodos = ((avance || {})[obraId] || []);
+    const av = avTodos.filter(h => dentro(isoDeAvance(h.fecha, h.ts))).sort((a, b) => (a.ts || 0) - (b.ts || 0));
     const bt = (bitacora || []).filter(h => h.obra_id === obraId && dentro(h.fecha)).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
-    if (!av.length && !bt.length) { alert("No hay avances ni bitácora cargados en esa semana para esta obra."); return; }
+    // Alcanza con que haya AVANCE (fotos) en la semana. La bitácora es opcional: solo se carga si pasó algo.
+    if (!av.length && !bt.length) {
+      const ult = avTodos.map(h => isoDeAvance(h.fecha, h.ts)).filter(Boolean).sort().slice(-3).map(fmtDMY).join(", ");
+      alert(`No encontré fotos de avance entre el ${fmtDMY(semDesde)} y el ${fmtDMY(semHasta)} para esta obra.` + (ult ? `\n\nÚltimos avances cargados: ${ult}.\nSi son de otra semana, cambiá las fechas "Desde" y "Hasta".` : `\n\nEsta obra todavía no tiene fotos de avance cargadas.`));
+      return;
+    }
     setBusy(true); setStatus("Armando el certificado semanal…");
     try {
       const txtAv = av.length ? av.map(h => `- ${h.fecha}: ${(h.avance || h.descripcion || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros visuales)";
-      const txtBt = bt.length ? bt.map(h => `- ${fmtDMY(h.fecha)} · ${h.titulo || ""}: ${(h.desc || "").replace(/\s+/g, " ")}`).join("\n") : "(sin registros de bitácora)";
+      const txtBt = bt.length ? bt.map(h => `- ${fmtDMY(h.fecha)} · ${h.titulo || ""}: ${(h.desc || "").replace(/\s+/g, " ")}`).join("\n") : "(sin novedades: no se cargó bitácora porque no hubo hechos relevantes en la semana — es lo normal cuando la obra anduvo sin cambios)";
       // Estado de la recepción de documentación / EPP / otros ítems de esta obra
       const regDoc = (docrecepcion || []).find(r => r.obra_id === obraId);
       const itemsDoc = regDoc ? (regDoc.items || []) : [];
@@ -9941,7 +9963,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
         }
       } catch (e) { }
       const sys = "Sos un jefe de obra civil en Argentina que redacta certificados semanales para la dirección de obra. Escribís profesional, claro y conciso, en español rioplatense neutro-formal. No inventás datos: sintetizás y ordenás lo que te pasan. Los porcentajes son estimaciones visuales. En higiene y seguridad sos objetivo: describís solo lo que se ve en las fotos.";
-      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtDMY(semDesde)} al ${fmtDMY(semHasta)} (cierre viernes).\n\nREGISTROS DE AVANCE (fotos analizadas, pueden ser de días salteados):\n${txtAv}\n\nBITÁCORA DE OBRA (recepción de materiales, documentación, hechos):\n${txtBt}\n\nCHECKLIST DE RECEPCIÓN (documentación técnica, elementos de protección y otros ítems):\n${txtDoc}\n\nRedactá el certificado semanal con este formato EXACTO:\nDESARROLLO: (3 a 6 renglones contando cómo evolucionó la obra en la semana, uniendo los distintos días en un relato único, con el % estimado de avance alcanzado)\nRECEPCIONES: \n- (viñetas cortas con materiales recibidos y documentación, según la bitácora; si no hay, poné "Sin registros en la semana")\nLIMPIEZA Y SEGURIDAD: \n- (2 a 4 viñetas evaluando, SEGÚN LAS FOTOS ADJUNTAS: orden y limpieza de la obra —acopio de materiales, escombros, circulaciones libres— y uso de protecciones del personal —casco, chaleco, calzado de seguridad, arnés, guantes—. Si en las fotos no se ve personal, aclarálo. Si no hay fotos, poné "Sin fotos para evaluar")\nALERTAS: \n- (viñetas con pendientes, faltantes o demoras detectadas; incluí lo que falte del CHECKLIST DE RECEPCIÓN, sobre todo elementos de protección; si no hay, poné "Sin alertas")`;
+      const instruc = `Obra: "${obra?.nombre || ""}". Semana del ${fmtDMY(semDesde)} al ${fmtDMY(semHasta)} (cierre viernes).\n\nREGISTROS DE AVANCE (fotos analizadas, pueden ser de días salteados):\n${txtAv}\n\nBITÁCORA DE OBRA (solo se carga cuando pasó algo; si está vacía, la obra anduvo normal — NO lo marques como faltante ni como alerta):\n${txtBt}\n\nCHECKLIST DE RECEPCIÓN (documentación técnica, elementos de protección y otros ítems):\n${txtDoc}\n\nRedactá el certificado semanal con este formato EXACTO:\nDESARROLLO: (3 a 6 renglones contando cómo evolucionó la obra en la semana, uniendo los distintos días en un relato único, con el % estimado de avance alcanzado)\nRECEPCIONES: \n- (viñetas cortas con materiales recibidos y documentación, según la bitácora; si no hay, poné "Sin registros en la semana")\nLIMPIEZA Y SEGURIDAD: \n- (2 a 4 viñetas evaluando, SEGÚN LAS FOTOS ADJUNTAS: orden y limpieza de la obra —acopio de materiales, escombros, circulaciones libres— y uso de protecciones del personal —casco, chaleco, calzado de seguridad, arnés, guantes—. Si en las fotos no se ve personal, aclarálo. Si no hay fotos, poné "Sin fotos para evaluar")\nALERTAS: \n- (viñetas con pendientes, faltantes o demoras detectadas; incluí lo que falte del CHECKLIST DE RECEPCIÓN, sobre todo elementos de protección; si no hay, poné "Sin alertas")`;
       const resp = await callAI([{ role: "user", content: imgs.length ? [...imgs, { type: "text", text: instruc }] : instruc }], sys, apiKey, false);
       const cortar = (re) => { const m = resp.match(re); return m ? m[1].trim() : ""; };
       const desarrollo = cortar(/DESARROLLO:\s*([\s\S]*?)(?:RECEPCIONES:|ALERTAS:|$)/i) || resp;
