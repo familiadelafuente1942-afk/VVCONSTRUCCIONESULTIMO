@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import CronoPro from "./CronoPro.jsx";
+import CronoPro, { CronoAlertas, alertasCrono } from "./CronoPro.jsx";
 
 const DOCS_BASE = [
   { n: "Niveles", c: "Documentación técnica" },
@@ -6127,7 +6127,7 @@ function PortadaGestion({ gestion, obras, TXC, TXR, onIr }) {
     <div onClick={() => onIr("bitacora")} style={{ fontSize: 11, color: `rgba(${TXR},.55)`, padding: "4px 2px 0", cursor: "pointer" }}>La explicación completa está en <b style={{ color: "#D9B27C" }}>Bitácora</b> ›</div>
   </div>);
 }
-function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], onIr }) {
+function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], cronoPro, onIr }) {
   const [slideIdx, setSlideIdx] = useState(0);
   const rgbT = hexARgbC(T.bg).join(",");
   const TXC = T.text, TXR = hexARgbC(TXC).join(",");
@@ -6191,6 +6191,7 @@ function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, ava
         <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div>
       </div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
+      <div style={{ padding: "0 22px", marginBottom: 14 }}><CronoAlertas T={{ ...T, text: TXC, sub: `rgba(${TXR},.78)`, muted: `rgba(${TXR},.5)` }} data={cronoPro} obras={obras} lado="cliente" onIr={onIr} /></div>
       <PortadaGestion gestion={gestion} obras={obras} TXC={TXC} TXR={TXR} onIr={onIr} />
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedadesC.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
@@ -6461,7 +6462,7 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "inicio" && <InicioScreen T={T} cfg={cfg} gestion={gestion} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
+          {screen === "inicio" && <InicioScreen cronoPro={cronoPro} T={T} cfg={cfg} gestion={gestion} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} setObras={setObras} gestion={gestion} modelosObra={modelosObra} avance={avance} auditoria={auditoria} adicionales={adicionales} dronevuelos={dronevuelos} definiciones={definiciones} docrecepcion={docrecepcion} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} adicionales={adicionales} modelosObra={modelosObra} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
@@ -6475,7 +6476,7 @@ function ClienteApp() {
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} informesSem={informesSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "adicionales" && <AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} />}
-          {screen === "cronopro" && <CronoPro T={T} titulo="Cronograma" gated Gate={CodigoModal} obras={(obras || []).map(o => ({ id: o.id, nombre: o.nombre, inicio: o.inicio }))} data={cronoPro} setData={setCronoPro} />}
+          {screen === "cronopro" && <CronoPro T={T} titulo="Cronograma" lado="cliente" gated Gate={CodigoModal} obras={(obras || []).map(o => ({ id: o.id, nombre: o.nombre, inicio: o.inicio }))} data={cronoPro} setData={setCronoPro} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen key={gestionFoco || "g"} foco={gestionFoco} T={T} cfg={cfg} obras={obras} gestion={gestion} personal={personal} modelosObra={modelosObra} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
@@ -6484,7 +6485,7 @@ function ClienteApp() {
           {screen === "mas" && <MasScreen T={T} screen={screen} setScreen={irA} aviso={aviso} />}
         </div>
       </div>
-      <BottomNav T={T} screen={screen} setScreen={irA} aviso={aviso} />
+      <BottomNav T={T} screen={screen} setScreen={irA} aviso={(id) => id === "cronopro" ? (alertasCrono(cronoPro, obras) || []).length : aviso(id)} />
     </div>
     <SyncBanner />
     <div style={{ padding: "10px 16px 0" }}><GlobitoPermiso /></div>

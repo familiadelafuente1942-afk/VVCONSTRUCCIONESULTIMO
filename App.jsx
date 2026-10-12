@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
-import CronoPro from "./CronoPro.jsx";
+import CronoPro, { CronoAlertas, alertasCrono } from "./CronoPro.jsx";
 
 // Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
 // Solo las etapas de obra gris + colocación de piso (lo único que hace V+V):
@@ -10580,7 +10580,7 @@ function PortadaGestion({ gestion, obras, TXC, TXR, onIr }) {
     <div onClick={() => onIr("bitacora")} style={{ fontSize: 11, color: `rgba(${TXR},.55)`, padding: "4px 2px 0", cursor: "pointer" }}>La explicación completa está en <b style={{ color: "#D9B27C" }}>Bitácora</b> ›</div>
   </div>);
 }
-function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = [], avance = {}, mensajes = [], renders = {}, certif = {}, informesSem = {}, auditoria = [], onIr }) {
+function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = [], avance = {}, mensajes = [], renders = {}, certif = {}, informesSem = {}, auditoria = [], cronoPro, onIr }) {
   const [slideIdx, setSlideIdx] = React.useState(0);
   const cIn = colorsConBrillo(cfg);
   const rgbIn = hexARgbG(cIn.bg).join(",");
@@ -10657,6 +10657,7 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = 
         <div><div style={{ fontSize: 12, fontWeight: 700, color: TXC }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 10.5, color: `rgba(${TXR},.5)`, marginTop: 1 }}>Tocá para ver →</div></div>
       </div>}
 
+      <div style={{ padding: "0 22px", marginBottom: 14 }}><CronoAlertas T={{ ...T, text: TXC, sub: `rgba(${TXR},.78)`, muted: `rgba(${TXR},.5)` }} data={cronoPro} obras={obras} lado="vv" onIr={onIr} /></div>
       <PortadaGestion gestion={gestion} obras={obras} TXC={TXC} TXR={TXR} onIr={onIr} />
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedades.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
@@ -10875,7 +10876,7 @@ function App() {
   const navBadgesNuevo = {
     chat: aviso("chat"), dashboard: aviso("dashboard"), obras: aviso("obras"), avance: aviso("avance"),
     personal: aviso("personal"), cargar: aviso("cargar"), mas: aviso("mas"),
-    mensajes: aviso("mensajes"), pedidos: aviso("pedidos"),
+    mensajes: aviso("mensajes"), pedidos: aviso("pedidos"), cronopro: (alertasCrono(cronoPro, obras) || []).length,
     informes: aviso("informes"), formularios: aviso("formularios"), materiales: aviso("materiales"),
   };
   const navBadges = { mensajes: unreadMensajes, informes: unreadInformes, chat: unreadIA, mas: pendVV + unreadMat };
@@ -10902,7 +10903,7 @@ function App() {
         {view!=="dashboard" && <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
-            {view==="dashboard" && <InicioViewVV cfg={cfg} gestion={gestion} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setGestionFoco(id==="gestion" ? (param||null) : null); setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
+            {view==="dashboard" && <InicioViewVV cronoPro={cronoPro} cfg={cfg} gestion={gestion} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setGestionFoco(id==="gestion" ? (param||null) : null); setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} adicionales={adicionales} setAdicionales={setAdicionales} modelosObra={modelosObra} />}
             {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} certifRubro={certifRubro} setCertifRubro={setCertifRubro} docrecepcion={docrecepcion} />}
@@ -10914,7 +10915,7 @@ function App() {
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="gestion" && <GestionView db={db} cfg={cfg} focoId={gestionFoco} onFocoUsado={()=>setGestionFoco(null)} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
-            {view==="cronopro" && <CronoPro T={T} titulo="Cronograma" obras={(obras||[]).map(o=>({ id:o.id, nombre:o.nombre, inicio:o.inicio }))} data={cronoPro} setData={setCronoPro} Gate={CodigoModal} />}
+            {view==="cronopro" && <CronoPro T={T} titulo="Cronograma" lado="vv" obras={(obras||[]).map(o=>({ id:o.id, nombre:o.nombre, inicio:o.inicio }))} data={cronoPro} setData={setCronoPro} Gate={CodigoModal} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="minutas" && <GrabarReunion db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}

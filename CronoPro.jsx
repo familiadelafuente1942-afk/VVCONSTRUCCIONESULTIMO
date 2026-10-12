@@ -104,7 +104,44 @@ const Pill = ({ k, children }) => {
   return <span style={{ display: "inline-block", fontSize: 11, fontWeight: 800, borderRadius: 99, padding: "3px 9px", whiteSpace: "nowrap", color: c[0], background: c[1] }}>{children}</span>;
 };
 
-export default function CronoPro({ T, obras = [], data, setData, gated = false, Gate = null, titulo = "Cronograma" }) {
+// ── Alertas: pedidos/definiciones críticos que se están venciendo (se muestran igual en V+V y en la página del cliente) ──
+export function alertasCrono(data, obras) {
+  const out = [], hoy = hoyISO();
+  (obras || []).forEach(o => {
+    const P = data && data.obras && data.obras[o.id]; if (!P || !P.tareas || !P.tareas.length) return;
+    let M; try { M = calcular(P, hoy); } catch (e) { return; }
+    (P.pedidos || []).forEach(p => {
+      const inf = M.info[p.id]; if (!inf || p.hecho || inf.st === "ok") return;
+      const crit = p.crit || (M.base.LF[p.task] - M.base.EF[p.task]) === 0 || (M.cur.LF[p.task] - M.cur.EF[p.task]) === 0;
+      if (!crit) return;
+      const t = P.tareas.find(x => x.id === p.task);
+      out.push({ obraId: o.id, obra: o.nombre, id: p.id, tipo: p.tipo, desc: p.desc, tarea: t ? t.name : "", quien: p.quien, st: inf.st, txt: inf.txt, need: fmtN(D(M.cal, inf.need), 1), emitir: fmtN(D(M.cal, inf.emitir), 1) });
+    });
+  });
+  out.sort((a, b) => (a.st === "late" ? 0 : 1) - (b.st === "late" ? 0 : 1));
+  return out;
+}
+const ART = { "Definición": "la definición", "Plano": "el plano", "Materiales": "el pedido de materiales" };
+// lado "vv": mensaje para la app general; lado "cliente": el mismo aviso visto desde la página del cliente
+export function CronoAlertas({ T, data, obras, lado = "vv", onIr, max = 3, soloObra = null }) {
+  const todas = useMemo(() => alertasCrono(data, obras), [data, (obras || []).length]);
+  const al = soloObra ? todas.filter(a => a.obraId === soloObra) : todas;
+  if (!al.length) return null;
+  return (<div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    {al.slice(0, max).map(a => {
+      const art = ART[a.tipo] || "el pedido", late = a.st === "late", col = late ? CRIT : WARN;
+      const titulo = lado === "cliente" ? `V+V necesita ${art} «${a.desc}», que se está venciendo` : `Se está venciendo ${art} «${a.desc}»`;
+      return (<div key={a.id} onClick={() => onIr && onIr("cronopro")} style={{ background: late ? "rgba(229,96,74,.12)" : "rgba(224,160,74,.12)", border: `1px solid ${col}`, borderLeft: `4px solid ${col}`, borderRadius: 10, padding: "11px 13px", cursor: onIr ? "pointer" : "default" }}>
+        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase", color: col }}>{late ? "Vencido" : "Hay que emitirlo ya"} · {a.obra}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: T.text, margin: "3px 0 2px", lineHeight: 1.3 }}>{titulo}</div>
+        <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.5 }}>Lo necesita la tarea «{a.tarea}» el {a.need}. {late ? a.txt + "." : "Había que emitirlo antes del " + a.emitir + "."}{a.quien ? " Responsable: " + a.quien + "." : ""} Es una tarea crítica: cada día de demora corre el final de la obra.</div>
+      </div>);
+    })}
+    {al.length > max && <div style={{ fontSize: 12, color: T.muted, textAlign: "center" }}>y {al.length - max} más en Cronograma</div>}
+  </div>);
+}
+
+export default function CronoPro({ T, obras = [], data, setData, gated = false, Gate = null, titulo = "Cronograma", lado = "vv" }) {
   const lista = (obras || []).filter(o => o && o.id);
   const [obraId, setObraId] = useState(lista[0]?.id || "");
   const [tab, setTab] = useState("crono");
@@ -258,6 +295,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
     if (!W || !M) return vacio;
     const d = M.delta, c = +W.costo || 0, ds = W.dias || DIAS0, ex = W.excep || {};
     return (<>
+      {!editing && <CronoAlertas T={T} data={data} obras={obras} lado={lado} soloObra={obraId} max={10} />}
       <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: T.text }}>Cuánto te cuesta cada pedido que llega tarde</div>
       <div style={hint}>Cada pedido está atado a la tarea que lo necesita. Si llega después de que esa tarea arranca, la tarea se corre, y si está en la ruta crítica corre el final de la obra.</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -343,6 +381,10 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
             <div><Lbl T={T}>Anticipación (días)</Lbl><Inp T={T} type="number" min="0" step="1" value={p.lead} onCommit={v => setP(p.id, { lead: Math.max(0, Math.round(+v) || 0) })} /></div>
           </div>
           <div><Lbl T={T}>Respuesta real o comprometida</Lbl><Inp T={T} type="date" value={p.resp || ""} onCommit={v => setP(p.id, { resp: v })} /></div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 18px" }}>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: T.sub, minHeight: 32 }}><input type="checkbox" checked={!!p.crit} onChange={e => setP(p.id, { crit: e.target.checked })} /> Pedido crítico (avisar siempre)</label>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: T.sub, minHeight: 32 }}><input type="checkbox" checked={!!p.hecho} onChange={e => setP(p.id, { hecho: e.target.checked })} /> Ya se resolvió</label>
+          </div>
           {inf && <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.5 }}>Emitir antes del <b style={{ fontFamily: "ui-monospace,monospace", fontWeight: 500, color: T.text }}>{fmtW(inf.emitir)}</b> · debe estar el <b style={{ fontFamily: "ui-monospace,monospace", fontWeight: 500, color: T.text }}>{fmtW(inf.need)}</b></div>}
           {inf && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 6 }}><Pill k={inf.st}>{inf.txt}</Pill><span style={{ fontSize: 12, color: T.muted }}>{eff}</span></div>}
         </div>); })}
