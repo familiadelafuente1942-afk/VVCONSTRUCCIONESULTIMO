@@ -18,6 +18,7 @@ export default defineConfig({
         cronograma: resolve(__dirname, 'cronograma.html'),
         viajes: resolve(__dirname, 'viajes.html'),
         propietario: resolve(__dirname, 'propietario.html'),
+        inversores: resolve(__dirname, 'inversores.html'),
       },
     },
   },
