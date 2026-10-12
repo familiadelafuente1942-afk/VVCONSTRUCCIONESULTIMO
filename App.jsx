@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
+import CronoPro from "./CronoPro.jsx";
 
 // Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
 // Solo las etapas de obra gris + colocación de piso (lo único que hace V+V):
@@ -2672,6 +2673,7 @@ function MIcon({ id }){
   const m = {
     cliente:<><path {...p} d="M3 21h18"/><path {...p} d="M5 21V7l7-4 7 4v14"/><path {...p} d="M10 21v-5h4v5"/></>,
     mensajes:<><path {...p} d="M4 5h16v11H8l-4 4z"/></>,
+    matpedidos:<><path {...p} d="M9 5h6M9 9h6M9 13h4"/><rect {...p} x="5" y="3" width="14" height="18" rx="2"/><path {...p} d="M9 17l1.5 1.5L13 16"/></>,
     pedidos:<><path {...p} d="M9 5h6M9 9h6M9 13h4"/><rect {...p} x="5" y="3" width="14" height="18" rx="2"/><path {...p} d="M9 17l1.5 1.5L13 16"/></>,
     gestion:<><path {...p} d="M4 20V10M10 20V4M16 20v-7M20 20H3"/></>,
     modelos:<><rect {...p} x="3" y="4" width="18" height="5" rx="1"/><rect {...p} x="3" y="12" width="8" height="8" rx="1"/><rect {...p} x="13" y="12" width="8" height="8" rx="1"/></>,
@@ -2712,6 +2714,7 @@ const MAS_TILES = [
   { id:"cliente", label:"Panel cliente" },
   { id:"gestion", label:"Gestión de obra" },
   { id:"modelos", label:"Modelos de obra" },
+  { id:"matpedidos", label:"Pedidos enviados" },
   { id:"proyectos", label:"Proyectos", go:"proyectos" },
   { id:"seguimiento", label:"Seguimiento" }, { id:"materiales", label:"Materiales" },
   { id:"subcontratos", label:"Subcontratos" },
@@ -10499,7 +10502,7 @@ const BOTTOM_NAV_VV = [
   { id:"avance", label:"Avance" },
   { id:"bitacora", label:"Bitácora" },
   { id:"gestion", label:"Gestión" },
-  { id:"matpedidos", label:"Pedidos" },
+  { id:"cronopro", label:"Cronograma" },
   { id:"auditoria", label:"Auditoría" },
 ];
 function BottomNavVV({ view, go, badges = {} }) {
@@ -10726,6 +10729,7 @@ function App() {
   const [lics, setLics] = useStoredState("vv_lics", SAMPLE_LICS);
   const [obras, setObras] = useStoredState("vv_obras", SAMPLE_OBRAS);
   const [modelosObra, setModelosObra] = useStoredState("vv_modelos_obra", []);
+  const [cronoPro, setCronoPro] = useStoredState("vv_cronopro", { obras: {} });
   const [personal, setPersonal] = useStoredState("vv_personal", SAMPLE_PERSONAL);
   const [materiales, setMateriales] = useStoredState("vv_materiales", []);
   const [subcontratos, setSubcontratos] = useStoredState("vv_subcontratos", []);
@@ -10910,6 +10914,7 @@ function App() {
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="gestion" && <GestionView db={db} cfg={cfg} focoId={gestionFoco} onFocoUsado={()=>setGestionFoco(null)} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
+            {view==="cronopro" && <CronoPro T={T} titulo="Cronograma" obras={(obras||[]).map(o=>({ id:o.id, nombre:o.nombre, inicio:o.inicio }))} data={cronoPro} setData={setCronoPro} Gate={CodigoModal} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="minutas" && <GrabarReunion db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}

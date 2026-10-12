@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import CronoPro from "./CronoPro.jsx";
 
 const DOCS_BASE = [
   { n: "Niveles", c: "Documentación técnica" },
@@ -5994,13 +5995,14 @@ const BOTTOM_NAV = [
   { id: "avance", label: "Avance" },
   { id: "bitacora", label: "Bitácora" },
   { id: "gestion", label: "Gestión" },
-  { id: "materiales", label: "Pedidos" },
+  { id: "cronopro", label: "Cronograma" },
   { id: "auditoria", label: "Auditoría" },
 ];
 const MAS_ITEMS = [
   { id: "asistente", label: "IA" },
   { id: "informes", label: "Informes" },
-  { id: "cronograma", label: "Cronogramas" },
+  { id: "materiales", label: "Pedidos" },
+  { id: "cronograma", label: "Cronogramas V+V" },
   { id: "mensajes", label: "Mensajes" },
   { id: "formularios", label: "Certificados" },
   { id: "adicionales", label: "Tarea adicional" },
@@ -6227,6 +6229,7 @@ function ClienteApp() {
   const [gestion] = useStored("vv_gestion", {});
   const [modelosObra] = useStored("vv_modelos_obra", []);
   const [crono] = useStored("vv_cronograma", { obras: [] });
+  const [cronoPro, setCronoPro] = useStored("vv_cronopro", { obras: {} });
   const [formularios] = useStored("vv_formularios", []);
   const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
   const [dronevuelos] = useStored("vv_drone", []);
@@ -6472,6 +6475,7 @@ function ClienteApp() {
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} informesSem={informesSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "adicionales" && <AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} />}
+          {screen === "cronopro" && <CronoPro T={T} titulo="Cronograma" gated Gate={CodigoModal} obras={(obras || []).map(o => ({ id: o.id, nombre: o.nombre, inicio: o.inicio }))} data={cronoPro} setData={setCronoPro} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen key={gestionFoco || "g"} foco={gestionFoco} T={T} cfg={cfg} obras={obras} gestion={gestion} personal={personal} modelosObra={modelosObra} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
