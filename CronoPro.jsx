@@ -123,14 +123,14 @@ export function alertasCrono(data, obras) {
 }
 const ART = { "Definición": "la definición", "Plano": "el plano", "Materiales": "el pedido de materiales" };
 // lado "vv": mensaje para la app general; lado "cliente": el mismo aviso visto desde la página del cliente
-export function CronoAlertas({ T, data, obras, lado = "vv", onIr, max = 3, soloObra = null }) {
+export function CronoAlertas({ T, data, obras, lado = "vv", onIr, max = 3, soloObra = null, empresa = "V+V" }) {
   const todas = useMemo(() => alertasCrono(data, obras), [data, (obras || []).length]);
   const al = soloObra ? todas.filter(a => a.obraId === soloObra) : todas;
   if (!al.length) return null;
   return (<div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
     {al.slice(0, max).map(a => {
       const art = ART[a.tipo] || "el pedido", late = a.st === "late", col = late ? CRIT : WARN;
-      const titulo = lado === "cliente" ? `V+V necesita ${art} «${a.desc}», que se está venciendo` : `Se está venciendo ${art} «${a.desc}»`;
+      const titulo = lado === "cliente" ? `${empresa} necesita ${art} «${a.desc}», que se está venciendo` : `Se está venciendo ${art} «${a.desc}»`;
       return (<div key={a.id} onClick={() => onIr && onIr("cronopro")} style={{ background: late ? "rgba(229,96,74,.12)" : "rgba(224,160,74,.12)", border: `1px solid ${col}`, borderLeft: `4px solid ${col}`, borderRadius: 10, padding: "11px 13px", cursor: onIr ? "pointer" : "default" }}>
         <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase", color: col }}>{late ? "Vencido" : "Hay que emitirlo ya"} · {a.obra}</div>
         <div style={{ fontSize: 13.5, fontWeight: 800, color: T.text, margin: "3px 0 2px", lineHeight: 1.3 }}>{titulo}</div>
@@ -141,7 +141,7 @@ export function CronoAlertas({ T, data, obras, lado = "vv", onIr, max = 3, soloO
   </div>);
 }
 
-export default function CronoPro({ T, obras = [], data, setData, gated = false, Gate = null, titulo = "Cronograma", lado = "vv" }) {
+export default function CronoPro({ T, obras = [], data, setData, gated = false, Gate = null, titulo = "Cronograma", lado = "vv", empresa = "V+V" }) {
   const lista = (obras || []).filter(o => o && o.id);
   const [obraId, setObraId] = useState(lista[0]?.id || "");
   const [tab, setTab] = useState("crono");
@@ -295,7 +295,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
     if (!W || !M) return vacio;
     const d = M.delta, c = +W.costo || 0, ds = W.dias || DIAS0, ex = W.excep || {};
     return (<>
-      {!editing && <CronoAlertas T={T} data={data} obras={obras} lado={lado} soloObra={obraId} max={10} />}
+      {!editing && <CronoAlertas T={T} data={data} obras={obras} lado={lado} soloObra={obraId} max={10} empresa={empresa} />}
       <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: T.text }}>Cuánto te cuesta cada pedido que llega tarde</div>
       <div style={hint}>Cada pedido está atado a la tarea que lo necesita. Si llega después de que esa tarea arranca, la tarea se corre, y si está en la ruta crítica corre el final de la obra.</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
