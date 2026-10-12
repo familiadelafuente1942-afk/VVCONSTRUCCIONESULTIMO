@@ -13,7 +13,7 @@ const CONCEPT_SRC = [c1, c2, c3, c4, c5];
 import { defaultContent } from "./brochure.js";
 const concepts = Array.from({ length: 5 }, (_, i) => ({ id: -(i + 1), fileName: `concept-${i + 1}.jpeg`, contentType: "image/jpeg", category: "Dise\xF1o conceptual", title: `Arquitectura Belfast \xB7 propuesta ${String(i + 1).padStart(2, "0")}`, caption: "Imagen conceptual ilustrativa. No representa un proyecto aprobado ni un lote definitivo.", createdAt: "", src: CONCEPT_SRC[i] }));
 const mediaUrl = (item) => item.src ?? api.mediaUrl(item);
-const nav = [["propuesta", "Propuesta"], ["modalidad", "Modalidad"], ["proyecto", "Proyecto"], ["avances", "Avances"], ["documentos", "Documentaci\xF3n"], ["tu-inversion", "Tu inversi\xF3n"], ["contacto", "Contacto"]];
+const nav = [["propuesta", "Propuesta"], ["modalidad", "Modalidad"], ["simulador", "Simulador"], ["proyecto", "Proyecto"], ["avances", "Avances"], ["documentos", "Documentaci\xF3n"], ["tu-inversion", "Tu inversi\xF3n"], ["contacto", "Contacto"]];
 function Home() {
   const [content, setContent] = useState(defaultContent);
   const [draft, setDraft] = useState(defaultContent);
@@ -22,6 +22,7 @@ function Home() {
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [resumen, setResumen] = useState({ total: 0, interesados: 0 });
   const [saveState, setSaveState] = useState("");
   const [updatedAt, setUpdatedAt] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -37,6 +38,7 @@ function Home() {
     setUpdatedAt(contentData.updatedAt ?? "");
     setMedia(mediaItems);
     setAdmin(meData);
+    api.resumen().then(setResumen);
   };
   useEffect(() => {
     refresh().catch(() => void 0);
@@ -112,6 +114,7 @@ function Home() {
     <section className="experience section"><p className="eyebrow">LOS SOCIOS / EL RECORRIDO</p><h2>{content.experienceTitle}</h2><p className="lead">{content.experienceBody}</p></section>
     <section className="intro section" id="propuesta"><div><p className="eyebrow">01 / NUESTRA MIRADA</p><h2>{content.conceptTitle}</h2></div><p className="lead">{content.conceptBody}</p></section>
     <section className="model section" id="modalidad"><div className="section-heading"><div><p className="eyebrow">02 / CÓMO PARTICIPAR</p><h2>El acuerdo. Los aportes. El proyecto.</h2></div><Landmark /></div><div className="model-layout"><article className="model-main"><p className="number">01</p><h3>{content.modelTitle}</h3><p>{content.modelBody}</p><div className="trust-line"><ShieldCheck /><span>La estructura jurídica y económica definitiva se documentará antes de cada adhesión.</span></div></article><div className="terms-grid"><Metric label="Aporte inicial" value={content.initialContribution} /><Metric label="Integración" value={content.installments} /><Metric label="Ticket estimado" value={content.investmentTicket} /><Metric label="Plazo del proyecto" value={content.projectTerm} /><Metric label="Moneda" value={content.currency} /><Metric label="Retorno de referencia" value={content.returnReference} /></div></div></section>
+    <FundingSim content={content} resumen={resumen} />
     <section className="product section" id="proyecto"><div className="product-copy"><p className="eyebrow">03 / EL LENGUAJE ARQUITECTÓNICO</p><h2>{content.productTitle}</h2><p>{content.productBody}</p><div className="product-facts"><span><Building2 /><small>Unidades</small><b>{content.unitsReference}</b></span><span><CircleDollarSign /><small>Superficie comercial</small><b>{content.sellableAreaReference}</b></span><span><Check /><small>Servicios y amenities</small><b>{content.amenitiesReference}</b></span></div></div><div className="product-alternatives"><p className="eyebrow">POSIBLES DISEÑOS / NO DEFINITIVOS</p><div>{concepts.slice(2, 5).map((item) => <button key={item.id} onClick={() => setActiveMedia(item)}><img src={mediaUrl(item)} alt={item.title} /><span>Referencia de estilo</span></button>)}</div><p>El edificio podrá tomar este lenguaje arquitectónico. Su configuración final no está definida.</p></div></section>
     <section className="definition section" id="distribucion"><p className="eyebrow">EL PRODUCTO / DEFINICIÓN EN DESARROLLO</p><h2>El edificio, por dentro.</h2><div className="definition-blocks">{[["Plantas y distribuci\xF3n", content.distributionBody, "Plantas"], ["Amenities y servicios", content.amenitiesBody, "Amenities"], ["Qu\xE9 buscamos y para qui\xE9n", content.profileBody, "Perfil"]].map(([title, body, category]) => <article key={category}><h3>{title}</h3><p>{body}</p><div className="section-files">{media.filter((item) => item.category === category).map((item) => <button key={item.id} onClick={() => setActiveMedia(item)}>{item.contentType.startsWith("image/") ? <img src={mediaUrl(item)} alt={item.title} /> : <FileText />}<strong>{item.title}</strong>{item.caption && <span>{item.caption}</span>}</button>)}</div>{!media.some((item) => item.category === category) && <small>Material por incorporar · sujeto al lote y al anteproyecto</small>}</article>)}</div></section>
     <section className="timeline section" id="avances"><div className="section-heading"><div><p className="eyebrow">04 / LA HOJA DE RUTA</p><h2>Del terreno al edificio.</h2></div><Clock3 /></div><div className="timeline-list">{content.milestones.map((item, index) => <article key={`${item.title}-${index}`} className={item.status === "En curso" ? "current" : ""}><span className="timeline-index">{String(index + 1).padStart(2, "0")}</span><div><small>{item.status}</small><h3>{item.title}</h3><p>{item.detail}</p></div></article>)}</div></section>
@@ -127,13 +130,41 @@ function Home() {
     {editing && <AdminPanel draft={draft} setDraft={setDraft} setField={setField} save={save} close={() => setEditing(false)} saveState={saveState} upload={upload} uploading={uploading} uploadCategory={uploadCategory} setUploadCategory={setUploadCategory} media={media} deleteMedia={deleteMedia} />} 
   </main>;
 }
+const parseNum = (s) => Number(String(s ?? "").replace(/[^\d]/g, "")) || 0;
+const usd = (n) => "USD " + Math.round(n).toLocaleString("es-AR");
+function FundingSim({ content, resumen }) {
+  const goal = parseNum(content.fundingGoal);
+  const committed = parseNum(content.fundingCommitted);
+  const pct = Math.min(100, Math.max(5, parseNum(content.simInitialPct) || 30));
+  const cuotas = parseNum(content.installments) || 24;
+  const [aporte, setAporte] = useState(50000);
+  const inicial = aporte * pct / 100;
+  const cuota = (aporte - inicial) / cuotas;
+  const part = goal > 0 ? aporte / goal * 100 : null;
+  const avance = goal > 0 ? Math.min(100, committed / goal * 100) : 0;
+  return <section className="sim section" id="simulador">
+    <div><p className="eyebrow">CÓMO QUEDARÍA TU APORTE</p><h2>Simulá tu participación.</h2><p className="lead">Elegí un monto de referencia y mirá cómo se compondrían el aporte inicial y las cuotas. Es una simulación orientativa: los valores definitivos se fijarán en el contrato de fideicomiso.</p></div>
+    <div className="sim-box">
+      {goal > 0 && <div className="sim-meter"><div className="sim-meter-top"><span>Objetivo de la ronda</span><b>{usd(goal)}</b></div><div className="sim-bar"><i style={{ width: `${avance}%` }} /></div><div className="sim-meter-bot"><span>{committed > 0 ? `${usd(committed)} comprometidos (${Math.round(avance)}%)` : "Ronda abierta"}</span>{resumen.interesados > 0 && <span>{resumen.interesados} {resumen.interesados === 1 ? "persona ya manifestó" : "personas ya manifestaron"} interés</span>}</div></div>}
+      <label className="sim-field"><span>Monto de aporte total (USD)</span><input type="range" min={5000} max={goal > 0 ? Math.max(5000, Math.min(goal, 500000)) : 300000} step={1000} value={aporte} onChange={(e) => setAporte(Number(e.target.value))} /><b>{usd(aporte)}</b></label>
+      <div className="sim-results">
+        <div><small>Aporte inicial ({pct}%)</small><strong>{usd(inicial)}</strong></div>
+        <div><small>{cuotas} cuotas de</small><strong>{usd(cuota)}</strong></div>
+        {part !== null && <div><small>Participación estimada</small><strong>{part < 0.1 ? "<0,1" : part.toFixed(part < 10 ? 2 : 1).replace(".", ",")}%</strong></div>}
+      </div>
+      <p className="sim-note">Simulación ilustrativa con valores a confirmar. No constituye oferta ni promesa de rentabilidad.</p>
+      <a className="primary" href="#tu-inversion">Quiero que me contacten <ArrowRight size={18} /></a>
+    </div>
+  </section>;
+}
+
 function Metric({ label, value }) {
   return <article><small>{label}</small><strong>{value}</strong></article>;
 }
 function AdminPanel({ draft, setDraft, setField, save, close, saveState, upload, uploading, uploadCategory, setUploadCategory, media, deleteMedia }) {
   const [fileTitle, setFileTitle] = useState("");
   const [fileCaption, setFileCaption] = useState("");
-  const fields = [["experienceTitle", "T\xEDtulo sobre la experiencia"], ["experienceBody", "Experiencia de los socios", true], ["distributionBody", "Plantas y distribuci\xF3n", true], ["amenitiesBody", "Amenities y servicios", true], ["profileBody", "Qu\xE9 buscamos y perfil del desarrollo", true], ["projectName", "Nombre del proyecto"], ["stageLabel", "Etapa actual"], ["heroTitle", "T\xEDtulo principal"], ["heroSubtitle", "Introducci\xF3n", true], ["location", "Ubicaci\xF3n"], ["conceptTitle", "T\xEDtulo de la propuesta"], ["conceptBody", "Descripci\xF3n de la propuesta", true], ["modelTitle", "Modalidad"], ["modelBody", "Explicaci\xF3n del fideicomiso", true], ["initialContribution", "Aporte inicial"], ["installments", "Cantidad de cuotas"], ["investmentTicket", "Ticket estimado"], ["projectTerm", "Plazo estimado"], ["currency", "Moneda"], ["returnReference", "Retorno de referencia"], ["productTitle", "T\xEDtulo del producto"], ["productBody", "Descripci\xF3n del producto", true], ["unitsReference", "Unidades"], ["sellableAreaReference", "Superficie vendible"], ["amenitiesReference", "Amenities"], ["trustTitle", "T\xEDtulo del seguimiento"], ["trustBody", "Explicaci\xF3n del seguimiento", true], ["ctaTitle", "T\xEDtulo de contacto"], ["ctaBody", "Texto de contacto", true], ["whatsapp", "WhatsApp con c\xF3digo de pa\xEDs"], ["email", "Email"], ["disclaimer", "Aclaraci\xF3n legal", true]];
+  const fields = [["fundingGoal", "Objetivo de fondos de la ronda (USD, solo números)"], ["fundingCommitted", "Fondos ya comprometidos (USD, solo números)"], ["simInitialPct", "% de aporte inicial para el simulador"], ["experienceTitle", "T\xEDtulo sobre la experiencia"], ["experienceBody", "Experiencia de los socios", true], ["distributionBody", "Plantas y distribuci\xF3n", true], ["amenitiesBody", "Amenities y servicios", true], ["profileBody", "Qu\xE9 buscamos y perfil del desarrollo", true], ["projectName", "Nombre del proyecto"], ["stageLabel", "Etapa actual"], ["heroTitle", "T\xEDtulo principal"], ["heroSubtitle", "Introducci\xF3n", true], ["location", "Ubicaci\xF3n"], ["conceptTitle", "T\xEDtulo de la propuesta"], ["conceptBody", "Descripci\xF3n de la propuesta", true], ["modelTitle", "Modalidad"], ["modelBody", "Explicaci\xF3n del fideicomiso", true], ["initialContribution", "Aporte inicial"], ["installments", "Cantidad de cuotas"], ["investmentTicket", "Ticket estimado"], ["projectTerm", "Plazo estimado"], ["currency", "Moneda"], ["returnReference", "Retorno de referencia"], ["productTitle", "T\xEDtulo del producto"], ["productBody", "Descripci\xF3n del producto", true], ["unitsReference", "Unidades"], ["sellableAreaReference", "Superficie vendible"], ["amenitiesReference", "Amenities"], ["trustTitle", "T\xEDtulo del seguimiento"], ["trustBody", "Explicaci\xF3n del seguimiento", true], ["ctaTitle", "T\xEDtulo de contacto"], ["ctaBody", "Texto de contacto", true], ["whatsapp", "WhatsApp con c\xF3digo de pa\xEDs"], ["email", "Email"], ["disclaimer", "Aclaraci\xF3n legal", true]];
   return <div className="admin-shell"><div className="admin-head"><div><small>MODO BELFAST</small><h2>Editar presentación</h2></div><button onClick={close}><X /></button></div><div className="admin-body">
     <section><h3>Contenido general</h3><div className="admin-fields">{fields.map(([key, label, long]) => <label key={key}><span>{label}</span>{long ? <textarea value={String(draft[key])} onChange={(e) => setField(key, e.target.value)} /> : <input value={String(draft[key])} onChange={(e) => setField(key, e.target.value)} />}</label>)}</div></section>
     <section><h3>Etapas del proyecto</h3>{draft.milestones.map((item, index) => <div className="repeat-row" key={index}><input value={item.title} onChange={(e) => setDraft((c) => ({ ...c, milestones: c.milestones.map((x, i) => i === index ? { ...x, title: e.target.value } : x) }))} /><input value={item.detail} onChange={(e) => setDraft((c) => ({ ...c, milestones: c.milestones.map((x, i) => i === index ? { ...x, detail: e.target.value } : x) }))} /><select value={item.status} onChange={(e) => setDraft((c) => ({ ...c, milestones: c.milestones.map((x, i) => i === index ? { ...x, status: e.target.value } : x) }))}><option>Completado</option><option>En curso</option><option>Próximo</option></select></div>)}</section>

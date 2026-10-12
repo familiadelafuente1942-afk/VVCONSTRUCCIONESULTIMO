@@ -33,3 +33,21 @@ body{background:#191918;color:#e9e3da}.section{padding-top:115px;padding-bottom:
 
 
 h1,h2,h3{font-weight:500}h1{font-weight:500}.brand b{font-family:'Source Serif 4',Georgia,serif;font-weight:700}
+
+.sim{max-width:none;background:#f4f1ec;display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center;padding:100px max(32px,calc((100vw - 1180px)/2))}
+.sim h2{color:#20201e;margin-bottom:18px}.sim .lead{color:#5d5a54}
+.sim-box{background:#fff;border:1px solid var(--line);border-radius:22px;padding:30px;box-shadow:var(--shadow);display:grid;gap:22px;color:#20201e}
+.sim-field{display:grid;gap:10px}.sim-field span{font-size:13px;color:var(--muted)}.sim-field b{font-size:30px}.sim-field input{width:100%;accent-color:#8d6943}
+.sim-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.sim-results div{padding:16px;border:1px solid var(--line);border-radius:14px;background:#faf8f4;display:grid;gap:6px}.sim-results small{color:var(--muted);font-size:12px}.sim-results strong{font-size:22px}
+.sim-note{font-size:12px;color:var(--muted);margin:0}
+.sim-meter{display:grid;gap:8px}.sim-meter-top,.sim-meter-bot{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:#5d5a54}.sim-meter-top b{font-size:18px;color:#20201e}
+.sim-bar{height:10px;border-radius:6px;background:#ebe5db;overflow:hidden}.sim-bar i{display:block;height:100%;background:#8d6943;border-radius:6px}
+.sim .primary{justify-self:start;display:inline-flex;align-items:center;gap:8px;padding:14px 22px;border-radius:12px;text-decoration:none}
+@media(max-width:860px){.sim{grid-template-columns:1fr;gap:30px;padding:64px 20px}}
+.sim .sim-box{border:1px solid #e4ddd1}
+.sim .sim-results div{border:1px solid #e4ddd1}
+.sim .sim-field span,.sim .sim-results small,.sim .sim-note,.sim .sim-meter-top span,.sim .sim-meter-bot{color:#6b675f}
+.sim .primary{background:#8d6943;color:#fff;border:0;box-shadow:0 10px 24px rgba(141,105,67,.28);font-weight:600}
+.sim .primary svg{color:#fff}
+.sim a.primary{background:#8d6943 !important;color:#fff !important;border:0 !important;min-height:48px;padding:0 24px}

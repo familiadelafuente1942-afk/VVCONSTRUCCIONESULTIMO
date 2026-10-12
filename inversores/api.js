@@ -94,3 +94,7 @@ export async function listSurveys() {
   const rows = await rest("/inv_surveys?select=id,created_at,answers&order=id.desc&limit=300");
   return rows.map((r) => ({ id: r.id, createdAt: r.created_at, ...r.answers }));
 }
+
+export async function resumen() {
+  try { const r = await rest("/rpc/inv_resumen", { method: "POST", body: "{}" }); return r || { total: 0, interesados: 0 }; } catch { return { total: 0, interesados: 0 }; }
+}

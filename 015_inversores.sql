@@ -27,3 +27,8 @@ insert into storage.buckets (id, name, public, file_size_limit) values ('inverso
 drop policy if exists inv_obj_read on storage.objects; create policy inv_obj_read on storage.objects for select using (bucket_id='inversores');
 drop policy if exists inv_obj_ins on storage.objects; create policy inv_obj_ins on storage.objects for insert with check (bucket_id='inversores' and inv_soy_admin());
 drop policy if exists inv_obj_del on storage.objects; create policy inv_obj_del on storage.objects for delete using (bucket_id='inversores' and inv_soy_admin());
+
+create or replace function inv_resumen() returns json language sql stable security definer set search_path=public as $$
+  select json_build_object('total',count(*),'interesados',count(*) filter (where answers->>'interest'='Sí, me interesa')) from inv_surveys;
+$$;
+grant execute on function inv_resumen() to anon, authenticated;

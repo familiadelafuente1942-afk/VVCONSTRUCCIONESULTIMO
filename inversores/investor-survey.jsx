@@ -45,7 +45,16 @@ function SurveyInbox() {
   useEffect(() => {
     load();
   }, []);
-  return <section><h3>Encuesta de inversores · privada</h3><button onClick={load}>Actualizar respuestas</button><p>{status}</p><div className="survey-inbox">{items.map((item) => <article key={item.id}><strong>{item.name || "Respuesta sin nombre"} · {item.interest || "Inter\xE9s no indicado"}</strong><small>{new Date(item.createdAt).toLocaleString("es-AR")}</small><p>{item.contact || "Sin contacto"} · Objetivo: {item.goal || "Por definir"}</p><p>Plazo: {item.horizon} · Unidad: {item.unit}<br />Aporte: {item.budget || "No informado"}<br />Pago: {item.payment}</p><p>Prioridades: {item.features?.join(", ") || "No informadas"}</p>{item.comments && <p>{item.comments}</p>}</article>)}</div></section>;
+  function exportCsv() {
+    const cols = [["createdAt", "Fecha"], ["name", "Nombre"], ["contact", "Contacto"], ["interest", "Interés"], ["goal", "Objetivo"], ["horizon", "Plazo"], ["unit", "Unidad"], ["budget", "Aporte orientativo"], ["payment", "Forma de pago"], ["features", "Prioridades"], ["comments", "Comentarios"]];
+    const esc = (v) => '"' + String(Array.isArray(v) ? v.join(" | ") : v ?? "").replace(/"/g, '""') + '"';
+    const csv = "\uFEFF" + [cols.map((c) => esc(c[1])).join(";"), ...items.map((it) => cols.map((c) => esc(it[c[0]])).join(";"))].join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "interesados-belfast.csv"; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  return <section><h3>Encuesta de inversores · privada</h3><button onClick={load}>Actualizar respuestas</button> <button onClick={exportCsv} disabled={!items.length}>Descargar Excel (CSV)</button><p>{status}</p><div className="survey-inbox">{items.map((item) => <article key={item.id}><strong>{item.name || "Respuesta sin nombre"} · {item.interest || "Inter\xE9s no indicado"}</strong><small>{new Date(item.createdAt).toLocaleString("es-AR")}</small><p>{item.contact || "Sin contacto"} · Objetivo: {item.goal || "Por definir"}</p><p>Plazo: {item.horizon} · Unidad: {item.unit}<br />Aporte: {item.budget || "No informado"}<br />Pago: {item.payment}</p><p>Prioridades: {item.features?.join(", ") || "No informadas"}</p>{item.comments && <p>{item.comments}</p>}</article>)}</div></section>;
 }
 export {
   InvestorSurvey,

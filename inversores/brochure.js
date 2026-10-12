@@ -4,6 +4,9 @@ const defaultContent = {
   distributionBody: "Las plantas y tipolog\xEDas se incorporar\xE1n con el anteproyecto. Cada alternativa podr\xE1 mostrar ambientes, superficies, balcones y distribuci\xF3n. La cantidad de unidades y sus medidas se definir\xE1n sobre el lote seleccionado.",
   amenitiesBody: "Estamos definiendo servicios que aporten valor de uso y sean razonables de mantener. Las alternativas se evaluar\xE1n con el proyecto y con las preferencias de los inversores. Ning\xFAn amenity se considera confirmado en esta etapa.",
   profileBody: "Buscamos un edificio residencial con identidad arquitect\xF3nica, espacios bien aprovechados y un costo de mantenimiento cuidado. Evaluaremos el producto para vivienda, renta o reventa seg\xFAn la ubicaci\xF3n y el mercado real del lote.",
+  fundingGoal: "",
+  fundingCommitted: "",
+  simInitialPct: "30",
   projectName: "Proyecto PH 01",
   stageLabel: "Etapa inicial \xB7 b\xFAsqueda y selecci\xF3n del lote",
   heroTitle: "La pr\xF3xima obra empieza con nosotros.",
@@ -39,6 +42,12 @@ const defaultContent = {
     { title: "Fideicomiso y adhesi\xF3n", detail: "Documentaci\xF3n legal y apertura formal a inversores.", status: "Pr\xF3ximo" }
   ],
   faqs: [
+    { question: "\xBFQu\xE9 pasa si no se consigue el lote?", answer: "Los fondos aportados quedan en el fideicomiso con un destino definido por contrato. Las condiciones de devoluci\xF3n si el proyecto no se concreta se detallar\xE1n en el contrato antes de cada adhesi\xF3n." },
+    { question: "\xBFQui\xE9n administra el dinero?", answer: "Un fiduciario independiente, que se informar\xE1 antes de la adhesi\xF3n. El dinero del proyecto se maneja en la cuenta del fideicomiso, separado del patrimonio de Belfast." },
+    { question: "\xBFPuedo salir o ceder mi participaci\xF3n?", answer: "Las condiciones de cesi\xF3n y salida se definir\xE1n en el contrato de fideicomiso. Se informar\xE1n antes de adherir para que cada inversor conozca los plazos." },
+    { question: "\xBFCu\xE1l es el aporte m\xEDnimo?", answer: "Se informar\xE1 junto con el plan econ\xF3mico. Pod\xE9s usar el simulador de esta p\xE1gina para ver c\xF3mo quedar\xEDan tu aporte inicial y tus cuotas." },
+    { question: "\xBFQu\xE9 impuestos y costos tiene participar?", answer: "El tratamiento impositivo y los costos del fideicomiso se detallar\xE1n con el contrato. Recomendamos consultarlo con tu contador antes de adherir." },
+    { question: "\xBFC\xF3mo se toman las decisiones del proyecto?", answer: "Las reglas de decisi\xF3n, informaci\xF3n peri\xF3dica y rendici\xF3n de cuentas quedar\xE1n escritas en el contrato de fideicomiso." },
     { question: "\xBFC\xF3mo se participa?", answer: "Mediante una adhesi\xF3n al fideicomiso del proyecto, con un aporte inicial y un cronograma previsto de 24 cuotas." },
     { question: "\xBFYa est\xE1 definido el lote?", answer: "Todav\xEDa no. Esta etapa busca formar el grupo inicial mientras Belfast Desarrollos eval\xFAa y compara oportunidades." },
     { question: "\xBFQu\xE9 informaci\xF3n recibir\xE1 el inversor?", answer: "Actualizaciones de lote, proyecto, documentaci\xF3n, cronograma, inversi\xF3n, costos, im\xE1genes y decisiones relevantes." },
