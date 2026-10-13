@@ -235,7 +235,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
   const setT = (id, patch) => guard(() => setW(p => ({ ...p, tareas: p.tareas.map(t => t.id === id ? { ...t, ...patch } : t) })));
   const setP = (id, patch) => guard(() => setW(p => ({ ...p, pedidos: p.pedidos.map(x => x.id === id ? { ...x, ...patch } : x) })));
   const addT = () => guard(() => setW(p => { const last = p.tareas[p.tareas.length - 1]; return { ...p, tareas: [...p.tareas, { id: nid(), name: "Nueva tarea", dur: 5, preds: last ? [last.id] : [] }] }; }));
-  const addP = () => guard(() => setW(p => p.tareas.length ? { ...p, pedidos: [...p.pedidos, { id: nid(), tipo: "Materiales", desc: "Nuevo pedido", task: p.tareas[0].id, lead: 5, quien: "", resp: "" }] } : p));
+  const addP = () => guard(() => setW(p => p.tareas.length ? { ...p, pedidos: [...p.pedidos, { id: nid(), tipo: "Definición", desc: "Nueva definición", task: p.tareas[0].id, lead: 5, quien: "", resp: "" }] } : p));
   const delT = (id) => guard(() => {
     if (W.tareas.length <= 1) { aviso("La obra necesita al menos una tarea."); return; }
     const prev = W, n0 = W.pedidos.length;
@@ -400,13 +400,13 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
     if (!W) return <div style={{ ...card, ...hint, textAlign: "center", padding: 24 }}>Primero creá el cronograma de la obra en la solapa Cronograma.</div>;
     const c = +W.costo || 0;
     return (<>
-      <div><div style={eyebrow}>Pedidos atados a una tarea</div><div style={{ ...hint, marginTop: 4 }}>Cambiá la fecha de respuesta de un pedido y mirá cómo se mueve la obra en la solapa Cronograma. Cualquier día del calendario sirve.</div></div>
-      {!W.pedidos.length && <div style={{ ...card, ...hint, textAlign: "center", padding: 24 }}>Todavía no hay pedidos. Agregá el primero con el botón de abajo.</div>}
+      <div><div style={eyebrow}>Definiciones y planos atados a una tarea</div><div style={{ ...hint, marginTop: 4 }}>Acá van solo las definiciones y los planos que hay que tener antes de que arranque una tarea. Los materiales se piden por la app de pedidos. Cambiá la fecha de respuesta de uno y mirá cómo se mueve la obra en la solapa Cronograma. Cualquier día del calendario sirve.</div></div>
+      {!W.pedidos.length && <div style={{ ...card, ...hint, textAlign: "center", padding: 24 }}>Todavía no hay definiciones ni planos. Agregá el primero con el botón de abajo.</div>}
       {W.pedidos.map(p => { const inf = M && M.info[p.id];
         const eff = !inf ? "" : inf.single > 0 ? "Corre el fin " + inf.single + (inf.single === 1 ? " día" : " días") + " · " + money(inf.single * c) : (inf.c != null && inf.c > inf.need) ? "Lo absorbe la holgura de la tarea" : "Sin efecto en la obra";
         return (<div key={p.id} style={itemBorder(!inf ? BAR : inf.st === "ok" ? OK : inf.st === "warn" ? WARN : CRIT)}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
-            <select value={p.tipo} onChange={e => setP(p.id, { tipo: e.target.value })} style={{ width: 130, flex: "none", background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 8px", minHeight: 40, fontSize: 13 }}>{["Materiales", "Definición", "Plano"].map(x => <option key={x}>{x}</option>)}</select>
+            <select value={p.tipo} onChange={e => setP(p.id, { tipo: e.target.value })} style={{ width: 130, flex: "none", background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 8px", minHeight: 40, fontSize: 13 }}>{(p.tipo === "Materiales" ? ["Materiales", "Definición", "Plano"] : ["Definición", "Plano"]).map(x => <option key={x}>{x}</option>)}</select>
             <Inp T={T} value={p.desc} onCommit={v => setP(p.id, { desc: v })} style={{ fontWeight: 700 }} />
             <button style={{ ...ibtn, color: CRIT }} onClick={() => delP(p.id)} aria-label="Eliminar pedido">✕</button>
           </div>
@@ -423,7 +423,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
           {inf && <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.5 }}>Emitir antes del <b style={{ fontFamily: "ui-monospace,monospace", fontWeight: 500, color: T.text }}>{fmtW(inf.emitir)}</b> · debe estar el <b style={{ fontFamily: "ui-monospace,monospace", fontWeight: 500, color: T.text }}>{fmtW(inf.need)}</b></div>}
           {inf && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 6 }}><Pill k={inf.st}>{inf.txt}</Pill><span style={{ fontSize: 12, color: T.muted }}>{eff}</span></div>}
         </div>); })}
-      <button style={{ ...btn(true), minHeight: 44 }} onClick={addP}>+ Agregar pedido</button>
+      <button style={{ ...btn(true), minHeight: 44 }} onClick={addP}>+ Agregar definición o plano</button>
     </>);
   };
 
