@@ -6030,11 +6030,12 @@ const MAS_ITEMS = [
   { id: "personal", label: "Personal" },
   { id: "gestion", label: "Gestión de obra" },
   { id: "minutas", label: "Grabar reunión" },
+  { id: "accesos", label: "Accesos por persona" },
   { id: "ajustes", label: "Ajustes" },
 ];
-function BottomNav({ T, screen, setScreen, aviso }) {
+function BottomNav({ T, screen, setScreen, aviso, restringido }) {
   const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);
-  const items = BOTTOM_NAV;
+  const items = restringido ? [{ id: "inicio", label: "Inicio" }, { id: "obras", label: "Obras" }, { id: "avance", label: "Avance" }, { id: "bitacora", label: "Bitácora" }, { id: "cronopro", label: "Cronograma" }, { id: "materiales", label: "Pedidos" }] : BOTTOM_NAV;
   return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", paddingBottom: "calc(env(safe-area-inset-bottom) + 6px)" }}>
     <div style={{ width: "100%", maxWidth: 1180, display: "flex" }}>
       {items.map(n => {
@@ -6048,11 +6049,11 @@ function BottomNav({ T, screen, setScreen, aviso }) {
     </div>
   </nav>);
 }
-function MasScreen({ T, screen, setScreen, aviso }) {
+function MasScreen({ T, screen, setScreen, aviso, restringido }) {
   const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
     <Eyebrow T={T}>Más</Eyebrow>
-    {MAS_ITEMS.map(it => { const n = badge(it.id); return (
+    {(restringido ? MAS_ITEMS.filter(it => SECCIONES_JEFE.includes(it.id)) : MAS_ITEMS).map(it => { const n = badge(it.id); return (
       <div key={it.id} onClick={() => setScreen(it.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 15px", marginBottom: 8, cursor: "pointer" }}>
         <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{it.label}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -6192,7 +6193,7 @@ function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, s
   </div>);
 }
 
-function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], cronoPro, onIr, matpedidos = [], setMatpedidos, pedidos = [], setPedidos }) {
+function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], cronoPro, onIr, restringido = false, matpedidos = [], setMatpedidos, pedidos = [], setPedidos }) {
   const [slideIdx, setSlideIdx] = useState(0);
   const rgbT = hexARgbC(T.bg).join(",");
   const TXC = T.text, TXR = hexARgbC(TXC).join(",");
@@ -6257,17 +6258,83 @@ function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, ava
       </div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
       <PedidosDefInicio T={T} cfg={cfg} obras={obras} matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} TXC={TXC} TXR={TXR} onIr={onIr} />
-      <PortadaGestion gestion={gestion} obras={obras} TXC={TXC} TXR={TXR} onIr={onIr} />
+      {!restringido && <PortadaGestion gestion={gestion} obras={obras} TXC={TXC} TXR={TXR} onIr={onIr} />}
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedadesC.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
       {novedadesC.map((n, i) => (<div key={i} onClick={() => onIr(n.ir, n.param)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid rgba(${TXR},.07)`, cursor: "pointer" }}>
         <span style={{ fontSize: 12.5 }}>{n.full ? n.txt : <><b style={{ color: "#D9B27C" }}>{n.n}</b> {n.txt}</>}</span><span style={{ color: `rgba(${TXR},.35)`, fontSize: 13 }}>›</span>
       </div>))}
-      <div onClick={() => onIr("asistente")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
+      {!restringido && <div onClick={() => onIr("asistente")} style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(20,18,15,.94), rgba(8,8,8,.97))", border: "1px solid rgba(176,137,79,.4)", borderRadius: 8, padding: "13px 15px", marginTop: 22, cursor: "pointer" }}>
         <div style={{ fontSize: 9, letterSpacing: ".12em", textTransform: "uppercase", color: "#D9B27C", fontWeight: 700 }}>✦ IA Belfast</div>
         <div style={{ fontSize: 12, color: "rgba(242,240,235,.6)", marginTop: 5 }}>Pedile a la IA — buscar, subir fotos, cargar archivos a una obra…</div>
-      </div>
+      </div>}
     </div>
+  </div>);
+}
+
+// ═══ ACCESOS POR PERSONA ═══
+// General: ve todo. Jefe de obra: ve solo las obras que se le asignan (y solo las secciones de trabajo).
+// Mientras no haya ninguna persona cargada, la app funciona como siempre.
+const SECCIONES_JEFE = ["inicio", "obras", "avance", "bitacora", "cronopro", "materiales", "pedidos", "mas"];
+const genCodigo = (accs) => { for (let i = 0; i < 60; i++) { const c = String(1000 + Math.floor(Math.random() * 9000)); if (c !== CODIGO_EDICION && !(accs || []).some(a => String(a.codigo) === c)) return c; } return String(Date.now()).slice(-5); };
+
+function AccesoGate({ T, accesos, onEntrar }) {
+  const [v, setV] = useState("");
+  const [err, setErr] = useState(false);
+  const probar = () => { const a = (accesos || []).find(x => x.codigo && String(x.codigo) === v.trim()); if (a) onEntrar(v.trim()); else { setErr(true); setV(""); } };
+  return (<div style={{ minHeight: "100dvh", background: T.bg, color: T.text, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, paddingTop: `max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)` }}>
+    <div style={{ width: "100%", maxWidth: 340, textAlign: "center" }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".18em", color: T.accent, textTransform: "uppercase" }}>Panel de Cliente</div>
+      <div style={{ fontSize: 22, fontWeight: 800, margin: "8px 0 6px" }}>Ingresá tu código</div>
+      <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.55, marginBottom: 18 }}>Es el código que te pasaron para entrar. Con él ves tus obras.</div>
+      <input type="password" inputMode="numeric" autoFocus value={v} onChange={e => { setV(e.target.value); setErr(false); }} onKeyDown={e => { if (e.key === "Enter") probar(); }} placeholder="Código" style={{ width: "100%", background: T.card, border: `1px solid ${err ? "#E58989" : T.border}`, borderRadius: 12, padding: "14px", fontSize: 20, textAlign: "center", letterSpacing: ".3em", color: T.text, boxSizing: "border-box" }} />
+      {err && <div style={{ fontSize: 12.5, color: "#E58989", marginTop: 8 }}>Código incorrecto</div>}
+      <button onClick={probar} style={{ width: "100%", marginTop: 14, background: T.accent, color: "#fff", border: 0, borderRadius: 12, padding: 14, fontSize: 15, fontWeight: 800, cursor: "pointer" }}>Entrar</button>
+    </div>
+  </div>);
+}
+
+function AccesosScreen({ T, obras = [], accesos = [], setAccesos, codigoSes, setCodigoSes }) {
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 15, color: T.text, boxSizing: "border-box" };
+  const guardarSes = (c) => { try { localStorage.setItem("cliente_sesion", c); } catch { } setCodigoSes(c); };
+  function agregar() {
+    setAccesos(prev => {
+      let arr = (prev || []).slice();
+      if (!arr.some(a => a.rol === "general")) { const c = genCodigo(arr); arr.push({ id: uid(), nombre: "Administrador", rol: "general", obras: [], codigo: c }); if (!codigoSes) guardarSes(c); }
+      arr.push({ id: uid(), nombre: "", rol: "jefe", obras: [], codigo: genCodigo(arr) });
+      return arr;
+    });
+  }
+  const cambiar = (id, patch) => setAccesos(prev => (prev || []).map(a => a.id === id ? { ...a, ...patch } : a));
+  function quitar(a) {
+    if (a.rol === "general" && (accesos || []).filter(x => x.rol === "general").length < 2 && (accesos || []).length > 1) { alert("Tiene que quedar al menos una persona con acceso General."); return; }
+    if (!confirm("¿Quitar el acceso de " + (a.nombre || "esta persona") + "?")) return;
+    setAccesos(prev => (prev || []).filter(x => x.id !== a.id));
+  }
+  const link = (a) => { const nombres = (a.obras || []).map(id => (obras.find(o => o.id === id) || {}).nombre).filter(Boolean).join(", "); const t = `Hola${a.nombre ? " " + a.nombre : ""}, entrá a ${location.origin}/cliente.html e ingresá este código: ${a.codigo}${a.rol === "jefe" && nombres ? "\nVas a ver tus obras: " + nombres : ""}`; return "https://wa.me/?text=" + encodeURIComponent(t); };
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 40px" }}>
+    <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Accesos por persona</div>
+    <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55, margin: "4px 0 14px" }}>Cada persona entra a esta misma app con su código. <b>General</b> ve todo. <b>Jefe de obra</b> ve solamente las obras que le asignes y las secciones de trabajo (inicio, obras, avance, bitácora, cronograma y pedidos). No ve gestión, costos, mensajes ni la IA.</div>
+    {(accesos || []).length === 0 && <div style={{ fontSize: 12.5, color: T.muted, background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, marginBottom: 12, lineHeight: 1.55 }}>Todavía no hay accesos cargados, así que la app está abierta para quien tenga el link. Al agregar la primera persona se crea también tu acceso General, con un código que vas a ver acá. Anotalo: desde ese momento todos los aparatos piden código.</div>}
+    {(accesos || []).map(a => (<div key={a.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 13, marginBottom: 11 }}>
+      <input value={a.nombre} onChange={e => cambiar(a.id, { nombre: e.target.value })} placeholder="Nombre de la persona" style={inp} />
+      <div style={{ display: "flex", gap: 6, margin: "9px 0" }}>{[["general", "General"], ["jefe", "Jefe de obra"]].map(([k, l]) => <button key={k} onClick={() => cambiar(a.id, { rol: k })} style={{ flex: 1, padding: "9px 4px", borderRadius: 8, border: `1px solid ${a.rol === k ? T.accent : T.border}`, background: a.rol === k ? T.accent : T.bg, color: a.rol === k ? "#fff" : T.text, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}</div>
+      {a.rol === "jefe" && <div style={{ marginBottom: 9 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>Obras que ve</div>
+        {obras.map(o => { const on = (a.obras || []).includes(o.id); return (<label key={o.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 0", fontSize: 13.5, color: T.text, cursor: "pointer" }}><input type="checkbox" checked={on} onChange={() => cambiar(a.id, { obras: on ? (a.obras || []).filter(x => x !== o.id) : [...(a.obras || []), o.id] })} style={{ width: 18, height: 18 }} />{o.nombre}</label>); })}
+        {(a.obras || []).length === 0 && <div style={{ fontSize: 11.5, color: "#E0A04A", marginTop: 4 }}>Sin obras asignadas: va a ver todo vacío.</div>}
+      </div>}
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>Código</div><input value={a.codigo} inputMode="numeric" onChange={e => cambiar(a.id, { codigo: e.target.value.replace(/\D/g, "").slice(0, 8) })} style={{ ...inp, letterSpacing: ".2em", fontWeight: 800 }} /></div>
+        <button onClick={() => cambiar(a.id, { codigo: genCodigo(accesos) })} style={{ marginTop: 18, background: T.bg, border: `1px solid ${T.border}`, color: T.text, borderRadius: 10, padding: "10px 11px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Nuevo</button>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <a href={link(a)} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 10, padding: "10px", fontSize: 12.5, fontWeight: 800, textDecoration: "none" }}>Enviar por WhatsApp</a>
+        <button onClick={() => quitar(a)} style={{ background: "none", border: "1px solid rgba(239,68,68,.4)", color: "#EF4444", borderRadius: 10, padding: "10px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Quitar</button>
+      </div>
+      {a.codigo && a.codigo === codigoSes && <div style={{ fontSize: 11, color: T.muted, marginTop: 8 }}>Este es tu acceso en este aparato.</div>}
+    </div>))}
+    <button onClick={agregar} style={{ width: "100%", background: T.accent, color: "#fff", border: 0, borderRadius: 12, padding: 14, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>＋ Agregar persona</button>
   </div>);
 }
 
@@ -6276,28 +6343,55 @@ function ClienteApp() {
   const [cfg, setCfg] = useStored("cliente_cfg", DEFAULT_CFG);
   const T = theme(cfg);
   const [screen, setScreen] = useState("inicio");
-  const [obrasRaw, setObras] = useStored("vv_obras", []);
+  // ── Accesos por persona: General ve todo; Jefe de obra ve solo sus obras ──
+  const [accesos, setAccesos] = useStored("cliente_accesos", []);
+  const accRef = useRef(accesos); accRef.current = accesos;
+  const [codigoSes, setCodigoSes] = useState(() => { try { return localStorage.getItem("cliente_sesion") || ""; } catch { return ""; } });
+  const [accListo, setAccListo] = useState(() => { try { return !!localStorage.getItem("cliente_sesion") || !!localStorage.getItem("cliente_accesos"); } catch { return false; } });
+  useEffect(() => {
+    let vivo = true;
+    const traerAcc = async () => { try { const r = await storage.get("cliente_accesos"); if (vivo && r?.value) { const d = JSON.parse(r.value); if (Array.isArray(d) && JSON.stringify(d) !== JSON.stringify(accRef.current)) setAccesos(d); } } catch { } if (vivo) setAccListo(true); };
+    traerAcc(); const t = setTimeout(() => vivo && setAccListo(true), 4000); const iv = setInterval(traerAcc, 30000);
+    const onVis = () => { if (document.visibilityState === "visible") traerAcc(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { vivo = false; clearTimeout(t); clearInterval(iv); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
+  const miAcceso = (accesos || []).find(a => a.codigo && String(a.codigo) === String(codigoSes));
+  const bloqueado = (accesos || []).length > 0 && !miAcceso;
+  const restringido = !!miAcceso && miAcceso.rol === "jefe";
+  const idsOk = restringido ? new Set(miAcceso.obras || []) : null;
+  const [obrasRaw, setObrasRaw] = useStored("vv_obras", []);
+  // Si es jefe de obra, lo que guarda no pisa las obras que no ve
+  const setObras = (u) => setObrasRaw(prev => { if (!idsOk) return typeof u === "function" ? u(prev) : u; const vis = (prev || []).filter(o => idsOk.has(o.id)); const nx = typeof u === "function" ? u(vis) : u; return [...(prev || []).filter(o => !idsOk.has(o.id)), ...(nx || [])]; });
   // Obras marcadas como "privada" en V+V no existen para Belfast: se filtran acá,
   // en el único lugar donde Cliente.jsx lee la lista completa.
-  const obras = (obrasRaw || []).filter(o => !o.privada);
-  const [avance, setAvance] = useStored("vv_avance", {});
-  const [definiciones, setDefiniciones] = useStored("vv_definiciones", []);
+  const obrasTodas = (obrasRaw || []).filter(o => !o.privada);
+  const obras = idsOk ? obrasTodas.filter(o => idsOk.has(o.id)) : obrasTodas;
+  const [avanceAll, setAvance] = useStored("vv_avance", {});
+  const avance = idsOk ? Object.fromEntries(Object.entries(avanceAll || {}).filter(([k]) => idsOk.has(k))) : avanceAll;
+  const [definicionesAll, setDefinicionesAll] = useStored("vv_definiciones", []);
+  const definiciones = idsOk ? (definicionesAll || []).filter(r => idsOk.has(r.obra_id)) : definicionesAll;
+  const setDefiniciones = (u) => setDefinicionesAll(prev => { const nx = typeof u === "function" ? u(definiciones) : u; return idsOk ? [...(prev || []).filter(r => !idsOk.has(r.obra_id)), ...(nx || [])] : nx; });
   const [docrecepcion, setDocrecepcion] = useStored("vv_docrecepcion", []);
-  const [bitacora, setBitacora] = useStored("vv_bitacora", []);
+  const [bitacoraAll, setBitacora] = useStored("vv_bitacora", []);
+  const bitacora = idsOk ? (bitacoraAll || []).filter(h => idsOk.has(h.obra_id)) : bitacoraAll;
   const [tareas, setTareas] = useStored("vv_tareas", []);
   const [mensajes, setMensajes] = useStored("vv_mensajes", []);
   const [archivosCliente, setArchivosCliente] = useStored("cliente_archivos", []);
   const [archivosVV, setArchivosVV] = useStored("vv_archivos", []);
   const [vvCfg] = useStored("vv_cfg", {});
   const [chatMsgs, setChatMsgs] = useStored("cliente_chat", []);
-  const [pedidos, setPedidos] = useStored("vv_pedidos", []);
+  const [pedidosAll, setPedidos] = useStored("vv_pedidos", []);
+  const pedidos = idsOk ? (pedidosAll || []).filter(p => idsOk.has(p.obra_id)) : pedidosAll;
   const [personal, setPersonal] = useStored("vv_personal", []);
   const [gestion] = useStored("vv_gestion", {});
   const [modelosObra] = useStored("vv_modelos_obra", []);
   const [crono] = useStored("vv_cronograma", { obras: [] });
-  const [cronoPro, setCronoPro] = useStored("vv_cronopro", { obras: {} });
+  const [cronoProAll, setCronoPro] = useStored("vv_cronopro", { obras: {} });
+  const cronoPro = idsOk ? { ...(cronoProAll || {}), obras: Object.fromEntries(Object.entries((cronoProAll || {}).obras || {}).filter(([k]) => idsOk.has(k))) } : cronoProAll;
   const [formularios] = useStored("vv_formularios", []);
-  const [matpedidos, setMatpedidos] = useStored("vv_matpedidos", []);
+  const [matpedidosAll, setMatpedidos] = useStored("vv_matpedidos", []);
+  const matpedidos = idsOk ? (matpedidosAll || []).filter(p => idsOk.has(p.obra_id)) : matpedidosAll;
   const [dronevuelos] = useStored("vv_drone", []);
   // Las reuniones de Belfast son PRIVADAS: van en su propia clave, separada
   // de "vv_minutas" (las de V+V). Ninguna de las dos empresas ve las del otro.
@@ -6350,7 +6444,7 @@ function ClienteApp() {
   // al abrir una pantalla, se apaga su punto rojo
   const [auditoriaDesdeSemana, setAuditoriaDesdeSemana] = React.useState(false);
   const [gestionFoco, setGestionFoco] = React.useState(null);
-  const irA = (id, param) => { setGestionFoco(id === "gestion" ? (param || null) : null); setAuditoriaDesdeSemana(id === "auditoria" && param === "semana"); setScreen(id); marcarVisto(id); };
+  const irA = (id, param) => { if (restringido && !SECCIONES_JEFE.includes(id)) return; setGestionFoco(id === "gestion" ? (param || null) : null); setAuditoriaDesdeSemana(id === "auditoria" && param === "semana"); setScreen(id); marcarVisto(id); };
   // Si los datos de la pantalla activa siguen llegando de la nube (sync), se re-marca como
   // visto cada vez que cambian MIENTRAS el usuario sigue parado ahí — así el globito no
   // "revive" solo por datos que terminaron de sincronizar un segundo después del toque.
@@ -6519,6 +6613,8 @@ function ClienteApp() {
     if (obraId && archivos?.length) { await agregarAObra(obraId, archivos); await acuseRecibo(obraId, archivos); }
   }
 
+  if (!accListo && !codigoSes) return (<div style={{ minHeight: "100dvh", background: T.bg, color: T.sub, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>Cargando…</div>);
+  if (bloqueado) return <AccesoGate T={T} accesos={accesos} onEntrar={(c) => { try { localStorage.setItem("cliente_sesion", c); } catch { } setCodigoSes(c); setScreen("inicio"); }} />;
   return (<div style={{ width: "100%", maxWidth: "100vw", height: "100dvh", background: LUXE_BG, overflowX: "hidden" }}>
     <style>{css + `:root{--bg:${T.bg};--card:${T.card};--border:${T.border};--text:${T.text};--sub:${T.sub};--muted:${T.muted};--accent:${T.accent};--al:${T.accentLight};--navy:${T.navy};} select option{background:${T.card};color:${T.text};} body{background:${T.bg};}`}</style>
     <Toast T={T} toast={toast} />
@@ -6527,7 +6623,7 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "inicio" && <InicioScreen matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} cronoPro={cronoPro} T={T} cfg={cfg} gestion={gestion} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
+          {screen === "inicio" && <InicioScreen restringido={restringido} matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} cronoPro={cronoPro} T={T} cfg={cfg} gestion={gestion} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} setObras={setObras} gestion={gestion} modelosObra={modelosObra} avance={avance} auditoria={auditoria} adicionales={adicionales} dronevuelos={dronevuelos} definiciones={definiciones} docrecepcion={docrecepcion} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} adicionales={adicionales} modelosObra={modelosObra} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
@@ -6547,10 +6643,11 @@ function ClienteApp() {
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
           {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} renders={renders} setRenders={setRenders} />}
-          {screen === "mas" && <MasScreen T={T} screen={screen} setScreen={irA} aviso={aviso} />}
+          {screen === "accesos" && !restringido && <AccesosScreen T={T} obras={obrasTodas} accesos={accesos} setAccesos={setAccesos} codigoSes={codigoSes} setCodigoSes={setCodigoSes} />}
+          {screen === "mas" && <MasScreen restringido={restringido} T={T} screen={screen} setScreen={irA} aviso={aviso} />}
         </div>
       </div>
-      <BottomNav T={T} screen={screen} setScreen={irA} aviso={(id) => id === "cronopro" ? (alertasCrono(cronoPro, obras) || []).length : aviso(id)} />
+      <BottomNav restringido={restringido} T={T} screen={screen} setScreen={irA} aviso={(id) => id === "cronopro" ? (alertasCrono(cronoPro, obras) || []).length : aviso(id)} />
     </div>
     <SyncBanner />
     <div style={{ padding: "10px 16px 0" }}><GlobitoPermiso /></div>
