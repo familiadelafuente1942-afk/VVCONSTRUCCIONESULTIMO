@@ -56,13 +56,19 @@ function calcular(P, hoy) {
   const base = programar(o, {}, start), info = {}, cons = {};
   (P.pedidos || []).forEach(p => {
     if (base.ES[p.task] == null) return;
-    const need = base.ES[p.task], emitir = need - (+p.lead || 0); let c = null, st, txt;
-    if (p.resp) { const r = wdIdx(cal, p.resp), late = r - need; c = r; if (late > 0) { st = "late"; txt = "Llega " + late + (late === 1 ? " día" : " días") + " tarde"; } else { st = "ok"; txt = "En fecha"; } }
-    else if (hoyI > need) { st = "late"; txt = "Atrasado"; c = hoyI; }
-    else if (hoyI >= emitir) { st = "warn"; txt = "Emitir ya"; }
-    else { st = "ok"; txt = "En fecha"; }
+    const need = base.ES[p.task], lead = +p.lead || 0, emitir = need - lead;
+    const amar = Math.min(need, Math.max(emitir, need - Math.max(1, Math.round(lead / 3))));
+    const respEff = p.resp || (p.est === "esta" && p.estFecha) || "";
+    let c = null, st, txt, fase;
+    if (respEff) { const r = wdIdx(cal, respEff), late = r - need; c = r; if (late > 0) { st = "late"; fase = "retraso"; txt = "Llegó " + late + (late === 1 ? " día" : " días") + " tarde"; } else { st = "ok"; fase = "ok"; txt = p.est === "esta" ? "Definido" : "En fecha"; } }
+    else if (p.hecho) { st = "ok"; fase = "ok"; txt = "Resuelto"; }
+    else if (p.est === "noesta") { st = "late"; fase = "retraso"; txt = "No llegó: atrasa la obra"; c = Math.max(hoyI, need); }
+    else if (hoyI >= need) { st = "late"; fase = "rojo"; txt = "Debía estar hoy: confirmá si está"; }
+    else if (hoyI >= amar) { st = "warn"; fase = "amarillo"; txt = p.pedido ? "Cerca de la fecha: reclamala" : "Cerca de la fecha y sin pedir"; }
+    else if (hoyI >= emitir) { st = "ok"; fase = "verde"; txt = p.pedido ? "Pedida, en espera" : "Hay que pedirla ya"; }
+    else { st = "hol"; fase = "futuro"; txt = "Todavía falta"; }
     let single = 0; if (c != null) { const q = {}; q[p.task] = c; single = programar(o, q, start).end - base.end; }
-    info[p.id] = { need, emitir, c, st, txt, single };
+    info[p.id] = { need, emitir, amar, c, st, txt, single, fase };
     if (c != null) cons[p.task] = Math.max(cons[p.task] || 0, c);
   });
   const cur = programar(o, cons, start);
@@ -127,30 +133,43 @@ export function alertasCrono(data, obras) {
     const P = data && data.obras && data.obras[o.id]; if (!P || !P.tareas || !P.tareas.length) return;
     let M; try { M = calcular(P, hoy); } catch (e) { return; }
     (P.pedidos || []).forEach(p => {
-      const inf = M.info[p.id]; if (!inf || p.hecho || inf.st === "ok") return;
-      const crit = p.crit || (M.base.LF[p.task] - M.base.EF[p.task]) === 0 || (M.cur.LF[p.task] - M.cur.EF[p.task]) === 0;
-      if (!crit) return;
+      const inf = M.info[p.id]; if (!inf || p.hecho || inf.fase === "ok" || inf.fase === "futuro") return;
+      if (inf.fase === "verde" && p.pedido) return;
       const t = P.tareas.find(x => x.id === p.task);
-      out.push({ obraId: o.id, obra: o.nombre, id: p.id, tipo: p.tipo, desc: p.desc, tarea: t ? t.name : "", quien: p.quien, st: inf.st, txt: inf.txt, need: fmtN(D(M.cal, inf.need), 1), emitir: fmtN(D(M.cal, inf.emitir), 1) });
+      out.push({ obraId: o.id, obra: o.nombre, id: p.id, tipo: p.tipo, desc: p.desc, tarea: t ? t.name : "", quien: p.quien, st: inf.st, fase: inf.fase, pedido: p.pedido || "", txt: inf.txt, need: fmtN(D(M.cal, inf.need), 1), emitir: fmtN(D(M.cal, inf.emitir), 1), amar: fmtN(D(M.cal, inf.amar), 1) });
     });
   });
-  out.sort((a, b) => (a.st === "late" ? 0 : 1) - (b.st === "late" ? 0 : 1));
+  const ORD = { retraso: 0, rojo: 1, amarillo: 2, verde: 3 }; out.sort((a, b) => (ORD[a.fase] ?? 9) - (ORD[b.fase] ?? 9));
   return out;
 }
 const ART = { "Definición": "la definición", "Plano": "el plano", "Materiales": "el pedido de materiales" };
 // lado "vv": mensaje para la app general; lado "cliente": el mismo aviso visto desde la página del cliente
-export function CronoAlertas({ T, data, obras, lado = "vv", onIr, max = 3, soloObra = null, empresa = "V+V" }) {
+export function CronoAlertas({ T, data, obras, lado = "vv", onIr, max = 3, soloObra = null, empresa = "V+V", setData = null }) {
   const todas = useMemo(() => alertasCrono(data, obras), [data, (obras || []).length]);
   const al = soloObra ? todas.filter(a => a.obraId === soloObra) : todas;
   if (!al.length) return null;
+  const marcar = (a, patch) => { if (setData) setData(prev => { const pp = prev || {}, os = pp.obras || {}, P = os[a.obraId]; if (!P) return pp; return { ...pp, obras: { ...os, [a.obraId]: { ...P, pedidos: P.pedidos.map(x => x.id === a.id ? { ...x, ...patch } : x) } } }; }); };
+  const bt = (col) => ({ font: "inherit", fontSize: 12.5, fontWeight: 800, color: "#fff", background: col, border: 0, borderRadius: 8, padding: "8px 14px", minHeight: 38, cursor: "pointer" });
   return (<div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
     {al.slice(0, max).map(a => {
-      const art = ART[a.tipo] || "el pedido", late = a.st === "late", col = late ? CRIT : WARN;
-      const titulo = lado === "cliente" ? `${empresa} necesita ${art} «${a.desc}», que se está venciendo` : `Se está venciendo ${art} «${a.desc}»`;
-      return (<div key={a.id} onClick={() => onIr && onIr("cronopro")} style={{ background: late ? "rgba(229,96,74,.12)" : "rgba(224,160,74,.12)", border: `1px solid ${col}`, borderLeft: `4px solid ${col}`, borderRadius: 10, padding: "11px 13px", cursor: onIr ? "pointer" : "default" }}>
-        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase", color: col }}>{late ? "Vencido" : "Hay que emitirlo ya"} · {a.obra}</div>
+      const art = ART[a.tipo] || "el pedido", f = a.fase, col = f === "verde" ? OK : f === "amarillo" ? WARN : CRIT, hoy = hoyISO();
+      const bg = f === "verde" ? "rgba(62,155,98,.12)" : f === "amarillo" ? "rgba(224,160,74,.12)" : "rgba(229,96,74,.12)";
+      const rot = f === "verde" ? "Semáforo verde · hay que pedirla" : f === "amarillo" ? "Semáforo amarillo · ya casi" : f === "rojo" ? "Semáforo rojo · debe estar hoy" : "Retraso · no llegó";
+      let titulo, detalle;
+      if (lado === "cliente") { titulo = f === "verde" ? `${empresa} va a pedir ${art} «${a.desc}»` : `${empresa} necesita ${art} «${a.desc}»`; }
+      else titulo = f === "verde" ? `Estamos en verde: hay que pedir ${art} «${a.desc}»` : f === "amarillo" ? `Estamos en amarillo: ${art} «${a.desc}» está por vencer` : f === "rojo" ? `Estamos en rojo: hoy debe estar ${art} «${a.desc}»` : `No llegó ${art} «${a.desc}» y la obra ya se está atrasando`;
+      const nec = `La necesita la tarea «${a.tarea}» el ${a.need}.`;
+      detalle = f === "verde" ? `${nec} Había que pedirla desde el ${a.emitir}.` : f === "amarillo" ? `${nec} ${a.pedido ? "Ya la pediste: reclamala para que llegue a tiempo." : "Todavía no figura como pedida."}` : f === "rojo" ? `${nec} ¿Está o no está? Marcalo: si no está, empieza a contar el atraso.` : `${nec} Cada día de demora corre el final de la obra. Cuando llegue, marcala como que está.`;
+      if (a.quien) detalle += " Responsable: " + a.quien + ".";
+      const acciones = lado === "vv" && setData ? (f === "verde" ? <button style={bt(OK)} onClick={(e) => { e.stopPropagation(); marcar(a, { pedido: hoy }); }}>Ya la pedí</button>
+        : f === "amarillo" ? (<>{!a.pedido && <button style={bt(OK)} onClick={(e) => { e.stopPropagation(); marcar(a, { pedido: hoy }); }}>Ya la pedí</button>}<button style={bt("#3E9B62")} onClick={(e) => { e.stopPropagation(); marcar(a, { est: "esta", estFecha: hoy }); }}>Ya está</button></>)
+        : f === "rojo" ? (<><button style={bt(OK)} onClick={(e) => { e.stopPropagation(); marcar(a, { est: "esta", estFecha: hoy }); }}>Está</button><button style={bt(CRIT)} onClick={(e) => { e.stopPropagation(); marcar(a, { est: "noesta", estFecha: hoy }); }}>No está</button></>)
+        : <button style={bt(OK)} onClick={(e) => { e.stopPropagation(); marcar(a, { est: "esta", estFecha: hoy }); }}>Ya llegó</button>) : null;
+      return (<div key={a.id} onClick={() => onIr && onIr("cronopro")} style={{ background: bg, border: `1px solid ${col}`, borderLeft: `4px solid ${col}`, borderRadius: 10, padding: "11px 13px", cursor: onIr ? "pointer" : "default" }}>
+        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase", color: col }}>{rot} · {a.obra}</div>
         <div style={{ fontSize: 13.5, fontWeight: 800, color: T.text, margin: "3px 0 2px", lineHeight: 1.3 }}>{titulo}</div>
-        <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.5 }}>Lo necesita la tarea «{a.tarea}» el {a.need}. {late ? a.txt + "." : "Había que emitirlo antes del " + a.emitir + "."}{a.quien ? " Responsable: " + a.quien + "." : ""} Es una tarea crítica: cada día de demora corre el final de la obra.</div>
+        <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.5 }}>{detalle}</div>
+        {acciones && <div style={{ display: "flex", gap: 8, marginTop: 9, flexWrap: "wrap" }}>{acciones}</div>}
       </div>);
     })}
     {al.length > max && <div style={{ fontSize: 12, color: T.muted, textAlign: "center" }}>y {al.length - max} más en Cronograma</div>}
@@ -330,7 +349,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
     if (!W || !M) return vacio;
     const d = M.delta, c = +W.costo || 0, ds = W.dias || DIAS0, ex = W.excep || {};
     return (<>
-      {!editing && <CronoAlertas T={T} data={data} obras={obras} lado={lado} soloObra={obraId} max={10} empresa={empresa} />}
+      {!editing && <CronoAlertas T={T} data={data} setData={setData} obras={obras} lado={lado} soloObra={obraId} max={10} empresa={empresa} />}
       <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: T.text }}>Cuánto te cuesta cada pedido que llega tarde</div>
       <div style={hint}>Cada pedido está atado a la tarea que lo necesita. Si llega después de que esa tarea arranca, la tarea se corre, y si está en la ruta crítica corre el final de la obra.</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -416,11 +435,17 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
             <div><Lbl T={T}>Anticipación (días)</Lbl><Inp T={T} type="number" min="0" step="1" value={p.lead} onCommit={v => setP(p.id, { lead: Math.max(0, Math.round(+v) || 0) })} /></div>
           </div>
           <div><Lbl T={T}>Respuesta real o comprometida</Lbl><Inp T={T} type="date" value={p.resp || ""} onCommit={v => setP(p.id, { resp: v })} /></div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 18px" }}>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: T.sub, minHeight: 32 }}><input type="checkbox" checked={!!p.crit} onChange={e => setP(p.id, { crit: e.target.checked })} /> Pedido crítico (avisar siempre)</label>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: T.sub, minHeight: 32 }}><input type="checkbox" checked={!!p.hecho} onChange={e => setP(p.id, { hecho: e.target.checked })} /> Ya se resolvió</label>
+          {inf && (<div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, color: T.sub, flexWrap: "wrap" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><i style={{ width: 11, height: 11, borderRadius: "50%", background: OK, display: "inline-block" }} />pedir desde el <b style={{ color: T.text }}>{fmtW(inf.emitir)}</b></span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><i style={{ width: 11, height: 11, borderRadius: "50%", background: WARN, display: "inline-block" }} />aviso el <b style={{ color: T.text }}>{fmtW(inf.amar)}</b></span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><i style={{ width: 11, height: 11, borderRadius: "50%", background: CRIT, display: "inline-block" }} />debe estar el <b style={{ color: T.text }}>{fmtW(inf.need)}</b></span>
+          </div>)}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+            {!p.pedido && !p.est && <button style={btn(false)} onClick={() => setP(p.id, { pedido: hoy })}>Ya la pedí</button>}
+            {p.pedido && <span style={{ fontSize: 12, color: T.sub }}>Pedida el {fmtN(dnOf(p.pedido))}</span>}
+            {!p.est && !p.hecho && <><button style={btn(true)} onClick={() => setP(p.id, { est: "esta", estFecha: hoy })}>Está</button><button style={{ ...btn(false), color: CRIT, borderColor: CRIT }} onClick={() => setP(p.id, { est: "noesta", estFecha: hoy })}>No está</button></>}
+            {(p.est || p.hecho) && <><span style={{ fontSize: 12, fontWeight: 700, color: p.est === "noesta" ? CRIT : OK }}>{p.est === "noesta" ? "Marcada: no está" : "Marcada: está"}{p.estFecha ? " (" + fmtN(dnOf(p.estFecha)) + ")" : ""}</span>{p.est === "noesta" && <button style={btn(true)} onClick={() => setP(p.id, { est: "esta", estFecha: hoy })}>Ya llegó</button>}<button style={btn(false)} onClick={() => setP(p.id, { est: "", estFecha: "", hecho: false })}>Reabrir</button></>}
           </div>
-          {inf && <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.5 }}>Emitir antes del <b style={{ fontFamily: "ui-monospace,monospace", fontWeight: 500, color: T.text }}>{fmtW(inf.emitir)}</b> · debe estar el <b style={{ fontFamily: "ui-monospace,monospace", fontWeight: 500, color: T.text }}>{fmtW(inf.need)}</b></div>}
           {inf && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 6 }}><Pill k={inf.st}>{inf.txt}</Pill><span style={{ fontSize: 12, color: T.muted }}>{eff}</span></div>}
         </div>); })}
       <button style={{ ...btn(true), minHeight: 44 }} onClick={addP}>+ Agregar definición o plano</button>
