@@ -52,7 +52,7 @@ function programar(o, cons, start) {
 }
 function calcular(P, hoy) {
   const cal = mkCal(P.dias, P.excep), o = ordenar(P.tareas), start = wdIdx(cal, P.inicio), hoyI = wdIdx(cal, hoy);
-  o.fix = {}; P.tareas.forEach(t => { if (t.desde) o.fix[t.id] = wdIdx(cal, t.desde); });
+  o.fix = {}; P.tareas.forEach(t => { if (t.desde) o.fix[t.id] = wdIdx(cal, t.desde); else if (t.off != null) o.fix[t.id] = start + Math.max(0, +t.off || 0); });
   const base = programar(o, {}, start), info = {}, cons = {};
   (P.pedidos || []).forEach(p => {
     if (base.ES[p.task] == null) return;
@@ -89,6 +89,21 @@ function clonar(m) {
   const map = {}; m.tareas.forEach(t => { map[t.id] = nid(); });
   return { tareas: m.tareas.map(t => ({ id: map[t.id], name: t.name, dur: t.dur, preds: (t.preds || []).map(p => map[p]).filter(Boolean) })),
     pedidos: (m.pedidos || []).filter(p => map[p.task]).map(p => ({ id: nid(), tipo: p.tipo, desc: p.desc, task: map[p.task], lead: p.lead, quien: p.quien, resp: "" })) };
+}
+// Tareas del cronograma a partir del Modelo de obra (el mismo que se carga en Obras → Modelos de obra).
+function tareasDeModelo(m) {
+  const out = [], num = (x) => Number(x) || 0;
+  const losas = (m && m.losas) || [], plantas = (m && m.plantas) || [];
+  ((m && m.etapas) || []).forEach(e => {
+    if (!e.usa || num(e.duracionDias) <= 0) return;
+    if (e.etapa === "Estructura" && losas.length) return;
+    if (e.etapa === "Mampostería" && plantas.length) return;
+    out.push({ name: e.etapa, dur: Math.round(num(e.duracionDias)), off: Math.max(0, Math.round(num(e.inicioOffsetDias))) });
+  });
+  losas.forEach((l, i) => { if (num(l.duracionDias) > 0) out.push({ name: "Losa " + (i + 1), dur: Math.round(num(l.duracionDias)), off: Math.max(0, Math.round(num(l.inicioOffsetDias))) }); });
+  plantas.forEach((pl, i) => { if (num(pl.duracionDias) > 0) out.push({ name: "Mampostería planta " + (i + 1), dur: Math.round(num(pl.duracionDias)), off: Math.max(0, Math.round(num(pl.inicioOffsetDias))) }); });
+  out.sort((a, b) => a.off - b.off);
+  return out.map(t => ({ id: nid(), name: t.name, dur: Math.max(1, t.dur), off: t.off, preds: [] }));
 }
 const planNuevo = (inicio, m) => ({ inicio: inicio || hoyISO(), costo: 450000, plan: true, dias: DIAS0.slice(), excep: {}, ...(m ? clonar(m) : { tareas: [], pedidos: [] }) });
 
@@ -142,7 +157,7 @@ export function CronoAlertas({ T, data, obras, lado = "vv", onIr, max = 3, soloO
   </div>);
 }
 
-export default function CronoPro({ T, obras = [], data, setData, gated = false, Gate = null, titulo = "Cronograma", lado = "vv", empresa = "V+V" }) {
+export default function CronoPro({ T, obras = [], data, setData, gated = false, Gate = null, titulo = "Cronograma", lado = "vv", empresa = "V+V", modelosObra = [] }) {
   const lista = (obras || []).filter(o => o && o.id);
   const [obraId, setObraId] = useState(lista[0]?.id || "");
   const [tab, setTab] = useState("crono");
@@ -168,6 +183,18 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
     else setData(prev => { const p = prev || {}; const os = p.obras || {}; return { ...p, obras: { ...os, [obraId]: f(os[obraId]) } }; });
   };
   const aviso = (msg, undo) => { setToast({ msg, undo }); clearTimeout(toastT.current); toastT.current = setTimeout(() => setToast(null), 7000); };
+  // Modelo de obra asignado a esta obra (un solo modelo para todo: el de Obras → Modelos de obra)
+  const modeloObra = (modelosObra || []).find(m => obra && m.id === obra.modeloId) || null;
+  const cargarModeloObra = () => {
+    if (!modeloObra) return;
+    const tareas = tareasDeModelo(modeloObra);
+    if (!tareas.length) { aviso("El modelo «" + modeloObra.nombre + "» todavía no tiene etapas con duración."); return; }
+    const ini = isoDeCorta(obra && obra.inicio) || hoy;
+    setData(prev => { const pp = prev || {}; const os = pp.obras || {}; const ant = os[obraId]; return { ...pp, obras: { ...os, [obraId]: { ...planNuevo(ant ? ant.inicio : ini), ...(ant ? { costo: ant.costo, plan: ant.plan, dias: ant.dias, excep: ant.excep } : {}), inicioFicha: ant ? ant.inicioFicha : undefined, tareas, pedidos: [], modeloId: modeloObra.id } } }; });
+    setTab("crono"); aviso("Modelo «" + modeloObra.nombre + "» cargado.");
+  };
+  const empezarEnBlanco = () => guard(() => crearDesde({ id: "en_blanco", nombre: "En blanco", tareas: [{ id: nid(), name: "Primera tarea", dur: 5, preds: [] }], pedidos: [] }));
+
   // Si cambia la fecha de inicio en la ficha de la obra, el cronograma la toma solo.
   const iniFicha = isoDeCorta(obra && obra.inicio);
   useEffect(() => {
@@ -231,7 +258,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
   const delModelo = (m) => guard(() => { const prev = modelos; setModelos(ms => ms.filter(x => x.id !== m.id)); aviso("Modelo eliminado.", () => setModelos(prev)); });
 
   const pedirTab = (k) => { if (k === "crono" || can) { setTab(k); return; } setGate({ fn: () => setTab(k) }); };
-  const TABS = [["crono", "Cronograma"], ["tareas", "Tareas"], ["pedidos", "Pedidos"], ["modelos", "Modelos"]];
+  const TABS = [["crono", "Cronograma"], ["tareas", "Tareas"], ["pedidos", "Pedidos"]];
   const bloq = (k) => gated && !unlocked && k !== "crono";
 
   // ── Gantt ──
@@ -287,10 +314,11 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
   // ── pantallas ──
   const vacio = (<div style={{ ...card, textAlign: "center", padding: "26px 16px" }}>
     <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>Esta obra todavía no tiene cronograma</div>
-    <div style={{ ...hint, margin: "6px 0 14px" }}>Elegí un modelo para empezar. Después podés cambiar todas las tareas, duraciones y pedidos.</div>
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {modelos.map(m => <button key={m.id} style={btn(false)} onClick={() => crearDesde(m)}>{!can ? "🔒 " : ""}{m.nombre}</button>)}
-    </div>
+    {modeloObra
+      ? <><div style={{ ...hint, margin: "6px 0 14px" }}>Esta obra usa el modelo «{modeloObra.nombre}». Tocá el botón y el cronograma se arma con sus etapas y duraciones.</div>
+        <button style={btn(true)} onClick={cargarModeloObra}>Cargar el modelo de la obra</button></>
+      : <><div style={{ ...hint, margin: "6px 0 14px" }}>{(modelosObra || []).length ? "Elegí el modelo de esta obra en Obras → Modelo de obra y después cargalo acá con un toque." : "Cargá un modelo en Obras → Modelos de obra y asignáselo a esta obra."}</div>
+        <button style={btn(false)} onClick={empezarEnBlanco}>{!can ? "🔒 " : ""}Empezar en blanco</button></>}
   </div>);
 
   const kpi = (lab, val, sub, tone) => (<div style={{ ...card, display: "flex", flexDirection: "column", gap: 3, padding: "11px 12px" }}>
@@ -348,7 +376,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
   const pantallaTareas = () => {
     if (!W) return <div style={{ ...card, ...hint, textAlign: "center", padding: 24 }}>Primero creá el cronograma de la obra en la solapa Cronograma.</div>;
     return (<>
-      <div><div style={eyebrow}>Tareas de la obra</div><div style={{ ...hint, marginTop: 4 }}>En "Arranca el día" abrí el calendario y elegí la fecha en que empieza cada tarea. La duración cuenta solo los días de trabajo.</div>{M && M.o.cyc && <div style={{ ...hint, color: CRIT, fontWeight: 700, marginTop: 4 }}>Hay una dependencia circular: se ignoró la que cierra el círculo.</div>}</div>
+      <div><div style={eyebrow}>Tareas de la obra</div>{modeloObra && <div style={{ ...hint, marginTop: 6 }}>Modelo de la obra: <b style={{ color: T.text }}>{modeloObra.nombre}</b> (se cambia en Obras). <button style={{ font: "inherit", fontSize: 12, fontWeight: 700, color: T.accent, background: "none", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline" }} onClick={() => guard(() => { if (!(W.pedidos || []).length || window.confirm("Volver a cargar el modelo reemplaza las tareas y borra los pedidos de esta obra. ¿Seguir?")) cargarModeloObra(); })}>Volver a cargarlo</button></div>}<div style={{ ...hint, marginTop: 4 }}>En "Arranca el día" abrí el calendario y elegí la fecha en que empieza cada tarea. La duración cuenta solo los días de trabajo.</div>{M && M.o.cyc && <div style={{ ...hint, color: CRIT, fontWeight: 700, marginTop: 4 }}>Hay una dependencia circular: se ignoró la que cierra el círculo.</div>}</div>
       {W.tareas.map((t, i) => { const cr = M && critOf(t.id), fl = M ? M.cur.LF[t.id] - M.cur.EF[t.id] : 0;
         return (<div key={t.id} style={itemBorder(cr ? CRIT : BAR)}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
@@ -360,7 +388,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <div><Lbl T={T}>Duración (días de trabajo)</Lbl><Inp T={T} type="number" min="1" step="1" value={t.dur} onCommit={v => setT(t.id, { dur: Math.max(1, Math.round(+v) || 1) })} /></div>
-            <div><Lbl T={T}>Arranca el día</Lbl><Inp T={T} type="date" value={t.desde || (M ? isoOf(D(M.cal, M.cur.ES[t.id])) : W.inicio)} onCommit={v => setT(t.id, { desde: v || undefined })} /></div>
+            <div><Lbl T={T}>Arranca el día</Lbl><Inp T={T} type="date" value={t.desde || (M ? isoOf(D(M.cal, M.cur.ES[t.id])) : W.inicio)} onCommit={v => setT(t.id, { desde: v || undefined, off: undefined })} /></div>
           </div>
           {M && <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6, fontSize: 12, color: T.sub }}><span><b style={{ fontFamily: "ui-monospace,monospace", fontWeight: 500, color: T.text }}>{fmtW(M.cur.ES[t.id])}</b> → <b style={{ fontFamily: "ui-monospace,monospace", fontWeight: 500, color: T.text }}>{fmtW(M.cur.EF[t.id] - 1)}</b></span>{cr ? <Pill k="crit">Crítica</Pill> : <Pill k="hol">Holgura {fl} d</Pill>}</div>}
         </div>); })}
@@ -432,7 +460,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
     </div>
     <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 90px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
       {!lista.length ? <div style={{ ...card, ...hint, textAlign: "center", padding: 24 }}>No hay obras cargadas todavía.</div>
-        : tab === "crono" ? pantallaCrono() : tab === "tareas" ? pantallaTareas() : tab === "pedidos" ? pantallaPedidos() : pantallaModelos()}
+        : tab === "crono" ? pantallaCrono() : tab === "tareas" ? pantallaTareas() : pantallaPedidos()}
     </div>
     {toast && <div style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: "calc(80px + env(safe-area-inset-bottom,0px))", background: T.text, color: T.bg, padding: "10px 14px", borderRadius: 10, fontSize: 12.5, fontWeight: 600, display: "flex", gap: 14, alignItems: "center", zIndex: 900, maxWidth: "calc(100% - 32px)" }}>
       <span>{toast.msg}</span>{toast.undo && <button style={{ font: "inherit", fontWeight: 800, background: "none", border: 0, color: T.accent, cursor: "pointer", padding: 0 }} onClick={() => { toast.undo(); setToast(null); }}>Deshacer</button>}</div>}
