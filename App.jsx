@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 import CronoPro, { CronoAlertas, alertasCrono } from "./CronoPro.jsx";
-import { PlanillaDefinicion, PanelDefinicion, chipDef } from "./PedidoDef.jsx";
+import { PlanillaDefinicion, PanelDefinicion, chipDef, RecorridoDef, TableroDef, conMov } from "./PedidoDef.jsx";
 
 // Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
 // Solo las etapas de obra gris + colocación de piso (lo único que hace V+V):
@@ -7484,6 +7484,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   const [open, setOpen] = useState(null);
   const [nuevo, setNuevo] = useState(null);
   const [planilla, setPlanilla] = useState(false);
+  const [tablero, setTablero] = useState(false);
   const [reply, setReply] = useState("");
   const [adj, setAdj] = useState([]);
   const [iaLoad, setIaLoad] = useState(false);
@@ -7517,9 +7518,9 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   function crear() { if (!nuevo.asunto?.trim()) return; aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: miSide, para: "cliente", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }), ...arr]); setNuevo(null); }
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
     const subirDef = async (f) => { const data = await toDataUrl(f); const url = await uploadFoto(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
-  function crearDef(d) { const base = nuevoPedido({ de: miSide, para: "cliente", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); setPlanilla(false); }
-  function responderDef(id, texto, archivos) { const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "resuelto", hilo: [...x.hilo, { de: miSide, texto: texto || "Respuesta con documentación adjunta.", fecha: f, ts, porIA: false, archivos: archivos || [] }] } : x)); }
-function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
+  function crearDef(d) { const base = nuevoPedido({ de: miSide, para: d.para || "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); setPlanilla(false); }
+  function responderDef(id, texto, archivos) { const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? conMov({ ...x, hilo: [...x.hilo, { de: miSide, texto: texto || "Respuesta con documentación adjunta.", fecha: f, ts, porIA: false, archivos: archivos || [] }] }, x.para === "estudio" ? "respondido" : "resuelto", miSide) : x)); }
+function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? conMov(x, estado, miSide) : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
   function borrarMsgHilo(pedidoId, idx) { if (!confirm("¿Eliminar este mensaje/archivo del hilo?")) return; aplicarPedidos(setPedidos, arr => arr.map(x => x.id === pedidoId ? { ...x, hilo: (x.hilo || []).filter((_, j) => j !== idx) } : x)); }
   async function responderIA(p) {
@@ -7533,7 +7534,13 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 90, position: "relative" }}>
     <SubHead id="pedidos" label="Pedidos · Seguimiento" sub={`Gestión de temas con ${otroNom}`} onBack={onBack} />
-    {!cur && <div style={{ padding: "16px 20px" }}>
+    {!cur && tablero && <div style={{ padding: "16px 20px" }}>
+      <button onClick={() => setTablero(false)} style={{ background: "none", border: "none", color: T.accent, fontSize: 12.5, fontWeight: 700, marginBottom: 12 }}>← Volver a los pedidos</button>
+      <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 4 }}>Definiciones y planos: quién está trabando</div>
+      <div style={{ fontSize: 12, color: T.sub, marginBottom: 12, lineHeight: 1.5 }}>Cuánto tiempo estuvo cada pedido en manos de cada uno, desde que lo pidió el contratista hasta que el estudio respondió.</div>
+      <TableroDef T={T} pedidos={pedidos} obras={obras} onOpen={(id) => { setTablero(false); setOpen(id); }} />
+    </div>}
+    {!cur && !tablero && <div style={{ padding: "16px 20px" }}>
       {(() => { const pend = pedidos.filter(p => p.para === miSide && p.estado !== "resuelto"); if (!pend.length) return null; const obrasTxt = [...new Set(pend.map(p => p.obra_id ? obraNom(obras, p.obra_id) : "general").filter(Boolean))].join(", "); return (<div style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "12px 14px", marginBottom: 14 }}>
         <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
         <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{obrasTxt ? `Obras: ${obrasTxt}` : ""}</div></div>
@@ -7547,6 +7554,7 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
         {[["todos", "Todos"], ["recibidos", "Recibidos"], ["enviados", "Enviados"]].map(([k, l]) => <button key={k} onClick={() => setFiltro(k)} style={{ flex: 1, padding: "8px", borderRadius: T.rsm, border: `1px solid ${filtro === k ? T.accent : T.border}`, background: filtro === k ? T.al : T.card, color: filtro === k ? T.accent : T.sub, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
       </div>
       <button onClick={() => setPlanilla(true)} style={{ width: "100%", background: "transparent", color: T.accent, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 800, marginBottom: 14, cursor: "pointer" }}>＋ Pedir definición o plano (planilla modelo)</button>
+      <button onClick={() => setTablero(true)} style={{ width: "100%", background: "transparent", color: T.text, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 800, marginBottom: 14, cursor: "pointer" }}>Tablero: quién está trabando las definiciones</button>
       {lista.length === 0 && <EmptyMsg>Sin pedidos. Creá uno o pedíselo a la IA (“pedí definiciones a {otroNom} sobre…”).</EmptyMsg>}
       {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado] || PEDIDO_ESTADOS.abierto; const ult = (p.hilo || [])[(p.hilo || []).length - 1]; return (<RowItem key={p.id} onClick={() => { setOpen(p.id); setReply(""); }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
@@ -7578,7 +7586,8 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
         </div>
         <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
       </Card>
-      <PanelDefinicion T={T} p={cur} miSide={miSide} subir={subirDef} onResponder={(t, a) => responderDef(cur.id, t, a)} onReabrir={() => setEstado(cur.id, "abierto")} />
+      <PanelDefinicion T={T} p={cur} miSide={miSide} subir={subirDef} onResponder={(t, a) => responderDef(cur.id, t, a)} onReabrir={() => setEstado(cur.id, cur.para === "estudio" ? "en_proceso" : "abierto")} onResolver={() => setEstado(cur.id, "resuelto")} />
+      <RecorridoDef T={T} p={cur} />
       <Eyebrow>Hilo</Eyebrow>
       {(cur.hilo || []).map((h, i) => { const mine = persp(h); return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
         <div style={{ maxWidth: "85%" }}>
@@ -7586,7 +7595,7 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
             {h.texto}
             {(h.archivos || []).map((a, j) => a.img ? <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 7 }}><img src={a.url} alt={a.nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} /></a> : <a key={j} href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}><Ico n="clip" /> {a.nombre}</a>)}
           </div>
-          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "IA · " : ""}{mine ? "V+V" : otroNom} · {h.fecha}{mine && i > 0 && <span onClick={() => borrarMsgHilo(cur.id, i)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
+          <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "IA · " : ""}{h.de === "estudio" ? (h.nombre || "Estudio") : mine ? "V+V" : otroNom} · {h.fecha}{mine && i > 0 && <span onClick={() => borrarMsgHilo(cur.id, i)} style={{ marginLeft: 8, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>Eliminar</span>}</div>
         </div>
       </div>); })}
       <div style={{ marginTop: 12 }}>
@@ -7602,7 +7611,7 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
     </div>); })()}
 
     {!cur && <AddFab onClick={() => setNuevo({ asunto: "", detalle: "", prioridad: "media", obra_id: "" })} label="Pedido" />}
-    {planilla && <PlanillaDefinicion T={T} obras={obras} paraNombre={otroNom} subir={subirDef} onCrear={crearDef} onCancel={() => setPlanilla(false)} />}
+    {planilla && <PlanillaDefinicion T={T} obras={obras} paraNombre={otroNom} paraOpciones={[{ k: "estudio", l: "Estudio de arquitectura" }, { k: "cliente", l: otroNom }]} subir={subirDef} onCrear={crearDef} onCancel={() => setPlanilla(false)} />}
     {nuevo && <Sheet title={`Nuevo pedido a ${otroNom}`} onClose={() => setNuevo(null)}>
       <Field label="Asunto"><TInput value={nuevo.asunto || ""} onChange={e => setNuevo({ ...nuevo, asunto: e.target.value })} placeholder="Ej: Definiciones de terminaciones PB" /></Field>
       <Field label="Detalle / solicitud"><textarea value={nuevo.detalle || ""} onChange={e => setNuevo({ ...nuevo, detalle: e.target.value })} rows={4} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>

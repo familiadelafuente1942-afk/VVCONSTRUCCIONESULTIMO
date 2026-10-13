@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import CronoPro, { CronoAlertas, alertasCrono } from "./CronoPro.jsx";
-import { PlanillaDefinicion, PanelDefinicion, chipDef } from "./PedidoDef.jsx";
+import { PlanillaDefinicion, PanelDefinicion, chipDef, RecorridoDef, TableroDef, conMov, trazaDef, fmtTs } from "./PedidoDef.jsx";
 
 const DOCS_BASE = [
   { n: "Niveles", c: "Documentación técnica" },
@@ -3797,6 +3797,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   const [open, setOpen] = useState(null);
   const [nuevo, setNuevo] = useState(null);
   const [planilla, setPlanilla] = useState(false);
+  const [tablero, setTablero] = useState(false);
   const [reply, setReply] = useState("");
   const [adj, setAdj] = useState([]);
   const [iaLoad, setIaLoad] = useState(false);
@@ -3828,16 +3829,22 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   function crear() { if (!nuevo.asunto?.trim()) return; aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: miSide, para: "vv", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }), ...arr]); setNuevo(null); }
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
     const subirDef = async (f) => { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
-  function crearDef(d) { const base = nuevoPedido({ de: miSide, para: "vv", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); setPlanilla(false); }
-  function responderDef(id, texto, archivos) { const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "resuelto", hilo: [...x.hilo, { de: miSide, texto: texto || "Respuesta con documentación adjunta.", fecha: f, ts, porIA: false, archivos: archivos || [] }] } : x)); }
-function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
+  function crearDef(d) { const base = nuevoPedido({ de: miSide, para: d.para || "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); setPlanilla(false); }
+  function responderDef(id, texto, archivos) { const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? conMov({ ...x, hilo: [...x.hilo, { de: miSide, texto: texto || "Respuesta con documentación adjunta.", fecha: f, ts, porIA: false, archivos: archivos || [] }] }, x.para === "estudio" ? "respondido" : "resuelto", miSide) : x)); }
+function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? conMov(x, estado, miSide) : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
   async function responderIA(p) { setIaLoad(true); const hist = (p.hilo || []).map(h => `${h.de === miSide ? cfg.nombre : "V+V"}: ${h.texto}`).join("\n"); const sys = `Sos el agente de ${cfg.nombre} respondiendo a V+V Construcciones. Redactá una respuesta breve y concreta (español rioplatense) al último mensaje. Solo el texto.`; const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey); setReply(r); setIaLoad(false); }
   const Pill = (k, l) => <button key={k} onClick={() => setFiltro(k)} style={{ flex: 1, padding: "8px", borderRadius: T.rsm, border: `1px solid ${filtro === k ? T.accent : T.border}`, background: filtro === k ? "rgba(255,255,255,.08)" : T.card, color: filtro === k ? T.accent : T.sub, fontSize: 12, fontWeight: 700 }}>{l}</button>;
 
   return (<div style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
     <div style={{ padding: "16px 20px" }}>
-      {!cur && <>
+      {!cur && tablero && <>
+        <button onClick={() => setTablero(false)} style={{ background: "none", border: "none", color: T.accent, fontSize: 12.5, fontWeight: 700, marginBottom: 12 }}>← Volver a los pedidos</button>
+        <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 4 }}>Definiciones y planos: quién está trabando</div>
+        <div style={{ fontSize: 12, color: T.sub, marginBottom: 12, lineHeight: 1.5 }}>Cuánto tiempo estuvo cada pedido en manos de cada uno, desde que lo pidió el contratista hasta que el estudio respondió.</div>
+        <TableroDef T={T} pedidos={pedidos} obras={obras} onOpen={(id) => { setTablero(false); setOpen(id); }} />
+      </>}
+      {!cur && !tablero && <>
         {(() => { const pend = pedidos.filter(p => p.para === miSide && p.estado !== "resuelto"); if (!pend.length) return null; const obrasTxt = [...new Set(pend.map(p => p.obra_id ? nomObra(p.obra_id) : "general").filter(Boolean))].join(", "); return (<div style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", borderRadius: T.rsm, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EF4444", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{pend.length}</div>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 11.5, color: "#B91C1C", marginTop: 1 }}>{obrasTxt ? `Obras: ${obrasTxt}` : ""}</div></div>
@@ -3845,6 +3852,7 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
         <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>{Pill("todos", "Todos")}{Pill("recibidos", "Recibidos")}{Pill("enviados", "Enviados")}</div>
         <button onClick={() => setNuevo({ asunto: "", detalle: "", prioridad: "media", obra_id: obras[0]?.id || "" })} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, marginBottom: 16 }}>＋ Nuevo pedido a V+V</button>
         <button onClick={() => setPlanilla(true)} style={{ width: "100%", background: "transparent", color: T.accent, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 800, marginBottom: 14, cursor: "pointer" }}>＋ Pedir definición o plano (planilla modelo)</button>
+        <button onClick={() => setTablero(true)} style={{ width: "100%", background: "transparent", color: T.text, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 800, marginBottom: 14, cursor: "pointer" }}>Tablero: quién está trabando las definiciones</button>
       {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 18px" }}>Sin pedidos. Creá uno o pedíselo a la IA.</div>}
         {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado] || PEDIDO_ESTADOS.abierto; const ult = (p.hilo || [])[p.hilo?.length - 1]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9 }}>
           <div onClick={() => { setOpen(p.id); setReply(""); }} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
@@ -3872,7 +3880,8 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
           <div style={{ display: "flex", gap: 6, marginTop: 12 }}>{Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700 }}>{v.l}</button>)}</div>
           <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
         </Card>
-        <PanelDefinicion T={T} p={cur} miSide={miSide} subir={subirDef} onResponder={(t, a) => responderDef(cur.id, t, a)} onReabrir={() => setEstado(cur.id, "abierto")} />
+        <PanelDefinicion T={T} p={cur} miSide={miSide} subir={subirDef} onResponder={(t, a) => responderDef(cur.id, t, a)} onReabrir={() => setEstado(cur.id, cur.para === "estudio" ? "en_proceso" : "abierto")} onResolver={() => setEstado(cur.id, "resuelto")} />
+      <RecorridoDef T={T} p={cur} />
       <Eyebrow T={T}>Hilo</Eyebrow>
         {(cur.hilo || []).map((h, i) => { const mine = h.de === miSide; return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
           <div style={{ maxWidth: "85%" }}>
@@ -3880,7 +3889,7 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
               {h.texto}
               {(h.archivos || []).map((a, j) => a.img ? <a key={j} href={a.url} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 7 }}><img src={a.url} alt={a.nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} /></a> : <a key={j} href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700, color: mine ? "#fff" : T.accent, textDecoration: "underline" }}><Ico n="clip" /> {a.nombre}</a>)}
             </div>
-            <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "IA · " : ""}{mine ? cfg.nombre : "V+V"} · {h.fecha}</div>
+            <div style={{ fontSize: 9.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{h.porIA ? "IA · " : ""}{h.de === "estudio" ? (h.nombre || "Estudio") : mine ? cfg.nombre : "V+V"} · {h.fecha}</div>
           </div>
         </div>); })}
         <textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Escribí una respuesta…" rows={3} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 16, color: T.text, marginTop: 8 }} />
@@ -3893,7 +3902,7 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
         </div>
       </>); })()}
     </div>
-    {planilla && <PlanillaDefinicion T={T} obras={obras} paraNombre={otroNom} subir={subirDef} onCrear={crearDef} onCancel={() => setPlanilla(false)} />}
+    {planilla && <PlanillaDefinicion T={T} obras={obras} paraNombre={otroNom} paraOpciones={[{ k: "estudio", l: "Estudio de arquitectura" }, { k: "vv", l: otroNom }]} subir={subirDef} onCrear={crearDef} onCancel={() => setPlanilla(false)} />}
     {nuevo && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={() => setNuevo(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 1180, margin: "0 auto", padding: "20px", animation: "up .25s ease" }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 14 }}>Nuevo pedido a V+V</div>
@@ -4694,13 +4703,18 @@ function RecepcionDocs({ obras, empresa, docrecepcion, persistDoc }) {
 }
 
 
-function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matpedidos = [], setMatpedidos, definiciones = [], setDefiniciones, docrecepcion = [], setDocrecepcion }) {
+function MaterialesScreen({ T, cfg, obras, pedidos = [], setPedidos, personal = [], contactos = [], matpedidos = [], setMatpedidos, definiciones = [], setDefiniciones, docrecepcion = [], setDocrecepcion }) {
   // Estado del pedido de información (definiciones y planos): cuánto hace que espera
   // y cuándo V+V registró la recepción.
   const diasDe = (p) => { const t0 = p.ts || 0; return t0 ? Math.max(0, Math.floor((Date.now() - t0) / 86400000)) : 0; };
   const alertaDe = (p) => { const d = diasDe(p); if (d >= 5) return { txt: `⚠ Vencido — ${d} días sin respuesta`, color: "#B91C1C", bg: "rgba(239,68,68,.10)", bd: "rgba(239,68,68,.30)" }; if (d >= 3) return { txt: `⏳ ${d} días esperando`, color: "#B45309", bg: "rgba(180,83,9,.14)", bd: "rgba(180,83,9,.30)" }; return { txt: d === 0 ? "Pedido hoy" : d === 1 ? "1 día esperando" : `${d} días esperando`, color: "#1B3A5B", bg: "rgba(37,99,235,.14)", bd: "#DBEAFE" }; };
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "—";
   const [waFor, setWaFor] = useState(null);
+  // Circuito contratista → app cliente → estudio: el pedido de definición o plano se pasa al estudio sin volver a escribirlo
+  const [aEstudio, setAEstudio] = useState(null);
+  const pedEstudioDe = (m) => (pedidos || []).find(x => x.def && x.def.origen && x.def.origen.matId === m.id);
+  const subirEst = async (f) => { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
+  function pasarAlEstudio(d) { const base = nuevoPedido({ de: "cliente", para: "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); setAEstudio(null); }
   function marcarEnviado(id) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
   function levantar(id, val) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, leido: val, leidoFecha: val ? hoyStr() : "", leidoPor: val ? (cfg?.nombre || cfg?.sigla || "Belfast") : "" } : x)); }
   function waText(p) {
@@ -4801,6 +4815,7 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
             ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "rgba(22,163,74,.14)", border: "1px solid rgba(22,163,74,.30)", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Recepción registrada{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
             : (() => { const a = alertaDe(p); return <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: a.color, background: a.bg, border: `1px solid ${a.bd}`, borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>{a.txt}</div>; })())}
         </div>
+        {p.tipo !== "material" && (() => { const pe = pedEstudioDe(p); if (!pe) return <button onClick={() => setAEstudio(p)} style={{ width: "100%", marginTop: 11, background: "transparent", color: T.accent, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "11px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>Pasar al estudio de arquitectura</button>; const tz = trazaDef(pe), ch = chipDef(pe); return <div style={{ marginTop: 11, border: `1px solid ${ch.col}`, borderLeft: `4px solid ${ch.col}`, borderRadius: T.rsm, padding: "9px 11px", fontSize: 12, color: T.text, lineHeight: 1.5 }}><b>En el estudio</b> desde {fmtTs(pe.ts)} · {ch.txt}{tz.holder ? " · lo tiene: " + tz.holder : ""}</div>; })()}
         <div style={{ display: "flex", gap: 8, marginTop: 11 }}>
           <button onClick={() => levantar(p.id, !p.leido)} style={{ flex: 1, background: p.leido ? T.bg : "rgba(22,163,74,.14)", color: p.leido ? T.sub : "#15803D", border: `1px solid ${p.leido ? T.border : "rgba(22,163,74,.30)"}`, borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{p.leido ? "↩ Marcar sin levantar" : "✓ Levantar pedido"}</button>
           <button onClick={() => setWaFor(waFor === p.id ? null : p.id)} style={{ flex: 1, background: "#25D366", color: "#fff", border: "none", borderRadius: T.rsm, padding: "10px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Ico n="send" /> WhatsApp</button>
@@ -4815,6 +4830,8 @@ function MaterialesScreen({ T, cfg, obras, personal = [], contactos = [], matped
         </div>}
       </Card>); })}
     </div>
+    {aEstudio && <PlanillaDefinicion T={T} obras={obras} paraNombre="el estudio de arquitectura" subir={subirEst} onCrear={pasarAlEstudio} onCancel={() => setAEstudio(null)}
+      inicial={{ tipo: aEstudio.tipo === "plano" ? "Plano" : "Definición", obra_id: aEstudio.obra_id, tarea: (aEstudio.items || []).map(i => i.nombre).filter(Boolean).join(", ").slice(0, 120), que: itemsTexto(aEstudio).join("\n") + (aEstudio.nota ? "\n" + aEstudio.nota : ""), limite: aEstudio.fecha_necesita || "", origen: { matId: aEstudio.id, pidioTs: aEstudio.ts, quien: aEstudio.solicitante || aEstudio.empresa || "el contratista" } }} />}
     {form && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={() => setForm(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 620, padding: 20, maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 14 }}>{form.id ? `Editar pedido de ${tipoPedCli(form.tipo).label.toLowerCase()}` : `Nuevo pedido de ${tipoPedCli(form.tipo).label.toLowerCase()}`}</div>
@@ -6474,7 +6491,7 @@ function ClienteApp() {
           {screen === "auditoria" && <AuditoriaClienteView T={T} obras={obras} auditoria={auditoria} cfg={cfg} desdeSemana={auditoriaDesdeSemana} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
           {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
-          {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
+          {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} pedidos={pedidos} setPedidos={setPedidos} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} informesSem={informesSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "adicionales" && <AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} />}
