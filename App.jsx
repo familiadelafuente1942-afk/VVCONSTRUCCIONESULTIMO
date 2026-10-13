@@ -10621,10 +10621,12 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], matpedidos 
   const pend = (pedidos || []).filter(p => p.para === "vv" && p.estado !== "resuelto");
   // Respuestas que volvieron por el circuito App General → Cliente → Estudio → Cliente → App General.
   const [respVistas, setRespVistas] = React.useState(() => { try { return Number(localStorage.getItem("vv_resp_vistas") || 0); } catch { return 0; } });
+  const [respOcultas, setRespOcultas] = React.useState(() => { try { return JSON.parse(localStorage.getItem("vv_resp_ocultas") || "[]"); } catch { return []; } });
+  const ocultarResp = (id) => { setRespOcultas(prev => { const n = [...prev, id].slice(-200); try { localStorage.setItem("vv_resp_ocultas", JSON.stringify(n)); } catch { } return n; }); };
   const respRecibidas = [
     ...(matpedidos || []).filter(m => m.respuesta && m.de !== "contratista").map(m => ({ id: "m" + m.id, ts: m.respuesta.ts || 0, obra: m.obra_id, tit: (m.items || []).map(i => i.nombre).join(", ") || "Pedido", texto: m.respuesta.texto || "", n: (m.respuesta.archivos || []).length, quien: m.respuesta.por || m.respuesta.de || "", ir: "matpedidos", archivos: m.respuesta.archivos || [], items: m.items || [], nota: m.nota || "", fecha: m.respuesta.fecha || "" })),
     ...(pedidos || []).filter(p => p.de === "vv" && p.def && p.def.devueltoTs).map(p => { const u = [...(p.hilo || [])].reverse().find(h => h.de !== "vv"); const ent = (p.hilo || []).filter(h => h.de !== "vv" && ((h.texto && !/^El estudio recibió el pedido/.test(h.texto)) || (h.archivos || []).length)); return { id: "p" + p.id, archivos: ent.flatMap(h => h.archivos || []), textos: ent.map(h => h.texto).filter(Boolean), items: [], nota: p.detalle || "", fecha: new Date(p.def.devueltoTs).toLocaleDateString("es-AR"), ts: p.def.devueltoTs, obra: p.obra_id, tit: p.asunto || "Pedido", texto: (u && u.texto) || "", n: (u && u.archivos || []).length, quien: u && (u.nombre || u.de) || "", ir: "mas-pedidos" }; }),
-  ].filter(r => r.ts).sort((a, b) => b.ts - a.ts).slice(0, 6);
+  ].filter(r => r.ts && !respOcultas.includes(r.id) && (Date.now() - r.ts) < 7 * 86400000).sort((a, b) => b.ts - a.ts).slice(0, 6);
   const [respAbierta, setRespAbierta] = React.useState(null);
   const respNuevas = respRecibidas.filter(r => r.ts > respVistas).length;
   const marcarRespVistas = () => { const t = Date.now(); setRespVistas(t); try { localStorage.setItem("vv_resp_vistas", String(t)); } catch { } };
@@ -10691,7 +10693,8 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], matpedidos 
             <div style={{ fontSize: 11, fontWeight: 800, color: "#444", textTransform: "uppercase", marginBottom: 6 }}>Archivos ({respAbierta.archivos.length})</div>
             {respAbierta.archivos.map((f, i) => <a key={i} href={f.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, background: "#F3F4F6", borderRadius: 8, padding: "11px 12px", marginBottom: 6, fontSize: 13, fontWeight: 700, color: "#1d4ed8", textDecoration: "none" }}>📎 <span style={{ flex: 1, wordBreak: "break-all" }}>{f.nombre || f.name || "Archivo"}</span> <span>Abrir ↗</span></a>)}
           </div>}
-          <button onClick={() => setRespAbierta(null)} style={{ width: "100%", marginTop: 16, background: "#111", color: "#fff", border: 0, borderRadius: 10, padding: 13, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Cerrar</button>
+          <button onClick={() => { ocultarResp(respAbierta.id); setRespAbierta(null); }} style={{ width: "100%", marginTop: 16, background: "#15803D", color: "#fff", border: 0, borderRadius: 10, padding: 13, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Ya la guardé — sacar del Inicio</button>
+          <button onClick={() => setRespAbierta(null)} style={{ width: "100%", marginTop: 8, background: "#111", color: "#fff", border: 0, borderRadius: 10, padding: 13, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Cerrar</button>
         </div>
       </div>}
       {respRecibidas.length > 0 && <div style={{ background: "rgba(62,155,98,.10)", border: "1px solid rgba(62,155,98,.35)", borderRadius: 6, padding: "12px 14px", marginBottom: 16 }}>
@@ -10700,6 +10703,7 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], matpedidos 
           {respNuevas > 0 && <button onClick={marcarRespVistas} style={{ background: "transparent", border: `1px solid rgba(${TXR},.3)`, color: TXC, borderRadius: 5, padding: "3px 8px", fontSize: 10.5, cursor: "pointer" }}>Marcar vistas</button>}
         </div>
         {respRecibidas.map(r => <div key={r.id} onClick={() => { marcarRespVistas(); setRespAbierta(r); }} style={{ marginTop: 9, paddingTop: 9, borderTop: `1px solid rgba(${TXR},.12)`, cursor: "pointer" }}>
+          <button onClick={(e) => { e.stopPropagation(); ocultarResp(r.id); }} style={{ float: "right", background: "transparent", border: `1px solid rgba(${TXR},.3)`, color: TXC, borderRadius: 5, padding: "3px 8px", fontSize: 10.5, cursor: "pointer", marginLeft: 8 }}>Ya la guardé ✓</button>
           <div style={{ fontSize: 12, fontWeight: 700, color: TXC }}>{r.ts > respVistas && <span style={{ fontSize: 9, fontWeight: 800, background: "#3E9B62", color: "#fff", borderRadius: 4, padding: "1px 5px", marginRight: 6 }}>NUEVA</span>}{r.tit}</div>
           <div style={{ fontSize: 10.5, color: `rgba(${TXR},.55)`, marginTop: 2 }}>{(obras.find(o => o.id === r.obra) || {}).nombre || "Obra"} · {new Date(r.ts).toLocaleDateString("es-AR")}{r.n ? ` · ${r.n} archivo${r.n > 1 ? "s" : ""}` : ""}</div>
           {r.texto && <div style={{ fontSize: 11.5, color: `rgba(${TXR},.8)`, marginTop: 3 }}>{r.texto.slice(0, 140)}</div>}
