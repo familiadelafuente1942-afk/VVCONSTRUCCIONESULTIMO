@@ -6235,7 +6235,7 @@ function PedidosDefInicio({ onDevolver, T, cfg, obras, matpedidos, setMatpedidos
   </div>);
 }
 
-function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], cronoPro, onIr, onDevolver, restringido = false, matpedidos = [], setMatpedidos, pedidos = [], setPedidos }) {
+function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], cronoPro, onIr, onDevolver, restringido = false, onSalir, matpedidos = [], setMatpedidos, pedidos = [], setPedidos }) {
   const [slideIdx, setSlideIdx] = useState(0);
   const rgbT = hexARgbC(T.bg).join(",");
   const TXC = T.text, TXR = hexARgbC(TXC).join(",");
@@ -6300,6 +6300,7 @@ function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, ava
       </div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
       <PedidosDefInicio onDevolver={onDevolver} T={T} cfg={cfg} obras={obras} matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} TXC={TXC} TXR={TXR} onIr={onIr} />
+      {restringido && onSalir && <div style={{ marginBottom: 14 }}><button onClick={() => { if (confirm("¿Salir de este aparato? La próxima vez te va a pedir el código.")) onSalir(); }} style={{ width: "100%", background: "transparent", border: `1px solid rgba(${TXR},.25)`, color: `rgba(${TXR},.65)`, borderRadius: 10, padding: 11, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Salir de este aparato (cambiar de código)</button></div>}
       {!restringido && <PortadaGestion gestion={gestion} obras={obras} TXC={TXC} TXR={TXR} onIr={onIr} />}
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedadesC.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
@@ -6678,7 +6679,7 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "inicio" && <InicioScreen onDevolver={devolverAlContratista} restringido={restringido} matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} cronoPro={cronoPro} T={T} cfg={cfg} gestion={gestion} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
+          {screen === "inicio" && <InicioScreen onDevolver={devolverAlContratista} restringido={restringido} onSalir={() => { try { localStorage.removeItem("cliente_sesion"); } catch { } setCodigoSes(""); setScreen("inicio"); }} matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} cronoPro={cronoPro} T={T} cfg={cfg} gestion={gestion} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} setObras={setObras} gestion={gestion} modelosObra={modelosObra} avance={avance} auditoria={auditoria} adicionales={adicionales} dronevuelos={dronevuelos} definiciones={definiciones} docrecepcion={docrecepcion} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} adicionales={adicionales} modelosObra={modelosObra} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
