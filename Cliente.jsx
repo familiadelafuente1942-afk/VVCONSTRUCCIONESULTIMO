@@ -6150,6 +6150,8 @@ function PortadaGestion({ gestion, obras, TXC, TXR, onIr }) {
 // Inicio de la app cliente: lo que pidió el contratista y todavía hay que levantar y pasar al estudio, y lo que ya está en el estudio
 function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, setPedidos, TXC, TXR, onIr }) {
   const [plan, setPlan] = useState(null);
+  const [verTab, setVerTab] = useState(false);
+  const hayDef = (pedidos || []).some(x => x && x.def);
   const nomObra = id => (obras || []).find(o => o.id === id)?.nombre || "—";
   const lista = (matpedidos || []).filter(m => m.tipo && m.tipo !== "material").slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const enEstudio = m => (pedidos || []).find(x => x.def && x.def.origen && x.def.origen.matId === m.id);
@@ -6162,7 +6164,7 @@ function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, s
     if (m && !m.leido) aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === m.id ? { ...x, leido: true, leidoTs: Date.now(), leidoFecha: hoyStr(), leidoPor: cfg?.nombre || cfg?.sigla || "Belfast" } : x));
     setPlan(null);
   }
-  if (!pend.length && !activos.length) return null;
+  if (!pend.length && !activos.length && !hayDef) return null;
   const dias = ts => ts ? Math.max(0, Math.floor((Date.now() - ts) / 86400000)) : 0;
   const cab = { fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 };
   return (<div style={{ marginBottom: 18 }}>
@@ -6181,6 +6183,10 @@ function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, s
         <div style={{ fontSize: 12, color: `rgba(${TXR},.6)`, marginTop: 4, lineHeight: 1.55 }}>Obra: <b>{nomObra(pe.obra_id)}</b> · {ch.txt}<br />Pedido {fmtTs(tz.tReq)} · levantado {fmtTs(pe.def.origen.leidoTs || pe.ts)} · pasó al estudio {fmtTs(tz.tFwd)}{tz.tResp ? " · respondió " + fmtTs(tz.tResp) : ""}<br /><b>Lo tiene: {tz.holder}</b></div>
       </div>); })}
     </>}
+    {hayDef && <div style={{ marginBottom: 6 }}>
+      <button onClick={() => setVerTab(v => !v)} style={{ width: "100%", background: "transparent", color: TXC, border: `1.5px solid ${T.accent}`, borderRadius: 12, padding: "12px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{verTab ? "Ocultar" : "Ver"} quién está trabando las definiciones</button>
+      {verTab && <div style={{ marginTop: 12 }}><TableroDef T={T} pedidos={pedidos} obras={obras} onOpen={() => onIr && onIr("pedidos")} /></div>}
+    </div>}
     {plan && <PlanillaDefinicion T={T} obras={obras} paraNombre="el estudio de arquitectura" subir={subir} onCrear={pasar} onCancel={() => setPlan(null)}
       inicial={{ tipo: plan.tipo === "plano" ? "Plano" : "Definición", obra_id: plan.obra_id, tarea: (plan.items || []).map(i => i.nombre).filter(Boolean).join(", ").slice(0, 120), que: itemsTexto(plan).join("\n") + (plan.nota ? "\n" + plan.nota : ""), limite: plan.fecha_necesita || "", origen: { matId: plan.id, pidioTs: plan.ts, leidoTs: Date.now(), quien: plan.solicitante || plan.empresa || "el contratista" } }} />}
   </div>);
