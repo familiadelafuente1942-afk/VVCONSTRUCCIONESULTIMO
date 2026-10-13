@@ -6052,7 +6052,7 @@ function BottomNav({ T, screen, setScreen, aviso, restringido }) {
     </div>
   </nav>);
 }
-function MasScreen({ T, screen, setScreen, aviso, restringido }) {
+function MasScreen({ T, screen, setScreen, aviso, restringido, conSesion, onSalir }) {
   const badge = (id) => (typeof aviso === "function" ? aviso(id) : 0);
   return (<div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
     <Eyebrow T={T}>Más</Eyebrow>
@@ -6064,6 +6064,7 @@ function MasScreen({ T, screen, setScreen, aviso, restringido }) {
           <span style={{ color: T.muted, fontSize: 14 }}>›</span>
         </div>
       </div>); })}
+    {conSesion && <button onClick={() => { if (confirm("¿Salir de este aparato? La próxima vez te va a pedir el código.")) onSalir(); }} style={{ width: "100%", marginTop: 14, background: "transparent", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 12, padding: 13, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Salir de este aparato (cambiar de código)</button>}
   </div>);
 }
 function WebClientHero({ T, cfg, obras }) {
@@ -6698,7 +6699,7 @@ function ClienteApp() {
           {screen === "mensajes" && <MensajesScreen T={T} cfg={cfg} obras={obras} mensajes={mensajes} enviar={enviar} borrarMensaje={borrarMensaje} vaciarMensajes={vaciarMensajes} />}
           {screen === "ajustes" && <AjustesScreen T={T} cfg={cfg} setCfg={setCfg} obras={obras} setObras={setObras} renders={renders} setRenders={setRenders} />}
           {screen === "accesos" && !restringido && <AccesosScreen T={T} obras={obrasTodas} accesos={accesos} setAccesos={setAccesos} codigoSes={codigoSes} setCodigoSes={setCodigoSes} />}
-          {screen === "mas" && <MasScreen restringido={restringido} T={T} screen={screen} setScreen={irA} aviso={aviso} />}
+          {screen === "mas" && <MasScreen restringido={restringido} conSesion={!!miAcceso} onSalir={() => { try { localStorage.removeItem("cliente_sesion"); } catch { } setCodigoSes(""); setScreen("inicio"); }} T={T} screen={screen} setScreen={irA} aviso={aviso} />}
         </div>
       </div>
       <BottomNav restringido={restringido} T={T} screen={screen} setScreen={irA} aviso={(id) => id === "cronopro" ? (alertasCrono(cronoPro, obras) || []).length : aviso(id)} />
