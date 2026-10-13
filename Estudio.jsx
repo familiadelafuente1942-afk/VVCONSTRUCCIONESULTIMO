@@ -25,6 +25,8 @@ async function subirArchivo(file) {
   return { nombre: file.name, url: SUPA_URL + "/storage/v1/object/public/" + BUCKET + "/" + path, img: (file.type || "").startsWith("image/") };
 }
 
+// Margen superior seguro: en iPhone (app en la pantalla de inicio o con isla dinámica) el contenido quedaba debajo de la barra y no se podía tocar
+const SAFE_TOP = (() => { try { return (window.navigator.standalone || window.matchMedia("(display-mode: standalone)").matches) ? 58 : 14; } catch (e) { return 14; } })();
 const T = { bg: "#F3F1EC", card: "#FFFFFF", border: "#DDD8CD", text: "#1D1D1F", sub: "#5E5B55", muted: "#8A8680", accent: "#2F5D8C", rsm: 12 };
 const ESTADOS = { abierto: ["Nuevo", "#E0A04A"], en_proceso: ["En estudio", "#2F5D8C"], respondido: ["Respondido", "#8B5CF6"], resuelto: ["Resuelto", "#3E9B62"] };
 
@@ -113,7 +115,7 @@ export default function EstudioApp() {
   const cur = open ? mios.find(p => p.id === open) : null;
 
   const card = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 14, marginBottom: 10 };
-  const wrap = { minHeight: "100%", background: T.bg, color: T.text, paddingTop: "env(safe-area-inset-top)" };
+  const wrap = { minHeight: "100%", background: T.bg, color: T.text, paddingTop: `calc(max(env(safe-area-inset-top), ${SAFE_TOP}px) + 8px)` };
   const inner = { maxWidth: 760, margin: "0 auto", padding: "18px 16px 40px" };
 
   if (!nombre) return (<div style={wrap}><div style={{ ...inner, paddingTop: 60 }}>
