@@ -3826,10 +3826,10 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   const lista = pedidos.filter(p => filtro === "todos" ? true : filtro === "recibidos" ? p.para === miSide : p.de === miSide);
   const cur = open ? pedidos.find(p => p.id === open) : null;
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "";
-  function crear() { if (!nuevo.asunto?.trim()) return; const base = nuevoPedido({ de: miSide, para: "estudio", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }); aplicarPedidos(setPedidos, arr => [{ ...base, def: { tipo: "Consulta técnica", tarea: nuevo.asunto.trim(), limite: "", mov: [{ ts: Date.now(), estado: "abierto", quien: "pedido" }] } }, ...arr]); setNuevo(null); }
+  function crear() { if (!nuevo.asunto?.trim()) return; const base = nuevoPedido({ de: miSide, para: "estudio", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }); aplicarPedidos(setPedidos, arr => [{ ...base, def: { tipo: "Consulta técnica", empresa: cfg?.nombre || "", tarea: nuevo.asunto.trim(), limite: "", mov: [{ ts: Date.now(), estado: "abierto", quien: "pedido" }] } }, ...arr]); setNuevo(null); }
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
     const subirDef = async (f) => { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
-  function crearDef(d) { const base = nuevoPedido({ de: miSide, para: d.para || "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); setPlanilla(false); }
+  function crearDef(d) { const base = nuevoPedido({ de: miSide, para: d.para || "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: { ...d.def, empresa: cfg?.nombre || "" }, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); setPlanilla(false); }
   function responderDef(id, texto, archivos) { const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? conMov({ ...x, hilo: [...x.hilo, { de: miSide, texto: texto || "Respuesta con documentación adjunta.", fecha: f, ts, porIA: false, archivos: archivos || [] }] }, x.para === "estudio" ? "respondido" : "resuelto", miSide) : x)); }
 function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? conMov(x, estado, miSide) : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
@@ -4714,7 +4714,7 @@ function MaterialesScreen({ T, cfg, obras, pedidos = [], setPedidos, personal = 
   const [aEstudio, setAEstudio] = useState(null);
   const pedEstudioDe = (m) => (pedidos || []).find(x => x.def && x.def.origen && x.def.origen.matId === m.id);
   const subirEst = async (f) => { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
-  function pasarAlEstudio(d) { const base = nuevoPedido({ de: "cliente", para: "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); if (aEstudio && !aEstudio.leido) levantar(aEstudio.id, true); setAEstudio(null); }
+  function pasarAlEstudio(d) { const base = nuevoPedido({ de: "cliente", para: "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: { ...d.def, empresa: cfg?.nombre || "" }, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); if (aEstudio && !aEstudio.leido) levantar(aEstudio.id, true); setAEstudio(null); }
   function marcarEnviado(id) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
   function levantar(id, val) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, leido: val, leidoTs: val ? Date.now() : 0, leidoFecha: val ? hoyStr() : "", leidoPor: val ? (cfg?.nombre || cfg?.sigla || "Belfast") : "" } : x)); }
   function waText(p) {
@@ -6160,7 +6160,7 @@ function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, s
   const subir = async (f) => { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
   function pasar(d) {
     const m = plan; const base = nuevoPedido({ de: "cliente", para: "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id });
-    aplicarPedidos(setPedidos, arr => [{ ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }, ...arr]);
+    aplicarPedidos(setPedidos, arr => [{ ...base, def: { ...d.def, empresa: cfg?.nombre || "" }, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }, ...arr]);
     if (m && !m.leido) aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === m.id ? { ...x, leido: true, leidoTs: Date.now(), leidoFecha: hoyStr(), leidoPor: cfg?.nombre || cfg?.sigla || "Belfast" } : x));
     setPlan(null);
   }

@@ -39,6 +39,7 @@ export default function EstudioApp() {
   const [borrador, setBorrador] = useState("");
   const [pedidos, setPedidos] = useState([]);
   const [obras, setObras] = useState([]);
+  const [cfgNombre, setCfgNombre] = useState("");
   const [error, setError] = useState("");
   const [cargado, setCargado] = useState(false);
   const [filtro, setFiltro] = useState("responder");
@@ -60,6 +61,7 @@ export default function EstudioApp() {
     traer(); const iv = setInterval(traer, 8000);
     const onVis = () => { if (document.visibilityState === "visible") traer(); };
     document.addEventListener("visibilitychange", onVis);
+    (async () => { const c = await nubeGet("cliente_cfg"); try { if (c) setCfgNombre(JSON.parse(c).nombre || ""); } catch { } })();
     (async () => { const o = await nubeGet("vv_obras"); try { if (o) setObras(JSON.parse(o).map(x => ({ id: x.id, nombre: x.nombre }))); } catch { } })();
     return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); };
   }, [traer]);
@@ -86,6 +88,8 @@ export default function EstudioApp() {
   async function adjuntar(e) { const fs = Array.from(e.target.files || []); e.target.value = ""; const n = []; for (const f of fs) { try { n.push(await subirArchivo(f)); } catch (er) { alert(er.message); } } setAdjMsg(p => [...p, ...n]); }
 
   const mios = pedidos.filter(p => p && p.def && p.para === "estudio");
+  // Nombre de la constructora que pide: el del pedido si está, si no el de la configuración de la app cliente
+  const empresaDe = (p) => (p && p.def && p.def.empresa) || cfgNombre || "la constructora";
   const nomObra = (id) => (obras.find(o => o.id === id) || {}).nombre || "";
   const obrasCon = obras.filter(o => mios.some(p => p.obra_id === o.id));
   const enObra = mios.filter(p => !obra || p.obra_id === obra);
@@ -98,9 +102,9 @@ export default function EstudioApp() {
   const inner = { maxWidth: 760, margin: "0 auto", padding: "18px 16px 40px" };
 
   if (!nombre) return (<div style={wrap}><div style={{ ...inner, paddingTop: 60 }}>
-    <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".1em", color: T.accent, textTransform: "uppercase" }}>V+V Construcciones</div>
-    <div style={{ fontSize: 24, fontWeight: 800, margin: "6px 0 8px" }}>Panel del estudio</div>
-    <div style={{ fontSize: 14, color: T.sub, lineHeight: 1.6, marginBottom: 18 }}>Acá ves las definiciones y los planos que te pide la obra, con su fecha límite, y respondés cargando la descripción y la documentación.</div>
+    <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".1em", color: T.accent, textTransform: "uppercase" }}>Panel del estudio</div>
+    <div style={{ fontSize: 24, fontWeight: 800, margin: "6px 0 8px" }}>Panel del estudio de arquitectura</div>
+    <div style={{ fontSize: 14, color: T.sub, lineHeight: 1.6, marginBottom: 18 }}>Acá ves las definiciones y los planos que te pide la constructora, con su fecha límite, y respondés cargando la descripción y la documentación.</div>
     <div style={card}>
       <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>Nombre del estudio</div>
       <input value={borrador} onChange={e => setBorrador(e.target.value)} placeholder="Ej: Estudio Fernández Arquitectos" style={{ width: "100%", border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 13px", fontSize: 16, background: T.bg, color: T.text }} />
@@ -111,7 +115,7 @@ export default function EstudioApp() {
 
   return (<div style={wrap}><div style={inner}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
-      <div><div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", color: T.accent, textTransform: "uppercase" }}>Panel del estudio · V+V Construcciones</div>
+      <div><div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", color: T.accent, textTransform: "uppercase" }}>Panel del estudio{cfgNombre ? " · " + cfgNombre : ""}</div>
         <div style={{ fontSize: 21, fontWeight: 800, marginTop: 3 }}>{nombre}</div></div>
       <button onClick={() => { try { localStorage.removeItem("estudio_nombre"); } catch { } setNombre(""); }} style={{ background: "none", border: 0, color: T.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>Cambiar</button>
     </div>
@@ -132,7 +136,7 @@ export default function EstudioApp() {
             <div style={{ fontSize: 15, fontWeight: 800 }}>{p.def.tarea}</div>
             <span style={{ fontSize: 10.5, fontWeight: 800, color: "#fff", background: e[1], borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap" }}>{e[0]}</span>
           </div>
-          <div style={{ fontSize: 12.5, color: T.sub, marginTop: 3 }}>{p.def.tipo}{nomObra(p.obra_id) ? " · " + nomObra(p.obra_id) : ""} · pedido el {p.fecha}</div>
+          <div style={{ fontSize: 12.5, color: T.sub, marginTop: 3 }}>{p.def.tipo}{nomObra(p.obra_id) ? " · " + nomObra(p.obra_id) : ""} · pide: {empresaDe(p)} · pedido el {p.fecha}</div>
           {p.def.limite && p.estado !== "resuelto" && p.estado !== "respondido" && <div style={{ fontSize: 12.5, fontWeight: 800, color: ch.col, marginTop: 6 }}>{d < 0 ? "Vencido hace " + (-d) + (d === -1 ? " día" : " días") : d === 0 ? "Vence hoy" : "Necesario antes del " + fmtLimite(p.def.limite) + " (" + d + (d === 1 ? " día" : " días") + ")"}</div>}
         </div>); })}
     </>}
@@ -141,7 +145,7 @@ export default function EstudioApp() {
       <button onClick={() => setOpen(null)} style={{ background: "none", border: 0, color: T.accent, fontSize: 14, fontWeight: 700, marginBottom: 10, cursor: "pointer", padding: 0 }}>← Volver</button>
       <div style={card}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><div style={{ fontSize: 18, fontWeight: 800 }}>{cur.def.tarea}</div><span style={{ fontSize: 11, fontWeight: 800, color: "#fff", background: e[1], borderRadius: 6, padding: "3px 9px", height: "fit-content" }}>{e[0]}</span></div>
-        <div style={{ fontSize: 12.5, color: T.sub, marginTop: 4 }}>{cur.def.tipo}{nomObra(cur.obra_id) ? " · Obra: " + nomObra(cur.obra_id) : ""} · prioridad {cur.prioridad}</div>
+        <div style={{ fontSize: 12.5, color: T.sub, marginTop: 4 }}>{cur.def.tipo}{nomObra(cur.obra_id) ? " · Obra: " + nomObra(cur.obra_id) : ""} · Pide: {empresaDe(cur)} · prioridad {cur.prioridad}</div>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 0 5px" }}>Qué se pidió</div>
         <div style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{primero.texto}</div>
         <Archivos lista={primero.archivos} />
@@ -152,7 +156,7 @@ export default function EstudioApp() {
       {(cur.hilo || []).slice(1).length === 0 && <div style={{ fontSize: 13, color: T.muted, marginBottom: 10 }}>Todavía no hay mensajes.</div>}
       {(cur.hilo || []).slice(1).map((h, i) => { const mine = h.de === "estudio"; return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}><div style={{ maxWidth: "88%" }}>
         <div style={{ background: mine ? T.accent : T.card, color: mine ? "#fff" : T.text, border: mine ? 0 : `1px solid ${T.border}`, borderRadius: mine ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "10px 13px", fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{h.texto}<Archivos lista={h.archivos} /></div>
-        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{mine ? (h.nombre || nombre) : (h.de === "cliente" ? "Cliente" : "V+V")} · {h.fecha}</div></div></div>); })}
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3, textAlign: mine ? "right" : "left" }}>{mine ? (h.nombre || nombre) : (h.de === "cliente" ? empresaDe(cur) : "Constructora")} · {h.fecha}</div></div></div>); })}
       {cur.estado !== "resuelto" && <div style={card}>
         <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 6 }}>¿Una duda o una aclaración antes de responder?</div>
         <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={3} placeholder="Escribí tu consulta…" style={{ width: "100%", border: `1px solid ${T.border}`, borderRadius: 10, padding: "11px 13px", fontSize: 16, background: T.bg, color: T.text }} />
