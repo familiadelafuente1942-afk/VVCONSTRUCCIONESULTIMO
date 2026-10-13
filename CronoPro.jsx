@@ -60,7 +60,7 @@ function calcular(P, hoy) {
     const amar = Math.min(need, Math.max(emitir, need - Math.max(1, Math.round(lead / 3))));
     const respEff = p.resp || (p.est === "esta" && p.estFecha) || "";
     let c = null, st, txt, fase;
-    if (respEff) { const r = wdIdx(cal, respEff), late = r - need; c = r; if (late > 0) { st = "late"; fase = "retraso"; txt = "Llegó " + late + (late === 1 ? " día" : " días") + " tarde"; } else { st = "ok"; fase = "ok"; txt = p.est === "esta" ? "Definido" : "En fecha"; } }
+    if (respEff) { const r = wdIdx(cal, respEff), late = r - need; c = r; if (late > 0) { st = "late"; fase = "retraso"; txt = "Debía estar el " + fmtN(D(cal, need)) + " y llegó el " + fmtN(D(cal, r)) + ": " + late + (late === 1 ? " día" : " días") + " tarde"; } else { st = "ok"; fase = "ok"; txt = p.est === "esta" ? "Definido" : "En fecha"; } }
     else if (p.hecho) { st = "ok"; fase = "ok"; txt = "Resuelto"; }
     else if (p.est === "noesta") { st = "late"; fase = "retraso"; txt = "No llegó: atrasa la obra"; c = Math.max(hoyI, need); }
     else if (hoyI >= need) { st = "late"; fase = "rojo"; txt = "Debía estar hoy: confirmá si está"; }

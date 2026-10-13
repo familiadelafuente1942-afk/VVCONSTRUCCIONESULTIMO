@@ -4714,9 +4714,9 @@ function MaterialesScreen({ T, cfg, obras, pedidos = [], setPedidos, personal = 
   const [aEstudio, setAEstudio] = useState(null);
   const pedEstudioDe = (m) => (pedidos || []).find(x => x.def && x.def.origen && x.def.origen.matId === m.id);
   const subirEst = async (f) => { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
-  function pasarAlEstudio(d) { const base = nuevoPedido({ de: "cliente", para: "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); setAEstudio(null); }
+  function pasarAlEstudio(d) { const base = nuevoPedido({ de: "cliente", para: "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); if (aEstudio && !aEstudio.leido) levantar(aEstudio.id, true); setAEstudio(null); }
   function marcarEnviado(id) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, waEnviado: true, waEnviadoFecha: hoyStr(), waEnviadoPor: cfg?.sigla || "Belfast" } : x)); }
-  function levantar(id, val) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, leido: val, leidoFecha: val ? hoyStr() : "", leidoPor: val ? (cfg?.nombre || cfg?.sigla || "Belfast") : "" } : x)); }
+  function levantar(id, val) { aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === id ? { ...x, leido: val, leidoTs: val ? Date.now() : 0, leidoFecha: val ? hoyStr() : "", leidoPor: val ? (cfg?.nombre || cfg?.sigla || "Belfast") : "" } : x)); }
   function waText(p) {
     const tp = tipoPedCli(p.tipo);
     const lines = itemsTexto(p).map(l => `• ${l}`);
@@ -4831,7 +4831,7 @@ function MaterialesScreen({ T, cfg, obras, pedidos = [], setPedidos, personal = 
       </Card>); })}
     </div>
     {aEstudio && <PlanillaDefinicion T={T} obras={obras} paraNombre="el estudio de arquitectura" subir={subirEst} onCrear={pasarAlEstudio} onCancel={() => setAEstudio(null)}
-      inicial={{ tipo: aEstudio.tipo === "plano" ? "Plano" : "Definición", obra_id: aEstudio.obra_id, tarea: (aEstudio.items || []).map(i => i.nombre).filter(Boolean).join(", ").slice(0, 120), que: itemsTexto(aEstudio).join("\n") + (aEstudio.nota ? "\n" + aEstudio.nota : ""), limite: aEstudio.fecha_necesita || "", origen: { matId: aEstudio.id, pidioTs: aEstudio.ts, quien: aEstudio.solicitante || aEstudio.empresa || "el contratista" } }} />}
+      inicial={{ tipo: aEstudio.tipo === "plano" ? "Plano" : "Definición", obra_id: aEstudio.obra_id, tarea: (aEstudio.items || []).map(i => i.nombre).filter(Boolean).join(", ").slice(0, 120), que: itemsTexto(aEstudio).join("\n") + (aEstudio.nota ? "\n" + aEstudio.nota : ""), limite: aEstudio.fecha_necesita || "", origen: { matId: aEstudio.id, pidioTs: aEstudio.ts, leidoTs: aEstudio.leidoTs || Date.now(), quien: aEstudio.solicitante || aEstudio.empresa || "el contratista" } }} />}
     {form && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={() => setForm(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 620, padding: 20, maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 14 }}>{form.id ? `Editar pedido de ${tipoPedCli(form.tipo).label.toLowerCase()}` : `Nuevo pedido de ${tipoPedCli(form.tipo).label.toLowerCase()}`}</div>
@@ -6147,7 +6147,46 @@ function PortadaGestion({ gestion, obras, TXC, TXR, onIr }) {
     <div onClick={() => onIr("bitacora")} style={{ fontSize: 11, color: `rgba(${TXR},.55)`, padding: "4px 2px 0", cursor: "pointer" }}>La explicación completa está en <b style={{ color: "#D9B27C" }}>Bitácora</b> ›</div>
   </div>);
 }
-function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], cronoPro, onIr }) {
+// Inicio de la app cliente: lo que pidió el contratista y todavía hay que levantar y pasar al estudio, y lo que ya está en el estudio
+function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, setPedidos, TXC, TXR, onIr }) {
+  const [plan, setPlan] = useState(null);
+  const nomObra = id => (obras || []).find(o => o.id === id)?.nombre || "—";
+  const lista = (matpedidos || []).filter(m => m.tipo && m.tipo !== "material").slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const enEstudio = m => (pedidos || []).find(x => x.def && x.def.origen && x.def.origen.matId === m.id);
+  const pend = lista.filter(m => !enEstudio(m) && !m.cumplido);
+  const activos = lista.map(m => ({ m, pe: enEstudio(m) })).filter(x => x.pe && x.pe.estado !== "resuelto");
+  const subir = async (f) => { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
+  function pasar(d) {
+    const m = plan; const base = nuevoPedido({ de: "cliente", para: "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id });
+    aplicarPedidos(setPedidos, arr => [{ ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }, ...arr]);
+    if (m && !m.leido) aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === m.id ? { ...x, leido: true, leidoTs: Date.now(), leidoFecha: hoyStr(), leidoPor: cfg?.nombre || cfg?.sigla || "Belfast" } : x));
+    setPlan(null);
+  }
+  if (!pend.length && !activos.length) return null;
+  const dias = ts => ts ? Math.max(0, Math.floor((Date.now() - ts) / 86400000)) : 0;
+  const cab = { fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 };
+  return (<div style={{ marginBottom: 18 }}>
+    {pend.length > 0 && <>
+      <div style={cab}>Pedidos nuevos del contratista · {pend.length}</div>
+      {pend.map(m => (<div key={m.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: "4px solid #E0A04A", borderRadius: 12, padding: 12, marginBottom: 9 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: TXC }}>{(tipoPedCli(m.tipo).sing || "pedido").replace(/^./, c => c.toUpperCase())}: {(m.items || []).map(i => i.nombre).filter(Boolean).join(", ") || "(sin detalle)"}</div>
+        <div style={{ fontSize: 12, color: `rgba(${TXR},.6)`, marginTop: 4, lineHeight: 1.55 }}>Obra: <b>{nomObra(m.obra_id)}</b><br />Lo pidió: <b>{m.solicitante || "—"}{m.empresa ? " · " + m.empresa : ""}</b><br />Pedido el {m.fecha}{m.fecha_necesita ? " · lo necesita para el " + m.fecha_necesita.split("-").reverse().join("/") : ""}{dias(m.ts) > 0 ? " · hace " + dias(m.ts) + (dias(m.ts) === 1 ? " día" : " días") + " en tu poder" : " · llegó hoy"}</div>
+        <button onClick={() => setPlan(m)} style={{ width: "100%", marginTop: 10, background: T.accent, color: "#fff", border: 0, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Levantar y pasar al estudio</button>
+      </div>))}
+    </>}
+    {activos.length > 0 && <>
+      <div style={{ ...cab, marginTop: pend.length ? 8 : 0 }}>En el estudio de arquitectura · {activos.length}</div>
+      {activos.map(({ m, pe }) => { const tz = trazaDef(pe), ch = chipDef(pe); return (<div key={m.id} onClick={() => onIr && onIr("pedidos")} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `4px solid ${ch.col}`, borderRadius: 12, padding: 12, marginBottom: 9, cursor: "pointer" }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: TXC }}>{pe.def.tarea}</div>
+        <div style={{ fontSize: 12, color: `rgba(${TXR},.6)`, marginTop: 4, lineHeight: 1.55 }}>Obra: <b>{nomObra(pe.obra_id)}</b> · {ch.txt}<br />Pedido {fmtTs(tz.tReq)} · levantado {fmtTs(pe.def.origen.leidoTs || pe.ts)} · pasó al estudio {fmtTs(tz.tFwd)}{tz.tResp ? " · respondió " + fmtTs(tz.tResp) : ""}<br /><b>Lo tiene: {tz.holder}</b></div>
+      </div>); })}
+    </>}
+    {plan && <PlanillaDefinicion T={T} obras={obras} paraNombre="el estudio de arquitectura" subir={subir} onCrear={pasar} onCancel={() => setPlan(null)}
+      inicial={{ tipo: plan.tipo === "plano" ? "Plano" : "Definición", obra_id: plan.obra_id, tarea: (plan.items || []).map(i => i.nombre).filter(Boolean).join(", ").slice(0, 120), que: itemsTexto(plan).join("\n") + (plan.nota ? "\n" + plan.nota : ""), limite: plan.fecha_necesita || "", origen: { matId: plan.id, pidioTs: plan.ts, leidoTs: Date.now(), quien: plan.solicitante || plan.empresa || "el contratista" } }} />}
+  </div>);
+}
+
+function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], cronoPro, onIr, matpedidos = [], setMatpedidos, pedidos = [], setPedidos }) {
   const [slideIdx, setSlideIdx] = useState(0);
   const rgbT = hexARgbC(T.bg).join(",");
   const TXC = T.text, TXR = hexARgbC(TXC).join(",");
@@ -6211,6 +6250,7 @@ function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, ava
         <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div>
       </div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
+      <PedidosDefInicio T={T} cfg={cfg} obras={obras} matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} TXC={TXC} TXR={TXR} onIr={onIr} />
       <PortadaGestion gestion={gestion} obras={obras} TXC={TXC} TXR={TXR} onIr={onIr} />
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedadesC.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
@@ -6481,7 +6521,7 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "inicio" && <InicioScreen cronoPro={cronoPro} T={T} cfg={cfg} gestion={gestion} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
+          {screen === "inicio" && <InicioScreen matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} cronoPro={cronoPro} T={T} cfg={cfg} gestion={gestion} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} setObras={setObras} gestion={gestion} modelosObra={modelosObra} avance={avance} auditoria={auditoria} adicionales={adicionales} dronevuelos={dronevuelos} definiciones={definiciones} docrecepcion={docrecepcion} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} adicionales={adicionales} modelosObra={modelosObra} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}

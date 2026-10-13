@@ -173,6 +173,7 @@ export function RecorridoDef({ T, p }) {
   const hitos = [
     d.debioPedir ? ["Debía pedirse", fmtLimite(d.debioPedir)] : null,
     o.pidioTs ? ["Lo pidió " + (o.quien || "el contratista"), fmtTs(o.pidioTs)] : null,
+    o.leidoTs ? ["El cliente lo levantó", fmtTs(o.leidoTs)] : null,
     ["Se mandó al estudio", fmtTs(t.tFwd)],
     d.limite ? ["Se necesitaba el", fmtLimite(d.limite)] : null,
     ["Respuesta del estudio", t.tResp ? fmtTs(t.tResp) : "pendiente"],
