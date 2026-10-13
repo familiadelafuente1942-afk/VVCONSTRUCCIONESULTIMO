@@ -138,7 +138,7 @@ export function PanelDefinicion({ T, p, miSide, subir, onResponder, onReabrir, o
   const [err, setErr] = useState("");
   if (!p || !p.def) return null;
   const ch = chipDef(p), cerrado = p.estado === "resuelto", paraEstudio = p.para === "estudio";
-  const yaRespondioEstudio = paraEstudio && p.estado === "respondido", meToca = p.para === miSide && !yaRespondioEstudio;
+  const yaRespondioEstudio = paraEstudio && p.estado === "respondido", meToca = p.para === miSide;
   const respondido = p.estado === "respondido" || (!paraEstudio && (p.hilo || []).some(h => h.de !== p.de));
   const enviar = () => { if (!texto.trim() && !adj.length) { setErr("Escribí la respuesta o subí el plano/documento."); return; } onResponder(texto, adj); setTexto(""); setAdj([]); setErr(""); };
   const btn = (bg, col, bd) => ({ width: "100%", marginTop: 10, background: bg, color: col, border: bd || 0, borderRadius: T.rsm || 10, padding: "13px", fontSize: 14, fontWeight: 800, cursor: "pointer" });
@@ -149,12 +149,12 @@ export function PanelDefinicion({ T, p, miSide, subir, onResponder, onReabrir, o
       ? <div style={{ fontSize: 12.5, color: T.sub }}>Este pedido está resuelto. {onReabrir && miSide !== "estudio" && <button type="button" onClick={onReabrir} style={{ background: "none", border: 0, color: T.accent, fontWeight: 700, fontSize: 12.5, cursor: "pointer", padding: 0 }}>Reabrir</button>}</div>
       : meToca
         ? (<div>
-          <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.5, marginBottom: 8 }}>Respondé con la descripción de la definición y subí el plano o los documentos.</div>
+          <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.5, marginBottom: 8 }}>{yaRespondioEstudio ? "Ya enviaste una respuesta. Si falta la definición, el plano o algún documento, subilo acá y se suma al pedido." : "Respondé con la descripción de la definición y subí el plano o los documentos."}</div>
           {onTomar && p.estado === "abierto" && <button type="button" onClick={onTomar} style={{ ...btn(T.bg, T.text, `1px solid ${T.border}`), marginTop: 0, marginBottom: 10 }}>Lo recibí, estoy trabajando en esto</button>}
           <textarea value={texto} onChange={e => { setTexto(e.target.value); setErr(""); }} rows={4} placeholder="Descripción de la definición, medidas, materiales, aclaraciones…" style={inp(T)} />
           <div style={{ marginTop: 8 }}><Adjuntos T={T} adj={adj} setAdj={setAdj} subir={subir} texto="Subir plano o documentación" /></div>
           {err && <div style={{ color: "#E5604A", fontSize: 12.5, fontWeight: 700, marginTop: 8 }}>{err}</div>}
-          <button type="button" onClick={enviar} style={btn(T.accent, "#fff")}>{paraEstudio ? "Enviar respuesta" : "Enviar respuesta y dar por resuelto"}</button>
+          <button type="button" onClick={enviar} style={btn(T.accent, "#fff")}>{yaRespondioEstudio ? "Enviar documentación" : paraEstudio ? "Enviar respuesta" : "Enviar respuesta y dar por resuelto"}</button>
         </div>)
         : (yaRespondioEstudio && miSide === "estudio")
           ? <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.5 }}>Enviaste la respuesta. Falta que la empresa la revise y la dé por resuelta. Si piden un ajuste, el pedido vuelve a aparecer en "Para responder".</div>
