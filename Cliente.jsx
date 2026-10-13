@@ -6348,7 +6348,13 @@ function AccesosScreen({ T, obras = [], accesos = [], setAccesos, codigoSes, set
       return arr;
     });
   }
-  const cambiar = (id, patch) => setAccesos(prev => (prev || []).map(a => a.id === id ? { ...a, ...patch } : a));
+  const cambiar = (id, patch) => {
+    // No dejar que la persona que está usando este aparato se saque a sí misma el acceso General (se queda afuera del panel)
+    const yo = (accesos || []).find(a => a.id === id);
+    if (yo && patch.rol && patch.rol !== "general" && yo.rol === "general" && yo.codigo && yo.codigo === codigoSes) { alert("No podés pasar a Jefe de obra tu propio acceso: te quedarías sin poder volver a este panel. Pedile a V+V que lo haga desde la App General si hace falta."); return; }
+    if (yo && patch.rol && patch.rol !== "general" && yo.rol === "general" && (accesos || []).filter(a => a.rol === "general").length < 2) { alert("Tiene que quedar al menos un acceso General."); return; }
+    setAccesos(prev => (prev || []).map(a => a.id === id ? { ...a, ...patch } : a));
+  };
   function quitar(a) {
     if (a.rol === "general" && (accesos || []).filter(x => x.rol === "general").length < 2 && (accesos || []).length > 1) { alert("Tiene que quedar al menos una persona con acceso General."); return; }
     if (!confirm("¿Quitar el acceso de " + (a.nombre || "esta persona") + "?")) return;

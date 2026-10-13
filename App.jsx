@@ -9498,6 +9498,34 @@ function MensajesVVView({ db, cfg, onBack }) {
 }
 
 // ── PANEL DE CLIENTE (Belfast) ───────────────────────────────────────
+function AccesosBelfast() {
+  const [lista, setLista] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [abierto, setAbierto] = useState(false);
+  async function cargar() { try { const r = await storage.get("cliente_accesos"); setLista(r && r.value ? (JSON.parse(r.value) || []) : []); } catch { setLista([]); } }
+  useEffect(() => { if (abierto && lista === null) cargar(); }, [abierto]);
+  async function cambiarRol(id, rol) {
+    try {
+      const r = await storage.get("cliente_accesos"); const act = r && r.value ? JSON.parse(r.value) : [];
+      const nuevo = act.map(a => a.id === id ? { ...a, rol } : a);
+      if (!nuevo.some(a => a.rol === "general")) { setMsg("Tiene que quedar al menos un acceso General."); return; }
+      await storage.set("cliente_accesos", JSON.stringify(nuevo)); setLista(nuevo); setMsg("Guardado. En la app del cliente se actualiza en unos segundos.");
+    } catch { setMsg("No se pudo guardar. Probá de nuevo."); }
+  }
+  return (<div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "12px 14px", marginBottom: 14 }}>
+    <div onClick={() => setAbierto(v => !v)} style={{ display: "flex", justifyContent: "space-between", cursor: "pointer", fontSize: 13, fontWeight: 800, color: T.text }}><span>Accesos y códigos de {"Belfast"}</span><span>{abierto ? "▲" : "▼"}</span></div>
+    {abierto && <div style={{ marginTop: 10 }}>
+      {lista === null && <div style={{ fontSize: 12, color: T.muted }}>Cargando…</div>}
+      {lista && lista.length === 0 && <div style={{ fontSize: 12, color: T.muted }}>Todavía no hay accesos cargados.</div>}
+      {(lista || []).map(a => (<div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderTop: `1px solid ${T.border}`, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 120 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{a.nombre || "(sin nombre)"}</div><div style={{ fontSize: 11.5, color: T.sub }}>Código: <b>{a.codigo}</b> · {a.rol === "general" ? "General" : "Jefe de obra"}</div></div>
+        <button onClick={() => cambiarRol(a.id, a.rol === "general" ? "jefe" : "general")} style={{ background: a.rol === "general" ? T.bg : T.accent, color: a.rol === "general" ? T.sub : "#fff", border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{a.rol === "general" ? "Pasar a Jefe de obra" : "Hacer General"}</button>
+      </div>))}
+      {msg && <div style={{ fontSize: 11.5, color: T.sub, marginTop: 8 }}>{msg}</div>}
+    </div>}
+  </div>);
+}
+
 function ClientePanel({ db, cfg, onBack }) {
   const { obras, tareas } = db;
   const cs = cfg?.clienteSigla || "BELFAST";
@@ -9526,6 +9554,7 @@ function ClientePanel({ db, cfg, onBack }) {
     <div style={{ height: 2, background: BRASS }} />
 
     <div style={{ padding: "16px 20px" }}>
+      <AccesosBelfast />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 9, marginBottom: 10 }}>
         <MiniStat label="Obras activas" value={activas} color="#16A34A" />
         <MiniStat label="Avance prom." value={avg + "%"} color={T.accent} />
