@@ -168,6 +168,12 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
     else setData(prev => { const p = prev || {}; const os = p.obras || {}; return { ...p, obras: { ...os, [obraId]: f(os[obraId]) } }; });
   };
   const aviso = (msg, undo) => { setToast({ msg, undo }); clearTimeout(toastT.current); toastT.current = setTimeout(() => setToast(null), 7000); };
+  // Si cambia la fecha de inicio en la ficha de la obra, el cronograma la toma solo.
+  const iniFicha = isoDeCorta(obra && obra.inicio);
+  useEffect(() => {
+    if (editing || !planObra || !iniFicha || planObra.inicioFicha === iniFicha) return;
+    setData(prev => { const pp = prev || {}; const os = pp.obras || {}; const cur = os[obraId]; if (!cur || cur.inicioFicha === iniFicha) return pp; return { ...pp, obras: { ...os, [obraId]: { ...cur, inicio: iniFicha, inicioFicha: iniFicha } } }; });
+  }, [iniFicha, obraId, !!planObra, planObra && planObra.inicioFicha, editing]);
   const M = useMemo(() => (W && W.tareas && W.tareas.length ? calcular(W, hoy) : null), [W, hoy]);
 
   useEffect(() => {
