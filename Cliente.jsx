@@ -6161,11 +6161,14 @@ function PedidosDefInicio({ onDevolver, T, cfg, obras, matpedidos, setMatpedidos
   const enEstudio = m => (pedidos || []).find(x => x.def && x.def.origen && x.def.origen.matId === m.id);
   const pend = lista.filter(m => !enEstudio(m) && !m.cumplido);
   // Todo lo que está en el circuito del estudio (venga de un pedido del contratista o de la planilla), sin perder ninguno
-  const enCircuito = (pedidos || []).filter(x => x && x.def && x.para === "estudio").map(pe => ({ pe, m: (matpedidos || []).find(mm => pe.def.origen && mm.id === pe.def.origen.matId) || null }));
-  const activosTodos = enCircuito.filter(x => x.pe.estado !== "resuelto");
-  const listos = activosTodos.filter(x => x.pe.estado === "respondido");
-  const activos = activosTodos.filter(x => x.pe.estado !== "respondido");
-  const hechos = enCircuito.filter(x => x.pe.estado === "resuelto").sort((a, b) => ((b.pe.def.devueltoTs || b.pe.upd || 0) - (a.pe.def.devueltoTs || a.pe.upd || 0))).slice(0, 5);
+  const enCircuito = (pedidos || []).filter(x => x && x.def && (x.para === "estudio" || (x.hilo || []).some(h => h.de === "estudio"))).map(pe => ({ pe, m: (matpedidos || []).find(mm => pe.def.origen && mm.id === pe.def.origen.matId) || null }));
+  // "Falta enviar": el estudio ya dejó respuesta o documentación y todavía no se le mandó al contratista (aunque el estado diga otra cosa)
+  const tieneResp = pe => { const est = (pe.hilo || []).filter(h => h.de === "estudio"); return pe.estado === "respondido" || est.some(h => (h.archivos || []).length || (h.texto && !/^El estudio recibió el pedido/.test(h.texto))); };
+  const faltaEnviar = pe => !(pe.def && pe.def.devueltoTs) && tieneResp(pe);
+  const listos = enCircuito.filter(x => faltaEnviar(x.pe));
+  const activosTodos = enCircuito.filter(x => x.pe.estado !== "resuelto" && !faltaEnviar(x.pe));
+  const activos = activosTodos;
+  const hechos = enCircuito.filter(x => x.pe.estado === "resuelto" && !faltaEnviar(x.pe)).sort((a, b) => ((b.pe.def.devueltoTs || b.pe.upd || 0) - (a.pe.def.devueltoTs || a.pe.upd || 0))).slice(0, 5);
   const [abierto, setAbierto] = useState(null);
   const respDe = (pe) => { const est = (pe.hilo || []).filter(h => h.de === "estudio"); return { textos: est.map(h => h.texto).filter(t => t && !/^El estudio recibió el pedido/.test(t)), archivos: est.flatMap(h => h.archivos || []) }; };
   const quienPidio = (m, pe) => (m && (m.solicitante || m.empresa)) || (pe.def.origen && pe.def.origen.quien) || (pe.de === "vv" ? "V+V" : "el contratista");
@@ -6176,7 +6179,7 @@ function PedidosDefInicio({ onDevolver, T, cfg, obras, matpedidos, setMatpedidos
     if (m && !m.leido) aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === m.id ? { ...x, leido: true, leidoTs: Date.now(), leidoFecha: hoyStr(), leidoPor: cfg?.nombre || cfg?.sigla || "Belfast" } : x));
     setPlan(null);
   }
-  if (!pend.length && !activosTodos.length && !hechos.length) return null;
+  if (!pend.length && !activosTodos.length && !listos.length && !hechos.length) return null;
   const dias = ts => ts ? Math.max(0, Math.floor((Date.now() - ts) / 86400000)) : 0;
   const cab = { fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 };
   return (<div style={{ marginBottom: 18 }}>
@@ -6211,7 +6214,7 @@ function PedidosDefInicio({ onDevolver, T, cfg, obras, matpedidos, setMatpedidos
       <button onClick={() => setVerTab(v => !v)} style={{ width: "100%", background: "transparent", color: `rgba(${TXR},.55)`, border: 0, padding: "8px", fontSize: 12, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>{verTab ? "Ocultar" : "Ver"} quién está demorando las definiciones</button>
       {verTab && <div style={{ marginTop: 12 }}><TableroDef T={T} pedidos={pedidos} obras={obras} onOpen={() => onIr && onIr("pedidos")} /></div>}
     </div>}
-    {abierto && (() => { const { pe, m } = abierto; const live = (pedidos || []).find(x => x.id === pe.id) || pe; const rd = respDe(live); const listo = live.estado === "respondido"; return (<div onClick={() => setAbierto(null)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,.65)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+    {abierto && (() => { const { pe, m } = abierto; const live = (pedidos || []).find(x => x.id === pe.id) || pe; const rd = respDe(live); const listo = faltaEnviar(live); return (<div onClick={() => setAbierto(null)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,.65)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, color: TXC, width: "100%", maxWidth: 520, maxHeight: "88vh", overflowY: "auto", borderRadius: "16px 16px 0 0", padding: "20px 20px calc(24px + env(safe-area-inset-bottom))" }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: listo ? "#8B5CF6" : "#3E9B62", letterSpacing: ".05em" }}>{listo ? "RESPUESTA DEL ESTUDIO · FALTA ENVIARLA" : "✓ RESUELTO Y ENVIADO"}</div>
         <div style={{ fontSize: 17, fontWeight: 800, marginTop: 4 }}>{live.def.tarea}</div>
