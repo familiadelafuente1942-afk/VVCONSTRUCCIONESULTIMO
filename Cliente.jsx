@@ -6160,10 +6160,15 @@ function PedidosDefInicio({ onDevolver, T, cfg, obras, matpedidos, setMatpedidos
   const lista = (matpedidos || []).filter(m => m.tipo && m.tipo !== "material").slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const enEstudio = m => (pedidos || []).find(x => x.def && x.def.origen && x.def.origen.matId === m.id);
   const pend = lista.filter(m => !enEstudio(m) && !m.cumplido);
-  const activosTodos = lista.map(m => ({ m, pe: enEstudio(m) })).filter(x => x.pe && x.pe.estado !== "resuelto");
+  // Todo lo que está en el circuito del estudio (venga de un pedido del contratista o de la planilla), sin perder ninguno
+  const enCircuito = (pedidos || []).filter(x => x && x.def && x.para === "estudio").map(pe => ({ pe, m: (matpedidos || []).find(mm => pe.def.origen && mm.id === pe.def.origen.matId) || null }));
+  const activosTodos = enCircuito.filter(x => x.pe.estado !== "resuelto");
   const listos = activosTodos.filter(x => x.pe.estado === "respondido");
   const activos = activosTodos.filter(x => x.pe.estado !== "respondido");
-  const hechos = lista.filter(m => m.respuesta).sort((a, b) => (b.respuesta.ts || 0) - (a.respuesta.ts || 0)).slice(0, 3);
+  const hechos = enCircuito.filter(x => x.pe.estado === "resuelto").sort((a, b) => ((b.pe.def.devueltoTs || b.pe.upd || 0) - (a.pe.def.devueltoTs || a.pe.upd || 0))).slice(0, 5);
+  const [abierto, setAbierto] = useState(null);
+  const respDe = (pe) => { const est = (pe.hilo || []).filter(h => h.de === "estudio"); return { textos: est.map(h => h.texto).filter(t => t && !/^El estudio recibió el pedido/.test(t)), archivos: est.flatMap(h => h.archivos || []) }; };
+  const quienPidio = (m, pe) => (m && (m.solicitante || m.empresa)) || (pe.def.origen && pe.def.origen.quien) || (pe.de === "vv" ? "V+V" : "el contratista");
   const subir = async (f) => { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
   function pasar(d) {
     const m = plan; const base = nuevoPedido({ de: "cliente", para: "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id });
@@ -6171,7 +6176,7 @@ function PedidosDefInicio({ onDevolver, T, cfg, obras, matpedidos, setMatpedidos
     if (m && !m.leido) aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === m.id ? { ...x, leido: true, leidoTs: Date.now(), leidoFecha: hoyStr(), leidoPor: cfg?.nombre || cfg?.sigla || "Belfast" } : x));
     setPlan(null);
   }
-  if (!pend.length && !activosTodos.length && !hechos.length && !hayDef) return null;
+  if (!pend.length && !activosTodos.length && !hechos.length) return null;
   const dias = ts => ts ? Math.max(0, Math.floor((Date.now() - ts) / 86400000)) : 0;
   const cab = { fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 };
   return (<div style={{ marginBottom: 18 }}>
@@ -6185,27 +6190,42 @@ function PedidosDefInicio({ onDevolver, T, cfg, obras, matpedidos, setMatpedidos
     </>}
     {listos.length > 0 && <>
       <div style={{ ...cab, marginTop: pend.length ? 8 : 0 }}>Respondidos por el estudio · listos para enviar al contratista · {listos.length}</div>
-      {listos.map(({ m, pe }) => { const tz = trazaDef(pe); const arch = (pe.hilo || []).filter(h => h.de === "estudio").flatMap(h => h.archivos || []); return (<div key={m.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: "4px solid #8B5CF6", borderRadius: 12, padding: 12, marginBottom: 9 }}>
+      {listos.map(({ m, pe }) => { const tz = trazaDef(pe); const rd = respDe(pe); return (<div key={pe.id} onClick={() => setAbierto({ pe, m })} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: "4px solid #8B5CF6", borderRadius: 12, padding: 12, marginBottom: 9, cursor: "pointer" }}>
         <div style={{ fontSize: 13.5, fontWeight: 800, color: TXC }}>{pe.def.tarea}</div>
-        <div style={{ fontSize: 12, color: `rgba(${TXR},.6)`, marginTop: 4, lineHeight: 1.55 }}>Obra: <b>{nomObra(pe.obra_id)}</b> · lo pidió {m.solicitante || m.empresa || "el contratista"}<br />El estudio respondió el {fmtTs(tz.tResp)}{arch.length ? " · " + arch.length + " archivo" + (arch.length > 1 ? "s" : "") : ""}</div>
-        <button onClick={() => onDevolver && onDevolver(pe)} style={{ width: "100%", marginTop: 10, background: "#3E9B62", color: "#fff", border: 0, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Enviar al contratista y dar por resuelto</button>
+        <div style={{ fontSize: 12, color: `rgba(${TXR},.6)`, marginTop: 4, lineHeight: 1.55 }}>Obra: <b>{nomObra(pe.obra_id)}</b> · lo pidió {quienPidio(m, pe)}<br />El estudio respondió el {fmtTs(tz.tResp)}{rd.archivos.length ? " · " + rd.archivos.length + " archivo" + (rd.archivos.length > 1 ? "s" : "") : ""} · <b style={{ color: "#8B5CF6" }}>Tocá para ver la respuesta</b></div>
+        <button onClick={e => { e.stopPropagation(); onDevolver && onDevolver(pe); }} style={{ width: "100%", marginTop: 10, background: "#3E9B62", color: "#fff", border: 0, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Enviar al contratista y dar por resuelto</button>
       </div>); })}
     </>}
     {activos.length > 0 && <>
       <div style={{ ...cab, marginTop: pend.length || listos.length ? 8 : 0 }}>En el estudio de arquitectura · {activos.length}</div>
-      {activos.map(({ m, pe }) => { const tz = trazaDef(pe), ch = chipDef(pe); return (<div key={m.id} onClick={() => onIr && onIr("pedidos")} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `4px solid ${ch.col}`, borderRadius: 12, padding: 12, marginBottom: 9, cursor: "pointer" }}>
+      {activos.map(({ m, pe }) => { const tz = trazaDef(pe), ch = chipDef(pe); return (<div key={pe.id} onClick={() => onIr && onIr("pedidos")} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `4px solid ${ch.col}`, borderRadius: 12, padding: 12, marginBottom: 9, cursor: "pointer" }}>
         <div style={{ fontSize: 13.5, fontWeight: 800, color: TXC }}>{pe.def.tarea}</div>
-        <div style={{ fontSize: 12, color: `rgba(${TXR},.6)`, marginTop: 4, lineHeight: 1.55 }}>Obra: <b>{nomObra(pe.obra_id)}</b> · {ch.txt}<br />Pedido {fmtTs(tz.tReq)} · levantado {fmtTs(pe.def.origen.leidoTs || pe.ts)} · pasó al estudio {fmtTs(tz.tFwd)}{tz.tResp ? " · respondió " + fmtTs(tz.tResp) : ""}<br /><b>Lo tiene: {tz.holder}</b></div>
+        <div style={{ fontSize: 12, color: `rgba(${TXR},.6)`, marginTop: 4, lineHeight: 1.55 }}>Obra: <b>{nomObra(pe.obra_id)}</b> · {ch.txt}<br />Pedido {fmtTs(tz.tReq)} · levantado {fmtTs((pe.def.origen && pe.def.origen.leidoTs) || pe.ts)} · pasó al estudio {fmtTs(tz.tFwd)}{tz.tResp ? " · respondió " + fmtTs(tz.tResp) : ""}<br /><b>Lo tiene: {tz.holder}</b></div>
       </div>); })}
     </>}
     {hechos.length > 0 && <>
       <div style={{ ...cab, marginTop: 8 }}>Resueltos y enviados al contratista</div>
-      {hechos.map(m => (<div key={m.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: "4px solid #3E9B62", borderRadius: 12, padding: "10px 12px", marginBottom: 8, fontSize: 12, color: `rgba(${TXR},.65)`, lineHeight: 1.5 }}><b style={{ color: TXC, fontSize: 13 }}>{(m.items || []).map(i => i.nombre).filter(Boolean).join(", ")}</b><br />{nomObra(m.obra_id)} · enviado a {m.solicitante || m.empresa || "el contratista"} el {m.respuesta.fecha}{(m.respuesta.archivos || []).length ? " · " + m.respuesta.archivos.length + " archivo(s)" : ""}</div>))}
+      {hechos.map(({ m, pe }) => { const rd = respDe(pe); return (<div key={pe.id} onClick={() => setAbierto({ pe, m })} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: "4px solid #3E9B62", borderRadius: 12, padding: "10px 12px", marginBottom: 8, fontSize: 12, color: `rgba(${TXR},.65)`, lineHeight: 1.5, cursor: "pointer" }}><b style={{ color: TXC, fontSize: 13 }}>{pe.def.tarea}</b><br />{nomObra(pe.obra_id)} · enviado a {quienPidio(m, pe)}{pe.def.devueltoTs ? " el " + fmtTs(pe.def.devueltoTs) : ""}{rd.archivos.length ? " · " + rd.archivos.length + " archivo(s)" : ""} · <b style={{ color: "#3E9B62" }}>Ver</b></div>); })}
     </>}
-    {hayDef && <div style={{ marginBottom: 6 }}>
-      <button onClick={() => setVerTab(v => !v)} style={{ width: "100%", background: "transparent", color: TXC, border: `1.5px solid ${T.accent}`, borderRadius: 12, padding: "12px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{verTab ? "Ocultar" : "Ver"} quién está trabando las definiciones</button>
+    {activos.length > 0 && <div style={{ marginBottom: 6 }}>
+      <button onClick={() => setVerTab(v => !v)} style={{ width: "100%", background: "transparent", color: `rgba(${TXR},.55)`, border: 0, padding: "8px", fontSize: 12, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>{verTab ? "Ocultar" : "Ver"} quién está demorando las definiciones</button>
       {verTab && <div style={{ marginTop: 12 }}><TableroDef T={T} pedidos={pedidos} obras={obras} onOpen={() => onIr && onIr("pedidos")} /></div>}
     </div>}
+    {abierto && (() => { const { pe, m } = abierto; const live = (pedidos || []).find(x => x.id === pe.id) || pe; const rd = respDe(live); const listo = live.estado === "respondido"; return (<div onClick={() => setAbierto(null)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,.65)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.card, color: TXC, width: "100%", maxWidth: 520, maxHeight: "88vh", overflowY: "auto", borderRadius: "16px 16px 0 0", padding: "20px 20px calc(24px + env(safe-area-inset-bottom))" }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: listo ? "#8B5CF6" : "#3E9B62", letterSpacing: ".05em" }}>{listo ? "RESPUESTA DEL ESTUDIO · FALTA ENVIARLA" : "✓ RESUELTO Y ENVIADO"}</div>
+        <div style={{ fontSize: 17, fontWeight: 800, marginTop: 4 }}>{live.def.tarea}</div>
+        <div style={{ fontSize: 12, color: `rgba(${TXR},.6)`, marginTop: 2 }}>{nomObra(live.obra_id)} · pidió {quienPidio(m, live)}</div>
+        <div style={{ fontSize: 11, fontWeight: 800, opacity: .6, marginTop: 14, textTransform: "uppercase" }}>Respuesta</div>
+        <div style={{ fontSize: 14, marginTop: 4, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{rd.textos.length ? rd.textos.join("\n\n") : "Sin texto — mirá los archivos adjuntos."}</div>
+        {rd.archivos.length > 0 && <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, opacity: .6, textTransform: "uppercase", marginBottom: 6 }}>Archivos ({rd.archivos.length})</div>
+          {rd.archivos.map((f, i) => <a key={i} href={f.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "12px", marginBottom: 6, fontSize: 13, fontWeight: 700, color: T.accent, textDecoration: "none" }}>📎 <span style={{ flex: 1, wordBreak: "break-all" }}>{f.nombre || f.name || "Archivo"}</span><span>Abrir ↗</span></a>)}
+        </div>}
+        {listo && <button onClick={() => { onDevolver && onDevolver(live); setAbierto(null); }} style={{ width: "100%", marginTop: 16, background: "#3E9B62", color: "#fff", border: 0, borderRadius: 10, padding: 14, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Enviar al contratista y dar por resuelto</button>}
+        <button onClick={() => setAbierto(null)} style={{ width: "100%", marginTop: 10, background: "transparent", color: TXC, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cerrar</button>
+      </div>
+    </div>); })()}
     {plan && <PlanillaDefinicion T={T} obras={obras} paraNombre="el estudio de arquitectura" subir={subir} onCrear={pasar} onCancel={() => setPlan(null)}
       inicial={{ tipo: plan.tipo === "plano" ? "Plano" : "Definición", obra_id: plan.obra_id, tarea: (plan.items || []).map(i => i.nombre).filter(Boolean).join(", ").slice(0, 120), que: itemsTexto(plan).join("\n") + (plan.nota ? "\n" + plan.nota : ""), limite: plan.fecha_necesita || "", origen: { matId: plan.id, pidioTs: plan.ts, leidoTs: Date.now(), quien: plan.solicitante || plan.empresa || "el contratista" } }} />}
   </div>);
@@ -6464,15 +6484,15 @@ function ClienteApp() {
   const [gestionFoco, setGestionFoco] = React.useState(null);
   // Canal hacia abajo: lo que respondió el estudio se le devuelve al contratista que lo pidió
   const devolverAlContratista = (pe) => {
-    const mid = pe && pe.def && pe.def.origen && pe.def.origen.matId; if (!mid) return;
+    const mid = pe && pe.def && pe.def.origen && pe.def.origen.matId; if (!pe) return;
     const est = (pe.hilo || []).filter(h => h.de === "estudio");
     const texto = est.map(h => h.texto).filter(t => t && !/^El estudio recibió el pedido/.test(t)).join("\n\n");
     const archivos = est.flatMap(h => h.archivos || []);
     const ts = Date.now(), f = hoyStr();
-    const m = (matpedidosAll || []).find(x => x.id === mid);
-    aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === mid ? { ...x, respuesta: { ts, fecha: f, de: "Estudio de arquitectura", por: cfg?.nombre || "Belfast", texto, archivos }, cumplido: true, cumplidoFecha: f, cumplidoTs: ts } : x));
+    const m = mid ? (matpedidosAll || []).find(x => x.id === mid) : null;
+    if (mid) aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === mid ? { ...x, respuesta: { ts, fecha: f, de: "Estudio de arquitectura", por: cfg?.nombre || "Belfast", texto, archivos }, cumplido: true, cumplidoFecha: f, cumplidoTs: ts } : x));
     const nombres = ((m && m.items) || []).map(i => (i.nombre || "").trim().toLowerCase()).filter(Boolean);
-    if (nombres.length) setDefinicionesAll(prev => (prev || []).map(r => r.obra_id !== pe.obra_id ? r : { ...r, upd: ts, items: (r.items || []).map(it => nombres.includes((it.nombre || "").trim().toLowerCase()) ? { ...it, tiene: true, estado: "respondida", historial: [...(it.historial || []), { ts, tipo: "respondida", texto, archivoUrl: (archivos[0] || {}).url || null, archivoNombre: (archivos[0] || {}).nombre || null }] } : it) }));
+    if (mid && nombres.length) setDefinicionesAll(prev => (prev || []).map(r => r.obra_id !== pe.obra_id ? r : { ...r, upd: ts, items: (r.items || []).map(it => nombres.includes((it.nombre || "").trim().toLowerCase()) ? { ...it, tiene: true, estado: "respondida", historial: [...(it.historial || []), { ts, tipo: "respondida", texto, archivoUrl: (archivos[0] || {}).url || null, archivoNombre: (archivos[0] || {}).nombre || null }] } : it) }));
     aplicarPedidos(setPedidos, arr => arr.map(x => x.id === pe.id ? conMov({ ...x, def: { ...x.def, devueltoTs: ts } }, "resuelto", "cliente") : x));
   };
   const irA = (id, param) => { if (restringido && !SECCIONES_JEFE.includes(id)) return; setGestionFoco(id === "gestion" ? (param || null) : null); setAuditoriaDesdeSemana(id === "auditoria" && param === "semana"); setScreen(id); marcarVisto(id); };
