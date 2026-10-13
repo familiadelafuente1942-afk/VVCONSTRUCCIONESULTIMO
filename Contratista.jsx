@@ -752,6 +752,7 @@ export default function ContratistaApp() {
   useEffect(() => {
     try { if (!document.getElementById("fonts-fraunces")) { const l = document.createElement("link"); l.id = "fonts-fraunces"; l.rel = "stylesheet"; l.href = "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap"; document.head.appendChild(l); } } catch { }
   }, []);
+  const [respVisto, setRespVisto] = useState(() => { try { return Number(localStorage.getItem("contratista_resp_visto") || 0); } catch { return 0; } });
   const lastWrite = useRef(0);
   const lastWriteDoc = useRef(0);
   async function persistDoc(next) {
@@ -883,6 +884,11 @@ export default function ContratistaApp() {
   const hoyISO = new Date().toISOString().slice(0, 10);
   const mios = listaTodos.filter(p => p.de === "contratista" && p.empresa === empresa);
   const porAvisar = mios.filter(p => !p.waEnviado).length;
+  // Respuestas que le llegaron a esta empresa (definiciones y planos contestados por el estudio, enviados por el cliente)
+  const conRespuesta = mios.filter(p => p.respuesta).sort((a, b) => (b.respuesta.ts || 0) - (a.respuesta.ts || 0));
+  const esNueva = (p) => (p.respuesta.ts || 0) > respVisto;
+  const respNuevas = conRespuesta.filter(esNueva).length;
+  const marcarRespVista = () => { const t = Date.now(); try { localStorage.setItem("contratista_resp_visto", String(t)); } catch { } setRespVisto(t); };
   const filasEstado = (obras || []).map(o => {
     const ped = listaTodos.filter(p => p.obra_id === o.id);
     const ultMat = ped.filter(p => (p.tipo || "material") === "material").reduce((m, x) => Math.max(m, x.ts || 0), 0);
@@ -970,6 +976,18 @@ export default function ContratistaApp() {
             <div style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 600, color: c, lineHeight: 1 }}>{n}</div>
             <div style={{ fontSize: 10, color: T.muted, marginTop: 6, fontWeight: 700, letterSpacing: ".04em" }}>{l}</div></div>)}
         </div>
+        {conRespuesta.length > 0 && <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ ...lblS, margin: 0, color: respNuevas ? "#16A34A" : undefined }}>{respNuevas ? `Te llegó ${respNuevas === 1 ? "una respuesta" : respNuevas + " respuestas"}` : "Respuestas recibidas"}</div>
+            {respNuevas > 0 && <button onClick={marcarRespVista} style={{ background: "none", border: 0, color: T.muted, fontSize: 11.5, textDecoration: "underline", cursor: "pointer" }}>Marcar como vistas</button>}
+          </div>
+          {conRespuesta.slice(0, 5).map(p => (<div key={p.id} style={{ background: T.card, border: `1px solid ${esNueva(p) ? "#16A34A" : T.border}`, borderLeft: "4px solid #16A34A", borderRadius: 14, padding: 13, marginBottom: 9 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><div style={{ fontSize: 13.5, fontWeight: 800, color: T.head }}>{(p.items || []).map(i => i.nombre).filter(Boolean).join(", ") || "Pedido"}</div>{esNueva(p) && <span style={{ fontSize: 9.5, fontWeight: 800, color: "#fff", background: "#16A34A", borderRadius: 6, padding: "3px 8px", height: "fit-content" }}>NUEVA</span>}</div>
+            <div style={{ fontSize: 11.5, color: T.muted, marginTop: 3 }}>{obraNom(p.obra_id)} · respondido el {p.respuesta.fecha}</div>
+            {p.respuesta.texto && <div style={{ fontSize: 13, color: T.text, marginTop: 7, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{p.respuesta.texto}</div>}
+            {(p.respuesta.archivos || []).map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer" onClick={marcarRespVista} style={{ display: "inline-block", marginTop: 8, marginRight: 6, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, color: T.accent, textDecoration: "none" }}>📎 {a.nombre}</a>)}
+          </div>))}
+        </div>}
         <div style={{ ...lblS, marginBottom: 10 }}>Qué querés pedir</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 9, marginBottom: 24 }}>
           {TIPOS_PEDIDO.map(t => <button key={t.id} onClick={() => nuevo(t.id)} style={{ background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 6px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center", boxShadow: T.shadow }}>
