@@ -138,6 +138,8 @@ function avisarErrorSync(key, msg) {
 // Registra que la app se abrió — usado por NEXO Control para saber
 // cuántas personas usan cada vista. No interfiere con nada existente.
 function registrarApertura(appTag) {
+  // Una apertura por aparato cada 30 minutos: recargar o cambiar de pantalla no suma de nuevo.
+  try { const k = "apertura_ts_" + appTag, ult = Number(localStorage.getItem(k) || 0); if (Date.now() - ult < 30 * 60 * 1000) return; localStorage.setItem(k, String(Date.now())); } catch (e) { }
   // Va a una tabla liviana propia (no a bco_storage) para no sobrecargar
   // esa tabla, que ya tiene todo el resto del sistema. Si falla, avisa por
   // el mismo canal de errores que usa el resto de la app (no en silencio).

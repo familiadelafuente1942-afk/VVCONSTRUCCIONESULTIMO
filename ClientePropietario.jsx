@@ -17,6 +17,8 @@ const SH = () => ({ "Content-Type": "application/json", "apikey": SUPA_KEY, "Aut
 // cuántas personas usan cada vista. Tabla liviana propia (no bco_storage).
 // Si falla, avisa por el canal de errores (no en silencio).
 function registrarApertura(appTag) {
+  // Una apertura por aparato cada 30 minutos: recargar o cambiar de pantalla no suma de nuevo.
+  try { const k = "apertura_ts_" + appTag, ult = Number(localStorage.getItem(k) || 0); if (Date.now() - ult < 30 * 60 * 1000) return; localStorage.setItem(k, String(Date.now())); } catch (e) { }
   try {
     fetch(SUPA_URL + "/rest/v1/aperturas", {
       method: "POST",
