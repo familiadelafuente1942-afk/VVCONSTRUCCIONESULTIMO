@@ -17,12 +17,22 @@ async function nubeGet(key) {
 async function nubeSet(key, value) { const r = await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...H(), Prefer: "resolution=merge-duplicates" }, body: JSON.stringify({ key, value }) }); if (!r.ok) throw new Error("HTTP " + r.status); }
 const uid = () => Math.random().toString(36).slice(2, 9);
 const hoyStr = () => { const d = new Date(); return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getFullYear()).slice(2); };
+const MIME = { pdf: "application/pdf", dwg: "application/acad", dxf: "application/dxf", xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", heic: "image/heic", zip: "application/zip", skp: "application/octet-stream", rvt: "application/octet-stream" };
+// Sube cualquier archivo (PDF, CAD, Excel, Word, fotos…). Si el servidor no acepta el tipo, reintenta como archivo genérico. Si falla, dice por qué.
 async function subirArchivo(file) {
   const ext = (file.name.split(".").pop() || "bin").toLowerCase();
-  const path = "pedidos/" + uid() + "_" + Date.now() + "." + ext;
-  const r = await fetch(SUPA_URL + "/storage/v1/object/" + BUCKET + "/" + path, { method: "POST", headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": file.type || "application/octet-stream" }, body: await file.arrayBuffer() });
-  if (!r.ok) throw new Error("No se pudo subir " + file.name);
-  return { nombre: file.name, url: SUPA_URL + "/storage/v1/object/public/" + BUCKET + "/" + path, img: (file.type || "").startsWith("image/") };
+  const limpio = file.name.replace(/[^\w.\-]+/g, "_").slice(-80);
+  const path = "pedidos/" + uid() + "_" + Date.now() + "_" + limpio;
+  const tipos = [...new Set([file.type || MIME[ext] || "application/octet-stream", "application/octet-stream"])];
+  let ult = "";
+  for (const tipo of tipos) {
+    try {
+      const r = await fetch(SUPA_URL + "/storage/v1/object/" + BUCKET + "/" + path, { method: "POST", headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": tipo, "x-upsert": "true" }, body: file });
+      if (r.ok) return { nombre: file.name, url: SUPA_URL + "/storage/v1/object/public/" + BUCKET + "/" + path, img: (file.type || "").startsWith("image/") };
+      ult = r.status + " " + (await r.text().catch(() => "")).slice(0, 140);
+    } catch (e) { ult = "sin conexión (" + (e && e.message || e) + ")"; }
+  }
+  throw new Error("No se pudo subir \"" + file.name + "\". " + ult);
 }
 
 // Margen superior seguro: en iPhone (app en la pantalla de inicio o con isla dinámica) el contenido quedaba debajo de la barra y no se podía tocar

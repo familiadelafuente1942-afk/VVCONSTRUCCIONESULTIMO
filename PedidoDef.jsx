@@ -66,14 +66,16 @@ const lab = (T) => ({ display: "block", fontSize: 11, fontWeight: 800, color: T.
 function Adjuntos({ T, adj, setAdj, subir, texto }) {
   const ref = useRef(null);
   const [subiendo, setSub] = useState(false);
+  const [errUp, setErrUp] = useState("");
   const agregar = async (e) => {
-    const fs = Array.from(e.target.files || []); if (!fs.length) return; setSub(true);
-    const nuevos = []; for (const f of fs) { try { const a = await subir(f); if (a) nuevos.push(a); } catch (er) { } }
-    setAdj(p => [...p, ...nuevos]); setSub(false); e.target.value = "";
+    const input = e.target, fs = Array.from(input.files || []); if (!fs.length) return; setSub(true); setErrUp("");
+    const nuevos = [], fallos = []; for (const f of fs) { try { const a = await subir(f); if (a) nuevos.push(a); else fallos.push(f.name); } catch (er) { fallos.push((er && er.message) || f.name); } }
+    setAdj(p => [...p, ...nuevos]); setSub(false); if (fallos.length) setErrUp(fallos.join(" · ")); try { input.value = ""; } catch (er) { }
   };
   return (<div>
-    <input ref={ref} type="file" multiple accept="image/*,application/pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx" onChange={agregar} style={{ display: "none" }} />
+    <input ref={ref} type="file" multiple onChange={agregar} style={{ display: "none" }} />
     <button type="button" onClick={() => ref.current && ref.current.click()} disabled={subiendo} style={{ width: "100%", background: T.bg, color: T.text, border: `1px dashed ${T.border}`, borderRadius: T.rsm || 10, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{subiendo ? "Subiendo…" : "＋ " + texto}</button>
+    {errUp && <div style={{ color: "#E5604A", fontSize: 12.5, fontWeight: 700, marginTop: 8 }}>{errUp}</div>}
     {adj.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{adj.map((a, i) => <span key={i} style={{ background: "rgba(128,128,128,.14)", borderRadius: 6, padding: "5px 9px", fontSize: 11.5, color: T.sub }}>{a.nombre} <span onClick={() => setAdj(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", marginLeft: 4, fontWeight: 800 }}>✕</span></span>)}</div>}
   </div>);
 }
