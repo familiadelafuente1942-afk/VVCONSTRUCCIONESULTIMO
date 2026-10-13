@@ -5104,6 +5104,11 @@ function MatPedidosView({ db, cfg, onBack }) {
             {(p.solicitante || p.empresa) && <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 7, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 7, padding: "4px 9px", fontSize: 11, fontWeight: 700, color: T.sub }}><Ico n="user" s={12} c={T.sub} /> Pidió: {p.solicitante || p.empresa}{p.solicitante && p.empresa ? ` (${p.empresa})` : ""}</div>}
             {p.nota && <div style={{ fontSize: 11.5, color: T.muted, marginTop: 4, fontStyle: "italic" }}>{p.nota}</div>}
             <div style={{ fontSize: 10.5, fontWeight: 700, marginTop: 6, color: p.leido ? "#16A34A" : "#B45309" }}>{p.leido ? `✓ Levantado por ${cn}${p.leidoFecha ? " · " + p.leidoFecha : ""}` : `● No leído por ${cn}`}</div>
+            {p.respuesta && <div style={{ marginTop: 8, background: "rgba(22,163,74,.10)", border: "1px solid rgba(22,163,74,.30)", borderRadius: 8, padding: "8px 10px" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "#15803D" }}>✓ Respuesta recibida{p.respuesta.fecha ? " · " + p.respuesta.fecha : ""}</div>
+              {p.respuesta.texto && <div style={{ fontSize: 12, color: T.text, marginTop: 3, whiteSpace: "pre-wrap" }}>{p.respuesta.texto}</div>}
+              {(p.respuesta.archivos || []).map((f, i) => <a key={i} href={f.url} target="_blank" rel="noreferrer" style={{ display: "block", fontSize: 11.5, color: T.accent, marginTop: 3 }}>📎 {f.name || f.nombre || "Archivo"}</a>)}
+            </div>}
             {p.waEnviado && <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", marginTop: 3 }}><Ico n="send" /> Enviado por WhatsApp{p.waEnviadoFecha ? " · " + p.waEnviadoFecha : ""}{p.waEnviadoPor ? " · " + p.waEnviadoPor : ""}</div>}
             {p.tipo !== "material" && (p.cumplido
               ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: "#15803D", background: "rgba(22,163,74,.14)", border: "1px solid rgba(22,163,74,.30)", borderRadius: 6, padding: "3px 8px", marginTop: 7 }}>✓ Cumplido{p.cumplidoFecha ? " · " + p.cumplidoFecha : ""}</div>
@@ -10592,7 +10597,7 @@ function PortadaGestion({ gestion, obras, TXC, TXR, onIr }) {
     <div onClick={() => onIr("bitacora")} style={{ fontSize: 11, color: `rgba(${TXR},.55)`, padding: "4px 2px 0", cursor: "pointer" }}>La explicación completa está en <b style={{ color: "#D9B27C" }}>Bitácora</b> ›</div>
   </div>);
 }
-function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = [], avance = {}, mensajes = [], renders = {}, certif = {}, informesSem = {}, auditoria = [], cronoPro, setCronoPro, onIr }) {
+function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], matpedidos = [], bitacora = [], avance = {}, mensajes = [], renders = {}, certif = {}, informesSem = {}, auditoria = [], cronoPro, setCronoPro, onIr }) {
   const [slideIdx, setSlideIdx] = React.useState(0);
   const cIn = colorsConBrillo(cfg);
   const rgbIn = hexARgbG(cIn.bg).join(",");
@@ -10614,6 +10619,14 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = 
   const l1 = cfg?.logoEmpresa2, l2 = cfg?.logoEmpresa; const logoSrc = l1 || l2 || VV_LOGO_FALLBACK;
 
   const pend = (pedidos || []).filter(p => p.para === "vv" && p.estado !== "resuelto");
+  // Respuestas que volvieron por el circuito App General → Cliente → Estudio → Cliente → App General.
+  const [respVistas, setRespVistas] = React.useState(() => { try { return Number(localStorage.getItem("vv_resp_vistas") || 0); } catch { return 0; } });
+  const respRecibidas = [
+    ...(matpedidos || []).filter(m => m.respuesta && m.de !== "contratista").map(m => ({ id: "m" + m.id, ts: m.respuesta.ts || 0, obra: m.obra_id, tit: (m.items || []).map(i => i.nombre).join(", ") || "Pedido", texto: m.respuesta.texto || "", n: (m.respuesta.archivos || []).length, quien: m.respuesta.por || m.respuesta.de || "", ir: "matpedidos" })),
+    ...(pedidos || []).filter(p => p.de === "vv" && p.def && p.def.devueltoTs).map(p => { const u = [...(p.hilo || [])].reverse().find(h => h.de !== "vv"); return { id: "p" + p.id, ts: p.def.devueltoTs, obra: p.obra_id, tit: p.asunto || "Pedido", texto: (u && u.texto) || "", n: (u && u.archivos || []).length, quien: u && (u.nombre || u.de) || "", ir: "mas-pedidos" }; }),
+  ].filter(r => r.ts).sort((a, b) => b.ts - a.ts).slice(0, 6);
+  const respNuevas = respRecibidas.filter(r => r.ts > respVistas).length;
+  const marcarRespVistas = () => { const t = Date.now(); setRespVistas(t); try { localStorage.setItem("vv_resp_vistas", String(t)); } catch { } };
 
   // "Novedades recientes": conteos de ESTA SEMANA (lunes a hoy) — si fuera
   // acumulado de siempre, con el tiempo iba a terminar diciendo "37.000
@@ -10664,6 +10677,17 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = 
       </div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
 
+      {respRecibidas.length > 0 && <div style={{ background: "rgba(62,155,98,.10)", border: "1px solid rgba(62,155,98,.35)", borderRadius: 6, padding: "12px 14px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: TXC }}>✓ {respNuevas > 0 ? `Se recibió ${respNuevas > 1 ? respNuevas + " respuestas" : "una respuesta"} a tus pedidos` : "Respuestas recibidas"}</div>
+          {respNuevas > 0 && <button onClick={marcarRespVistas} style={{ background: "transparent", border: `1px solid rgba(${TXR},.3)`, color: TXC, borderRadius: 5, padding: "3px 8px", fontSize: 10.5, cursor: "pointer" }}>Marcar vistas</button>}
+        </div>
+        {respRecibidas.map(r => <div key={r.id} onClick={() => { marcarRespVistas(); onIr(r.ir); }} style={{ marginTop: 9, paddingTop: 9, borderTop: `1px solid rgba(${TXR},.12)`, cursor: "pointer" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: TXC }}>{r.ts > respVistas && <span style={{ fontSize: 9, fontWeight: 800, background: "#3E9B62", color: "#fff", borderRadius: 4, padding: "1px 5px", marginRight: 6 }}>NUEVA</span>}{r.tit}</div>
+          <div style={{ fontSize: 10.5, color: `rgba(${TXR},.55)`, marginTop: 2 }}>{(obras.find(o => o.id === r.obra) || {}).nombre || "Obra"} · {new Date(r.ts).toLocaleDateString("es-AR")}{r.n ? ` · ${r.n} archivo${r.n > 1 ? "s" : ""}` : ""}</div>
+          {r.texto && <div style={{ fontSize: 11.5, color: `rgba(${TXR},.8)`, marginTop: 3 }}>{r.texto.slice(0, 140)}</div>}
+        </div>)}
+      </div>}
       {pend.length > 0 && <div onClick={() => onIr("mas-pedidos")} style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(229,137,137,.08)", border: "1px solid rgba(229,137,137,.25)", borderRadius: 6, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
         <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#E58989", color: "#0d0d0f", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{pend.length}</span>
         <div><div style={{ fontSize: 12, fontWeight: 700, color: TXC }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 10.5, color: `rgba(${TXR},.5)`, marginTop: 1 }}>Tocá para ver →</div></div>
@@ -10914,7 +10938,7 @@ function App() {
         {view!=="dashboard" && <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
-            {view==="dashboard" && <InicioViewVV cronoPro={cronoPro} setCronoPro={setCronoPro} cfg={cfg} gestion={gestion} obras={obras} personal={personal} pedidos={pedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setGestionFoco(id==="gestion" ? (param||null) : null); setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
+            {view==="dashboard" && <InicioViewVV cronoPro={cronoPro} setCronoPro={setCronoPro} cfg={cfg} gestion={gestion} obras={obras} personal={personal} pedidos={pedidos} matpedidos={matpedidos} bitacora={bitacora} avance={avance} mensajes={mensajes} renders={renders} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param)=>{ setGestionFoco(id==="gestion" ? (param||null) : null); setAuditoriaDesdeSemana(id==="auditoria" && param==="semana"); if(id==="mas"){ setView("mas"); setMasSub(null); } else if(id==="mas-pedidos"){ setView("mas"); setMasSub("pedidos"); } else if(id==="mas-mensajes"){ setView("mas"); setMasSub("mensajes"); } else if(id==="mas-informes"){ setView("mas"); setMasSub("infsemanal"); } else { setView(id); } }} />}
             {view==="proyectos" && <Proyectos lics={lics} setLics={setLics} requireAuth={requireAuth} cfg={cfg} obras={obras} setObras={setObras} />}
             {view==="obras" && <Obras obras={obras} setObras={setObras} lics={lics} detailId={detailObraId} setDetailId={setDetailObraId} requireAuth={requireAuth} cfg={cfg} apiKey={cfg.apiKey} adicionales={adicionales} setAdicionales={setAdicionales} modelosObra={modelosObra} />}
             {view==="avance" && <AvanceView obras={obras} avance={avance} setAvance={setAvance} apiKey={cfg.apiKey} cfg={cfg} bitacora={bitacora} certif={certifSem} setCertif={setCertifSem} certifRubro={certifRubro} setCertifRubro={setCertifRubro} docrecepcion={docrecepcion} />}
