@@ -246,7 +246,9 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
   const cierreIso = isoDeCorta(obra && obra.cierre);
   const cierreIdx = (() => { if (!M || !cierreIso) return null; let i = wdIdx(M.cal, cierreIso); if (D(M.cal, i) > dnOf(cierreIso)) i -= 1; return Math.max(i, 0); })();
   const finPlanTxt = M ? (cierreIdx != null ? fmtN(D(M.cal, cierreIdx)) : fmtN(D(M.cal, M.base.end - 1))) : "";
-  const finProyTxt = M ? (cierreIdx != null ? fmtN(D(M.cal, cierreIdx + M.delta)) : fmtN(D(M.cal, M.cur.end - 1))) : "";
+  // El cierre se corre solo con los días de los retrasos cargados en Gestión de obra (no con el semáforo).
+  const retObra = retrasosObra(gestion, obraId), diasRet = retObra.reduce((a, r) => a + r.d, 0);
+  const finProyTxt = M ? (cierreIdx != null ? fmtN(D(M.cal, cierreIdx + diasRet)) : fmtN(D(M.cal, M.base.end - 1 + diasRet))) : "";
   const fmt = (i) => M ? fmtN(D(M.cal, i)) : "";
   const fmtW = (i) => M ? fmtN(D(M.cal, i), 1) : "";
   const critOf = (id) => (M.cur.LF[id] - M.cur.EF[id]) === 0 || (M.base.LF[id] - M.base.EF[id]) === 0;
@@ -372,14 +374,14 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
   const pantallaCrono = () => {
     if (!W || !M) return vacio;
     const d = M.delta, ds = W.dias || DIAS0, ex = W.excep || {};
-    const ret = retrasosObra(gestion, obraId), totDias = ret.reduce((a, r) => a + r.d, 0), totCosto = ret.reduce((a, r) => a + r.total, 0);
+    const ret = retObra, totDias = ret.reduce((a, r) => a + r.d, 0), totCosto = ret.reduce((a, r) => a + r.total, 0);
     return (<>
       {!editing && <CronoAlertas T={T} data={data} setData={setData} obras={obras} lado={lado} soloObra={obraId} max={10} empresa={empresa} />}
       <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: T.text }}>Cuánto cuestan los atrasos de la obra</div>
       <div style={hint}>El costo es la suma de los retrasos que cargás en Gestión de obra para esta obra, uno por uno. No es un atraso general de la obra: cada retraso tiene su motivo, sus días y su costo.</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {kpi("Fin planificado", finPlanTxt, cierreIdx != null ? "Cierre cargado en la obra" : "Sin ningún atraso")}
-        {kpi("Fin proyectado", finProyTxt, "Con los atrasos de hoy", d > 0 ? "bad" : "")}
+        {kpi("Fin proyectado", finProyTxt, diasRet > 0 ? "Cierre + " + diasRet + (diasRet === 1 ? " día" : " días") + " de retraso en Gestión" : "Sin retrasos cargados", diasRet > 0 ? "bad" : "")}
         {kpi("Atrasos acumulados", totDias + (totDias === 1 ? " día" : " días"), ret.length + (ret.length === 1 ? " retraso cargado en Gestión" : " retrasos cargados en Gestión"), totDias > 0 ? "bad" : "good")}
         {kpi("Costo de los atrasos", money(totCosto), "Suma de los retrasos de Gestión", totCosto > 0 ? "bad" : "good")}
       </div>

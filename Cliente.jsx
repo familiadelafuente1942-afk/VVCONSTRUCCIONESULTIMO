@@ -2780,10 +2780,6 @@ function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [],
                             </div>}
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14, pointerEvents: "auto" }}>
-                            <div onClick={() => setVerCrono(true)} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
-                                <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Cronograma</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{detail.modeloId && detail.inicio ? ((detail.cronoItems || []).length ? (detail.cronoItems || []).filter(x => !x.hecho).length + " pendientes" : "Abrir") : "Falta modelo/inicio"} ›</div>
-                            </div>
                             <div onClick={() => setTab("fotos")} style={{ background: T.bg, borderRadius: T.rsm, padding: "10px 12px", border: `1px solid ${T.border}`, cursor: "pointer" }}>
                                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 5, textTransform: "uppercase" }}>Fotos</div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{(detail.fotos || []).length} foto{(detail.fotos || []).length === 1 ? "" : "s"} ›</div>
@@ -2813,7 +2809,6 @@ function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [],
                         </div>)}
                     </div>)}
                 </div>
-                {verCrono && <CronogramaObraView obra={detail} modelosObra={modelosObra} onUpd={(patch) => upd(detail.id, patch)} onBack={() => setVerCrono(false)} />}
                 {gate && <CodigoModal titulo="El panel está en modo solo lectura. Ingresá el código para poder modificar." onOk={() => { setDesbloq(true); const fn = gate.fn; setGate(null); if (fn) fn(); }} onCancel={() => setGate(null)} />}
 {mostrarAdic && (<div style={{ position: "fixed", inset: 0, paddingTop: `max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)`, boxSizing: "border-box", background: T.bg, zIndex: 400, display: "flex", flexDirection: "column" }}>
                     <div style={{ padding: "12px 18px", borderBottom: `1px solid ${T.border}`, background: T.card }}><button onClick={() => setMostrarAdic(false)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer" }}>← Volver a la obra</button></div>
