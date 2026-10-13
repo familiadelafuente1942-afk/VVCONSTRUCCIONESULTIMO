@@ -10922,7 +10922,7 @@ function App() {
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="gestion" && <GestionView db={db} cfg={cfg} focoId={gestionFoco} onFocoUsado={()=>setGestionFoco(null)} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
-            {view==="cronopro" && <CronoPro T={T} titulo="Cronograma" lado="vv" modelosObra={modelosObra} obras={(obras||[]).map(o=>({ id:o.id, nombre:o.nombre, inicio:o.inicio, cierre:o.cierre }))} data={cronoPro} setData={setCronoPro} Gate={CodigoModal} />}
+            {view==="cronopro" && <CronoPro T={T} titulo="Cronograma" lado="vv" modelosObra={modelosObra} gestion={gestion} obras={(obras||[]).map(o=>({ id:o.id, nombre:o.nombre, inicio:o.inicio, cierre:o.cierre }))} data={cronoPro} setData={setCronoPro} Gate={CodigoModal} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="minutas" && <GrabarReunion db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}

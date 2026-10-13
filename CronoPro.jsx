@@ -126,6 +126,21 @@ const Pill = ({ k, children }) => {
   return <span style={{ display: "inline-block", fontSize: 11, fontWeight: 800, borderRadius: 99, padding: "3px 9px", whiteSpace: "nowrap", color: c[0], background: c[1] }}>{children}</span>;
 };
 
+// ── Retrasos cargados en Gestión de obra: el costo del cronograma es la SUMA de estos (misma cuenta que Gestión) ──
+function retrasosObra(gestion, obraId) {
+  const g = gestion || {}, out = [];
+  (g.manual || []).forEach(it => {
+    if (!it || it.tipo !== "Retraso" || (obraId && it.obra_id !== obraId)) return;
+    const d = Number(it.demoraDias) || 0;
+    const personas = it.personas != null && it.personas !== "" ? (Number(it.personas) || 0) : (Number(g.dotacion) || 0);
+    const prod = Math.min(100, Math.max(0, Number(it.productividad) || 0));
+    const vv = d * (personas * (Number(g.costoPersona) || 0) * (1 - prod / 100) + (Number(g.fijosVV) || 0));
+    const bel = d * (Number(g.ggBelfast) || 0);
+    out.push({ id: it.id, desc: it.descripcion || it.etapa || "Retraso", etapa: it.etapa || "", d, vv, bel, total: vv + bel });
+  });
+  return out;
+}
+
 // ── Alertas: pedidos/definiciones críticos que se están venciendo (se muestran igual en V+V y en la página del cliente) ──
 export function alertasCrono(data, obras) {
   const out = [], hoy = hoyISO();
@@ -176,7 +191,7 @@ export function CronoAlertas({ T, data, obras, lado = "vv", onIr, max = 3, soloO
   </div>);
 }
 
-export default function CronoPro({ T, obras = [], data, setData, gated = false, Gate = null, titulo = "Cronograma", lado = "vv", empresa = "V+V", modelosObra = [] }) {
+export default function CronoPro({ T, obras = [], data, setData, gated = false, Gate = null, titulo = "Cronograma", lado = "vv", empresa = "V+V", modelosObra = [], gestion = null }) {
   const lista = (obras || []).filter(o => o && o.id);
   const [obraId, setObraId] = useState(lista[0]?.id || "");
   const [tab, setTab] = useState("crono");
@@ -288,7 +303,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
   // ── Gantt ──
   const gantt = () => {
     const cal = M.cal, labW = 112, H = 46, dh = dnOf(hoy), isoEx = W.excep || {};
-    const min = Math.min(D(cal, M.start), dh), max = Math.max(Math.max(D(cal, M.cur.end - 1), D(cal, M.base.end - 1)) + 8, dh + 4);
+    const emi = (W.pedidos || []).filter(pp => M.info[pp.id]).map(pp => D(cal, M.info[pp.id].emitir)), min = Math.min(D(cal, M.start), dh, ...emi), max = Math.max(Math.max(D(cal, M.cur.end - 1), D(cal, M.base.end - 1)) + 8, dh + 4);
     const n = max - min, px = Math.max(15, Math.min(24, Math.floor(((gw || 360) - labW - 2) / n))), Wd = n * px;
     const x = (d) => (d - min) * px;
     const head = [], shade = [];
@@ -308,7 +323,11 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
       const es = M.cur.ES[t.id], ef = M.cur.EF[t.id], bes = M.base.ES[t.id], bef = M.base.EF[t.id];
       const fl = M.cur.LF[t.id] - ef, c = critOf(t.id), slip = es - bes, xs = x(D(cal, es)), xe = x(D(cal, ef - 1) + 1);
       const marks = []; let k = 0;
-      (W.pedidos || []).forEach(p => { if (p.task !== t.id || !M.info[p.id]) return; const inf = M.info[p.id]; marks.push(<div key={p.id} title={p.desc + " · debe estar respondido el " + fmtW(inf.need)} style={{ position: "absolute", top: 2, left: x(D(cal, inf.need)) + px / 2 - 5 + k * 7, width: 10, height: 10, transform: "rotate(45deg)", background: inf.st === "ok" ? OK : inf.st === "warn" ? WARN : CRIT, border: `1px solid ${T.card}` }} />); k++; });
+      (W.pedidos || []).forEach(p => { if (p.task !== t.id || !M.info[p.id]) return; const inf = M.info[p.id], resuelto = inf.fase === "ok";
+        [[inf.emitir, OK, "pedir desde el"], [inf.amar, WARN, "aviso el"], [inf.need, CRIT, "debe estar el"]].forEach(([idx, col, lab], q) => {
+          const alcanzado = resuelto || M.hoyI >= idx, actual = !resuelto && ((q === 0 && inf.fase === "verde") || (q === 1 && inf.fase === "amarillo") || (q === 2 && (inf.fase === "rojo" || inf.fase === "retraso")));
+          marks.push(<div key={p.id + q} title={p.desc + " · " + lab + " " + fmtW(idx) + (actual ? " · estamos acá" : "")} style={{ position: "absolute", top: 1, left: x(D(cal, idx)) + px / 2 - 5 + k * 3, width: 10, height: 10, borderRadius: "50%", background: alcanzado ? col : "transparent", border: `2px solid ${col}`, boxSizing: "border-box", opacity: alcanzado ? 1 : 0.55, boxShadow: actual ? `0 0 0 3px ${col}55` : "none" }} />); });
+        k++; });
       return (<div key={t.id} style={{ display: "flex", height: H, borderBottom: `1px solid ${T.border}` }}>
         <div style={{ position: "sticky", left: 0, zIndex: 3, flex: `0 0 ${labW}px`, width: labW, background: T.card, padding: "0 8px", display: "flex", alignItems: "center", borderRight: `1px solid ${T.border}`, minWidth: 0 }}>
           <div style={{ fontSize: 11.5, fontWeight: 700, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, color: T.text }}>{t.name}<div style={{ fontFamily: "ui-monospace,monospace", fontSize: 10, fontWeight: 400, color: c ? CRIT : T.muted }}>{c ? "Crítica" : "Holgura " + fl + " d"}</div></div>
@@ -352,24 +371,40 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
 
   const pantallaCrono = () => {
     if (!W || !M) return vacio;
-    const d = M.delta, c = +W.costo || 0, ds = W.dias || DIAS0, ex = W.excep || {};
+    const d = M.delta, ds = W.dias || DIAS0, ex = W.excep || {};
+    const ret = retrasosObra(gestion, obraId), totDias = ret.reduce((a, r) => a + r.d, 0), totCosto = ret.reduce((a, r) => a + r.total, 0);
     return (<>
       {!editing && <CronoAlertas T={T} data={data} setData={setData} obras={obras} lado={lado} soloObra={obraId} max={10} empresa={empresa} />}
-      <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: T.text }}>Cuánto te cuesta cada pedido que llega tarde</div>
-      <div style={hint}>Cada pedido está atado a la tarea que lo necesita. Si llega después de que esa tarea arranca, la tarea se corre, y si está en la ruta crítica corre el final de la obra.</div>
+      <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: T.text }}>Cuánto cuestan los atrasos de la obra</div>
+      <div style={hint}>El costo es la suma de los retrasos que cargás en Gestión de obra para esta obra, uno por uno. No es un atraso general de la obra: cada retraso tiene su motivo, sus días y su costo.</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {kpi("Fin planificado", finPlanTxt, cierreIdx != null ? "Cierre cargado en la obra" : "Sin ningún atraso")}
         {kpi("Fin proyectado", finProyTxt, "Con los atrasos de hoy", d > 0 ? "bad" : "")}
-        {kpi("Atraso de la obra", d + (d === 1 ? " día" : " días"), "días de trabajo", d > 0 ? "bad" : "good")}
-        {kpi("Costo del atraso", money(d * c), d + " × " + money(c), d > 0 ? "bad" : "good")}
+        {kpi("Atrasos acumulados", totDias + (totDias === 1 ? " día" : " días"), ret.length + (ret.length === 1 ? " retraso cargado en Gestión" : " retrasos cargados en Gestión"), totDias > 0 ? "bad" : "good")}
+        {kpi("Costo de los atrasos", money(totCosto), "Suma de los retrasos de Gestión", totCosto > 0 ? "bad" : "good")}
       </div>
+      {ret.length > 0 && <div style={card}>
+        <div style={{ ...eyebrow, marginBottom: 8 }}>Retrasos cargados en Gestión</div>
+        {ret.map(r => <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderTop: `1px solid ${T.border}`, fontSize: 12.5 }}>
+          <span style={{ color: T.text, minWidth: 0 }}>{r.desc}<span style={{ color: T.muted }}> · {r.d} {r.d === 1 ? "día" : "días"}</span></span>
+          <b style={{ color: CRIT, whiteSpace: "nowrap" }}>{money(r.total)}</b></div>)}
+      </div>}
+      {!ret.length && <div style={{ ...hint, ...card }}>Todavía no hay retrasos cargados en Gestión de obra para esta obra. Cuando cargues uno (por ejemplo, 5 días de retraso en trabajos preliminares), suma acá con su costo.</div>}
+      {(W.pedidos || []).length > 0 && <div style={card}>
+        <div style={{ ...eyebrow, marginBottom: 8 }}>Semáforo de definiciones y planos</div>
+        {(W.pedidos || []).map(pp => { const inf = M.info[pp.id]; if (!inf) return null; const col = inf.fase === "verde" ? OK : inf.fase === "amarillo" ? WARN : inf.fase === "rojo" || inf.fase === "retraso" ? CRIT : inf.fase === "ok" ? OK : GHOST;
+          return (<div key={pp.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderTop: `1px solid ${T.border}`, fontSize: 12.5 }}>
+            <i style={{ flex: "none", width: 13, height: 13, borderRadius: "50%", background: inf.fase === "futuro" ? "transparent" : col, border: `2px solid ${col}`, boxSizing: "border-box" }} />
+            <span style={{ flex: 1, minWidth: 0, color: T.text }}><b>{pp.desc}</b><span style={{ color: T.muted }}> · {inf.txt}</span></span>
+            <span style={{ color: T.muted, fontFamily: "ui-monospace,monospace", fontSize: 11.5, whiteSpace: "nowrap" }}>{fmtW(inf.need)}</span></div>); })}
+      </div>}
       <div style={card}>
         <div style={{ ...eyebrow, marginBottom: 10 }}>Cronograma</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 14px", fontSize: 11, color: T.muted, marginBottom: 10 }}>
           <span><i style={{ display: "inline-block", width: 18, height: 9, borderRadius: 2, background: CRIT, marginRight: 5 }} />Ruta crítica</span>
           <span><i style={{ display: "inline-block", width: 18, height: 9, borderRadius: 2, background: BAR, marginRight: 5 }} />Con holgura</span>
           <span><i style={{ display: "inline-block", width: 18, borderTop: `3px solid ${GHOST}`, marginRight: 5, verticalAlign: "middle" }} />Plan original</span>
-          <span><i style={{ display: "inline-block", width: 8, height: 8, transform: "rotate(45deg)", background: OK, marginRight: 6 }} />Pedido debe estar respondido</span>
+          <span><i style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: OK, marginRight: 4 }} /><i style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: WARN, marginRight: 4 }} /><i style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: CRIT, marginRight: 5 }} />Semáforo de definiciones: pedir, aviso, debe estar</span>
         </div>
         <div ref={gref} style={{ overflowX: "auto", border: `1px solid ${T.border}`, borderRadius: 8, background: T.bg }}>{gantt()}</div>
         <div style={{ ...hint, marginTop: 8 }}>Cada columna es un día del calendario. Los días grises no se trabajan. Tocá el número de un día para marcarlo como no laborable (feriado, lluvia) o como trabajado (sábado). Deslizá para ver todo.</div>
@@ -380,7 +415,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <div><Lbl T={T}>Inicio de obra</Lbl>{iniFicha ? <div style={{ ...hint, color: T.text, minHeight: 40, display: "flex", alignItems: "center" }}>{fmtN(dnOf(W.inicio))} · de la ficha de la obra</div> : <Inp T={T} type="date" value={W.inicio} onCommit={v => v && setW(p => ({ ...p, inicio: v }))} />}</div>
-              <div><Lbl T={T}>Costo de un día parado ($)</Lbl><Inp T={T} type="number" min="0" step="10000" value={W.costo} onCommit={v => setW(p => ({ ...p, costo: Math.max(0, +v || 0) }))} /></div>
+
             </div>
             <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: T.sub }}><input type="checkbox" checked={W.plan !== false} onChange={e => setW(p => ({ ...p, plan: e.target.checked }))} /> Mostrar plan original en el cronograma</label>
             <div><Lbl T={T}>Días que se trabajan por semana</Lbl>
@@ -422,12 +457,11 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
 
   const pantallaPedidos = () => {
     if (!W) return <div style={{ ...card, ...hint, textAlign: "center", padding: 24 }}>Primero creá el cronograma de la obra en la solapa Cronograma.</div>;
-    const c = +W.costo || 0;
     return (<>
       <div><div style={eyebrow}>Definiciones y planos atados a una tarea</div><div style={{ ...hint, marginTop: 4 }}>Acá van solo las definiciones y los planos que hay que tener antes de que arranque una tarea. Los materiales se piden por la app de pedidos. Cambiá la fecha de respuesta de uno y mirá cómo se mueve la obra en la solapa Cronograma. Cualquier día del calendario sirve.</div></div>
       {!W.pedidos.length && <div style={{ ...card, ...hint, textAlign: "center", padding: 24 }}>Todavía no hay definiciones ni planos. Agregá el primero con el botón de abajo.</div>}
       {W.pedidos.map(p => { const inf = M && M.info[p.id];
-        const eff = !inf ? "" : inf.single > 0 ? "Corre el fin " + inf.single + (inf.single === 1 ? " día" : " días") + " · " + money(inf.single * c) : (inf.c != null && inf.c > inf.need) ? "Lo absorbe la holgura de la tarea" : "Sin efecto en la obra";
+        const eff = !inf ? "" : inf.single > 0 ? "Corre el fin " + inf.single + (inf.single === 1 ? " día" : " días") + "" : (inf.c != null && inf.c > inf.need) ? "Lo absorbe la holgura de la tarea" : "Sin efecto en la obra";
         return (<div key={p.id} style={itemBorder(!inf ? BAR : inf.st === "ok" ? OK : inf.st === "warn" ? WARN : CRIT)}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
             <select value={p.tipo} onChange={e => setP(p.id, { tipo: e.target.value })} style={{ width: 130, flex: "none", background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 8px", minHeight: 40, fontSize: 13 }}>{(p.tipo === "Materiales" ? ["Materiales", "Definición", "Plano"] : ["Definición", "Plano"]).map(x => <option key={x}>{x}</option>)}</select>

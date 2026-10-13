@@ -6483,7 +6483,7 @@ function ClienteApp() {
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} informesSem={informesSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "adicionales" && <AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} />}
-          {screen === "cronopro" && <CronoPro T={T} titulo="Cronograma" lado="cliente" modelosObra={modelosObra} gated Gate={CodigoModal} obras={(obras || []).map(o => ({ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre }))} data={cronoPro} setData={setCronoPro} />}
+          {screen === "cronopro" && <CronoPro T={T} titulo="Cronograma" lado="cliente" modelosObra={modelosObra} gestion={gestion} gated Gate={CodigoModal} obras={(obras || []).map(o => ({ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre }))} data={cronoPro} setData={setCronoPro} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen key={gestionFoco || "g"} foco={gestionFoco} T={T} cfg={cfg} obras={obras} gestion={gestion} personal={personal} modelosObra={modelosObra} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
