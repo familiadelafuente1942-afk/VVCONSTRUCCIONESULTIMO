@@ -227,6 +227,11 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
     f(); window.addEventListener("resize", f); return () => window.removeEventListener("resize", f);
   }, [tab, obraId, !!M]);
 
+  // Inicio y cierre salen de la ficha de la obra; el cronograma solo suma los atrasos.
+  const cierreIso = isoDeCorta(obra && obra.cierre);
+  const cierreIdx = (() => { if (!M || !cierreIso) return null; let i = wdIdx(M.cal, cierreIso); if (D(M.cal, i) > dnOf(cierreIso)) i -= 1; return Math.max(i, 0); })();
+  const finPlanTxt = M ? (cierreIdx != null ? fmtN(D(M.cal, cierreIdx)) : fmtN(D(M.cal, M.base.end - 1))) : "";
+  const finProyTxt = M ? (cierreIdx != null ? fmtN(D(M.cal, cierreIdx + M.delta)) : fmtN(D(M.cal, M.cur.end - 1))) : "";
   const fmt = (i) => M ? fmtN(D(M.cal, i)) : "";
   const fmtW = (i) => M ? fmtN(D(M.cal, i), 1) : "";
   const critOf = (id) => (M.cur.LF[id] - M.cur.EF[id]) === 0 || (M.base.LF[id] - M.base.EF[id]) === 0;
@@ -353,8 +358,8 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
       <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: T.text }}>Cuánto te cuesta cada pedido que llega tarde</div>
       <div style={hint}>Cada pedido está atado a la tarea que lo necesita. Si llega después de que esa tarea arranca, la tarea se corre, y si está en la ruta crítica corre el final de la obra.</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        {kpi("Fin planificado", fmt(M.base.end - 1), "Sin ningún atraso")}
-        {kpi("Fin proyectado", fmt(M.cur.end - 1), "Con los pedidos de hoy", d > 0 ? "bad" : "")}
+        {kpi("Fin planificado", finPlanTxt, cierreIdx != null ? "Cierre cargado en la obra" : "Sin ningún atraso")}
+        {kpi("Fin proyectado", finProyTxt, "Con los atrasos de hoy", d > 0 ? "bad" : "")}
         {kpi("Atraso de la obra", d + (d === 1 ? " día" : " días"), "días de trabajo", d > 0 ? "bad" : "good")}
         {kpi("Costo del atraso", money(d * c), d + " × " + money(c), d > 0 ? "bad" : "good")}
       </div>
@@ -374,7 +379,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
         {!can ? <button style={btn(false)} onClick={() => guard(() => { })}>🔒 Editar con código</button> : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <div><Lbl T={T}>Inicio de obra</Lbl><Inp T={T} type="date" value={W.inicio} onCommit={v => v && setW(p => ({ ...p, inicio: v }))} /></div>
+              <div><Lbl T={T}>Inicio de obra</Lbl>{iniFicha ? <div style={{ ...hint, color: T.text, minHeight: 40, display: "flex", alignItems: "center" }}>{fmtN(dnOf(W.inicio))} · de la ficha de la obra</div> : <Inp T={T} type="date" value={W.inicio} onCommit={v => v && setW(p => ({ ...p, inicio: v }))} />}</div>
               <div><Lbl T={T}>Costo de un día parado ($)</Lbl><Inp T={T} type="number" min="0" step="10000" value={W.costo} onCommit={v => setW(p => ({ ...p, costo: Math.max(0, +v || 0) }))} /></div>
             </div>
             <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: T.sub }}><input type="checkbox" checked={W.plan !== false} onChange={e => setW(p => ({ ...p, plan: e.target.checked }))} /> Mostrar plan original en el cronograma</label>
@@ -473,7 +478,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: `1px solid ${T.border}`, background: T.card }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{edM ? "Modelo · " + edM.nombre : titulo + (obra ? " · " + obra.nombre : "")}</div>
-        <div style={{ fontSize: 11, color: T.muted }}>{M ? fmt(M.start) + " → " + fmt(M.cur.end - 1) + " · " + (M.cur.end - M.start) + " días de trabajo" : "Sin cronograma cargado"}</div>
+        <div style={{ fontSize: 11, color: T.muted }}>{M ? fmt(M.start) + " → " + finProyTxt : "Sin cronograma cargado"}</div>
       </div>
       {lista.length > 1 && !editing && <select value={obraId} onChange={e => setObraId(e.target.value)} aria-label="Obra" style={{ maxWidth: 150, background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 8px", minHeight: 36, fontSize: 12, fontWeight: 700 }}>{lista.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>}
     </div>

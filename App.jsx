@@ -10665,7 +10665,6 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], bitacora = 
         <div><div style={{ fontSize: 12, fontWeight: 700, color: TXC }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 10.5, color: `rgba(${TXR},.5)`, marginTop: 1 }}>Tocá para ver →</div></div>
       </div>}
 
-      <div style={{ padding: "0 22px", marginBottom: 14 }}><CronoAlertas T={{ ...T, text: TXC, sub: `rgba(${TXR},.78)`, muted: `rgba(${TXR},.5)` }} data={cronoPro} setData={setCronoPro} obras={obras} lado="vv" onIr={onIr} /></div>
       <PortadaGestion gestion={gestion} obras={obras} TXC={TXC} TXR={TXR} onIr={onIr} />
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedades.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
@@ -10923,7 +10922,7 @@ function App() {
             {view==="bitacora" && <BitacoraView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="gestion" && <GestionView db={db} cfg={cfg} focoId={gestionFoco} onFocoUsado={()=>setGestionFoco(null)} onBack={()=>setView("dashboard")} />}
             {view==="formularios" && <FormulariosView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
-            {view==="cronopro" && <CronoPro T={T} titulo="Cronograma" lado="vv" modelosObra={modelosObra} obras={(obras||[]).map(o=>({ id:o.id, nombre:o.nombre, inicio:o.inicio }))} data={cronoPro} setData={setCronoPro} Gate={CodigoModal} />}
+            {view==="cronopro" && <CronoPro T={T} titulo="Cronograma" lado="vv" modelosObra={modelosObra} obras={(obras||[]).map(o=>({ id:o.id, nombre:o.nombre, inicio:o.inicio, cierre:o.cierre }))} data={cronoPro} setData={setCronoPro} Gate={CodigoModal} />}
             {view==="matpedidos" && <MatPedidosView db={db} cfg={cfg} onBack={()=>setView("dashboard")} />}
             {view==="drone" && <DroneIAView db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}
             {view==="minutas" && <GrabarReunion db={db} cfg={cfg} apiKey={cfg.apiKey} onBack={()=>setView("dashboard")} />}

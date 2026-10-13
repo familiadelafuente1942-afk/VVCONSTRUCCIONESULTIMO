@@ -6199,7 +6199,6 @@ function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, ava
         <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div>
       </div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
-      <div style={{ padding: "0 22px", marginBottom: 14 }}><CronoAlertas T={{ ...T, text: TXC, sub: `rgba(${TXR},.78)`, muted: `rgba(${TXR},.5)` }} data={cronoPro} obras={obras} lado="cliente" onIr={onIr} /></div>
       <PortadaGestion gestion={gestion} obras={obras} TXC={TXC} TXR={TXR} onIr={onIr} />
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedadesC.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
@@ -6484,7 +6483,7 @@ function ClienteApp() {
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} informesSem={informesSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
           {screen === "adicionales" && <AdicionalesClienteView T={T} obras={obras} adicionales={adicionales} cfg={cfg} />}
-          {screen === "cronopro" && <CronoPro T={T} titulo="Cronograma" lado="cliente" modelosObra={modelosObra} gated Gate={CodigoModal} obras={(obras || []).map(o => ({ id: o.id, nombre: o.nombre, inicio: o.inicio }))} data={cronoPro} setData={setCronoPro} />}
+          {screen === "cronopro" && <CronoPro T={T} titulo="Cronograma" lado="cliente" modelosObra={modelosObra} gated Gate={CodigoModal} obras={(obras || []).map(o => ({ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre }))} data={cronoPro} setData={setCronoPro} />}
           {screen === "cronograma" && <CronogramaScreen T={T} cfg={cfg} crono={crono} gestion={gestion} />}
           {screen === "gestion" && <GestionScreen key={gestionFoco || "g"} foco={gestionFoco} T={T} cfg={cfg} obras={obras} gestion={gestion} personal={personal} modelosObra={modelosObra} />}
           {screen === "archivos" && <ArchivosScreen T={T} obras={obras} archivosCliente={archivosCliente} setArchivosCliente={setArchivosCliente} archivosVV={archivosVV} registrarSubida={registrarSubida} quitarDeObra={quitarDeObra} />}
