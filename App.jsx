@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 import CronoPro, { CronoAlertas, alertasCrono } from "./CronoPro.jsx";
+import { PlanillaDefinicion, PanelDefinicion, chipDef } from "./PedidoDef.jsx";
 
 // Etapas de obra (para saber en qué momento está cada hecho de la bitácora)
 // Solo las etapas de obra gris + colocación de piso (lo único que hace V+V):
@@ -7487,6 +7488,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   const [filtro, setFiltro] = useState("todos");
   const [open, setOpen] = useState(null);
   const [nuevo, setNuevo] = useState(null);
+  const [planilla, setPlanilla] = useState(false);
   const [reply, setReply] = useState("");
   const [adj, setAdj] = useState([]);
   const [iaLoad, setIaLoad] = useState(false);
@@ -7519,7 +7521,10 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
   const cur = open ? pedidos.find(p => p.id === open) : null;
   function crear() { if (!nuevo.asunto?.trim()) return; aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: miSide, para: "cliente", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }), ...arr]); setNuevo(null); }
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
-  function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
+    const subirDef = async (f) => { const data = await toDataUrl(f); const url = await uploadFoto(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
+  function crearDef(d) { const base = nuevoPedido({ de: miSide, para: "cliente", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); setPlanilla(false); }
+  function responderDef(id, texto, archivos) { const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "resuelto", hilo: [...x.hilo, { de: miSide, texto: texto || "Respuesta con documentación adjunta.", fecha: f, ts, porIA: false, archivos: archivos || [] }] } : x)); }
+function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
   function borrarMsgHilo(pedidoId, idx) { if (!confirm("¿Eliminar este mensaje/archivo del hilo?")) return; aplicarPedidos(setPedidos, arr => arr.map(x => x.id === pedidoId ? { ...x, hilo: (x.hilo || []).filter((_, j) => j !== idx) } : x)); }
   async function responderIA(p) {
@@ -7546,11 +7551,12 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
         {[["todos", "Todos"], ["recibidos", "Recibidos"], ["enviados", "Enviados"]].map(([k, l]) => <button key={k} onClick={() => setFiltro(k)} style={{ flex: 1, padding: "8px", borderRadius: T.rsm, border: `1px solid ${filtro === k ? T.accent : T.border}`, background: filtro === k ? T.al : T.card, color: filtro === k ? T.accent : T.sub, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
       </div>
+      <button onClick={() => setPlanilla(true)} style={{ width: "100%", background: "transparent", color: T.accent, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 800, marginBottom: 14, cursor: "pointer" }}>＋ Pedir definición o plano (planilla modelo)</button>
       {lista.length === 0 && <EmptyMsg>Sin pedidos. Creá uno o pedíselo a la IA (“pedí definiciones a {otroNom} sobre…”).</EmptyMsg>}
       {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado] || PEDIDO_ESTADOS.abierto; const ult = (p.hilo || [])[(p.hilo || []).length - 1]; return (<RowItem key={p.id} onClick={() => { setOpen(p.id); setReply(""); }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>{(() => { const c = chipDef(p); return c ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: c.col, border: `1px solid ${c.col}`, borderRadius: 5, padding: "2px 7px", marginTop: 4 }}>{c.txt}</div> : null; })()}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
               {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.al, borderRadius: 5, padding: "2px 7px" }}><Ico n="building" /> {obraNom(obras, p.obra_id)}</span>}
               {p.para === miSide && p.estado !== "resuelto" && <span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", background: "rgba(239,68,68,.10)", borderRadius: 5, padding: "2px 7px" }}>● Pendiente de respuesta</span>}
@@ -7577,6 +7583,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
         </div>
         <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
       </Card>
+      <PanelDefinicion T={T} p={cur} miSide={miSide} subir={subirDef} onResponder={(t, a) => responderDef(cur.id, t, a)} onReabrir={() => setEstado(cur.id, "abierto")} />
       <Eyebrow>Hilo</Eyebrow>
       {(cur.hilo || []).map((h, i) => { const mine = persp(h); return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
         <div style={{ maxWidth: "85%" }}>
@@ -7600,6 +7607,7 @@ function PedidosView({ db, cfg, apiKey, onBack }) {
     </div>); })()}
 
     {!cur && <AddFab onClick={() => setNuevo({ asunto: "", detalle: "", prioridad: "media", obra_id: "" })} label="Pedido" />}
+    {planilla && <PlanillaDefinicion T={T} obras={obras} paraNombre={otroNom} subir={subirDef} onCrear={crearDef} onCancel={() => setPlanilla(false)} />}
     {nuevo && <Sheet title={`Nuevo pedido a ${otroNom}`} onClose={() => setNuevo(null)}>
       <Field label="Asunto"><TInput value={nuevo.asunto || ""} onChange={e => setNuevo({ ...nuevo, asunto: e.target.value })} placeholder="Ej: Definiciones de terminaciones PB" /></Field>
       <Field label="Detalle / solicitud"><textarea value={nuevo.detalle || ""} onChange={e => setNuevo({ ...nuevo, detalle: e.target.value })} rows={4} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }} /></Field>

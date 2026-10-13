@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import CronoPro, { CronoAlertas, alertasCrono } from "./CronoPro.jsx";
+import { PlanillaDefinicion, PanelDefinicion, chipDef } from "./PedidoDef.jsx";
 
 const DOCS_BASE = [
   { n: "Niveles", c: "Documentación técnica" },
@@ -3800,6 +3801,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   const [filtro, setFiltro] = useState("todos");
   const [open, setOpen] = useState(null);
   const [nuevo, setNuevo] = useState(null);
+  const [planilla, setPlanilla] = useState(false);
   const [reply, setReply] = useState("");
   const [adj, setAdj] = useState([]);
   const [iaLoad, setIaLoad] = useState(false);
@@ -3830,7 +3832,10 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
   const nomObra = id => obras.find(o => o.id === id)?.nombre || "";
   function crear() { if (!nuevo.asunto?.trim()) return; aplicarPedidos(setPedidos, arr => [nuevoPedido({ de: miSide, para: "vv", asunto: nuevo.asunto, detalle: nuevo.detalle, prioridad: nuevo.prioridad, obra_id: nuevo.obra_id }), ...arr]); setNuevo(null); }
   function responder(id, texto, porIA, archivos) { if (!texto?.trim() && !(archivos || []).length) return; const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "respondido", hilo: [...x.hilo, { de: miSide, texto, fecha: f, ts, porIA: !!porIA, archivos: archivos || [] }] } : x)); setReply(""); setAdj([]); }
-  function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
+    const subirDef = async (f) => { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
+  function crearDef(d) { const base = nuevoPedido({ de: miSide, para: "vv", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id }); const p0 = { ...base, def: d.def, hilo: [{ ...base.hilo[0], archivos: d.archivos || [] }] }; aplicarPedidos(setPedidos, arr => [p0, ...arr]); setPlanilla(false); }
+  function responderDef(id, texto, archivos) { const f = hoyStr(), ts = Date.now(); aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado: "resuelto", hilo: [...x.hilo, { de: miSide, texto: texto || "Respuesta con documentación adjunta.", fecha: f, ts, porIA: false, archivos: archivos || [] }] } : x)); }
+function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => x.id === id ? { ...x, estado } : x)); }
   function borrarPedido(id) { if (!confirm("¿Eliminar este pedido? Se borra para las dos empresas.")) return; aplicarPedidos(setPedidos, arr => arr.filter(x => x.id !== id)); setOpen(null); }
   async function responderIA(p) { setIaLoad(true); const hist = (p.hilo || []).map(h => `${h.de === miSide ? cfg.nombre : "V+V"}: ${h.texto}`).join("\n"); const sys = `Sos el agente de ${cfg.nombre} respondiendo a V+V Construcciones. Redactá una respuesta breve y concreta (español rioplatense) al último mensaje. Solo el texto.`; const r = await callAI([{ role: "user", content: `Pedido: ${p.asunto}\n\nHilo:\n${hist}\n\nRedactá nuestra respuesta.` }], sys, apiKey); setReply(r); setIaLoad(false); }
   const Pill = (k, l) => <button key={k} onClick={() => setFiltro(k)} style={{ flex: 1, padding: "8px", borderRadius: T.rsm, border: `1px solid ${filtro === k ? T.accent : T.border}`, background: filtro === k ? "rgba(255,255,255,.08)" : T.card, color: filtro === k ? T.accent : T.sub, fontSize: 12, fontWeight: 700 }}>{l}</button>;
@@ -3844,11 +3849,12 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
         </div>); })()}
         <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>{Pill("todos", "Todos")}{Pill("recibidos", "Recibidos")}{Pill("enviados", "Enviados")}</div>
         <button onClick={() => setNuevo({ asunto: "", detalle: "", prioridad: "media", obra_id: obras[0]?.id || "" })} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 700, marginBottom: 16 }}>＋ Nuevo pedido a V+V</button>
-        {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 18px" }}>Sin pedidos. Creá uno o pedíselo a la IA.</div>}
+        <button onClick={() => setPlanilla(true)} style={{ width: "100%", background: "transparent", color: T.accent, border: `1.5px solid ${T.accent}`, borderRadius: T.rsm, padding: "12px", fontSize: 13, fontWeight: 800, marginBottom: 14, cursor: "pointer" }}>＋ Pedir definición o plano (planilla modelo)</button>
+      {lista.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "30px 18px" }}>Sin pedidos. Creá uno o pedíselo a la IA.</div>}
         {lista.map(p => { const e = PEDIDO_ESTADOS[p.estado] || PEDIDO_ESTADOS.abierto; const ult = (p.hilo || [])[p.hilo?.length - 1]; return (<Card T={T} key={p.id} style={{ padding: 13, marginBottom: 9 }}>
           <div onClick={() => { setOpen(p.id); setReply(""); }} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{p.asunto}</div>{(() => { const c = chipDef(p); return c ? <div style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color: c.col, border: `1px solid ${c.col}`, borderRadius: 5, padding: "2px 7px", marginTop: 4 }}>{c.txt}</div> : null; })()}
               <div style={{ fontSize: 11.5, color: T.muted, marginTop: 2 }}>{p.de === miSide ? "Enviado" : "Recibido"} · {p.fecha}</div>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 4 }}>
                 {p.obra_id && <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: "rgba(255,255,255,.08)", borderRadius: 5, padding: "2px 7px" }}><Ico n="building" /> {nomObra(p.obra_id)}</span>}
@@ -3871,7 +3877,8 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
           <div style={{ display: "flex", gap: 6, marginTop: 12 }}>{Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700 }}>{v.l}</button>)}</div>
           <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
         </Card>
-        <Eyebrow T={T}>Hilo</Eyebrow>
+        <PanelDefinicion T={T} p={cur} miSide={miSide} subir={subirDef} onResponder={(t, a) => responderDef(cur.id, t, a)} onReabrir={() => setEstado(cur.id, "abierto")} />
+      <Eyebrow T={T}>Hilo</Eyebrow>
         {(cur.hilo || []).map((h, i) => { const mine = h.de === miSide; return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
           <div style={{ maxWidth: "85%" }}>
             <div style={{ background: mine ? T.accent : T.card, color: mine ? "#fff" : T.text, border: mine ? "none" : `1px solid ${T.border}`, borderRadius: mine ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "10px 13px", fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
@@ -3891,6 +3898,7 @@ function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
         </div>
       </>); })()}
     </div>
+    {planilla && <PlanillaDefinicion T={T} obras={obras} paraNombre={otroNom} subir={subirDef} onCrear={crearDef} onCancel={() => setPlanilla(false)} />}
     {nuevo && <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 300, display: "flex", alignItems: "flex-end" }} onClick={() => setNuevo(null)}>
       <div onClick={e => e.stopPropagation()} style={{ background: T.card, borderRadius: "18px 18px 0 0", width: "100%", maxWidth: 1180, margin: "0 auto", padding: "20px", animation: "up .25s ease" }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 14 }}>Nuevo pedido a V+V</div>
