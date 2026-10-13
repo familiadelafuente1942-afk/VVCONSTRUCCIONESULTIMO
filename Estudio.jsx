@@ -40,6 +40,9 @@ export default function EstudioApp() {
   const [pedidos, setPedidos] = useState([]);
   const [obras, setObras] = useState([]);
   const [cfgNombre, setCfgNombre] = useState("");
+  const [logo, setLogo] = useState(() => { try { return localStorage.getItem("estudio_logo") || ""; } catch { return ""; } });
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
+  const logoRef = useRef(null);
   const [error, setError] = useState("");
   const [cargado, setCargado] = useState(false);
   const [filtro, setFiltro] = useState("responder");
@@ -61,6 +64,7 @@ export default function EstudioApp() {
     traer(); const iv = setInterval(traer, 8000);
     const onVis = () => { if (document.visibilityState === "visible") traer(); };
     document.addEventListener("visibilitychange", onVis);
+    (async () => { const pf = await nubeGet("estudio_perfil"); try { if (pf) { const j = JSON.parse(pf); if (j.logo) { setLogo(j.logo); try { localStorage.setItem("estudio_logo", j.logo); } catch { } } } } catch { } })();
     (async () => { const c = await nubeGet("cliente_cfg"); try { if (c) setCfgNombre(JSON.parse(c).nombre || ""); } catch { } })();
     (async () => { const o = await nubeGet("vv_obras"); try { if (o) setObras(JSON.parse(o).map(x => ({ id: x.id, nombre: x.nombre }))); } catch { } })();
     return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); };
@@ -80,6 +84,17 @@ export default function EstudioApp() {
       setPedidos(sig);
     } catch (e) { alert("No se pudo guardar (" + e.message + "). Probá de nuevo."); }
     setGuardando(false);
+  }
+  async function cambiarLogo(e) {
+    const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+    if (!(f.type || "").startsWith("image/")) { alert("Elegí una imagen (JPG o PNG)."); return; }
+    setSubiendoLogo(true);
+    try {
+      const a = await subirArchivo(f);
+      setLogo(a.url); try { localStorage.setItem("estudio_logo", a.url); } catch { }
+      await nubeSet("estudio_perfil", JSON.stringify({ nombre, logo: a.url, upd: Date.now() }));
+    } catch (er) { alert("No se pudo subir el logo. Probá de nuevo."); }
+    setSubiendoLogo(false);
   }
   const entrada = (texto, archivos) => ({ de: "estudio", nombre, texto, fecha: hoyStr(), ts: Date.now(), porIA: false, archivos: archivos || [] });
   const tomar = (id) => cambiar(id, p => conMov({ ...p, hilo: [...(p.hilo || []), entrada("El estudio recibió el pedido y está trabajando en la respuesta.")] }, "en_proceso", "estudio"));
@@ -115,8 +130,16 @@ export default function EstudioApp() {
 
   return (<div style={wrap}><div style={inner}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
-      <div><div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", color: T.accent, textTransform: "uppercase" }}>Panel del estudio{cfgNombre ? " · " + cfgNombre : ""}</div>
-        <div style={{ fontSize: 21, fontWeight: 800, marginTop: 3 }}>{nombre}</div></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+        <input ref={logoRef} type="file" accept="image/*" onChange={cambiarLogo} style={{ display: "none" }} />
+        <div onClick={() => logoRef.current && logoRef.current.click()} title="Cambiar el logo del estudio" style={{ width: 58, height: 58, borderRadius: 14, border: `1px solid ${T.border}`, background: T.card, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", position: "relative" }}>
+          {logo ? <img src={logo} alt="Logo del estudio" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <span style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textAlign: "center", lineHeight: 1.2 }}>Subir<br />logo</span>}
+          {subiendoLogo && <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,.8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>…</div>}
+        </div>
+        <div style={{ minWidth: 0 }}><div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", color: T.accent, textTransform: "uppercase" }}>Panel del estudio{cfgNombre ? " · " + cfgNombre : ""}</div>
+          <div style={{ fontSize: 21, fontWeight: 800, marginTop: 3 }}>{nombre}</div>
+          <button onClick={() => logoRef.current && logoRef.current.click()} style={{ background: "none", border: 0, padding: 0, color: T.accent, fontSize: 12, fontWeight: 700, cursor: "pointer", marginTop: 2 }}>{logo ? "Cambiar logo" : "Subir logo del estudio"}</button></div>
+      </div>
       <button onClick={() => { try { localStorage.removeItem("estudio_nombre"); } catch { } setNombre(""); }} style={{ background: "none", border: 0, color: T.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>Cambiar</button>
     </div>
     {error && <div style={{ background: "#FEF3C7", color: "#92400E", borderRadius: 10, padding: "9px 12px", fontSize: 12.5, marginBottom: 10 }}>{error}</div>}
