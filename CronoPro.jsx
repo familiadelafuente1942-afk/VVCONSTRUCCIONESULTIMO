@@ -44,14 +44,15 @@ function ordenar(tareas) {
 }
 function programar(o, cons, start) {
   const ES = {}, EF = {};
-  o.ord.forEach(t => { let s = start; o.pm[t.id].forEach(p => { if (EF[p] != null) s = Math.max(s, EF[p]); }); if (cons[t.id] != null) s = Math.max(s, cons[t.id]); ES[t.id] = s; EF[t.id] = s + t.dur; });
+  o.ord.forEach(t => { const fx = o.fix && o.fix[t.id]; let s = fx != null ? fx : start; if (fx == null) o.pm[t.id].forEach(p => { if (EF[p] != null) s = Math.max(s, EF[p]); }); if (cons[t.id] != null) s = Math.max(s, cons[t.id]); ES[t.id] = s; EF[t.id] = s + t.dur; });
   let end = start; o.ord.forEach(t => { end = Math.max(end, EF[t.id]); });
   const LF = {};
-  for (let i = o.ord.length - 1; i >= 0; i--) { const t = o.ord[i]; let lf = end; o.ord.forEach(u => { if (o.pm[u.id].indexOf(t.id) >= 0) lf = Math.min(lf, LF[u.id] - u.dur); }); LF[t.id] = lf; }
+  for (let i = o.ord.length - 1; i >= 0; i--) { const t = o.ord[i]; let lf = end; o.ord.forEach(u => { if ((!o.fix || o.fix[u.id] == null) && o.pm[u.id].indexOf(t.id) >= 0) lf = Math.min(lf, LF[u.id] - u.dur); }); LF[t.id] = lf; }
   return { ES, EF, LF, end };
 }
 function calcular(P, hoy) {
   const cal = mkCal(P.dias, P.excep), o = ordenar(P.tareas), start = wdIdx(cal, P.inicio), hoyI = wdIdx(cal, hoy);
+  o.fix = {}; P.tareas.forEach(t => { if (t.desde) o.fix[t.id] = wdIdx(cal, t.desde); });
   const base = programar(o, {}, start), info = {}, cons = {};
   (P.pedidos || []).forEach(p => {
     if (base.ES[p.task] == null) return;
@@ -341,7 +342,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
   const pantallaTareas = () => {
     if (!W) return <div style={{ ...card, ...hint, textAlign: "center", padding: 24 }}>Primero creá el cronograma de la obra en la solapa Cronograma.</div>;
     return (<>
-      <div><div style={eyebrow}>Tareas de la obra</div><div style={{ ...hint, marginTop: 4 }}>En "Empieza después de" escribí los números de las tareas que tienen que terminar antes, por ejemplo 3, 5. Vacío significa que arranca con la obra.</div>{M && M.o.cyc && <div style={{ ...hint, color: CRIT, fontWeight: 700, marginTop: 4 }}>Hay una dependencia circular: se ignoró la que cierra el círculo.</div>}</div>
+      <div><div style={eyebrow}>Tareas de la obra</div><div style={{ ...hint, marginTop: 4 }}>En "Arranca el día" abrí el calendario y elegí la fecha en que empieza cada tarea. La duración cuenta solo los días de trabajo.</div>{M && M.o.cyc && <div style={{ ...hint, color: CRIT, fontWeight: 700, marginTop: 4 }}>Hay una dependencia circular: se ignoró la que cierra el círculo.</div>}</div>
       {W.tareas.map((t, i) => { const cr = M && critOf(t.id), fl = M ? M.cur.LF[t.id] - M.cur.EF[t.id] : 0;
         return (<div key={t.id} style={itemBorder(cr ? CRIT : BAR)}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
@@ -353,7 +354,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <div><Lbl T={T}>Duración (días de trabajo)</Lbl><Inp T={T} type="number" min="1" step="1" value={t.dur} onCommit={v => setT(t.id, { dur: Math.max(1, Math.round(+v) || 1) })} /></div>
-            <div><Lbl T={T}>Empieza después de (N°)</Lbl><Inp T={T} inputMode="numeric" placeholder="ej. 3, 5" value={(t.preds || []).map(rowNum).filter(Boolean).join(", ")} onCommit={v => setPreds(t, v)} /></div>
+            <div><Lbl T={T}>Arranca el día</Lbl><Inp T={T} type="date" value={t.desde || (M ? isoOf(D(M.cal, M.cur.ES[t.id])) : W.inicio)} onCommit={v => setT(t.id, { desde: v || undefined })} /></div>
           </div>
           {M && <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6, fontSize: 12, color: T.sub }}><span><b style={{ fontFamily: "ui-monospace,monospace", fontWeight: 500, color: T.text }}>{fmtW(M.cur.ES[t.id])}</b> → <b style={{ fontFamily: "ui-monospace,monospace", fontWeight: 500, color: T.text }}>{fmtW(M.cur.EF[t.id] - 1)}</b></span>{cr ? <Pill k="crit">Crítica</Pill> : <Pill k="hol">Holgura {fl} d</Pill>}</div>}
         </div>); })}
