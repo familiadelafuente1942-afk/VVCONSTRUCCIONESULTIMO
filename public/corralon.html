@@ -178,10 +178,10 @@ const SEED={
 /* ───────── lectura de las otras apps ───────── */
 function ls(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
-function leer(k){let v=ls(k);if(v==null)v=ls('demo_nube__'+k);if(v==null)return null;try{return JSON.parse(v)}catch(e){return null}}
+function leer(k){let v=ls('corr_nube__'+k);if(v==null)v=ls(k);if(v==null)v=ls('demo_nube__'+k);if(v==null)return null;try{return JSON.parse(v)}catch(e){return null}}
 const CLAVES=['vv_obras','vv_matpedidos','vv_personal','vv_cfg','vv_gestion'];
 let D=null,ST={ps:{}},snap='';
-function huella(){return CLAVES.map(k=>(ls(k)||'')+'|'+(ls('demo_nube__'+k)||'')).join('~')+'~'+(ls(KEY)||'')}
+function huella(){return CLAVES.map(k=>(ls(k)||'')+'|'+(ls('corr_nube__'+k)||'')).join('~')+'~'+(ls(KEY)||'')}
 function cargar(){
   const o=USAR_APPS?leer('vv_obras'):null;
   const real=!!(o&&o.length);
@@ -544,8 +544,24 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('focus',refrescar);
 setInterval(refrescar,4000);
 
+/* Trae los datos directo de la base (solo lectura), así funciona también anclada en el inicio del celular. */
+const NUBE='https://bxhjgxzvayszfqwlwinq.supabase.co/rest/v1/bco_storage',NK='sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5';
+async function traerNube(){
+  let hubo=false;
+  for(const k of CLAVES){
+    try{
+      const r=await fetch(NUBE+'?key=eq.'+k+'&select=value&limit=1',{headers:{apikey:NK,Authorization:'Bearer '+NK}});
+      if(!r.ok)continue;
+      const a=await r.json();
+      if(a&&a[0]&&a[0].value!=null){const v=typeof a[0].value==='string'?a[0].value:JSON.stringify(a[0].value);if(ls('corr_nube__'+k)!==v){lsSet('corr_nube__'+k,v);hubo=true}}
+    }catch(e){}
+  }
+  if(hubo&&!S.sheet){cargar();render()}
+}
 cargar();
 render();
+traerNube();
+setInterval(traerNube,20000);
 })();
 </script>
 </body>
