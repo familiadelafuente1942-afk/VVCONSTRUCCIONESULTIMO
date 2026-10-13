@@ -316,7 +316,7 @@ storage.set = (key, value) => {
       let achica = vacioJ(value) || (c.value.length > 500 && String(value).length < c.value.length * 0.2);
       // Obras: si la nube tiene 3+ y lo nuevo trae menos de la mitad, es un error → se bloquea siempre.
       let obrasAchica = false;
-      if (key === "vv_obras") { try { const nc = JSON.parse(c.value), nn = JSON.parse(value); obrasAchica = Array.isArray(nc) && Array.isArray(nn) && nc.length >= 3 && nn.length < nc.length * 0.5; } catch { } }
+      if (key === "vv_obras") { try { const nc = JSON.parse(c.value), nn = JSON.parse(value); const unicas = Array.isArray(nc) ? new Set(nc.map(o => o && o.id)).size : 0; obrasAchica = Array.isArray(nc) && Array.isArray(nn) && nc.length >= 3 && nn.length < nc.length * 0.5 && nn.length < unicas; } catch { } }
       if ((achica && !guardia.leida[key]) || obrasAchica) {
         guardia.bloq[key] = Date.now();
         avisarErrorSync(key, "Se BLOQUEÓ un guardado que habría borrado datos de la nube (este aparato todavía no los había cargado). Recargá la página.");
@@ -10816,6 +10816,8 @@ function App() {
   const [gestionFoco, setGestionFoco] = useState(null);
   const [lics, setLics] = useStoredState("vv_lics", SAMPLE_LICS);
   const [obras, setObras] = useStoredState("vv_obras", SAMPLE_OBRAS);
+  // Limpieza: si por un error anterior la lista quedó con obras repetidas, se deja una sola por obra (la última)
+  useEffect(() => { const l = obras || []; if (l.length < 2) return; const m = new Map(); l.forEach(o => { if (o && o.id != null) m.set(o.id, o); }); if (m.size < l.length) setObras(Array.from(m.values())); }, [obras]);
   const [modelosObra, setModelosObra] = useStoredState("vv_modelos_obra", []);
   const [cronoPro, setCronoPro] = useStoredState("vv_cronopro", { obras: {} });
   const [personal, setPersonal] = useStoredState("vv_personal", SAMPLE_PERSONAL);

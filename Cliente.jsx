@@ -272,7 +272,7 @@ storage.set = (key, value) => {
       // si la nube tiene 3+ obras y lo nuevo trae menos de la mitad, es un error → se bloquea,
       // aunque este aparato ya haya leído antes (así no pisa una lista vieja o corta).
       let obrasAchica = false;
-      if (key === "vv_obras") { try { const nc = JSON.parse(c.value), nn = JSON.parse(value); obrasAchica = Array.isArray(nc) && Array.isArray(nn) && nc.length >= 3 && nn.length < nc.length * 0.5; } catch { } }
+      if (key === "vv_obras") { try { const nc = JSON.parse(c.value), nn = JSON.parse(value); const unicas = Array.isArray(nc) ? new Set(nc.map(o => o && o.id)).size : 0; obrasAchica = Array.isArray(nc) && Array.isArray(nn) && nc.length >= 3 && nn.length < nc.length * 0.5 && nn.length < unicas; } catch { } }
       if ((achica && !guardia.leida[key]) || obrasAchica) {
         guardia.bloq[key] = Date.now();
         avisarErrorSync(key, "Se BLOQUEÓ un guardado que habría borrado datos de la nube. Recargá la página (Ctrl+F5) y avisá si vuelve a pasar.");
@@ -6413,7 +6413,9 @@ function ClienteApp() {
   const idsOk = restringido ? new Set(miAcceso.obras || []) : null;
   const [obrasRaw, setObrasRaw] = useStored("vv_obras", []);
   // Si es jefe de obra, lo que guarda no pisa las obras que no ve
-  const setObras = (u) => setObrasRaw(prev => { if (!idsOk) return typeof u === "function" ? u(prev) : u; const vis = (prev || []).filter(o => idsOk.has(o.id)); const nx = typeof u === "function" ? u(vis) : u; return [...(prev || []).filter(o => !idsOk.has(o.id)), ...(nx || [])]; });
+  const setObras = (u) => setObrasRaw(prev => { if (!idsOk) return typeof u === "function" ? u(prev) : u; const vis = (prev || []).filter(o => idsOk.has(o.id)); const nx = (typeof u === "function" ? u(vis) : u); return [...(prev || []).filter(o => !idsOk.has(o.id)), ...(nx || []).filter(o => o && idsOk.has(o.id))]; });
+  // Limpieza: si por un error anterior la lista quedó con obras repetidas, se deja una sola por obra (la última)
+  useEffect(() => { if (idsOk) return; const l = obrasRaw || []; if (l.length < 2) return; const m = new Map(); l.forEach(o => { if (o && o.id != null) m.set(o.id, o); }); if (m.size < l.length) setObrasRaw(Array.from(m.values())); }, [obrasRaw, !!idsOk]);
   // Obras marcadas como "privada" en V+V no existen para Belfast: se filtran acá,
   // en el único lugar donde Cliente.jsx lee la lista completa.
   const obrasTodas = (obrasRaw || []).filter(o => !o.privada);
@@ -6422,7 +6424,7 @@ function ClienteApp() {
   const avance = idsOk ? Object.fromEntries(Object.entries(avanceAll || {}).filter(([k]) => idsOk.has(k))) : avanceAll;
   const [definicionesAll, setDefinicionesAll] = useStored("vv_definiciones", []);
   const definiciones = idsOk ? (definicionesAll || []).filter(r => idsOk.has(r.obra_id)) : definicionesAll;
-  const setDefiniciones = (u) => setDefinicionesAll(prev => { const nx = typeof u === "function" ? u(definiciones) : u; return idsOk ? [...(prev || []).filter(r => !idsOk.has(r.obra_id)), ...(nx || [])] : nx; });
+  const setDefiniciones = (u) => setDefinicionesAll(prev => { const nx = typeof u === "function" ? u(definiciones) : u; return idsOk ? [...(prev || []).filter(r => !idsOk.has(r.obra_id)), ...(nx || []).filter(r => r && idsOk.has(r.obra_id))] : nx; });
   const [docrecepcion, setDocrecepcion] = useStored("vv_docrecepcion", []);
   const [bitacoraAll, setBitacora] = useStored("vv_bitacora", []);
   const bitacora = idsOk ? (bitacoraAll || []).filter(h => idsOk.has(h.obra_id)) : bitacoraAll;
