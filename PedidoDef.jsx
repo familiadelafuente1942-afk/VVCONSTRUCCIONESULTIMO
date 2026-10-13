@@ -132,7 +132,7 @@ export function PlanillaDefinicion({ T, obras = [], paraNombre = "el estudio", p
 //  · me toca responder (soy el estudio): descripción + documentos, y puedo marcar "estoy trabajando en esto"
 //  · soy quien pidió y el estudio ya respondió: acepto y doy por resuelto, o pido un ajuste
 //  · espero la respuesta
-export function PanelDefinicion({ T, p, miSide, subir, onResponder, onReabrir, onTomar, onResolver }) {
+export function PanelDefinicion({ T, p, miSide, subir, onResponder, onReabrir, onTomar, onResolver, onDevolver }) {
   const [texto, setTexto] = useState("");
   const [adj, setAdj] = useState([]);
   const [err, setErr] = useState("");
@@ -146,7 +146,7 @@ export function PanelDefinicion({ T, p, miSide, subir, onResponder, onReabrir, o
     <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase", color: ch.col }}>{ch.txt}</div>
     <div style={{ fontSize: 14, fontWeight: 800, color: T.text, margin: "3px 0" }}>{p.def.tarea}</div>
     {cerrado
-      ? <div style={{ fontSize: 12.5, color: T.sub }}>Este pedido está resuelto. {onReabrir && miSide !== "estudio" && <button type="button" onClick={onReabrir} style={{ background: "none", border: 0, color: T.accent, fontWeight: 700, fontSize: 12.5, cursor: "pointer", padding: 0 }}>Reabrir</button>}</div>
+      ? <div style={{ fontSize: 12.5, color: T.sub }}>Este pedido está resuelto{p.def.devueltoTs ? " y la respuesta ya se envió al contratista" : ""}. {onReabrir && miSide !== "estudio" && <button type="button" onClick={onReabrir} style={{ background: "none", border: 0, color: T.accent, fontWeight: 700, fontSize: 12.5, cursor: "pointer", padding: 0 }}>Reabrir</button>}</div>
       : meToca
         ? (<div>
           <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.5, marginBottom: 8 }}>{yaRespondioEstudio ? "Ya enviaste una respuesta. Si falta la definición, el plano o algún documento, subilo acá y se suma al pedido." : "Respondé con la descripción de la definición y subí el plano o los documentos."}</div>
@@ -161,7 +161,8 @@ export function PanelDefinicion({ T, p, miSide, subir, onResponder, onReabrir, o
         : (paraEstudio && respondido && onResolver)
           ? (<div>
             <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.5 }}>El estudio respondió. Revisá la respuesta y los archivos en el hilo.</div>
-            <button type="button" onClick={onResolver} style={btn("#3E9B62", "#fff")}>Está bien, dar por resuelto</button>
+            {onDevolver && p.def.origen && p.def.origen.matId && <button type="button" onClick={onDevolver} style={btn("#3E9B62", "#fff")}>Enviar al contratista y dar por resuelto</button>}
+            <button type="button" onClick={onResolver} style={btn(onDevolver && p.def.origen && p.def.origen.matId ? T.bg : "#3E9B62", onDevolver && p.def.origen && p.def.origen.matId ? T.text : "#fff", onDevolver && p.def.origen && p.def.origen.matId ? `1px solid ${T.border}` : 0)}>{onDevolver && p.def.origen && p.def.origen.matId ? "Dar por resuelto sin enviar" : "Está bien, dar por resuelto"}</button>
             {onReabrir && <button type="button" onClick={onReabrir} style={btn(T.bg, T.text, `1px solid ${T.border}`)}>Pedir un ajuste al estudio</button>}
           </div>)
           : <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.5 }}>{respondido ? "Ya hay una respuesta. Revisala en el hilo y, si está bien, marcá el pedido como resuelto." : (paraEstudio ? "Está en el estudio. Cuando suban el plano o la descripción, aparece en el hilo." : "Esperando la respuesta. Cuando suban el plano o la descripción, aparece en el hilo.")}</div>}
@@ -179,6 +180,7 @@ export function RecorridoDef({ T, p }) {
     ["Se mandó al estudio", fmtTs(t.tFwd)],
     d.limite ? ["Se necesitaba el", fmtLimite(d.limite)] : null,
     ["Respuesta del estudio", t.tResp ? fmtTs(t.tResp) : "pendiente"],
+    d.devueltoTs ? ["Enviado al contratista", fmtTs(d.devueltoTs)] : null,
     ["Resuelto", t.tRes ? fmtTs(t.tRes) : "pendiente"],
   ].filter(Boolean);
   return (<div style={{ border: `1px solid ${T.border}`, background: T.card, borderRadius: T.rsm || 10, padding: 13, marginBottom: 14 }}>

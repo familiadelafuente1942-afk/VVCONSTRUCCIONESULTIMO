@@ -3791,7 +3791,7 @@ Usá solo ids/nombres reales. Sin acción concreta, no agregues el bloque.`;
 }
 
 // ── PANTALLA: PEDIDOS (cliente) ──────────────────────────────────────
-function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos }) {
+function PedidosScreen({ T, cfg, apiKey, obras, pedidos, setPedidos, onDevolver }) {
   const miSide = "cliente", otroNom = "V+V Construcciones";
   const [filtro, setFiltro] = useState("todos");
   const [open, setOpen] = useState(null);
@@ -3880,7 +3880,7 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
           <div style={{ display: "flex", gap: 6, marginTop: 12 }}>{Object.entries(PEDIDO_ESTADOS).map(([k, v]) => <button key={k} onClick={() => setEstado(cur.id, k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, border: `1px solid ${cur.estado === k ? v.c : T.border}`, background: cur.estado === k ? v.b : T.card, color: cur.estado === k ? v.c : T.muted, fontSize: 10.5, fontWeight: 700 }}>{v.l}</button>)}</div>
           <button onClick={() => borrarPedido(cur.id)} style={{ width: "100%", marginTop: 12, background: "rgba(239,68,68,.10)", border: "1px solid rgba(239,68,68,.30)", color: "#EF4444", borderRadius: T.rsm, padding: "9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Eliminar pedido</button>
         </Card>
-        <PanelDefinicion T={T} p={cur} miSide={miSide} subir={subirDef} onResponder={(t, a) => responderDef(cur.id, t, a)} onReabrir={() => setEstado(cur.id, cur.para === "estudio" ? "en_proceso" : "abierto")} onResolver={() => setEstado(cur.id, "resuelto")} />
+        <PanelDefinicion T={T} p={cur} miSide={miSide} subir={subirDef} onResponder={(t, a) => responderDef(cur.id, t, a)} onReabrir={() => setEstado(cur.id, cur.para === "estudio" ? "en_proceso" : "abierto")} onResolver={() => setEstado(cur.id, "resuelto")} onDevolver={onDevolver ? () => onDevolver(cur) : null} />
       <RecorridoDef T={T} p={cur} />
       <Eyebrow T={T}>Hilo</Eyebrow>
         {(cur.hilo || []).map((h, i) => { const mine = h.de === miSide; return (<div key={i} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", marginBottom: 10 }}>
@@ -3900,6 +3900,9 @@ function setEstado(id, estado) { aplicarPedidos(setPedidos, arr => arr.map(x => 
           <button onClick={() => responderIA(cur)} disabled={iaLoad} style={{ flex: 1, background: "rgba(255,255,255,.08)", color: T.accent, border: "none", borderRadius: T.rsm, padding: "11px", fontSize: 13, fontWeight: 700 }}>{iaLoad ? "Redactando…" : "Redactar con IA"}</button>
           <PBtn T={T} onClick={() => responder(cur.id, reply, false, adj)} style={{ flex: 1 }}>Enviar</PBtn>
         </div>
+        {onDevolver && cur.def && cur.def.origen && cur.def.origen.matId && cur.estado !== "resuelto" && (cur.hilo || []).some(h => h.de === "estudio" && !/^El estudio recibió el pedido/.test(h.texto || "")) &&
+          <button onClick={() => { if (confirm("¿Enviar la respuesta del estudio al contratista y dar el pedido por resuelto?")) onDevolver(cur); }} style={{ width: "100%", marginTop: 14, background: "#3E9B62", color: "#fff", border: 0, borderRadius: T.rsm, padding: "14px", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>Enviárselo al contratista</button>}
+        {cur.def && cur.def.devueltoTs && <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 700, color: "#3E9B62", textAlign: "center" }}>✓ Enviado al contratista el {fmtTs(cur.def.devueltoTs)}</div>}
       </>); })()}
     </div>
     {planilla && <PlanillaDefinicion T={T} obras={obras} paraNombre={otroNom} paraOpciones={[{ k: "estudio", l: "Estudio de arquitectura" }, { k: "vv", l: otroNom }]} subir={subirDef} onCrear={crearDef} onCancel={() => setPlanilla(false)} />}
@@ -6149,7 +6152,7 @@ function PortadaGestion({ gestion, obras, TXC, TXR, onIr }) {
   </div>);
 }
 // Inicio de la app cliente: lo que pidió el contratista y todavía hay que levantar y pasar al estudio, y lo que ya está en el estudio
-function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, setPedidos, TXC, TXR, onIr }) {
+function PedidosDefInicio({ onDevolver, T, cfg, obras, matpedidos, setMatpedidos, pedidos, setPedidos, TXC, TXR, onIr }) {
   const [plan, setPlan] = useState(null);
   const [verTab, setVerTab] = useState(false);
   const hayDef = (pedidos || []).some(x => x && x.def);
@@ -6157,7 +6160,10 @@ function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, s
   const lista = (matpedidos || []).filter(m => m.tipo && m.tipo !== "material").slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const enEstudio = m => (pedidos || []).find(x => x.def && x.def.origen && x.def.origen.matId === m.id);
   const pend = lista.filter(m => !enEstudio(m) && !m.cumplido);
-  const activos = lista.map(m => ({ m, pe: enEstudio(m) })).filter(x => x.pe && x.pe.estado !== "resuelto");
+  const activosTodos = lista.map(m => ({ m, pe: enEstudio(m) })).filter(x => x.pe && x.pe.estado !== "resuelto");
+  const listos = activosTodos.filter(x => x.pe.estado === "respondido");
+  const activos = activosTodos.filter(x => x.pe.estado !== "respondido");
+  const hechos = lista.filter(m => m.respuesta).sort((a, b) => (b.respuesta.ts || 0) - (a.respuesta.ts || 0)).slice(0, 3);
   const subir = async (f) => { const data = await fileToDataUrl(f); const url = await uploadArchivo(data, "pedidos", f.name.replace(/\W+/g, "_")); return { nombre: f.name, url, img: f.type.startsWith("image/") }; };
   function pasar(d) {
     const m = plan; const base = nuevoPedido({ de: "cliente", para: "estudio", asunto: d.asunto, detalle: d.detalle, prioridad: d.prioridad, obra_id: d.obra_id });
@@ -6165,7 +6171,7 @@ function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, s
     if (m && !m.leido) aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === m.id ? { ...x, leido: true, leidoTs: Date.now(), leidoFecha: hoyStr(), leidoPor: cfg?.nombre || cfg?.sigla || "Belfast" } : x));
     setPlan(null);
   }
-  if (!pend.length && !activos.length && !hayDef) return null;
+  if (!pend.length && !activosTodos.length && !hechos.length && !hayDef) return null;
   const dias = ts => ts ? Math.max(0, Math.floor((Date.now() - ts) / 86400000)) : 0;
   const cab = { fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 };
   return (<div style={{ marginBottom: 18 }}>
@@ -6177,12 +6183,24 @@ function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, s
         <button onClick={() => setPlan(m)} style={{ width: "100%", marginTop: 10, background: T.accent, color: "#fff", border: 0, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Levantar y pasar al estudio</button>
       </div>))}
     </>}
+    {listos.length > 0 && <>
+      <div style={{ ...cab, marginTop: pend.length ? 8 : 0 }}>Respondidos por el estudio · listos para enviar al contratista · {listos.length}</div>
+      {listos.map(({ m, pe }) => { const tz = trazaDef(pe); const arch = (pe.hilo || []).filter(h => h.de === "estudio").flatMap(h => h.archivos || []); return (<div key={m.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: "4px solid #8B5CF6", borderRadius: 12, padding: 12, marginBottom: 9 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: TXC }}>{pe.def.tarea}</div>
+        <div style={{ fontSize: 12, color: `rgba(${TXR},.6)`, marginTop: 4, lineHeight: 1.55 }}>Obra: <b>{nomObra(pe.obra_id)}</b> · lo pidió {m.solicitante || m.empresa || "el contratista"}<br />El estudio respondió el {fmtTs(tz.tResp)}{arch.length ? " · " + arch.length + " archivo" + (arch.length > 1 ? "s" : "") : ""}</div>
+        <button onClick={() => onDevolver && onDevolver(pe)} style={{ width: "100%", marginTop: 10, background: "#3E9B62", color: "#fff", border: 0, borderRadius: 10, padding: "11px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>Enviar al contratista y dar por resuelto</button>
+      </div>); })}
+    </>}
     {activos.length > 0 && <>
-      <div style={{ ...cab, marginTop: pend.length ? 8 : 0 }}>En el estudio de arquitectura · {activos.length}</div>
+      <div style={{ ...cab, marginTop: pend.length || listos.length ? 8 : 0 }}>En el estudio de arquitectura · {activos.length}</div>
       {activos.map(({ m, pe }) => { const tz = trazaDef(pe), ch = chipDef(pe); return (<div key={m.id} onClick={() => onIr && onIr("pedidos")} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `4px solid ${ch.col}`, borderRadius: 12, padding: 12, marginBottom: 9, cursor: "pointer" }}>
         <div style={{ fontSize: 13.5, fontWeight: 800, color: TXC }}>{pe.def.tarea}</div>
         <div style={{ fontSize: 12, color: `rgba(${TXR},.6)`, marginTop: 4, lineHeight: 1.55 }}>Obra: <b>{nomObra(pe.obra_id)}</b> · {ch.txt}<br />Pedido {fmtTs(tz.tReq)} · levantado {fmtTs(pe.def.origen.leidoTs || pe.ts)} · pasó al estudio {fmtTs(tz.tFwd)}{tz.tResp ? " · respondió " + fmtTs(tz.tResp) : ""}<br /><b>Lo tiene: {tz.holder}</b></div>
       </div>); })}
+    </>}
+    {hechos.length > 0 && <>
+      <div style={{ ...cab, marginTop: 8 }}>Resueltos y enviados al contratista</div>
+      {hechos.map(m => (<div key={m.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: "4px solid #3E9B62", borderRadius: 12, padding: "10px 12px", marginBottom: 8, fontSize: 12, color: `rgba(${TXR},.65)`, lineHeight: 1.5 }}><b style={{ color: TXC, fontSize: 13 }}>{(m.items || []).map(i => i.nombre).filter(Boolean).join(", ")}</b><br />{nomObra(m.obra_id)} · enviado a {m.solicitante || m.empresa || "el contratista"} el {m.respuesta.fecha}{(m.respuesta.archivos || []).length ? " · " + m.respuesta.archivos.length + " archivo(s)" : ""}</div>))}
     </>}
     {hayDef && <div style={{ marginBottom: 6 }}>
       <button onClick={() => setVerTab(v => !v)} style={{ width: "100%", background: "transparent", color: TXC, border: `1.5px solid ${T.accent}`, borderRadius: 12, padding: "12px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>{verTab ? "Ocultar" : "Ver"} quién está trabando las definiciones</button>
@@ -6193,7 +6211,7 @@ function PedidosDefInicio({ T, cfg, obras, matpedidos, setMatpedidos, pedidos, s
   </div>);
 }
 
-function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], cronoPro, onIr, restringido = false, matpedidos = [], setMatpedidos, pedidos = [], setPedidos }) {
+function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, avance, certif = {}, informesSem = {}, auditoria = [], cronoPro, onIr, onDevolver, restringido = false, matpedidos = [], setMatpedidos, pedidos = [], setPedidos }) {
   const [slideIdx, setSlideIdx] = useState(0);
   const rgbT = hexARgbC(T.bg).join(",");
   const TXC = T.text, TXR = hexARgbC(TXC).join(",");
@@ -6257,7 +6275,7 @@ function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, ava
         <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div>
       </div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
-      <PedidosDefInicio T={T} cfg={cfg} obras={obras} matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} TXC={TXC} TXR={TXR} onIr={onIr} />
+      <PedidosDefInicio onDevolver={onDevolver} T={T} cfg={cfg} obras={obras} matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} TXC={TXC} TXR={TXR} onIr={onIr} />
       {!restringido && <PortadaGestion gestion={gestion} obras={obras} TXC={TXC} TXR={TXR} onIr={onIr} />}
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Novedades recientes</div>
       {novedadesC.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)`, padding: "8px 0" }}>Sin novedades todavía.</div>}
@@ -6444,6 +6462,19 @@ function ClienteApp() {
   // al abrir una pantalla, se apaga su punto rojo
   const [auditoriaDesdeSemana, setAuditoriaDesdeSemana] = React.useState(false);
   const [gestionFoco, setGestionFoco] = React.useState(null);
+  // Canal hacia abajo: lo que respondió el estudio se le devuelve al contratista que lo pidió
+  const devolverAlContratista = (pe) => {
+    const mid = pe && pe.def && pe.def.origen && pe.def.origen.matId; if (!mid) return;
+    const est = (pe.hilo || []).filter(h => h.de === "estudio");
+    const texto = est.map(h => h.texto).filter(t => t && !/^El estudio recibió el pedido/.test(t)).join("\n\n");
+    const archivos = est.flatMap(h => h.archivos || []);
+    const ts = Date.now(), f = hoyStr();
+    const m = (matpedidosAll || []).find(x => x.id === mid);
+    aplicarMats(setMatpedidos, prev => (prev || []).map(x => x.id === mid ? { ...x, respuesta: { ts, fecha: f, de: "Estudio de arquitectura", por: cfg?.nombre || "Belfast", texto, archivos }, cumplido: true, cumplidoFecha: f, cumplidoTs: ts } : x));
+    const nombres = ((m && m.items) || []).map(i => (i.nombre || "").trim().toLowerCase()).filter(Boolean);
+    if (nombres.length) setDefinicionesAll(prev => (prev || []).map(r => r.obra_id !== pe.obra_id ? r : { ...r, upd: ts, items: (r.items || []).map(it => nombres.includes((it.nombre || "").trim().toLowerCase()) ? { ...it, tiene: true, estado: "respondida", historial: [...(it.historial || []), { ts, tipo: "respondida", texto, archivoUrl: (archivos[0] || {}).url || null, archivoNombre: (archivos[0] || {}).nombre || null }] } : it) }));
+    aplicarPedidos(setPedidos, arr => arr.map(x => x.id === pe.id ? conMov({ ...x, def: { ...x.def, devueltoTs: ts } }, "resuelto", "cliente") : x));
+  };
   const irA = (id, param) => { if (restringido && !SECCIONES_JEFE.includes(id)) return; setGestionFoco(id === "gestion" ? (param || null) : null); setAuditoriaDesdeSemana(id === "auditoria" && param === "semana"); setScreen(id); marcarVisto(id); };
   // Si los datos de la pantalla activa siguen llegando de la nube (sync), se re-marca como
   // visto cada vez que cambian MIENTRAS el usuario sigue parado ahí — así el globito no
@@ -6623,7 +6654,7 @@ function ClienteApp() {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", justifyContent: "center", background: "transparent" }}>
         <div style={{ width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", overflow: "hidden", background: T.bg, borderLeft: `1px solid rgba(176,137,79,0.28)`, borderRight: `1px solid rgba(176,137,79,0.28)`, boxShadow: "0 0 80px rgba(0,0,0,0.45)" }}>
-          {screen === "inicio" && <InicioScreen restringido={restringido} matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} cronoPro={cronoPro} T={T} cfg={cfg} gestion={gestion} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
+          {screen === "inicio" && <InicioScreen onDevolver={devolverAlContratista} restringido={restringido} matpedidos={matpedidos} setMatpedidos={setMatpedidos} pedidos={pedidos} setPedidos={setPedidos} cronoPro={cronoPro} T={T} cfg={cfg} gestion={gestion} obras={obras} renders={renders} mensajes={mensajes} bitacora={bitacora} avance={avance} certif={certifSem} informesSem={informesSem} auditoria={auditoria} onIr={(id, param) => irA(id, param)} />}
           {screen === "asistente" && <AsistenteScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} setObras={setObras} gestion={gestion} modelosObra={modelosObra} avance={avance} auditoria={auditoria} adicionales={adicionales} dronevuelos={dronevuelos} definiciones={definiciones} docrecepcion={docrecepcion} tareas={tareas} msgs={chatMsgs} setMsgs={setChatMsgs} pedidos={pedidos} setPedidos={setPedidos} personal={personal} setPersonal={setPersonal} mensajes={mensajes} contactos={contactos} formularios={formularios} matpedidos={matpedidos} documentacion={documentacion} certif={certifSem} bitacora={bitacora} onPedidos={() => setScreen("pedidos")} onMinutas={() => setScreen("minutas")} />}
           {screen === "obras" && <div style={{ flex: 1, overflowY: "auto" }}><Obras obras={obras} setObras={setObras} adicionales={adicionales} modelosObra={modelosObra} cfg={cfg} apiKey={vvCfg.apiKey} /></div>}
           {screen === "drone" && <DroneIAClienteView T={T} obras={obras} dronevuelos={dronevuelos} />}
@@ -6632,7 +6663,7 @@ function ClienteApp() {
           {screen === "bitacora" && <BitacoraView T={T} obras={obras} bitacora={bitacora} setBitacora={setBitacora} cfg={cfg} />}
           {screen === "auditoria" && <AuditoriaClienteView T={T} obras={obras} auditoria={auditoria} cfg={cfg} desdeSemana={auditoriaDesdeSemana} />}
           {screen === "personal" && <PersonalScreen T={T} cfg={cfg} personal={personal} setPersonal={setPersonal} obras={obras} contactos={contactos} setContactos={setContactos} />}
-          {screen === "pedidos" && <PedidosScreen T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
+          {screen === "pedidos" && <PedidosScreen onDevolver={devolverAlContratista} T={T} cfg={cfg} apiKey={vvCfg.apiKey} obras={obras} pedidos={pedidos} setPedidos={setPedidos} />}
           {screen === "materiales" && <MaterialesScreen T={T} cfg={cfg} obras={obras} pedidos={pedidos} setPedidos={setPedidos} personal={personal} contactos={contactos} matpedidos={matpedidos} setMatpedidos={setMatpedidos} definiciones={definiciones} setDefiniciones={setDefiniciones} docrecepcion={docrecepcion} setDocrecepcion={setDocrecepcion} />}
           {screen === "informes" && <InformesScreen T={T} obras={obras} formularios={formularios} certif={certifSem} informesSem={informesSem} avance={avance} cfg={cfg} envios={enviosProp} setEnvios={setEnviosProp} />}
           {screen === "formularios" && <FormulariosScreen T={T} obras={obras} formularios={formularios} />}
