@@ -158,7 +158,8 @@ export default function NexoObraApp() {
   const entrar = (p) => { setPerfil(p); setVerAlcance(false); setTab(p ? NAVS[p][0][0] : ""); };
   useEffect(() => { if (perfil && !tab) setTab(NAVS[perfil][0][0]); }, [perfil, tab]);
   const portada = useMemo(() => D.obras.flatMap(o => [...arr(D.renders[o.id]).map(urlDe), ...arr(o.fotos).slice(0, 1).map(urlDe)].filter(Boolean).slice(0, 1)).filter(u => !esVideo(u)), [D]);
-  const ctx = { T, cfg, setCfg, D, tab, setTab };
+  const [obraSel, setObraSel] = useState(null);
+  const ctx = { T, cfg, setCfg, D, tab, setTab: (t) => { setTab(t); if (t !== "obras") setObraSel(null); }, obraSel, setObraSel };
 
   return (<div style={{ background: T.bg }}><div style={{ height: "100dvh", width: "100%", display: "flex", flexDirection: "column", background: T.bg, color: T.text, fontFamily: "'Inter',sans-serif" }}>
     <style>{CSS}{`body{background:${T.bg}}`}</style>
@@ -174,7 +175,7 @@ export default function NexoObraApp() {
           {perfil === "estudio" && <Estudio {...ctx} />}
           {perfil === "propietario" && <Propietario {...ctx} />}
         </div>}
-        {perfil !== "propietario" && <Nav T={T} perfil={perfil} tab={tab} setTab={setTab} />}
+        {perfil !== "propietario" && <Nav T={T} perfil={perfil} tab={tab} setTab={ctx.setTab} />}
       </>)}
   </div></div>);
 }
@@ -206,10 +207,10 @@ function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar, imgs = [] })
       <div style={{ textAlign: "center", fontSize: 12.5, color: T.sub, lineHeight: 1.55, margin: "10px 0 20px" }}>Una sola app, tres paneles. Cada invitación abre solo el suyo.</div>
       {R ? <div style={{ fontSize: 11.5, color: T.accent, background: T.accentLight, borderRadius: 10, padding: "9px 12px", marginBottom: 16, textAlign: "center", fontWeight: 700 }}>{(() => { const n = new Set(arr(R.vv_obras).filter(o => o && !o.privada).map(o => o.id)).size; return n + (n === 1 ? " obra real cargada" : " obras reales cargadas"); })()}{st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura</div>
         : <div style={{ fontSize: 12, color: T.sub, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 16, textAlign: "center" }}>{st === "error" ? "No pude traer los datos todavía." : "Cargando tus obras…"} <button onClick={recargar} style={{ background: "none", border: 0, color: BRASS, fontWeight: 800, fontSize: 12 }}>Reintentar</button></div>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 14, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14, marginBottom: 14 }}>
       {Object.entries(PANELES).map(([k, p], n) => {
         const mio = perfil === k, bloq = perfil && !mio, img = imgs[n % Math.max(imgs.length, 1)];
-        return (<div key={k} onClick={() => { if (!perfil && R) entrar(k); else if (mio) volver(); }} style={{ position: "relative", height: 200, borderRadius: 16, overflow: "hidden", border: `1px solid ${mio ? T.accent : T.border}`, background: `linear-gradient(135deg,${T.card},${T.bg})`, cursor: bloq || !R ? "default" : "pointer", opacity: bloq ? .55 : 1, boxShadow: T.shadow }}>
+        return (<div key={k} onClick={() => { if (!perfil && R) entrar(k); else if (mio) volver(); }} style={{ position: "relative", height: 230, borderRadius: 16, overflow: "hidden", border: `1px solid ${mio ? T.accent : T.border}`, background: `linear-gradient(135deg,${T.card},${T.bg})`, cursor: bloq || !R ? "default" : "pointer", opacity: bloq ? .55 : 1, boxShadow: T.shadow }}>
           {img && <img src={img} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: bloq ? "grayscale(1)" : "none" }} />}
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.05) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,.86) 100%)" }} />
           <div style={{ position: "absolute", left: 18, right: 18, bottom: 16, color: "#f2f0eb" }}>
@@ -321,41 +322,44 @@ function Constructora(x) {
   if (tab === "pedidos") return wrap(<><Eyebrow T={x.T}>Pedidos</Eyebrow><ListaPedidos T={x.T} D={x.D} /></>);
   return <CMas {...x} />;
 }
-function CInicio({ T, cfg, D, setTab }) {
-  const [i, setI] = useState(0);
-  const act = D.obras.filter(o => o.estado === "curso" || !o.estado); const L = act.length ? act : D.obras;
-  useEffect(() => { if (L.length < 2) return; const t = setInterval(() => setI(k => (k + 1) % L.length), 4500); return () => clearInterval(t); }, [L.length]);
-  const o = L[i % L.length];
-  const rgbT = hexARgb(T.bg).join(","), TXR = hexARgb(T.text).join(",");
-  const r0 = arr(D.renders[o.id])[0];
+function CInicio({ T, cfg, D, setTab, setObraSel }) {
+  const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
   const abiertos = D.pedidos.filter(p => p.estado !== "resuelto");
+  const dias = (p) => p.def && p.def.limite ? Math.round((new Date(p.def.limite + "T12:00:00") - hoy) / 864e5) : null;
+  const venc = abiertos.filter(p => dias(p) != null && dias(p) < 0), porv = abiertos.filter(p => dias(p) != null && dias(p) >= 0 && dias(p) <= 7);
+  const obrasAfect = new Set([...venc, ...porv].map(p => p.obra_id)).size;
+  const rgb = hexARgb(T.text).join(",");
+  const act = D.obras.filter(o => o.estado === "curso" || !o.estado); const L = act.length ? act : D.obras;
+  const fotoDe = (q) => [...arr(D.renders[q.id]).map(urlDe), ...arr(q.fotos).map(urlDe)].find(u => u && !esVideo(u)) || "";
   const novedades = [...D.obras.flatMap(x => arr(D.informesSem[x.id]).map(r => ({ ts: r.ts, t: `Informe semanal · ${x.nombre}` }))), ...D.bitacora.map(h => ({ ts: h.ts, t: `Bitácora · ${(D.obras.find(x => x.id === h.obra_id) || {}).nombre || ""}: ${h.titulo || h.desc || ""}` }))].filter(n => n.ts).sort((a, b) => b.ts - a.ts).slice(0, 5);
+  const hora = new Date().getHours(), saludo = hora < 12 ? "Buenos días" : hora < 20 ? "Buenas tardes" : "Buenas noches";
+  const plural = (n, a, b) => n + " " + (n === 1 ? a : b);
   return (<div style={{ flex: 1, background: T.bg }}>
-    <div style={{ position: "relative", height: "34vh", minHeight: 230, maxHeight: 380, overflow: "hidden", background: T.bg }}>
-      {r0 && r0.url ? <img key={r0.url} src={r0.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, animation: "fadeIn .6s ease" }} /> : <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg,${T.bg},${T.card})` }} />}
-      <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(${rgbT},.15) 0%, rgba(${rgbT},.4) 45%, ${T.bg} 100%)` }} />
-      <div style={{ position: "absolute", bottom: 20, left: "clamp(18px,3vw,40px)", right: "clamp(18px,3vw,40px)" }}>
-        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${TXR},.55)` }}>{cfg.nombre}</div>
-        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: T.text, marginTop: 4 }}>{o.nombre}</div>
-      </div>
-      {L.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>{L.map((q, k) => <span key={q.id} style={{ width: 5, height: 5, borderRadius: "50%", background: k === i % L.length ? BRASS : `rgba(${TXR},.35)` }} />)}</div>}
-    </div>
     <div style={{ padding: "22px clamp(18px,3vw,40px) 30px" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1 }}>{o.avance || 0}</div><div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div></div>
-      <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
-      <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Qué hay que mover</div>
-      {abiertos.length === 0 && <div style={{ fontSize: 12.5, color: T.muted, padding: "6px 0 14px" }}>Nada urgente por ahora.</div>}
-      {abiertos.length > 0 && <div onClick={() => setTab("pedidos")} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid rgba(${TXR},.07)`, cursor: "pointer", fontSize: 12.5 }}><span><b style={{ color: "#D9B27C" }}>{abiertos.length}</b> {abiertos.length === 1 ? "pedido abierto" : "pedidos abiertos"} con el estudio</span><span style={{ color: `rgba(${TXR},.35)` }}>›</span></div>}
-      <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 10px" }}>Novedades recientes</div>
-      {novedades.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)` }}>Sin novedades todavía.</div>}
-      {novedades.map((n, k) => <div key={k} style={{ padding: "11px 0", borderBottom: `1px solid rgba(${TXR},.07)`, fontSize: 12.5 }}>{n.t} <span style={{ color: `rgba(${TXR},.4)`, fontSize: 11 }}>· {fTs(n.ts)}</span></div>)}
+      <div style={{ fontSize: 10.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${rgb},.55)`, fontWeight: 700 }}>{saludo} · {cfg.nombre}</div>
+      <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: "clamp(24px,3.4vw,34px)", lineHeight: 1.2, margin: "8px 0 18px" }}>{venc.length + porv.length === 0 ? `${plural(L.length, "obra en curso", "obras en curso")}, sin pedidos por vencer` : `${plural(venc.length, "pedido vencido", "pedidos vencidos")} y ${porv.length} por vencer en ${plural(obrasAfect, "obra", "obras")}`}</div>
+      <div style={{ display: "flex", gap: 14, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 10, marginBottom: 16 }}>
+        {L.map(o => { const f = fotoDe(o); return (<div key={o.id} onClick={() => { setObraSel && setObraSel(o.id); setTab("obras"); }} style={{ flex: "0 0 min(360px,82%)", scrollSnapAlign: "start", background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", cursor: "pointer", boxShadow: T.shadow }}>
+          <div style={{ height: 170, background: `linear-gradient(135deg,${T.bg},${T.border})` }}>{f && <img src={f} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}</div>
+          <div style={{ padding: "13px 15px 15px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 20 }}>{o.nombre}</div><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: "#E9B949" }}>{o.avance || 0}%</div></div>
+            {o.sector && <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{o.sector}</div>}
+            <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "10px 0 8px" }}><div style={{ width: (o.avance || 0) + "%", height: 5, background: "#E9B949", borderRadius: 4 }} /></div>
+            <div style={{ fontSize: 11.5, color: T.muted }}>{arr(o.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === o.id).length} en bitácora</div>
+          </div></div>); })}
+      </div>
+      <div style={{ height: 1, background: `rgba(${rgb},.1)`, marginBottom: 6 }} />
+      {abiertos.length > 0 && <div onClick={() => setTab("pedidos")} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid rgba(${rgb},.07)`, cursor: "pointer", fontSize: 12.5 }}><span><b style={{ color: "#D9B27C" }}>{abiertos.length}</b> {abiertos.length === 1 ? "pedido abierto" : "pedidos abiertos"} con el estudio</span><span style={{ color: `rgba(${rgb},.35)` }}>›</span></div>}
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${rgb},.4)`, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 10px" }}>Novedades recientes</div>
+      {novedades.length === 0 && <div style={{ fontSize: 12, color: `rgba(${rgb},.4)` }}>Sin novedades todavía.</div>}
+      {novedades.map((n, k) => <div key={k} style={{ padding: "11px 0", borderBottom: `1px solid rgba(${rgb},.07)`, fontSize: 12.5 }}>{n.t} <span style={{ color: `rgba(${rgb},.4)`, fontSize: 11 }}>· {fTs(n.ts)}</span></div>)}
     </div>
   </div>);
 }
 const SUBS = [["fotos", "Fotos"], ["avance", "Avance"], ["bitacora", "Bitácora"], ["informes", "Informes"], ["crono", "Cronograma"], ["archivos", "Archivos"], ["adic", "Adicionales"]];
-function CObras({ T, D, cfg, rol }) {
+function CObras({ T, D, cfg, rol, obraSel, setObraSel }) {
   const est = rol === "estudio";
-  const [id, setId] = useState(null); const [sub, setSub] = useState("crono");
+  const [idL, setIdL] = useState(null); const id = obraSel != null ? obraSel : idL; const setId = (v) => { setIdL(v); setObraSel && setObraSel(v); }; const [sub, setSub] = useState("crono");
   const o = D.obras.find(x => x.id === id);
   const fotoDe = (q) => [...arr(D.renders[q.id]).map(urlDe), ...arr(q.fotos).map(urlDe)].find(u => u && !esVideo(u)) || "";
   if (!o) return wrap(<><Eyebrow T={T}>Obras</Eyebrow>{D.obras.map(x => { const f = fotoDe(x); return <Card key={x.id} T={T} onClick={() => { setId(x.id); setSub("crono"); }} style={{ padding: 10, marginBottom: 10, cursor: "pointer", display: "flex", gap: 13, alignItems: "center" }}>
