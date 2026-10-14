@@ -11021,4 +11021,5 @@ function App() {
   );
 }
 
+export { ModelosObraView };
 export default App;

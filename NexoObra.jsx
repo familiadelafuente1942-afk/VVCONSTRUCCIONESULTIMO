@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import CronoPro, { alertasCrono } from "./CronoPro.jsx";
 import { AvanceView, BitacoraView } from "./Cliente.jsx";
+import { ModelosObraView } from "./App.jsx";
 
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
@@ -122,7 +123,7 @@ const PANELES = {
   propietario: { n: "Propietario", d: "Sigue su obra", pts: ["Avance de su obra", "Fotos de la obra", "Informes semanales y de avance", "Sin alertas ni costos internos"] },
 };
 const NAVS = {
-  constructora: [["inicio", "Inicio"], ["obras", "Obras"], ["avance", "Avance"], ["pedidos", "Pedidos"], ["bitacora", "Bitácora"], ["mas", "Más"]],
+  constructora: [["inicio", "Inicio"], ["obras", "Obras"], ["pedidos", "Pedidos"], ["mas", "Más"]],
   estudio: [["pedidos", "Pedidos"], ["planos", "Planos"], ["adicionales", "Adicionales"]],
   propietario: [["obra", "Mi obra"], ["fotos", "Fotos"], ["informes", "Informes"]],
 };
@@ -142,12 +143,14 @@ export default function NexoObraApp() {
   const [avanceV, setAvance, rstA] = useOverlay("avance", (R && R.vv_avance) || {});
   const [cronoV, setCronoPro, rstC] = useOverlay("cronopro", (R && R.vv_cronopro) || { obras: {} });
   const [enviosV, setEnvios, rstE] = useOverlay("envios", (R && R.cliente_envios_prop) || {});
-  const restaurar = () => { rstB(); rstA(); rstC(); rstE(); };
+  const [modelosV, setModelosObra, rstM] = useOverlay("modelos", arr(R && R.vv_modelos_obra));
+  const [asigV, setAsig, rstS] = useOverlay("modelo_asig", {});
+  const restaurar = () => { rstB(); rstA(); rstC(); rstE(); rstM(); rstS(); };
   const D = useMemo(() => ({
-    setBitacora, setAvance, setCronoPro, setEnvios, restaurar, envios: enviosV, apiKey: ((R && R.vv_cfg) || {}).apiKey, certif: (R && R.vv_certif_sem) || {}, modelosObra: arr(R && R.vv_modelos_obra), gestion: (R && R.vv_gestion) || null,
+    setBitacora, setAvance, setCronoPro, setEnvios, restaurar, envios: enviosV, apiKey: ((R && R.vv_cfg) || {}).apiKey, certif: (R && R.vv_certif_sem) || {}, modelosObra: arr(modelosV), setModelosObra, asig: asigV || {}, setAsig, gestion: (R && R.vv_gestion) || null,
     obras, bitacora: arr(bitacoraV), avance: avanceV || {}, informesSem: (R && R.vv_informes_sem) || {}, renders: (R && R.vv_renders) || {},
     pedidos: arr(R && R.vv_pedidos), matpedidos: arr(R && R.vv_matpedidos), cronoPro: cronoV || { obras: {} }, adicionales: arr(R && R.vv_adicionales),
-  }), [R, obras, bitacoraV, avanceV, cronoV, enviosV]);
+  }), [R, obras, bitacoraV, avanceV, cronoV, enviosV, modelosV, asigV]);
   const entrar = (p) => { setPerfil(p); setVerAlcance(false); setTab(p ? NAVS[p][0][0] : ""); };
   useEffect(() => { if (perfil && !tab) setTab(NAVS[perfil][0][0]); }, [perfil, tab]);
   const ctx = { T, cfg, D, tab, setTab };
@@ -293,8 +296,6 @@ function Constructora(x) {
   if (tab === "inicio") return <CInicio {...x} />;
   if (tab === "obras") return <CObras {...x} />;
   if (tab === "pedidos") return wrap(<><Eyebrow T={x.T}>Pedidos</Eyebrow><ListaPedidos T={x.T} D={x.D} /></>);
-  if (tab === "avance") return <div style={{ flex: 1, overflowY: "auto" }}><AvanceView T={x.T} obras={x.D.obras} avance={x.D.avance} setAvance={x.D.setAvance} apiKey={x.D.apiKey} cfg={x.cfg} certif={x.D.certif} envios={x.D.envios} setEnvios={x.D.setEnvios} /></div>;
-  if (tab === "bitacora") return <div style={{ flex: 1, overflowY: "auto" }}><BitacoraView T={x.T} obras={x.D.obras} bitacora={x.D.bitacora} setBitacora={x.D.setBitacora} cfg={x.cfg} /></div>;
   return <CMas {...x} />;
 }
 function CInicio({ T, cfg, D, setTab }) {
@@ -339,7 +340,8 @@ function CObras({ T, D, cfg }) {
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 19 }}>{x.nombre}</div><div style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{x.avance || 0}%</div></div>
     <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "10px 0 8px" }}><div style={{ width: (x.avance || 0) + "%", height: 5, background: T.accent, borderRadius: 4 }} /></div>
     <div style={{ fontSize: 11.5, color: T.sub }}>{arr(x.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === x.id).length} hechos en bitácora · {arr(x.informes).length + arr(D.informesSem[x.id]).length} informes</div></Card>)}</>);
-    return wrap(<>
+  const mid = (D.asig && D.asig[o.id] != null) ? D.asig[o.id] : o.modeloId;
+  return wrap(<>
     <button onClick={() => setId(null)} style={{ background: "none", border: 0, color: T.accent, fontSize: 13, fontWeight: 800, padding: "0 0 10px" }}>← Obras</button>
     <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24 }}>{o.nombre}</div>
     <div style={{ fontSize: 12, color: T.sub, margin: "3px 0 12px" }}>{o.avance || 0}% de avance{o.sector ? " · " + o.sector : ""}</div>
@@ -349,7 +351,11 @@ function CObras({ T, D, cfg }) {
     {sub === "avance" && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><AvanceView key={o.id} T={T} obras={[o]} avance={D.avance} setAvance={D.setAvance} apiKey={D.apiKey} cfg={cfg} certif={D.certif} envios={D.envios} setEnvios={D.setEnvios} /></div>}
     {sub === "bitacora" && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><BitacoraView key={o.id} T={T} obras={[o]} bitacora={D.bitacora} setBitacora={D.setBitacora} cfg={cfg} /></div>}
     {sub === "informes" && <Informes T={T} D={D} o={o} />}
-    {sub === "crono" && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><CronoPro key={o.id} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre }]} data={D.cronoPro} setData={D.setCronoPro} /></div>}
+    {sub === "crono" && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}>
+      <div style={{ padding: "0 clamp(16px,3vw,40px)" }}><div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em" }}>Modelo de cronograma de esta obra</div>
+        <Sel T={T} value={mid || ""} onChange={v => D.setAsig(p => ({ ...(p || {}), [o.id]: v }))}><option value="">— sin modelo —</option>{D.modelosObra.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</Sel>
+        {!mid && <div style={{ fontSize: 12, color: T.muted, margin: "-6px 0 10px" }}>Esta obra no tiene modelo asignado. Los modelos se crean en Más → Modelos de cronograma.</div>}</div>
+      <CronoPro key={o.id + mid} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre, modeloId: mid }]} data={D.cronoPro} setData={D.setCronoPro} /></div>}
     {sub === "archivos" && (arr(o.archivos).length ? arr(o.archivos).map((a, i) => <Archivo key={i} T={T} a={a} />) : <Vacio T={T}>No hay archivos cargados.</Vacio>)}
     {sub === "adic" && <ListaAdic T={T} D={D} obra={o.id} />}
   </>);
@@ -367,10 +373,13 @@ function ListaAdic({ T, D, obra }) {
   </Card>);
 }
 function CBitacora({ T, D }) { const [o, setId] = useObra(D); return wrap(<><Eyebrow T={T}>Bitácora</Eyebrow><SelObra T={T} D={D} o={o} setId={setId} /><Bitacora T={T} D={D} o={o} /></>); }
-function CMas({ T, D, recargar, st }) {
+function CMas({ T, D, cfg, recargar, st }) {
+  const [ver, setVer] = useState("");
+  if (ver === "modelos") return <div style={{ flex: 1, overflowY: "auto" }}><ModelosObraView db={{ modelosObra: D.modelosObra, setModelosObra: D.setModelosObra }} cfg={cfg} onBack={() => setVer("")} /></div>;
   return wrap(<><Eyebrow T={T}>Más</Eyebrow>
-    <Card T={T} style={{ padding: "13px 15px", marginBottom: 8 }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Datos de las obras</div><div style={{ fontSize: 12, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>{D.obras.length} obras · {D.bitacora.length} hechos de bitácora · {D.obras.reduce((a, o) => a + arr(o.fotos).length, 0)} fotos. {st === "cache" ? "Mostrando la última copia guardada en este aparato." : "Actualizado recién."} Esta app solo lee: no modifica nada de las otras aplicaciones.</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>Los avances, bitácoras y cambios del cronograma que cargues acá quedan en este aparato (no tocan las otras apps).</div><button onClick={recargar} style={{ marginTop: 10, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "10px 16px", fontSize: 12.5, fontWeight: 700 }}>Actualizar ahora</button><button onClick={() => { if (confirm("¿Descartar lo cargado en este aparato y volver a los datos reales?")) D.restaurar(); }} style={{ marginTop: 10, marginLeft: 8, background: "transparent", color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 14px", fontSize: 12.5, fontWeight: 600 }}>Volver a datos reales</button></Card>
-    <Card T={T} style={{ padding: "13px 15px" }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Adicionales</div><div style={{ marginTop: 10 }}><ListaAdic T={T} D={D} /></div></Card></>);
+    <Card T={T} onClick={() => setVer("modelos")} style={{ padding: "13px 15px", marginBottom: 8, cursor: "pointer" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: 13.5, fontWeight: 700 }}>Modelos de cronograma</div><div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{D.modelosObra.length} modelos · se asignan a cada obra dentro de su Cronograma</div></div><span style={{ color: T.muted }}>›</span></div></Card>
+    <Card T={T} style={{ padding: "13px 15px", marginBottom: 8 }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Modelo de cada obra</div>{D.obras.map(o => { const id = (D.asig && D.asig[o.id] != null) ? D.asig[o.id] : o.modeloId; const m = D.modelosObra.find(q => q.id === id); return <div key={o.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}><span>{o.nombre}</span><span style={{ color: m ? T.accent : T.muted, fontWeight: 700 }}>{m ? m.nombre : "sin modelo"}</span></div>; })}</Card>
+    <Card T={T} style={{ padding: "13px 15px" }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Datos de las obras</div><div style={{ fontSize: 12, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>{D.obras.length} obras · {D.bitacora.length} hechos de bitácora · {D.obras.reduce((a, o) => a + arr(o.fotos).length, 0)} fotos. {st === "cache" ? "Mostrando la última copia guardada en este aparato." : "Actualizado recién."} Esta app solo lee: no modifica nada de las otras aplicaciones. Lo que cargues acá (avances, bitácoras, cronograma, modelos) queda en este aparato.</div><button onClick={recargar} style={{ marginTop: 10, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "10px 16px", fontSize: 12.5, fontWeight: 700 }}>Actualizar ahora</button><button onClick={() => { if (confirm("¿Descartar lo cargado en este aparato y volver a los datos reales?")) D.restaurar(); }} style={{ marginTop: 10, marginLeft: 8, background: "transparent", color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 14px", fontSize: 12.5, fontWeight: 600 }}>Volver a datos reales</button></Card></>);
 }
 
 // ── PANEL ESTUDIO ──────────────────────────────────────────────────────────
