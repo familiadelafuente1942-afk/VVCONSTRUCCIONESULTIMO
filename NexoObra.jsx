@@ -42,6 +42,10 @@ const CSS = `
   body{background:#0d0d0f;overscroll-behavior:none;font-family:'Inter',sans-serif;}
   button{cursor:pointer;font-family:inherit;}input,textarea,select{font-family:inherit;}
   input:focus,textarea:focus{outline:none;}textarea{resize:none;}::-webkit-scrollbar{display:none;}
+  .xscroll{scrollbar-width:thin;scrollbar-color:#B0894F rgba(255,255,255,.12);}
+  .xscroll::-webkit-scrollbar{display:block;height:9px;}
+  .xscroll::-webkit-scrollbar-track{background:rgba(255,255,255,.1);border-radius:6px;}
+  .xscroll::-webkit-scrollbar-thumb{background:#B0894F;border-radius:6px;}
   @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   @keyframes fadeIn{from{opacity:0}to{opacity:.85}}
 `;
@@ -369,7 +373,9 @@ function CInicio({ T, cfg, D, setTab, setObraSel }) {
     <div style={{ padding: "22px clamp(18px,3vw,40px) 30px" }}>
       <div style={{ fontSize: 10.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${rgb},.55)`, fontWeight: 700 }}>{saludo} · {cfg.nombre}</div>
       <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: "clamp(24px,3.4vw,34px)", lineHeight: 1.2, margin: "8px 0 18px" }}>{venc.length + porv.length === 0 ? `${plural(L.length, "obra en curso", "obras en curso")}, sin pedidos por vencer` : `${plural(venc.length, "pedido vencido", "pedidos vencidos")} y ${porv.length} por vencer en ${plural(obrasAfect, "obra", "obras")}`}</div>
-      <div style={{ display: "flex", gap: 14, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 10, marginBottom: 16 }}>
+      <div style={{ position: "relative" }}>
+      {[["‹", -1], ["›", 1]].map(([t, d]) => <button key={t} onClick={() => { const e = document.getElementById("carr-obras"); if (e) e.scrollBy({ left: d * 380, behavior: "smooth" }); }} style={{ position: "absolute", top: 70, [d < 0 ? "left" : "right"]: -6, zIndex: 5, width: 36, height: 36, borderRadius: 18, border: "1px solid rgba(255,255,255,.3)", background: "rgba(0,0,0,.65)", color: "#fff", fontSize: 22, lineHeight: 1 }}>{t}</button>)}
+      <div id="carr-obras" className="xscroll" style={{ display: "flex", gap: 14, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 12, marginBottom: 16 }}>
         {L.map(o => { const f = fotoDe(o); return (<div key={o.id} onClick={() => { setObraSel && setObraSel(o.id); setTab("obras"); }} style={{ flex: "0 0 min(360px,82%)", scrollSnapAlign: "start", background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", cursor: "pointer", boxShadow: T.shadow }}>
           <div style={{ height: 170, background: `linear-gradient(135deg,${T.bg},${T.border})` }}>{f && <img src={f} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}</div>
           <div style={{ padding: "13px 15px 15px" }}>
@@ -378,6 +384,7 @@ function CInicio({ T, cfg, D, setTab, setObraSel }) {
             <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "10px 0 8px" }}><div style={{ width: (o.avance || 0) + "%", height: 5, background: "#E9B949", borderRadius: 4 }} /></div>
             <div style={{ fontSize: 11.5, color: T.muted }}>{arr(o.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === o.id).length} en bitácora</div>
           </div></div>); })}
+      </div>
       </div>
       <div onClick={() => setIaAbierta(true)} style={{ display: "flex", alignItems: "center", gap: 12, background: T.card, border: `1px solid ${BRASS}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", marginBottom: 16 }}><div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Estrella s={30} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 800, color: "#E9B949", letterSpacing: ".04em" }}>NEXO IA</div><div style={{ fontSize: 12.5, color: T.sub, marginTop: 2 }}>Preguntale a la app por cualquier obra. Responde con lo que está cargado.</div></div><span style={{ color: T.muted, fontSize: 18 }}>›</span></div>
       {iaAbierta && <IAOverlay T={T} cfg={cfg} D={D} cerrar={() => setIaAbierta(false)} />}
@@ -414,7 +421,7 @@ function CObras({ T, D, cfg, rol, obraSel, setObraSel }) {
         <div style={{ fontSize: 11.5, opacity: .8 }}>{o.sector || ""}</div>
       </div></div>; })()}
     {o.obs && <Card T={T} style={{ padding: 12, marginBottom: 12, fontSize: 12.5, color: T.sub, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{o.obs}</Card>}
-    <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 10 }}>{(est ? SUBS.filter(([k]) => k !== "adic") : SUBS).map(([k, l]) => <Pill key={k} T={T} a={sub === k} onClick={() => setSub(k)}>{l}</Pill>)}</div>
+    <div className="xscroll" style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 10 }}>{(est ? SUBS.filter(([k]) => k !== "adic") : SUBS).map(([k, l]) => <Pill key={k} T={T} a={sub === k} onClick={() => setSub(k)}>{l}</Pill>)}</div>
     {sub === "fotos" && <Galeria T={T} items={[...arr(o.fotos), ...arr(o.videos)]} />}
     {sub === "avance" && est && <AvanceLista T={T} D={D} o={o} />}
     {sub === "avance" && !est && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><AvanceView key={o.id} T={T} obras={[o]} avance={D.avance} setAvance={D.setAvance} apiKey={D.apiKey} cfg={cfg} certif={D.certif} envios={D.envios} setEnvios={D.setEnvios} /></div>}
