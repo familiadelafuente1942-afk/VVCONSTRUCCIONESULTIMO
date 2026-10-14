@@ -307,21 +307,50 @@ function Hilo({ T, p }) {
     {arr(h.archivos).map((a, j) => <Archivo key={j} T={T} a={a} />)}
   </div>);
 }
-function chipPedido(p, T) {
+const SEM = { rojo: "#E5604A", naranja: "#E58A3A", amarillo: "#E0B93A", verde: "#3E9B62", apagado: "#8B8B8B" };
+const SEM_ORD = ["rojo", "naranja", "amarillo", "verde", "apagado"];
+function semPedido(p) {
+  if (p.estado === "resuelto") return { k: "apagado", t: "Resuelto" };
+  if (p.estado === "respondido") return { k: "apagado", t: "Respondido", viol: true };
   const d = p.def && p.def.limite ? Math.round((new Date(p.def.limite + "T12:00:00") - new Date()) / 864e5) : null;
-  if (p.estado === "resuelto") return { t: "Resuelto", c: "#3E9B62" };
-  if (p.estado === "respondido") return { t: "Respondido", c: "#8B5CF6" };
-  if (d != null && d < 0) return { t: `Vencido hace ${-d} d`, c: "#E5604A" };
-  if (d != null) return { t: d === 0 ? "Vence hoy" : `Vence en ${d} d`, c: d <= 7 ? "#E0A04A" : "#3E9B62" };
-  return { t: "Abierto", c: T.sub };
+  if (d == null) return { k: "verde", t: "Abierto", d };
+  if (d < 0) return { k: "rojo", t: `Vencido hace ${-d} d`, d };
+  if (d <= 3) return { k: "rojo", t: d === 0 ? "Vence hoy" : `Pedir ya · ${d} d`, d };
+  if (d <= 7) return { k: "naranja", t: `Urgente · ${d} d`, d };
+  if (d <= 14) return { k: "amarillo", t: `Pedir · ${d} d`, d };
+  return { k: "verde", t: `En ventana · ${d} d`, d };
+}
+function chipPedido(p, T) { const s = semPedido(p); return { t: s.t, c: s.viol ? "#8B5CF6" : SEM[s.k], k: s.k }; }
+function cuentaSem(L) { const r = { rojo: 0, naranja: 0, amarillo: 0, verde: 0 }; L.forEach(p => { const k = semPedido(p).k; if (r[k] != null) r[k]++; }); return r; }
+function Semaforo({ T, L }) { const c = cuentaSem(L); return <div style={{ display: "flex", gap: 7, marginBottom: 12, flexWrap: "wrap" }}>{["rojo", "naranja", "amarillo", "verde"].map(k => <div key={k} style={{ flex: "1 1 70px", textAlign: "center", border: `1px solid ${SEM[k]}`, borderRadius: 10, padding: "7px 4px", background: SEM[k] + "18" }}><div style={{ fontSize: 20, fontWeight: 800, color: SEM[k], fontFamily: "'Fraunces',serif" }}>{c[k]}</div><div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", color: T.sub }}>{k === "rojo" ? "Vencido / ya" : k === "naranja" ? "Urgente" : k === "amarillo" ? "Pedir" : "En ventana"}</div></div>)}</div>; }
+function Checklist({ T, D, o }) {
+  const L = D.pedidos.filter(p => p.obra_id === o.id);
+  const [ab, setAb] = useState(null);
+  if (!L.length) return <Vacio T={T}>Esta obra no tiene pedidos cargados.</Vacio>;
+  const G = {}; L.forEach(p => { const t = (p.def && p.def.tarea) || "Sin tarea asignada"; (G[t] = G[t] || []).push(p); });
+  const grupos = Object.entries(G).map(([t, ps]) => { const act = ps.filter(p => p.estado !== "resuelto"); const peor = act.length ? SEM_ORD.indexOf(act.map(p => semPedido(p).k).sort((x, y) => SEM_ORD.indexOf(x) - SEM_ORD.indexOf(y))[0]) : 4; const lim = act.map(p => (p.def && p.def.limite) || "9").sort()[0] || "z"; return { t, ps, peor, lim, act }; }).sort((a, b) => a.peor - b.peor || a.lim.localeCompare(b.lim));
+  return (<div>
+    <Semaforo T={T} L={L} />
+    {grupos.map(g => { const k = SEM_ORD[g.peor]; return <Card key={g.t} T={T} style={{ padding: 0, marginBottom: 10, overflow: "hidden", borderLeft: `4px solid ${SEM[k]}` }}>
+      <div style={{ padding: "11px 13px", display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}><div style={{ fontSize: 14, fontWeight: 800 }}>{g.t}</div><div style={{ fontSize: 11, color: T.sub }}>{g.ps.length - g.act.length}/{g.ps.length} resueltos</div></div>
+      {g.ps.slice().sort((a, b) => ((a.def && a.def.limite) || "9").localeCompare((b.def && b.def.limite) || "9")).map(p => { const c = chipPedido(p, T), open = ab === p.id; return <div key={p.id} style={{ borderTop: `1px solid ${T.border}`, padding: "9px 13px" }}>
+        <div onClick={() => setAb(open ? null : p.id)} style={{ display: "flex", gap: 9, alignItems: "center", cursor: "pointer" }}>
+          <span style={{ width: 11, height: 11, borderRadius: 11, background: c.c, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, textDecoration: p.estado === "resuelto" ? "line-through" : "none", opacity: p.estado === "resuelto" ? .6 : 1 }}>{p.asunto}</div>
+          <span style={{ fontSize: 10.5, fontWeight: 800, color: c.c, whiteSpace: "nowrap" }}>{c.t}</span></div>
+        {open && <div style={{ marginTop: 8 }}>{p.def && p.def.tipo && <div style={{ fontSize: 11.5, color: T.sub }}>{p.def.tipo}{p.def.limite ? " · límite " + fFecha(p.def.limite) : ""}</div>}{p.detalle && <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55, marginTop: 4 }}>{p.detalle}</div>}<Hilo T={T} p={p} />{arr(p.docs).map((a, i) => <Archivo key={i} T={T} a={a} />)}</div>}
+      </div>; })}
+    </Card>; })}
+  </div>);
 }
 function ListaPedidos({ T, D, soloEstudio }) {
-  const [f, setF] = useState("abiertos"); const [ab, setAb] = useState(null);
+  const [f, setF] = useState("abiertos"); const [ab, setAb] = useState(null); const [col, setCol] = useState("");
   let L = D.pedidos.filter(p => !soloEstudio || p.para === "estudio" || (p.def && p.def.tipo));
   const abiertos = L.filter(p => p.estado !== "resuelto"), hechos = L.filter(p => p.estado === "resuelto");
-  const lista = (f === "abiertos" ? abiertos : hechos).slice().sort((a, b) => ((a.def && a.def.limite) || "9").localeCompare((b.def && b.def.limite) || "9"));
+  const lista = (f === "abiertos" ? abiertos : hechos).filter(p => !col || semPedido(p).k === col).slice().sort((a, b) => ((a.def && a.def.limite) || "9").localeCompare((b.def && b.def.limite) || "9"));
   const nomObra = (id) => (D.obras.find(o => o.id === id) || {}).nombre || "";
   return (<div>
+    {f === "abiertos" && <><Semaforo T={T} L={abiertos} /><div className="xscroll" style={{ display: "flex", gap: 7, marginBottom: 10, overflowX: "auto" }}><Pill T={T} a={!col} onClick={() => setCol("")}>Todos</Pill>{["rojo", "naranja", "amarillo", "verde"].map(k => <Pill key={k} T={T} a={col === k} onClick={() => setCol(col === k ? "" : k)}>{k[0].toUpperCase() + k.slice(1)}</Pill>)}</div></>}
     <div style={{ display: "flex", gap: 7, marginBottom: 12 }}><Pill T={T} a={f === "abiertos"} onClick={() => setF("abiertos")}>Abiertos · {abiertos.length}</Pill><Pill T={T} a={f === "hechos"} onClick={() => setF("hechos")}>Resueltos · {hechos.length}</Pill></div>
     {lista.length === 0 && <Vacio T={T}>No hay pedidos en esta lista.</Vacio>}
     {lista.map(p => { const c = chipPedido(p, T), open = ab === p.id; return (<Card key={p.id} T={T} style={{ padding: 13, marginBottom: 9, borderLeft: `4px solid ${c.c}` }}>
@@ -396,7 +425,7 @@ function CInicio({ T, cfg, D, setTab, setObraSel }) {
     </div>
   </div>);
 }
-const SUBS = [["fotos", "Fotos"], ["avance", "Avance"], ["bitacora", "Bitácora"], ["informes", "Informes"], ["crono", "Cronograma"], ["archivos", "Archivos"], ["adic", "Adicionales"]];
+const SUBS = [["fotos", "Fotos"], ["avance", "Avance"], ["bitacora", "Bitácora"], ["informes", "Informes"], ["crono", "Cronograma"], ["check", "Checklist"], ["archivos", "Archivos"], ["adic", "Adicionales"]];
 function CObras({ T, D, cfg, rol, obraSel, setObraSel }) {
   const est = rol === "estudio";
   const [idL, setIdL] = useState(null); const id = obraSel != null ? obraSel : idL; const setId = (v) => { setIdL(v); setObraSel && setObraSel(v); }; const [sub, setSub] = useState("crono");
@@ -407,6 +436,7 @@ function CObras({ T, D, cfg, rol, obraSel, setObraSel }) {
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 18 }}>{x.nombre}</div><div style={{ fontSize: 14, fontWeight: 800, color: "#E9B949" }}>{x.avance || 0}%</div></div>
       <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "8px 0 7px" }}><div style={{ width: (x.avance || 0) + "%", height: 5, background: "#E9B949", borderRadius: 4 }} /></div>
+      {(() => { const c = cuentaSem(D.pedidos.filter(p => p.obra_id === x.id)); return (c.rojo + c.naranja + c.amarillo) > 0 && <div style={{ display: "flex", gap: 8, marginBottom: 5 }}>{["rojo", "naranja", "amarillo"].filter(k => c[k]).map(k => <span key={k} style={{ fontSize: 11, fontWeight: 800, color: SEM[k] }}>● {c[k]}</span>)}<span style={{ fontSize: 11, color: T.sub }}>pedidos</span></div>; })()}
       <div style={{ fontSize: 11.5, color: T.sub }}>{x.sector ? x.sector + " · " : ""}{arr(x.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === x.id).length} en bitácora · {arr(x.informes).length + arr(D.informesSem[x.id]).length} informes</div>
     </div></Card>; })}</>);
   const mid = (D.asig && D.asig[o.id] != null) ? D.asig[o.id] : o.modeloId;
@@ -434,6 +464,7 @@ function CObras({ T, D, cfg, rol, obraSel, setObraSel }) {
         <Sel T={T} value={mid || ""} onChange={v => D.setAsig(p => ({ ...(p || {}), [o.id]: v }))}><option value="">— sin modelo —</option>{D.modelosObra.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</Sel>
         {!mid && <div style={{ fontSize: 12, color: T.muted, margin: "-6px 0 10px" }}>Esta obra no tiene modelo asignado. Los modelos se crean en Más → Modelos de cronograma.</div>}</div>
       <CronoPro key={o.id + mid} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre, modeloId: mid }]} data={D.cronoPro} setData={D.setCronoPro} /></div>}
+    {sub === "check" && <Checklist T={T} D={D} o={o} />}
     {sub === "archivos" && (arr(o.archivos).length ? arr(o.archivos).map((a, i) => <Archivo key={i} T={T} a={a} />) : <Vacio T={T}>No hay archivos cargados.</Vacio>)}
     {sub === "adic" && <ListaAdic T={T} D={D} obra={o.id} />}
   </>);
