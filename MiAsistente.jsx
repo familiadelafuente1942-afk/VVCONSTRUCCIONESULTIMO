@@ -257,7 +257,7 @@ export default function MiAsistente() {
   const [trust, setTrust] = useState(true);
   const [db, setDb] = useState({ obras: [], personal: [], pedidos: [], matpedidos: [], mensajes: [], formularios: [], documentacion: [] });
   const [pagos, setPagos] = useState([]);
-  const [proyectos, setProyectos] = useState([]); const proyRef = useRef([]); const proyWrite = useRef(0); const [proySel, setProySel] = useState(null);
+  const [proyectos, setProyectos] = useState([]); const proyRef = useRef([]); const proyWrite = useRef(0); const obrasLimpias = useRef(false); const [proySel, setProySel] = useState(null);
   const [cobros, setCobros] = useState([]);
   const [filtroObraCobro, setFiltroObraCobro] = useState("");
   const [perfil, setPerfil] = useState("");
@@ -364,13 +364,13 @@ export default function MiAsistente() {
       const res = await Promise.all(keys.map(k => storage.get(k)));
       if (!alive) return;
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
-      setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
+      let obrasRaw = parse(res[0]); if (!Array.isArray(obrasRaw)) obrasRaw = [];
+      { const m = new Map(); obrasRaw.forEach(o => { if (o && o.id != null) m.set(o.id, o); }); if (m.size < obrasRaw.length) { const lim = Array.from(m.values()); if (!obrasLimpias.current) { obrasLimpias.current = true; try { localStorage.setItem("vv_obras", JSON.stringify(lim)); } catch { } storage.set("vv_obras", JSON.stringify(lim)).catch(() => { }); } obrasRaw = lim; } }
+      setDb({ obras: obrasRaw, personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
       if (Date.now() - proyWrite.current > 4000) {
         const rpy = await storage.get("sebastian_proyectos"); if (!alive) return;
         let py = parse(rpy); if (!Array.isArray(py)) py = [];
-        const norm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
-        const have = new Set(py.map(p => norm(p.nombre))); let ch = false;
-        parse(res[0]).forEach(o => { if (!o || !o.nombre) return; const en = !o.estado || /curso|activ|ejecuc/i.test(o.estado); if (en && !have.has(norm(o.nombre))) { have.add(norm(o.nombre)); py = [...py, { id: "py_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6), nombre: o.nombre, tipo: "obra", estado: o.estado || "En curso", resumen: "", diario: [] }]; ch = true; } });
+        const antes = py.length; py = py.filter(p => p && (p.tipo !== "obra" || (p.diario || []).length || p.resumen)); const ch = py.length !== antes;
         proyRef.current = py; setProyectos(prev => JSON.stringify(py) !== JSON.stringify(prev) ? py : prev);
         if (ch) { proyWrite.current = Date.now(); storage.set("sebastian_proyectos", JSON.stringify(py)).catch(() => { }); }
       }
@@ -656,8 +656,8 @@ ${(() => {
       return `Eligió tomar: ${elegidos.join(", ")}.\nYa tomó hoy: ${tomadosHoy.length ? tomadosHoy.join(", ") : "ninguno todavía"}.${faltan.length ? `\nLe falta hoy: ${faltan.join(", ")}.` : "\n¡Ya tomó todo lo de hoy!"}`;
     })()}
 
-MIS PROYECTOS Y OBRAS EN CURSO (estado de situación; cada uno con su diario de novedades, lo más nuevo primero. Si te pregunta "¿cómo vamos con X?", respondé con esto):
-${(proyectos || []).map(p => `· ${p.nombre} [${p.tipo === "obra" ? "obra" : "proyecto"}] — estado: ${p.estado || "sin estado"}${p.resumen ? `\n   Resumen: ${p.resumen}` : ""}${(p.diario || []).length ? "\n" + (p.diario || []).slice(0, 8).map(n => `   - ${n.fecha}: ${n.texto}`).join("\n") : "\n   (sin novedades cargadas)"}`).join("\n") || "(todavía no hay proyectos cargados)"}
+MIS PROYECTOS (todavía no son obras; cuando terminan pasan a ser una obra) (estado de situación; cada uno con su diario de novedades, lo más nuevo primero. Si te pregunta "¿cómo vamos con X?", respondé con esto):
+${(proyectos || []).map(p => `· ${p.nombre} [proyecto] — estado: ${p.estado || "sin estado"}${p.resumen ? `\n   Resumen: ${p.resumen}` : ""}${(p.diario || []).length ? "\n" + (p.diario || []).slice(0, 8).map(n => `   - ${n.fecha}: ${n.texto}`).join("\n") : "\n   (sin novedades cargadas)"}`).join("\n") || "(todavía no hay proyectos cargados)"}
 
 MI AGENDA (eventos/citas):
 ${ag}
@@ -924,7 +924,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     alert(`Listo: "${quitar.nombre}" quedó unificada en "${keep.nombre}" (${nPag} pagos y ${nCob} cobros pasados).`);
   }
   function crearObra(a) {
-    const nueva = { id: uid() + Date.now(), nombre: a.nombre || a.obra || "Obra nueva", estado: a.estado || "En curso", avance: Number(a.avance) || 0, direccion: a.direccion || "", fotos: [], videos: [], planos: [], informes: [], tareas: [] };
+    const nueva = { id: uid() + Date.now(), nombre: a.nombre || a.obra || "Obra nueva", estado: a.estado || "En curso", avance: Number(a.avance) || 0, direccion: a.direccion || "", ...(a.obs ? { obs: a.obs } : {}), fotos: [], videos: [], planos: [], informes: [], tareas: [] };
     (async () => {
       let arr = []; try { const r = await storage.get("vv_obras"); if (r?.value) arr = JSON.parse(r.value); } catch { }
       const next = [nueva, ...arr];
@@ -1277,7 +1277,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "cobros" && <CobrosBody cobros={cobros} obras={db.obras} filtroObra={filtroObraCobro} setFiltroObra={setFiltroObraCobro} exportar={exportarCobrosExcel} borrar={(id) => persistCobros((cobros || []).filter(c => c.id !== id))} onAdd={cargarCobro} onEditarFecha={(id, fecha) => persistCobros((cobros || []).map(c => c.id === id ? { ...c, fecha } : c))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
     {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} exportarPDF={exportarResultadosPDF} />}
-    {vista === "proyectos" && <ProyectosBody proyectos={proyectos} sel={proySel} setSel={setProySel} guardar={persistProyectos} hablar={(n) => { setVista("chat"); setInput(`Sobre ${n}: `); }} />}
+    {vista === "proyectos" && <ProyectosBody proyectos={proyectos} sel={proySel} setSel={setProySel} guardar={persistProyectos} hablar={(n) => { setVista("chat"); setInput(`Sobre ${n}: `); }} pasarAObra={(p, obs) => { crearObra({ nombre: p.nombre, estado: "En curso", obs }); persistProyectos(proyRef.current.filter(x => x.id !== p.id)); setProySel(null); setVista("obras"); }} />}
     {vista === "reuniones" && <ReunionesBody proyectos={proyectos} guardarProyectos={persistProyectos} cargarJsPDF={cargarJsPDF} />}
     {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: 0, direccion: "" })} borrar={borrarObra} onUnificar={unificarObras} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
@@ -2112,7 +2112,7 @@ function CamarasBody({ camaras, onSave }) {
   </div>);
 }
 
-function ProyectosBody({ proyectos, sel, setSel, guardar, hablar }) {
+function ProyectosBody({ proyectos, sel, setSel, guardar, hablar, pasarAObra }) {
   const [nuevo, setNuevo] = useState(""); const [nota, setNota] = useState(""); const [edNota, setEdNota] = useState(null);
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box", fontFamily: "inherit" };
   const p = (proyectos || []).find(x => x.id === sel);
@@ -2121,8 +2121,9 @@ function ProyectosBody({ proyectos, sel, setSel, guardar, hablar }) {
     <button onClick={() => { setSel(null); setEdNota(null); }} style={{ background: "none", border: 0, color: T.accent, fontSize: 13, fontWeight: 800, padding: "0 0 10px", cursor: "pointer" }}>← Proyectos</button>
     <input value={p.nombre} onChange={e => upd({ nombre: e.target.value })} style={{ ...inp, fontFamily: T.serif, fontSize: 20, fontWeight: 700 }} />
     <div style={{ display: "flex", gap: 7 }}><input value={p.estado || ""} onChange={e => upd({ estado: e.target.value })} placeholder="Estado (ej: En negociación)" style={{ ...inp, flex: 1 }} />
-      <select value={p.tipo || "proyecto"} onChange={e => upd({ tipo: e.target.value })} style={{ ...inp, width: 118 }}><option value="obra">Obra</option><option value="proyecto">Proyecto</option></select></div>
+</div>
     <textarea value={p.resumen || ""} onChange={e => upd({ resumen: e.target.value })} placeholder="Resumen general: dónde estamos parados" rows={3} style={{ ...inp, resize: "vertical" }} />
+    <button onClick={() => { if (!window.confirm(`¿Pasar "${p.nombre}" a obra?\n\nSe crea la obra en la solapa Obras (con el resumen y las novedades en sus observaciones) y el proyecto sale de esta lista.`)) return; const obs = [p.resumen ? "Resumen del proyecto: " + p.resumen : "", ...(p.diario || []).slice().reverse().map(n => `${n.fecha}: ${n.texto}`)].filter(Boolean).join("\n"); pasarAObra(p, obs); }} style={{ width: "100%", background: "none", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 11, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>🏗 Pasar a obra (terminó como proyecto)</button>
     <button onClick={() => hablar(p.nombre)} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>💬 Hablar con Tita sobre este proyecto</button>
     <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Diario de novedades</div>
     <textarea value={nota} onChange={e => setNota(e.target.value)} placeholder="Escribí una novedad (o contale a Tita y ella la anota)" rows={2} style={{ ...inp, resize: "vertical" }} />
@@ -2138,11 +2139,10 @@ function ProyectosBody({ proyectos, sel, setSel, guardar, hablar }) {
     <div style={{ display: "flex", gap: 7, marginBottom: 14 }}><input value={nuevo} onChange={e => setNuevo(e.target.value)} placeholder="Nuevo proyecto (ej: San Telmo)" style={{ ...inp, flex: 1, marginBottom: 0 }} />
       <button onClick={() => { const n = nuevo.trim(); if (!n) return; const id = "py_" + Date.now(); guardar([...(proyectos || []), { id, nombre: n, tipo: "proyecto", estado: "En curso", resumen: "", diario: [] }]); setNuevo(""); setSel(id); }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋</button></div>
     {(proyectos || []).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px" }}>Todavía no hay proyectos. Creá uno o contale a Tita cómo va.</div>}
-    {["proyecto", "obra"].map(tp => { const L = (proyectos || []).filter(x => (x.tipo || "proyecto") === tp); if (!L.length) return null; return (<div key={tp}><div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", margin: "6px 0 8px" }}>{tp === "obra" ? "Obras en curso" : "Proyectos"}</div>
-      {L.map(x => { const u = (x.diario || [])[0]; return (<div key={x.id} onClick={() => setSel(x.id)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "13px", marginBottom: 9, cursor: "pointer" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}><div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{x.nombre}</div><div style={{ fontSize: 11, fontWeight: 700, color: T.accent, whiteSpace: "nowrap" }}>{x.estado || ""}</div></div>
-        <div style={{ fontSize: 12.5, color: T.sub, marginTop: 4, lineHeight: 1.5 }}>{u ? <><b>{u.fecha}:</b> {u.texto.length > 140 ? u.texto.slice(0, 140) + "…" : u.texto}</> : (x.resumen || "Sin novedades cargadas.")}</div>
-        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{(x.diario || []).length} novedades</div></div>); })}</div>); })}
+    {(proyectos || []).map(x => { const u = (x.diario || [])[0]; return (<div key={x.id} onClick={() => setSel(x.id)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "13px", marginBottom: 9, cursor: "pointer" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}><div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{x.nombre}</div><div style={{ fontSize: 11, fontWeight: 700, color: T.accent, whiteSpace: "nowrap" }}>{x.estado || ""}</div></div>
+      <div style={{ fontSize: 12.5, color: T.sub, marginTop: 4, lineHeight: 1.5 }}>{u ? <><b>{u.fecha}:</b> {u.texto.length > 140 ? u.texto.slice(0, 140) + "…" : u.texto}</> : (x.resumen || "Sin novedades cargadas.")}</div>
+      <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{(x.diario || []).length} novedades</div></div>); })}
   </div>);
 }
 
