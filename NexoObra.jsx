@@ -2,12 +2,13 @@
 // Lee en SOLO LECTURA los datos reales de las obras (mismas claves que las otras apps) y usa el mismo estilo.
 // No escribe nada en la base: no puede romper ni pisar datos de las otras aplicaciones.
 import React, { useState, useEffect, useMemo } from "react";
-import { alertasCrono } from "./CronoPro.jsx";
+import CronoPro, { alertasCrono } from "./CronoPro.jsx";
+import { AvanceView, BitacoraView } from "./Cliente.jsx";
 
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const BRASS = "#B0894F";
-const KEYS = ["vv_obras", "vv_bitacora", "vv_avance", "vv_informes_sem", "vv_renders", "vv_pedidos", "vv_matpedidos", "vv_cronopro", "vv_adicionales", "vv_certif_sem", "cliente_cfg"];
+const KEYS = ["vv_obras", "vv_bitacora", "vv_avance", "vv_informes_sem", "vv_renders", "vv_pedidos", "vv_matpedidos", "vv_cronopro", "vv_adicionales", "vv_certif_sem", "cliente_cfg", "vv_cfg", "vv_modelos_obra", "vv_gestion", "cliente_envios_prop"];
 const CACHE = "nexoobra_real_v2";
 
 // ── tema: idéntico al de la app Cliente ─────────────────────────────────────
@@ -67,6 +68,17 @@ function useReal() {
   return { R, st, recargar: () => { setSt(s => (R ? "cache" : "cargando")); setIntento(i => i + 1); } };
 }
 
+// Lo que se carga acá (avances, bitácora, cronograma) queda en ESTE aparato; no se escribe en la base real.
+function useOverlay(key, real) {
+  const K = "nexoobra_ov_" + key;
+  const [loc, setLoc] = useState(() => { try { const v = localStorage.getItem(K); return v ? JSON.parse(v) : null; } catch { return null; } });
+  const val = loc != null ? loc : real;
+  const ref = React.useRef(val); ref.current = val;
+  const set = (u) => { const n = typeof u === "function" ? u(ref.current) : u; ref.current = n; setLoc(n); try { localStorage.setItem(K, JSON.stringify(n)); } catch { } };
+  const reset = () => { setLoc(null); try { localStorage.removeItem(K); } catch { } };
+  return [val, set, reset, loc != null];
+}
+
 // ── utilidades de forma tolerante ──────────────────────────────────────────
 const arr = (x) => (Array.isArray(x) ? x : []);
 const urlDe = (x) => (typeof x === "string" ? x : (x && (x.url || x.src || x.dataUrl)) || "");
@@ -110,7 +122,7 @@ const PANELES = {
   propietario: { n: "Propietario", d: "Sigue su obra", pts: ["Avance de su obra", "Fotos de la obra", "Informes semanales y de avance", "Sin alertas ni costos internos"] },
 };
 const NAVS = {
-  constructora: [["inicio", "Inicio"], ["obras", "Obras"], ["pedidos", "Pedidos"], ["bitacora", "Bitácora"], ["mas", "Más"]],
+  constructora: [["inicio", "Inicio"], ["obras", "Obras"], ["avance", "Avance"], ["pedidos", "Pedidos"], ["bitacora", "Bitácora"], ["mas", "Más"]],
   estudio: [["pedidos", "Pedidos"], ["planos", "Planos"], ["adicionales", "Adicionales"]],
   propietario: [["obra", "Mi obra"], ["fotos", "Fotos"], ["informes", "Informes"]],
 };
@@ -125,10 +137,16 @@ export default function NexoObraApp() {
   const cfg = useMemo(() => ({ ...DEFAULT_CFG, ...(R && R.cliente_cfg ? R.cliente_cfg : {}) }), [R]);
   const T = useMemo(() => theme(cfg), [cfg]);
   const obras = useMemo(() => arr(R && R.vv_obras).filter(o => o && !o.privada), [R]);
+  const [bitacoraV, setBitacora, rstB] = useOverlay("bitacora", arr(R && R.vv_bitacora));
+  const [avanceV, setAvance, rstA] = useOverlay("avance", (R && R.vv_avance) || {});
+  const [cronoV, setCronoPro, rstC] = useOverlay("cronopro", (R && R.vv_cronopro) || { obras: {} });
+  const [enviosV, setEnvios, rstE] = useOverlay("envios", (R && R.cliente_envios_prop) || {});
+  const restaurar = () => { rstB(); rstA(); rstC(); rstE(); };
   const D = useMemo(() => ({
-    obras, bitacora: arr(R && R.vv_bitacora), avance: (R && R.vv_avance) || {}, informesSem: (R && R.vv_informes_sem) || {}, renders: (R && R.vv_renders) || {},
-    pedidos: arr(R && R.vv_pedidos), matpedidos: arr(R && R.vv_matpedidos), cronoPro: (R && R.vv_cronopro) || { obras: {} }, adicionales: arr(R && R.vv_adicionales),
-  }), [R, obras]);
+    setBitacora, setAvance, setCronoPro, setEnvios, restaurar, envios: enviosV, apiKey: ((R && R.vv_cfg) || {}).apiKey, certif: (R && R.vv_certif_sem) || {}, modelosObra: arr(R && R.vv_modelos_obra), gestion: (R && R.vv_gestion) || null,
+    obras, bitacora: arr(bitacoraV), avance: avanceV || {}, informesSem: (R && R.vv_informes_sem) || {}, renders: (R && R.vv_renders) || {},
+    pedidos: arr(R && R.vv_pedidos), matpedidos: arr(R && R.vv_matpedidos), cronoPro: cronoV || { obras: {} }, adicionales: arr(R && R.vv_adicionales),
+  }), [R, obras, bitacoraV, avanceV, cronoV, enviosV]);
   const entrar = (p) => { setPerfil(p); setVerAlcance(false); setTab(p ? NAVS[p][0][0] : ""); };
   useEffect(() => { if (perfil && !tab) setTab(NAVS[perfil][0][0]); }, [perfil, tab]);
   const ctx = { T, cfg, D, tab, setTab };
@@ -272,7 +290,8 @@ function Constructora(x) {
   if (tab === "inicio") return <CInicio {...x} />;
   if (tab === "obras") return <CObras {...x} />;
   if (tab === "pedidos") return wrap(<><Eyebrow T={x.T}>Pedidos</Eyebrow><ListaPedidos T={x.T} D={x.D} /></>);
-  if (tab === "bitacora") return <CBitacora {...x} />;
+  if (tab === "avance") return <div style={{ flex: 1, overflowY: "auto" }}><AvanceView T={x.T} obras={x.D.obras} avance={x.D.avance} setAvance={x.D.setAvance} apiKey={x.D.apiKey} cfg={x.cfg} certif={x.D.certif} envios={x.D.envios} setEnvios={x.D.setEnvios} /></div>;
+  if (tab === "bitacora") return <div style={{ flex: 1, overflowY: "auto" }}><BitacoraView T={x.T} obras={x.D.obras} bitacora={x.D.bitacora} setBitacora={x.D.setBitacora} cfg={x.cfg} /></div>;
   return <CMas {...x} />;
 }
 function CInicio({ T, cfg, D, setTab }) {
@@ -309,25 +328,25 @@ function CInicio({ T, cfg, D, setTab }) {
     </div>
   </div>);
 }
-const SUBS = [["fotos", "Fotos"], ["bitacora", "Bitácora"], ["informes", "Informes"], ["crono", "Cronograma"], ["archivos", "Archivos"], ["adic", "Adicionales"]];
-function CObras({ T, D }) {
+const SUBS = [["fotos", "Fotos"], ["avance", "Avance"], ["bitacora", "Bitácora"], ["informes", "Informes"], ["crono", "Cronograma"], ["archivos", "Archivos"], ["adic", "Adicionales"]];
+function CObras({ T, D, cfg }) {
   const [id, setId] = useState(null); const [sub, setSub] = useState("fotos");
   const o = D.obras.find(x => x.id === id);
   if (!o) return wrap(<><Eyebrow T={T}>Obras</Eyebrow>{D.obras.map(x => <Card key={x.id} T={T} onClick={() => { setId(x.id); setSub("fotos"); }} style={{ padding: 15, marginBottom: 10, cursor: "pointer" }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 19 }}>{x.nombre}</div><div style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{x.avance || 0}%</div></div>
     <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "10px 0 8px" }}><div style={{ width: (x.avance || 0) + "%", height: 5, background: T.accent, borderRadius: 4 }} /></div>
     <div style={{ fontSize: 11.5, color: T.sub }}>{arr(x.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === x.id).length} hechos en bitácora · {arr(x.informes).length + arr(D.informesSem[x.id]).length} informes</div></Card>)}</>);
-  const P = D.cronoPro && D.cronoPro.obras && D.cronoPro.obras[o.id];
-  return wrap(<>
+    return wrap(<>
     <button onClick={() => setId(null)} style={{ background: "none", border: 0, color: T.accent, fontSize: 13, fontWeight: 800, padding: "0 0 10px" }}>← Obras</button>
     <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24 }}>{o.nombre}</div>
     <div style={{ fontSize: 12, color: T.sub, margin: "3px 0 12px" }}>{o.avance || 0}% de avance{o.sector ? " · " + o.sector : ""}</div>
     {o.obs && <Card T={T} style={{ padding: 12, marginBottom: 12, fontSize: 12.5, color: T.sub, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{o.obs}</Card>}
     <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 10 }}>{SUBS.map(([k, l]) => <Pill key={k} T={T} a={sub === k} onClick={() => setSub(k)}>{l}</Pill>)}</div>
     {sub === "fotos" && <Galeria T={T} items={[...arr(o.fotos), ...arr(o.videos)]} />}
-    {sub === "bitacora" && <Bitacora T={T} D={D} o={o} />}
+    {sub === "avance" && <div style={{ margin: "0 -20px" }}><AvanceView key={o.id} T={T} obras={[o]} avance={D.avance} setAvance={D.setAvance} apiKey={D.apiKey} cfg={cfg} certif={D.certif} envios={D.envios} setEnvios={D.setEnvios} /></div>}
+    {sub === "bitacora" && <div style={{ margin: "0 -20px" }}><BitacoraView key={o.id} T={T} obras={[o]} bitacora={D.bitacora} setBitacora={D.setBitacora} cfg={cfg} /></div>}
     {sub === "informes" && <Informes T={T} D={D} o={o} />}
-    {sub === "crono" && (P && arr(P.tareas).length ? arr(P.tareas).map(t => <Card key={t.id} T={T} style={{ padding: "11px 13px", marginBottom: 7 }}><div style={{ fontSize: 13, fontWeight: 700 }}>{t.name}</div><div style={{ fontSize: 11, color: T.muted }}>{t.dur} días de trabajo{arr(P.pedidos).filter(p => p.task === t.id).length ? " · " + arr(P.pedidos).filter(p => p.task === t.id).map(p => p.desc).join(", ") : ""}</div></Card>) : <Vacio T={T}>Esta obra todavía no tiene cronograma cargado.</Vacio>)}
+    {sub === "crono" && <div style={{ margin: "0 -20px" }}><CronoPro key={o.id} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre }]} data={D.cronoPro} setData={D.setCronoPro} /></div>}
     {sub === "archivos" && (arr(o.archivos).length ? arr(o.archivos).map((a, i) => <Archivo key={i} T={T} a={a} />) : <Vacio T={T}>No hay archivos cargados.</Vacio>)}
     {sub === "adic" && <ListaAdic T={T} D={D} obra={o.id} />}
   </>);
@@ -347,7 +366,7 @@ function ListaAdic({ T, D, obra }) {
 function CBitacora({ T, D }) { const [o, setId] = useObra(D); return wrap(<><Eyebrow T={T}>Bitácora</Eyebrow><SelObra T={T} D={D} o={o} setId={setId} /><Bitacora T={T} D={D} o={o} /></>); }
 function CMas({ T, D, recargar, st }) {
   return wrap(<><Eyebrow T={T}>Más</Eyebrow>
-    <Card T={T} style={{ padding: "13px 15px", marginBottom: 8 }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Datos de las obras</div><div style={{ fontSize: 12, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>{D.obras.length} obras · {D.bitacora.length} hechos de bitácora · {D.obras.reduce((a, o) => a + arr(o.fotos).length, 0)} fotos. {st === "cache" ? "Mostrando la última copia guardada en este aparato." : "Actualizado recién."} Esta app solo lee: no modifica nada de las otras aplicaciones.</div><button onClick={recargar} style={{ marginTop: 10, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "10px 16px", fontSize: 12.5, fontWeight: 700 }}>Actualizar ahora</button></Card>
+    <Card T={T} style={{ padding: "13px 15px", marginBottom: 8 }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Datos de las obras</div><div style={{ fontSize: 12, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>{D.obras.length} obras · {D.bitacora.length} hechos de bitácora · {D.obras.reduce((a, o) => a + arr(o.fotos).length, 0)} fotos. {st === "cache" ? "Mostrando la última copia guardada en este aparato." : "Actualizado recién."} Esta app solo lee: no modifica nada de las otras aplicaciones.</div><div style={{ fontSize: 11.5, color: T.muted, marginTop: 6, lineHeight: 1.5 }}>Los avances, bitácoras y cambios del cronograma que cargues acá quedan en este aparato (no tocan las otras apps).</div><button onClick={recargar} style={{ marginTop: 10, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "10px 16px", fontSize: 12.5, fontWeight: 700 }}>Actualizar ahora</button><button onClick={() => { if (confirm("¿Descartar lo cargado en este aparato y volver a los datos reales?")) D.restaurar(); }} style={{ marginTop: 10, marginLeft: 8, background: "transparent", color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 14px", fontSize: 12.5, fontWeight: 600 }}>Volver a datos reales</button></Card>
     <Card T={T} style={{ padding: "13px 15px" }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Adicionales</div><div style={{ marginTop: 10 }}><ListaAdic T={T} D={D} /></div></Card></>);
 }
 
