@@ -157,11 +157,12 @@ export default function NexoObraApp() {
   }), [R, obras, bitacoraV, avanceV, cronoV, enviosV, modelosV, asigV, rendersV]);
   const entrar = (p) => { setPerfil(p); setVerAlcance(false); setTab(p ? NAVS[p][0][0] : ""); };
   useEffect(() => { if (perfil && !tab) setTab(NAVS[perfil][0][0]); }, [perfil, tab]);
+  const portada = useMemo(() => D.obras.flatMap(o => [...arr(D.renders[o.id]).map(urlDe), ...arr(o.fotos).slice(0, 1).map(urlDe)].filter(Boolean).slice(0, 1)).filter(u => !esVideo(u)), [D]);
   const ctx = { T, cfg, setCfg, D, tab, setTab };
 
   return (<div style={{ background: T.bg }}><div style={{ height: "100dvh", width: "100%", display: "flex", flexDirection: "column", background: T.bg, color: T.text, fontFamily: "'Inter',sans-serif" }}>
     <style>{CSS}{`body{background:${T.bg}}`}</style>
-    {(!perfil || verAlcance) ? <Alcance T={T} cfg={cfg} perfil={perfil} entrar={entrar} volver={() => setVerAlcance(false)} st={st} R={R} recargar={recargar} />
+    {(!perfil || verAlcance) ? <Alcance imgs={portada} T={T} cfg={cfg} perfil={perfil} entrar={entrar} volver={() => setVerAlcance(false)} st={st} R={R} recargar={recargar} />
       : (<>
         {perfil === "propietario" ? <div style={{ position: "fixed", zIndex: 300, top: `calc(8px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`, left: 10, display: "flex", alignItems: "center", gap: 6, background: PCOL.propietario, color: "#fff", borderRadius: 20, padding: "5px 6px 5px 11px", boxShadow: "0 2px 10px rgba(0,0,0,.4)" }}><span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".14em", textTransform: "uppercase" }}>Panel Propietario</span><button onClick={() => setVerAlcance(true)} style={{ background: "rgba(0,0,0,.28)", border: "none", color: "#fff", borderRadius: 14, padding: "4px 9px", fontSize: 10.5, fontWeight: 700 }}>Paneles</button></div>
           : <Cabecera T={T} cfg={cfg} perfil={perfil} onAlcance={() => setVerAlcance(true)} />}
@@ -196,29 +197,31 @@ function Nav({ T, perfil, tab, setTab }) {
   </nav>);
 }
 
-function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar }) {
+function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar, imgs = [] }) {
   return (<div style={{ flex: 1, overflowY: "auto", padding: `calc(26px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 20px 30px` }}>
     <div style={{ width: "100%" }}>
       <div style={{ textAlign: "center", marginBottom: 6 }}>
         {cfg.logo ? <img src={cfg.logo} alt="" style={{ maxHeight: 60, maxWidth: 240, objectFit: "contain" }} /> : <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 28, color: T.text }}>NEXO Obra</div>}
       </div>
       <div style={{ textAlign: "center", fontSize: 12.5, color: T.sub, lineHeight: 1.55, margin: "10px 0 20px" }}>Una sola app, tres paneles. Cada invitación abre solo el suyo.</div>
-      {R ? <div style={{ fontSize: 11.5, color: T.accent, background: T.accentLight, borderRadius: 10, padding: "9px 12px", marginBottom: 16, textAlign: "center", fontWeight: 700 }}>{new Set(arr(R.vv_obras).filter(o => o && !o.privada).map(o => o.id)).size} obras reales cargadas{st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura</div>
+      {R ? <div style={{ fontSize: 11.5, color: T.accent, background: T.accentLight, borderRadius: 10, padding: "9px 12px", marginBottom: 16, textAlign: "center", fontWeight: 700 }}>{(() => { const n = new Set(arr(R.vv_obras).filter(o => o && !o.privada).map(o => o.id)).size; return n + (n === 1 ? " obra real cargada" : " obras reales cargadas"); })()}{st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura</div>
         : <div style={{ fontSize: 12, color: T.sub, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 16, textAlign: "center" }}>{st === "error" ? "No pude traer los datos todavía." : "Cargando tus obras…"} <button onClick={recargar} style={{ background: "none", border: 0, color: BRASS, fontWeight: 800, fontSize: 12 }}>Reintentar</button></div>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14, marginBottom: 14 }}>
-      {Object.entries(PANELES).map(([k, p]) => {
-        const mio = perfil === k, bloq = perfil && !mio;
-        return (<Card key={k} T={T} style={{ padding: 16, opacity: bloq ? .5 : 1, borderColor: mio ? T.accent : T.border }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ flex: 1 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 19, color: mio ? T.accent : T.text }}>{bloq ? "🔒 " : ""}{p.n}</div><div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{p.d}</div></div>
-            {mio && <Badge c={T.accent} b={T.accentLight}>Tu panel</Badge>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 14, marginBottom: 14 }}>
+      {Object.entries(PANELES).map(([k, p], n) => {
+        const mio = perfil === k, bloq = perfil && !mio, img = imgs[n % Math.max(imgs.length, 1)];
+        return (<div key={k} onClick={() => { if (!perfil && R) entrar(k); else if (mio) volver(); }} style={{ position: "relative", height: 200, borderRadius: 16, overflow: "hidden", border: `1px solid ${mio ? T.accent : T.border}`, background: `linear-gradient(135deg,${T.card},${T.bg})`, cursor: bloq || !R ? "default" : "pointer", opacity: bloq ? .55 : 1, boxShadow: T.shadow }}>
+          {img && <img src={img} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: bloq ? "grayscale(1)" : "none" }} />}
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.05) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,.86) 100%)" }} />
+          <div style={{ position: "absolute", left: 18, right: 18, bottom: 16, color: "#f2f0eb" }}>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".18em", textTransform: "uppercase", color: "#E9B949", marginBottom: 4 }}>{p.d}</div>
+            <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24 }}>{bloq ? "🔒 " : ""}{p.n}</div>
+            <div style={{ fontSize: 12.5, opacity: .85, margin: "3px 0 6px", lineHeight: 1.45 }}>{p.pts[0]}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: "#E9B949" }}>{bloq ? "Bloqueado: este panel lo ve " + (k === "constructora" ? "la constructora" : k === "estudio" ? "el estudio" : "el propietario") : mio ? "Tu panel · volver →" : "Ingresar →"}</div>
           </div>
-          {!bloq && <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 12.5, color: T.sub, lineHeight: 1.65 }}>{p.pts.map(t => <li key={t}>{t}</li>)}</ul>}
-          {bloq && <div style={{ fontSize: 12, color: T.muted, marginTop: 8 }}>Bloqueado: este panel lo ve {k === "constructora" ? "la constructora" : k === "estudio" ? "el estudio" : "el propietario"}.</div>}
-          {!perfil && <button disabled={!R} onClick={() => entrar(k)} style={{ width: "100%", marginTop: 12, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, fontSize: 13, fontWeight: 700, opacity: R ? 1 : .5 }}>Entrar como {p.n.toLowerCase()}</button>}
-        </Card>);
+        </div>);
       })}
       </div>
+      {!perfil && <div style={{ fontSize: 11.5, color: T.muted, textAlign: "center", marginBottom: 14 }}>Cada perfil entra con su invitación y ve solo su panel.</div>}
       {perfil && <button onClick={volver} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, fontSize: 13, fontWeight: 700 }}>Volver a mi panel</button>}
       {perfil && <button onClick={() => entrar("")} style={{ width: "100%", marginTop: 10, background: "transparent", color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 11, fontSize: 12.5, fontWeight: 600 }}>Cambiar de perfil (solo en la demo)</button>}
     </div>
@@ -352,17 +355,27 @@ function CInicio({ T, cfg, D, setTab }) {
 const SUBS = [["fotos", "Fotos"], ["avance", "Avance"], ["bitacora", "Bitácora"], ["informes", "Informes"], ["crono", "Cronograma"], ["archivos", "Archivos"], ["adic", "Adicionales"]];
 function CObras({ T, D, cfg, rol }) {
   const est = rol === "estudio";
-  const [id, setId] = useState(null); const [sub, setSub] = useState("fotos");
+  const [id, setId] = useState(null); const [sub, setSub] = useState("crono");
   const o = D.obras.find(x => x.id === id);
-  if (!o) return wrap(<><Eyebrow T={T}>Obras</Eyebrow>{D.obras.map(x => <Card key={x.id} T={T} onClick={() => { setId(x.id); setSub("fotos"); }} style={{ padding: 15, marginBottom: 10, cursor: "pointer" }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 19 }}>{x.nombre}</div><div style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{x.avance || 0}%</div></div>
-    <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "10px 0 8px" }}><div style={{ width: (x.avance || 0) + "%", height: 5, background: T.accent, borderRadius: 4 }} /></div>
-    <div style={{ fontSize: 11.5, color: T.sub }}>{arr(x.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === x.id).length} hechos en bitácora · {arr(x.informes).length + arr(D.informesSem[x.id]).length} informes</div></Card>)}</>);
+  const fotoDe = (q) => [...arr(D.renders[q.id]).map(urlDe), ...arr(q.fotos).map(urlDe)].find(u => u && !esVideo(u)) || "";
+  if (!o) return wrap(<><Eyebrow T={T}>Obras</Eyebrow>{D.obras.map(x => { const f = fotoDe(x); return <Card key={x.id} T={T} onClick={() => { setId(x.id); setSub("crono"); }} style={{ padding: 10, marginBottom: 10, cursor: "pointer", display: "flex", gap: 13, alignItems: "center" }}>
+    <div style={{ width: 96, height: 72, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: `linear-gradient(135deg,${T.bg},${T.border})` }}>{f && <img src={f} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}</div>
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 18 }}>{x.nombre}</div><div style={{ fontSize: 14, fontWeight: 800, color: "#E9B949" }}>{x.avance || 0}%</div></div>
+      <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "8px 0 7px" }}><div style={{ width: (x.avance || 0) + "%", height: 5, background: "#E9B949", borderRadius: 4 }} /></div>
+      <div style={{ fontSize: 11.5, color: T.sub }}>{x.sector ? x.sector + " · " : ""}{arr(x.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === x.id).length} en bitácora · {arr(x.informes).length + arr(D.informesSem[x.id]).length} informes</div>
+    </div></Card>; })}</>);
   const mid = (D.asig && D.asig[o.id] != null) ? D.asig[o.id] : o.modeloId;
   return wrap(<>
     <button onClick={() => setId(null)} style={{ background: "none", border: 0, color: T.accent, fontSize: 13, fontWeight: 800, padding: "0 0 10px" }}>← Obras</button>
-    <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24 }}>{o.nombre}</div>
-    <div style={{ fontSize: 12, color: T.sub, margin: "3px 0 12px" }}>{o.avance || 0}% de avance{o.sector ? " · " + o.sector : ""}</div>
+    {(() => { const f = fotoDe(o); return <div style={{ position: "relative", height: 190, borderRadius: 16, overflow: "hidden", marginBottom: 14, background: `linear-gradient(135deg,${T.card},${T.bg})`, border: `1px solid ${T.border}` }}>
+      {f && <img src={f} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.05) 0%, rgba(0,0,0,.4) 50%, rgba(0,0,0,.88) 100%)" }} />
+      <div style={{ position: "absolute", left: 18, right: 18, bottom: 14, color: "#f2f0eb" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 26 }}>{o.nombre}</div><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 28, color: "#E9B949" }}>{o.avance || 0}%</div></div>
+        <div style={{ height: 5, background: "rgba(255,255,255,.22)", borderRadius: 4, margin: "8px 0 6px" }}><div style={{ width: (o.avance || 0) + "%", height: 5, background: "#E9B949", borderRadius: 4 }} /></div>
+        <div style={{ fontSize: 11.5, opacity: .8 }}>{o.sector || ""}</div>
+      </div></div>; })()}
     {o.obs && <Card T={T} style={{ padding: 12, marginBottom: 12, fontSize: 12.5, color: T.sub, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{o.obs}</Card>}
     <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 10 }}>{(est ? SUBS.filter(([k]) => k !== "adic") : SUBS).map(([k, l]) => <Pill key={k} T={T} a={sub === k} onClick={() => setSub(k)}>{l}</Pill>)}</div>
     {sub === "fotos" && <Galeria T={T} items={[...arr(o.fotos), ...arr(o.videos)]} />}
