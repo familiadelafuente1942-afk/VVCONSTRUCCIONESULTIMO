@@ -200,7 +200,7 @@ function Nav({ T, perfil, tab, setTab }) {
 
 const FUENTES = "@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');";
 const F_TIT = "'Michroma','Inter',sans-serif", F_TXT = "'Barlow Semi Condensed','Inter',sans-serif", F_MONO = "'Space Mono',monospace";
-const Estrella = ({ s = 90 }) => (<svg width={s} height={s * .62} viewBox="0 0 120 74" fill="none" stroke="#E9B949" strokeWidth="3" strokeLinecap="round"><path d="M18 24h84" /><circle cx="14" cy="24" r="5" fill="#E9B949" stroke="none" /><circle cx="106" cy="24" r="5" fill="#E9B949" stroke="none" /><path d="M60 8v60M38 6l44 36M82 6L38 42" /><circle cx="60" cy="24" r="6" fill="#B0894F" stroke="none" /></svg>);
+const Estrella = ({ s = 90 }) => (<svg width={s} height={s * .84} viewBox="0 0 120 100" fill="none" stroke="#F0C45A" strokeWidth="3.2" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 6px rgba(233,185,73,.45))" }}><path d="M60 11v86" /><path d="M13 62h94" /><path d="M31 36l58 52M89 36L31 88" /><circle cx="60" cy="7" r="4.6" fill="#F0C45A" stroke="none" /><circle cx="9" cy="62" r="4.6" fill="#F0C45A" stroke="none" /><circle cx="111" cy="62" r="4.6" fill="#F0C45A" stroke="none" /><circle cx="60" cy="62" r="8" fill="#B0894F" stroke="none" /></svg>);
 function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar, imgs = [] }) {
   const hoyTxt = new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short", year: "numeric" }).replace(/\./g, "");
   const nObras = R ? new Set(arr(R.vv_obras).filter(o => o && !o.privada).map(o => o.id)).size : 0;
