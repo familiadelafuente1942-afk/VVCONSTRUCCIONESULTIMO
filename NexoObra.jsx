@@ -2,7 +2,7 @@
 // Lee en SOLO LECTURA los datos reales de las obras (mismas claves que las otras apps) y usa el mismo estilo.
 // No escribe nada en la base: no puede romper ni pisar datos de las otras aplicaciones.
 import React, { useState, useEffect, useMemo } from "react";
-import CronoPro, { alertasCrono } from "./CronoPro.jsx";
+import CronoPro from "./CronoPro.jsx";
 import { AvanceView, BitacoraView } from "./Cliente.jsx";
 import { ModelosObraView } from "./App.jsx";
 
@@ -305,10 +305,8 @@ function CInicio({ T, cfg, D, setTab }) {
   const o = L[i % L.length];
   const rgbT = hexARgb(T.bg).join(","), TXR = hexARgb(T.text).join(",");
   const r0 = arr(D.renders[o.id])[0];
-  const alertas = useMemo(() => { try { return alertasCrono(D.cronoPro, D.obras) || []; } catch { return []; } }, [D]);
   const abiertos = D.pedidos.filter(p => p.estado !== "resuelto");
   const novedades = [...D.obras.flatMap(x => arr(D.informesSem[x.id]).map(r => ({ ts: r.ts, t: `Informe semanal · ${x.nombre}` }))), ...D.bitacora.map(h => ({ ts: h.ts, t: `Bitácora · ${(D.obras.find(x => x.id === h.obra_id) || {}).nombre || ""}: ${h.titulo || h.desc || ""}` }))].filter(n => n.ts).sort((a, b) => b.ts - a.ts).slice(0, 5);
-  const col = { retraso: "#E5604A", rojo: "#E5604A", amarillo: "#E0A04A", verde: "#3E9B62" };
   return (<div style={{ flex: 1, background: T.bg }}>
     <div style={{ position: "relative", height: "34vh", minHeight: 230, maxHeight: 380, overflow: "hidden", background: T.bg }}>
       {r0 && r0.url ? <img key={r0.url} src={r0.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, animation: "fadeIn .6s ease" }} /> : <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg,${T.bg},${T.card})` }} />}
@@ -323,8 +321,7 @@ function CInicio({ T, cfg, D, setTab }) {
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1 }}>{o.avance || 0}</div><div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div></div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Qué hay que mover</div>
-      {alertas.length === 0 && abiertos.length === 0 && <div style={{ fontSize: 12.5, color: T.muted, padding: "6px 0 14px" }}>Nada urgente por ahora.</div>}
-      {alertas.slice(0, 5).map(a => { const c = col[a.fase] || BRASS; return (<div key={a.obraId + a.id} onClick={() => setTab("pedidos")} style={{ background: hexToRgba(c, .12), border: `1px solid ${c}`, borderLeft: `4px solid ${c}`, borderRadius: 10, padding: "11px 13px", marginBottom: 8 }}><div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase", color: c }}>{a.fase === "verde" ? "Hay que pedirlo" : a.fase === "amarillo" ? "Pedilo ya" : a.fase === "rojo" ? "Debe estar hoy" : "Retraso"} · {a.obra}</div><div style={{ fontSize: 13.5, fontWeight: 800, margin: "3px 0 2px" }}>{a.desc}</div><div style={{ fontSize: 12, color: T.sub }}>Para la tarea «{a.tarea}»{a.need ? " · necesaria el " + a.need : ""}</div></div>); })}
+      {abiertos.length === 0 && <div style={{ fontSize: 12.5, color: T.muted, padding: "6px 0 14px" }}>Nada urgente por ahora.</div>}
       {abiertos.length > 0 && <div onClick={() => setTab("pedidos")} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid rgba(${TXR},.07)`, cursor: "pointer", fontSize: 12.5 }}><span><b style={{ color: "#D9B27C" }}>{abiertos.length}</b> {abiertos.length === 1 ? "pedido abierto" : "pedidos abiertos"} con el estudio</span><span style={{ color: `rgba(${TXR},.35)` }}>›</span></div>}
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 10px" }}>Novedades recientes</div>
       {novedades.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)` }}>Sin novedades todavía.</div>}
