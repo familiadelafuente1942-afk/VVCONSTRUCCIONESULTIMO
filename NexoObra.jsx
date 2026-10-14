@@ -5,6 +5,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import CronoPro from "./CronoPro.jsx";
 import { AvanceView, BitacoraView, AjustesScreen } from "./Cliente.jsx";
 import { ModelosObraView } from "./App.jsx";
+import ClientePropietarioApp from "./ClientePropietario.jsx";
 
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
@@ -162,15 +163,17 @@ export default function NexoObraApp() {
     <style>{CSS}{`body{background:${T.bg}}`}</style>
     {(!perfil || verAlcance) ? <Alcance T={T} cfg={cfg} perfil={perfil} entrar={entrar} volver={() => setVerAlcance(false)} st={st} R={R} recargar={recargar} />
       : (<>
-        <Cabecera T={T} cfg={cfg} perfil={perfil} onAlcance={() => setVerAlcance(true)} />
+        {perfil === "propietario" ? <div style={{ position: "fixed", zIndex: 300, top: `calc(8px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`, left: 10, display: "flex", alignItems: "center", gap: 6, background: PCOL.propietario, color: "#fff", borderRadius: 20, padding: "5px 6px 5px 11px", boxShadow: "0 2px 10px rgba(0,0,0,.4)" }}><span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".14em", textTransform: "uppercase" }}>Panel Propietario</span><button onClick={() => setVerAlcance(true)} style={{ background: "rgba(0,0,0,.28)", border: "none", color: "#fff", borderRadius: 14, padding: "4px 9px", fontSize: 10.5, fontWeight: 700 }}>Paneles</button></div>
+          : <Cabecera T={T} cfg={cfg} perfil={perfil} onAlcance={() => setVerAlcance(true)} />}
+        {perfil === "propietario" && <div style={{ flex: 1, minHeight: 0, background: "#0d0d0f" }}><ClientePropietarioApp /></div>}
         {st === "error" && <div style={{ padding: "30px 22px", textAlign: "center", color: T.sub, fontSize: 13, lineHeight: 1.6 }}>No pude traer los datos de las obras ahora. Revisá la conexión.<div><button onClick={recargar} style={{ marginTop: 12, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "11px 18px", fontSize: 13, fontWeight: 700 }}>Reintentar</button></div></div>}
         {st === "cargando" && <div style={{ padding: 40, textAlign: "center", color: T.muted, fontSize: 13 }}>Cargando tus obras…</div>}
-        {R && <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        {R && perfil !== "propietario" && <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
           {perfil === "constructora" && <Constructora {...ctx} recargar={recargar} st={st} />}
           {perfil === "estudio" && <Estudio {...ctx} />}
           {perfil === "propietario" && <Propietario {...ctx} />}
         </div>}
-        <Nav T={T} perfil={perfil} tab={tab} setTab={setTab} />
+        {perfil !== "propietario" && <Nav T={T} perfil={perfil} tab={tab} setTab={setTab} />}
       </>)}
   </div></div>);
 }
