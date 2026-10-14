@@ -217,9 +217,9 @@ const storage = {
         try {
             let r = await intentar();
             if (!r.ok) r = await intentar(); // un reintento antes de darlo por perdido
-            if (!r.ok) { avisarErrorSync(key); return { value, ok: false }; }
-        } catch {
-            avisarErrorSync(key);
+            if (!r.ok) { let det = ""; try { det = (await r.text()).replace(/\s+/g, " ").slice(0, 140); } catch { } avisarErrorSync(key, `No se pudo guardar "${key}" en la nube (error ${r.status}${det ? ": " + det : ""}; ${Math.round(String(value).length / 1024)} KB). Se guardó en este aparato.`); return { value, ok: false }; }
+        } catch (e) {
+            avisarErrorSync(key, `No se pudo guardar "${key}" en la nube (sin conexión o bloqueado: ${String((e && e.message) || e).slice(0, 80)}; ${Math.round(String(value).length / 1024)} KB). Se guardó en este aparato.`);
             return { value, ok: false };
         }
         return { value, ok: true };
