@@ -198,33 +198,50 @@ function Nav({ T, perfil, tab, setTab }) {
   </nav>);
 }
 
+const FUENTES = "@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');";
+const F_TIT = "'Michroma','Inter',sans-serif", F_TXT = "'Barlow Semi Condensed','Inter',sans-serif", F_MONO = "'Space Mono',monospace";
+const Estrella = ({ s = 90 }) => (<svg width={s} height={s * .62} viewBox="0 0 120 74" fill="none" stroke="#E9B949" strokeWidth="3" strokeLinecap="round"><path d="M18 24h84" /><circle cx="14" cy="24" r="5" fill="#E9B949" stroke="none" /><circle cx="106" cy="24" r="5" fill="#E9B949" stroke="none" /><path d="M60 8v60M38 6l44 36M82 6L38 42" /><circle cx="60" cy="24" r="6" fill="#B0894F" stroke="none" /></svg>);
 function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar, imgs = [] }) {
-  return (<div style={{ flex: 1, overflowY: "auto", padding: `calc(26px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 20px 30px` }}>
-    <div style={{ width: "100%" }}>
-      <div style={{ textAlign: "center", marginBottom: 6 }}>
-        {cfg.logo ? <img src={cfg.logo} alt="" style={{ maxHeight: 60, maxWidth: 240, objectFit: "contain" }} /> : <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 28, color: T.text }}>NEXO Obra</div>}
+  const hoyTxt = new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short", year: "numeric" }).replace(/\./g, "");
+  const nObras = R ? new Set(arr(R.vv_obras).filter(o => o && !o.privada).map(o => o.id)).size : 0;
+  return (<div style={{ flex: 1, overflowY: "auto", fontFamily: F_TXT, background: "radial-gradient(900px 500px at 50% -10%, rgba(176,137,79,.12), transparent 60%), #0b0d12" }}>
+    <style>{FUENTES}</style>
+    <div style={{ maxWidth: 620, margin: "0 auto", minHeight: "100%", borderLeft: "1px solid rgba(255,255,255,.14)", borderRight: "1px solid rgba(255,255,255,.14)", background: "rgba(13,15,21,.7)" }}>
+      <div style={{ padding: `calc(14px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 22px 12px`, borderBottom: "1px solid rgba(255,255,255,.14)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}><div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Estrella s={22} /></div><span style={{ fontFamily: F_MONO, fontWeight: 700, fontSize: 15, color: "#E9B949", letterSpacing: ".06em" }}>NEXO</span></div>
+          <span style={{ fontFamily: F_MONO, fontSize: 13, color: "#d7d3ca" }}>{hoyTxt}</span>
+        </div>
+        <div style={{ fontSize: 17, fontWeight: 500, color: "#f2f0eb", marginTop: 14 }}>{perfil ? "Tu panel: " + PANELES[perfil].n : "Ingresá con tu cuenta"}</div>
       </div>
-      <div style={{ textAlign: "center", fontSize: 12.5, color: T.sub, lineHeight: 1.55, margin: "10px 0 20px" }}>Una sola app, tres paneles. Cada invitación abre solo el suyo.</div>
-      {R ? <div style={{ fontSize: 11.5, color: T.accent, background: T.accentLight, borderRadius: 10, padding: "9px 12px", marginBottom: 16, textAlign: "center", fontWeight: 700 }}>{(() => { const n = new Set(arr(R.vv_obras).filter(o => o && !o.privada).map(o => o.id)).size; return n + (n === 1 ? " obra real cargada" : " obras reales cargadas"); })()}{st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura</div>
-        : <div style={{ fontSize: 12, color: T.sub, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 16, textAlign: "center" }}>{st === "error" ? "No pude traer los datos todavía." : "Cargando tus obras…"} <button onClick={recargar} style={{ background: "none", border: 0, color: BRASS, fontWeight: 800, fontSize: 12 }}>Reintentar</button></div>}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14, marginBottom: 14 }}>
-      {Object.entries(PANELES).map(([k, p], n) => {
-        const mio = perfil === k, bloq = perfil && !mio, img = imgs[n % Math.max(imgs.length, 1)];
-        return (<div key={k} onClick={() => { if (!perfil && R) entrar(k); else if (mio) volver(); }} style={{ position: "relative", height: 230, borderRadius: 16, overflow: "hidden", border: `1px solid ${mio ? T.accent : T.border}`, background: `linear-gradient(135deg,${T.card},${T.bg})`, cursor: bloq || !R ? "default" : "pointer", opacity: bloq ? .55 : 1, boxShadow: T.shadow }}>
-          {img && <img src={img} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: bloq ? "grayscale(1)" : "none" }} />}
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.05) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,.86) 100%)" }} />
-          <div style={{ position: "absolute", left: 18, right: 18, bottom: 16, color: "#f2f0eb" }}>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".18em", textTransform: "uppercase", color: "#E9B949", marginBottom: 4 }}>{p.d}</div>
-            <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24 }}>{bloq ? "🔒 " : ""}{p.n}</div>
-            <div style={{ fontSize: 12.5, opacity: .85, margin: "3px 0 6px", lineHeight: 1.45 }}>{p.pts[0]}</div>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: "#E9B949" }}>{bloq ? "Bloqueado: este panel lo ve " + (k === "constructora" ? "la constructora" : k === "estudio" ? "el estudio" : "el propietario") : mio ? "Tu panel · volver →" : "Ingresar →"}</div>
-          </div>
-        </div>);
-      })}
+      <div style={{ padding: "26px 22px 34px" }}>
+        {!perfil && <div style={{ textAlign: "center", marginBottom: 26 }}>
+          <Estrella s={150} />
+          <div style={{ fontFamily: F_TIT, fontSize: 54, letterSpacing: ".14em", color: "#f2f0eb", margin: "4px 0 4px" }}>NEXO</div>
+          <div style={{ fontSize: 17, color: "#f2f0eb" }}>Todos conectados, En tiempo real.</div>
+          <div style={{ fontFamily: F_TIT, fontSize: 22, lineHeight: 1.3, color: "#f2f0eb", textTransform: "uppercase", margin: "26px 0 10px" }}>La obra que se anticipa no se improvisa</div>
+          <div style={{ width: 70, height: 2, background: "#E9B949", margin: "0 auto" }} />
+        </div>}
+        <div style={{ fontFamily: F_TIT, fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", color: "#f2f0eb", marginBottom: 14 }}>{perfil ? "Paneles de la app" : "Ingresá a tu panel"}</div>
+        <div style={{ display: "grid", gap: 14 }}>
+          {Object.entries(PANELES).map(([k, p], n) => {
+            const mio = perfil === k, bloq = perfil && !mio, img = imgs[n % Math.max(imgs.length, 1)];
+            return (<div key={k} onClick={() => { if (!perfil && R) entrar(k); else if (mio) volver(); }} style={{ position: "relative", height: 210, borderRadius: 22, overflow: "hidden", border: `1px solid ${mio ? "#E9B949" : "rgba(255,255,255,.2)"}`, background: "linear-gradient(135deg,#1a1d26,#0b0d12)", cursor: bloq || !R ? "default" : "pointer", opacity: bloq ? .5 : 1 }}>
+              {img && <img src={img} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: bloq ? "grayscale(1)" : "none" }} />}
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.08) 0%, rgba(0,0,0,.4) 45%, rgba(0,0,0,.88) 100%)" }} />
+              <div style={{ position: "absolute", left: 20, right: 20, bottom: 16, color: "#f2f0eb" }}>
+                <div style={{ fontFamily: F_TIT, fontSize: 9.5, letterSpacing: ".16em", textTransform: "uppercase", color: "#E9B949", marginBottom: 6 }}>{p.d}</div>
+                <div style={{ fontFamily: F_TIT, fontSize: 22, textTransform: "uppercase", lineHeight: 1.15 }}>{bloq ? "🔒 " : ""}{p.n === "Estudio" ? "Estudio de arquitectura" : p.n}</div>
+                <div style={{ fontSize: 14.5, fontWeight: 500, margin: "5px 0 8px", lineHeight: 1.35 }}>{p.pts[0]}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#E9B949" }}>{bloq ? "Bloqueado: este panel lo ve " + (k === "constructora" ? "la constructora" : k === "estudio" ? "el estudio" : "el propietario") : mio ? "Tu panel · volver →" : "Ingresar →"}</div>
+              </div>
+            </div>);
+          })}
+        </div>
+        <div style={{ marginTop: 16, border: "1px dashed rgba(255,255,255,.2)", borderRadius: 12, padding: "11px 14px", fontSize: 14, color: "#f2f0eb" }}>Cada perfil entra con su invitación y ve solo su panel.</div>
+        <div style={{ marginTop: 14, fontSize: 12.5, color: "#9a968c", textAlign: "center" }}>{R ? `${nObras} ${nObras === 1 ? "obra real cargada" : "obras reales cargadas"}${st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura` : (st === "error" ? "No pude traer los datos todavía." : "Cargando tus obras…")} {!R && <button onClick={recargar} style={{ background: "none", border: 0, color: "#E9B949", fontWeight: 700, fontSize: 12.5 }}>Reintentar</button>}</div>
+        {perfil && <button onClick={() => entrar("")} style={{ width: "100%", marginTop: 14, background: "transparent", color: "#d7d3ca", border: "1px solid rgba(255,255,255,.2)", borderRadius: 12, padding: 12, fontSize: 14, fontWeight: 600 }}>Cambiar de perfil (solo en la demo)</button>}
       </div>
-      {!perfil && <div style={{ fontSize: 11.5, color: T.muted, textAlign: "center", marginBottom: 14 }}>Cada perfil entra con su invitación y ve solo su panel.</div>}
-      {perfil && <button onClick={volver} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, fontSize: 13, fontWeight: 700 }}>Volver a mi panel</button>}
-      {perfil && <button onClick={() => entrar("")} style={{ width: "100%", marginTop: 10, background: "transparent", color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 11, fontSize: 12.5, fontWeight: 600 }}>Cambiar de perfil (solo en la demo)</button>}
     </div>
   </div>);
 }
