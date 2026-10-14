@@ -99,7 +99,7 @@ function Galeria({ T, items }) {
   const L = items.map(urlDe).filter(Boolean);
   if (!L.length) return <Vacio T={T}>Todavía no hay fotos cargadas.</Vacio>;
   return (<>
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 5 }}>{L.map((u, i) => esVideo(u)
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 6 }}>{L.map((u, i) => esVideo(u)
       ? <video key={i} src={u} controls preload="metadata" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, background: "#000" }} />
       : <img key={i} src={u} alt="" loading="lazy" onClick={() => setVer(u)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer" }} />)}</div>
     {ver && <div onClick={() => setVer(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 10 }}><img src={ver} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /></div>}
@@ -152,7 +152,7 @@ export default function NexoObraApp() {
   useEffect(() => { if (perfil && !tab) setTab(NAVS[perfil][0][0]); }, [perfil, tab]);
   const ctx = { T, cfg, D, tab, setTab };
 
-  return (<div style={{ background: T.bg, display: "flex", justifyContent: "center" }}><div style={{ height: "100dvh", width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", background: T.bg, color: T.text, fontFamily: "'Inter',sans-serif" }}>
+  return (<div style={{ background: T.bg }}><div style={{ height: "100dvh", width: "100%", display: "flex", flexDirection: "column", background: T.bg, color: T.text, fontFamily: "'Inter',sans-serif" }}>
     <style>{CSS}{`body{background:${T.bg}}`}</style>
     {(!perfil || verAlcance) ? <Alcance T={T} cfg={cfg} perfil={perfil} entrar={entrar} volver={() => setVerAlcance(false)} st={st} R={R} recargar={recargar} />
       : (<>
@@ -183,22 +183,23 @@ function Cabecera({ T, cfg, perfil, onAlcance }) {
 function Nav({ T, perfil, tab, setTab }) {
   if (!perfil) return null;
   return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", paddingBottom: "calc(env(safe-area-inset-bottom) + 6px)" }}>
-    <div style={{ width: "100%", maxWidth: 1180, display: "flex" }}>{NAVS[perfil].map(([id, l]) => { const a = tab === id; return <button key={id} onClick={() => setTab(id)} style={{ flex: 1, background: "none", border: "none", padding: "6px 4px 5px", fontSize: 10.5, fontWeight: a ? 800 : 600, color: a ? T.accent : T.sub, borderTop: `2px solid ${a ? BRASS : "transparent"}`, marginTop: -1 }}>{l}</button>; })}</div>
+    <div style={{ width: "100%", display: "flex" }}>{NAVS[perfil].map(([id, l]) => { const a = tab === id; return <button key={id} onClick={() => setTab(id)} style={{ flex: 1, background: "none", border: "none", padding: "6px 4px 5px", fontSize: 10.5, fontWeight: a ? 800 : 600, color: a ? T.accent : T.sub, borderTop: `2px solid ${a ? BRASS : "transparent"}`, marginTop: -1 }}>{l}</button>; })}</div>
   </nav>);
 }
 
 function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar }) {
   return (<div style={{ flex: 1, overflowY: "auto", padding: `calc(26px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 20px 30px` }}>
-    <div style={{ maxWidth: 560, margin: "0 auto" }}>
+    <div style={{ width: "100%" }}>
       <div style={{ textAlign: "center", marginBottom: 6 }}>
         {cfg.logo ? <img src={cfg.logo} alt="" style={{ maxHeight: 60, maxWidth: 240, objectFit: "contain" }} /> : <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 28, color: T.text }}>NEXO Obra</div>}
       </div>
       <div style={{ textAlign: "center", fontSize: 12.5, color: T.sub, lineHeight: 1.55, margin: "10px 0 20px" }}>Una sola app, tres paneles. Cada invitación abre solo el suyo.</div>
       {R ? <div style={{ fontSize: 11.5, color: T.accent, background: T.accentLight, borderRadius: 10, padding: "9px 12px", marginBottom: 16, textAlign: "center", fontWeight: 700 }}>{new Set(arr(R.vv_obras).filter(o => o && !o.privada).map(o => o.id)).size} obras reales cargadas{st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura</div>
         : <div style={{ fontSize: 12, color: T.sub, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 16, textAlign: "center" }}>{st === "error" ? "No pude traer los datos todavía." : "Cargando tus obras…"} <button onClick={recargar} style={{ background: "none", border: 0, color: BRASS, fontWeight: 800, fontSize: 12 }}>Reintentar</button></div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14, marginBottom: 14 }}>
       {Object.entries(PANELES).map(([k, p]) => {
         const mio = perfil === k, bloq = perfil && !mio;
-        return (<Card key={k} T={T} style={{ padding: 16, marginBottom: 12, opacity: bloq ? .5 : 1, borderColor: mio ? T.accent : T.border }}>
+        return (<Card key={k} T={T} style={{ padding: 16, opacity: bloq ? .5 : 1, borderColor: mio ? T.accent : T.border }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ flex: 1 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 19, color: mio ? T.accent : T.text }}>{bloq ? "🔒 " : ""}{p.n}</div><div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{p.d}</div></div>
             {mio && <Badge c={T.accent} b={T.accentLight}>Tu panel</Badge>}
@@ -208,6 +209,7 @@ function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar }) {
           {!perfil && <button disabled={!R} onClick={() => entrar(k)} style={{ width: "100%", marginTop: 12, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, fontSize: 13, fontWeight: 700, opacity: R ? 1 : .5 }}>Entrar como {p.n.toLowerCase()}</button>}
         </Card>);
       })}
+      </div>
       {perfil && <button onClick={volver} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, fontSize: 13, fontWeight: 700 }}>Volver a mi panel</button>}
       {perfil && <button onClick={() => entrar("")} style={{ width: "100%", marginTop: 10, background: "transparent", color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 11, fontSize: 12.5, fontWeight: 600 }}>Cambiar de perfil (solo en la demo)</button>}
     </div>
@@ -217,7 +219,7 @@ function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar }) {
 // ── selector de obra compartido ────────────────────────────────────────────
 function useObra(D) { const [id, setId] = useState(""); const o = D.obras.find(x => x.id === id) || D.obras[0]; return [o, setId]; }
 function SelObra({ T, D, o, setId }) { return <Sel T={T} value={o ? o.id : ""} onChange={setId}>{D.obras.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</Sel>; }
-const wrap = (children) => <div style={{ padding: "16px 20px 30px", maxWidth: 760, width: "100%", margin: "0 auto" }}>{children}</div>;
+const wrap = (children) => <div style={{ padding: "18px clamp(16px,3vw,40px) 30px", width: "100%" }}>{children}</div>;
 
 // bloque de informes (semanales + de avance + informes cargados a la obra)
 function Informes({ T, D, o }) {
@@ -310,13 +312,13 @@ function CInicio({ T, cfg, D, setTab }) {
     <div style={{ position: "relative", height: "34vh", minHeight: 230, maxHeight: 380, overflow: "hidden", background: T.bg }}>
       {r0 && r0.url ? <img key={r0.url} src={r0.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, animation: "fadeIn .6s ease" }} /> : <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg,${T.bg},${T.card})` }} />}
       <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(${rgbT},.15) 0%, rgba(${rgbT},.4) 45%, ${T.bg} 100%)` }} />
-      <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
+      <div style={{ position: "absolute", bottom: 20, left: "clamp(18px,3vw,40px)", right: "clamp(18px,3vw,40px)" }}>
         <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${TXR},.55)` }}>{cfg.nombre}</div>
         <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: T.text, marginTop: 4 }}>{o.nombre}</div>
       </div>
       {L.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>{L.map((q, k) => <span key={q.id} style={{ width: 5, height: 5, borderRadius: "50%", background: k === i % L.length ? BRASS : `rgba(${TXR},.35)` }} />)}</div>}
     </div>
-    <div style={{ padding: "22px 22px 30px", maxWidth: 760, margin: "0 auto" }}>
+    <div style={{ padding: "22px clamp(18px,3vw,40px) 30px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1 }}>{o.avance || 0}</div><div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div></div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Qué hay que mover</div>
@@ -344,10 +346,10 @@ function CObras({ T, D, cfg }) {
     {o.obs && <Card T={T} style={{ padding: 12, marginBottom: 12, fontSize: 12.5, color: T.sub, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{o.obs}</Card>}
     <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 10 }}>{SUBS.map(([k, l]) => <Pill key={k} T={T} a={sub === k} onClick={() => setSub(k)}>{l}</Pill>)}</div>
     {sub === "fotos" && <Galeria T={T} items={[...arr(o.fotos), ...arr(o.videos)]} />}
-    {sub === "avance" && <div style={{ margin: "0 -20px" }}><AvanceView key={o.id} T={T} obras={[o]} avance={D.avance} setAvance={D.setAvance} apiKey={D.apiKey} cfg={cfg} certif={D.certif} envios={D.envios} setEnvios={D.setEnvios} /></div>}
-    {sub === "bitacora" && <div style={{ margin: "0 -20px" }}><BitacoraView key={o.id} T={T} obras={[o]} bitacora={D.bitacora} setBitacora={D.setBitacora} cfg={cfg} /></div>}
+    {sub === "avance" && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><AvanceView key={o.id} T={T} obras={[o]} avance={D.avance} setAvance={D.setAvance} apiKey={D.apiKey} cfg={cfg} certif={D.certif} envios={D.envios} setEnvios={D.setEnvios} /></div>}
+    {sub === "bitacora" && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><BitacoraView key={o.id} T={T} obras={[o]} bitacora={D.bitacora} setBitacora={D.setBitacora} cfg={cfg} /></div>}
     {sub === "informes" && <Informes T={T} D={D} o={o} />}
-    {sub === "crono" && <div style={{ margin: "0 -20px" }}><CronoPro key={o.id} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre }]} data={D.cronoPro} setData={D.setCronoPro} /></div>}
+    {sub === "crono" && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><CronoPro key={o.id} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre }]} data={D.cronoPro} setData={D.setCronoPro} /></div>}
     {sub === "archivos" && (arr(o.archivos).length ? arr(o.archivos).map((a, i) => <Archivo key={i} T={T} a={a} />) : <Vacio T={T}>No hay archivos cargados.</Vacio>)}
     {sub === "adic" && <ListaAdic T={T} D={D} obra={o.id} />}
   </>);
