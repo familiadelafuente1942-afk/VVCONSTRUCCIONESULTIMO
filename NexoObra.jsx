@@ -128,12 +128,14 @@ const NAVS = {
   propietario: [["obra", "Mi obra"], ["fotos", "Fotos"], ["informes", "Informes"]],
 };
 const KEYP = "nexoobra_perfil";
+const PCOL = { constructora: "#B0894F", estudio: "#2F6F8F", propietario: "#3E8E62" };
 
 export default function NexoObraApp() {
   const { R, st, recargar } = useReal();
   const [perfil, setPerfil] = useState(() => { try { return localStorage.getItem(KEYP) || ""; } catch { return ""; } });
   const [verAlcance, setVerAlcance] = useState(false);
   const [tab, setTab] = useState("");
+  useEffect(() => { try { document.title = perfil ? "NEXO · " + PANELES[perfil].n : "NEXO Obra"; } catch { } }, [perfil]);
   useEffect(() => { try { perfil ? localStorage.setItem(KEYP, perfil) : localStorage.removeItem(KEYP); } catch { } }, [perfil]);
   const [cfg, setCfg, rstF] = useOverlay("cfg", useMemo(() => ({ ...DEFAULT_CFG, ...(R && R.cliente_cfg ? R.cliente_cfg : {}) }), [R]));
   const [rendersV, setRenders, rstR] = useOverlay("renders", (R && R.vv_renders) || {});
@@ -181,7 +183,7 @@ function Cabecera({ T, cfg, perfil, onAlcance }) {
           <div style={{ lineHeight: 1.25, textAlign: "left" }}><div style={{ fontSize: 9, fontWeight: 700, color: BRASS, letterSpacing: "0.24em", textTransform: "uppercase", marginBottom: 3 }}>Panel {PANELES[perfil].n.toLowerCase()}</div><div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{cfg.nombre}</div></div></>}
       <button onClick={onAlcance} style={{ position: "absolute", right: 14, background: "transparent", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "7px 10px", fontSize: 11, fontWeight: 700 }}>Paneles</button>
     </div>
-    <div style={{ height: 1, background: T.border }} />
+    <div style={{ background: PCOL[perfil], color: "#fff", textAlign: "center", padding: "7px 12px", fontSize: 12, fontWeight: 800, letterSpacing: ".22em", textTransform: "uppercase" }}>Panel {PANELES[perfil].n}</div>
   </div>);
 }
 function Nav({ T, perfil, tab, setTab }) {
