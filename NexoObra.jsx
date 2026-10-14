@@ -119,12 +119,12 @@ function Documento({ T, doc, cerrar }) {
 // ── App ────────────────────────────────────────────────────────────────────
 const PANELES = {
   constructora: { n: "Constructora", d: "Ejecuta y anticipa", pts: ["Inicio con la obra, el avance y lo que hay que mover", "Semáforo de pedidos según el cronograma", "Fotos, bitácora e informes de cada obra", "Pedidos al estudio y sus respuestas"] },
-  estudio: { n: "Estudio", d: "Proyecta y dirige la obra", pts: ["Pedidos que le hacen, con su fecha límite", "Respuestas con planos y archivos", "Planos y documentos entregados", "Adicionales de obra"] },
+  estudio: { n: "Estudio", d: "Proyecta y dirige la obra", pts: ["Ve día a día el avance, las fotos y los informes de cada obra", "Pedidos que le hacen, con su fecha límite", "Respuestas con planos y archivos", "Planos entregados y adicionales"] },
   propietario: { n: "Propietario", d: "Sigue su obra", pts: ["Avance de su obra", "Fotos de la obra", "Informes semanales y de avance", "Sin alertas ni costos internos"] },
 };
 const NAVS = {
   constructora: [["inicio", "Inicio"], ["obras", "Obras"], ["pedidos", "Pedidos"], ["mas", "Más"]],
-  estudio: [["pedidos", "Pedidos"], ["planos", "Planos"], ["adicionales", "Adicionales"]],
+  estudio: [["inicio", "Inicio"], ["obras", "Obras"], ["pedidos", "Pedidos"], ["planos", "Planos"], ["adicionales", "Adicionales"]],
   propietario: [["obra", "Mi obra"], ["fotos", "Fotos"], ["informes", "Informes"]],
 };
 const KEYP = "nexoobra_perfil";
@@ -244,6 +244,20 @@ function Informes({ T, D, o }) {
     {inf.length > 0 && <><Eyebrow T={T}>Informes cargados</Eyebrow>{inf.map((x, i) => <Card key={x.id || i} T={T} style={{ padding: "10px 13px", marginBottom: 8 }}><div style={{ fontSize: 13, fontWeight: 700 }}>{x.titulo || x.nombre || "Informe"}</div>{x.ts && <div style={{ fontSize: 10.5, color: T.muted }}>{fTs(x.ts)}</div>}{urlDe(x) && <Archivo T={T} a={x} />}</Card>)}</>}
   </div>);
 }
+// avance de obra en modo lectura (lo carga la constructora; lo ven estudio y propietario)
+function AvanceLista({ T, D, o }) {
+  const [doc, setDoc] = useState(null);
+  const L = arr(D.avance[o.id]).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  if (doc) return <Documento T={T} doc={doc} cerrar={() => setDoc(null)} />;
+  if (!L.length) return <Vacio T={T}>Todavía no hay avances cargados en esta obra.</Vacio>;
+  return L.map((h, i) => { const fs = arr(h.fotos).length ? arr(h.fotos) : (h.fotoUrl ? [h.fotoUrl] : []); return (<Card key={h.id || i} T={T} style={{ marginBottom: 10, overflow: "hidden" }}>
+    <div style={{ padding: "11px 13px" }}><div style={{ fontSize: 12, fontWeight: 800, color: BRASS }}>{fFecha(h.fecha) || fTs(h.ts)}</div>
+      {h.avance && <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>{h.avance}</div>}
+      {h.descripcion && <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55, marginTop: 3, whiteSpace: "pre-wrap" }}>{h.descripcion}</div>}
+      {h.html && <button onClick={() => setDoc({ html: h.html, titulo: "Informe de avance " + (fFecha(h.fecha) || "") })} style={{ marginTop: 8, background: "none", border: `1px solid ${BRASS}`, color: BRASS, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700 }}>Ver informe</button>}</div>
+    {fs.length > 0 && <div style={{ padding: "0 8px 8px" }}><Galeria T={T} items={fs} /></div>}
+  </Card>); });
+}
 // bitácora: hechos con sus fotos y adjuntos
 function Bitacora({ T, D, o }) {
   const L = D.bitacora.filter(h => h.obra_id === o.id).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
@@ -330,7 +344,8 @@ function CInicio({ T, cfg, D, setTab }) {
   </div>);
 }
 const SUBS = [["fotos", "Fotos"], ["avance", "Avance"], ["bitacora", "Bitácora"], ["informes", "Informes"], ["crono", "Cronograma"], ["archivos", "Archivos"], ["adic", "Adicionales"]];
-function CObras({ T, D, cfg }) {
+function CObras({ T, D, cfg, rol }) {
+  const est = rol === "estudio";
   const [id, setId] = useState(null); const [sub, setSub] = useState("fotos");
   const o = D.obras.find(x => x.id === id);
   if (!o) return wrap(<><Eyebrow T={T}>Obras</Eyebrow>{D.obras.map(x => <Card key={x.id} T={T} onClick={() => { setId(x.id); setSub("fotos"); }} style={{ padding: 15, marginBottom: 10, cursor: "pointer" }}>
@@ -343,12 +358,15 @@ function CObras({ T, D, cfg }) {
     <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24 }}>{o.nombre}</div>
     <div style={{ fontSize: 12, color: T.sub, margin: "3px 0 12px" }}>{o.avance || 0}% de avance{o.sector ? " · " + o.sector : ""}</div>
     {o.obs && <Card T={T} style={{ padding: 12, marginBottom: 12, fontSize: 12.5, color: T.sub, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{o.obs}</Card>}
-    <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 10 }}>{SUBS.map(([k, l]) => <Pill key={k} T={T} a={sub === k} onClick={() => setSub(k)}>{l}</Pill>)}</div>
+    <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 10 }}>{(est ? SUBS.filter(([k]) => k !== "bitacora_x") : SUBS).map(([k, l]) => <Pill key={k} T={T} a={sub === k} onClick={() => setSub(k)}>{l}</Pill>)}</div>
     {sub === "fotos" && <Galeria T={T} items={[...arr(o.fotos), ...arr(o.videos)]} />}
-    {sub === "avance" && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><AvanceView key={o.id} T={T} obras={[o]} avance={D.avance} setAvance={D.setAvance} apiKey={D.apiKey} cfg={cfg} certif={D.certif} envios={D.envios} setEnvios={D.setEnvios} /></div>}
-    {sub === "bitacora" && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><BitacoraView key={o.id} T={T} obras={[o]} bitacora={D.bitacora} setBitacora={D.setBitacora} cfg={cfg} /></div>}
+    {sub === "avance" && est && <AvanceLista T={T} D={D} o={o} />}
+    {sub === "avance" && !est && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><AvanceView key={o.id} T={T} obras={[o]} avance={D.avance} setAvance={D.setAvance} apiKey={D.apiKey} cfg={cfg} certif={D.certif} envios={D.envios} setEnvios={D.setEnvios} /></div>}
+    {sub === "bitacora" && est && <Bitacora T={T} D={D} o={o} />}
+    {sub === "bitacora" && !est && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><BitacoraView key={o.id} T={T} obras={[o]} bitacora={D.bitacora} setBitacora={D.setBitacora} cfg={cfg} /></div>}
     {sub === "informes" && <Informes T={T} D={D} o={o} />}
-    {sub === "crono" && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}>
+    {sub === "crono" && est && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><CronoPro key={o.id + mid} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre, modeloId: mid }]} data={D.cronoPro} setData={() => {}} /></div>}
+    {sub === "crono" && !est && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}>
       <div style={{ padding: "0 clamp(16px,3vw,40px)" }}><div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em" }}>Modelo de cronograma de esta obra</div>
         <Sel T={T} value={mid || ""} onChange={v => D.setAsig(p => ({ ...(p || {}), [o.id]: v }))}><option value="">— sin modelo —</option>{D.modelosObra.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</Sel>
         {!mid && <div style={{ fontSize: 12, color: T.muted, margin: "-6px 0 10px" }}>Esta obra no tiene modelo asignado. Los modelos se crean en Más → Modelos de cronograma.</div>}</div>
@@ -380,7 +398,10 @@ function CMas({ T, D, cfg, recargar, st }) {
 }
 
 // ── PANEL ESTUDIO ──────────────────────────────────────────────────────────
-function Estudio({ T, D, tab }) {
+function Estudio(x) {
+  const { T, D, tab } = x;
+  if (tab === "inicio") return <CInicio {...x} />;
+  if (tab === "obras") return <CObras {...x} rol="estudio" />;
   if (tab === "planos") {
     const L = D.pedidos.flatMap(p => arr(p.hilo).filter(h => h.de === "estudio").flatMap(h => arr(h.archivos).map(a => ({ a, p, fecha: h.fecha, ts: h.ts })))).sort((x, y) => (y.ts || 0) - (x.ts || 0));
     return wrap(<><Eyebrow T={T}>Planos y documentos entregados</Eyebrow>{L.length === 0 && <Vacio T={T}>Todavía no hay documentos entregados.</Vacio>}{L.map((x, i) => <Card key={i} T={T} style={{ padding: "11px 13px", marginBottom: 8 }}><div style={{ fontSize: 12, color: T.sub }}>{(D.obras.find(o => o.id === x.p.obra_id) || {}).nombre} · {x.p.asunto} · {fFecha(x.fecha)}</div><Archivo T={T} a={x.a} /></Card>)}</>);
