@@ -6728,5 +6728,5 @@ function beep() {
   o.start(); o.stop(ctx.currentTime + 0.3);
 }
 
-export { AvanceView, BitacoraView };
+export { AvanceView, BitacoraView, AjustesScreen };
 export default ClienteApp;

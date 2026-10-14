@@ -3,7 +3,7 @@
 // No escribe nada en la base: no puede romper ni pisar datos de las otras aplicaciones.
 import React, { useState, useEffect, useMemo } from "react";
 import CronoPro from "./CronoPro.jsx";
-import { AvanceView, BitacoraView } from "./Cliente.jsx";
+import { AvanceView, BitacoraView, AjustesScreen } from "./Cliente.jsx";
 import { ModelosObraView } from "./App.jsx";
 
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
@@ -119,12 +119,12 @@ function Documento({ T, doc, cerrar }) {
 // ── App ────────────────────────────────────────────────────────────────────
 const PANELES = {
   constructora: { n: "Constructora", d: "Ejecuta y anticipa", pts: ["Inicio con la obra, el avance y lo que hay que mover", "Semáforo de pedidos según el cronograma", "Fotos, bitácora e informes de cada obra", "Pedidos al estudio y sus respuestas"] },
-  estudio: { n: "Estudio", d: "Proyecta y dirige la obra", pts: ["Ve día a día el avance, las fotos y los informes de cada obra", "Pedidos que le hacen, con su fecha límite", "Respuestas con planos y archivos", "Planos entregados y adicionales"] },
+  estudio: { n: "Estudio", d: "Proyecta y dirige la obra", pts: ["Ve día a día el avance, las fotos y los informes de cada obra", "Pedidos que le hacen, con su fecha límite", "Respuestas con planos y archivos", "Planos entregados y ajustes de su panel"] },
   propietario: { n: "Propietario", d: "Sigue su obra", pts: ["Avance de su obra", "Fotos de la obra", "Informes semanales y de avance", "Sin alertas ni costos internos"] },
 };
 const NAVS = {
   constructora: [["inicio", "Inicio"], ["obras", "Obras"], ["pedidos", "Pedidos"], ["mas", "Más"]],
-  estudio: [["inicio", "Inicio"], ["obras", "Obras"], ["pedidos", "Pedidos"], ["planos", "Planos"], ["adicionales", "Adicionales"]],
+  estudio: [["inicio", "Inicio"], ["obras", "Obras"], ["pedidos", "Pedidos"], ["planos", "Planos"], ["ajustes", "Ajustes"]],
   propietario: [["obra", "Mi obra"], ["fotos", "Fotos"], ["informes", "Informes"]],
 };
 const KEYP = "nexoobra_perfil";
@@ -135,7 +135,8 @@ export default function NexoObraApp() {
   const [verAlcance, setVerAlcance] = useState(false);
   const [tab, setTab] = useState("");
   useEffect(() => { try { perfil ? localStorage.setItem(KEYP, perfil) : localStorage.removeItem(KEYP); } catch { } }, [perfil]);
-  const cfg = useMemo(() => ({ ...DEFAULT_CFG, ...(R && R.cliente_cfg ? R.cliente_cfg : {}) }), [R]);
+  const [cfg, setCfg, rstF] = useOverlay("cfg", useMemo(() => ({ ...DEFAULT_CFG, ...(R && R.cliente_cfg ? R.cliente_cfg : {}) }), [R]));
+  const [rendersV, setRenders, rstR] = useOverlay("renders", (R && R.vv_renders) || {});
   const T = useMemo(() => theme(cfg), [cfg]);
   // La base puede traer obras repetidas (error viejo ya corregido): se deja una sola por obra, la última.
   const obras = useMemo(() => { const m = new Map(); arr(R && R.vv_obras).forEach(o => { if (o && o.id != null) m.set(o.id, o); }); return [...m.values()].filter(o => !o.privada); }, [R]);
@@ -145,15 +146,15 @@ export default function NexoObraApp() {
   const [enviosV, setEnvios, rstE] = useOverlay("envios", (R && R.cliente_envios_prop) || {});
   const [modelosV, setModelosObra, rstM] = useOverlay("modelos", arr(R && R.vv_modelos_obra));
   const [asigV, setAsig, rstS] = useOverlay("modelo_asig", {});
-  const restaurar = () => { rstB(); rstA(); rstC(); rstE(); rstM(); rstS(); };
+  const restaurar = () => { rstB(); rstA(); rstC(); rstE(); rstM(); rstS(); rstF(); rstR(); };
   const D = useMemo(() => ({
     setBitacora, setAvance, setCronoPro, setEnvios, restaurar, envios: enviosV, apiKey: ((R && R.vv_cfg) || {}).apiKey, certif: (R && R.vv_certif_sem) || {}, modelosObra: arr(modelosV), setModelosObra, asig: asigV || {}, setAsig, gestion: (R && R.vv_gestion) || null,
-    obras, bitacora: arr(bitacoraV), avance: avanceV || {}, informesSem: (R && R.vv_informes_sem) || {}, renders: (R && R.vv_renders) || {},
+    obras, bitacora: arr(bitacoraV), avance: avanceV || {}, informesSem: (R && R.vv_informes_sem) || {}, renders: rendersV || {}, setRenders,
     pedidos: arr(R && R.vv_pedidos), matpedidos: arr(R && R.vv_matpedidos), cronoPro: cronoV || { obras: {} }, adicionales: arr(R && R.vv_adicionales),
-  }), [R, obras, bitacoraV, avanceV, cronoV, enviosV, modelosV, asigV]);
+  }), [R, obras, bitacoraV, avanceV, cronoV, enviosV, modelosV, asigV, rendersV]);
   const entrar = (p) => { setPerfil(p); setVerAlcance(false); setTab(p ? NAVS[p][0][0] : ""); };
   useEffect(() => { if (perfil && !tab) setTab(NAVS[perfil][0][0]); }, [perfil, tab]);
-  const ctx = { T, cfg, D, tab, setTab };
+  const ctx = { T, cfg, setCfg, D, tab, setTab };
 
   return (<div style={{ background: T.bg }}><div style={{ height: "100dvh", width: "100%", display: "flex", flexDirection: "column", background: T.bg, color: T.text, fontFamily: "'Inter',sans-serif" }}>
     <style>{CSS}{`body{background:${T.bg}}`}</style>
@@ -358,7 +359,7 @@ function CObras({ T, D, cfg, rol }) {
     <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24 }}>{o.nombre}</div>
     <div style={{ fontSize: 12, color: T.sub, margin: "3px 0 12px" }}>{o.avance || 0}% de avance{o.sector ? " · " + o.sector : ""}</div>
     {o.obs && <Card T={T} style={{ padding: 12, marginBottom: 12, fontSize: 12.5, color: T.sub, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{o.obs}</Card>}
-    <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 10 }}>{(est ? SUBS.filter(([k]) => k !== "bitacora_x") : SUBS).map(([k, l]) => <Pill key={k} T={T} a={sub === k} onClick={() => setSub(k)}>{l}</Pill>)}</div>
+    <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 10 }}>{(est ? SUBS.filter(([k]) => k !== "adic") : SUBS).map(([k, l]) => <Pill key={k} T={T} a={sub === k} onClick={() => setSub(k)}>{l}</Pill>)}</div>
     {sub === "fotos" && <Galeria T={T} items={[...arr(o.fotos), ...arr(o.videos)]} />}
     {sub === "avance" && est && <AvanceLista T={T} D={D} o={o} />}
     {sub === "avance" && !est && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><AvanceView key={o.id} T={T} obras={[o]} avance={D.avance} setAvance={D.setAvance} apiKey={D.apiKey} cfg={cfg} certif={D.certif} envios={D.envios} setEnvios={D.setEnvios} /></div>}
@@ -406,7 +407,7 @@ function Estudio(x) {
     const L = D.pedidos.flatMap(p => arr(p.hilo).filter(h => h.de === "estudio").flatMap(h => arr(h.archivos).map(a => ({ a, p, fecha: h.fecha, ts: h.ts })))).sort((x, y) => (y.ts || 0) - (x.ts || 0));
     return wrap(<><Eyebrow T={T}>Planos y documentos entregados</Eyebrow>{L.length === 0 && <Vacio T={T}>Todavía no hay documentos entregados.</Vacio>}{L.map((x, i) => <Card key={i} T={T} style={{ padding: "11px 13px", marginBottom: 8 }}><div style={{ fontSize: 12, color: T.sub }}>{(D.obras.find(o => o.id === x.p.obra_id) || {}).nombre} · {x.p.asunto} · {fFecha(x.fecha)}</div><Archivo T={T} a={x.a} /></Card>)}</>);
   }
-  if (tab === "adicionales") return wrap(<><Eyebrow T={T}>Adicionales de obra</Eyebrow><ListaAdic T={T} D={D} /></>);
+  if (tab === "ajustes") return <div style={{ flex: 1, overflowY: "auto" }}><AjustesScreen T={T} cfg={x.cfg} setCfg={x.setCfg} obras={D.obras} setObras={() => {}} renders={D.renders} setRenders={D.setRenders} /></div>;
   return wrap(<><Eyebrow T={T}>Lo que te piden</Eyebrow><ListaPedidos T={T} D={D} soloEstudio /></>);
 }
 
