@@ -458,12 +458,12 @@ function CObras({ T, D, cfg, rol, obraSel, setObraSel }) {
     {sub === "bitacora" && est && <Bitacora T={T} D={D} o={o} />}
     {sub === "bitacora" && !est && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><BitacoraView key={o.id} T={T} obras={[o]} bitacora={D.bitacora} setBitacora={D.setBitacora} cfg={cfg} /></div>}
     {sub === "informes" && <Informes T={T} D={D} o={o} />}
-    {sub === "crono" && est && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><CronoPro key={o.id + mid} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre, modeloId: mid }]} data={D.cronoPro} setData={() => {}} /></div>}
+    {sub === "crono" && est && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}><CronoPro sinDatos key={o.id + mid} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre, modeloId: mid }]} data={D.cronoPro} setData={() => {}} /></div>}
     {sub === "crono" && !est && <div style={{ margin: "0 calc(-1 * clamp(16px,3vw,40px))" }}>
       <div style={{ padding: "0 clamp(16px,3vw,40px)" }}><div style={{ fontSize: 10.5, fontWeight: 800, color: T.sub, textTransform: "uppercase", letterSpacing: ".05em" }}>Modelo de cronograma de esta obra</div>
         <Sel T={T} value={mid || ""} onChange={v => D.setAsig(p => ({ ...(p || {}), [o.id]: v }))}><option value="">— sin modelo —</option>{D.modelosObra.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}</Sel>
         {!mid && <div style={{ fontSize: 12, color: T.muted, margin: "-6px 0 10px" }}>Esta obra no tiene modelo asignado. Los modelos se crean en Más → Modelos de cronograma.</div>}</div>
-      <CronoPro key={o.id + mid} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre, modeloId: mid }]} data={D.cronoPro} setData={D.setCronoPro} /></div>}
+      <CronoPro sinDatos key={o.id + mid} T={T} titulo="Cronograma" lado="cliente" modelosObra={D.modelosObra} gestion={D.gestion} obras={[{ id: o.id, nombre: o.nombre, inicio: o.inicio, cierre: o.cierre, modeloId: mid }]} data={D.cronoPro} setData={D.setCronoPro} /></div>}
     {sub === "check" && <Checklist T={T} D={D} o={o} />}
     {sub === "archivos" && (arr(o.archivos).length ? arr(o.archivos).map((a, i) => <Archivo key={i} T={T} a={a} />) : <Vacio T={T}>No hay archivos cargados.</Vacio>)}
     {sub === "adic" && <ListaAdic T={T} D={D} obra={o.id} />}

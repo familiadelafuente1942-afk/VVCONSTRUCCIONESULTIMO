@@ -191,7 +191,7 @@ export function CronoAlertas({ T, data, obras, lado = "vv", onIr, max = 3, soloO
   </div>);
 }
 
-export default function CronoPro({ T, obras = [], data, setData, gated = false, Gate = null, titulo = "Cronograma", lado = "vv", empresa = "V+V", modelosObra = [], gestion = null }) {
+export default function CronoPro({ T, obras = [], data, setData, gated = false, Gate = null, titulo = "Cronograma", lado = "vv", empresa = "V+V", modelosObra = [], gestion = null, sinDatos = false }) {
   const lista = (obras || []).filter(o => o && o.id);
   const [obraId, setObraId] = useState(lista[0]?.id || "");
   const [tab, setTab] = useState("crono");
@@ -411,7 +411,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
         <div ref={gref} style={{ overflowX: "auto", border: `1px solid ${T.border}`, borderRadius: 8, background: T.bg }}>{gantt()}</div>
         <div style={{ ...hint, marginTop: 8 }}>Cada columna es un día del calendario. Los días grises no se trabajan. Tocá el número de un día para marcarlo como no laborable (feriado, lluvia) o como trabajado (sábado). Deslizá para ver todo.</div>
       </div>
-      <div style={card}>
+      {!sinDatos && <div style={card}>
         <div style={{ ...eyebrow, marginBottom: 10 }}>Datos de la obra</div>
         {!can ? <button style={btn(false)} onClick={() => guard(() => { })}>🔒 Editar con código</button> : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -430,7 +430,7 @@ export default function CronoPro({ T, obras = [], data, setData, gated = false, 
               <ExcepAdd T={T} btn={btn} onAdd={(v, t) => { setW(p => { const e = { ...(p.excep || {}) }, def = (p.dias || DIAS0)[dowOf(dnOf(v))] ? 1 : 0; if (t === def) delete e[v]; else e[v] = t; return { ...p, excep: e }; }); }} aviso={aviso} />
             </div>
           </div>)}
-      </div>
+      </div>}
     </>);
   };
 
