@@ -1,408 +1,378 @@
-// NEXO Obra — DEMO simplificada: una sola app, tres paneles (Constructora · Estudio · Propietario).
-// Datos de ejemplo cargados en el aparato (no toca ninguna base real). Mismo estilo que el resto de la suite.
+// NEXO Obra — versión simplificada: una sola app, tres paneles (Constructora · Estudio · Propietario).
+// Lee en SOLO LECTURA los datos reales de las obras (mismas claves que las otras apps) y usa el mismo estilo.
+// No escribe nada en la base: no puede romper ni pisar datos de las otras aplicaciones.
 import React, { useState, useEffect, useMemo } from "react";
+import { alertasCrono } from "./CronoPro.jsx";
 
-// ── estilo (igual a la suite) ───────────────────────────────────────────────
-const C = { bg: "#0d0d0f", card: "#111214", card2: "#16171a", border: "#232227", text: "#f2f0eb", sub: "#B8B5AE", muted: "#7A776F", accent: "#B0894F", accentL: "rgba(176,137,79,.14)", verde: "#3E9B62", amarillo: "#E0B13A", naranja: "#E8843B", rojo: "#D8473A" };
-const FASE_COL = { verde: C.verde, amarillo: C.amarillo, naranja: C.naranja, rojo: C.rojo, ok: C.verde, futuro: C.muted };
-const FASE_TXT = { verde: "Hay que pedirlo", amarillo: "Pedilo ya", naranja: "Urgente", rojo: "Vencido", ok: "Listo", futuro: "Todavía falta" };
-const standalone = typeof window !== "undefined" && (window.navigator.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches));
-const SAFE_TOP = `max(env(safe-area-inset-top), ${standalone ? 58 : 14}px)`;
+const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
+const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
+const BRASS = "#B0894F";
+const KEYS = ["vv_obras", "vv_bitacora", "vv_avance", "vv_informes_sem", "vv_renders", "vv_pedidos", "vv_matpedidos", "vv_cronopro", "vv_adicionales", "vv_certif_sem", "cliente_cfg"];
+const CACHE = "nexoobra_real_v2";
 
-// ── fechas y plata de espera ────────────────────────────────────────────────
-const DIA = 86400000;
-const hoyISO = () => { const d = new Date(); d.setHours(12, 0, 0, 0); return d.toISOString().slice(0, 10); };
-const masDias = (iso, n) => new Date(new Date(iso + "T12:00:00").getTime() + n * DIA).toISOString().slice(0, 10);
-const dif = (a, b) => Math.round((new Date(a + "T12:00:00") - new Date(b + "T12:00:00")) / DIA); // a - b en días
-const fmtF = (iso) => iso ? new Date(iso + "T12:00:00").toLocaleDateString("es-AR", { day: "numeric", month: "short" }) : "—";
-const money = (n) => "$" + Math.round(n || 0).toLocaleString("es-AR");
-let _id = 0; const nid = () => "n" + Date.now().toString(36) + (++_id);
-
-// Cuánto antes hay que pedir, por rubro (semanas). Primera estimación, a calibrar con tiempos reales.
-const LEAD = { "Aberturas": 8, "Instalaciones embutidas": 6, "Revestimientos y solados": 6, "Fundaciones": 4, "Losas": 4, "Contrapisos y carpetas": 4, "Tareas preliminares": 3, "Mampostería": 3, "Revoques": 3, "Cielorrasos": 3, "Pintura": 2 };
-
-// El color lo pone el calendario; el estado lo pone la persona con un toque.
-function semaforo(p, tarea, hoy) {
-  if (!tarea) return { fase: "futuro", du: 99, diasRojo: 0 };
-  const lead = (LEAD[p.rubro] || 4) * 7, banda = Math.max(3, (lead - 5) / 3);
-  const fin = p.estado === "enobra" ? (p.enobraFecha || hoy) : p.estado === "respondido" ? (p.respFecha || hoy) : hoy;
-  const duFin = dif(tarea.inicio, fin), du = dif(tarea.inicio, hoy);
-  const diasRojo = Math.max(0, Math.floor(5 - duFin));
-  if (p.estado === "enobra") return { fase: "ok", du, diasRojo, apagado: true };
-  if (p.estado === "respondido") return { fase: "ok", du, diasRojo };
-  let fase = "futuro";
-  if (du <= 5) fase = "rojo"; else if (du <= 5 + banda) fase = "naranja"; else if (du <= 5 + 2 * banda) fase = "amarillo"; else if (du <= lead) fase = "verde";
-  return { fase, du, diasRojo };
+// ── tema: idéntico al de la app Cliente ─────────────────────────────────────
+const TEMA_OSCURO = { bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", accent: "#B0894F", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+const TEMA_CLARO = { bg: "#F5F6F8", card: "#ffffff", border: "#E6E9EE", text: "#131C2B", sub: "#4A5565", muted: "#97A0AE", accent: "#B0894F", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
+const DEFAULT_CFG = { nombre: "Belfast Construction Management", sigla: "BELFAST", logo: "", accent: "#1E3A5F" };
+function hexARgb(hex) { const h = String(hex || "").replace("#", ""); const hh = h.length === 3 ? h.split("").map(x => x + x).join("") : h; const n = parseInt(hh, 16) || 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function rgbAHex(rgb) { return "#" + rgb.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join(""); }
+function aclarar(hex, t) { const A = hexARgb(hex); const G = [76, 78, 84]; return rgbAHex(A.map((v, i) => v + (G[i] - v) * t)); }
+function hexToRgba(hex, a) { const h = String(hex || "").replace("#", ""); if (h.length !== 6) return `rgba(255,255,255,${a})`; return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`; }
+function paletaBrillo(brillo) {
+  const L = Math.max(0, Math.min(100, Number(brillo))) / 100; let tL = 1 - L;
+  if (Math.abs(tL - L) < 0.55) tL = L < 0.5 ? L + 0.55 : L - 0.55; tL = Math.max(0, Math.min(1, tL));
+  const g = (v) => { const n = Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, "0"); return "#" + n + n + n; };
+  const mix = (a, b, k) => g(a + (b - a) * k);
+  return { bg: g(L), card: g(L < 0.5 ? L + 0.05 : L + 0.04), border: g(L < 0.5 ? L + 0.14 : L - 0.12), text: g(tL), sub: mix(tL, L, 0.3), muted: mix(tL, L, 0.52), navy: L < 0.5 ? g(L * 0.7) : "#0F172A", oscuro: L < 0.5 };
 }
-const costoDia = (obra) => (obra ? obra.personas * obra.jornal : 0);
-
-// ── datos de ejemplo (fechas relativas a hoy, para que el semáforo muestre de todo) ──
-function crearDemo() {
-  const h = hoyISO(), d = (n) => masDias(h, n);
-  const obras = [
-    { id: "o1", nombre: "Sáenz Peña 01", modelo: "2 losas", propietario: "Familia Ruiz", avance: 38, personas: 7, jornal: 75000, equipo: ["Capataz · M. Gómez", "Oficial albañil × 3", "Ayudantes × 7", "Encargado de seguridad"], hitos: [["Fundaciones", d(-110), true], ["Losa 1", d(-18), true], ["Mampostería PB", d(6), false], ["Losa 2", d(75), false], ["Entrega", d(190), false]] },
-    { id: "o2", nombre: "Los Puentes 132", modelo: "1 losa", propietario: "Sr. Paredes", avance: 62, personas: 5, jornal: 75000, equipo: ["Capataz · R. Díaz", "Oficial albañil × 2", "Ayudantes × 5"], hitos: [["Fundaciones", d(-150), true], ["Losa", d(-60), true], ["Revoques", d(-5), true], ["Cielorrasos", d(14), false], ["Entrega", d(70), false]] },
-  ];
-  const tareas = [
-    { id: "t1", obra: "o1", nombre: "Losa 1", inicio: d(-18), dur: 20 },
-    { id: "t2", obra: "o1", nombre: "Mampostería PB", inicio: d(6), dur: 25 },
-    { id: "t3", obra: "o1", nombre: "Contrapisos y carpetas", inicio: d(3), dur: 12 },
-    { id: "t4", obra: "o1", nombre: "Instalaciones embutidas", inicio: d(25), dur: 18 },
-    { id: "t5", obra: "o1", nombre: "Colocación de aberturas", inicio: d(40), dur: 10 },
-    { id: "t6", obra: "o1", nombre: "Revoques", inicio: d(60), dur: 30 },
-    { id: "t7", obra: "o2", nombre: "Cielorrasos", inicio: d(14), dur: 10 },
-    { id: "t8", obra: "o2", nombre: "Pintura", inicio: d(30), dur: 15 },
-    { id: "t9", obra: "o2", nombre: "Baños: cuerpos de ducha y grifería", inicio: d(21), dur: 6 },
-  ];
-  const P = (id, obra, tarea, tipo, rubro, desc, estado, extra = {}) => ({ id, obra, tarea, tipo, rubro, desc, estado, reclamos: 0, ...extra });
-  const pedidos = [
-    P("p1", "o1", "t3", "Definición", "Contrapisos y carpetas", "Niveles de solado y pendientes", "pedido", { pedidoFecha: d(-12) }),
-    P("p2", "o1", "t2", "Plano", "Mampostería", "Plano de mampostería de planta baja", "pedido", { pedidoFecha: d(-3) }),
-    P("p3", "o1", "t4", "Plano", "Instalaciones embutidas", "Plano de instalaciones eléctricas y sanitarias", "porpedir"),
-    P("p4", "o1", "t5", "Definición", "Aberturas", "Tipología y medidas de aberturas", "porpedir"),
-    P("p5", "o1", "t6", "Definición", "Revoques", "Terminación de revoques exteriores", "porpedir"),
-    P("p6", "o1", "t1", "Plano", "Losas", "Plano de armaduras de Losa 1", "enobra", { pedidoFecha: d(-70), respFecha: d(-40), enobraFecha: d(-30), respuesta: { texto: "Plano de armaduras vigente, versión 2.", archivos: ["Armaduras_L1_v2.pdf"] } }),
-    P("p7", "o2", "t7", "Definición", "Cielorrasos", "Altura y tipo de cielorraso en living", "respondido", { pedidoFecha: d(-10), respFecha: d(-1), nuevo: true, respuesta: { texto: "Cielorraso de placa de yeso, junta tomada. Altura final 2,60 m. Detalle adjunto.", archivos: ["Detalle_cielorraso.pdf", "Planilla_alturas.xlsx"] } }),
-    P("p8", "o2", "t8", "Definición", "Pintura", "Colores y sistema de pintura", "porpedir"),
-    P("p9", "o2", "t9", "Definición", "Revestimientos y solados", "Cuerpos de ducha y grifería: modelos", "pedido", { pedidoFecha: d(-5) }),
-  ];
-  const planos = [
-    { id: "pl1", obra: "o1", rubro: "Losas", nombre: "Armaduras Losa 1", version: 2, fecha: d(-40), historial: [{ version: 1, fecha: d(-75) }] },
-    { id: "pl2", obra: "o1", rubro: "Fundaciones", nombre: "Planta de fundaciones", version: 1, fecha: d(-115), historial: [] },
-    { id: "pl3", obra: "o2", rubro: "Losas", nombre: "Estructura losa", version: 3, fecha: d(-62), historial: [{ version: 1, fecha: d(-95) }, { version: 2, fecha: d(-80) }] },
-  ];
-  const adicionales = [
-    { id: "a1", obra: "o1", desc: "Platea adicional en sector cochera", monto: 1850000, estado: "pendiente", req: [{ t: "Cotización cargada", ok: true }, { t: "Plano de detalle del estudio", ok: false }] },
-    { id: "a2", obra: "o2", desc: "Muro de contención lateral", monto: 920000, estado: "autorizado", req: [{ t: "Cotización cargada", ok: true }, { t: "Plano de detalle del estudio", ok: true }] },
-  ];
-  const registro = [
-    { id: "r1", obra: "o1", ts: Date.now() - 3 * 3600000, texto: "Se completó el encofrado del sector norte. Faltan 2 camiones de hormigón para mañana." },
-    { id: "r2", obra: "o2", ts: Date.now() - 26 * 3600000, texto: "Visita del estudio: se revisó la altura de cielorrasos en el living." },
-  ];
-  const elecciones = [
-    { id: "e1", obra: "o1", titulo: "Color de las aberturas", opciones: ["Negro mate", "Gris antracita"], limite: d(12), elegida: null },
-    { id: "e2", obra: "o2", titulo: "Revestimiento del frente", opciones: ["Piedra natural", "Microcemento"], limite: d(20), elegida: null },
-  ];
-  const fotos = [
-    { id: "f1", obra: "o1", fecha: d(-2), cap: "Encofrado sector norte", g: ["#3b3226", "#8a6d3b"] },
-    { id: "f2", obra: "o1", fecha: d(-9), cap: "Armado de columnas", g: ["#26313b", "#4f6f8a"] },
-    { id: "f3", obra: "o1", fecha: d(-18), cap: "Hormigonado Losa 1", g: ["#2e2e2e", "#7d7d7d"] },
-    { id: "f4", obra: "o2", fecha: d(-4), cap: "Revoque grueso terminado", g: ["#3b2a26", "#8a5a4f"] },
-    { id: "f5", obra: "o2", fecha: d(-12), cap: "Instalación sanitaria", g: ["#263b32", "#4f8a6d"] },
-  ];
-  return { v: 1, creado: h, obras, tareas, pedidos, planos, adicionales, registro, elecciones, fotos, liberadas: ["t1"] };
+function theme(cfg) {
+  const c = cfg || {};
+  if (c.brillo != null) { const p = paletaBrillo(c.brillo); const ac = c.accent || BRASS; return { bg: p.bg, card: p.card, border: p.border, text: p.text, sub: p.sub, muted: p.muted, accent: ac, accentLight: hexToRgba(ac, .14), navy: p.oscuro ? p.bg : p.navy, r: 12, rsm: 8, shadow: p.oscuro ? TEMA_OSCURO.shadow : TEMA_CLARO.shadow }; }
+  const base = c.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO, osc = c.modo !== "claro";
+  const pct = Math.max(0, Math.min(100, c.oscuroIntensidad == null ? 100 : Number(c.oscuroIntensidad))), t = osc ? (1 - pct / 100) * 0.62 : 0;
+  const bg = c.themeBg || (osc ? aclarar(base.bg, t) : base.bg), text = c.themeText || base.text, accent = c.accent || base.accent;
+  return { bg, card: c.themeCard || (osc ? aclarar(base.card, t) : base.card), border: c.themeBorder || (osc ? aclarar(base.border, Math.min(1, t * 1.3)) : base.border), text, sub: c.themeText ? hexToRgba(c.themeText, .6) : base.sub, muted: c.themeText ? hexToRgba(c.themeText, .42) : base.muted, accent, accentLight: hexToRgba(accent, .14), navy: bg, r: 12, rsm: 8, shadow: base.shadow };
 }
-const KEY = "nexoobra_demo_v1", KEYP = "nexoobra_perfil";
-function cargar() { try { const r = localStorage.getItem(KEY); if (r) { const d = JSON.parse(r); if (d && d.v === 1) return d; } } catch { } return crearDemo(); }
+const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#0d0d0f;overscroll-behavior:none;font-family:'Inter',sans-serif;}
+  button{cursor:pointer;font-family:inherit;}input,textarea,select{font-family:inherit;}
+  input:focus,textarea:focus{outline:none;}textarea{resize:none;}::-webkit-scrollbar{display:none;}
+  @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:.85}}
+`;
+const SAFE_TOP_PX = (() => { try { return (window.navigator.standalone || window.matchMedia("(display-mode: standalone)").matches) ? 50 : 0; } catch (e) { return 0; } })();
 
-// ── piezas chicas ───────────────────────────────────────────────────────────
-const Star = ({ s = 22 }) => (<svg width={s} height={s} viewBox="0 0 40 40" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round"><path d="M20 3v34M3 20h34M9 9l22 22M31 9L9 31" /><circle cx="20" cy="20" r="2.6" fill={C.accent} /></svg>);
-const Eyebrow = ({ children }) => (<div style={{ display: "flex", alignItems: "center", gap: 8, margin: "18px 0 10px" }}><span style={{ width: 18, height: 2, background: C.accent }} /><span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".16em", textTransform: "uppercase", color: C.sub }}>{children}</span></div>);
-const Card = ({ children, color, onClick, style }) => (<div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderLeft: color ? `4px solid ${color}` : `1px solid ${C.border}`, borderRadius: 12, padding: 13, marginBottom: 10, cursor: onClick ? "pointer" : "default", ...style }}>{children}</div>);
-const Btn = ({ children, onClick, color = C.accent, ghost, disabled, small, style }) => (<button disabled={disabled} onClick={onClick} style={{ width: small ? "auto" : "100%", background: disabled ? C.card2 : ghost ? "transparent" : color, color: disabled ? C.muted : ghost ? C.text : "#0d0d0f", border: ghost ? `1px solid ${C.border}` : 0, borderRadius: 10, padding: small ? "8px 12px" : "13px 14px", fontSize: small ? 12 : 14, fontWeight: 800, cursor: disabled ? "default" : "pointer", marginTop: small ? 0 : 10, ...style }}>{children}</button>);
-const Chip = ({ children, color = C.sub, bg }) => (<span style={{ display: "inline-block", fontSize: 10.5, fontWeight: 800, color, background: bg || "rgba(255,255,255,.06)", borderRadius: 6, padding: "3px 8px", marginRight: 6 }}>{children}</span>);
-const Sel = ({ value, onChange, children }) => (<select value={value} onChange={e => onChange(e.target.value)} style={{ width: "100%", background: C.card2, color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px", fontSize: 16, marginBottom: 8 }}>{children}</select>);
-const Archivo = ({ n }) => (<div style={{ display: "flex", alignItems: "center", gap: 8, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", marginTop: 6, fontSize: 13, fontWeight: 700, color: C.accent }}>📎 <span style={{ flex: 1, minWidth: 0, wordBreak: "break-all" }}>{n}</span><span style={{ whiteSpace: "nowrap" }}>Abrir ↗</span></div>);
+// ── lectura de datos reales (solo GET) ─────────────────────────────────────
+const parse = (v) => { if (v == null) return null; if (typeof v !== "string") return v; try { return JSON.parse(v); } catch { return null; } };
+async function leerNube() {
+  const r = await fetch(SUPA_URL + "/rest/v1/bco_storage?select=key,value&key=in.(" + KEYS.join(",") + ")", { headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY } });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const rows = await r.json(), out = {};
+  rows.forEach(x => { out[x.key] = parse(x.value); });
+  if (!out.vv_obras) throw new Error("sin obras");
+  return out;
+}
+function useReal() {
+  const [R, setR] = useState(() => { try { const c = JSON.parse(localStorage.getItem(CACHE) || "null"); return c ? c.d : null; } catch { return null; } });
+  const [st, setSt] = useState(R ? "cache" : "cargando");
+  const [intento, setIntento] = useState(0);
+  useEffect(() => {
+    let vivo = true;
+    leerNube().then(d => { if (!vivo) return; setR(d); setSt("ok"); try { localStorage.setItem(CACHE, JSON.stringify({ d, ts: Date.now() })); } catch { } })
+      .catch(() => { if (vivo) setSt(s => (s === "cache" ? "cache" : "error")); });
+    return () => { vivo = false; };
+  }, [intento]);
+  return { R, st, recargar: () => { setSt(s => (R ? "cache" : "cargando")); setIntento(i => i + 1); } };
+}
 
-// ── App ─────────────────────────────────────────────────────────────────────
+// ── utilidades de forma tolerante ──────────────────────────────────────────
+const arr = (x) => (Array.isArray(x) ? x : []);
+const urlDe = (x) => (typeof x === "string" ? x : (x && (x.url || x.src || x.dataUrl)) || "");
+const fFecha = (iso) => { if (!iso) return ""; const s = String(iso).slice(0, 10).split("-"); return s.length === 3 ? `${s[2]}/${s[1]}/${s[0].slice(2)}` : String(iso); };
+const fTs = (ts) => ts ? new Date(ts).toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "2-digit" }) : "";
+const esVideo = (u) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(u || "");
+
+// ── piezas de interfaz (mismo lenguaje visual que Cliente.jsx) ─────────────
+const Card = ({ T, children, style = {}, onClick }) => <div onClick={onClick} style={{ background: T.card, borderRadius: T.r, border: `1px solid ${T.border}`, boxShadow: T.shadow, ...style }}>{children}</div>;
+const Badge = ({ c, b, children }) => <span style={{ fontSize: 10, fontWeight: 700, color: c, background: b, borderRadius: 20, padding: "3px 9px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{children}</span>;
+const Eyebrow = ({ T, children }) => <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 11 }}><span style={{ width: 18, height: 2, background: BRASS }} /><span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: T.sub }}>{children}</span></div>;
+const Vacio = ({ T, children }) => <div style={{ textAlign: "center", color: T.muted, fontSize: 12.5, padding: "26px 16px" }}>{children}</div>;
+const Sel = ({ T, value, onChange, children }) => <select value={value} onChange={e => onChange(e.target.value)} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", fontSize: 14, color: T.text, margin: "6px 0 12px" }}>{children}</select>;
+const Pill = ({ T, a, children, onClick }) => <button onClick={onClick} style={{ flexShrink: 0, background: a ? T.accent : "transparent", color: a ? "#fff" : T.sub, border: `1px solid ${a ? T.accent : T.border}`, borderRadius: 20, padding: "7px 13px", fontSize: 12, fontWeight: 700 }}>{children}</button>;
+const Archivo = ({ T, a }) => { const u = urlDe(a), n = (a && (a.nombre || a.name)) || "Archivo"; return <a href={u || undefined} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginTop: 6, textDecoration: "none", color: T.text, fontSize: 12.5, fontWeight: 600 }}><span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n}</span><span style={{ color: BRASS, fontSize: 11.5, fontWeight: 800 }}>Abrir ↗</span></a>; };
+function Galeria({ T, items }) {
+  const [ver, setVer] = useState(null);
+  const L = items.map(urlDe).filter(Boolean);
+  if (!L.length) return <Vacio T={T}>Todavía no hay fotos cargadas.</Vacio>;
+  return (<>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 5 }}>{L.map((u, i) => esVideo(u)
+      ? <video key={i} src={u} controls preload="metadata" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, background: "#000" }} />
+      : <img key={i} src={u} alt="" loading="lazy" onClick={() => setVer(u)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer" }} />)}</div>
+    {ver && <div onClick={() => setVer(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 10 }}><img src={ver} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /></div>}
+  </>);
+}
+function Documento({ T, doc, cerrar }) {
+  return (<div style={{ position: "fixed", inset: 0, background: "#1a2433", zIndex: 400, display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 12px 10px` }}>
+      <button onClick={cerrar} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, fontWeight: 700 }}>← Volver</button>
+      <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.titulo}</span>
+    </div>
+    <iframe srcDoc={doc.html} title={doc.titulo} style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+  </div>);
+}
+
+// ── App ────────────────────────────────────────────────────────────────────
+const PANELES = {
+  constructora: { n: "Constructora", d: "Ejecuta y anticipa", pts: ["Inicio con la obra, el avance y lo que hay que mover", "Semáforo de pedidos según el cronograma", "Fotos, bitácora e informes de cada obra", "Pedidos al estudio y sus respuestas"] },
+  estudio: { n: "Estudio", d: "Proyecta y dirige la obra", pts: ["Pedidos que le hacen, con su fecha límite", "Respuestas con planos y archivos", "Planos y documentos entregados", "Adicionales de obra"] },
+  propietario: { n: "Propietario", d: "Sigue su obra", pts: ["Avance de su obra", "Fotos de la obra", "Informes semanales y de avance", "Sin alertas ni costos internos"] },
+};
+const NAVS = {
+  constructora: [["inicio", "Inicio"], ["obras", "Obras"], ["pedidos", "Pedidos"], ["bitacora", "Bitácora"], ["mas", "Más"]],
+  estudio: [["pedidos", "Pedidos"], ["planos", "Planos"], ["adicionales", "Adicionales"]],
+  propietario: [["obra", "Mi obra"], ["fotos", "Fotos"], ["informes", "Informes"]],
+};
+const KEYP = "nexoobra_perfil";
+
 export default function NexoObraApp() {
-  const [D, setD] = useState(cargar);
+  const { R, st, recargar } = useReal();
   const [perfil, setPerfil] = useState(() => { try { return localStorage.getItem(KEYP) || ""; } catch { return ""; } });
   const [verAlcance, setVerAlcance] = useState(false);
   const [tab, setTab] = useState("");
-  const [obraAbierta, setObraAbierta] = useState(null);
-  const [toast, setToast] = useState("");
-  const hoy = hoyISO();
-  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(D)); } catch { } }, [D]);
   useEffect(() => { try { perfil ? localStorage.setItem(KEYP, perfil) : localStorage.removeItem(KEYP); } catch { } }, [perfil]);
-  const avisar = (t) => { setToast(t); setTimeout(() => setToast(""), 2200); };
-  const upd = (k, fn) => setD(prev => ({ ...prev, [k]: fn(prev[k]) }));
-  const setPed = (id, patch) => upd("pedidos", ps => ps.map(p => p.id === id ? { ...p, ...(typeof patch === "function" ? patch(p) : patch) } : p));
-  const obraDe = (id) => D.obras.find(o => o.id === id);
-  const tareaDe = (id) => D.tareas.find(t => t.id === id);
-  const sem = (p) => semaforo(p, tareaDe(p.tarea), hoy);
-  const entrar = (p) => { setPerfil(p); setVerAlcance(false); setObraAbierta(null); setTab(p === "constructora" ? "inicio" : p === "estudio" ? "pedidos" : "obra"); window.scrollTo && window.scrollTo(0, 0); };
-  const ctx = { D, upd, setPed, obraDe, tareaDe, sem, hoy, avisar, tab, setTab, obraAbierta, setObraAbierta, setD };
+  const cfg = useMemo(() => ({ ...DEFAULT_CFG, ...(R && R.cliente_cfg ? R.cliente_cfg : {}) }), [R]);
+  const T = useMemo(() => theme(cfg), [cfg]);
+  const obras = useMemo(() => arr(R && R.vv_obras).filter(o => o && !o.privada), [R]);
+  const D = useMemo(() => ({
+    obras, bitacora: arr(R && R.vv_bitacora), avance: (R && R.vv_avance) || {}, informesSem: (R && R.vv_informes_sem) || {}, renders: (R && R.vv_renders) || {},
+    pedidos: arr(R && R.vv_pedidos), matpedidos: arr(R && R.vv_matpedidos), cronoPro: (R && R.vv_cronopro) || { obras: {} }, adicionales: arr(R && R.vv_adicionales),
+  }), [R, obras]);
+  const entrar = (p) => { setPerfil(p); setVerAlcance(false); setTab(p ? NAVS[p][0][0] : ""); };
+  useEffect(() => { if (perfil && !tab) setTab(NAVS[perfil][0][0]); }, [perfil, tab]);
+  const ctx = { T, cfg, D, tab, setTab };
 
-  const reset = () => { if (confirm("¿Volver a cargar los datos de ejemplo?")) { const n = crearDemo(); setD(n); avisar("Datos de ejemplo restaurados"); } };
-
-  return (<div style={{ background: C.bg, display: "flex", justifyContent: "center" }}><div style={{ height: "100dvh", width: "100%", maxWidth: 640, display: "flex", flexDirection: "column", background: C.bg, color: C.text, fontFamily: "'Inter',-apple-system,sans-serif", borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}` }}>
-    <style>{`body{background:${C.bg}} *{-webkit-tap-highlight-color:transparent} input,textarea,select{font-family:inherit}`}</style>
-    {(!perfil || verAlcance) ? <Alcance perfil={perfil} entrar={entrar} volver={() => setVerAlcance(false)} reset={reset} />
+  return (<div style={{ background: T.bg, display: "flex", justifyContent: "center" }}><div style={{ height: "100dvh", width: "100%", maxWidth: 1180, display: "flex", flexDirection: "column", background: T.bg, color: T.text, fontFamily: "'Inter',sans-serif" }}>
+    <style>{CSS}{`body{background:${T.bg}}`}</style>
+    {(!perfil || verAlcance) ? <Alcance T={T} cfg={cfg} perfil={perfil} entrar={entrar} volver={() => setVerAlcance(false)} st={st} R={R} recargar={recargar} />
       : (<>
-        <Header perfil={perfil} onAlcance={() => setVerAlcance(true)} />
-        <div style={{ flex: 1, overflowY: "auto", padding: "4px 18px 24px" }}>
-          {perfil === "constructora" && <Constructora {...ctx} />}
+        <Cabecera T={T} cfg={cfg} perfil={perfil} onAlcance={() => setVerAlcance(true)} />
+        {st === "error" && <div style={{ padding: "30px 22px", textAlign: "center", color: T.sub, fontSize: 13, lineHeight: 1.6 }}>No pude traer los datos de las obras ahora. Revisá la conexión.<div><button onClick={recargar} style={{ marginTop: 12, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "11px 18px", fontSize: 13, fontWeight: 700 }}>Reintentar</button></div></div>}
+        {st === "cargando" && <div style={{ padding: 40, textAlign: "center", color: T.muted, fontSize: 13 }}>Cargando tus obras…</div>}
+        {R && <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+          {perfil === "constructora" && <Constructora {...ctx} recargar={recargar} st={st} />}
           {perfil === "estudio" && <Estudio {...ctx} />}
           {perfil === "propietario" && <Propietario {...ctx} />}
-        </div>
-        <Nav perfil={perfil} tab={tab} setTab={(t) => { setTab(t); setObraAbierta(null); }} />
+        </div>}
+        <Nav T={T} perfil={perfil} tab={tab} setTab={setTab} />
       </>)}
-    {toast && <div style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", width: "min(608px, calc(100% - 32px))", bottom: 86, zIndex: 50, background: C.accent, color: "#0d0d0f", borderRadius: 12, padding: "12px 14px", fontSize: 13.5, fontWeight: 800, textAlign: "center" }}>{toast}</div>}
   </div></div>);
 }
 
-// ── Primer panel: el alcance de la app ──────────────────────────────────────
-const PANELES = {
-  constructora: { n: "Constructora", ico: "🏗️", d: "Ejecuta y anticipa", pts: ["Semáforo de pedidos y avisos", "Pide definiciones, planos y materiales", "Libera cada etapa sin esperar", "Registro y dotación en obra"] },
-  estudio: { n: "Estudio", ico: "📐", d: "Proyecta y dirige la obra", pts: ["Ve lo que le piden, por fecha", "Responde con planos y archivos", "Sube la versión vigente de cada plano", "Autoriza adicionales"] },
-  propietario: { n: "Propietario", ico: "🏠", d: "Sigue su obra", pts: ["Avance e hitos", "Fotos e informe semanal", "Elecciones que dependen de él", "Sin alertas ni costos"] },
-};
-function Alcance({ perfil, entrar, volver, reset }) {
-  return (<div style={{ flex: 1, overflowY: "auto", padding: `${SAFE_TOP} 18px 30px` }}>
-    <div style={{ textAlign: "center", padding: "10px 0 6px" }}>
-      <Star s={46} />
-      <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: ".3em", marginTop: 6 }}>NEXO</div>
-      <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>Todos conectados · En tiempo real</div>
+function Cabecera({ T, cfg, perfil, onAlcance }) {
+  return (<div style={{ background: T.navy, color: "#fff", flexShrink: 0 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 13, padding: `calc(16px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 78px 15px`, minHeight: 64, position: "relative" }}>
+      {cfg.logo ? <img src={cfg.logo} alt="" style={{ maxHeight: 48, maxWidth: 240, objectFit: "contain" }} />
+        : <><div style={{ width: 46, height: 46, background: "rgba(255,255,255,.08)", border: `1px solid ${BRASS}`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: 800 }}>{(cfg.sigla || "C").slice(0, 3)}</div>
+          <div style={{ lineHeight: 1.25, textAlign: "left" }}><div style={{ fontSize: 9, fontWeight: 700, color: BRASS, letterSpacing: "0.24em", textTransform: "uppercase", marginBottom: 3 }}>Panel {PANELES[perfil].n.toLowerCase()}</div><div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{cfg.nombre}</div></div></>}
+      <button onClick={onAlcance} style={{ position: "absolute", right: 14, background: "transparent", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "7px 10px", fontSize: 11, fontWeight: 700 }}>Paneles</button>
     </div>
-    <div style={{ fontSize: 20, fontWeight: 800, textAlign: "center", margin: "18px 0 4px" }}>La obra que se anticipa no se improvisa</div>
-    <div style={{ fontSize: 13, color: C.sub, textAlign: "center", lineHeight: 1.5, marginBottom: 16 }}>Una sola app, tres paneles. Cada invitación abre solo el suyo.</div>
-    {!perfil && <div style={{ fontSize: 11.5, color: C.accent, background: C.accentL, borderRadius: 10, padding: "9px 12px", marginBottom: 14, textAlign: "center", fontWeight: 700 }}>DEMO · Tocá un panel para ver la app como lo vería cada persona</div>}
-    {Object.entries(PANELES).map(([k, p]) => {
-      const mio = perfil === k, bloq = perfil && !mio;
-      return (<div key={k} style={{ background: C.card, border: `1px solid ${mio ? C.accent : C.border}`, borderRadius: 14, padding: 15, marginBottom: 11, opacity: bloq ? .55 : 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 26 }}>{bloq ? "🔒" : p.ico}</span>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 800, color: mio ? C.accent : C.text }}>{p.n}</div><div style={{ fontSize: 12, color: C.sub }}>{p.d}</div></div>
-          {mio && <Chip color={C.accent} bg={C.accentL}>TU PANEL</Chip>}
-        </div>
-        {!bloq && <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 12.5, color: C.sub, lineHeight: 1.65 }}>{p.pts.map(t => <li key={t}>{t}</li>)}</ul>}
-        {bloq && <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>Bloqueado: este panel lo ve {k === "constructora" ? "la constructora" : k === "estudio" ? "el estudio" : "el propietario"} con su invitación.</div>}
-        {!perfil && <Btn onClick={() => entrar(k)}>Entrar como {p.n.toLowerCase()}</Btn>}
-      </div>);
-    })}
-    {perfil && <Btn onClick={volver}>Volver a mi panel</Btn>}
-    {perfil && <Btn ghost onClick={() => entrar("")}>Cambiar de perfil (solo en la demo)</Btn>}
-    <div style={{ textAlign: "center", marginTop: 18 }}><button onClick={reset} style={{ background: "none", border: 0, color: C.muted, fontSize: 12, textDecoration: "underline", cursor: "pointer" }}>Restaurar datos de ejemplo</button></div>
+    <div style={{ height: 1, background: T.border }} />
   </div>);
 }
-
-function Header({ perfil, onAlcance }) {
-  const p = PANELES[perfil];
-  return (<div style={{ flexShrink: 0, padding: `${SAFE_TOP} 18px 10px`, borderBottom: `1px solid ${C.border}`, background: C.card, display: "flex", alignItems: "center", gap: 10 }}>
-    <Star s={22} />
-    <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".2em", color: C.accent, textTransform: "uppercase" }}>NEXO Obra · demo</div><div style={{ fontSize: 16, fontWeight: 800 }}>Panel {p.n.toLowerCase()}</div></div>
-    <button onClick={onAlcance} style={{ background: C.card2, border: `1px solid ${C.border}`, color: C.text, borderRadius: 10, padding: "8px 11px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Alcance</button>
-  </div>);
-}
-
-const NAVS = {
-  constructora: [["inicio", "Inicio"], ["obras", "Obras"], ["pedidos", "Pedidos"], ["registro", "Registro"], ["mas", "Más"]],
-  estudio: [["pedidos", "Pedidos"], ["planos", "Planos"], ["adicionales", "Adicionales"]],
-  propietario: [["obra", "Mi obra"], ["fotos", "Fotos"], ["elecciones", "Elecciones"]],
-};
-function Nav({ perfil, tab, setTab }) {
-  return (<nav style={{ flexShrink: 0, background: C.card, borderTop: `1px solid ${C.border}`, display: "flex", paddingBottom: "calc(env(safe-area-inset-bottom) + 6px)" }}>
-    {NAVS[perfil].map(([id, l]) => { const a = tab === id; return (<button key={id} onClick={() => setTab(id)} style={{ flex: 1, background: "none", border: 0, borderTop: `2px solid ${a ? C.accent : "transparent"}`, padding: "10px 4px 7px", fontSize: 11.5, fontWeight: a ? 800 : 600, color: a ? C.accent : C.sub, cursor: "pointer" }}>{l}</button>); })}
+function Nav({ T, perfil, tab, setTab }) {
+  if (!perfil) return null;
+  return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", paddingBottom: "calc(env(safe-area-inset-bottom) + 6px)" }}>
+    <div style={{ width: "100%", maxWidth: 1180, display: "flex" }}>{NAVS[perfil].map(([id, l]) => { const a = tab === id; return <button key={id} onClick={() => setTab(id)} style={{ flex: 1, background: "none", border: "none", padding: "6px 4px 5px", fontSize: 10.5, fontWeight: a ? 800 : 600, color: a ? T.accent : T.sub, borderTop: `2px solid ${a ? BRASS : "transparent"}`, marginTop: -1 }}>{l}</button>; })}</div>
   </nav>);
 }
 
-// ── tarjeta de pedido: el color lo pone el calendario, el estado se cambia con UN toque ──
-function PedidoCard({ p, x, rol, mostrarObra = true }) {
-  const { sem, obraDe, tareaDe, setPed, avisar } = x;
-  const s = sem(p), col = FASE_COL[s.fase], o = obraDe(p.obra), t = tareaDe(p.tarea);
-  const costo = s.fase === "rojo" ? costoDia(o) : 0;
-  const debeEstar = t ? masDias(t.inicio, -5) : "";
-  const [abierto, setAbierto] = useState(false);
-  return (<Card color={s.apagado ? C.border : col}>
-    <div onClick={() => setAbierto(a => !a)} style={{ cursor: "pointer" }}>
-      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 5 }}>
-        {!s.apagado && <Chip color={col} bg="rgba(255,255,255,.05)">{p.estado === "respondido" ? "Respondido" : FASE_TXT[s.fase]}</Chip>}
-        {s.apagado && <Chip color={C.verde}>En obra ✓</Chip>}
-        <Chip>{p.tipo}</Chip>
-        {p.nuevo && <Chip color="#0d0d0f" bg={C.verde}>NUEVA RESPUESTA</Chip>}
+function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar }) {
+  return (<div style={{ flex: 1, overflowY: "auto", padding: `calc(26px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 20px 30px` }}>
+    <div style={{ maxWidth: 560, margin: "0 auto" }}>
+      <div style={{ textAlign: "center", marginBottom: 6 }}>
+        {cfg.logo ? <img src={cfg.logo} alt="" style={{ maxHeight: 60, maxWidth: 240, objectFit: "contain" }} /> : <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 28, color: T.text }}>NEXO Obra</div>}
       </div>
-      <div style={{ fontSize: 14.5, fontWeight: 800, lineHeight: 1.35 }}>{p.desc}</div>
-      <div style={{ fontSize: 12, color: C.sub, marginTop: 4, lineHeight: 1.5 }}>{mostrarObra && o ? o.nombre + " · " : ""}Para: {t ? t.nombre : "—"}<br />La tarea arranca el <b style={{ color: C.text }}>{t ? fmtF(t.inicio) : "—"}</b>{p.estado === "pedido" || p.estado === "porpedir" ? <> · debe estar el <b style={{ color: C.text }}>{fmtF(debeEstar)}</b></> : null}</div>
-      {rol === "constructora" && costo > 0 && <div style={{ fontSize: 12, fontWeight: 800, color: C.rojo, marginTop: 6 }}>Cada día en rojo cuesta {money(costo)} · ya van {s.diasRojo} {s.diasRojo === 1 ? "día" : "días"} = {money(costo * s.diasRojo)}</div>}
+      <div style={{ textAlign: "center", fontSize: 12.5, color: T.sub, lineHeight: 1.55, margin: "10px 0 20px" }}>Una sola app, tres paneles. Cada invitación abre solo el suyo.</div>
+      {R ? <div style={{ fontSize: 11.5, color: T.accent, background: T.accentLight, borderRadius: 10, padding: "9px 12px", marginBottom: 16, textAlign: "center", fontWeight: 700 }}>{arr(R.vv_obras).filter(o => !o.privada).length} obras reales cargadas{st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura</div>
+        : <div style={{ fontSize: 12, color: T.sub, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 16, textAlign: "center" }}>{st === "error" ? "No pude traer los datos todavía." : "Cargando tus obras…"} <button onClick={recargar} style={{ background: "none", border: 0, color: BRASS, fontWeight: 800, fontSize: 12 }}>Reintentar</button></div>}
+      {Object.entries(PANELES).map(([k, p]) => {
+        const mio = perfil === k, bloq = perfil && !mio;
+        return (<Card key={k} T={T} style={{ padding: 16, marginBottom: 12, opacity: bloq ? .5 : 1, borderColor: mio ? T.accent : T.border }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 19, color: mio ? T.accent : T.text }}>{bloq ? "🔒 " : ""}{p.n}</div><div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{p.d}</div></div>
+            {mio && <Badge c={T.accent} b={T.accentLight}>Tu panel</Badge>}
+          </div>
+          {!bloq && <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 12.5, color: T.sub, lineHeight: 1.65 }}>{p.pts.map(t => <li key={t}>{t}</li>)}</ul>}
+          {bloq && <div style={{ fontSize: 12, color: T.muted, marginTop: 8 }}>Bloqueado: este panel lo ve {k === "constructora" ? "la constructora" : k === "estudio" ? "el estudio" : "el propietario"}.</div>}
+          {!perfil && <button disabled={!R} onClick={() => entrar(k)} style={{ width: "100%", marginTop: 12, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, fontSize: 13, fontWeight: 700, opacity: R ? 1 : .5 }}>Entrar como {p.n.toLowerCase()}</button>}
+        </Card>);
+      })}
+      {perfil && <button onClick={volver} style={{ width: "100%", background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: 12, fontSize: 13, fontWeight: 700 }}>Volver a mi panel</button>}
+      {perfil && <button onClick={() => entrar("")} style={{ width: "100%", marginTop: 10, background: "transparent", color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: 11, fontSize: 12.5, fontWeight: 600 }}>Cambiar de perfil (solo en la demo)</button>}
     </div>
-    {abierto && p.respuesta && (<div style={{ marginTop: 8, background: C.card2, borderRadius: 8, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: C.verde }}>Respuesta del estudio · {fmtF(p.respFecha)}</div><div style={{ fontSize: 13, marginTop: 4, lineHeight: 1.5 }}>{p.respuesta.texto}</div>{(p.respuesta.archivos || []).map(a => <Archivo key={a} n={a} />)}</div>)}
-    {rol === "constructora" && p.estado === "porpedir" && <Btn color={col} onClick={() => { setPed(p.id, { estado: "pedido", pedidoFecha: x.hoy }); avisar("Pedido enviado al estudio"); }}>Pedir al estudio</Btn>}
-    {rol === "constructora" && p.estado === "pedido" && <Btn ghost onClick={() => { setPed(p.id, pp => ({ reclamos: (pp.reclamos || 0) + 1 })); avisar("Reclamo enviado al estudio"); }}>Reclamar{p.reclamos ? " (" + p.reclamos + ")" : ""} · pedido el {fmtF(p.pedidoFecha)}</Btn>}
-    {rol === "constructora" && p.estado === "respondido" && <Btn color={C.verde} onClick={() => { setPed(p.id, { estado: "enobra", enobraFecha: x.hoy, nuevo: false }); avisar("Listo: ya está en obra"); }}>Ya está en obra</Btn>}
-  </Card>);
-}
-
-// ── PANEL CONSTRUCTORA ──────────────────────────────────────────────────────
-function Constructora(x) {
-  const { D, tab, obraAbierta } = x;
-  if (obraAbierta) return <ObraDetalle {...x} />;
-  if (tab === "inicio") return <CInicio {...x} />;
-  if (tab === "obras") return <CObras {...x} />;
-  if (tab === "pedidos") return <CPedidos {...x} />;
-  if (tab === "registro") return <CRegistro {...x} />;
-  return <CMas {...x} />;
-}
-function CInicio(x) {
-  const { D, sem, setPed, avisar, hoy, obraDe, setTab } = x;
-  const act = D.pedidos.filter(p => p.estado !== "enobra");
-  const urg = act.filter(p => ["rojo", "naranja", "amarillo"].includes(sem(p).fase) && p.estado !== "respondido").sort((a, b) => ["rojo", "naranja", "amarillo"].indexOf(sem(a).fase) - ["rojo", "naranja", "amarillo"].indexOf(sem(b).fase));
-  const resp = D.pedidos.filter(p => p.estado === "respondido");
-  const cuenta = (f) => act.filter(p => p.estado !== "respondido" && sem(p).fase === f).length;
-  const costoTot = D.pedidos.reduce((a, p) => { const s = sem(p); const o = obraDe(p.obra); return a + s.diasRojo * costoDia(o); }, 0);
-  const evitados = D.pedidos.filter(p => (p.estado === "respondido" || p.estado === "enobra") && sem(p).diasRojo === 0).length;
-  return (<div>
-    <Eyebrow>¿Qué tengo que hacer hoy?</Eyebrow>
-    <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-      {[["rojo", "Vencidos"], ["naranja", "Urgentes"], ["amarillo", "Pedir ya"]].map(([f, l]) => (<div key={f} style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderTop: `3px solid ${FASE_COL[f]}`, borderRadius: 10, padding: "10px 6px", textAlign: "center" }}><div style={{ fontSize: 22, fontWeight: 800, color: cuenta(f) ? FASE_COL[f] : C.muted }}>{cuenta(f)}</div><div style={{ fontSize: 10.5, color: C.sub, fontWeight: 700 }}>{l}</div></div>))}
-    </div>
-    {resp.length > 0 && (<><Eyebrow>Respondió el estudio</Eyebrow>{resp.map(p => <PedidoCard key={p.id} p={p} x={x} rol="constructora" />)}</>)}
-    <Eyebrow>Pedidos que hay que mover</Eyebrow>
-    {urg.length === 0 && <Card><div style={{ fontSize: 13, color: C.sub }}>Nada urgente. Todo en orden por hoy.</div></Card>}
-    {urg.map(p => <PedidoCard key={p.id} p={p} x={x} rol="constructora" />)}
-    <Eyebrow>El costo de la espera</Eyebrow>
-    <Card><div style={{ fontSize: 26, fontWeight: 800, color: costoTot ? C.rojo : C.verde }}>{money(costoTot)}</div><div style={{ fontSize: 12, color: C.sub, lineHeight: 1.5, marginTop: 3 }}>Días en rojo × personas en obra × jornal, hasta hoy. Se actualiza solo.</div>
-      <div style={{ fontSize: 12, color: C.verde, marginTop: 8, fontWeight: 700 }}>{evitados} {evitados === 1 ? "pedido resuelto" : "pedidos resueltos"} antes del rojo: espera evitada.</div></Card>
   </div>);
 }
-function CObras(x) {
-  const { D, sem, setObraAbierta } = x;
-  return (<div><Eyebrow>¿Cómo está cada obra?</Eyebrow>
-    {D.obras.map(o => { const ps = D.pedidos.filter(p => p.obra === o.id); const c = (f) => ps.filter(p => p.estado !== "respondido" && sem(p).fase === f).length; return (<Card key={o.id} onClick={() => setObraAbierta(o.id)}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><div style={{ fontSize: 17, fontWeight: 800 }}>{o.nombre}</div><div style={{ fontSize: 12, color: C.sub }}>{o.modelo}</div></div>
-      <div style={{ height: 6, background: C.card2, borderRadius: 4, margin: "10px 0 6px" }}><div style={{ width: o.avance + "%", height: 6, background: C.accent, borderRadius: 4 }} /></div>
-      <div style={{ fontSize: 12, color: C.sub }}>{o.avance}% de avance · {o.personas} personas en obra</div>
-      <div style={{ marginTop: 8 }}>{["rojo", "naranja", "amarillo"].map(f => c(f) > 0 && <Chip key={f} color={FASE_COL[f]}>{c(f)} {f === "rojo" ? "vencido" : f === "naranja" ? "urgente" : "pedir ya"}</Chip>)}{!["rojo", "naranja", "amarillo"].some(f => c(f) > 0) && <Chip color={C.verde}>Sin pedidos en riesgo</Chip>}</div>
+
+// ── selector de obra compartido ────────────────────────────────────────────
+function useObra(D) { const [id, setId] = useState(""); const o = D.obras.find(x => x.id === id) || D.obras[0]; return [o, setId]; }
+function SelObra({ T, D, o, setId }) { return <Sel T={T} value={o ? o.id : ""} onChange={setId}>{D.obras.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</Sel>; }
+const wrap = (children) => <div style={{ padding: "16px 20px 30px", maxWidth: 760, width: "100%", margin: "0 auto" }}>{children}</div>;
+
+// bloque de informes (semanales + de avance + informes cargados a la obra)
+function Informes({ T, D, o }) {
+  const [doc, setDoc] = useState(null); const [ab, setAb] = useState(null);
+  const sem = arr(D.informesSem[o.id]).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const av = arr(D.avance[o.id]).filter(a => a.html).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const inf = arr(o.informes).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  if (doc) return <Documento T={T} doc={doc} cerrar={() => setDoc(null)} />;
+  const vacio = !sem.length && !av.length && !inf.length;
+  return (<div>
+    {vacio && <Vacio T={T}>Todavía no hay informes de esta obra.</Vacio>}
+    {sem.length > 0 && <><Eyebrow T={T}>Informes semanales</Eyebrow>{sem.map(r => { const open = ab === r.id; return (<Card key={r.id} T={T} style={{ padding: "11px 13px", marginBottom: 8, borderLeft: `3px solid ${BRASS}` }}>
+      <div onClick={() => setAb(open ? null : r.id)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}><div style={{ flex: 1 }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>Semana {fFecha(r.desde)} al {fFecha(r.hasta)}</div><div style={{ fontSize: 10.5, color: T.muted, marginTop: 1 }}>{arr(r.hechos).length} trabajos realizados{r.emitido ? " · emitido " + r.emitido : ""}</div></div><span style={{ color: T.muted, fontSize: 11 }}>{open ? "▲" : "▼"}</span></div>
+      {open && <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+        {[["Trabajos realizados", r.hechos], ["Trabajos previstos", r.proxima]].map(([t, l]) => <div key={t}><div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", margin: "4px 0 5px" }}>{t}</div>{arr(l).length ? <ul style={{ margin: "0 0 8px", paddingLeft: 18 }}>{arr(l).map((h, i) => <li key={i} style={{ fontSize: 12.5, lineHeight: 1.55, marginBottom: 3 }}>{h}</li>)}</ul> : <div style={{ fontSize: 12, color: T.muted, fontStyle: "italic" }}>— sin registros —</div>}</div>)}
+        {r.obs && <><div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em", margin: "4px 0 5px" }}>Observaciones</div><div style={{ fontSize: 12.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{r.obs}</div></>}
+      </div>}</Card>); })}</>}
+    {av.length > 0 && <><Eyebrow T={T}>Informes de avance</Eyebrow>{av.map((a, i) => <Card key={a.id || i} T={T} style={{ padding: "11px 13px", marginBottom: 8 }} onClick={() => setDoc({ html: a.html, titulo: "Informe de avance " + fTs(a.ts) })}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}><span style={{ fontSize: 13, fontWeight: 700 }}>Informe de avance · {fTs(a.ts)}</span><span style={{ color: BRASS, fontSize: 12, fontWeight: 800 }}>Ver ›</span></div></Card>)}</>}
+    {inf.length > 0 && <><Eyebrow T={T}>Informes cargados</Eyebrow>{inf.map((x, i) => <Card key={x.id || i} T={T} style={{ padding: "10px 13px", marginBottom: 8 }}><div style={{ fontSize: 13, fontWeight: 700 }}>{x.titulo || x.nombre || "Informe"}</div>{x.ts && <div style={{ fontSize: 10.5, color: T.muted }}>{fTs(x.ts)}</div>}{urlDe(x) && <Archivo T={T} a={x} />}</Card>)}</>}
+  </div>);
+}
+// bitácora: hechos con sus fotos y adjuntos
+function Bitacora({ T, D, o }) {
+  const L = D.bitacora.filter(h => h.obra_id === o.id).sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : (b.ts || 0) - (a.ts || 0)));
+  if (!L.length) return <Vacio T={T}>Todavía no hay hechos en la bitácora de esta obra.</Vacio>;
+  return L.map(h => { const fs = arr(h.fotos).length ? arr(h.fotos) : (h.fotoUrl ? [h.fotoUrl] : []); return (<Card key={h.id} T={T} style={{ marginBottom: 10, overflow: "hidden" }}>
+    <div style={{ padding: "11px 13px" }}><div style={{ fontSize: 10.5, color: T.muted, fontWeight: 700 }}>{fFecha(h.fecha)}</div>{h.titulo && <div style={{ fontSize: 14, fontWeight: 800, marginTop: 2 }}>{h.titulo}</div>}{h.desc && <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55, marginTop: 3, whiteSpace: "pre-wrap" }}>{h.desc}</div>}</div>
+    {fs.length > 0 && <div style={{ padding: "0 8px 8px" }}><Galeria T={T} items={fs} /></div>}
+    {arr(h.adjuntos).length > 0 && <div style={{ padding: "0 13px 11px" }}>{arr(h.adjuntos).map((a, i) => <Archivo key={i} T={T} a={a} />)}</div>}
+  </Card>); });
+}
+function Hilo({ T, p }) {
+  return arr(p.hilo).map((h, i) => <div key={i} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "9px 11px", marginTop: 7 }}>
+    <div style={{ fontSize: 10, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: ".05em" }}>{h.de === "estudio" ? "Estudio" : h.de === "vv" ? "Constructora" : h.de === "cliente" ? "Cliente" : h.de || ""}{h.fecha ? " · " + fFecha(h.fecha) : ""}</div>
+    {h.texto && <div style={{ fontSize: 12.5, lineHeight: 1.55, marginTop: 3, whiteSpace: "pre-wrap" }}>{h.texto}</div>}
+    {arr(h.archivos).map((a, j) => <Archivo key={j} T={T} a={a} />)}
+  </div>);
+}
+function chipPedido(p, T) {
+  const d = p.def && p.def.limite ? Math.round((new Date(p.def.limite + "T12:00:00") - new Date()) / 864e5) : null;
+  if (p.estado === "resuelto") return { t: "Resuelto", c: "#3E9B62" };
+  if (p.estado === "respondido") return { t: "Respondido", c: "#8B5CF6" };
+  if (d != null && d < 0) return { t: `Vencido hace ${-d} d`, c: "#E5604A" };
+  if (d != null) return { t: d === 0 ? "Vence hoy" : `Vence en ${d} d`, c: d <= 7 ? "#E0A04A" : "#3E9B62" };
+  return { t: "Abierto", c: T.sub };
+}
+function ListaPedidos({ T, D, soloEstudio }) {
+  const [f, setF] = useState("abiertos"); const [ab, setAb] = useState(null);
+  let L = D.pedidos.filter(p => !soloEstudio || p.para === "estudio" || (p.def && p.def.tipo));
+  const abiertos = L.filter(p => p.estado !== "resuelto"), hechos = L.filter(p => p.estado === "resuelto");
+  const lista = (f === "abiertos" ? abiertos : hechos).slice().sort((a, b) => ((a.def && a.def.limite) || "9").localeCompare((b.def && b.def.limite) || "9"));
+  const nomObra = (id) => (D.obras.find(o => o.id === id) || {}).nombre || "";
+  return (<div>
+    <div style={{ display: "flex", gap: 7, marginBottom: 12 }}><Pill T={T} a={f === "abiertos"} onClick={() => setF("abiertos")}>Abiertos · {abiertos.length}</Pill><Pill T={T} a={f === "hechos"} onClick={() => setF("hechos")}>Resueltos · {hechos.length}</Pill></div>
+    {lista.length === 0 && <Vacio T={T}>No hay pedidos en esta lista.</Vacio>}
+    {lista.map(p => { const c = chipPedido(p, T), open = ab === p.id; return (<Card key={p.id} T={T} style={{ padding: 13, marginBottom: 9, borderLeft: `4px solid ${c.c}` }}>
+      <div onClick={() => setAb(open ? null : p.id)} style={{ cursor: "pointer" }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 5, flexWrap: "wrap" }}><span style={{ fontSize: 10.5, fontWeight: 800, color: c.c, border: `1px solid ${c.c}`, borderRadius: 5, padding: "2px 7px" }}>{c.t}</span>{p.def && p.def.tipo && <span style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, border: `1px solid ${T.border}`, borderRadius: 5, padding: "2px 7px" }}>{p.def.tipo}</span>}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.asunto}</div>
+        <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3 }}>{nomObra(p.obra_id)}{p.def && p.def.tarea ? " · para " + p.def.tarea : ""}{p.def && p.def.limite ? " · límite " + fFecha(p.def.limite) : ""}</div>
+      </div>
+      {open && <div style={{ marginTop: 8 }}>{p.detalle && <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55 }}>{p.detalle}</div>}<Hilo T={T} p={p} />{arr(p.docs).map((a, i) => <Archivo key={i} T={T} a={a} />)}</div>}
     </Card>); })}
   </div>);
 }
-const SUBS = [["crono", "Cronograma"], ["pedidos", "Pedidos"], ["planos", "Planos"], ["adic", "Adicionales"], ["lib", "Liberación"], ["equipo", "Equipo"]];
-function ObraDetalle(x) {
-  const { D, obraAbierta, setObraAbierta, sem, obraDe, upd, avisar, hoy } = x;
-  const o = obraDe(obraAbierta); const [sub, setSub] = useState("crono");
-  const tareas = D.tareas.filter(t => t.obra === o.id), ps = D.pedidos.filter(p => p.obra === o.id);
-  return (<div>
-    <button onClick={() => setObraAbierta(null)} style={{ background: "none", border: 0, color: C.accent, fontSize: 13, fontWeight: 800, padding: "10px 0", cursor: "pointer" }}>← Obras</button>
-    <div style={{ fontSize: 20, fontWeight: 800 }}>{o.nombre}</div>
-    <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>{o.modelo} · {o.avance}% de avance</div>
-    <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6 }}>{SUBS.map(([k, l]) => (<button key={k} onClick={() => setSub(k)} style={{ flexShrink: 0, background: sub === k ? C.accent : C.card, color: sub === k ? "#0d0d0f" : C.sub, border: `1px solid ${sub === k ? C.accent : C.border}`, borderRadius: 18, padding: "8px 14px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>{l}</button>))}</div>
-    {sub === "crono" && (<div style={{ marginTop: 10 }}>{tareas.sort((a, b) => a.inicio.localeCompare(b.inicio)).map(t => { const pp = ps.filter(p => p.tarea === t.id); const peor = pp.map(p => sem(p)).filter(s => ["rojo", "naranja", "amarillo", "verde"].includes(s.fase)).sort((a, b) => ["rojo", "naranja", "amarillo", "verde"].indexOf(a.fase) - ["rojo", "naranja", "amarillo", "verde"].indexOf(b.fase))[0]; const en = dif(t.inicio, hoy);
-      return (<Card key={t.id} color={peor ? FASE_COL[peor.fase] : C.border}><div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><div style={{ fontSize: 14, fontWeight: 800 }}>{t.nombre}</div><div style={{ fontSize: 11.5, color: C.sub, whiteSpace: "nowrap" }}>{fmtF(t.inicio)} → {fmtF(masDias(t.inicio, t.dur))}</div></div><div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>{en > 0 ? `Arranca en ${en} días` : en > -t.dur ? "En ejecución" : "Terminada"} · {pp.length} {pp.length === 1 ? "pedido" : "pedidos"}</div></Card>); })}</div>)}
-    {sub === "pedidos" && (<div style={{ marginTop: 10 }}>{tareas.sort((a, b) => a.inicio.localeCompare(b.inicio)).map(t => { const pp = ps.filter(p => p.tarea === t.id); if (!pp.length) return null; return (<div key={t.id}><div style={{ fontSize: 12, fontWeight: 800, color: C.sub, margin: "12px 0 6px", textTransform: "uppercase", letterSpacing: ".06em" }}>{t.nombre}</div>{pp.map(p => <PedidoCard key={p.id} p={p} x={x} rol="constructora" mostrarObra={false} />)}</div>); })}</div>)}
-    {sub === "planos" && <PlanosLista x={x} obra={o.id} editable={false} />}
-    {sub === "adic" && <AdicLista x={x} obra={o.id} rol="constructora" />}
-    {sub === "lib" && (<div style={{ marginTop: 10 }}><div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.5, marginBottom: 10 }}>La etapa se libera sola cuando todo lo que necesita está respondido y en obra. La cuadrilla arranca sin esperar.</div>{tareas.sort((a, b) => a.inicio.localeCompare(b.inicio)).map(t => { const pp = ps.filter(p => p.tarea === t.id); const falta = pp.filter(p => p.estado !== "enobra"); const lib = D.liberadas.includes(t.id); const ok = falta.length === 0; return (<Card key={t.id} color={lib ? C.verde : ok ? C.accent : C.border}><div style={{ fontSize: 14, fontWeight: 800 }}>{t.nombre}</div>
-      {lib && <div style={{ fontSize: 12.5, color: C.verde, marginTop: 4, fontWeight: 700 }}>✓ Etapa liberada</div>}
-      {!lib && ok && <Btn color={C.verde} onClick={() => { upd("liberadas", l => [...l, t.id]); avisar("Etapa liberada: la cuadrilla puede arrancar"); }}>Liberar etapa</Btn>}
-      {!lib && !ok && <div style={{ fontSize: 12, color: C.sub, marginTop: 5, lineHeight: 1.55 }}>Falta: {falta.map(p => p.desc).join(" · ")}</div>}</Card>); })}</div>)}
-    {sub === "equipo" && (<div style={{ marginTop: 10 }}>
-      <Card><div style={{ fontSize: 12, color: C.sub, fontWeight: 700 }}>Personas hoy en obra</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 8 }}><button onClick={() => upd("obras", os => os.map(q => q.id === o.id ? { ...q, personas: Math.max(0, q.personas - 1) } : q))} style={{ width: 44, height: 44, borderRadius: 10, background: C.card2, border: `1px solid ${C.border}`, color: C.text, fontSize: 22, cursor: "pointer" }}>−</button><div style={{ fontSize: 30, fontWeight: 800, minWidth: 40, textAlign: "center" }}>{o.personas}</div><button onClick={() => upd("obras", os => os.map(q => q.id === o.id ? { ...q, personas: q.personas + 1 } : q))} style={{ width: 44, height: 44, borderRadius: 10, background: C.card2, border: `1px solid ${C.border}`, color: C.text, fontSize: 22, cursor: "pointer" }}>+</button></div>
-        <div style={{ fontSize: 12, color: C.sub, marginTop: 10 }}>Jornal: {money(o.jornal)} · cada día parado cuesta {money(costoDia(o))}</div></Card>
-      <Eyebrow>Equipo de obra</Eyebrow>{o.equipo.map(e => <Card key={e}><div style={{ fontSize: 13.5, fontWeight: 700 }}>{e}</div></Card>)}</div>)}
+
+// ── PANEL CONSTRUCTORA ─────────────────────────────────────────────────────
+function Constructora(x) {
+  const { tab } = x;
+  if (!x.D.obras.length) return wrap(<Vacio T={x.T}>No hay obras cargadas.</Vacio>);
+  if (tab === "inicio") return <CInicio {...x} />;
+  if (tab === "obras") return <CObras {...x} />;
+  if (tab === "pedidos") return wrap(<><Eyebrow T={x.T}>Pedidos</Eyebrow><ListaPedidos T={x.T} D={x.D} /></>);
+  if (tab === "bitacora") return <CBitacora {...x} />;
+  return <CMas {...x} />;
+}
+function CInicio({ T, cfg, D, setTab }) {
+  const [i, setI] = useState(0);
+  const act = D.obras.filter(o => o.estado === "curso" || !o.estado); const L = act.length ? act : D.obras;
+  useEffect(() => { if (L.length < 2) return; const t = setInterval(() => setI(k => (k + 1) % L.length), 4500); return () => clearInterval(t); }, [L.length]);
+  const o = L[i % L.length];
+  const rgbT = hexARgb(T.bg).join(","), TXR = hexARgb(T.text).join(",");
+  const r0 = arr(D.renders[o.id])[0];
+  const alertas = useMemo(() => { try { return alertasCrono(D.cronoPro, D.obras) || []; } catch { return []; } }, [D]);
+  const abiertos = D.pedidos.filter(p => p.estado !== "resuelto");
+  const novedades = [...D.obras.flatMap(x => arr(D.informesSem[x.id]).map(r => ({ ts: r.ts, t: `Informe semanal · ${x.nombre}` }))), ...D.bitacora.map(h => ({ ts: h.ts, t: `Bitácora · ${(D.obras.find(x => x.id === h.obra_id) || {}).nombre || ""}: ${h.titulo || h.desc || ""}` }))].filter(n => n.ts).sort((a, b) => b.ts - a.ts).slice(0, 5);
+  const col = { retraso: "#E5604A", rojo: "#E5604A", amarillo: "#E0A04A", verde: "#3E9B62" };
+  return (<div style={{ flex: 1, background: T.bg }}>
+    <div style={{ position: "relative", height: "34vh", minHeight: 230, maxHeight: 380, overflow: "hidden", background: T.bg }}>
+      {r0 && r0.url ? <img key={r0.url} src={r0.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: .85, animation: "fadeIn .6s ease" }} /> : <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg,${T.bg},${T.card})` }} />}
+      <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(${rgbT},.15) 0%, rgba(${rgbT},.4) 45%, ${T.bg} 100%)` }} />
+      <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
+        <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${TXR},.55)` }}>{cfg.nombre}</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: T.text, marginTop: 4 }}>{o.nombre}</div>
+      </div>
+      {L.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>{L.map((q, k) => <span key={q.id} style={{ width: 5, height: 5, borderRadius: "50%", background: k === i % L.length ? BRASS : `rgba(${TXR},.35)` }} />)}</div>}
+    </div>
+    <div style={{ padding: "22px 22px 30px", maxWidth: 760, margin: "0 auto" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1 }}>{o.avance || 0}</div><div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div></div>
+      <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Qué hay que mover</div>
+      {alertas.length === 0 && abiertos.length === 0 && <div style={{ fontSize: 12.5, color: T.muted, padding: "6px 0 14px" }}>Nada urgente por ahora.</div>}
+      {alertas.slice(0, 5).map(a => { const c = col[a.fase] || BRASS; return (<div key={a.obraId + a.id} onClick={() => setTab("pedidos")} style={{ background: hexToRgba(c, .12), border: `1px solid ${c}`, borderLeft: `4px solid ${c}`, borderRadius: 10, padding: "11px 13px", marginBottom: 8 }}><div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase", color: c }}>{a.fase === "verde" ? "Hay que pedirlo" : a.fase === "amarillo" ? "Pedilo ya" : a.fase === "rojo" ? "Debe estar hoy" : "Retraso"} · {a.obra}</div><div style={{ fontSize: 13.5, fontWeight: 800, margin: "3px 0 2px" }}>{a.desc}</div><div style={{ fontSize: 12, color: T.sub }}>Para la tarea «{a.tarea}»{a.need ? " · necesaria el " + a.need : ""}</div></div>); })}
+      {abiertos.length > 0 && <div onClick={() => setTab("pedidos")} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid rgba(${TXR},.07)`, cursor: "pointer", fontSize: 12.5 }}><span><b style={{ color: "#D9B27C" }}>{abiertos.length}</b> {abiertos.length === 1 ? "pedido abierto" : "pedidos abiertos"} con el estudio</span><span style={{ color: `rgba(${TXR},.35)` }}>›</span></div>}
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${TXR},.4)`, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 10px" }}>Novedades recientes</div>
+      {novedades.length === 0 && <div style={{ fontSize: 12, color: `rgba(${TXR},.4)` }}>Sin novedades todavía.</div>}
+      {novedades.map((n, k) => <div key={k} style={{ padding: "11px 0", borderBottom: `1px solid rgba(${TXR},.07)`, fontSize: 12.5 }}>{n.t} <span style={{ color: `rgba(${TXR},.4)`, fontSize: 11 }}>· {fTs(n.ts)}</span></div>)}
+    </div>
   </div>);
 }
-function CPedidos(x) {
-  const { D, sem, setD, hoy, avisar } = x;
-  const [f, setF] = useState("todos"); const [nuevo, setNuevo] = useState(false);
-  const [o, setO] = useState(D.obras[0].id), [r, setR] = useState("Losas"), [ti, setTi] = useState("Plano"), [tk, setTk] = useState("");
-  const tareas = D.tareas.filter(t => t.obra === o);
-  const lista = D.pedidos.filter(p => f === "todos" ? true : f === "respondido" ? p.estado === "respondido" : (p.estado !== "respondido" && p.estado !== "enobra" && sem(p).fase === f)).sort((a, b) => sem(a).du - sem(b).du);
-  function crear() { const t = tk || (tareas[0] && tareas[0].id); if (!t) return; const p = { id: nid(), obra: o, tarea: t, tipo: ti, rubro: r, desc: (ti === "Plano" ? "Plano de " : ti === "Material" ? "Materiales de " : "Definición de ") + r.toLowerCase(), estado: "pedido", pedidoFecha: hoy, reclamos: 0 }; setD(prev => ({ ...prev, pedidos: [p, ...prev.pedidos] })); setNuevo(false); avisar("Pedido enviado al estudio"); }
-  return (<div><Eyebrow>¿Qué falta y quién lo debe?</Eyebrow>
-    <Btn onClick={() => setNuevo(n => !n)} style={{ marginTop: 0 }}>{nuevo ? "Cerrar" : "＋ Nuevo pedido"}</Btn>
-    {nuevo && (<Card style={{ marginTop: 10 }}><Sel value={o} onChange={v => { setO(v); setTk(""); }}>{D.obras.map(q => <option key={q.id} value={q.id}>{q.nombre}</option>)}</Sel><Sel value={tk || (tareas[0] && tareas[0].id)} onChange={setTk}>{tareas.map(t => <option key={t.id} value={t.id}>Para: {t.nombre}</option>)}</Sel><Sel value={r} onChange={setR}>{Object.keys(LEAD).map(k => <option key={k}>{k}</option>)}</Sel><Sel value={ti} onChange={setTi}><option>Plano</option><option>Definición</option><option>Material</option></Sel><div style={{ fontSize: 11.5, color: C.sub, marginBottom: 4 }}>Se pide con {LEAD[r]} semanas de anticipación.</div><Btn onClick={crear}>Pedir al estudio</Btn></Card>)}
-    <div style={{ display: "flex", gap: 6, overflowX: "auto", margin: "12px 0 4px" }}>{[["todos", "Todos"], ["rojo", "Vencidos"], ["naranja", "Urgentes"], ["amarillo", "Pedir ya"], ["verde", "A tiempo"], ["respondido", "Respondidos"]].map(([k, l]) => (<button key={k} onClick={() => setF(k)} style={{ flexShrink: 0, background: f === k ? C.accent : C.card, color: f === k ? "#0d0d0f" : C.sub, border: `1px solid ${f === k ? C.accent : C.border}`, borderRadius: 16, padding: "7px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>{l}</button>))}</div>
-    <div style={{ marginTop: 8 }}>{lista.map(p => <PedidoCard key={p.id} p={p} x={x} rol="constructora" />)}{lista.length === 0 && <Card><div style={{ fontSize: 13, color: C.sub }}>No hay pedidos en esta vista.</div></Card>}</div>
-  </div>);
+const SUBS = [["fotos", "Fotos"], ["bitacora", "Bitácora"], ["informes", "Informes"], ["crono", "Cronograma"], ["archivos", "Archivos"], ["adic", "Adicionales"]];
+function CObras({ T, D }) {
+  const [id, setId] = useState(null); const [sub, setSub] = useState("fotos");
+  const o = D.obras.find(x => x.id === id);
+  if (!o) return wrap(<><Eyebrow T={T}>Obras</Eyebrow>{D.obras.map(x => <Card key={x.id} T={T} onClick={() => { setId(x.id); setSub("fotos"); }} style={{ padding: 15, marginBottom: 10, cursor: "pointer" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 19 }}>{x.nombre}</div><div style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{x.avance || 0}%</div></div>
+    <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "10px 0 8px" }}><div style={{ width: (x.avance || 0) + "%", height: 5, background: T.accent, borderRadius: 4 }} /></div>
+    <div style={{ fontSize: 11.5, color: T.sub }}>{arr(x.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === x.id).length} hechos en bitácora · {arr(x.informes).length + arr(D.informesSem[x.id]).length} informes</div></Card>)}</>);
+  const P = D.cronoPro && D.cronoPro.obras && D.cronoPro.obras[o.id];
+  return wrap(<>
+    <button onClick={() => setId(null)} style={{ background: "none", border: 0, color: T.accent, fontSize: 13, fontWeight: 800, padding: "0 0 10px" }}>← Obras</button>
+    <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24 }}>{o.nombre}</div>
+    <div style={{ fontSize: 12, color: T.sub, margin: "3px 0 12px" }}>{o.avance || 0}% de avance{o.sector ? " · " + o.sector : ""}</div>
+    {o.obs && <Card T={T} style={{ padding: 12, marginBottom: 12, fontSize: 12.5, color: T.sub, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{o.obs}</Card>}
+    <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 10 }}>{SUBS.map(([k, l]) => <Pill key={k} T={T} a={sub === k} onClick={() => setSub(k)}>{l}</Pill>)}</div>
+    {sub === "fotos" && <Galeria T={T} items={[...arr(o.fotos), ...arr(o.videos)]} />}
+    {sub === "bitacora" && <Bitacora T={T} D={D} o={o} />}
+    {sub === "informes" && <Informes T={T} D={D} o={o} />}
+    {sub === "crono" && (P && arr(P.tareas).length ? arr(P.tareas).map(t => <Card key={t.id} T={T} style={{ padding: "11px 13px", marginBottom: 7 }}><div style={{ fontSize: 13, fontWeight: 700 }}>{t.name}</div><div style={{ fontSize: 11, color: T.muted }}>{t.dur} días de trabajo{arr(P.pedidos).filter(p => p.task === t.id).length ? " · " + arr(P.pedidos).filter(p => p.task === t.id).map(p => p.desc).join(", ") : ""}</div></Card>) : <Vacio T={T}>Esta obra todavía no tiene cronograma cargado.</Vacio>)}
+    {sub === "archivos" && (arr(o.archivos).length ? arr(o.archivos).map((a, i) => <Archivo key={i} T={T} a={a} />) : <Vacio T={T}>No hay archivos cargados.</Vacio>)}
+    {sub === "adic" && <ListaAdic T={T} D={D} obra={o.id} />}
+  </>);
 }
-function CRegistro(x) {
-  const { D, upd, obraDe, avisar } = x; const [t, setT] = useState(""); const [o, setO] = useState(D.obras[0].id);
-  return (<div><Eyebrow>¿Qué pasó hoy en obra?</Eyebrow>
-    <Card><Sel value={o} onChange={setO}>{D.obras.map(q => <option key={q.id} value={q.id}>{q.nombre}</option>)}</Sel><textarea value={t} onChange={e => setT(e.target.value)} rows={3} placeholder="Escribí lo que pasó hoy…" style={{ width: "100%", background: C.card2, color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, fontSize: 16, resize: "none" }} /><Btn disabled={!t.trim()} onClick={() => { upd("registro", r => [{ id: nid(), obra: o, ts: Date.now(), texto: t.trim() }, ...r]); setT(""); avisar("Guardado en el registro"); }}>Guardar</Btn></Card>
-    {D.registro.slice().sort((a, b) => b.ts - a.ts).map(r => (<Card key={r.id}><div style={{ fontSize: 11.5, color: C.sub, fontWeight: 700 }}>{(obraDe(r.obra) || {}).nombre} · {new Date(r.ts).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div><div style={{ fontSize: 13.5, marginTop: 4, lineHeight: 1.5 }}>{r.texto}</div></Card>))}
-  </div>);
-}
-function CMas(x) {
-  const { D, obraDe } = x; const [ver, setVer] = useState("");
-  const item = (k, l, d) => (<Card key={k} onClick={() => setVer(ver === k ? "" : k)}><div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: 14, fontWeight: 800 }}>{l}</div><div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{d}</div></div><span style={{ color: C.muted }}>{ver === k ? "▾" : "›"}</span></div>
-    {ver === k && k === "modelos" && (<div style={{ marginTop: 10 }}>{Object.entries(LEAD).sort((a, b) => b[1] - a[1]).map(([r, w]) => (<div key={r} style={{ display: "flex", alignItems: "center", gap: 8, margin: "5px 0", fontSize: 12.5 }}><span style={{ flex: "0 0 150px", color: C.sub }}>{r}</span><span style={{ flex: 1, height: 8, background: C.card2, borderRadius: 4 }}><span style={{ display: "block", width: w * 12 + "%", height: 8, background: C.accent, borderRadius: 4 }} /></span><b style={{ width: 52, textAlign: "right" }}>{w} sem</b></div>))}<div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Primera estimación para el modelo de 2 losas, a calibrar con los tiempos reales que registre la app.</div></div>)}
-    {ver === k && k === "informe" && (<div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: C.sub }}>{D.obras.map(o => <div key={o.id} style={{ marginBottom: 8 }}><b style={{ color: C.text }}>{o.nombre}:</b> {o.avance}% de avance. Hito siguiente: {(o.hitos.find(h => !h[2]) || [])[0] || "—"}.</div>)}<div style={{ fontSize: 11, color: C.muted }}>Es el mismo informe que recibe el propietario: sin alertas, costos ni notas internas.</div></div>)}
-    {ver === k && k === "plantillas" && <div style={{ marginTop: 10, fontSize: 12.5, color: C.sub, lineHeight: 1.6 }}>Pedido de definición · Pedido de plano · Pedido de materiales · Acta de liberación de etapa. Una plantilla por tipo, con los campos mínimos.</div>}
-    {ver === k && k === "config" && <div style={{ marginTop: 10, fontSize: 12.5, color: C.sub, lineHeight: 1.6 }}>Jornal por obra, anticipación por rubro, invitaciones por panel y responsables. En la demo se cargan fijos.</div>}
+function ListaAdic({ T, D, obra }) {
+  const L = D.adicionales.filter(a => !obra || a.obra_id === obra).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  if (!L.length) return <Vacio T={T}>No hay adicionales cargados.</Vacio>;
+  return L.map((a, i) => <Card key={a.id || i} T={T} style={{ padding: 13, marginBottom: 9 }}>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><div style={{ fontSize: 13.5, fontWeight: 800 }}>{a.adicionalNro ? "Adicional N° " + a.adicionalNro : "Adicional"}{a.tipoAdicional ? " · " + a.tipoAdicional : ""}</div><div style={{ fontSize: 11, color: T.muted }}>{fFecha(a.fecha)}</div></div>
+    <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{(D.obras.find(o => o.id === a.obra_id) || {}).nombre}</div>
+    {a.requerimiento && <div style={{ fontSize: 12.5, lineHeight: 1.55, marginTop: 6 }}>{a.requerimiento}</div>}
+    {a.descripcionTecnica && <div style={{ fontSize: 12, color: T.sub, lineHeight: 1.55, marginTop: 4 }}>{a.descripcionTecnica}</div>}
+    {a.resolucion && <div style={{ marginTop: 6 }}><Badge c={T.accent} b={T.accentLight}>{a.resolucion}</Badge></div>}
+    {arr(a.docsAdjuntos).map((d, j) => <Archivo key={j} T={T} a={d} />)}
   </Card>);
-  return (<div><Eyebrow>Más</Eyebrow>{item("modelos", "Modelos y biblioteca de pedidos", "Cuánto antes se pide cada rubro")}{item("plantillas", "Plantillas", "Formatos listos para pedir y liberar")}{item("informe", "Informe semanal", "Lo que ve el propietario")}{item("config", "Configuración", "Invitaciones, jornales y plazos")}</div>);
+}
+function CBitacora({ T, D }) { const [o, setId] = useObra(D); return wrap(<><Eyebrow T={T}>Bitácora</Eyebrow><SelObra T={T} D={D} o={o} setId={setId} /><Bitacora T={T} D={D} o={o} /></>); }
+function CMas({ T, D, recargar, st }) {
+  return wrap(<><Eyebrow T={T}>Más</Eyebrow>
+    <Card T={T} style={{ padding: "13px 15px", marginBottom: 8 }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Datos de las obras</div><div style={{ fontSize: 12, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>{D.obras.length} obras · {D.bitacora.length} hechos de bitácora · {D.obras.reduce((a, o) => a + arr(o.fotos).length, 0)} fotos. {st === "cache" ? "Mostrando la última copia guardada en este aparato." : "Actualizado recién."} Esta app solo lee: no modifica nada de las otras aplicaciones.</div><button onClick={recargar} style={{ marginTop: 10, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "10px 16px", fontSize: 12.5, fontWeight: 700 }}>Actualizar ahora</button></Card>
+    <Card T={T} style={{ padding: "13px 15px" }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Adicionales</div><div style={{ marginTop: 10 }}><ListaAdic T={T} D={D} /></div></Card></>);
 }
 
-// ── Planos y adicionales (compartidos) ──────────────────────────────────────
-function PlanosLista({ x, obra, editable }) {
-  const { D, upd, avisar, obraDe, hoy } = x;
-  const pl = D.planos.filter(p => !obra || p.obra === obra);
-  return (<div style={{ marginTop: obra ? 10 : 0 }}>{!obra && <Eyebrow>Versión vigente por rubro</Eyebrow>}
-    {pl.map(p => (<Card key={p.id}><div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><div><div style={{ fontSize: 14, fontWeight: 800 }}>{p.nombre}</div><div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{(obraDe(p.obra) || {}).nombre} · {p.rubro}</div></div><Chip color={C.verde}>v{p.version} vigente</Chip></div>
-      <Archivo n={`${p.nombre.replace(/\s+/g, "_")}_v${p.version}.pdf`} />
-      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>Vigente desde el {fmtF(p.fecha)}{p.historial.length ? ` · reemplaza a v${p.historial[p.historial.length - 1].version}` : ""}</div>
-      {editable && <Btn ghost onClick={() => { upd("planos", ps => ps.map(q => q.id === p.id ? { ...q, version: q.version + 1, fecha: hoy, historial: [...q.historial, { version: q.version, fecha: q.fecha }] } : q)); avisar(`Subiste la v${p.version + 1}: la anterior queda como reemplazada`); }}>Subir nueva versión</Btn>}</Card>))}
-    {pl.length === 0 && <Card><div style={{ fontSize: 13, color: C.sub }}>Todavía no hay planos cargados.</div></Card>}
-  </div>);
-}
-function AdicLista({ x, obra, rol }) {
-  const { D, upd, avisar, obraDe } = x;
-  const L = D.adicionales.filter(a => !obra || a.obra === obra);
-  const set = (id, patch) => upd("adicionales", as => as.map(a => a.id === id ? { ...a, ...patch } : a));
-  return (<div style={{ marginTop: obra ? 10 : 0 }}>{!obra && <Eyebrow>Adicionales para autorizar</Eyebrow>}
-    {L.map(a => { const ok = a.req.every(r => r.ok); const col = a.estado === "autorizado" ? C.verde : a.estado === "rechazado" ? C.rojo : C.amarillo;
-      return (<Card key={a.id} color={col}><div style={{ fontSize: 14, fontWeight: 800 }}>{a.desc}</div><div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>{(obraDe(a.obra) || {}).nombre}{rol === "constructora" ? " · " + money(a.monto) : ""}</div>
-        <div style={{ marginTop: 8 }}>{a.req.map(r => <div key={r.t} style={{ fontSize: 12.5, color: r.ok ? C.verde : C.naranja, margin: "3px 0" }}>{r.ok ? "✓" : "○"} {r.t}</div>)}</div>
-        <div style={{ marginTop: 6 }}><Chip color={col}>{a.estado === "autorizado" ? "Autorizado" : a.estado === "rechazado" ? "Rechazado" : "Pendiente de autorización"}</Chip>{a.estado === "autorizado" && !ok && <Chip color={C.naranja}>Bloqueado hasta cumplir</Chip>}</div>
-        {rol === "estudio" && a.estado === "pendiente" && (<div style={{ display: "flex", gap: 8 }}><Btn color={C.verde} onClick={() => { set(a.id, { estado: "autorizado" }); avisar("Adicional autorizado"); }}>Autorizar</Btn><Btn ghost onClick={() => { set(a.id, { estado: "rechazado" }); avisar("Adicional rechazado"); }}>Rechazar</Btn></div>)}
-        {rol === "constructora" && a.estado === "pendiente" && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>Esperando que el estudio lo autorice.</div>}
-      </Card>); })}
-    {L.length === 0 && <Card><div style={{ fontSize: 13, color: C.sub }}>No hay adicionales.</div></Card>}
-  </div>);
-}
-
-// ── PANEL ESTUDIO ───────────────────────────────────────────────────────────
-function Estudio(x) {
-  const { tab, D } = x;
-  if (tab === "planos") return <PlanosLista x={x} editable />;
-  if (tab === "adicionales") return <AdicLista x={x} rol="estudio" />;
-  return <EPedidos {...x} />;
-}
-function EPedidos(x) {
-  const { D, sem, setPed, upd, obraDe, tareaDe, hoy, avisar } = x;
-  const [ver, setVer] = useState("pend"); const [abierto, setAbierto] = useState(null); const [txt, setTxt] = useState(""); const [arch, setArch] = useState([]);
-  const mios = D.pedidos.filter(p => p.tipo !== "Material" && (p.estado === "pedido" || p.estado === "respondido" || p.estado === "enobra"));
-  const pend = mios.filter(p => p.estado === "pedido").sort((a, b) => sem(a).du - sem(b).du);
-  const hechos = mios.filter(p => p.estado !== "pedido").sort((a, b) => (b.respFecha || "").localeCompare(a.respFecha || ""));
-  function responder(p) {
-    const archivos = arch.length ? arch : [p.tipo === "Plano" ? `Plano_${p.rubro.replace(/\s+/g, "_")}_v1.pdf` : `Definicion_${p.rubro.replace(/\s+/g, "_")}.pdf`];
-    setPed(p.id, { estado: "respondido", respFecha: hoy, nuevo: true, respuesta: { texto: txt.trim() || "Respuesta con documentación adjunta.", archivos } });
-    if (p.tipo === "Plano") upd("planos", ps => { const ex = ps.find(q => q.obra === p.obra && q.rubro === p.rubro); if (ex) return ps.map(q => q === ex ? { ...q, version: q.version + 1, fecha: hoy, historial: [...q.historial, { version: q.version, fecha: q.fecha }] } : q); return [...ps, { id: nid(), obra: p.obra, rubro: p.rubro, nombre: p.desc.replace(/^Plano de /, "Plano "), version: 1, fecha: hoy, historial: [] }]; });
-    setAbierto(null); setTxt(""); setArch([]); avisar("Respuesta enviada a la constructora");
+// ── PANEL ESTUDIO ──────────────────────────────────────────────────────────
+function Estudio({ T, D, tab }) {
+  if (tab === "planos") {
+    const L = D.pedidos.flatMap(p => arr(p.hilo).filter(h => h.de === "estudio").flatMap(h => arr(h.archivos).map(a => ({ a, p, fecha: h.fecha, ts: h.ts })))).sort((x, y) => (y.ts || 0) - (x.ts || 0));
+    return wrap(<><Eyebrow T={T}>Planos y documentos entregados</Eyebrow>{L.length === 0 && <Vacio T={T}>Todavía no hay documentos entregados.</Vacio>}{L.map((x, i) => <Card key={i} T={T} style={{ padding: "11px 13px", marginBottom: 8 }}><div style={{ fontSize: 12, color: T.sub }}>{(D.obras.find(o => o.id === x.p.obra_id) || {}).nombre} · {x.p.asunto} · {fFecha(x.fecha)}</div><Archivo T={T} a={x.a} /></Card>)}</>);
   }
-  const lista = ver === "pend" ? pend : hechos;
-  return (<div><Eyebrow>Lo que te piden, por fecha</Eyebrow>
-    <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>{[["pend", `Para responder · ${pend.length}`], ["hechos", `Respondidos · ${hechos.length}`]].map(([k, l]) => (<button key={k} onClick={() => setVer(k)} style={{ flex: 1, background: ver === k ? C.accent : C.card, color: ver === k ? "#0d0d0f" : C.sub, border: `1px solid ${ver === k ? C.accent : C.border}`, borderRadius: 10, padding: "10px 6px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>{l}</button>))}</div>
-    {lista.map(p => { const s = sem(p), t = tareaDe(p.tarea), col = p.estado === "pedido" ? FASE_COL[s.fase] : C.verde; const debe = t ? masDias(t.inicio, -5) : ""; const dd = debe ? dif(debe, hoy) : 0;
-      return (<Card key={p.id} color={col}><div onClick={() => setAbierto(abierto === p.id ? null : p.id)} style={{ cursor: "pointer" }}>
-        <div style={{ marginBottom: 5 }}><Chip>{p.tipo}</Chip>{p.estado === "pedido" && <Chip color={dd < 0 ? C.rojo : dd <= 7 ? C.naranja : C.verde}>{dd < 0 ? `Vencido hace ${-dd} d` : dd === 0 ? "Vence hoy" : (dd === 1 ? "Falta 1 día" : `Faltan ${dd} días`)}</Chip>}{p.estado !== "pedido" && <Chip color={C.verde}>Respondido {fmtF(p.respFecha)}</Chip>}</div>
-        <div style={{ fontSize: 14.5, fontWeight: 800 }}>{p.desc}</div>
-        <div style={{ fontSize: 12, color: C.sub, marginTop: 4, lineHeight: 1.5 }}>{(obraDe(p.obra) || {}).nombre} · para {t ? t.nombre : "—"}<br />Lo necesita antes del {fmtF(debe)} · pedido el {fmtF(p.pedidoFecha)}</div></div>
-        {p.estado !== "pedido" && p.respuesta && abierto === p.id && <div style={{ marginTop: 8, background: C.card2, borderRadius: 8, padding: 10, fontSize: 13, lineHeight: 1.5 }}>{p.respuesta.texto}{p.respuesta.archivos.map(a => <Archivo key={a} n={a} />)}</div>}
-        {p.estado === "pedido" && abierto === p.id && (<div style={{ marginTop: 10 }}><textarea value={txt} onChange={e => setTxt(e.target.value)} rows={3} placeholder="Escribí la respuesta (opcional)…" style={{ width: "100%", background: C.card2, color: C.text, border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, fontSize: 16, resize: "none" }} />
-          {arch.map(a => <Archivo key={a} n={a} />)}
-          <Btn ghost onClick={() => setArch(a => [...a, `${p.tipo === "Plano" ? "Plano" : "Documento"}_${p.rubro.replace(/\s+/g, "_")}_${a.length + 1}.${a.length % 2 ? "dwg" : "pdf"}`])}>＋ Adjuntar archivo (PDF, CAD, Excel…)</Btn>
-          <Btn color={C.verde} onClick={() => responder(p)}>Responder y enviar</Btn></div>)}
-        {p.estado === "pedido" && abierto !== p.id && <Btn onClick={() => setAbierto(p.id)}>Responder</Btn>}
-      </Card>); })}
-    {lista.length === 0 && <Card><div style={{ fontSize: 13, color: C.sub }}>{ver === "pend" ? "No tenés pedidos para responder. Todo al día." : "Todavía no respondiste ninguno."}</div></Card>}
-  </div>);
+  if (tab === "adicionales") return wrap(<><Eyebrow T={T}>Adicionales de obra</Eyebrow><ListaAdic T={T} D={D} /></>);
+  return wrap(<><Eyebrow T={T}>Lo que te piden</Eyebrow><ListaPedidos T={T} D={D} soloEstudio /></>);
 }
 
-// ── PANEL PROPIETARIO (sin alertas, sin costos, sin nada interno) ───────────
-function Propietario(x) {
-  const { D, tab, upd, avisar, obraDe, hoy } = x;
-  const [oid, setOid] = useState(D.obras[0].id); const o = obraDe(oid);
-  const Selector = () => (<div style={{ display: "flex", gap: 6, margin: "6px 0 4px", overflowX: "auto" }}>{D.obras.map(q => (<button key={q.id} onClick={() => setOid(q.id)} style={{ flexShrink: 0, background: oid === q.id ? C.accent : C.card, color: oid === q.id ? "#0d0d0f" : C.sub, border: `1px solid ${oid === q.id ? C.accent : C.border}`, borderRadius: 16, padding: "8px 13px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>{q.nombre}</button>))}</div>);
-  if (tab === "fotos") return (<div><Eyebrow>Fotos de tu obra</Eyebrow><Selector />{D.fotos.filter(f => f.obra === oid).sort((a, b) => b.fecha.localeCompare(a.fecha)).map(f => (<div key={f.id} style={{ marginTop: 10, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}><div style={{ height: 150, background: `linear-gradient(135deg,${f.g[0]},${f.g[1]})`, display: "flex", alignItems: "flex-end", padding: 12 }}><span style={{ fontSize: 24 }}>📷</span></div><div style={{ background: C.card, padding: "10px 12px" }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>{f.cap}</div><div style={{ fontSize: 11.5, color: C.sub }}>{fmtF(f.fecha)}</div></div></div>))}</div>);
-  if (tab === "elecciones") return (<div><Eyebrow>Elecciones que dependen de vos</Eyebrow><Selector />{D.elecciones.filter(e => e.obra === oid).map(e => (<Card key={e.id} color={e.elegida ? C.verde : C.accent} style={{ marginTop: 10 }}><div style={{ fontSize: 14.5, fontWeight: 800 }}>{e.titulo}</div><div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>Necesitamos tu elección antes del {fmtF(e.limite)}</div>
-    {e.elegida ? <div style={{ fontSize: 13, color: C.verde, fontWeight: 800, marginTop: 8 }}>✓ Elegiste: {e.elegida}</div> : <div style={{ display: "flex", gap: 8 }}>{e.opciones.map(op => <Btn key={op} ghost onClick={() => { upd("elecciones", es => es.map(q => q.id === e.id ? { ...q, elegida: op } : q)); avisar("Gracias, avisamos a la obra"); }}>{op}</Btn>)}</div>}</Card>))}</div>);
-  return (<div><Eyebrow>Tu obra</Eyebrow><Selector />
-    <Card style={{ marginTop: 10 }}><div style={{ fontSize: 13, color: C.sub }}>{o.nombre} · {o.propietario}</div><div style={{ fontSize: 44, fontWeight: 800, color: C.accent, lineHeight: 1.1, marginTop: 4 }}>{o.avance}%</div><div style={{ fontSize: 12, color: C.sub }}>de avance</div><div style={{ height: 8, background: C.card2, borderRadius: 4, marginTop: 10 }}><div style={{ width: o.avance + "%", height: 8, background: C.accent, borderRadius: 4 }} /></div></Card>
-    <Eyebrow>Hitos</Eyebrow>
-    {o.hitos.map(([n, f, hecho], i) => (<div key={n} style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12 }}><div style={{ width: 22, height: 22, borderRadius: "50%", background: hecho ? C.verde : "transparent", border: `2px solid ${hecho ? C.verde : C.muted}`, color: "#0d0d0f", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{hecho ? "✓" : ""}</div><div><div style={{ fontSize: 14, fontWeight: 700, color: hecho ? C.text : C.sub }}>{n}</div><div style={{ fontSize: 11.5, color: C.muted }}>{hecho ? "Completado" : "Previsto"} · {fmtF(f)}</div></div></div>))}
-    <Eyebrow>Informe de la semana</Eyebrow>
-    <Card><div style={{ fontSize: 13, lineHeight: 1.6, color: C.sub }}>Esta semana la obra avanzó según lo previsto. Próximo hito: <b style={{ color: C.text }}>{(o.hitos.find(h => !h[2]) || [])[0] || "—"}</b>. Mirá las fotos nuevas en la solapa Fotos.</div></Card>
-  </div>);
+// ── PANEL PROPIETARIO (sin alertas ni costos internos) ─────────────────────
+function Propietario({ T, D, tab }) {
+  const [o, setId] = useObra(D);
+  if (!o) return wrap(<Vacio T={T}>No hay obras.</Vacio>);
+  const fotos = [...arr(o.fotos), ...D.bitacora.filter(h => h.obra_id === o.id).flatMap(h => arr(h.fotos))];
+  if (tab === "fotos") return wrap(<><Eyebrow T={T}>Fotos de tu obra</Eyebrow><SelObra T={T} D={D} o={o} setId={setId} /><Galeria T={T} items={fotos} /></>);
+  if (tab === "informes") return wrap(<><Eyebrow T={T}>Informes</Eyebrow><SelObra T={T} D={D} o={o} setId={setId} /><Informes T={T} D={D} o={{ ...o, informes: arr(o.informes) }} /></>);
+  const r0 = arr(D.renders[o.id])[0];
+  return wrap(<><Eyebrow T={T}>Tu obra</Eyebrow><SelObra T={T} D={D} o={o} setId={setId} />
+    <Card T={T} style={{ overflow: "hidden" }}>{r0 && r0.url && <img src={r0.url} alt="" style={{ width: "100%", maxHeight: 260, objectFit: "cover", display: "block" }} />}
+      <div style={{ padding: 18 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 22 }}>{o.nombre}</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "14px 0 10px" }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1 }}>{o.avance || 0}</div><div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: T.muted }}>% de avance</div></div>
+        <div style={{ height: 5, background: T.border, borderRadius: 4 }}><div style={{ width: (o.avance || 0) + "%", height: 5, background: T.accent, borderRadius: 4 }} /></div></div></Card>
+    {fotos.length > 0 && <><div style={{ height: 16 }} /><Eyebrow T={T}>Últimas fotos</Eyebrow><Galeria T={T} items={fotos.slice(-6).reverse()} /></>}</>);
 }
