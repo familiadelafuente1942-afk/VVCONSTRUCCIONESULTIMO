@@ -257,6 +257,7 @@ export default function MiAsistente() {
   const [trust, setTrust] = useState(true);
   const [db, setDb] = useState({ obras: [], personal: [], pedidos: [], matpedidos: [], mensajes: [], formularios: [], documentacion: [] });
   const [pagos, setPagos] = useState([]);
+  const [proyectos, setProyectos] = useState([]); const proyRef = useRef([]); const proyWrite = useRef(0); const [proySel, setProySel] = useState(null);
   const [cobros, setCobros] = useState([]);
   const [filtroObraCobro, setFiltroObraCobro] = useState("");
   const [perfil, setPerfil] = useState("");
@@ -364,6 +365,15 @@ export default function MiAsistente() {
       if (!alive) return;
       const parse = (r) => { try { return r?.value ? JSON.parse(r.value) : []; } catch { return []; } };
       setDb({ obras: parse(res[0]), personal: parse(res[1]), pedidos: parse(res[2]), matpedidos: parse(res[3]), mensajes: parse(res[4]), formularios: parse(res[5]), documentacion: parse(res[6]) });
+      if (Date.now() - proyWrite.current > 4000) {
+        const rpy = await storage.get("sebastian_proyectos"); if (!alive) return;
+        let py = parse(rpy); if (!Array.isArray(py)) py = [];
+        const norm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+        const have = new Set(py.map(p => norm(p.nombre))); let ch = false;
+        parse(res[0]).forEach(o => { if (!o || !o.nombre) return; const en = !o.estado || /curso|activ|ejecuc/i.test(o.estado); if (en && !have.has(norm(o.nombre))) { have.add(norm(o.nombre)); py = [...py, { id: "py_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6), nombre: o.nombre, tipo: "obra", estado: o.estado || "En curso", resumen: "", diario: [] }]; ch = true; } });
+        proyRef.current = py; setProyectos(prev => JSON.stringify(py) !== JSON.stringify(prev) ? py : prev);
+        if (ch) { proyWrite.current = Date.now(); storage.set("sebastian_proyectos", JSON.stringify(py)).catch(() => { }); }
+      }
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; const pg = parse(rp); setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
       if (Date.now() - cobrosWrite.current > 4000) { const rcb = await storage.get("sebastian_cobros"); if (!alive) return; const cb = parse(rcb); setCobros(prev => JSON.stringify(cb) !== JSON.stringify(prev) ? cb : prev); }
       if (Date.now() - cierresWrite.current > 4000) { const rci = await storage.get("sebastian_cierres"); if (!alive) return; let ci = {}; try { ci = rci?.value ? JSON.parse(rci.value) : {}; } catch { ci = {}; } if (Array.isArray(ci)) ci = {}; setCierres(prev => JSON.stringify(ci) !== JSON.stringify(prev) ? ci : prev); }
@@ -572,6 +582,19 @@ export default function MiAsistente() {
       try { inputRef.current && inputRef.current.focus(); } catch { }
     }
   }
+  const normP = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  function persistProyectos(next) { proyRef.current = next; setProyectos(next); proyWrite.current = Date.now(); storage.set("sebastian_proyectos", JSON.stringify(next)).catch(() => { }); }
+  function buscarProyecto(nombre, lista) { const q = normP(nombre); if (!q) return null; const L = lista || proyRef.current; return L.find(p => normP(p.nombre) === q) || L.find(p => normP(p.nombre).includes(q) || q.includes(normP(p.nombre))) || null; }
+  function anotarProyecto(a) {
+    const L = proyRef.current.slice(); let p = buscarProyecto(a.proyecto, L); let nuevo = false;
+    if (!p) { p = { id: "py_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6), nombre: String(a.proyecto || "Proyecto").trim(), tipo: "proyecto", estado: "En curso", resumen: "", diario: [] }; L.push(p); nuevo = true; }
+    const q = { ...p, diario: [...(p.diario || [])] };
+    if (a.nota) q.diario.unshift({ id: "n_" + Date.now(), fecha: hoyStr(), ts: Date.now(), texto: String(a.nota).trim() });
+    if (a.estado) q.estado = String(a.estado).trim();
+    if (a.resumen) q.resumen = String(a.resumen).trim();
+    persistProyectos(L.map(x => x.id === p.id ? q : x).concat(L.find(x => x.id === p.id) ? [] : [q]).filter((x, i, arr) => arr.findIndex(y => y.id === x.id) === i));
+    return { p: q, nuevo };
+  }
   function buildSystem() {
     const o = db.obras || [];
     const obrasTxt = o.map(x => `· ${x.nombre}${x.estado ? ` (${x.estado})` : ""}${x.avance != null ? ` — avance ${x.avance}%` : ""} — ${(x.fotos || []).length} fotos, ${(x.videos || []).length} videos, ${(x.planos || []).length} planos, ${(x.informes || []).length} informes`).join("\n") || "(sin obras)";
@@ -633,6 +656,9 @@ ${(() => {
       return `Eligió tomar: ${elegidos.join(", ")}.\nYa tomó hoy: ${tomadosHoy.length ? tomadosHoy.join(", ") : "ninguno todavía"}.${faltan.length ? `\nLe falta hoy: ${faltan.join(", ")}.` : "\n¡Ya tomó todo lo de hoy!"}`;
     })()}
 
+MIS PROYECTOS Y OBRAS EN CURSO (estado de situación; cada uno con su diario de novedades, lo más nuevo primero. Si te pregunta "¿cómo vamos con X?", respondé con esto):
+${(proyectos || []).map(p => `· ${p.nombre} [${p.tipo === "obra" ? "obra" : "proyecto"}] — estado: ${p.estado || "sin estado"}${p.resumen ? `\n   Resumen: ${p.resumen}` : ""}${(p.diario || []).length ? "\n" + (p.diario || []).slice(0, 8).map(n => `   - ${n.fecha}: ${n.texto}`).join("\n") : "\n   (sin novedades cargadas)"}`).join("\n") || "(todavía no hay proyectos cargados)"}
+
 MI AGENDA (eventos/citas):
 ${ag}
 
@@ -654,6 +680,7 @@ Acciones:
 {"tipo":"mandar_mail","para":"Héctor","email":"opcional si lo sabés","asunto":"...","cuerpo":"texto del mail redactado"}
 {"tipo":"como_llego","destino":"dirección o lugar (ej: Aeroparque, o Av. Corrientes 1234 CABA)"}
 {"tipo":"foto_a_obra","obra":"Castores 475","cantidad":12}
+{"tipo":"proyecto_nota","proyecto":"nombre del proyecto u obra (ej: San Telmo)","nota":"qué pasó / qué se habló, redactado claro con fecha si la dijo","estado":"opcional: nuevo estado (ej: En negociación)","resumen":"opcional: resumen general actualizado del proyecto"}
 {"tipo":"crear_obra","nombre":"Nombre de la obra","direccion":"opcional","estado":"En curso","avance":0}
 {"tipo":"recordar","dato":"lo que hay que recordar de Sebastián (ej: tiene 3 hijos; su cumple es el 5/8; prefiere respuestas cortas)"}
 {"tipo":"agendar","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","nota":"opcional"}
@@ -672,6 +699,7 @@ Reglas:
 - "mandar_mail" cuando dice "mandale un mail a X que…" o "escribile un mail a X". Redactá un asunto y un cuerpo profesional y claro; se abre el mail listo para enviar. Si no sabés el email, dejalo vacío (él elige el contacto).
 - "como_llego" cuando Sebastián pregunta cuánto tarda, cuánto hay, cómo llegar o la distancia a un lugar (ej: "¿cuánto tardo hasta el Aeroparque?", "¿cómo llego a Castores 475?", "¿cuánto hay hasta Pilar?"). Poné el destino. El sistema toma su ubicación GPS, estima el tiempo y le deja un botón a Google Maps. Si el destino es una obra, usá su dirección si la sabés.
 - "foto_a_obra" cuando Sebastián sube una o varias fotos por el chat y te dice a qué obra van (ej: "subila a Castores 475", "estas fotos son de Golf 2-93", "mandalas a la obra A 37"). Tomo las últimas fotos que subió y las cargo en las fotos de esa obra (las ve V+V).
+- "proyecto_nota" SIEMPRE que Sebastián te cuente cómo va, cómo fue una reunión, una novedad, una decisión o un pendiente de un proyecto u obra (ej: "hoy tuve una reunión en San Telmo, quedamos en…"). Guardalo en el diario de ESE proyecto (si no existe lo crea). Redactá la nota con los datos concretos (quién, qué se acordó, próximos pasos). Si cambia la situación general, actualizá "estado"/"resumen". Si menciona varios proyectos, usá un bloque para el principal y decile que repita para el otro. Es distinto de "recordar" (que es sobre él) y de "agendar".
 - "crear_obra" cuando dice "cargá una obra nueva", "agregá la obra X", "abrí una obra en tal dirección". Poné el nombre y lo que aclare (dirección, estado).
 - "recordar" SIEMPRE que Sebastián te cuente algo durable sobre él (familia, hijos, gustos, fechas, cómo prefiere que le hables, su equipo, etc.). Guardalo para conocerlo. No lo uses para cosas pasajeras.
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora. Si es un PAGO A REALIZAR en el futuro (ej: "el 10 tengo que pagarle a Juan 50000", "recordame pagar el alquiler el día 5"), usá "tipoAgenda":"pago" con titulo (a quién/qué), fecha y monto — le va a llegar como recordatorio igual que los demás eventos, y aparece marcado como pago en la Agenda.
@@ -1103,6 +1131,11 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       setMsgs(prev => [...prev, { role: "assistant", content: `📸 Subí ${nuevas.length === 1 ? "la foto" : nuevas.length + " fotos"} a la obra ${target.nombre}. Ya las ve V+V en las fotos de esa obra.${limpio ? "\n\n" + limpio : ""}` }]);
       setBusy(false); return;
     }
+    if (accion && accion.tipo === "proyecto_nota") {
+      const r = anotarProyecto(accion);
+      setMsgs(prev => [...prev, { role: "assistant", content: `📌 ${r.nuevo ? "Creé el proyecto y anoté" : "Anotado"} en ${r.p.nombre}${accion.nota ? `: ${accion.nota}` : ""}${accion.estado ? `\nEstado: ${r.p.estado}` : ""}${limpio ? "\n\n" + limpio : ""}\n\nLo ves en la solapa Proyectos.` }]);
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "crear_obra") {
       const o = crearObra(accion);
       setMsgs(prev => [...prev, { role: "assistant", content: `🏗 Obra creada: ${o.nombre}${o.direccion ? ` · ${o.direccion}` : ""} (${o.estado}). Ya la ven V+V y todo el equipo.${limpio ? "\n\n" + limpio : ""}` }]);
@@ -1236,7 +1269,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["resultados", "Resultados"], ["obras", "Obras"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["resultados", "Resultados"], ["obras", "Obras"], ["proyectos", "Proyectos"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
@@ -1244,6 +1277,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "cobros" && <CobrosBody cobros={cobros} obras={db.obras} filtroObra={filtroObraCobro} setFiltroObra={setFiltroObraCobro} exportar={exportarCobrosExcel} borrar={(id) => persistCobros((cobros || []).filter(c => c.id !== id))} onAdd={cargarCobro} onEditarFecha={(id, fecha) => persistCobros((cobros || []).map(c => c.id === id ? { ...c, fecha } : c))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
     {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} exportarPDF={exportarResultadosPDF} />}
+    {vista === "proyectos" && <ProyectosBody proyectos={proyectos} sel={proySel} setSel={setProySel} guardar={persistProyectos} hablar={(n) => { setVista("chat"); setInput(`Sobre ${n}: `); }} />}
     {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: 0, direccion: "" })} borrar={borrarObra} onUnificar={unificarObras} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
@@ -2074,5 +2108,39 @@ function CamarasBody({ camaras, onSave }) {
     </div>}
     {lista.length === 0 && !form && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.7 }}>No hay cámaras todavía.<br />Tocá "＋ Agregar cámara" y pegá la URL del stream.</div>}
     {lista.map(c => <div key={c.id} style={{ position: "relative" }}><CamaraMini cam={c} /><div style={{ position: "absolute", top: 8, right: 10, display: "flex", gap: 6 }}><button onClick={() => setForm(c)} style={{ background: "rgba(0,0,0,.5)", border: "none", color: "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✎</button><button onClick={() => borrar(c.id)} style={{ background: "rgba(0,0,0,.5)", border: "none", color: "#fff", borderRadius: 7, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>✕</button></div></div>)}
+  </div>);
+}
+
+function ProyectosBody({ proyectos, sel, setSel, guardar, hablar }) {
+  const [nuevo, setNuevo] = useState(""); const [nota, setNota] = useState(""); const [edNota, setEdNota] = useState(null);
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box", fontFamily: "inherit" };
+  const p = (proyectos || []).find(x => x.id === sel);
+  const upd = (patch) => guardar(proyectos.map(x => x.id === p.id ? { ...x, ...patch } : x));
+  if (p) return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <button onClick={() => { setSel(null); setEdNota(null); }} style={{ background: "none", border: 0, color: T.accent, fontSize: 13, fontWeight: 800, padding: "0 0 10px", cursor: "pointer" }}>← Proyectos</button>
+    <input value={p.nombre} onChange={e => upd({ nombre: e.target.value })} style={{ ...inp, fontFamily: T.serif, fontSize: 20, fontWeight: 700 }} />
+    <div style={{ display: "flex", gap: 7 }}><input value={p.estado || ""} onChange={e => upd({ estado: e.target.value })} placeholder="Estado (ej: En negociación)" style={{ ...inp, flex: 1 }} />
+      <select value={p.tipo || "proyecto"} onChange={e => upd({ tipo: e.target.value })} style={{ ...inp, width: 118 }}><option value="obra">Obra</option><option value="proyecto">Proyecto</option></select></div>
+    <textarea value={p.resumen || ""} onChange={e => upd({ resumen: e.target.value })} placeholder="Resumen general: dónde estamos parados" rows={3} style={{ ...inp, resize: "vertical" }} />
+    <button onClick={() => hablar(p.nombre)} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "12px", fontSize: 13.5, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>💬 Hablar con Tita sobre este proyecto</button>
+    <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Diario de novedades</div>
+    <textarea value={nota} onChange={e => setNota(e.target.value)} placeholder="Escribí una novedad (o contale a Tita y ella la anota)" rows={2} style={{ ...inp, resize: "vertical" }} />
+    <button onClick={() => { const t = nota.trim(); if (!t) return; upd({ diario: [{ id: "n_" + Date.now(), fecha: hoyStr(), ts: Date.now(), texto: t }, ...(p.diario || [])] }); setNota(""); }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "10px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>Agregar novedad</button>
+    {(p.diario || []).length === 0 && <div style={{ color: T.muted, fontSize: 13, padding: "10px 2px" }}>Todavía no hay novedades.</div>}
+    {(p.diario || []).map(n => (<div key={n.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "11px 13px", marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.muted, marginBottom: 4 }}><span>{n.fecha}</span><span><button onClick={() => setEdNota(edNota === n.id ? null : n.id)} style={{ background: "none", border: 0, color: T.sub, cursor: "pointer", fontSize: 11 }}>{edNota === n.id ? "Listo" : "Editar"}</button> · <button onClick={() => { if (confirm("¿Borrar esta novedad?")) upd({ diario: p.diario.filter(x => x.id !== n.id) }); }} style={{ background: "none", border: 0, color: "#C0392B", cursor: "pointer", fontSize: 11 }}>Borrar</button></span></div>
+      {edNota === n.id ? <textarea value={n.texto} onChange={e => upd({ diario: p.diario.map(x => x.id === n.id ? { ...x, texto: e.target.value } : x) })} rows={3} style={{ ...inp, marginBottom: 0 }} /> : <div style={{ fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", color: T.text }}>{n.texto}</div>}
+    </div>))}
+    <button onClick={() => { if (confirm("¿Borrar el proyecto y todo su diario?")) { guardar(proyectos.filter(x => x.id !== p.id)); setSel(null); } }} style={{ marginTop: 14, background: "none", border: `1px solid ${T.border}`, color: "#C0392B", borderRadius: 9, padding: "9px 14px", fontSize: 12, cursor: "pointer" }}>Borrar proyecto</button>
+  </div>);
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <div style={{ display: "flex", gap: 7, marginBottom: 14 }}><input value={nuevo} onChange={e => setNuevo(e.target.value)} placeholder="Nuevo proyecto (ej: San Telmo)" style={{ ...inp, flex: 1, marginBottom: 0 }} />
+      <button onClick={() => { const n = nuevo.trim(); if (!n) return; const id = "py_" + Date.now(); guardar([...(proyectos || []), { id, nombre: n, tipo: "proyecto", estado: "En curso", resumen: "", diario: [] }]); setNuevo(""); setSel(id); }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋</button></div>
+    {(proyectos || []).length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "30px 18px" }}>Todavía no hay proyectos. Creá uno o contale a Tita cómo va.</div>}
+    {["proyecto", "obra"].map(tp => { const L = (proyectos || []).filter(x => (x.tipo || "proyecto") === tp); if (!L.length) return null; return (<div key={tp}><div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", margin: "6px 0 8px" }}>{tp === "obra" ? "Obras en curso" : "Proyectos"}</div>
+      {L.map(x => { const u = (x.diario || [])[0]; return (<div key={x.id} onClick={() => setSel(x.id)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "13px", marginBottom: 9, cursor: "pointer" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}><div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{x.nombre}</div><div style={{ fontSize: 11, fontWeight: 700, color: T.accent, whiteSpace: "nowrap" }}>{x.estado || ""}</div></div>
+        <div style={{ fontSize: 12.5, color: T.sub, marginTop: 4, lineHeight: 1.5 }}>{u ? <><b>{u.fecha}:</b> {u.texto.length > 140 ? u.texto.slice(0, 140) + "…" : u.texto}</> : (x.resumen || "Sin novedades cargadas.")}</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{(x.diario || []).length} novedades</div></div>); })}</div>); })}
   </div>);
 }
