@@ -1269,7 +1269,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["resultados", "Resultados"], ["obras", "Obras"], ["proyectos", "Proyectos"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["resultados", "Resultados"], ["obras", "Obras"], ["proyectos", "Proyectos"], ["reuniones", "Reuniones"], ["agenda", "Agenda"], ["entrenamiento", "Entrenamiento"], ["suplementos", "Suplementación"], ["contactos", "Contactos"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => setVista(id)} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
@@ -1278,6 +1278,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
     {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} exportarPDF={exportarResultadosPDF} />}
     {vista === "proyectos" && <ProyectosBody proyectos={proyectos} sel={proySel} setSel={setProySel} guardar={persistProyectos} hablar={(n) => { setVista("chat"); setInput(`Sobre ${n}: `); }} />}
+    {vista === "reuniones" && <ReunionesBody proyectos={proyectos} guardarProyectos={persistProyectos} cargarJsPDF={cargarJsPDF} />}
     {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: 0, direccion: "" })} borrar={borrarObra} onUnificar={unificarObras} />}
     {vista === "contactos" && <ContactosBody contactos={contactos} onSave={persistContactos} />}
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
@@ -2142,5 +2143,140 @@ function ProyectosBody({ proyectos, sel, setSel, guardar, hablar }) {
         <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}><div style={{ fontSize: 14.5, fontWeight: 800, color: T.text }}>{x.nombre}</div><div style={{ fontSize: 11, fontWeight: 700, color: T.accent, whiteSpace: "nowrap" }}>{x.estado || ""}</div></div>
         <div style={{ fontSize: 12.5, color: T.sub, marginTop: 4, lineHeight: 1.5 }}>{u ? <><b>{u.fecha}:</b> {u.texto.length > 140 ? u.texto.slice(0, 140) + "…" : u.texto}</> : (x.resumen || "Sin novedades cargadas.")}</div>
         <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4 }}>{(x.diario || []).length} novedades</div></div>); })}</div>); })}
+  </div>);
+}
+
+
+function ReunionesBody({ proyectos, guardarProyectos, cargarJsPDF }) {
+  const [titulo, setTitulo] = useState(""); const [proy, setProy] = useState(""); const [partic, setPartic] = useState("");
+  const [estado, setEstado] = useState("idle"); // idle | grabando | pausa | procesando | listo
+  const [seg, setSeg] = useState(0); const [partes, setPartes] = useState([]); const [texto, setTexto] = useState("");
+  const [msg, setMsg] = useState(""); const [lista, setLista] = useState([]); const [abierta, setAbierta] = useState(null); const [guardarDiario, setGuardarDiario] = useState(true);
+  const rec = useRef({ stream: null, mr: null, timer: null, seg: null, activo: false, idx: 0, mime: "", wake: null, res: {}, pend: 0 });
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box", fontFamily: "inherit" };
+  const btn = (bg, col) => ({ background: bg, color: col || "#fff", border: bg === "none" ? `1px solid ${T.border}` : "none", borderRadius: 11, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" });
+  useEffect(() => { storage.get("sebastian_reuniones").then(r => { try { setLista(r?.value ? JSON.parse(r.value) : []); } catch { } }).catch(() => { }); try { const b = localStorage.getItem("reunion_borrador"); if (b) { const d = JSON.parse(b); if (d.texto) { setTexto(d.texto); setTitulo(d.titulo || ""); setEstado("listo"); setMsg("Recuperé una grabación que quedó sin guardar."); } } } catch { } return () => limpiar(); }, []);
+  const persistLista = (n) => { setLista(n); storage.set("sebastian_reuniones", JSON.stringify(n)).catch(() => { }); };
+  function limpiar() { const r = rec.current; r.activo = false; try { clearInterval(r.timer); clearTimeout(r.seg); } catch { } try { r.mr && r.mr.state !== "inactive" && r.mr.stop(); } catch { } try { r.stream && r.stream.getTracks().forEach(t => t.stop()); } catch { } try { r.wake && r.wake.release(); } catch { } }
+  const fmt = (n) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+  function b64(blob) { return new Promise((ok, no) => { const f = new FileReader(); f.onload = () => ok(String(f.result).split(",")[1]); f.onerror = no; f.readAsDataURL(blob); }); }
+  async function transcribir(i, blob, mime) {
+    const r = rec.current; r.pend++; setPartes(p => { const n = p.slice(); n[i] = { ok: false, blob, mime, txt: "", est: "subiendo" }; return n; });
+    try {
+      const a = await b64(blob);
+      const rp = await fetch("/api/transcribir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audio: a, mime }) });
+      const d = await rp.json().catch(() => ({})); if (!rp.ok) throw new Error(d.error?.message || "Error " + rp.status);
+      r.res[i] = d.text || ""; setPartes(p => { const n = p.slice(); n[i] = { ...n[i], ok: true, txt: d.text || "", est: "ok", blob: null }; return n; });
+      try { localStorage.setItem("reunion_borrador", JSON.stringify({ titulo, texto: Object.keys(r.res).sort((x, y) => x - y).map(k => r.res[k]).join("\n\n") })); } catch { }
+    } catch (e) { setPartes(p => { const n = p.slice(); n[i] = { ...n[i], ok: false, est: "error: " + (e.message || e) }; return n; }); setMsg("Un tramo no se pudo transcribir (" + (e.message || e) + "). Tocá Reintentar abajo."); }
+    r.pend--;
+  }
+  function arrancarTramo() {
+    const r = rec.current; if (!r.activo) return;
+    const mr = new MediaRecorder(r.stream, { mimeType: r.mime || undefined, audioBitsPerSecond: 32000 }); const trozos = []; const i = r.idx++;
+    mr.ondataavailable = e => { if (e.data && e.data.size) trozos.push(e.data); };
+    mr.onstop = () => { const blob = new Blob(trozos, { type: r.mime || "audio/webm" }); if (blob.size > 1500) transcribir(i, blob, r.mime || "audio/webm"); };
+    mr.start(); r.mr = mr; r.seg = setTimeout(() => { try { mr.stop(); } catch { } arrancarTramo(); }, 120000);
+  }
+  async function grabar() {
+    setMsg("");
+    try {
+      if (!navigator.mediaDevices || !window.MediaRecorder) { setMsg("Este navegador no permite grabar. Probá con Safari o Chrome actualizado."); return; }
+      const r = rec.current; r.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      r.mime = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find(m => MediaRecorder.isTypeSupported(m)) || "";
+      r.activo = true; r.idx = 0; r.res = {}; setPartes([]); setTexto(""); setSeg(0); setEstado("grabando");
+      try { r.wake = await navigator.wakeLock.request("screen"); } catch { }
+      r.timer = setInterval(() => setSeg(s => s + 1), 1000); arrancarTramo();
+    } catch (e) { setMsg("No pude usar el micrófono: " + (e.message || e) + ". Revisá el permiso del navegador."); }
+  }
+  function pausar() { const r = rec.current; if (estado === "grabando") { r.activo = false; clearInterval(r.timer); clearTimeout(r.seg); try { r.mr.stop(); } catch { } setEstado("pausa"); } else { r.activo = true; r.timer = setInterval(() => setSeg(s => s + 1), 1000); arrancarTramo(); setEstado("grabando"); } }
+  async function terminar() {
+    const r = rec.current; r.activo = false; clearInterval(r.timer); clearTimeout(r.seg); try { r.mr && r.mr.state !== "inactive" && r.mr.stop(); } catch { } try { r.stream.getTracks().forEach(t => t.stop()); } catch { } try { r.wake && r.wake.release(); } catch { }
+    setEstado("procesando"); setMsg("Transcribiendo lo último…");
+    for (let k = 0; k < 120 && (r.pend > 0 || k < 3); k++) await new Promise(ok => setTimeout(ok, 500));
+    unir(); setEstado("listo"); setMsg("");
+  }
+  function unir() { const r = rec.current; setTexto(Object.keys(r.res).sort((x, y) => x - y).map(k => r.res[k]).join("\n\n").trim()); }
+  async function reintentar() { const r = rec.current; const fall = partes.map((p, i) => ({ p, i })).filter(x => x.p && !x.p.ok && x.p.blob); for (const x of fall) { r.pend++; await transcribir(x.i, x.p.blob, x.p.mime); r.pend--; } await new Promise(ok => setTimeout(ok, 300)); unir(); setMsg(""); }
+  async function subirArchivo(e) { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return; if (f.size > 3e6) { setMsg("Ese audio pesa " + (f.size / 1e6).toFixed(1) + " MB; el límite por archivo es 3 MB. Grabá directo desde acá, que lo parte solo."); return; } setEstado("procesando"); setMsg("Transcribiendo el audio…"); const r = rec.current; r.res = {}; r.pend = 0; await transcribir(0, f, f.type || "audio/mp4"); await new Promise(ok => setTimeout(ok, 300)); unir(); setEstado("listo"); setMsg(""); }
+  async function resumirIA(txt) {
+    const prompt = `Sos el asistente de Sebastián (presidente de V+V Construcciones). Te paso la transcripción de una reunión. Armá el acta. Respondé SOLO un JSON válido, sin texto antes ni después, con esta forma:\n{"titulo":"título corto","resumen":"3 a 5 líneas con lo esencial","temas":[{"tema":"nombre del tema","detalle":"qué se dijo, 1 a 3 oraciones"}],"decisiones":["..."],"pendientes":[{"quien":"responsable o 'sin asignar'","que":"tarea","cuando":"plazo o 'sin fecha'"}],"proximos_pasos":["..."]}\nSolo incluí lo que realmente se dijo; no inventes nombres, números ni fechas. Si algo no se entiende, omitilo. Español rioplatense, claro y directo.\n\nTítulo dado por el usuario: ${titulo || "(sin título)"}\nParticipantes: ${partic || "(no indicados)"}\n\nTRANSCRIPCIÓN:\n"""${txt.slice(0, 90000)}"""`;
+    const out = await callAI([{ role: "user", content: prompt }], "Devolvés únicamente JSON válido.", "", false);
+    const i = out.indexOf("{"), j = out.lastIndexOf("}"); if (i < 0 || j < i) throw new Error(out.slice(0, 200));
+    return JSON.parse(out.slice(i, j + 1));
+  }
+  async function pdfActa(a) {
+    const lib = await cargarJsPDF(); if (!lib) { alert("No pude cargar el generador de PDF (revisá internet)."); return; }
+    const { jsPDF } = lib; const doc = new jsPDF({ unit: "mm", format: "a4" }); const W = 210, M = 16; let y = 0;
+    const nueva = (h) => { if (y + h > 280) { doc.addPage(); y = 18; } };
+    doc.setFillColor(27, 26, 22); doc.rect(0, 0, W, 26, "F"); doc.setTextColor(176, 137, 79); doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.text("ACTA DE REUNIÓN", M, 14);
+    doc.setTextColor(230, 230, 230); doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.text(a.fecha || hoyStr(), W - M, 14, { align: "right" }); doc.text("Mi Asistente · Sebastián", M, 21);
+    y = 38; doc.setTextColor(27, 26, 22); doc.setFont("helvetica", "bold"); doc.setFontSize(16); const tl = doc.splitTextToSize(a.titulo || "Reunión", W - 2 * M); doc.text(tl, M, y); y += tl.length * 7;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(110, 105, 94);
+    if (a.proyecto) { doc.text("Proyecto: " + a.proyecto, M, y); y += 5; } if (a.participantes) { const pl = doc.splitTextToSize("Participantes: " + a.participantes, W - 2 * M); doc.text(pl, M, y); y += pl.length * 5; }
+    y += 2; doc.setDrawColor(176, 137, 79); doc.setLineWidth(0.5); doc.line(M, y, W - M, y); y += 8;
+    const sec = (t) => { nueva(14); doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(161, 124, 62); doc.text(t.toUpperCase(), M, y); y += 6; doc.setTextColor(40, 40, 40); };
+    const par = (t, bold, ind) => { doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setFontSize(10); const l = doc.splitTextToSize(String(t || ""), W - 2 * M - (ind || 0)); l.forEach(x => { nueva(5.2); doc.text(x, M + (ind || 0), y); y += 5; }); };
+    if (a.resumen) { sec("Resumen"); par(a.resumen); y += 4; }
+    if ((a.temas || []).length) { sec("Temas tratados"); a.temas.forEach(t => { par("• " + t.tema, true); if (t.detalle) par(t.detalle, false, 4); y += 1.5; }); y += 3; }
+    if ((a.decisiones || []).length) { sec("Decisiones"); a.decisiones.forEach(d => par("- " + d, false)); y += 3; }
+    if ((a.pendientes || []).length) { sec("Pendientes"); a.pendientes.forEach(p => { par("[  ] " + p.que, true); par("Responsable: " + (p.quien || "sin asignar") + "  ·  Plazo: " + (p.cuando || "sin fecha"), false, 5); y += 1.5; }); y += 3; }
+    if ((a.proximos_pasos || []).length) { sec("Próximos pasos"); a.proximos_pasos.forEach(d => par("> " + d, false)); }
+    const pgs = doc.getNumberOfPages(); for (let i = 1; i <= pgs; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(150); doc.text(`${i}/${pgs}`, W - M, 290, { align: "right" }); }
+    doc.save(`Acta_${String(a.titulo || "reunion").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_").slice(0, 40)}_${(a.fecha || hoyStr()).replace(/\//g, "-")}.pdf`);
+  }
+  async function generar() {
+    if (!texto.trim()) { setMsg("No hay texto para resumir."); return; }
+    setEstado("procesando"); setMsg("Armando el acta…");
+    try {
+      const a = await resumirIA(texto); const pn = (proyectos || []).find(p => p.id === proy);
+      const reg = { id: "r_" + Date.now(), fecha: hoyStr(), ts: Date.now(), titulo: titulo.trim() || a.titulo || "Reunión", participantes: partic.trim(), proyecto: pn ? pn.nombre : "", proyectoId: proy || "", transcripcion: texto, acta: a };
+      persistLista([reg, ...lista]);
+      if (pn && guardarDiario) { const nota = `Reunión "${reg.titulo}": ${a.resumen || ""}${(a.decisiones || []).length ? "\nDecisiones: " + a.decisiones.join("; ") : ""}${(a.pendientes || []).length ? "\nPendientes: " + a.pendientes.map(p => `${p.que} (${p.quien || "sin asignar"}, ${p.cuando || "sin fecha"})`).join("; ") : ""}`; guardarProyectos((proyectos || []).map(p => p.id === pn.id ? { ...p, diario: [{ id: "n_" + Date.now(), fecha: hoyStr(), ts: Date.now(), texto: nota }, ...(p.diario || [])] } : p)); }
+      try { localStorage.removeItem("reunion_borrador"); } catch { }
+      await pdfActa({ ...a, titulo: reg.titulo, fecha: reg.fecha, proyecto: reg.proyecto, participantes: reg.participantes });
+      setEstado("idle"); setTexto(""); setTitulo(""); setPartic(""); setPartes([]); setAbierta(reg.id); setMsg("Listo: bajé el PDF y quedó guardada la reunión abajo.");
+    } catch (e) { setEstado("listo"); setMsg("No pude armar el acta: " + (e.message || e) + ". La transcripción sigue acá, probá de nuevo."); }
+  }
+  const hayError = partes.some(p => p && !p.ok && p.blob);
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    {(estado === "idle" || estado === "grabando" || estado === "pausa") && <>
+      <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título (ej: Reunión San Telmo)" style={inp} disabled={estado !== "idle"} />
+      <select value={proy} onChange={e => setProy(e.target.value)} style={inp} disabled={estado !== "idle"}><option value="">Proyecto (opcional)</option>{(proyectos || []).map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select>
+      <input value={partic} onChange={e => setPartic(e.target.value)} placeholder="Participantes (opcional)" style={inp} disabled={estado !== "idle"} />
+    </>}
+    {estado === "idle" && <><button onClick={grabar} style={{ ...btn("#C0392B"), width: "100%", fontSize: 16, padding: "16px" }}>🎙 Empezar a grabar</button>
+      <label style={{ display: "block", textAlign: "center", color: T.sub, fontSize: 12.5, marginTop: 10, cursor: "pointer" }}>o <u>subir un audio corto</u> (hasta 3 MB)<input type="file" accept="audio/*" onChange={subirArchivo} style={{ display: "none" }} /></label>
+      <div style={{ fontSize: 11.5, color: T.muted, marginTop: 10, lineHeight: 1.5 }}>Dejá la pantalla prendida y la app abierta mientras grabás. Se transcribe cada 2 minutos; cuando terminás, se arma el acta en PDF.</div></>}
+    {(estado === "grabando" || estado === "pausa") && <div style={{ textAlign: "center", padding: "10px 0" }}>
+      <div style={{ fontFamily: T.serif, fontSize: 46, fontWeight: 700, color: estado === "grabando" ? "#C0392B" : T.sub }}>{estado === "grabando" ? "● " : "❚❚ "}{fmt(seg)}</div>
+      <div style={{ fontSize: 12, color: T.sub, marginBottom: 14 }}>{estado === "grabando" ? "Grabando… no cierres la app" : "En pausa"}</div>
+      <div style={{ display: "flex", gap: 8 }}><button onClick={pausar} style={{ ...btn("none", T.text), flex: 1 }}>{estado === "grabando" ? "Pausar" : "Seguir"}</button><button onClick={terminar} style={{ ...btn(T.accent), flex: 1.4 }}>Terminar y armar acta</button></div>
+    </div>}
+    {estado === "procesando" && <div style={{ textAlign: "center", color: T.sub, padding: "30px 10px", fontSize: 14 }}>⏳ {msg || "Procesando…"}</div>}
+    {estado === "listo" && <>
+      <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Transcripción (podés corregirla)</div>
+      <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={10} style={{ ...inp, resize: "vertical", fontSize: 14, lineHeight: 1.5 }} />
+      <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Título de la reunión" style={inp} />
+      <select value={proy} onChange={e => setProy(e.target.value)} style={inp}><option value="">Proyecto (opcional)</option>{(proyectos || []).map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select>
+      <input value={partic} onChange={e => setPartic(e.target.value)} placeholder="Participantes (opcional)" style={inp} />
+      {proy && <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: T.sub, marginBottom: 10 }}><input type="checkbox" checked={guardarDiario} onChange={e => setGuardarDiario(e.target.checked)} />Anotar el resumen en el diario del proyecto</label>}
+      {hayError && <button onClick={reintentar} style={{ ...btn("none", "#C0392B"), width: "100%", marginBottom: 8 }}>Reintentar tramos que fallaron</button>}
+      <div style={{ display: "flex", gap: 8 }}><button onClick={() => { if (confirm("¿Descartar esta grabación?")) { setEstado("idle"); setTexto(""); setPartes([]); try { localStorage.removeItem("reunion_borrador"); } catch { } } }} style={{ ...btn("none", T.sub), flex: 1 }}>Descartar</button><button onClick={generar} style={{ ...btn(T.accent), flex: 2 }}>📄 Generar acta en PDF</button></div>
+    </>}
+    {msg && estado !== "procesando" && <div style={{ fontSize: 12.5, color: T.sub, margin: "10px 0", lineHeight: 1.5 }}>{msg}</div>}
+    {estado === "idle" && lista.length > 0 && <div style={{ marginTop: 20 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Reuniones anteriores</div>
+      {lista.map(r => <div key={r.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 11, padding: "12px 13px", marginBottom: 9 }}>
+        <div onClick={() => setAbierta(abierta === r.id ? null : r.id)} style={{ cursor: "pointer" }}><div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><div style={{ fontSize: 14, fontWeight: 800 }}>{r.titulo}</div><div style={{ fontSize: 11, color: T.muted }}>{r.fecha}</div></div>
+          <div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{r.proyecto ? r.proyecto + " · " : ""}{r.acta && r.acta.resumen ? r.acta.resumen.slice(0, 110) + (r.acta.resumen.length > 110 ? "…" : "") : ""}</div></div>
+        {abierta === r.id && <div style={{ marginTop: 10 }}>
+          {r.acta && r.acta.resumen && <div style={{ fontSize: 13, lineHeight: 1.55, marginBottom: 8 }}>{r.acta.resumen}</div>}
+          {((r.acta && r.acta.temas) || []).map((t, i) => <div key={i} style={{ fontSize: 12.5, marginBottom: 4 }}><b>{t.tema}:</b> {t.detalle}</div>)}
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}><button onClick={() => pdfActa({ ...r.acta, titulo: r.titulo, fecha: r.fecha, proyecto: r.proyecto, participantes: r.participantes })} style={{ ...btn(T.accent), flex: 1, padding: "10px" }}>📄 PDF</button>
+            <button onClick={() => { if (confirm("¿Borrar esta reunión?")) persistLista(lista.filter(x => x.id !== r.id)); }} style={{ ...btn("none", "#C0392B"), padding: "10px 14px" }}>Borrar</button></div>
+        </div>}
+      </div>)}
+    </div>}
   </div>);
 }
