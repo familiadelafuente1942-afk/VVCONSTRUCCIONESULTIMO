@@ -136,7 +136,8 @@ export default function NexoObraApp() {
   useEffect(() => { try { perfil ? localStorage.setItem(KEYP, perfil) : localStorage.removeItem(KEYP); } catch { } }, [perfil]);
   const cfg = useMemo(() => ({ ...DEFAULT_CFG, ...(R && R.cliente_cfg ? R.cliente_cfg : {}) }), [R]);
   const T = useMemo(() => theme(cfg), [cfg]);
-  const obras = useMemo(() => arr(R && R.vv_obras).filter(o => o && !o.privada), [R]);
+  // La base puede traer obras repetidas (error viejo ya corregido): se deja una sola por obra, la última.
+  const obras = useMemo(() => { const m = new Map(); arr(R && R.vv_obras).forEach(o => { if (o && o.id != null) m.set(o.id, o); }); return [...m.values()].filter(o => !o.privada); }, [R]);
   const [bitacoraV, setBitacora, rstB] = useOverlay("bitacora", arr(R && R.vv_bitacora));
   const [avanceV, setAvance, rstA] = useOverlay("avance", (R && R.vv_avance) || {});
   const [cronoV, setCronoPro, rstC] = useOverlay("cronopro", (R && R.vv_cronopro) || { obras: {} });
@@ -193,7 +194,7 @@ function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar }) {
         {cfg.logo ? <img src={cfg.logo} alt="" style={{ maxHeight: 60, maxWidth: 240, objectFit: "contain" }} /> : <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 28, color: T.text }}>NEXO Obra</div>}
       </div>
       <div style={{ textAlign: "center", fontSize: 12.5, color: T.sub, lineHeight: 1.55, margin: "10px 0 20px" }}>Una sola app, tres paneles. Cada invitación abre solo el suyo.</div>
-      {R ? <div style={{ fontSize: 11.5, color: T.accent, background: T.accentLight, borderRadius: 10, padding: "9px 12px", marginBottom: 16, textAlign: "center", fontWeight: 700 }}>{arr(R.vv_obras).filter(o => !o.privada).length} obras reales cargadas{st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura</div>
+      {R ? <div style={{ fontSize: 11.5, color: T.accent, background: T.accentLight, borderRadius: 10, padding: "9px 12px", marginBottom: 16, textAlign: "center", fontWeight: 700 }}>{new Set(arr(R.vv_obras).filter(o => o && !o.privada).map(o => o.id)).size} obras reales cargadas{st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura</div>
         : <div style={{ fontSize: 12, color: T.sub, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 16, textAlign: "center" }}>{st === "error" ? "No pude traer los datos todavía." : "Cargando tus obras…"} <button onClick={recargar} style={{ background: "none", border: 0, color: BRASS, fontWeight: 800, fontSize: 12 }}>Reintentar</button></div>}
       {Object.entries(PANELES).map(([k, p]) => {
         const mio = perfil === k, bloq = perfil && !mio;
