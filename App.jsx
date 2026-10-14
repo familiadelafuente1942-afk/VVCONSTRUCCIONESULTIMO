@@ -11021,5 +11021,5 @@ function App() {
   );
 }
 
-export { ModelosObraView };
+export { ModelosObraView, ChatIA };
 export default App;

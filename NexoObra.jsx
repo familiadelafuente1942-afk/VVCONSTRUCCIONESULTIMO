@@ -4,13 +4,13 @@
 import React, { useState, useEffect, useMemo } from "react";
 import CronoPro from "./CronoPro.jsx";
 import { AvanceView, BitacoraView, AjustesScreen } from "./Cliente.jsx";
-import { ModelosObraView } from "./App.jsx";
+import { ModelosObraView, ChatIA } from "./App.jsx";
 import ClientePropietarioApp from "./ClientePropietario.jsx";
 
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
 const BRASS = "#B0894F";
-const KEYS = ["vv_obras", "vv_bitacora", "vv_avance", "vv_informes_sem", "vv_renders", "vv_pedidos", "vv_matpedidos", "vv_cronopro", "vv_adicionales", "vv_certif_sem", "cliente_cfg", "vv_cfg", "vv_modelos_obra", "vv_gestion", "cliente_envios_prop"];
+const KEYS = ["vv_obras", "vv_bitacora", "vv_avance", "vv_informes_sem", "vv_renders", "vv_pedidos", "vv_matpedidos", "vv_cronopro", "vv_adicionales", "vv_certif_sem", "cliente_cfg", "vv_cfg", "vv_modelos_obra", "vv_gestion", "cliente_envios_prop", "vv_personal", "vv_tareas", "vv_mensajes", "vv_formularios", "vv_documentacion", "vv_auditoria", "vv_definiciones", "vv_docrecepcion", "vv_drone", "vv_minutas"];
 const CACHE = "nexoobra_real_v2";
 
 // ── tema: idéntico al de la app Cliente ─────────────────────────────────────
@@ -152,6 +152,7 @@ export default function NexoObraApp() {
   const restaurar = () => { rstB(); rstA(); rstC(); rstE(); rstM(); rstS(); rstF(); rstR(); };
   const D = useMemo(() => ({
     setBitacora, setAvance, setCronoPro, setEnvios, restaurar, envios: enviosV, apiKey: ((R && R.vv_cfg) || {}).apiKey, certif: (R && R.vv_certif_sem) || {}, modelosObra: arr(modelosV), setModelosObra, asig: asigV || {}, setAsig, gestion: (R && R.vv_gestion) || null,
+    ia: { personal: arr(R && R.vv_personal), tareas: arr(R && R.vv_tareas), mensajes: arr(R && R.vv_mensajes), formularios: arr(R && R.vv_formularios), documentacion: arr(R && R.vv_documentacion), auditoria: arr(R && R.vv_auditoria), definiciones: arr(R && R.vv_definiciones), docrecepcion: arr(R && R.vv_docrecepcion), dronevuelos: arr(R && R.vv_drone), minutas: arr(R && R.vv_minutas), gestion: (R && R.vv_gestion) || {} },
     obras, bitacora: arr(bitacoraV), avance: avanceV || {}, informesSem: (R && R.vv_informes_sem) || {}, renders: rendersV || {}, setRenders,
     pedidos: arr(R && R.vv_pedidos), matpedidos: arr(R && R.vv_matpedidos), cronoPro: cronoV || { obras: {} }, adicionales: arr(R && R.vv_adicionales),
   }), [R, obras, bitacoraV, avanceV, cronoV, enviosV, modelosV, asigV, rendersV]);
@@ -339,7 +340,20 @@ function Constructora(x) {
   if (tab === "pedidos") return wrap(<><Eyebrow T={x.T}>Pedidos</Eyebrow><ListaPedidos T={x.T} D={x.D} /></>);
   return <CMas {...x} />;
 }
+function IAOverlay({ T, cfg, D, cerrar }) {
+  const [msgs, setMsgs] = useState([]);
+  const noop = () => {};
+  const db = useMemo(() => ({ ...D.ia, obras: D.obras, bitacora: D.bitacora, avance: D.avance, pedidos: D.pedidos, matpedidos: D.matpedidos, adicionales: D.adicionales, modelosObra: D.modelosObra, certConformidad: [], lics: [], archivosGen: [], materiales: [], subcontratos: [], proveedores: [], herramientas: [], setPedidos: noop, setPersonal: noop, setMensajes: noop, setGestion: noop, setTareas: noop, setMatpedidos: noop }), [D]);
+  return (<div style={{ position: "fixed", inset: 0, zIndex: 450, background: T.bg, display: "flex", flexDirection: "column" }}>
+    <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 10, padding: `calc(10px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 14px 10px`, borderBottom: `1px solid ${T.border}`, background: T.card }}>
+      <button onClick={cerrar} style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, fontWeight: 700 }}>← Volver</button>
+      <span style={{ fontSize: 13, fontWeight: 800, color: T.text }}>NEXO IA</span><span style={{ fontSize: 11.5, color: T.muted }}>Responde con lo que está cargado</span>
+    </div>
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", maxWidth: 900, width: "100%", margin: "0 auto" }}><ChatIA db={db} cfg={{ ...cfg, apiKey: D.apiKey }} apiKey={D.apiKey} msgs={msgs} setMsgs={setMsgs} /></div>
+  </div>);
+}
 function CInicio({ T, cfg, D, setTab, setObraSel }) {
+  const [iaAbierta, setIaAbierta] = useState(false);
   const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
   const abiertos = D.pedidos.filter(p => p.estado !== "resuelto");
   const dias = (p) => p.def && p.def.limite ? Math.round((new Date(p.def.limite + "T12:00:00") - hoy) / 864e5) : null;
@@ -365,6 +379,8 @@ function CInicio({ T, cfg, D, setTab, setObraSel }) {
             <div style={{ fontSize: 11.5, color: T.muted }}>{arr(o.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === o.id).length} en bitácora</div>
           </div></div>); })}
       </div>
+      <div onClick={() => setIaAbierta(true)} style={{ display: "flex", alignItems: "center", gap: 12, background: T.card, border: `1px solid ${BRASS}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", marginBottom: 16 }}><div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Estrella s={30} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 800, color: "#E9B949", letterSpacing: ".04em" }}>NEXO IA</div><div style={{ fontSize: 12.5, color: T.sub, marginTop: 2 }}>Preguntale a la app por cualquier obra. Responde con lo que está cargado.</div></div><span style={{ color: T.muted, fontSize: 18 }}>›</span></div>
+      {iaAbierta && <IAOverlay T={T} cfg={cfg} D={D} cerrar={() => setIaAbierta(false)} />}
       <div style={{ height: 1, background: `rgba(${rgb},.1)`, marginBottom: 6 }} />
       {abiertos.length > 0 && <div onClick={() => setTab("pedidos")} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid rgba(${rgb},.07)`, cursor: "pointer", fontSize: 12.5 }}><span><b style={{ color: "#D9B27C" }}>{abiertos.length}</b> {abiertos.length === 1 ? "pedido abierto" : "pedidos abiertos"} con el estudio</span><span style={{ color: `rgba(${rgb},.35)` }}>›</span></div>}
       <div style={{ fontSize: 10.5, fontWeight: 800, color: `rgba(${rgb},.4)`, textTransform: "uppercase", letterSpacing: ".05em", margin: "18px 0 10px" }}>Novedades recientes</div>
