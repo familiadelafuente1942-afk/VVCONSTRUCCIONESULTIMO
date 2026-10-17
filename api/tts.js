@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     return;
   }
   const apiKey = process.env.ELEVENLABS_API_KEY;
-  const voiceId = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
+  let voiceId = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
   if (!apiKey) {
     res.status(500).json({ error: "Falta ELEVENLABS_API_KEY en Vercel." });
     return;
@@ -22,6 +22,9 @@ export default async function handler(req, res) {
     res.status(400).json({ error: "Cuerpo inválido" });
     return;
   }
+
+  // Opcional: una app puede pedir una voz propia (solo letras y números, es un ID público de ElevenLabs).
+  if (typeof body?.voz === "string" && /^[A-Za-z0-9]{15,30}$/.test(body.voz)) voiceId = body.voz;
 
   const texto = String(body?.texto || "").slice(0, 900);
   if (!texto) {

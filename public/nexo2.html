@@ -3030,13 +3030,28 @@ async function iaAsk(q){
       else{ans.text=(e&&e.text)||iaLocal(q);ans.note='No se pudo completar la respuesta con IA.'}}}
   ans.pending=false;ans.t=Date.now();IA_BUSY=false;IA_CTL=null;iaGuardar();iaRender();if(S.vozAuto)hablar(ans.text);
 }
-function hablar(t){try{const s=window.speechSynthesis;if(!s){toast('Este navegador no puede leer en voz alta');return}s.cancel();const u=new SpeechSynthesisUtterance(t.replace(/\*\*/g,'').replace(/^- /gm,''));u.lang='es-AR';u.rate=1.03;const v=s.getVoices().find(v=>/^es/.test(v.lang));if(v)u.voice=v;s.speak(u)}catch(e){toast('No se pudo leer en voz alta')}}
+const VOZ_ID='5VgdpNxWgMIhe51dTjhI';let VOZ_AUDIO=null;
+function vozParar(){try{if(VOZ_AUDIO){VOZ_AUDIO.pause();VOZ_AUDIO=null}}catch(e){}try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}}
+function vozSonando(){return !!(VOZ_AUDIO&&!VOZ_AUDIO.paused)||!!(window.speechSynthesis&&speechSynthesis.speaking)}
+function hablarNavegador(t){try{const s=window.speechSynthesis;if(!s){toast('Este navegador no puede leer en voz alta');return}s.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='es-AR';u.rate=1.03;const v=s.getVoices().find(v=>/^es/.test(v.lang));if(v)u.voice=v;s.speak(u)}catch(e){toast('No se pudo leer en voz alta')}}
+async function hablarViejo(t){
+  vozParar();
+  let txt=String(t||'').replace(/\*\*/g,'').replace(/^\s*[-•]\s+/gm,'').replace(/\s+/g,' ').trim();if(!txt)return;
+  if(txt.length>880){const cut=txt.slice(0,880);const k=Math.max(cut.lastIndexOf('. '),cut.lastIndexOf('? '),cut.lastIndexOf('! '));txt=k>300?cut.slice(0,k+1):cut}
+  if(!/^https?:/.test(location.protocol)){hablarNavegador(txt);return}
+  try{
+    const r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:txt,voz:VOZ_ID})});
+    if(!r.ok)throw new Error('tts '+r.status);
+    const blob=await r.blob();const url=URL.createObjectURL(blob);const au=new Audio(url);VOZ_AUDIO=au;au.onended=()=>{URL.revokeObjectURL(url);if(VOZ_AUDIO===au)VOZ_AUDIO=null};
+    await au.play();
+  }catch(e){hablarNavegador(txt)}
+}
 function copiar(t){const ok=()=>toast('Mensaje copiado');try{navigator.clipboard.writeText(t).then(ok,()=>copiarFallback(t))}catch(e){copiarFallback(t)}}
 function copiarFallback(t){const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy')}catch(e){}ta.remove();toast(ok?'Mensaje copiado':'Seleccioná el texto y copialo a mano')}
 let REC=null;
 Object.assign(A,{
   iaCopy:ds=>{const m=S.chat[+ds.i];if(m)copiar(m.text)},
-  iaSpeak:ds=>{const m=S.chat[+ds.i];if(!m)return;if(window.speechSynthesis&&speechSynthesis.speaking){speechSynthesis.cancel();return}hablar(m.text)},
+  iaSpeak:ds=>{const m=S.chat[+ds.i];if(!m)return;if(vozSonando()){vozParar();return}hablar(m.text)},
   iaMic:()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast('Este navegador no permite hablarle por voz. Probá desde Chrome o Safari.');return}
     if(REC){REC.stop();return}REC=new SR();REC.lang='es-AR';REC.interimResults=true;REC.continuous=false;S.escuchando=true;iaRender();
     REC.onresult=e=>{const t=[...e.results].map(r=>r[0].transcript).join(' ');const q=$('#ia-q');if(q)q.value=t;if(e.results[e.results.length-1].isFinal){S.vozAuto=true;REC.stop();iaAsk(t)}};
@@ -3068,14 +3083,26 @@ function paraHablar(t){return t.replace(/\*\*/g,'').replace(/^\s*[-•]\s*/gm,''
   .replace(/(\d{1,2}) (ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\b/g,(m,dd,mm)=>dd+' de '+MESV[mm]).replace(/N° ?/g,'número ').replace(/(\d+) ?%/g,'$1 por ciento').replace(/m²/g,' metros cuadrados')
   .replace(/\brev ([A-Z])\b/g,'revisión $1').replace(/\$ ?([\d.,]+) M\b/g,'$1 millones de pesos').replace(/\$ ?([\d.]+)/g,(m,n)=>n+' pesos').replace(/\bPB\b/g,'planta baja').replace(/\bPA\b/g,'planta alta').replace(/(\d) sem(?![\wáéíóú])/g,'$1 semanas').replace(/(\d) d(?![\wáéíóú])/g,'$1 días')
   .replace(/\.{2,}/g,'.').replace(/\s+/g,' ').trim()}
-hablar=function(t){try{const s=window.speechSynthesis;if(!s){toast('Este navegador no puede leer en voz alta');return}s.cancel();const v=mejorVoz();
+const hablarNav=function(t){try{const s=window.speechSynthesis;if(!s){toast('Este navegador no puede leer en voz alta');return}s.cancel();const v=mejorVoz();
   const frases=paraHablar(t).match(/[^.!?;:]+[.!?;:]?/g)||[];let grupo='',partes=[];frases.forEach(f=>{if((grupo+f).length>180){partes.push(grupo);grupo=f}else grupo+=f});if(grupo.trim())partes.push(grupo);
   partes.forEach((p,i)=>{const u=new SpeechSynthesisUtterance(p.trim());u.lang=v?v.lang:'es-AR';if(v)u.voice=v;u.rate=/natural|neural|online|siri/i.test(v?.name||'')?1.05:0.98;u.pitch=1;s.speak(u)})}catch(e){toast('No se pudo leer en voz alta')}};
 try{speechSynthesis.onvoiceschanged=()=>{}}catch(e){}
 A.iaVoz=()=>{const vs=vocesEs().sort((a,b)=>puntajeVoz(b)-puntajeVoz(a)),cur=mejorVoz();
-  openSheet(`<span class="eyebrow">Nexo IA</span><h2>Elegí la voz</h2><p class="muted small">Son las voces en español que tiene tu dispositivo. Las que dicen "Natural", "Online" o "Google" suenan mucho más humanas. En Windows, Microsoft Edge trae voces naturales argentinas (Elena y Tomás); en iPhone y Mac se descargan voces mejoradas desde Ajustes › Accesibilidad › Contenido leído.</p><div class="hlist">${vs.map(v=>`<div class="hrow"><button class="hopen" data-act="iaVozSel" data-n="${esc(v.name)}"><b>${cur&&cur.name===v.name?'✓ ':''}${esc(v.name)}</b><span class="muted small">${esc(v.lang)}${puntajeVoz(v)>=45?' · natural':''}</span></button><button class="btn sm ghost" data-act="iaVozProbar" data-n="${esc(v.name)}">Probar</button></div>`).join('')||'<p class="muted">Este dispositivo no tiene voces en español instaladas.</p>'}</div>`,'Voz de Nexo IA')};
+  openSheet(`<span class="eyebrow">Nexo IA</span><h2>Elegí la voz</h2><p class="muted small">Nexo habla con su voz de ElevenLabs. Estas voces del dispositivo se usan solo si no hay conexión con ese servicio. Son las voces en español que tiene tu dispositivo. Las que dicen "Natural", "Online" o "Google" suenan mucho más humanas. En Windows, Microsoft Edge trae voces naturales argentinas (Elena y Tomás); en iPhone y Mac se descargan voces mejoradas desde Ajustes › Accesibilidad › Contenido leído.</p><div class="hlist">${vs.map(v=>`<div class="hrow"><button class="hopen" data-act="iaVozSel" data-n="${esc(v.name)}"><b>${cur&&cur.name===v.name?'✓ ':''}${esc(v.name)}</b><span class="muted small">${esc(v.lang)}${puntajeVoz(v)>=45?' · natural':''}</span></button><button class="btn sm ghost" data-act="iaVozProbar" data-n="${esc(v.name)}">Probar</button></div>`).join('')||'<p class="muted">Este dispositivo no tiene voces en español instaladas.</p>'}</div>`,'Voz de Nexo IA')};
 A.iaVozSel=ds=>{try{localStorage.setItem('nexo_voz',ds.n)}catch(e){}toast('Voz elegida');keepScroll(A.iaVoz);hablar('Listo, voy a hablarte con esta voz. ¿En qué te ayudo?')};
 A.iaVozProbar=ds=>{const v=vocesEs().find(x=>x.name===ds.n);try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('Hola, soy Nexo. Esta semana la obra avanzó con las instalaciones y la entrega sigue prevista para abril.');if(v){u.voice=v;u.lang=v.lang}speechSynthesis.speak(u)}catch(e){}};
+hablar=async function(t){
+  vozParar();
+  let txt=paraHablar(String(t||''));if(!txt)return;
+  if(txt.length>880){const cut=txt.slice(0,880);const k=Math.max(cut.lastIndexOf('. '),cut.lastIndexOf('? '),cut.lastIndexOf('! '));txt=k>300?cut.slice(0,k+1):cut}
+  if(!/^https?:/.test(location.protocol)){hablarNav(t);return}
+  try{
+    const r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:txt,voz:VOZ_ID})});
+    if(!r.ok)throw new Error('tts '+r.status);
+    const url=URL.createObjectURL(await r.blob());const au=new Audio(url);VOZ_AUDIO=au;au.onended=()=>{URL.revokeObjectURL(url);if(VOZ_AUDIO===au)VOZ_AUDIO=null};
+    await au.play();
+  }catch(e){if(e&&e.name==='NotAllowedError'){toast('Tocá "Escuchar" para activar el audio')}else hablarNav(t)}
+};
 const _vIA10=vIA;vIA=function(){return _vIA10().replace('<button class="btn sm ghost" data-act="iaHist"','<button class="btn sm ghost" data-act="iaVoz" aria-label="Elegir la voz">Voz</button><button class="btn sm ghost" data-act="iaHist"')};
 
 /* ================= v10 · logo nuevo en vector y portada ================= */
