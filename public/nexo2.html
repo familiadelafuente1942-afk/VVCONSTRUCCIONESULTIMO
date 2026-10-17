@@ -1311,7 +1311,6 @@ let DIRCOD='DIR-5930';
 const CODF={prop:['clave','Propietario'],jefe:['codJefe','Jefatura de Obra'],aud:['codAud','Auditoría']};
 function codInit(o){if(!o.clave)o.clave=codGenerar(o,'prop');if(!o.codJefe)o.codJefe=codGenerar(o,'jefe');if(!o.codAud)o.codAud=codGenerar(o,'aud');if(o.audNombre===undefined)o.audNombre=''}
 OBRAS.forEach(o=>{const d=COD_DEF[o.id]||[];o.codJefe=d[0]||'';o.codAud=d[1]||'';o.audNombre='';});
-OBRAS.forEach(o=>{if(!o.codJefe||!o.codAud||!o.clave)codInit(o)});
 try{const old=JSON.parse(localStorage.getItem(CLAVES_LS)||'{}');OBRAS.forEach(o=>{if(old[o.id])o.clave=old[o.id]});
  const g=JSON.parse(localStorage.getItem(COD_LS)||'{}');if(g.dir)DIRCOD=g.dir;OBRAS.forEach(o=>{const x=(g.obras||{})[o.id];if(x){if(x.clave)o.clave=x.clave;if(x.j)o.codJefe=x.j;if(x.a)o.codAud=x.a;if(x.jn)o.jefe=x.jn;if(x.an!==undefined)o.audNombre=x.an}})}catch(e){}
 const codGuardarLS=()=>{try{localStorage.setItem(COD_LS,JSON.stringify({dir:DIRCOD,obras:Object.fromEntries(OBRAS.map(o=>[o.id,{clave:o.clave,j:o.codJefe,a:o.codAud,jn:o.jefe,an:o.audNombre}]))}))}catch(e){}};
@@ -1331,6 +1330,7 @@ const guardarCod=(r,id)=>{try{const l=guardadas(r);if(!l.includes(id))l.push(id)
 const olvidarCod=(r,id)=>{try{localStorage.setItem(LS_OBRAS[r],JSON.stringify(guardadas(r).filter(x=>x!==id)))}catch(e){}};
 const propGuardadas=()=>guardadas('prop');
 const normClave=t=>String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+OBRAS.forEach(o=>{if(!o.codJefe||!o.codAud||!o.clave)codInit(o)});
 const obrasOrg=()=>OBRAS.filter(o=>o.constructora===ORG);
 function misObras(){const u=S.u;if(!u)return[];if(u.rol==='direccion')return obrasOrg();if(u.rol==='auditor')return obrasOrg().filter(o=>S.audObras.includes(o.id));if(u.rol==='jefe')return obrasOrg().filter(o=>S.mias.includes(o.id));if(u.rol==='estudio')return OBRAS.filter(o=>o.estudio===u.name&&o.constructora===S.cons&&o.invitados.estudio==='aceptada');return[COBRA()]}
 const puedeVer=o=>misObras().includes(o);
