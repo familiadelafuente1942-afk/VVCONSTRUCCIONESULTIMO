@@ -1286,7 +1286,7 @@ const certFecha=c=>['losa','fund','pileta'].includes(c.task.rubro)?c.task.end-2*
 const certEstado=c=>c.estado==='certificada'?'certificada':certFecha(c)-TODAY<30*DAY?'pendiente':'programada';
 /* ===== configuración de las obras guardada en este aparato: modelo, m², inicio, jefatura, jornal, obras nuevas ===== */
 const CFG_LS='nexo2_obras_cfg';
-const CFG_KEYS=['nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','estudio','jornal','dot','late','margen','edits','invitados'];
+const CFG_KEYS=['audNombre','nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','estudio','jornal','dot','late','margen','edits','invitados'];
 const cfgPick=o=>{const r={};CFG_KEYS.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r};
 const CFG_ORIG=new Set(OBRAS.map(o=>o.id));
 const CFG_DEF=Object.fromEntries(OBRAS.map(o=>[o.id,JSON.parse(JSON.stringify(cfgPick(o)))]));
@@ -1343,18 +1343,32 @@ const ROL_TXT={direccion:'Dirección',jefe:'Jefatura de Obra',auditor:'Auditorí
 const S={u:null,step:'panels',tab:'inicio',obra:null,otab:'crono',filtro:'activos',tipoF:'Todas',obraF:'todas',chat:[],ver:'obra',capas:{hitos:true,pedidos:false,base:false,audit:false},audTab:'sup',regTipo:'Novedad',regF:'Todos',gal:0,regFoto:null,mias:[],audObras:[],sel:[],cons:ORG,drive:{obra:null,cat:null}};
 const ROLE=()=>S.u?.rol;
 /* claves de propietario: cada obra tiene la suya; el estudio o la constructora se la entrega al propietario */
-const CLAVES={o1:'LP132-4827',o2:'CA475-3159',o3:'GO293-7062',o4:'LP246-9514',o5:'SB88-2406'};
-OBRAS.forEach(o=>{o.clave=CLAVES[o.id]});
+OBRAS.forEach(o=>{o.clave=''});
 /* ===== códigos de acceso: Dirección (uno), y por obra: Jefatura, Auditoría y Propietario ===== */
 const COD_LS='nexo2_codigos',CLAVES_LS='nexo2_claves';
-const COD_DEF={o1:['J-LP132-3516','A-LP132-8240'],o2:['J-CA475-6127','A-CA475-4093'],o3:['J-GO293-9051','A-GO293-2674'],o4:['J-LP246-1738','A-LP246-5809'],o5:['J-SB88-7342','A-SB88-3961']};
-let DIRCOD='DIR-5930';
+let DIRCOD='';
 const CODF={prop:['clave','Propietario'],jefe:['codJefe','Jefatura de Obra'],aud:['codAud','Auditoría']};
 function codInit(o){if(!o.clave)o.clave=codGenerar(o,'prop');if(!o.codJefe)o.codJefe=codGenerar(o,'jefe');if(!o.codAud)o.codAud=codGenerar(o,'aud');if(o.audNombre===undefined)o.audNombre=''}
-OBRAS.forEach(o=>{const d=COD_DEF[o.id]||[];o.codJefe=d[0]||'';o.codAud=d[1]||'';o.audNombre='';});
-try{const old=JSON.parse(localStorage.getItem(CLAVES_LS)||'{}');OBRAS.forEach(o=>{if(old[o.id])o.clave=old[o.id]});
- const g=JSON.parse(localStorage.getItem(COD_LS)||'{}');if(g.dir)DIRCOD=g.dir;OBRAS.forEach(o=>{const x=(g.obras||{})[o.id];if(x){if(x.clave)o.clave=x.clave;if(x.j)o.codJefe=x.j;if(x.a)o.codAud=x.a;if(x.jn)o.jefe=x.jn;if(x.an!==undefined)o.audNombre=x.an}})}catch(e){}
-const codGuardarLS=()=>{try{localStorage.setItem(COD_LS,JSON.stringify({dir:DIRCOD,obras:Object.fromEntries(OBRAS.map(o=>[o.id,{clave:o.clave,j:o.codJefe,a:o.codAud,jn:o.jefe,an:o.audNombre}]))}))}catch(e){}};
+OBRAS.forEach(o=>{o.codJefe='';o.codAud='';o.audNombre=''});
+const codLegacy=()=>{try{const g=JSON.parse(localStorage.getItem(COD_LS)||'null');return g&&g.obras?g:null}catch(e){return null}};
+const codData=()=>({dir:DIRCOD,obras:Object.fromEntries(OBRAS.map(o=>[o.id,{clave:o.clave,j:o.codJefe,a:o.codAud}]))});
+function codAplicar(g){if(g.dir)DIRCOD=g.dir;OBRAS.forEach(o=>{const x=(g.obras||{})[o.id];if(x){o.clave=x.clave||'';o.codJefe=x.j||'';o.codAud=x.a||''}})}
+const dirAuthGet=()=>{try{return S.dirAuth||localStorage.getItem('nexo2_dirauth')||''}catch(e){return S.dirAuth||''}};
+async function codApi(body){const r=await fetch('/api/nexo2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error(r.status);return r.json()}
+async function codCargar(){
+  try{
+    const d=await codApi({op:'cods_get',dir:dirAuthGet()});
+    codAplicar(d);
+    const lg=codLegacy();
+    if(d.seed&&lg){codAplicar(lg);await codApi({op:'cods_set',dir:dirAuthGet(),data:codData()})}
+    try{localStorage.removeItem(COD_LS);localStorage.removeItem(CLAVES_LS)}catch(e){}
+    let nuevo=false;OBRAS.forEach(o=>{if(!o.codJefe||!o.codAud||!o.clave){codInit(o);nuevo=true}});
+    if(nuevo)await codApi({op:'cods_set',dir:dirAuthGet(),data:codData()});
+    draw();
+  }catch(e){toast('No se pudieron cargar los códigos. Revisá la conexión.')}
+}
+let _codQ=Promise.resolve();
+const codGuardarLS=()=>{_codQ=_codQ.then(async()=>{try{const r=await codApi({op:'cods_set',dir:dirAuthGet(),data:codData()});if(r.ok&&DIRCOD){S.dirAuth=DIRCOD;try{localStorage.setItem('nexo2_dirauth',DIRCOD)}catch(e){}}else if(r.error)toast(r.error)}catch(e){toast('No se pudo guardar el código. Revisá la conexión.')}})};
 const codsOtros=(ex,r)=>[normClave(DIRCOD),...OBRAS.flatMap(o=>Object.keys(CODF).filter(k=>!(o===ex&&k===r)).map(k=>normClave(o[CODF[k][0]])))].filter(Boolean);
 function codGenerar(o,r){const ini=o.nombre.split(/\s+/).map(w=>/^[A-Za-zÁÉÍÓÚÑ]/.test(w)?w[0]:'').join('').toUpperCase().replace(/Á/g,'A').replace(/É/g,'E').replace(/Í/g,'I').replace(/Ó/g,'O').replace(/Ú/g,'U');const num=(o.nombre.match(/\d+/)||[''])[0];const pre={prop:'',jefe:'J-',aud:'A-'}[r];let c;do{c=pre+ini+num+'-'+String(1000+Math.floor(Math.random()*9000))}while(codsOtros(o,r).includes(normClave(c)));return c}
 function codRow(o,r,edit){
@@ -1363,7 +1377,7 @@ function codRow(o,r,edit){
   ${r!=='prop'?`<input id="cn-${r}-${o.id}" value="${esc(nom||'')}" placeholder="${r==='jefe'?'Nombre del jefe de obra':'Nombre del auditor'}" ${edit?'':'readonly'}>`:''}
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="ck-${r}-${o.id}" value="${esc(o[CODF[r][0]])}" ${edit?'':'readonly'} autocapitalize="characters" spellcheck="false" style="flex:1;min-width:150px;letter-spacing:.08em;text-transform:uppercase;font-weight:600">
   ${edit?`<button class="btn sm gold" data-act="guardarClave" data-o="${o.id}" data-r="${r}">Guardar</button><button class="btn sm" data-act="genClave" data-o="${o.id}" data-r="${r}">Generar</button>`:''}<button class="btn sm" data-act="copiarClave" data-o="${o.id}" data-r="${r}">Copiar</button><button class="btn sm" data-act="copiarMsg" data-o="${o.id}" data-r="${r}">Copiar mensaje</button></div></div>`}
-const buscarCodigo=(r,txt)=>{const n=normClave(txt),f=CODF[r][0];return(r==='prop'?OBRAS:obrasOrg()).find(o=>o[f]&&normClave(o[f])===n)};
+
 const COBRA=()=>OBRAS.find(o=>o.id===S.cobra)||OBRAS[0];
 const LS_OBRAS={prop:'nexo2_obras_prop',jefe:'nexo2_obras_jefe',aud:'nexo2_obras_aud'};
 const guardadas=r=>{try{return(JSON.parse(localStorage.getItem(LS_OBRAS[r]))||[]).filter(id=>OBRAS.some(o=>o.id===id))}catch(e){return[]}};
@@ -1371,7 +1385,6 @@ const guardarCod=(r,id)=>{try{const l=guardadas(r);if(!l.includes(id))l.push(id)
 const olvidarCod=(r,id)=>{try{localStorage.setItem(LS_OBRAS[r],JSON.stringify(guardadas(r).filter(x=>x!==id)))}catch(e){}};
 const propGuardadas=()=>guardadas('prop');
 const normClave=t=>String(t||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-OBRAS.forEach(o=>{if(!o.codJefe||!o.codAud||!o.clave)codInit(o)});
 const obrasOrg=()=>OBRAS.filter(o=>o.constructora===ORG);
 function misObras(){const u=S.u;if(!u)return[];if(u.rol==='direccion')return obrasOrg();if(u.rol==='auditor')return obrasOrg().filter(o=>S.audObras.includes(o.id));if(u.rol==='jefe')return obrasOrg().filter(o=>S.mias.includes(o.id));if(u.rol==='estudio')return OBRAS.filter(o=>o.estudio===u.name&&o.constructora===S.cons&&o.invitados.estudio==='aceptada');return[COBRA()]}
 const puedeVer=o=>misObras().includes(o);
@@ -2409,7 +2422,12 @@ const SUBMIT={
     notify('jefe',o,`${AUD_TIPO[a.tipo].corto} ${a.num}: ${a.resultado.toLowerCase()}`,{t:'aud',id:a.id});
     AF=null;toast(`${a.num} guardado: le llega a la jefatura de obra`);draw();sheetAudVer(a.id)},
   modelo:f=>{readMO();const o=findO(f.dataset.o);cambiarModelo(o,MO);MO=null;closeSheet();notify('jefe',o,`La Dirección actualizó el modelo de ${o.nombre}: ${modeloTxt(o)}`,null);toast(`Modelo aplicado: ${modeloTxt(o)}`);draw()},
-  claveIn:f=>{const r=S.codRol||'prop',txt=val('cl-clave');if(r==='dir'){if(normClave(txt)&&normClave(txt)===normClave(DIRCOD))login('dir');else toast('Código incorrecto');return}const o=buscarCodigo(r,txt);if(!o){toast(r==='prop'?'Esa clave no es válida. Revisala con tu estudio.':'Ese código no es válido. Pedíselo a la Dirección.');return}guardarCod(r,o.id);if(r==='prop'){S.cobra=o.id;S.chat=[];login('cli')}else if(r==='jefe'){S.mias=guardadas('jefe');login('jefe')}else{S.audObras=guardadas('aud');login('aud')}},
+  claveIn:async f=>{const r=S.codRol||'prop',txt=val('cl-clave');if(!normClave(txt)){toast('Escribí el código');return}
+    let d;try{d=await codApi({op:'login',rol:r,codigo:txt})}catch(e){toast('Sin conexión con el servidor. Probá de nuevo.');return}
+    if(!d.ok){toast(d.error||(r==='dir'?'Código incorrecto':r==='prop'?'Esa clave no es válida. Revisala con tu estudio.':'Ese código no es válido. Pedíselo a la Dirección.'));return}
+    if(r==='dir'){S.dirAuth=txt.toUpperCase().replace(/\s+/g,'');try{localStorage.setItem('nexo2_dirauth',S.dirAuth)}catch(e){}login('dir');return}
+    const o=OBRAS.find(x=>x.id===d.obra);if(!o){toast('Esa obra todavía no está disponible en este dispositivo. Probá de nuevo en unos segundos.');return}
+    guardarCod(r,o.id);if(r==='prop'){S.cobra=o.id;S.chat=[];login('cli')}else if(r==='jefe'){S.mias=guardadas('jefe');login('jefe')}else{S.audObras=guardadas('aud');login('aud')}},
   invitar:f=>{const o=findO(f.dataset.o),rol=f.dataset.r;const mail=val('in-mail');if(!mail||!/@/.test(mail)){toast('Poné un mail válido');return}INVITES.push({id:'iv'+(++uid),obra:o,rol,para:rol==='estudio'?o.estudio:'Propietario',email:mail,estado:'pendiente',fecha:TODAY});o.invitados[rol]='pendiente';if(rol==='estudio')notify('estudio',o,`Invitación a ${o.nombre}: aceptala desde Inicio`,null);closeSheet();toast(`Invitación enviada a ${mail}`);draw()},
   crearObra:()=>{readNO();let nid;do{nid='o'+(++uid)}while(OBRAS.some(x=>x.id===nid));const o=buildObra({...NO,id:nid,constructora:ORG,nuevo:true,invitados:{estudio:'',propietario:''}});codInit(o);codGuardarLS();OBRAS.push(o);closeSheet();S.obra=o.id;S.tab='obra';S.otab='equipo';toast(`Se generaron ${o.tasks.length} tareas con sus tarjetas. Ahora invitá al estudio y al propietario.`);draw()}
 };
@@ -3312,7 +3330,7 @@ const SES_LS='nexo2_sesion';
 function sesGuardar(){try{const u=S.u;if(!u)return;const d={r:u.id};if(u.id==='cli')d.cobra=S.cobra;if(u.id==='est')d.cons=S.cons;localStorage.setItem(SES_LS,JSON.stringify(d))}catch(e){}}
 function sesBorrar(){try{localStorage.removeItem(SES_LS)}catch(e){}}
 const _loginSes=login;
-login=function(id){_loginSes(id);sesGuardar()};
+login=function(id){_loginSes(id);sesGuardar();if(id==='dir')codCargar()};
 function sesRestaurar(){
   try{
     const d=JSON.parse(localStorage.getItem(SES_LS)||'null');if(!d||S.u)return false;
@@ -3331,7 +3349,7 @@ try{if(!localStorage.getItem('nexo2_reset_v2')){['nexo2_obras_prop','nexo2_obras
 /* ================= sincronización compartida (Supabase): lo que cambia la dirección se guarda en la nube y llega a todos los dispositivos ================= */
 {
 const API='/api/nexo2';
-const MAP={nexo2_obras_cfg:'cfg',nexo2_codigos:'codigos'};
+const MAP={nexo2_obras_cfg:'cfg'};
 const VACIO='{"mod":{},"nuevas":[]}';
 const rawSet=Storage.prototype.setItem,rawGet=Storage.prototype.getItem;
 const lget=k=>{try{return rawGet.call(localStorage,k)}catch(e){return null}};
