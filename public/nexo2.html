@@ -3384,7 +3384,6 @@ function tabAvances(o){
   const items=((a&&a.items)||[]).slice().sort((p,q)=>q.fecha-p.fecha);
   const w=puedeAv(o);
   return `${w?`<button class="btn gold" data-act="avNuevo" data-o="${o.id}">+ Cargar avance con fotos</button>`:''}
-  ${ROLE()==='direccion'?`<button class="btn sm ghost" data-act="avImport" style="align-self:flex-start">Traer las fotos de la app anterior</button>`:''}
   ${a&&a.error?`<div class="infobox">${esc(a.error)}</div>`:''}
   <div class="list">${!a||!a.items?'<p class="muted">Cargando avances…</p>':items.map(x=>avItem(x,o,w)).join('')||`<p class="muted">Todavía no hay avances cargados.${w?' Subí el primero con fotos de lo que se hizo.':''}</p>`}</div>`;
 }
