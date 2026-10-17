@@ -914,6 +914,29 @@ main:has(.login) .note{font-size:11.5px;padding:6px 10px}
 .ia-img img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
 .ia-img span{font-size:11px;padding:5px 7px;color:var(--muted);line-height:1.25}
 .ia-pdf{margin-top:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ================= v14 · logo de Nexo animado en la portada ================= */
+.lg-mark svg{overflow:visible}
+.mk-orbit,.mk-core{transform-box:view-box;transform-origin:center}
+.mk-orbit{animation:mk-spin 40s linear infinite}
+.mk-core{animation:mk-pulse 3.4s ease-in-out infinite}
+.mk-orbit circle[fill="url(#gn)"]{animation:mk-tw 3.2s ease-in-out infinite}
+.mk-orbit circle:nth-last-child(3n+1){animation-delay:-.8s}.mk-orbit circle:nth-last-child(3n+2){animation-delay:-1.7s}.mk-orbit circle:nth-last-child(3n){animation-delay:-2.5s}
+@keyframes mk-spin{to{transform:rotate(360deg)}}
+@keyframes mk-pulse{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.16);opacity:1}}
+@keyframes mk-tw{0%,100%{opacity:1}50%{opacity:.4}}
+@media (prefers-reduced-motion:no-preference){
+  .login .lg-word{animation:lg-word .55s cubic-bezier(.2,.8,.2,1) both}
+  .login .lg-tag{animation:lg-fade .5s ease-out .3s both}
+  .login .frase,.login .frase-rule{animation:lg-fade .6s ease-out .55s both}
+  .login .lg-mark{animation:lg-mark 1.4s cubic-bezier(.2,.8,.2,1) .6s both}
+  .panels .pcard{animation:lg-up .6s ease-out both}
+  .panels .pcard:nth-child(1){animation-delay:.95s}.panels .pcard:nth-child(2){animation-delay:1.05s}.panels .pcard:nth-child(3){animation-delay:1.15s}
+}
+@keyframes lg-word{from{opacity:0;letter-spacing:.95em;filter:blur(6px)}to{opacity:1;letter-spacing:.42em;filter:blur(0)}}
+@keyframes lg-fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes lg-mark{from{opacity:0;transform:scale(.55);filter:blur(10px)}to{opacity:1;transform:none;filter:blur(0)}}
+@keyframes lg-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 </style>
 <div class="app">
   <header class="top">
@@ -3104,9 +3127,15 @@ hablar=async function(t){
 const _vIA10=vIA;vIA=function(){return _vIA10().replace('<button class="btn sm ghost" data-act="iaHist"','<button class="btn sm ghost" data-act="iaVoz" aria-label="Elegir la voz">Voz</button><button class="btn sm ghost" data-act="iaHist"')};
 
 /* ================= v10 · logo nuevo en vector y portada ================= */
+function markAnim(){
+  const m=MARK,i=m.indexOf('</defs>')+7,head=m.slice(0,i),body=m.slice(i,m.lastIndexOf('</svg>'));
+  const gi=body.indexOf('<g filter="url(#gw)">'),ge=body.indexOf('</g>',gi)+4;
+  const outer=body.slice(0,gi),core=body.slice(gi,ge),rest=body.slice(ge),r25=rest.indexOf('/>')+2;
+  return head+`<g class="mk-orbit">${outer}${rest.slice(r25)}</g><g class="mk-core">${core}${rest.slice(0,r25)}</g></svg>`;
+}
 function vLogin(){
   const P2=[['constructora','Constructora','Ejecución y anticipación','Dirección, jefatura de obra y auditoría: cada rol con su acceso.'],['estudio','Estudio de arquitectura','Proyecto y dirección de obra','Tarjetas de cada etapa, documentación centralizada y adicionales.'],['cliente','Propietario','Seguimiento de la obra','Su casa, avance, fotos de la semana y certificados de cada etapa.']].filter(x=>!LOCK||x[0]===LOCK);
-  return `<section class="login"><div class="lg-mark" role="img" aria-label="Logo de Nexo: un núcleo con puntos conectados">${MARK}</div><div class="lg-word">NEXO</div><div class="lg-tag"><i></i><span>Todos conectados, en tiempo real</span><i></i></div><p class="frase">La obra que se anticipa<br>no se improvisa</p><span class="frase-rule"></span></section>
+  return `<section class="login"><div class="lg-mark" role="img" aria-label="Logo de Nexo: un núcleo con puntos conectados">${markAnim()}</div><div class="lg-word">NEXO</div><div class="lg-tag"><i></i><span>Todos conectados, en tiempo real</span><i></i></div><p class="frase">La obra que se anticipa<br>no se improvisa</p><span class="frase-rule"></span></section>
   <section class="sec"><span class="eyebrow">${LOCK?'Tu acceso':'Ingresá a tu panel'}</span><div class="panels">${P2.map(([k,t,e,dd])=>`<button class="pcard" data-act="panel" data-p="${k}" style="background-image:url('${PANEL_IMG[k]}')"><span class="pshade"></span><span class="pin"><span class="peyebrow">${e}</span><span class="ptitle">${t}</span><span class="pdesc">${dd}</span><span class="pgo">Ingresar →</span></span></button>`).join('')}</div>
   <p class="note">${LOCK?'Este enlace es una invitación: solo da acceso a este panel.':'Cada usuario entra con su invitación y ve solo lo que le corresponde. En esta demo se elige para recorrer todo.'}</p></section>`;
 }
