@@ -1920,7 +1920,7 @@ function vClave(){
 }
 function propBar(){
   const gs=propGuardadas().map(id=>OBRAS.find(o=>o.id===id)),cur=COBRA();
-  return `<section class="sec"><span class="eyebrow">Tus obras</span><div style="display:flex;flex-wrap:wrap;gap:8px">${gs.map(o=>`<button class="btn sm ${o.id===cur.id?'gold':''}" data-act="entrarProp" data-o="${o.id}">${esc(o.nombre)}</button>`).join('')}<button class="btn sm" data-act="otraObra">+ Agregar otra obra</button></div></section>`;
+  return `<section class="sec"><span class="eyebrow">Tus obras en este dispositivo</span><div style="display:flex;flex-wrap:wrap;gap:8px">${gs.map(o=>`<span style="display:inline-flex;gap:2px"><button class="btn sm ${o.id===cur.id?'gold':''}" data-act="entrarProp" data-o="${o.id}">${esc(o.nombre)}</button><button class="btn sm ghost" data-act="quitarProp" data-o="${o.id}" aria-label="Quitar ${esc(o.nombre)} de este dispositivo" style="padding-inline:10px">✕</button></span>`).join('')}<button class="btn sm" data-act="otraObra">+ Agregar otra obra</button></div></section>`;
 }
 function vRoles(){
   const us=USERS.filter(u=>['direccion','jefe','auditor'].includes(u.rol));
@@ -2614,23 +2614,23 @@ function casaSVG(k,cur){/* k = etapa que se muestra (0 a 6) · imágenes con la 
   return `<svg viewBox="0 0 900 506" class="casa" role="img" aria-label="La casa en la etapa ${ETAPAS_CASA[k][0]}, con la misma fachada del render"><rect width="900" height="506" fill="#101114"/><image href="${src}" x="0" y="0" width="900" height="506" preserveAspectRatio="xMidYMid slice"/></svg>`}
 function vCliente(){
   const o=COBRA(),et=etapaDe(o),idx=Math.max(0,HITOS_CLIENTE.indexOf(et));const k=S.casa===undefined||S.casa===null?idx:S.casa;
-  const g=[[GAL[0],'Fachada principal'],[GAL[1],'Acceso'],[GAL[2],'Contrafachada'],[GAL[3],'Vista desde la laguna'],[GAL[4],'Living']],cur=g[S.gal%g.length];
+  const rr=iaRendersObra(o),g=rr.map(x=>[x.src,x.cap]),stageOK=(o===OBRAS[0]),cur=g.length?g[S.gal%g.length]:null;
   const inf=o.informes.at(-1),prev=o.informes.slice(0,-1).reverse();
   const fC=finContractual(o),sem=Math.max(0,Math.round((fC-TODAY)/(7*DAY)));const ct=contractual(o);
   const fechas=[...o.sup.filter(s=>s.estado==='programada').slice(0,2).map(s=>({t:s.fecha,n:'Visita de la auditoría técnica',k:'visita'})),...hitosObra(o).filter(h=>h.t>TODAY&&['Obra cerrada: techos terminados','Instalaciones probadas','Pisos y revestimientos terminados'].includes(h.name)).slice(0,2).map(h=>({t:h.t,n:h.name,k:'hito'})),{t:fC,n:'Entrega de tu casa',k:'hito'}].sort((a,b)=>a.t-b.t);
   const certs=AUD.filter(a=>a.obra===o&&a.tipo==='cert').sort((a,b)=>b.fecha-a.fecha);
   const fotosObra=o.informes.flatMap(i=>i.fotos).reverse(),mias=S.misFotos||[];
   const rng=e=>{const ts=ct.filter(t=>ETAPA[t.rubro]===HITOS_CLIENTE[e]);return ts.length?[Math.min(...ts.map(t=>t.start)),Math.max(...ts.map(t=>t.end))]:null};const rk=rng(k);
-  const hoyImg=fotosObra.length&&FILES[fotosObra[0]]?`<img src="${FILES[fotosObra[0]].url}" alt="Última foto de obra">`:casaSVG(idx,idx);
-  return `${propBar()}<section class="sec"><div class="gallery"><img src="${cur[0]}" alt="${cur[1]}"><div class="gcap"><span>${cur[1]}</span><span>${S.gal%g.length+1} / ${g.length}</span></div></div><div class="thumbs">${g.map((x,i)=>`<button data-act="gal" data-i="${i}" aria-pressed="${S.gal%g.length===i}" aria-label="${x[1]}"><img src="${x[0]}" alt=""></button>`).join('')}</div></section>
+  const hoyImg=fotosObra.length&&FILES[fotosObra[0]]?`<img src="${FILES[fotosObra[0]].url}" alt="Última foto de obra">`:(stageOK?casaSVG(idx,idx):'');
+  return `${propBar()}${g.length?`<section class="sec"><div class="gallery"><img src="${cur[0]}" alt="${cur[1]}"><div class="gcap"><span>${cur[1]}</span><span>${S.gal%g.length+1} / ${g.length}</span></div></div><div class="thumbs">${g.map((x,i)=>`<button data-act="gal" data-i="${i}" aria-pressed="${S.gal%g.length===i}" aria-label="${x[1]}"><img src="${x[0]}" alt=""></button>`).join('')}</div></section>`:`<section class="sec"><div class="entry"><b>Renders del proyecto</b><span class="muted">Todavía no hay renders cargados para esta obra.</span></div></section>`}
   <section class="sec"><span class="eyebrow">${esc(o.ubic)}</span><h1>${esc(o.nombre)}</h1>
   <div class="cl-top"><div><span class="bigpct">${avance(o)}%</span><span class="muted"> de avance</span></div><div class="cd"><b>${sem}</b><span>semanas para la entrega<br><span class="muted">${fmtY(fC)}</span></span></div></div><div class="bar"><i style="width:${avance(o)}%"></i></div></section>
   ${vIA()}
   <section class="sec"><div class="sec-head"><h2>Tu casa, etapa por etapa</h2><span class="muted small">deslizá para recorrerla</span></div>
-  <div class="casa-wrap">${casaSVG(k,idx)}<div class="casa-cap"><b>${ETAPAS_CASA[k][0]}</b><span>${ETAPAS_CASA[k][1]}</span><span class="${k<idx?'t-verde':k===idx?'t-gold':'muted'}">${k<idx?'Terminada':k===idx?'Estamos acá':'Próximamente'}${rk&&k<6?` · ${fmt(rk[0])} a ${fmt(rk[1])}`:k===6?` · ${fmt(fC)}`:''}</span></div></div>
+  <div class="casa-wrap">${stageOK?casaSVG(k,idx):''}<div class="casa-cap"><b>${ETAPAS_CASA[k][0]}</b><span>${ETAPAS_CASA[k][1]}</span><span class="${k<idx?'t-verde':k===idx?'t-gold':'muted'}">${k<idx?'Terminada':k===idx?'Estamos acá':'Próximamente'}${rk&&k<6?` · ${fmt(rk[0])} a ${fmt(rk[1])}`:k===6?` · ${fmt(fC)}`:''}</span></div></div>
   <input type="range" class="casa-rng" min="0" max="6" step="1" value="${k}" data-inp="casa" aria-label="Recorrer las etapas de la obra">
   <div class="hitos h7">${HITOS_CLIENTE.map((h,i)=>`<button data-act="casa" data-k="${i}" class="${i<idx?'h-done':i===idx?'h-now':''} ${i===k?'sel':''}"><i></i>${h}</button>`).join('')}</div></section>
-  <section class="sec"><div class="sec-head"><h2>Hoy y cómo va a quedar</h2><span class="muted small">mové la línea</span></div><div class="cmp" style="--p:${S.cmp??50}%"><div class="cmp-a">${hoyImg}<span class="cmp-l">Hoy</span></div><div class="cmp-b"><img src="${GAL[0]}" alt="Render del proyecto"><span class="cmp-l r">Proyecto</span></div><input type="range" min="0" max="100" value="${S.cmp??50}" data-inp="cmp" aria-label="Comparar hoy con el proyecto"></div><p class="muted small">${fotosObra.length?'La foto de la izquierda es la última que subió la jefatura.':'Imagen de referencia del estado de la obra. Cuando la jefatura sube fotos en su informe, acá aparece la última foto real.'}</p></section>
+  <section class="sec"><div class="sec-head"><h2>Hoy y cómo va a quedar</h2><span class="muted small">mové la línea</span></div>${(fotosObra.length||stageOK)&&g.length?`<div class="cmp" style="--p:${S.cmp??50}%"><div class="cmp-a">${hoyImg}<span class="cmp-l">Hoy</span></div><div class="cmp-b"><img src="${g.length?g[0][0]:''}" alt="Render del proyecto"><span class="cmp-l r">Proyecto</span></div><input type="range" min="0" max="100" value="${S.cmp??50}" data-inp="cmp" aria-label="Comparar hoy con el proyecto"></div>`:''}<p class="muted small">${fotosObra.length?'La foto de la izquierda es la última que subió la jefatura.':stageOK?'Imagen de referencia del estado de la obra. Cuando la jefatura sube fotos en su informe, acá aparece la última foto real.':'Cuando la jefatura suba fotos de la obra en su informe, acá las vas a poder comparar con el render del proyecto.'}</p></section>
   <section class="sec"><div class="sec-head"><h2>Esta semana</h2>${inf?`<span class="muted small">enviado por la jefatura · ${fmt(inf.fecha)}</span>`:''}</div>${inf?`<div class="entry"><span>${esc(inf.resumen)}</span><span class="meta">Semana del ${fmt(inf.desde)} al ${fmt(inf.hasta)}</span></div>${inf.fotos.length?`<div class="fotos">${inf.fotos.slice(0,3).map(f=>FILES[f]?`<div class="foto"><img src="${FILES[f].url}" alt="Foto de obra"></div>`:'').join('')}</div>`:''}`:'<p class="muted">Todavía no hay resumen semanal.</p>'}
   ${prev.length?`<details class="card"><summary>Semanas anteriores (${prev.length})</summary>${prev.map(i=>`<div class="irow"><span>Semana del ${fmt(i.desde)}<br><span class="muted small">${esc(i.resumen)}</span></span></div>`).join('')}</details>`:''}</section>
   <section class="sec"><h2>Próximas fechas</h2><div class="agenda">${fechas.map(f=>{const x=new Date(f.t);return `<div class="aitem ${f.k==='visita'?'a-sup':'a-cert'}"><span class="adate"><span>${DIAC[x.getUTCDay()]}</span><b>${x.getUTCDate()}</b><span>${MES[x.getUTCMonth()]}</span></span><span class="abody"><b>${esc(f.n)}</b><span>${f.k==='visita'?'Supervisión independiente de la obra':'Según el cronograma presentado'}</span></span></div>`}).join('')}</div></section>
@@ -3293,6 +3293,10 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)vozParar()}
 addEventListener('pagehide',()=>vozParar());
 const _iaAskVoz=iaAsk;iaAsk=function(q){const v=S.vozAuto;vozParar();S.vozAuto=v;return _iaAskVoz(q)};
 const _iaMicVoz=A.iaMic;A.iaMic=function(...a){vozParar();return _iaMicVoz.apply(this,a)};
+Object.assign(A,{
+  quitarProp:ds=>{const o=findO(ds.o);if(!o)return;openSheet(`<h2>¿Quitar ${esc(o.nombre)} de este dispositivo?</h2><p class="muted small">Se borra de la lista de este aparato. Para volver a entrar vas a necesitar la clave.</p><div class="sec"><button class="btn gold full" data-act="quitarProp2" data-o="${o.id}">Sí, quitar</button><button class="btn full" data-act="close">Cancelar</button></div>`,'Quitar obra')},
+  quitarProp2:ds=>{olvidarCod('prop',ds.o);closeSheet();if(S.cobra===ds.o||!guardadas('prop').includes(S.cobra)){const r=guardadas('prop');if(r.length){S.cobra=r[0];S.chat=[];login('cli')}else{sesBorrar();S.u=null;S.codRol='prop';S.step='clave';draw();scrollTo(0,0)}}else draw();toast('Obra quitada de este dispositivo')}
+});
 /* ================= sesión recordada: una vez que entraste, la app queda abierta en este aparato hasta que toques Salir ================= */
 const SES_LS='nexo2_sesion';
 function sesGuardar(){try{const u=S.u;if(!u)return;const d={r:u.id};if(u.id==='cli')d.cobra=S.cobra;if(u.id==='est')d.cons=S.cons;localStorage.setItem(SES_LS,JSON.stringify(d))}catch(e){}}
@@ -3312,6 +3316,7 @@ function sesRestaurar(){
 }
 try{if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('/nexo2-sw.js',{scope:'/nexo2.html'}).catch(()=>{})}catch(e){}
 $('#brand-icon').src=ICONO;
+try{if(!localStorage.getItem('nexo2_reset_v2')){['nexo2_obras_prop','nexo2_obras_jefe','nexo2_obras_aud','nexo2_sesion'].forEach(k=>localStorage.removeItem(k));localStorage.setItem('nexo2_reset_v2','1')}}catch(e){}
 {let ok=!LOCK;try{const d=JSON.parse(localStorage.getItem(SES_LS)||'null');if(LOCK&&d)ok=LOCK==='cliente'?d.r==='cli':LOCK==='estudio'?d.r==='est':['dir','jefe','aud'].includes(d.r)}catch(e){}if(ok)sesRestaurar()}
 draw();
 
