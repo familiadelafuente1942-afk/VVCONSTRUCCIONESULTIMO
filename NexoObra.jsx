@@ -9,13 +9,13 @@ import ClientePropietarioApp from "./ClientePropietario.jsx";
 
 const SUPA_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co";
 const SUPA_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
-const BRASS = "#B0894F";
+const BRASS = "#b8915a";
 const KEYS = ["vv_obras", "vv_bitacora", "vv_avance", "vv_informes_sem", "vv_renders", "vv_pedidos", "vv_matpedidos", "vv_cronopro", "vv_adicionales", "vv_certif_sem", "cliente_cfg", "vv_cfg", "vv_modelos_obra", "vv_gestion", "cliente_envios_prop", "vv_personal", "vv_tareas", "vv_mensajes", "vv_formularios", "vv_documentacion", "vv_auditoria", "vv_definiciones", "vv_docrecepcion", "vv_drone", "vv_minutas"];
 const CACHE = "nexoobra_real_v2";
 
 // ── tema: idéntico al de la app Cliente ─────────────────────────────────────
-const TEMA_OSCURO = { bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", accent: "#B0894F", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
-const TEMA_CLARO = { bg: "#F5F6F8", card: "#ffffff", border: "#E6E9EE", text: "#131C2B", sub: "#4A5565", muted: "#97A0AE", accent: "#B0894F", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
+const TEMA_OSCURO = { bg: "#0d0e10", card: "#16171a", border: "#2a2c31", text: "#ece8e1", sub: "rgba(236,232,225,.7)", muted: "#8f8b84", accent: "#b8915a", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+const TEMA_CLARO = { bg: "#F5F6F8", card: "#ffffff", border: "#E6E9EE", text: "#131C2B", sub: "#4A5565", muted: "#97A0AE", accent: "#b8915a", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
 const DEFAULT_CFG = { nombre: "Belfast Construction Management", sigla: "BELFAST", logo: "", accent: "#1E3A5F" };
 function hexARgb(hex) { const h = String(hex || "").replace("#", ""); const hh = h.length === 3 ? h.split("").map(x => x + x).join("") : h; const n = parseInt(hh, 16) || 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 function rgbAHex(rgb) { return "#" + rgb.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join(""); }
@@ -37,15 +37,15 @@ function theme(cfg) {
   return { bg, card: c.themeCard || (osc ? aclarar(base.card, t) : base.card), border: c.themeBorder || (osc ? aclarar(base.border, Math.min(1, t * 1.3)) : base.border), text, sub: c.themeText ? hexToRgba(c.themeText, .6) : base.sub, muted: c.themeText ? hexToRgba(c.themeText, .42) : base.muted, accent, accentLight: hexToRgba(accent, .14), navy: bg, r: 12, rsm: 8, shadow: base.shadow };
 }
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Michroma&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:#0d0d0f;overscroll-behavior:none;font-family:'Inter',sans-serif;}
+  body{background:#0d0e10;overscroll-behavior:none;font-family:'Barlow',system-ui,sans-serif;}
   button{cursor:pointer;font-family:inherit;}input,textarea,select{font-family:inherit;}
   input:focus,textarea:focus{outline:none;}textarea{resize:none;}::-webkit-scrollbar{display:none;}
-  .xscroll{scrollbar-width:thin;scrollbar-color:#B0894F rgba(255,255,255,.12);}
+  .xscroll{scrollbar-width:thin;scrollbar-color:#b8915a rgba(255,255,255,.12);}
   .xscroll::-webkit-scrollbar{display:block;height:9px;}
   .xscroll::-webkit-scrollbar-track{background:rgba(255,255,255,.1);border-radius:6px;}
-  .xscroll::-webkit-scrollbar-thumb{background:#B0894F;border-radius:6px;}
+  .xscroll::-webkit-scrollbar-thumb{background:#b8915a;border-radius:6px;}
   @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   @keyframes fadeIn{from{opacity:0}to{opacity:.85}}
 `;
@@ -133,7 +133,7 @@ const NAVS = {
   propietario: [["obra", "Mi obra"], ["fotos", "Fotos"], ["informes", "Informes"]],
 };
 const KEYP = "nexoobra_perfil";
-const PCOL = { constructora: "#B0894F", estudio: "#2F6F8F", propietario: "#3E8E62" };
+const PCOL = { constructora: "#b8915a", estudio: "#2F6F8F", propietario: "#3E8E62" };
 
 export default function NexoObraApp() {
   const { R, st, recargar } = useReal();
@@ -166,13 +166,13 @@ export default function NexoObraApp() {
   const [obraSel, setObraSel] = useState(null);
   const ctx = { T, cfg, setCfg, D, tab, setTab: (t) => { setTab(t); if (t !== "obras") setObraSel(null); }, obraSel, setObraSel };
 
-  return (<div style={{ background: T.bg }}><div style={{ height: "100dvh", width: "100%", display: "flex", flexDirection: "column", background: T.bg, color: T.text, fontFamily: "'Inter',sans-serif" }}>
+  return (<div style={{ background: T.bg }}><div style={{ height: "100dvh", width: "100%", display: "flex", flexDirection: "column", background: T.bg, color: T.text, fontFamily: "'Barlow',system-ui,sans-serif" }}>
     <style>{CSS}{`body{background:${T.bg}}`}</style>
     {(!perfil || verAlcance) ? <Alcance imgs={portada} T={T} cfg={cfg} perfil={perfil} entrar={entrar} volver={() => setVerAlcance(false)} st={st} R={R} recargar={recargar} />
       : (<>
         {perfil === "propietario" ? <div style={{ position: "fixed", zIndex: 300, top: `calc(8px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px))`, left: 10, display: "flex", alignItems: "center", gap: 6, background: PCOL.propietario, color: "#fff", borderRadius: 20, padding: "5px 6px 5px 11px", boxShadow: "0 2px 10px rgba(0,0,0,.4)" }}><span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".14em", textTransform: "uppercase" }}>Panel Propietario</span><button onClick={() => setVerAlcance(true)} style={{ background: "rgba(0,0,0,.28)", border: "none", color: "#fff", borderRadius: 14, padding: "4px 9px", fontSize: 10.5, fontWeight: 700 }}>Paneles</button></div>
           : <Cabecera T={T} cfg={cfg} perfil={perfil} onAlcance={() => setVerAlcance(true)} />}
-        {perfil === "propietario" && <div style={{ flex: 1, minHeight: 0, background: "#0d0d0f" }}><ClientePropietarioApp /></div>}
+        {perfil === "propietario" && <div style={{ flex: 1, minHeight: 0, background: "#0d0e10" }}><ClientePropietarioApp /></div>}
         {st === "error" && <div style={{ padding: "30px 22px", textAlign: "center", color: T.sub, fontSize: 13, lineHeight: 1.6 }}>No pude traer los datos de las obras ahora. Revisá la conexión.<div><button onClick={recargar} style={{ marginTop: 12, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "11px 18px", fontSize: 13, fontWeight: 700 }}>Reintentar</button></div></div>}
         {st === "cargando" && <div style={{ padding: 40, textAlign: "center", color: T.muted, fontSize: 13 }}>Cargando tus obras…</div>}
         {R && perfil !== "propietario" && <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
@@ -196,55 +196,56 @@ function Cabecera({ T, cfg, perfil, onAlcance }) {
     <div style={{ background: PCOL[perfil], color: "#fff", textAlign: "center", padding: "7px 12px", fontSize: 12, fontWeight: 800, letterSpacing: ".22em", textTransform: "uppercase" }}>Panel {PANELES[perfil].n}</div>
   </div>);
 }
+const NAV_IC = { inicio: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>', obras: '<path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"/>', obra: '<path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"/>', pedidos: '<rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/>', informes: '<path d="M5 4h11l3 3v13H5zM9 10h6M9 14h6"/>', mas: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>', planos: '<path d="M3 7h6l2 2h10v10H3z"/>', fotos: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/>', ajustes: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>' };
 function Nav({ T, perfil, tab, setTab }) {
   if (!perfil) return null;
   return (<nav style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "center", paddingBottom: "calc(env(safe-area-inset-bottom) + 6px)" }}>
-    <div style={{ width: "100%", display: "flex" }}>{NAVS[perfil].map(([id, l]) => { const a = tab === id; return <button key={id} onClick={() => setTab(id)} style={{ flex: 1, background: "none", border: "none", padding: "6px 4px 5px", fontSize: 10.5, fontWeight: a ? 800 : 600, color: a ? T.accent : T.sub, borderTop: `2px solid ${a ? BRASS : "transparent"}`, marginTop: -1 }}>{l}</button>; })}</div>
+    <div style={{ width: "100%", display: "flex" }}>{NAVS[perfil].map(([id, l]) => { const a = tab === id; return <button key={id} onClick={() => setTab(id)} aria-current={a ? "page" : undefined} style={{ flex: 1, background: "none", border: "none", padding: "10px 4px 12px", fontSize: 12, fontWeight: a ? 700 : 500, color: a ? "#b8915a" : "#8f8b84", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" dangerouslySetInnerHTML={{ __html: NAV_IC[id] || NAV_IC.mas }} />{l}</button>; })}</div>
   </nav>);
 }
 
-const FUENTES = "@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');";
-const F_TIT = "'Michroma','Inter',sans-serif", F_TXT = "'Barlow Semi Condensed','Inter',sans-serif", F_MONO = "'Space Mono',monospace";
-const Estrella = ({ s = 90 }) => (<svg width={s} height={s * .84} viewBox="0 0 120 100" fill="none" stroke="#F0C45A" strokeWidth="3.2" strokeLinecap="round" style={{ filter: "drop-shadow(0 0 6px rgba(233,185,73,.45))" }}><path d="M60 11v86" /><path d="M13 62h94" /><path d="M31 36l58 52M89 36L31 88" /><circle cx="60" cy="7" r="4.6" fill="#F0C45A" stroke="none" /><circle cx="9" cy="62" r="4.6" fill="#F0C45A" stroke="none" /><circle cx="111" cy="62" r="4.6" fill="#F0C45A" stroke="none" /><circle cx="60" cy="62" r="8" fill="#B0894F" stroke="none" /></svg>);
+const FUENTES = "@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');";
+const F_TIT = "'Michroma','Barlow Condensed',sans-serif", F_TXT = "'Barlow',system-ui,sans-serif", F_MONO = "'IBM Plex Mono',ui-monospace,monospace";
+const Estrella = ({ s = 90 }) => (<img src="/nexo/mark.svg" alt="" width={s} height={s} style={{ display: "block", objectFit: "contain" }} />);
 function Alcance({ T, cfg, perfil, entrar, volver, st, R, recargar, imgs = [] }) {
   const hoyTxt = new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short", year: "numeric" }).replace(/\./g, "");
   const nObras = R ? new Set(arr(R.vv_obras).filter(o => o && !o.privada).map(o => o.id)).size : 0;
-  return (<div style={{ flex: 1, overflowY: "auto", fontFamily: F_TXT, background: "radial-gradient(900px 500px at 50% -10%, rgba(176,137,79,.12), transparent 60%), #0b0d12" }}>
+  return (<div style={{ flex: 1, overflowY: "auto", fontFamily: F_TXT, background: "radial-gradient(900px 500px at 50% -10%, rgba(176,137,79,.12), transparent 60%), #0d0e10" }}>
     <style>{FUENTES}</style>
     <div style={{ maxWidth: 620, margin: "0 auto", minHeight: "100%", borderLeft: "1px solid rgba(255,255,255,.14)", borderRight: "1px solid rgba(255,255,255,.14)", background: "rgba(13,15,21,.7)" }}>
       <div style={{ padding: `calc(14px + max(env(safe-area-inset-top), ${SAFE_TOP_PX}px)) 22px 12px`, borderBottom: "1px solid rgba(255,255,255,.14)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}><div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Estrella s={22} /></div><span style={{ fontFamily: F_MONO, fontWeight: 700, fontSize: 15, color: "#E9B949", letterSpacing: ".06em" }}>NEXO</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}><div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Estrella s={22} /></div><span style={{ fontFamily: F_MONO, fontWeight: 700, fontSize: 15, color: "#b8915a", letterSpacing: ".06em" }}>NEXO</span></div>
           <span style={{ fontFamily: F_MONO, fontSize: 13, color: "#d7d3ca" }}>{hoyTxt}</span>
         </div>
         <div style={{ fontSize: 17, fontWeight: 500, color: "#f2f0eb", marginTop: 14 }}>{perfil ? "Tu panel: " + PANELES[perfil].n : "Ingresá con tu cuenta"}</div>
       </div>
       <div style={{ padding: "26px 22px 34px" }}>
-        {!perfil && <div style={{ textAlign: "center", marginBottom: 26 }}>
-          <Estrella s={150} />
-          <div style={{ fontFamily: F_TIT, fontSize: 54, letterSpacing: ".14em", color: "#f2f0eb", margin: "4px 0 4px" }}>NEXO</div>
-          <div style={{ fontSize: 17, color: "#f2f0eb" }}>Todos conectados, En tiempo real.</div>
-          <div style={{ fontFamily: F_TIT, fontSize: 22, lineHeight: 1.3, color: "#f2f0eb", textTransform: "uppercase", margin: "26px 0 10px" }}>La obra que se anticipa no se improvisa</div>
-          <div style={{ width: 70, height: 2, background: "#E9B949", margin: "0 auto" }} />
+        {!perfil && <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: 30, paddingTop: 6 }}>
+          <Estrella s={170} />
+          <div style={{ fontFamily: F_TIT, fontSize: "clamp(34px,9vw,52px)", letterSpacing: ".42em", paddingLeft: ".42em", lineHeight: 1, marginTop: 10, background: "linear-gradient(180deg,#f4efe6 0%,#c9c2b6 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>NEXO</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, fontFamily: F_TIT, fontSize: "clamp(8.5px,2.2vw,10.5px)", letterSpacing: ".34em", textTransform: "uppercase", color: "#b8915a" }}><i style={{ display: "block", width: 28, height: 1, background: "linear-gradient(90deg,transparent,#b8915a)" }} /><span>Todos conectados, en tiempo real</span><i style={{ display: "block", width: 28, height: 1, background: "linear-gradient(90deg,#b8915a,transparent)" }} /></div>
+          <div style={{ fontFamily: F_TIT, fontSize: "clamp(15px,4.2vw,21px)", lineHeight: 1.6, letterSpacing: ".06em", textTransform: "uppercase", marginTop: 30, color: "#efeae2" }}>La obra que se anticipa<br />no se improvisa</div>
+          <div style={{ width: 56, height: 1, background: "#b8915a", marginTop: 8 }} />
         </div>}
         <div style={{ fontFamily: F_TIT, fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", color: "#f2f0eb", marginBottom: 14 }}>{perfil ? "Paneles de la app" : "Ingresá a tu panel"}</div>
         <div style={{ display: "grid", gap: 14 }}>
           {Object.entries(PANELES).map(([k, p], n) => {
-            const mio = perfil === k, bloq = perfil && !mio, img = imgs[n % Math.max(imgs.length, 1)];
-            return (<div key={k} onClick={() => { if (!perfil && R) entrar(k); else if (mio) volver(); }} style={{ position: "relative", height: 210, borderRadius: 22, overflow: "hidden", border: `1px solid ${mio ? "#E9B949" : "rgba(255,255,255,.2)"}`, background: "linear-gradient(135deg,#1a1d26,#0b0d12)", cursor: bloq || !R ? "default" : "pointer", opacity: bloq ? .5 : 1 }}>
+            const mio = perfil === k, bloq = perfil && !mio, img = "/nexo/panel-" + (k === "propietario" ? "cliente" : k) + ".jpg";
+            return (<div key={k} onClick={() => { if (!perfil && R) entrar(k); else if (mio) volver(); }} style={{ position: "relative", minHeight: 190, borderRadius: 16, overflow: "hidden", border: `1px solid ${mio ? "#b8915a" : "#2a2c31"}`, background: "linear-gradient(135deg,#1a1d26,#0d0e10)", cursor: bloq || !R ? "default" : "pointer", opacity: bloq ? .5 : 1 }}>
               {img && <img src={img} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: bloq ? "grayscale(1)" : "none" }} />}
-              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.08) 0%, rgba(0,0,0,.4) 45%, rgba(0,0,0,.88) 100%)" }} />
-              <div style={{ position: "absolute", left: 20, right: 20, bottom: 16, color: "#f2f0eb" }}>
-                <div style={{ fontFamily: F_TIT, fontSize: 9.5, letterSpacing: ".16em", textTransform: "uppercase", color: "#E9B949", marginBottom: 6 }}>{p.d}</div>
-                <div style={{ fontFamily: F_TIT, fontSize: 22, textTransform: "uppercase", lineHeight: 1.15 }}>{bloq ? "🔒 " : ""}{p.n === "Estudio" ? "Estudio de arquitectura" : p.n}</div>
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg,rgba(8,8,10,.94) 0%,rgba(8,8,10,.78) 45%,rgba(8,8,10,.25) 100%)" }} />
+              <div style={{ position: "relative", padding: "22px 24px", maxWidth: "80%", color: "#f3efe8" }}>
+                <div style={{ fontFamily: F_TIT, fontSize: 9.5, letterSpacing: ".16em", textTransform: "uppercase", color: "#b8915a", marginBottom: 6 }}>{p.d}</div>
+                <div style={{ fontFamily: F_TIT, fontSize: 20, letterSpacing: ".04em", textTransform: "uppercase", lineHeight: 1.25 }}>{bloq ? "🔒 " : ""}{p.n === "Estudio" ? "Estudio de arquitectura" : p.n}</div>
                 <div style={{ fontSize: 14.5, fontWeight: 500, margin: "5px 0 8px", lineHeight: 1.35 }}>{p.pts[0]}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#E9B949" }}>{bloq ? "Bloqueado: este panel lo ve " + (k === "constructora" ? "la constructora" : k === "estudio" ? "el estudio" : "el propietario") : mio ? "Tu panel · volver →" : "Ingresar →"}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#b8915a" }}>{bloq ? "Bloqueado: este panel lo ve " + (k === "constructora" ? "la constructora" : k === "estudio" ? "el estudio" : "el propietario") : mio ? "Tu panel · volver →" : "Ingresar →"}</div>
               </div>
             </div>);
           })}
         </div>
         <div style={{ marginTop: 16, border: "1px dashed rgba(255,255,255,.2)", borderRadius: 12, padding: "11px 14px", fontSize: 14, color: "#f2f0eb" }}>Cada perfil entra con su invitación y ve solo su panel.</div>
-        <div style={{ marginTop: 14, fontSize: 12.5, color: "#9a968c", textAlign: "center" }}>{R ? `${nObras} ${nObras === 1 ? "obra real cargada" : "obras reales cargadas"}${st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura` : (st === "error" ? "No pude traer los datos todavía." : "Cargando tus obras…")} {!R && <button onClick={recargar} style={{ background: "none", border: 0, color: "#E9B949", fontWeight: 700, fontSize: 12.5 }}>Reintentar</button>}</div>
+        <div style={{ marginTop: 14, fontSize: 12.5, color: "#9a968c", textAlign: "center" }}>{R ? `${nObras} ${nObras === 1 ? "obra real cargada" : "obras reales cargadas"}${st === "cache" ? " (última copia de este aparato)" : ""} · solo lectura` : (st === "error" ? "No pude traer los datos todavía." : "Cargando tus obras…")} {!R && <button onClick={recargar} style={{ background: "none", border: 0, color: "#b8915a", fontWeight: 700, fontSize: 12.5 }}>Reintentar</button>}</div>
         {perfil && <button onClick={() => entrar("")} style={{ width: "100%", marginTop: 14, background: "transparent", color: "#d7d3ca", border: "1px solid rgba(255,255,255,.2)", borderRadius: 12, padding: 12, fontSize: 14, fontWeight: 600 }}>Cambiar de perfil (solo en la demo)</button>}
       </div>
     </div>
@@ -307,7 +308,7 @@ function Hilo({ T, p }) {
     {arr(h.archivos).map((a, j) => <Archivo key={j} T={T} a={a} />)}
   </div>);
 }
-const SEM = { rojo: "#E5604A", naranja: "#E58A3A", amarillo: "#E0B93A", verde: "#3E9B62", apagado: "#8B8B8B" };
+const SEM = { rojo: "#e2493e", naranja: "#e5813a", amarillo: "#e0b43a", verde: "#3fa66b", apagado: "#8B8B8B" };
 const SEM_ORD = ["rojo", "naranja", "amarillo", "verde", "apagado"];
 function semPedido(p) {
   if (p.estado === "resuelto") return { k: "apagado", t: "Resuelto" };
@@ -322,7 +323,7 @@ function semPedido(p) {
 }
 function chipPedido(p, T) { const s = semPedido(p); return { t: s.t, c: s.viol ? "#8B5CF6" : SEM[s.k], k: s.k }; }
 function cuentaSem(L) { const r = { rojo: 0, naranja: 0, amarillo: 0, verde: 0 }; L.forEach(p => { const k = semPedido(p).k; if (r[k] != null) r[k]++; }); return r; }
-function Semaforo({ T, L }) { const c = cuentaSem(L); return <div style={{ display: "flex", gap: 7, marginBottom: 12, flexWrap: "wrap" }}>{["rojo", "naranja", "amarillo", "verde"].map(k => <div key={k} style={{ flex: "1 1 70px", textAlign: "center", border: `1px solid ${SEM[k]}`, borderRadius: 10, padding: "7px 4px", background: SEM[k] + "18" }}><div style={{ fontSize: 20, fontWeight: 800, color: SEM[k], fontFamily: "'Fraunces',serif" }}>{c[k]}</div><div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", color: T.sub }}>{k === "rojo" ? "Vencido / ya" : k === "naranja" ? "Urgente" : k === "amarillo" ? "Pedir" : "En ventana"}</div></div>)}</div>; }
+function Semaforo({ T, L }) { const c = cuentaSem(L); return <div style={{ display: "flex", gap: 7, marginBottom: 12, flexWrap: "wrap" }}>{["rojo", "naranja", "amarillo", "verde"].map(k => <div key={k} style={{ flex: "1 1 70px", textAlign: "center", border: `1px solid ${SEM[k]}`, borderRadius: 10, padding: "7px 4px", background: SEM[k] + "18" }}><div style={{ fontSize: 20, fontWeight: 800, color: SEM[k], fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif" }}>{c[k]}</div><div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", color: T.sub }}>{k === "rojo" ? "Vencido / ya" : k === "naranja" ? "Urgente" : k === "amarillo" ? "Pedir" : "En ventana"}</div></div>)}</div>; }
 function Checklist({ T, D, o }) {
   const L = D.pedidos.filter(p => p.obra_id === o.id);
   const [ab, setAb] = useState(null);
@@ -401,21 +402,21 @@ function CInicio({ T, cfg, D, setTab, setObraSel }) {
   return (<div style={{ flex: 1, background: T.bg }}>
     <div style={{ padding: "22px clamp(18px,3vw,40px) 30px" }}>
       <div style={{ fontSize: 10.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${rgb},.55)`, fontWeight: 700 }}>{saludo} · {cfg.nombre}</div>
-      <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: "clamp(24px,3.4vw,34px)", lineHeight: 1.2, margin: "8px 0 18px" }}>{venc.length + porv.length === 0 ? `${plural(L.length, "obra en curso", "obras en curso")}, sin pedidos por vencer` : `${plural(venc.length, "pedido vencido", "pedidos vencidos")} y ${porv.length} por vencer en ${plural(obrasAfect, "obra", "obras")}`}</div>
+      <div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: "clamp(24px,3.4vw,34px)", lineHeight: 1.2, margin: "8px 0 18px" }}>{venc.length + porv.length === 0 ? `${plural(L.length, "obra en curso", "obras en curso")}, sin pedidos por vencer` : `${plural(venc.length, "pedido vencido", "pedidos vencidos")} y ${porv.length} por vencer en ${plural(obrasAfect, "obra", "obras")}`}</div>
       <div style={{ position: "relative" }}>
       {[["‹", -1], ["›", 1]].map(([t, d]) => <button key={t} onClick={() => { const e = document.getElementById("carr-obras"); if (e) e.scrollBy({ left: d * 380, behavior: "smooth" }); }} style={{ position: "absolute", top: 70, [d < 0 ? "left" : "right"]: -6, zIndex: 5, width: 36, height: 36, borderRadius: 18, border: "1px solid rgba(255,255,255,.3)", background: "rgba(0,0,0,.65)", color: "#fff", fontSize: 22, lineHeight: 1 }}>{t}</button>)}
       <div id="carr-obras" className="xscroll" style={{ display: "flex", gap: 14, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 12, marginBottom: 16 }}>
         {L.map(o => { const f = fotoDe(o); return (<div key={o.id} onClick={() => { setObraSel && setObraSel(o.id); setTab("obras"); }} style={{ flex: "0 0 min(360px,82%)", scrollSnapAlign: "start", background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", cursor: "pointer", boxShadow: T.shadow }}>
           <div style={{ height: 170, background: `linear-gradient(135deg,${T.bg},${T.border})` }}>{f && <img src={f} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}</div>
           <div style={{ padding: "13px 15px 15px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 20 }}>{o.nombre}</div><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: "#E9B949" }}>{o.avance || 0}%</div></div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: 20 }}>{o.nombre}</div><div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: 24, color: "#b8915a" }}>{o.avance || 0}%</div></div>
             {o.sector && <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{o.sector}</div>}
-            <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "10px 0 8px" }}><div style={{ width: (o.avance || 0) + "%", height: 5, background: "#E9B949", borderRadius: 4 }} /></div>
+            <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "10px 0 8px" }}><div style={{ width: (o.avance || 0) + "%", height: 5, background: "#b8915a", borderRadius: 4 }} /></div>
             <div style={{ fontSize: 11.5, color: T.muted }}>{arr(o.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === o.id).length} en bitácora</div>
           </div></div>); })}
       </div>
       </div>
-      <div onClick={() => setIaAbierta(true)} style={{ display: "flex", alignItems: "center", gap: 12, background: T.card, border: `1px solid ${BRASS}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", marginBottom: 16 }}><div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Estrella s={30} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 800, color: "#E9B949", letterSpacing: ".04em" }}>NEXO IA</div><div style={{ fontSize: 12.5, color: T.sub, marginTop: 2 }}>Preguntale a la app por cualquier obra. Responde con lo que está cargado.</div></div><span style={{ color: T.muted, fontSize: 18 }}>›</span></div>
+      <div onClick={() => setIaAbierta(true)} style={{ display: "flex", alignItems: "center", gap: 12, background: T.card, border: `1px solid ${BRASS}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer", marginBottom: 16 }}><div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Estrella s={30} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 800, color: "#b8915a", letterSpacing: ".04em" }}>NEXO IA</div><div style={{ fontSize: 12.5, color: T.sub, marginTop: 2 }}>Preguntale a la app por cualquier obra. Responde con lo que está cargado.</div></div><span style={{ color: T.muted, fontSize: 18 }}>›</span></div>
       {iaAbierta && <IAOverlay T={T} cfg={cfg} D={D} cerrar={() => setIaAbierta(false)} />}
       <div style={{ height: 1, background: `rgba(${rgb},.1)`, marginBottom: 6 }} />
       {abiertos.length > 0 && <div onClick={() => setTab("pedidos")} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid rgba(${rgb},.07)`, cursor: "pointer", fontSize: 12.5 }}><span><b style={{ color: "#D9B27C" }}>{abiertos.length}</b> {abiertos.length === 1 ? "pedido abierto" : "pedidos abiertos"} con el estudio</span><span style={{ color: `rgba(${rgb},.35)` }}>›</span></div>}
@@ -434,8 +435,8 @@ function CObras({ T, D, cfg, rol, obraSel, setObraSel }) {
   if (!o) return wrap(<><Eyebrow T={T}>Obras</Eyebrow>{D.obras.map(x => { const f = fotoDe(x); return <Card key={x.id} T={T} onClick={() => { setId(x.id); setSub("crono"); }} style={{ padding: 10, marginBottom: 10, cursor: "pointer", display: "flex", gap: 13, alignItems: "center" }}>
     <div style={{ width: 96, height: 72, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: `linear-gradient(135deg,${T.bg},${T.border})` }}>{f && <img src={f} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}</div>
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 18 }}>{x.nombre}</div><div style={{ fontSize: 14, fontWeight: 800, color: "#E9B949" }}>{x.avance || 0}%</div></div>
-      <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "8px 0 7px" }}><div style={{ width: (x.avance || 0) + "%", height: 5, background: "#E9B949", borderRadius: 4 }} /></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}><div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: 18 }}>{x.nombre}</div><div style={{ fontSize: 14, fontWeight: 800, color: "#b8915a" }}>{x.avance || 0}%</div></div>
+      <div style={{ height: 5, background: T.border, borderRadius: 4, margin: "8px 0 7px" }}><div style={{ width: (x.avance || 0) + "%", height: 5, background: "#b8915a", borderRadius: 4 }} /></div>
       {(() => { const c = cuentaSem(D.pedidos.filter(p => p.obra_id === x.id)); return (c.rojo + c.naranja + c.amarillo) > 0 && <div style={{ display: "flex", gap: 8, marginBottom: 5 }}>{["rojo", "naranja", "amarillo"].filter(k => c[k]).map(k => <span key={k} style={{ fontSize: 11, fontWeight: 800, color: SEM[k] }}>● {c[k]}</span>)}<span style={{ fontSize: 11, color: T.sub }}>pedidos</span></div>; })()}
       <div style={{ fontSize: 11.5, color: T.sub }}>{x.sector ? x.sector + " · " : ""}{arr(x.fotos).length} fotos · {D.bitacora.filter(h => h.obra_id === x.id).length} en bitácora · {arr(x.informes).length + arr(D.informesSem[x.id]).length} informes</div>
     </div></Card>; })}</>);
@@ -446,8 +447,8 @@ function CObras({ T, D, cfg, rol, obraSel, setObraSel }) {
       {f && <img src={f} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.05) 0%, rgba(0,0,0,.4) 50%, rgba(0,0,0,.88) 100%)" }} />
       <div style={{ position: "absolute", left: 18, right: 18, bottom: 14, color: "#f2f0eb" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 26 }}>{o.nombre}</div><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 28, color: "#E9B949" }}>{o.avance || 0}%</div></div>
-        <div style={{ height: 5, background: "rgba(255,255,255,.22)", borderRadius: 4, margin: "8px 0 6px" }}><div style={{ width: (o.avance || 0) + "%", height: 5, background: "#E9B949", borderRadius: 4 }} /></div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}><div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: 26 }}>{o.nombre}</div><div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: 28, color: "#b8915a" }}>{o.avance || 0}%</div></div>
+        <div style={{ height: 5, background: "rgba(255,255,255,.22)", borderRadius: 4, margin: "8px 0 6px" }}><div style={{ width: (o.avance || 0) + "%", height: 5, background: "#b8915a", borderRadius: 4 }} /></div>
         <div style={{ fontSize: 11.5, opacity: .8 }}>{o.sector || ""}</div>
       </div></div>; })()}
     {o.obs && <Card T={T} style={{ padding: 12, marginBottom: 12, fontSize: 12.5, color: T.sub, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{o.obs}</Card>}
@@ -514,8 +515,8 @@ function Propietario({ T, D, tab }) {
   const r0 = arr(D.renders[o.id])[0];
   return wrap(<><Eyebrow T={T}>Tu obra</Eyebrow><SelObra T={T} D={D} o={o} setId={setId} />
     <Card T={T} style={{ overflow: "hidden" }}>{r0 && r0.url && <img src={r0.url} alt="" style={{ width: "100%", maxHeight: 260, objectFit: "cover", display: "block" }} />}
-      <div style={{ padding: 18 }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 22 }}>{o.nombre}</div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "14px 0 10px" }}><div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1 }}>{o.avance || 0}</div><div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: T.muted }}>% de avance</div></div>
+      <div style={{ padding: 18 }}><div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: 22 }}>{o.nombre}</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "14px 0 10px" }}><div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: 40, lineHeight: 1 }}>{o.avance || 0}</div><div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: T.muted }}>% de avance</div></div>
         <div style={{ height: 5, background: T.border, borderRadius: 4 }}><div style={{ width: (o.avance || 0) + "%", height: 5, background: T.accent, borderRadius: 4 }} /></div></div></Card>
     {fotos.length > 0 && <><div style={{ height: 16 }} /><Eyebrow T={T}>Últimas fotos</Eyebrow><Galeria T={T} items={fotos.slice(-6).reverse()} /></>}</>);
 }
