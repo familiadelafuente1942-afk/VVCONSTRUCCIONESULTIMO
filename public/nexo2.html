@@ -909,6 +909,13 @@ main:has(.login) .note{font-size:11.5px;padding:6px 10px}
   main:has(.login) .pdesc{font-size:12px;line-height:1.3}
   main:has(.login) .pgo{display:none}
 }
+
+/* ================= v13 · adjuntos de la IA ================= */
+.ia-imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:10px}
+.ia-img{padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--raise);display:flex;flex-direction:column;text-align:left;color:var(--fg);cursor:pointer}
+.ia-img img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+.ia-img span{font-size:11px;padding:5px 7px;color:var(--muted);line-height:1.25}
+.ia-pdf{margin-top:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 <div class="app">
   <header class="top">
@@ -3000,11 +3007,11 @@ const ICO_SPK='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" strok
 const ICO_MIC='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5"/></svg>';
 function vIA(){
   const r=ROLE();const o0=misObras()[0];if(!o0)return'';
-  const sug=r==='estudio'?[`¿Qué me falta entregar de ${o0.nombre}?`,'¿Qué planos tengo por subir?']:r==='direccion'?['¿Qué obra está más atrasada y por qué?','¿Cuánto nos cuesta la espera hoy?','¿Qué adicionales están sin autorizar?']:r==='auditor'?['¿Qué compromisos tengo en los próximos días?','¿Qué planos tengo por revisar?']:r==='cliente'?['¿Cuándo terminan la obra?','¿Qué se hizo esta semana?','¿Cuándo es la próxima visita?']:[`¿En qué estado está la mampostería de ${o0.nombre}?`,'¿Qué tarjetas están vencidas?'];
-  const sub={cliente:'Preguntale lo que quieras sobre tu casa. Responde solo con los datos de tu obra.',direccion:'Acceso a toda la base de datos: obras, costos, planos, auditorías, adicionales y desempeño.',auditor:'Responde sobre tu agenda: supervisiones, revisión de planos y certificados.',estudio:'Responde sobre tus entregas, tus carpetas de planos y los adicionales.',jefe:'Responde sobre tus obras: tarjetas, cronograma, planos, registro e informes.'}[r];
+  const nn=o0.nombre;const sug=r==='cliente'?['¿Cómo viene mi obra?','Mostrame cómo se ve la casa hoy','Pasame el estado general en PDF','Mostrame los renders']:r==='direccion'?[`Contame el estado general de ${nn}`,'¿Qué obra está más atrasada y por qué?','Armame un PDF con el estado de todas las obras','Mostrame los renders de '+nn]:r==='estudio'?[`¿Qué me falta entregar de ${nn}?`,`Pasame el estado general de ${nn} en PDF`,'Mostrame los renders']:r==='auditor'?['¿Qué tengo que hacer esta semana?',`Estado general de ${nn} en PDF`,'Mostrame las fotos de la obra']:[`¿Cómo viene ${nn}?`,`Pasame el estado general de ${nn} en PDF`,'Mostrame las últimas fotos de obra'];
+  const sub={cliente:'Preguntale lo que quieras sobre tu casa. Te cuenta, te muestra fotos y renders y te arma PDFs.',direccion:'Preguntale lo que quieras sobre cualquier obra: te contesta, te arma PDFs y te muestra fotos y renders.',auditor:'Preguntale sobre tu agenda y tus obras. También te arma PDFs y te muestra fotos.',estudio:'Preguntale sobre tus entregas, planos y obras. También te arma PDFs y te muestra renders.',jefe:'Preguntale lo que quieras sobre tus obras. También te arma PDFs y te muestra fotos y renders.'}[r];
   const n=misChats().length;
   return `<section class="ia" aria-label="Nexo IA"><div class="ia-head"><img src="${ICONO}" alt="" class="ia-ico"><div><b>Nexo IA</b><span class="muted">${sub}</span></div><div class="ia-tools"><button class="btn sm ghost" data-act="iaHist" aria-label="Historial de chats">Historial${n?` · ${n}`:''}</button>${S.chat.length?'<button class="btn sm ghost" data-act="iaNuevo">Nuevo chat</button>':''}</div></div>
-  <div class="ia-log" id="ia-log">${S.chat.map((m,i)=>`<div class="msg ${m.role}" ${i===S.chat.length-1?'id="ia-last"':''}><div class="mtx">${m.role==='user'?esc(m.text):iaFormat(m.text)}</div>${m.note?`<span class="ia-note">${m.note}</span>`:''}${m.pending?'':`<span class="macts"><button data-act="iaCopy" data-i="${i}" aria-label="Copiar mensaje">${ICO_COPY}<span>Copiar</span></button>${m.role==='assistant'?`<button data-act="iaSpeak" data-i="${i}" aria-label="Escuchar respuesta">${ICO_SPK}<span>Escuchar</span></button>`:''}</span>`}</div>`).join('')}</div>
+  <div class="ia-log" id="ia-log">${S.chat.map((m,i)=>`<div class="msg ${m.role}" ${i===S.chat.length-1?'id="ia-last"':''}><div class="mtx">${m.role==='user'?esc(m.text):iaFormat(m.text)}</div>${iaAdj(m,i)}${m.note?`<span class="ia-note">${m.note}</span>`:''}${m.pending?'':`<span class="macts"><button data-act="iaCopy" data-i="${i}" aria-label="Copiar mensaje">${ICO_COPY}<span>Copiar</span></button>${m.role==='assistant'?`<button data-act="iaSpeak" data-i="${i}" aria-label="Escuchar respuesta">${ICO_SPK}<span>Escuchar</span></button>`:''}</span>`}</div>`).join('')}</div>
   ${S.chat.length?'':`<div class="ia-sug">${sug.map(s=>`<button data-act="iaSug" data-q="${esc(s)}">${esc(s)}</button>`).join('')}</div>`}
   <form class="ia-form" data-submit="ia"><button type="button" class="btn mic ${S.escuchando?'on':''}" data-act="iaMic" aria-label="Hablarle por voz">${ICO_MIC}</button><input id="ia-q" autocomplete="off" placeholder="${S.escuchando?'Te escucho…':r==='cliente'?'¿Cuándo colocan las aberturas?':'Escribí o tocá el micrófono para hablar'}" aria-label="Pregunta para Nexo IA"><button class="btn gold" type="submit">${IA_BUSY?'Detener':'Preguntar'}</button></form></section>`;
 }
@@ -3080,6 +3087,141 @@ function vLogin(){
 }
 
 /* ================= inicio ================= */
+/* ================= v13 · Nexo IA conversacional: entiende preguntas libres, consulta los datos reales y arma PDF, fotos y renders ================= */
+const IA_API='/api/claude',IA_MODEL='claude-sonnet-5';
+const iaTxtCorto=(s,n)=>String(s==null?'':s).replace(/[\u0000-\u001f]/g,' ').slice(0,n||600);
+function iaObra(txt){
+  const os=misObras();if(!os.length)return null;if(os.length===1&&!txt)return os[0];
+  const n=norm(String(txt||''));
+  return os.find(o=>norm(o.nombre)===n)||os.find(o=>{const num=(o.nombre.match(/\d+/)||[''])[0];return num&&n.includes(num)&&n.split(/\s+/).some(w=>norm(o.nombre).includes(w)&&w.length>2&&!/^\d+$/.test(w))})||os.find(o=>n&&(norm(o.nombre).includes(n)||n.includes(norm(o.nombre))))||(os.length===1?os[0]:null);
+}
+const iaFotosObra=o=>o.informes.flatMap(i=>(i.fotos||[]).filter(id=>FILES[id]).map(id=>({id,src:FILES[id].url,cap:`Obra · semana del ${fmt(i.desde)}`})));
+const iaRendersObra=o=>{const l=DOCS.filter(x=>x.obra===o&&x.cat==='ren'&&x.file&&FILES[x.file]).map(x=>({id:x.file,src:FILES[x.file].url,cap:x.nombre||'Render'}));if(!l.length&&o===OBRAS[0])return GAL.map((g,k)=>({id:null,src:g,cap:['Fachada principal','Acceso','Contrafachada','Vista desde la laguna','Living'][k]||'Render'}));return l};
+function iaDatosObra(o){
+  const r=ROLE();
+  if(r==='cliente'){const b=_snapshot9();return{...b,fotos_de_obra_disponibles:iaFotosObra(o).length,renders_disponibles:iaRendersObra(o).length}}
+  const sn=snapRol();let d=null;
+  if(sn&&sn.obras)d=sn.obras.find(x=>x.obra===o.nombre)||null;
+  if(!d)d={obra:o.nombre,etapa:etapaDe(o),avance:avance(o)+'%'};
+  return{...d,ubicacion:o.ubic,estudio:o.estudio,fotos_de_obra_disponibles:iaFotosObra(o).length,renders_disponibles:iaRendersObra(o).length,hoy:iso(TODAY)};
+}
+function iaDocEstado(o){
+  const r=ROLE(),full=r==='direccion',hoy=fmtLargo(TODAY)+' de 2026';
+  const fotos=iaFotosObra(o).slice(-6).map(x=>x.id);
+  if(r==='cliente'){
+    const ct=contractual(o),inf=o.informes.at(-1),cert=AUD.filter(a=>a.obra===o&&a.tipo==='cert');
+    return{titulo:'Estado general de la obra',sub:'Nexo · Seguimiento para el propietario',obra:o.nombre,num:'EST-'+iso(TODAY).replace(/-/g,''),fecha:hoy,
+      campos:[['Etapa actual',etapaDe(o)],['Avance',avance(o)+'%'],['Entrega prevista',fmtLargo(finContractual(o))],['Ubicación',o.ubic]],
+      secciones:[{h:'Etapas y fechas',tabla:{cols:['Etapa','Desde','Hasta'],w:[.5,.25,.25],rows:HITOS_CLIENTE.map(h=>{const ts=ct.filter(t=>ETAPA[t.rubro]===h);return ts.length?[h,fmt(Math.min(...ts.map(t=>t.start))),fmt(Math.max(...ts.map(t=>t.end)))]:[h,'—','—']})}},
+        ...(inf?[{h:'Resumen de la última semana',texto:inf.resumen}]:[]),
+        {h:'Etapas certificadas',lista:cert.length?cert.map(a=>`${a.data.etapa} · ${fmt(a.fecha)}`):['Todavía no hay etapas certificadas.']},
+        {h:'Próximas visitas de la auditoría',lista:o.sup.filter(s=>s.estado==='programada').slice(0,3).map(s=>fmtLargo(s.fecha)).concat([]).length?o.sup.filter(s=>s.estado==='programada').slice(0,3).map(s=>fmtLargo(s.fecha)):['Sin visitas programadas.']},
+        {h:'Registro visual',fotos}]};
+  }
+  const abiertas=o.cards.filter(c=>['rojo','naranja'].includes(color(c)));
+  const adics=ADIC.filter(a=>a.obra===o);
+  const ult=o.informes.at(-1);
+  return{titulo:'Estado general de la obra',sub:`${r==='estudio'?'Estudio':ROL_TXT[r]} · ${ORG}`,obra:o.nombre,num:'EST-'+iso(TODAY).replace(/-/g,''),fecha:hoy,
+    campos:[['Etapa actual',etapaDe(o)],['Avance real / base',`${avance(o)}% / ${avancePlan(o)}%`],['Entrega prevista',fmtLargo(finObra(o))],['Entrega según base',fmtLargo(finBase(o))],['Estudio',o.estudio],...(full?[['Jefatura de obra',o.jefe],['Dotación hoy',o.dotacion.hoy+' personas']]:[])],
+    secciones:[{h:'Cronograma conforme a obra',tabla:{cols:['Tarea','Inicio','Fin','Estado','Avance'],w:[.36,.15,.15,.18,.16],rows:o.tasks.map(t=>[t.name,fmt(t.start),fmt(t.end),estTarea(t),t.real?t.real.av+'%':'—'])}},
+      {h:'Tarjetas en rojo o naranja',lista:abiertas.length?abiertas.map(c=>`${CARD[c.tipo].n} · ${c.task.name} (${NOMBRE[color(c)].toLowerCase()}, límite ${fmt(timing(c).limit)}): ${c.items.filter(i=>!iDone(i)).map(i=>i.txt).slice(0,5).join('; ')||'sin pendientes'}`):['No hay tarjetas vencidas ni en riesgo.']},
+      {h:'Adicionales y cambios',lista:adics.length?adics.map(a=>`N° ${a.n}: ${a.txt} — ${adicEstado(a)[0]}`):['Sin adicionales.']},
+      ...(ult?[{h:'Última semana',texto:ult.resumen||ult.ejecutados||'—'}]:[]),
+      {h:'Supervisión y certificados',lista:[`Próxima supervisión: ${(o.sup.find(s=>s.estado==='programada')?fmt(o.sup.find(s=>s.estado==='programada').fecha):'sin fecha')}`,...o.cert.filter(c=>certEstado(c)!=='certificada').map(c=>`Certificado pendiente: ${c.etapa} (${fmt(certFecha(c))})`)]},
+      {h:'Registro visual',fotos}]};
+}
+function iaDocLibre(o,a){
+  const secs=(Array.isArray(a.secciones)?a.secciones:[]).slice(0,12).map(s=>{
+    const h=iaTxtCorto(s.titulo||'Sección',80);
+    if(Array.isArray(s.filas)&&Array.isArray(s.columnas)&&s.columnas.length){const n=Math.min(s.columnas.length,6),cols=s.columnas.slice(0,n).map(c=>iaTxtCorto(c,30));return{h,tabla:{cols,w:cols.map(()=>1/n),rows:s.filas.slice(0,60).map(f=>cols.map((_,i)=>iaTxtCorto((f||[])[i],160)))}}}
+    if(Array.isArray(s.items))return{h,lista:s.items.slice(0,40).map(x=>iaTxtCorto(x,300))};
+    if(s.fotos)return{h,fotos:(s.fotos==='renders'?iaRendersObra(o):iaFotosObra(o)).slice(-6).map(x=>x.id).filter(Boolean)};
+    return{h,texto:iaTxtCorto(s.texto||'',3000)};
+  });
+  return{titulo:iaTxtCorto(a.titulo||'Informe',90),sub:`Nexo IA · ${ROL_TXT[ROLE()]||'Propietario'}`,obra:o.nombre,num:'IA-'+iso(TODAY).replace(/-/g,''),fecha:fmtLargo(TODAY)+' de 2026',campos:[],...(a.intro?{intro:iaTxtCorto(a.intro,900)}:{}),secciones:secs};
+}
+const IA_TOOLS=[
+ {name:'consultar_obra',description:'Trae los datos reales y actualizados de una obra de la app: etapa, avance, cronograma por tarea, tarjetas pendientes, planos, adicionales, registro diario, informes, auditorías, equipo y más según el rol. Usala siempre antes de responder sobre una obra.',input_schema:{type:'object',properties:{obra:{type:'string',description:'Nombre o número de la obra, por ejemplo "Castores 475"'}},required:['obra']}},
+ {name:'mostrar_imagenes',description:'Muestra imágenes dentro del chat: renders del proyecto, fotos de obra cargadas en los informes, o cómo se ve la casa en la etapa actual.',input_schema:{type:'object',properties:{obra:{type:'string'},tipo:{type:'string',enum:['renders','fotos_obra','etapa_actual']}},required:['obra','tipo']}},
+ {name:'generar_pdf',description:'Genera un PDF descargable. Para pedidos de "estado general" usá plantilla estado_general (arma el informe completo solo). Para cualquier otro informe o resumen, usá plantilla personalizado y armá las secciones con datos que ya consultaste. Cada sección tiene titulo y UNO de: texto, items (lista), columnas+filas (tabla) o fotos ("obra" o "renders").',input_schema:{type:'object',properties:{obra:{type:'string'},plantilla:{type:'string',enum:['estado_general','personalizado']},titulo:{type:'string'},intro:{type:'string'},secciones:{type:'array',items:{type:'object',properties:{titulo:{type:'string'},texto:{type:'string'},items:{type:'array',items:{type:'string'}},columnas:{type:'array',items:{type:'string'}},filas:{type:'array',items:{type:'array',items:{type:'string'}}},fotos:{type:'string',enum:['obra','renders']}},required:['titulo']}}},required:['obra','plantilla']}}
+];
+async function iaEjecutar(name,a,adj){
+  const o=iaObra(a&&a.obra);
+  if(!o)return{error:`No encontré esa obra entre las que podés ver (${misObras().map(x=>x.nombre).join(', ')||'ninguna'}).`};
+  if(name==='consultar_obra')return iaDatosObra(o);
+  if(name==='mostrar_imagenes'){
+    let l=[];
+    if(a.tipo==='renders')l=iaRendersObra(o);
+    else if(a.tipo==='fotos_obra')l=iaFotosObra(o).slice(-8).reverse();
+    else{const k=Math.max(0,HITOS_CLIENTE.indexOf(etapaDe(o)));l=[{src:k>=6?GAL[0]:`/nexo2/etapa-${k}.jpg`,cap:`${o.nombre} · etapa ${etapaDe(o)} (imagen de referencia)`}]}
+    l=l.slice(0,8);if(!l.length)return{resultado:'No hay imágenes de ese tipo cargadas para esta obra.'};
+    adj.imgs.push(...l.map(x=>({src:x.src,cap:x.cap})));return{resultado:`Se mostraron ${l.length} imagen(es) en el chat.`};
+  }
+  if(name==='generar_pdf'){
+    const doc=a.plantilla==='estado_general'?iaDocEstado(o):iaDocLibre(o,a);
+    const blob=await docPDF(doc);const nm=`${slug(doc.titulo)}_${slug(o.nombre)}.pdf`;adj.pdfs.push({name:nm,blob});
+    return{resultado:`PDF "${doc.titulo}" generado (${nm}). Ya aparece como botón de descarga en el chat.`};
+  }
+  return{error:'Herramienta desconocida'};
+}
+function iaSistema(){
+  const r=ROLE(),os=misObras();
+  const alcance=r==='cliente'?`Hablás con el propietario de la casa ${COBRA().nombre}. Solo conocés su obra: no hablás de costos de la constructora, de otras obras ni de temas internos.`:IA_ALCANCE[r];
+  const idx=os.map(o=>({obra:o.nombre,etapa:etapaDe(o),avance:avance(o)+'%',entrega_prevista:iso(r==='cliente'?finContractual(o):finObra(o))}));
+  return `Sos Nexo IA, el asistente de inteligencia artificial de la app de gestión de obra Nexo. Hablás con ${S.u.name} (${ROL_TXT[r]||'Propietario'}). Hoy es ${fmtLargo(TODAY)} de 2026.
+${alcance}
+Cómo respondés: conversá como lo haría una persona muy capaz y cercana, en español rioplatense. Contestá lo que te preguntan con tus palabras, de forma natural, sin plantillas ni respuestas armadas; podés explicar, comparar, opinar con fundamento, resumir y razonar sobre los datos. Breve y concreto, pero completo cuando la pregunta lo pide. Usá listas solo cuando ayudan a leer.
+Datos: tenés herramientas para consultar la información real de la app. Antes de contestar sobre una obra, usá consultar_obra. Nunca inventes datos, fechas ni números: si algo no está en la app, decilo. Si te preguntan algo que no tiene que ver con la obra, ayudá igual de forma breve y volvé a lo tuyo.
+Archivos: si piden un PDF, informe o resumen para bajar, usá generar_pdf (para "estado general" usá la plantilla estado_general). Si piden fotos, renders o cómo se ve la casa, usá mostrar_imagenes. Después de usarlas, contá en una frase qué generaste o mostraste. No menciones nombres de herramientas.
+${r==='direccion'?'Tenés acceso completo, incluidos costos y desempeño.':'No hables de costos ni montos de la constructora.'} Nunca reveles códigos de acceso.
+Obras que puede ver esta persona: ${JSON.stringify(idx)}`;
+}
+function iaMsgs(){
+  const h=S.chat.filter(m=>!m.pending&&m.text).slice(-12).map(m=>({role:m.role,content:m.text}));
+  while(h.length&&h[0].role!=='user')h.shift();
+  const out=[];h.forEach(m=>{if(out.length&&out.at(-1).role===m.role)out.at(-1).content+='\n'+m.content;else out.push({...m})});
+  return out;
+}
+const iaAskLegacy=iaAsk;
+iaAsk=async function(q){
+  q=(q||'').trim();if(!q||IA_BUSY)return;
+  if(!/^https?:/.test(location.protocol)){return iaAskLegacy(q)}
+  S.chat.push({role:'user',text:q,t:Date.now()});
+  const ans={role:'assistant',text:'Pensando…',pending:true,adj:{imgs:[],pdfs:[]}};S.chat.push(ans);IA_BUSY=true;iaRender();
+  const msgs=iaMsgs();IA_CTL=new AbortController();
+  try{
+    for(let vuelta=0;vuelta<7;vuelta++){
+      const r=await fetch(IA_API,{method:'POST',headers:{'Content-Type':'application/json','x-nexo-origen':'nexo2-ia'},signal:IA_CTL.signal,body:JSON.stringify({model:IA_MODEL,max_tokens:2500,thinking:{type:'disabled'},system:iaSistema(),tools:IA_TOOLS,messages:msgs})});
+      let j=null;try{j=await r.json()}catch(e){}
+      if(!r.ok||!j||j.error)throw{code:'api',text:(j&&j.error&&j.error.message)||('Error '+r.status)};
+      const texto=(j.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
+      const usos=(j.content||[]).filter(b=>b.type==='tool_use');
+      if(j.stop_reason==='tool_use'&&usos.length){
+        msgs.push({role:'assistant',content:j.content});
+        ans.text=texto||'Consultando los datos…';iaRender();
+        const res=[];
+        for(const u of usos){let out;try{out=await iaEjecutar(u.name,u.input||{},ans.adj)}catch(e){out={error:'No se pudo completar: '+(e&&e.message||e)}}
+          res.push({type:'tool_result',tool_use_id:u.id,content:JSON.stringify(out).slice(0,30000)})}
+        msgs.push({role:'user',content:res});continue;
+      }
+      ans.text=texto||'Listo.';break;
+    }
+  }catch(e){
+    if(e&&e.name==='AbortError')ans.text=ans.text&&ans.text!=='Pensando…'?ans.text:'Detenido.';
+    else{ans.text=iaLocal(q);ans.note='No pude conectar con la IA ('+iaTxtCorto(e&&e.text||e&&e.message||'sin conexión',120)+'). Te muestro una respuesta rápida con los datos de la app.'}
+  }
+  ans.pending=false;ans.t=Date.now();IA_BUSY=false;IA_CTL=null;iaGuardar();iaRender();if(S.vozAuto)hablar(ans.text);
+};
+function iaAdj(m,i){
+  const a=m.adj;if(!a)return'';
+  return `${a.imgs.length?`<div class="ia-imgs">${a.imgs.map((x,j)=>`<button type="button" class="ia-img" data-act="iaImg" data-i="${i}" data-j="${j}"><img src="${x.src}" alt="${esc(x.cap)}" loading="lazy"><span>${esc(x.cap)}</span></button>`).join('')}</div>`:''}${a.pdfs.map((p,j)=>`<button type="button" class="btn sm gold ia-pdf" data-act="iaPdf" data-i="${i}" data-j="${j}">⬇ ${esc(p.name)}</button>`).join('')}`;
+}
+Object.assign(A,{
+  iaImg:ds=>{const x=(S.chat[+ds.i]||{}).adj?.imgs[+ds.j];if(!x)return;S.iaImgSel=x;openSheet(`<img src="${x.src}" alt="${esc(x.cap)}" style="width:100%;border-radius:12px;display:block"><p class="muted small" style="margin:8px 0">${esc(x.cap)}</p><button class="btn gold full" data-act="iaImgDl">Descargar imagen</button>`,'Imagen')},
+  iaImgDl:async()=>{const x=S.iaImgSel;if(!x)return;try{bajar(await urlBlob(x.src),`${slug(x.cap)}.jpg`)}catch(e){toast('No se pudo descargar la imagen')}},
+  iaPdf:ds=>{const p=(S.chat[+ds.i]||{}).adj?.pdfs[+ds.j];if(p)bajar(p.blob,p.name)}
+});
+
 if(LOCK==='cliente')S.u=USERS.find(u=>u.id==='cli'),S.tab='cliente';else if(LOCK==='estudio')S.step='cons';else if(LOCK==='constructora')S.step='roles';
 $('#brand-icon').src=ICONO;
 draw();
