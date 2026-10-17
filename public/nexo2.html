@@ -1284,6 +1284,15 @@ function buildObra(o){
 }
 const certFecha=c=>['losa','fund','pileta'].includes(c.task.rubro)?c.task.end-2*DAY:c.task.end;
 const certEstado=c=>c.estado==='certificada'?'certificada':certFecha(c)-TODAY<30*DAY?'pendiente':'programada';
+/* ===== configuración de las obras guardada en este aparato: modelo, m², inicio, jefatura, jornal, obras nuevas ===== */
+const CFG_LS='nexo2_obras_cfg';
+const CFG_KEYS=['nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','estudio','jornal','dot','late','margen','edits','invitados'];
+const cfgPick=o=>{const r={};CFG_KEYS.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r};
+const CFG_ORIG=new Set(OBRAS.map(o=>o.id));
+const CFG_DEF=Object.fromEntries(OBRAS.map(o=>[o.id,JSON.parse(JSON.stringify(cfgPick(o)))]));
+try{const g=JSON.parse(localStorage.getItem(CFG_LS)||'null');if(g){Object.entries(g.mod||{}).forEach(([id,ch])=>{const o=OBRAS.find(x=>x.id===id);if(o)Object.assign(o,ch)});(g.nuevas||[]).forEach(c=>{if(c&&c.id&&!OBRAS.some(x=>x.id===c.id))OBRAS.push(c)})}}catch(e){}
+let CFG_LAST='';
+function cfgGuardar(){try{const mod={},nuevas=[];OBRAS.forEach(o=>{const cur=cfgPick(o);if(CFG_ORIG.has(o.id)){const d=CFG_DEF[o.id],ch={};CFG_KEYS.forEach(k=>{if(JSON.stringify(cur[k])!==JSON.stringify(d[k]))ch[k]=cur[k]});if(Object.keys(ch).length)mod[o.id]=ch}else nuevas.push({id:o.id,constructora:o.constructora,nuevo:o.nuevo,...cur})});const t=JSON.stringify({mod,nuevas});if(t!==CFG_LAST){CFG_LAST=t;localStorage.setItem(CFG_LS,t)}}catch(e){}}
 OBRAS.forEach(buildObra);
 
 /* historial: lo resuelto antes de hoy, con una tasa de demora distinta por obra */
@@ -2402,7 +2411,7 @@ const SUBMIT={
   modelo:f=>{readMO();const o=findO(f.dataset.o);cambiarModelo(o,MO);MO=null;closeSheet();notify('jefe',o,`La Dirección actualizó el modelo de ${o.nombre}: ${modeloTxt(o)}`,null);toast(`Modelo aplicado: ${modeloTxt(o)}`);draw()},
   claveIn:f=>{const r=S.codRol||'prop',txt=val('cl-clave');if(r==='dir'){if(normClave(txt)&&normClave(txt)===normClave(DIRCOD))login('dir');else toast('Código incorrecto');return}const o=buscarCodigo(r,txt);if(!o){toast(r==='prop'?'Esa clave no es válida. Revisala con tu estudio.':'Ese código no es válido. Pedíselo a la Dirección.');return}guardarCod(r,o.id);if(r==='prop'){S.cobra=o.id;S.chat=[];login('cli')}else if(r==='jefe'){S.mias=guardadas('jefe');login('jefe')}else{S.audObras=guardadas('aud');login('aud')}},
   invitar:f=>{const o=findO(f.dataset.o),rol=f.dataset.r;const mail=val('in-mail');if(!mail||!/@/.test(mail)){toast('Poné un mail válido');return}INVITES.push({id:'iv'+(++uid),obra:o,rol,para:rol==='estudio'?o.estudio:'Propietario',email:mail,estado:'pendiente',fecha:TODAY});o.invitados[rol]='pendiente';if(rol==='estudio')notify('estudio',o,`Invitación a ${o.nombre}: aceptala desde Inicio`,null);closeSheet();toast(`Invitación enviada a ${mail}`);draw()},
-  crearObra:()=>{readNO();const o=buildObra({...NO,id:'o'+(++uid),constructora:ORG,nuevo:true,invitados:{estudio:'',propietario:''}});codInit(o);codGuardarLS();OBRAS.push(o);closeSheet();S.obra=o.id;S.tab='obra';S.otab='equipo';toast(`Se generaron ${o.tasks.length} tareas con sus tarjetas. Ahora invitá al estudio y al propietario.`);draw()}
+  crearObra:()=>{readNO();let nid;do{nid='o'+(++uid)}while(OBRAS.some(x=>x.id===nid));const o=buildObra({...NO,id:nid,constructora:ORG,nuevo:true,invitados:{estudio:'',propietario:''}});codInit(o);codGuardarLS();OBRAS.push(o);closeSheet();S.obra=o.id;S.tab='obra';S.otab='equipo';toast(`Se generaron ${o.tasks.length} tareas con sus tarjetas. Ahora invitá al estudio y al propietario.`);draw()}
 };
 const CHG={
   obraF:v=>{S.obraF=v;draw()},
@@ -3297,6 +3306,7 @@ Object.assign(A,{
   quitarProp:ds=>{const o=findO(ds.o);if(!o)return;openSheet(`<h2>¿Quitar ${esc(o.nombre)} de este dispositivo?</h2><p class="muted small">Se borra de la lista de este aparato. Para volver a entrar vas a necesitar la clave.</p><div class="sec"><button class="btn gold full" data-act="quitarProp2" data-o="${o.id}">Sí, quitar</button><button class="btn full" data-act="close">Cancelar</button></div>`,'Quitar obra')},
   quitarProp2:ds=>{olvidarCod('prop',ds.o);closeSheet();if(S.cobra===ds.o||!guardadas('prop').includes(S.cobra)){const r=guardadas('prop');if(r.length){S.cobra=r[0];S.chat=[];login('cli')}else{sesBorrar();S.u=null;S.codRol='prop';S.step='clave';draw();scrollTo(0,0)}}else draw();toast('Obra quitada de este dispositivo')}
 });
+const _drawCfg=draw;draw=function(...a){const r=_drawCfg.apply(this,a);cfgGuardar();return r};
 /* ================= sesión recordada: una vez que entraste, la app queda abierta en este aparato hasta que toques Salir ================= */
 const SES_LS='nexo2_sesion';
 function sesGuardar(){try{const u=S.u;if(!u)return;const d={r:u.id};if(u.id==='cli')d.cobra=S.cobra;if(u.id==='est')d.cons=S.cons;localStorage.setItem(SES_LS,JSON.stringify(d))}catch(e){}}
