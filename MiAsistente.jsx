@@ -1050,9 +1050,9 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     });
     y += 6; doc.setFontSize(10);
     doc.setFillColor(27, 58, 91); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-    doc.rect(M, y, W - 2 * M, 8, "F"); doc.text("Inversiones", M + 2, y + 5.5); doc.text("Monto", 120, y + 5.5); y += 8;
+    doc.rect(M, y, W - 2 * M, 8, "F"); doc.text("Inversiones", M + 2, y + 5.5); doc.text("Monto", 120, y + 5.5); doc.text("% de la ganancia", W - M - 2, y + 5.5, { align: "right" }); y += 8;
     doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal");
-    doc.text("(Terralagos)", M + 2, y + 5); doc.text(money(en.terralagos), 120, y + 5); y += 7;
+    doc.text("(Terralagos)", M + 2, y + 5); doc.text(money(en.terralagos), 120, y + 5); doc.text(pct(en.terralagos, en.totalEmpresa) + "%", W - M - 2, y + 5, { align: "right" }); y += 7;
     doc.setFontSize(8); doc.setFont("helvetica", "italic"); doc.setTextColor(120, 120, 120);
     doc.text("Ya sumada a la utilidad de arriba (no es un gasto), pero restada de la parte de Sebastián porque la puso él.", M, y + 4); y += 8;
     doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
@@ -2009,7 +2009,7 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
         <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Invertido en Terralagos</div>
           <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: T.text, marginTop: 3 }}>${(en.terralagos || 0).toLocaleString("es-AR")}</div>
-          <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>ya sumado a la utilidad</div>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>{pct(en.terralagos, en.totalEmpresa)}% de la ganancia · ya sumado a la utilidad</div>
         </div>
       </div>
 
