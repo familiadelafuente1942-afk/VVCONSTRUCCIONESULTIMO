@@ -7,6 +7,10 @@
 // Los códigos viven SOLO acá: nunca se devuelven salvo a quien presenta el código de Dirección.
 
 const URL_BASE = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co";
+const OLD_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co"; // app anterior (fotos de avance ya cargadas)
+const OLD_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
+const OLD_PUB = OLD_URL + "/storage/v1/object/public/";
+const NEW_PUB = URL_BASE + "/storage/v1/object/public/nexo2-fotos/";
 const norm = (t) => String(t || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 // Códigos vigentes al momento de cerrar el sistema (se usan una sola vez, hasta que Dirección los guarde).
@@ -116,6 +120,60 @@ export default async function handler(req, res) {
       return;
     }
 
+
+    // ===== traer lo cargado en la app anterior (solo Dirección) =====
+    if (b.op === "av_import") {
+      if (!dirOk(b.dir)) { await pausa(600); res.status(403).json({ error: "No autorizado" }); return; }
+      const oh = { apikey: OLD_KEY, Authorization: "Bearer " + OLD_KEY };
+      const leerOld = async (k) => {
+        const r = await fetch(`${OLD_URL}/rest/v1/bco_storage?key=eq.${k}&select=value&limit=1`, { headers: oh });
+        if (!r.ok) throw new Error("old " + r.status);
+        const rows = await r.json();
+        return rows[0] ? JSON.parse(rows[0].value) : null;
+      };
+      const obrasOld = (await leerOld("vv_obras")) || [];
+      const avOld = (await leerOld("vv_avance")) || {};
+      const nombre = {};
+      (Array.isArray(obrasOld) ? obrasOld : []).forEach((o) => { if (o && o.id) nombre[o.id] = o.nombre || o.name || o.id; });
+      if (b.modo !== "run") {
+        const lista = Object.keys(avOld).map((id) => ({
+          id, nombre: nombre[id] || id,
+          n: (avOld[id] || []).length,
+          fotos: (avOld[id] || []).reduce((t, h) => t + ((h.fotos && h.fotos.length) || (h.fotoUrl ? 1 : 0)), 0),
+        })).filter((x) => x.n > 0);
+        res.status(200).json({ obras: lista });
+        return;
+      }
+      const map = b.map || {};
+      let creados = 0, saltados = 0;
+      for (const [oldId, nuevo] of Object.entries(map)) {
+        if (!nuevo || !/^[A-Za-z0-9_-]{1,40}$/.test(nuevo) || !Array.isArray(avOld[oldId])) continue;
+        const clave = "avances_" + nuevo;
+        const v = await leer(H, clave);
+        const items = (v && v.items) || [];
+        const ids = new Set(items.map((x) => x.id));
+        for (const h of avOld[oldId]) {
+          if (!h || !h.id) continue;
+          const id = "imp_" + String(h.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+          if (ids.has(id)) { saltados++; continue; }
+          let fotos = Array.isArray(h.fotos) ? h.fotos : [];
+          if (!fotos.length && h.fotoUrl) fotos = [h.fotoUrl];
+          fotos = fotos.filter((u) => typeof u === "string" && u.startsWith(OLD_PUB)).slice(0, 12);
+          let fecha = Number(h.ts) || 0;
+          if (!fecha && typeof h.fecha === "string") { const [d, m, a] = h.fecha.split("/"); if (a) fecha = Date.parse(`20${a.slice(-2)}-${m}-${d}T12:00:00-03:00`); }
+          if (!fecha) fecha = Date.now();
+          const resumen = String(h.avance || "").replace(/\s+/g, " ").trim().slice(0, 700);
+          const txt = String(h.descripcion || "").replace(/\s+/g, " ").trim().slice(0, 700);
+          if (!fotos.length && !resumen && !txt) continue;
+          items.push({ id, fecha, sector: "", txt: resumen ? "" : txt, resumen, autor: "App anterior", fotos, importado: true });
+          creados++;
+        }
+        await escribir(H, clave, { items: items.sort((x, y) => x.fecha - y.fecha).slice(-1000) });
+      }
+      res.status(200).json({ ok: true, creados, saltados });
+      return;
+    }
+
     // ===== avances de obra con fotos =====
     if (typeof b.op === "string" && b.op.startsWith("av_")) {
       const obra = String(b.obra || "");
@@ -153,7 +211,7 @@ export default async function handler(req, res) {
       }
       if (b.op === "av_add") {
         const it = b.item || {};
-        const fotos = (Array.isArray(it.fotos) ? it.fotos : []).filter((u) => typeof u === "string" && u.startsWith(URL_BASE + "/storage/v1/object/public/nexo2-fotos/")).slice(0, 12);
+        const fotos = (Array.isArray(it.fotos) ? it.fotos : []).filter((u) => typeof u === "string" && u.startsWith(NEW_PUB)).slice(0, 12);
         const item = {
           id: "av" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
           fecha: Number(it.fecha) || Date.now(),
@@ -167,6 +225,42 @@ export default async function handler(req, res) {
         const items = [...((v && v.items) || []), item].slice(-500);
         await escribir(H, clave, { items });
         res.status(200).json({ ok: true, item });
+        return;
+      }
+      if (b.op === "av_resumen") {
+        const key = process.env.ANTHROPIC_API_KEY;
+        if (!key) { res.status(500).json({ error: "Falta ANTHROPIC_API_KEY" }); return; }
+        const v = await leer(H, clave);
+        const items = (v && v.items) || [];
+        const i = items.findIndex((x) => x.id === b.id);
+        if (i < 0) { res.status(404).json({ error: "No existe" }); return; }
+        const cur = items[i];
+        if (!cur.fotos || !cur.fotos.length) { res.status(200).json({ ok: true }); return; }
+        const prev = items.filter((x) => x.id !== cur.id && x.fecha < cur.fecha && x.fotos && x.fotos.length).sort((p, q) => q.fecha - p.fecha)[0];
+        const img = (u) => ({ type: "image", source: { type: "url", url: u } });
+        const content = [];
+        if (prev) { content.push({ type: "text", text: "FOTOS ANTERIORES:" }); prev.fotos.slice(0, 3).forEach((u) => content.push(img(u))); }
+        content.push({ type: "text", text: prev ? "FOTOS ACTUALES:" : "FOTOS ACTUALES (no hay fotos anteriores para comparar):" });
+        cur.fotos.slice(0, 4).forEach((u) => content.push(img(u)));
+        const fechaTxt = (t) => new Date(t - 108e5).toISOString().slice(0, 10);
+        content.push({ type: "text", text: (prev ? `Las fotos anteriores son del ${fechaTxt(prev.fecha)} y las actuales del ${fechaTxt(cur.fecha)}. ` : "") + (cur.sector ? `Sector: ${cur.sector}. ` : "") + (cur.txt ? `El jefe de obra escribió: "${cur.txt}". ` : "") + (prev ? "Resumí en 2 o 3 oraciones qué avanzó entre las fotos anteriores y las actuales y qué se ve pendiente. Si no se puede comparar, decilo." : "Describí en 2 oraciones qué se ve y en qué etapa está.") });
+        const r = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({
+            model: "claude-sonnet-5", max_tokens: 400,
+            system: "Sos un inspector de obra civil en Argentina. Comparás fotos de avance con criterio técnico y sos honesto: no inventes lo que no se ve. Respondé en español rioplatense (vos), claro y breve, sin títulos ni listas, máximo 3 oraciones.",
+            messages: [{ role: "user", content }],
+          }),
+        });
+        const d = await r.json();
+        const txt = d && d.content && d.content.find((c) => c.type === "text");
+        if (!r.ok || !txt) { res.status(502).json({ error: "No se pudo analizar las fotos" }); return; }
+        items[i] = { ...cur, resumen: txt.text.trim().slice(0, 900) };
+        const v2 = await leer(H, clave);
+        const items2 = ((v2 && v2.items) || []).map((x) => (x.id === cur.id ? items[i] : x));
+        await escribir(H, clave, { items: items2 });
+        res.status(200).json({ ok: true, resumen: items[i].resumen });
         return;
       }
       if (b.op === "av_del") {

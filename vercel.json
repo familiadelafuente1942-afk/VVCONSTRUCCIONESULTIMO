@@ -3,8 +3,16 @@
     {
       "source": "/((?!assets/).*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, max-age=0, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0, must-revalidate"
+        }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/nexo2.js": {
+      "maxDuration": 60
+    }
+  }
 }
