@@ -115,6 +115,68 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true });
       return;
     }
+
+    // ===== avances de obra con fotos =====
+    if (typeof b.op === "string" && b.op.startsWith("av_")) {
+      const obra = String(b.obra || "");
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const clave = "avances_" + obra;
+      if (b.op === "av_list") {
+        const v = await leer(H, clave);
+        res.status(200).json({ items: (v && v.items) || [] });
+        return;
+      }
+      // el resto exige código de Dirección o de la jefatura de esa obra
+      const cr = b.cred || {};
+      let quien = "";
+      if (cr.rol === "dir" && dirOk(cr.codigo)) quien = "dir";
+      else if (cr.rol === "jefe" && norm(cr.codigo) && norm((cods.obras[obra] || {}).j) === norm(cr.codigo)) quien = "jefe";
+      if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código para cargar avances." }); return; }
+
+      if (b.op === "av_foto") {
+        const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(b.data || ""));
+        if (!m || m[2].length > 4_000_000) { res.status(400).json({ error: "Foto inválida o muy pesada" }); return; }
+        const buf = Buffer.from(m[2], "base64");
+        const ext = m[1] === "jpeg" ? "jpg" : m[1];
+        const path = `${obra}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const subir = () => fetch(`${URL_BASE}/storage/v1/object/nexo2-fotos/${path}`, {
+          method: "POST", headers: { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "image/" + m[1], "x-upsert": "true" }, body: buf,
+        });
+        let r = await subir();
+        if (!r.ok) {
+          await fetch(`${URL_BASE}/storage/v1/bucket`, { method: "POST", headers: H, body: JSON.stringify({ id: "nexo2-fotos", name: "nexo2-fotos", public: true }) });
+          r = await subir();
+        }
+        if (!r.ok) { res.status(502).json({ error: "No se pudo guardar la foto" }); return; }
+        res.status(200).json({ url: `${URL_BASE}/storage/v1/object/public/nexo2-fotos/${path}` });
+        return;
+      }
+      if (b.op === "av_add") {
+        const it = b.item || {};
+        const fotos = (Array.isArray(it.fotos) ? it.fotos : []).filter((u) => typeof u === "string" && u.startsWith(URL_BASE + "/storage/v1/object/public/nexo2-fotos/")).slice(0, 12);
+        const item = {
+          id: "av" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+          fecha: Number(it.fecha) || Date.now(),
+          sector: String(it.sector || "").slice(0, 120),
+          txt: String(it.txt || "").slice(0, 2000),
+          autor: String(it.autor || (quien === "dir" ? "Dirección" : "Jefatura de obra")).slice(0, 80),
+          fotos,
+        };
+        if (!item.txt && !fotos.length) { res.status(400).json({ error: "Cargá una foto o un texto" }); return; }
+        const v = await leer(H, clave);
+        const items = [...((v && v.items) || []), item].slice(-500);
+        await escribir(H, clave, { items });
+        res.status(200).json({ ok: true, item });
+        return;
+      }
+      if (b.op === "av_del") {
+        const v = await leer(H, clave);
+        const items = ((v && v.items) || []).filter((x) => x.id !== b.id);
+        await escribir(H, clave, { items });
+        res.status(200).json({ ok: true });
+        return;
+      }
+    }
     res.status(400).json({ error: "Operación inválida" });
   } catch (e) {
     res.status(500).json({ error: "Error del servidor" });

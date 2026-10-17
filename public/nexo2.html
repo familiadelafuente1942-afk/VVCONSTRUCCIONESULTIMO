@@ -941,6 +941,11 @@ main:has(.login) .note{font-size:11.5px;padding:6px 10px}
 /* ================= v15 · botón para parar la voz ================= */
 .vozstop{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom,0px));z-index:60;display:flex;align-items:center;gap:10px;padding:12px 20px;border-radius:999px;border:1px solid var(--gold);background:#1a1710;color:#f3e3bf;font:600 15px var(--body);box-shadow:0 6px 24px rgba(0,0,0,.6);cursor:pointer}
 .vozstop .vs-ico{width:12px;height:12px;background:var(--gold);border-radius:2px;display:block}
+
+.avgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin:8px 0}
+.avph{padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#000;aspect-ratio:1;cursor:pointer}
+.avph img{width:100%;height:100%;object-fit:cover;display:block}
+.avc .top{display:flex;justify-content:space-between;gap:8px;align-items:center}
 </style>
 <div class="app">
   <header class="top">
@@ -1706,11 +1711,11 @@ function vObras(){
 function vObra(){
   const o=OBRAS.find(x=>x.id===S.obra);if(!o||!puedeVer(o)){S.tab='obras';return vObras()}
   const r=ROLE(),est=r==='estudio',aud=r==='auditor',a=actual(o),n=proxima(o);
-  const tabs=est?[['crono','Cronograma'],['sol','Tarjetas'],['docs','Planos'],['adic','Adicionales'],['audit','Auditoría']]:aud?[['asup','Supervisiones'],['arev','Revisión de doc.'],['acert','Certificación'],['crono','Cronograma'],['docs','Planos']]:[['crono','Cronograma'],['docs','Planos'],['informes','Informes'],['adic','Adicionales'],['audit','Auditoría'],['equipo','Equipo']];
+  const tabs=est?[['crono','Cronograma'],['sol','Tarjetas'],['docs','Planos'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría']]:aud?[['asup','Supervisiones'],['arev','Revisión de doc.'],['acert','Certificación'],['crono','Cronograma'],['docs','Planos'],['avances','Avances']]:[['crono','Cronograma'],['docs','Planos'],['informes','Informes'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría'],['equipo','Equipo']];
   if(!tabs.find(t=>t[0]===S.otab))S.otab=tabs[0][0];
   const cs=est?o.cards.filter(c=>c.tipo==='doc'):o.cards;const falt=cs.filter(c=>!cDone(c)&&color(c)!=='futuro').length,res=cs.filter(cDone).length,nuevos=o.cards.filter(cNuevos).length;
   const dv=desvioSem(o);
-  const body={crono:tabCrono,sol:tabSol,docs:tabDocs,informes:tabInformes,adic:tabAdic,audit:tabAudit,equipo:tabEquipo,asup:o=>audPanel(o,'sup'),arev:o=>audPanel(o,'rev'),acert:o=>audPanel(o,'cert')}[S.otab](o);
+  const body={crono:tabCrono,sol:tabSol,docs:tabDocs,informes:tabInformes,avances:tabAvances,adic:tabAdic,audit:tabAudit,equipo:tabEquipo,asup:o=>audPanel(o,'sup'),arev:o=>audPanel(o,'rev'),acert:o=>audPanel(o,'cert')}[S.otab](o);
   const facts=aud?'':`<div class="facts"><div class="fact"><span>Ahora</span><b>${iniciada(o)?esc(a.name):'Por iniciar'}</b></div><div class="fact"><span>Próxima tarea</span><b>${n?esc(n.name)+' · '+fmt(n.start):'Entrega'}</b></div><div class="fact"><span>${est?'Entrega contractual':'Entrega prevista'}</span><b class="${!est&&dv>0?'t-naranja':''}">${fmt(est?finContractual(o):finObra(o))}</b><small>${est?'según el cronograma presentado':dv>0?`${plural(dv,'semana','semanas')} después de la base`:'igual que la base'}</small></div><div class="fact"><span>${esDir()?'Pérdida por esperas':est?'Para entregar':'Tarjetas vencidas'}</span><b class="${esDir()?'t-rojo':''}">${esDir()?money(o.cards.reduce((s,c)=>s+costoEst(c),0)):est?falt:o.cards.filter(c=>color(c)==='rojo').length}</b></div></div>`;
   return `<div class="ohead"><button class="back" data-act="tab" data-t="obras">← Obras</button><img class="hero" src="${img(o)}" alt="Render de ${esc(o.nombre)}">
   <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end"><div><span class="eyebrow">${esc(o.ubic)}</span><h1>${esc(o.nombre)}</h1></div><span class="bigpct">${avance(o)}%</span></div>
@@ -2427,7 +2432,7 @@ const SUBMIT={
     if(!d.ok){toast(d.error||(r==='dir'?'Código incorrecto':r==='prop'?'Esa clave no es válida. Revisala con tu estudio.':'Ese código no es válido. Pedíselo a la Dirección.'));return}
     if(r==='dir'){S.dirAuth=txt.toUpperCase().replace(/\s+/g,'');try{localStorage.setItem('nexo2_dirauth',S.dirAuth)}catch(e){}login('dir');return}
     const o=OBRAS.find(x=>x.id===d.obra);if(!o){toast('Esa obra todavía no está disponible en este dispositivo. Probá de nuevo en unos segundos.');return}
-    guardarCod(r,o.id);if(r==='prop'){S.cobra=o.id;S.chat=[];login('cli')}else if(r==='jefe'){S.mias=guardadas('jefe');login('jefe')}else{S.audObras=guardadas('aud');login('aud')}},
+    guardarCod(r,o.id);credGuardar(r,o.id,txt);if(r==='prop'){S.cobra=o.id;S.chat=[];login('cli')}else if(r==='jefe'){S.mias=guardadas('jefe');login('jefe')}else{S.audObras=guardadas('aud');login('aud')}},
   invitar:f=>{const o=findO(f.dataset.o),rol=f.dataset.r;const mail=val('in-mail');if(!mail||!/@/.test(mail)){toast('Poné un mail válido');return}INVITES.push({id:'iv'+(++uid),obra:o,rol,para:rol==='estudio'?o.estudio:'Propietario',email:mail,estado:'pendiente',fecha:TODAY});o.invitados[rol]='pendiente';if(rol==='estudio')notify('estudio',o,`Invitación a ${o.nombre}: aceptala desde Inicio`,null);closeSheet();toast(`Invitación enviada a ${mail}`);draw()},
   crearObra:()=>{readNO();let nid;do{nid='o'+(++uid)}while(OBRAS.some(x=>x.id===nid));const o=buildObra({...NO,id:nid,constructora:ORG,nuevo:true,invitados:{estudio:'',propietario:''}});codInit(o);codGuardarLS();OBRAS.push(o);closeSheet();S.obra=o.id;S.tab='obra';S.otab='equipo';toast(`Se generaron ${o.tasks.length} tareas con sus tarjetas. Ahora invitá al estudio y al propietario.`);draw()}
 };
@@ -2653,6 +2658,7 @@ function vCliente(){
   <section class="sec"><span class="eyebrow">${esc(o.ubic)}</span><h1>${esc(o.nombre)}</h1>
   <div class="cl-top"><div><span class="bigpct">${avance(o)}%</span><span class="muted"> de avance</span></div><div class="cd"><b>${sem}</b><span>semanas para la entrega<br><span class="muted">${fmtY(fC)}</span></span></div></div><div class="bar"><i style="width:${avance(o)}%"></i></div></section>
   ${vIA()}
+  ${secAvCliente(o)}
   <section class="sec"><div class="sec-head"><h2>Tu casa, etapa por etapa</h2><span class="muted small">deslizá para recorrerla</span></div>
   <div class="casa-wrap">${stageOK?casaSVG(k,idx):''}<div class="casa-cap"><b>${ETAPAS_CASA[k][0]}</b><span>${ETAPAS_CASA[k][1]}</span><span class="${k<idx?'t-verde':k===idx?'t-gold':'muted'}">${k<idx?'Terminada':k===idx?'Estamos acá':'Próximamente'}${rk&&k<6?` · ${fmt(rk[0])} a ${fmt(rk[1])}`:k===6?` · ${fmt(fC)}`:''}</span></div></div>
   <input type="range" class="casa-rng" min="0" max="6" step="1" value="${k}" data-inp="casa" aria-label="Recorrer las etapas de la obra">
@@ -3346,6 +3352,77 @@ try{if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigato
 $('#brand-icon').src=ICONO;
 try{if(!localStorage.getItem('nexo2_reset_v2')){['nexo2_obras_prop','nexo2_obras_jefe','nexo2_obras_aud','nexo2_sesion'].forEach(k=>localStorage.removeItem(k));localStorage.setItem('nexo2_reset_v2','1')}}catch(e){}
 {let ok=!LOCK;try{const d=JSON.parse(localStorage.getItem(SES_LS)||'null');if(LOCK&&d)ok=LOCK==='cliente'?d.r==='cli':LOCK==='estudio'?d.r==='est':['dir','jefe','aud'].includes(d.r)}catch(e){}if(ok)sesRestaurar()}
+/* ================= avances de obra con fotos: se guardan en la nube y los ve cada rol en su obra ================= */
+const AVS={};
+const fAR=t=>fmt(t-108e5);
+const hAR=t=>{const x=new Date(t-108e5);return String(x.getUTCHours()).padStart(2,'0')+':'+String(x.getUTCMinutes()).padStart(2,'0')};
+const puedeAv=o=>ROLE()==='direccion'||(ROLE()==='jefe'&&puedeVer(o));
+function credAv(o){
+  if(ROLE()==='direccion')return{rol:'dir',codigo:dirAuthGet()};
+  if(ROLE()==='jefe'){try{return{rol:'jefe',codigo:((JSON.parse(localStorage.getItem('nexo2_cred')||'{}').jefe)||{})[o.id]||''}}catch(e){}}
+  return null;
+}
+function credGuardar(r,id,codigo){try{const c=JSON.parse(localStorage.getItem('nexo2_cred')||'{}');(c[r]=c[r]||{})[id]=codigo.toUpperCase().replace(/\s+/g,'');localStorage.setItem('nexo2_cred',JSON.stringify(c))}catch(e){}}
+async function avLoad(o,fuerza){
+  const a=AVS[o.id]=AVS[o.id]||{items:null,cargando:false,t:0,error:''};
+  if(a.cargando||(!fuerza&&a.items&&Date.now()-a.t<30000))return;
+  a.cargando=true;
+  try{const d=await codApi({op:'av_list',obra:o.id});a.items=d.items||[];a.error='';a.t=Date.now()}
+  catch(e){a.error='No se pudieron cargar los avances. Revisá la conexión.';if(!a.items)a.items=[];a.t=Date.now()}
+  a.cargando=false;draw();
+}
+function avItem(x,o,borrar){
+  return `<div class="card avc"><div class="top"><b>${fAR(x.fecha)} · ${hAR(x.fecha)}</b>${x.sector?`<span class="chip">${esc(x.sector)}</span>`:''}</div>
+  ${x.txt?`<p style="margin:6px 0">${esc(x.txt)}</p>`:''}
+  ${x.fotos&&x.fotos.length?`<div class="avgrid">${x.fotos.map(u=>`<button type="button" class="avph" data-act="verFotoAv" data-u="${esc(u)}" aria-label="Ver foto"><img src="${esc(u)}" alt="Avance de obra" loading="lazy"></button>`).join('')}</div>`:''}
+  <span class="muted small">${esc(x.autor||'')}</span>${borrar?`<button class="btn sm ghost" data-act="avBorrar" data-o="${o.id}" data-id="${x.id}" style="margin-left:8px">Borrar</button>`:''}</div>`;
+}
+function tabAvances(o){
+  const a=AVS[o.id];if(!a||!a.items)avLoad(o);
+  const items=((a&&a.items)||[]).slice().sort((p,q)=>q.fecha-p.fecha);
+  const w=puedeAv(o);
+  return `${w?`<button class="btn gold" data-act="avNuevo" data-o="${o.id}">+ Cargar avance con fotos</button>`:''}
+  ${a&&a.error?`<div class="infobox">${esc(a.error)}</div>`:''}
+  <div class="list">${!a||!a.items?'<p class="muted">Cargando avances…</p>':items.map(x=>avItem(x,o,w)).join('')||`<p class="muted">Todavía no hay avances cargados.${w?' Subí el primero con fotos de lo que se hizo.':''}</p>`}</div>`;
+}
+function secAvCliente(o){
+  const a=AVS[o.id];if(!a||!a.items)avLoad(o);
+  const items=((a&&a.items)||[]).slice().sort((p,q)=>q.fecha-p.fecha).slice(0,8);
+  if(a&&a.items&&!items.length)return '';
+  return `<section class="sec"><div class="sec-head"><h2>Avances de tu obra</h2><span class="muted small">fotos y novedades</span></div><div class="list">${a&&a.items?items.map(x=>avItem(x,o,false)).join(''):'<p class="muted">Cargando avances…</p>'}</div></section>`;
+}
+let AVF=null;
+function avSheet(){
+  const o=findO(AVF.obra);const tareas=[...new Set((o.tasks||[]).map(t=>t.name))];
+  openSheet(`<span class="eyebrow">${esc(o.nombre)}</span><h2>Cargar avance</h2><div class="sec">
+  <label class="f">¿Qué sector o tarea?<select id="av-sec"><option value="">General de la obra</option>${tareas.map(n=>`<option ${AVF.sector===n?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
+  <label class="f">Qué se hizo<textarea id="av-txt" rows="3" placeholder="Ej.: se terminó el hormigonado de la losa de planta baja">${esc(AVF.txt||'')}</textarea></label>
+  <span class="eyebrow">Fotos</span><div class="thumbs2">${AVF.fotos.map((f,i)=>`<span><img src="${f}" alt=""><button type="button" data-act="avQuitarFoto" data-i="${i}" aria-label="Quitar foto">✕</button></span>`).join('')}<label class="addph" for="av-foto">+</label><input id="av-foto" type="file" accept="image/*" multiple data-chg="avFoto" hidden></div>
+  <button class="btn gold full" data-act="avGuardar" ${AVF.sub?'disabled':''}>${AVF.sub?'Subiendo… '+AVF.sub:'Guardar avance'}</button><button class="btn full" data-act="close">Cancelar</button></div>`,'Cargar avance');
+}
+function avLeer(){if(!AVF||!$('#av-txt'))return;AVF.txt=$('#av-txt').value;AVF.sector=$('#av-sec').value}
+function reducir(file,max=1400,q=.72){return new Promise(res=>{const r=new FileReader();r.onerror=()=>res(null);r.onload=()=>{const im=new Image();im.onerror=()=>res(null);im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',q))};im.src=r.result};r.readAsDataURL(file)})}
+Object.assign(A,{
+  avNuevo:ds=>{AVF={obra:ds.o,sector:'',txt:'',fotos:[],sub:''};avSheet()},
+  avQuitarFoto:ds=>{avLeer();AVF.fotos.splice(+ds.i,1);avSheet()},
+  verFotoAv:ds=>{const f=addFile('Foto de avance','image/jpeg',ds.u);sheetArchivo({f:f.id})},
+  avBorrar:async ds=>{const o=findO(ds.o),cr=credAv(o);if(!cr)return;if(!confirm('¿Borrar este avance?'))return;try{await codApi({op:'av_del',obra:o.id,cred:cr,id:ds.id});toast('Avance borrado');avLoad(o,true)}catch(e){toast('No se pudo borrar. Volvé a ingresar tu código.')}},
+  avGuardar:async()=>{
+    avLeer();const o=findO(AVF.obra),cr=credAv(o);
+    if(!AVF.txt.trim()&&!AVF.fotos.length){toast('Cargá una foto o escribí qué se hizo');return}
+    if(!cr||!cr.codigo){toast('Para cargar avances volvé a ingresar tu código (Salir y entrar de nuevo).');return}
+    try{
+      const urls=[];
+      for(let i=0;i<AVF.fotos.length;i++){AVF.sub=`foto ${i+1} de ${AVF.fotos.length}`;avSheet();const r=await codApi({op:'av_foto',obra:o.id,cred:cr,data:AVF.fotos[i]});if(!r.url)throw new Error(r.error||'foto');urls.push(r.url)}
+      AVF.sub='guardando';avSheet();
+      const au=ROLE()==='direccion'?'Dirección':(o.jefe||'Jefatura de obra');
+      const r=await codApi({op:'av_add',obra:o.id,cred:cr,item:{fecha:Date.now(),sector:AVF.sector,txt:AVF.txt.trim(),fotos:urls,autor:au}});
+      if(!r.ok)throw new Error(r.error||'guardar');
+      closeSheet();AVF=null;toast('Avance guardado');S.otab='avances';avLoad(o,true);
+    }catch(e){AVF.sub='';avSheet();toast('No se pudo guardar el avance. Probá de nuevo.')}
+  }
+});
+CHG.avFoto=async(v,el)=>{avLeer();const fs=[...(el.files||[])].slice(0,12-AVF.fotos.length);for(const f of fs){const d=await reducir(f);if(d)AVF.fotos.push(d)}avSheet()};
 /* ================= sincronización compartida (Supabase): lo que cambia la dirección se guarda en la nube y llega a todos los dispositivos ================= */
 {
 const API='/api/nexo2';
