@@ -3248,6 +3248,7 @@ Object.assign(A,{
 });
 
 if(LOCK==='cliente')S.u=USERS.find(u=>u.id==='cli'),S.tab='cliente';else if(LOCK==='estudio')S.step='cons';else if(LOCK==='constructora')S.step='roles';
+try{if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('/nexo2-sw.js',{scope:'/nexo2.html'}).catch(()=>{})}catch(e){}
 $('#brand-icon').src=ICONO;
 draw();
 
