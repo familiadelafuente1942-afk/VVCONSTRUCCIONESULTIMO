@@ -483,10 +483,56 @@ function ListaAdic({ T, D, obra }) {
   </Card>);
 }
 function CBitacora({ T, D }) { const [o, setId] = useObra(D); return wrap(<><Eyebrow T={T}>Bitácora</Eyebrow><SelObra T={T} D={D} o={o} setId={setId} /><Bitacora T={T} D={D} o={o} /></>); }
+// ── configuración de tipografías (se guarda en este aparato) ───────────────
+const FONT_ROLES = [
+  { k: "tit", n: "Títulos y portada", d: "NEXO, nombres de paneles, encabezados grandes", def: "Michroma", opts: ["Michroma", "Barlow Condensed", "Oswald", "Montserrat", "Poppins", "Playfair Display", "Bebas Neue", "Space Grotesk"] },
+  { k: "dis", n: "Encabezados y números", d: "Nombres de obra, porcentajes, cifras grandes", def: "Barlow Condensed", opts: ["Barlow Condensed", "Oswald", "Bebas Neue", "Barlow", "Montserrat", "Poppins", "Playfair Display", "Roboto Condensed"] },
+  { k: "body", n: "Texto general", d: "Párrafos, botones, listas, formularios", def: "Barlow", opts: ["Barlow", "Inter", "Poppins", "Montserrat", "Roboto", "Plus Jakarta Sans", "DM Sans", "Lato", "Open Sans", "Nunito"] },
+  { k: "mono", n: "Fechas y datos", d: "Fecha de arriba y datos tipo código", def: "IBM Plex Mono", opts: ["IBM Plex Mono", "Space Mono", "JetBrains Mono", "Roboto Mono", "Barlow"] },
+];
+const FONT_LS = "nexoobra_fuentes";
+const leerFuentes = () => { try { return JSON.parse(localStorage.getItem(FONT_LS) || "{}") || {}; } catch { return {}; } };
+function aplicarFuentes(sel) {
+  try {
+    const f = {}; FONT_ROLES.forEach(r => { f[r.k] = (sel && sel[r.k]) || r.def; });
+    const usados = [...new Set(Object.values(f))].filter(n => !["Michroma", "Barlow Condensed", "Barlow", "IBM Plex Mono"].includes(n));
+    let l = document.getElementById("nexo-fuentes-extra");
+    if (!l) { l = document.createElement("link"); l.id = "nexo-fuentes-extra"; l.rel = "stylesheet"; document.head.appendChild(l); }
+    l.href = usados.length ? "https://fonts.googleapis.com/css2?" + usados.map(n => "family=" + n.replace(/ /g, "+") + ":wght@400;500;600;700").join("&") + "&display=swap" : "";
+    let st = document.getElementById("nexo-fuentes-css");
+    if (!st) { st = document.createElement("style"); st.id = "nexo-fuentes-css"; document.head.appendChild(st); }
+    const q = (n, g) => "'" + n + "'," + g;
+    st.textContent = `body,button,input,select,textarea{font-family:${q(f.body, "system-ui,sans-serif")}}
+[style*="font-family: Barlow,"],[style*="font-family: Barlow;"]{font-family:${q(f.body, "system-ui,sans-serif")} !important}
+[style*="Barlow Condensed"]{font-family:${q(f.dis, "'Arial Narrow',sans-serif")} !important}
+[style*="Michroma"]{font-family:${q(f.tit, "'Barlow Condensed',sans-serif")} !important}
+[style*="IBM Plex Mono"]{font-family:${q(f.mono, "ui-monospace,monospace")} !important}`;
+  } catch (e) { }
+}
+aplicarFuentes(leerFuentes());
+function ConfigApp({ T, volver }) {
+  const [sel, setSel] = useState(leerFuentes());
+  const cambiar = (k, v) => { const n = { ...sel, [k]: v }; setSel(n); try { localStorage.setItem(FONT_LS, JSON.stringify(n)); } catch { } aplicarFuentes(n); };
+  const restablecer = () => { setSel({}); try { localStorage.removeItem(FONT_LS); } catch { } aplicarFuentes({}); };
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 40px" }}>
+    <button onClick={volver} style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, fontWeight: 700, marginBottom: 14 }}>← Volver a Más</button>
+    <div style={{ fontFamily: "'Michroma','Barlow Condensed',sans-serif", fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", color: T.text, marginBottom: 6 }}>Configuración de la app</div>
+    <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.5, marginBottom: 14 }}>Elegí el tipo de letra de cada parte. Se aplica enseguida y queda guardado en este aparato. No cambia ningún dato de las obras.</div>
+    {FONT_ROLES.map(r => { const v = sel[r.k] || r.def; return (<div key={r.k} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "13px 15px", marginBottom: 10 }}>
+      <div style={{ fontSize: 14, fontWeight: 700 }}>{r.n}</div><div style={{ fontSize: 12, color: T.sub, margin: "2px 0 9px" }}>{r.d}</div>
+      <select value={v} onChange={e => cambiar(r.k, e.target.value)} style={{ width: "100%", background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 15, fontFamily: `'${v}'` }}>{r.opts.map(o => <option key={o} value={o}>{o}{o === r.def ? " (la de la 2.0)" : ""}</option>)}</select>
+      <div style={{ marginTop: 9, fontSize: 18, fontFamily: `'${v}', sans-serif`, color: T.text }}>La obra que se anticipa 0123456789</div>
+    </div>); })}
+    <button onClick={restablecer} style={{ width: "100%", background: "transparent", color: "#b8915a", border: "1px solid #b8915a", borderRadius: 12, padding: 12, fontSize: 14, fontWeight: 700 }}>Volver a las letras de la 2.0</button>
+  </div>);
+}
+
 function CMas({ T, D, cfg, recargar, st }) {
   const [ver, setVer] = useState("");
+  if (ver === "config") return <ConfigApp T={T} volver={() => setVer("")} />;
   if (ver === "modelos") return <div style={{ flex: 1, overflowY: "auto" }}><ModelosObraView db={{ modelosObra: D.modelosObra, setModelosObra: D.setModelosObra }} cfg={cfg} onBack={() => setVer("")} /></div>;
   return wrap(<><Eyebrow T={T}>Más</Eyebrow>
+    <Card T={T} onClick={() => setVer("config")} style={{ padding: "13px 15px", marginBottom: 8, cursor: "pointer" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: 13.5, fontWeight: 700 }}>Configuración de la app</div><div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>Tipos de letra de cada parte de la app</div></div><span style={{ color: T.muted, fontSize: 18 }}>›</span></div></Card>
     <Card T={T} onClick={() => setVer("modelos")} style={{ padding: "13px 15px", marginBottom: 8, cursor: "pointer" }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: 13.5, fontWeight: 700 }}>Modelos de cronograma</div><div style={{ fontSize: 12, color: T.sub, marginTop: 3 }}>{D.modelosObra.length} modelos · se asignan a cada obra dentro de su Cronograma</div></div><span style={{ color: T.muted }}>›</span></div></Card>
     <Card T={T} style={{ padding: "13px 15px", marginBottom: 8 }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Modelo de cada obra</div>{D.obras.map(o => { const id = (D.asig && D.asig[o.id] != null) ? D.asig[o.id] : o.modeloId; const m = D.modelosObra.find(q => q.id === id); return <div key={o.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}><span>{o.nombre}</span><span style={{ color: m ? T.accent : T.muted, fontWeight: 700 }}>{m ? m.nombre : "sin modelo"}</span></div>; })}</Card>
     <Card T={T} style={{ padding: "13px 15px" }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>Datos de las obras</div><div style={{ fontSize: 12, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>{D.obras.length} obras · {D.bitacora.length} hechos de bitácora · {D.obras.reduce((a, o) => a + arr(o.fotos).length, 0)} fotos. {st === "cache" ? "Mostrando la última copia guardada en este aparato." : "Actualizado recién."} Esta app solo lee: no modifica nada de las otras aplicaciones. Lo que cargues acá (avances, bitácoras, cronograma, modelos) queda en este aparato.</div><button onClick={recargar} style={{ marginTop: 10, background: T.navy, color: "#fff", border: `2px solid ${BRASS}`, borderRadius: T.rsm, padding: "10px 16px", fontSize: 12.5, fontWeight: 700 }}>Actualizar ahora</button><button onClick={() => { if (confirm("¿Descartar lo cargado en este aparato y volver a los datos reales?")) D.restaurar(); }} style={{ marginTop: 10, marginLeft: 8, background: "transparent", color: T.sub, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "10px 14px", fontSize: 12.5, fontWeight: 600 }}>Volver a datos reales</button></Card></>);
