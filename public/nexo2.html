@@ -889,6 +889,26 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.9;
 .msg{font-size:13.5px;padding:8px 10px}
 @media (min-width:1100px){#view .ia{max-width:880px}.ia-log{max-height:300px}}
 
+
+/* ================= v12 · portada completa en una sola pantalla, sin scroll ================= */
+main:has(.login){padding-block:6px 10px;gap:clamp(6px,1.5vh,16px)}
+main:has(.login) .login{padding-block:2px 0}
+main:has(.login) .lg-mark svg{width:clamp(60px,13vh,150px)}
+main:has(.login) .lg-word{font-size:clamp(24px,4.6vh,46px);margin-top:clamp(2px,1vh,10px)}
+main:has(.login) .lg-tag{margin-top:clamp(4px,1.2vh,12px)}
+main:has(.login) .frase{margin-top:clamp(8px,2.4vh,26px);font-size:clamp(12px,2.3vh,20px);line-height:1.4}
+main:has(.login) .frase-rule{margin-top:clamp(4px,1vh,8px)}
+main:has(.login) .sec{gap:clamp(6px,1.4vh,12px)}
+main:has(.login) .note{font-size:11.5px;padding:6px 10px}
+@media (min-width:900px){main:has(.login) .pcard{min-height:clamp(140px,27vh,330px)}}
+@media (max-width:899px){
+  main:has(.login) .panels{gap:8px}
+  main:has(.login) .pcard{min-height:clamp(76px,13.5vh,130px)}
+  main:has(.login) .pin{padding:10px 16px;gap:2px;max-width:92%}
+  main:has(.login) .ptitle{font-size:16px}
+  main:has(.login) .pdesc{font-size:12px;line-height:1.3}
+  main:has(.login) .pgo{display:none}
+}
 </style>
 <div class="app">
   <header class="top">
