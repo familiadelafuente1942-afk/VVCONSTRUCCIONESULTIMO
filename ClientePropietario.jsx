@@ -89,20 +89,20 @@ async function subirArchivo(file) {
 }
 const fFecha = (iso) => { if (!iso) return ""; const [a, m, d] = String(iso).split("-"); return a && d ? `${d}/${m}/${a.slice(2)}` : String(iso); };
 
-const TBASE = { navy: "#0d0d0f", brass: "#B0894F", brassLight: "#D9B27C", bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", r: 14, rsm: 10, shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+const TBASE = { navy: "#0d0e10", brass: "#b8915a", brassLight: "#D9B27C", bg: "#0d0e10", card: "#16171a", border: "#2a2c31", text: "#ece8e1", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", r: 14, rsm: 10, shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
 const DISENO = { v: "a" };
-const FONT = { serif: "'Fraunces',Georgia,'Times New Roman',serif" };
-const FUENTES = { elegante: { n: "Elegante", f: "'Fraunces',Georgia,'Times New Roman',serif" }, moderna: { n: "Moderna", f: "-apple-system,'Segoe UI',system-ui,Helvetica,Arial,sans-serif" }, clasica: { n: "Clásica", f: "Georgia,'Times New Roman',serif" } };
+const FONT = { serif: "'Barlow Condensed','Arial Narrow',sans-serif" };
+const FUENTES = { elegante: { n: "Elegante", f: "'Barlow Condensed','Arial Narrow',sans-serif" }, moderna: { n: "Moderna", f: "-apple-system,'Segoe UI',system-ui,Helvetica,Arial,sans-serif" }, clasica: { n: "Clásica", f: "Georgia,'Times New Roman',serif" } };
 // Solo se respeta el color de acento elegido; el fondo es siempre el oscuro de la marca.
 
 const TEMAS = {
-  bronce: { n: "Bronce", navy: "#0d0d0f", bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", brass: "#B0894F", brassLight: "#D9B27C", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" },
+  bronce: { n: "Bronce", navy: "#0d0e10", bg: "#0d0e10", card: "#16171a", border: "#2a2c31", text: "#ece8e1", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", brass: "#b8915a", brassLight: "#D9B27C", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" },
   marfil: { n: "Marfil", navy: "#1b1a18", bg: "#f3f1ec", card: "#ffffff", border: "#e1dcd1", text: "#1b1a18", sub: "rgba(27,26,24,.62)", muted: "rgba(27,26,24,.45)", brass: "#8a6a35", brassLight: "#b0894f", shadow: "0 1px 2px rgba(0,0,0,.05),0 10px 28px rgba(60,50,30,.10)" },
   acero: { n: "Acero", navy: "#0a111d", bg: "#0a111d", card: "#0f1a2b", border: "#1d2c45", text: "#e9f0f8", sub: "rgba(233,240,248,.62)", muted: "rgba(233,240,248,.42)", brass: "#4f93d1", brassLight: "#9cc7ec", shadow: "0 1px 2px rgba(0,0,0,.25),0 10px 30px rgba(0,5,20,.45)" },
   bosque: { n: "Bosque", navy: "#0b1410", bg: "#0b1410", card: "#101c17", border: "#1d2f27", text: "#eaf2ec", sub: "rgba(234,242,236,.62)", muted: "rgba(234,242,236,.42)", brass: "#5fa77f", brassLight: "#a8d4bb", shadow: "0 1px 2px rgba(0,0,0,.25),0 10px 30px rgba(0,10,5,.45)" },
   grafito: { n: "Grafito", navy: "#141416", bg: "#141416", card: "#1c1c20", border: "#2c2c32", text: "#f4f4f6", sub: "rgba(244,244,246,.62)", muted: "rgba(244,244,246,.42)", brass: "#c9c9d1", brassLight: "#e6e6ec", shadow: "0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.45)" },
 };
-const ACENTOS = ["#B0894F", "#4f93d1", "#5fa77f", "#c8574f", "#9078d6", "#d98a3d"];
+const ACENTOS = ["#b8915a", "#4f93d1", "#5fa77f", "#c8574f", "#9078d6", "#d98a3d"];
 function mezclar(hex, p) { const h = String(hex).replace("#", ""); if (h.length !== 6) return hex; const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); return "#" + c.map(v => Math.round(v + (255 - v) * p).toString(16).padStart(2, "0")).join(""); }
 function aplicarConfig(cfg) {
   const c = cfg || {};
@@ -841,7 +841,7 @@ function InicioProp({ obra, nombreCliente, renders, avance, certif, certConformi
         </div>
         <div style={{ position: "absolute", top: TOPPAD(20), left: 18, right: 18, bottom: 14, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
           <div style={{ width: 116, height: 116, borderRadius: "50%", border: `2px solid ${T.brass}`, overflow: "hidden", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 24px rgba(0,0,0,.5)", flexShrink: 0 }}>
-            {logo ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={48} c="#0d0d0f" />}
+            {logo ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={48} c="#0d0e10" />}
           </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.8)", marginTop: 18, letterSpacing: ".2em", textTransform: "uppercase" }}>Hola, {nombreCliente}</div>
           <div style={{ fontFamily: FONT.serif, fontSize: 36, fontWeight: 600, lineHeight: 1.05, color: "#fff", marginTop: 8, letterSpacing: "-.02em", textShadow: "0 2px 14px rgba(0,0,0,.5)" }}>{obra.nombre}</div>
@@ -881,10 +881,10 @@ function InicioProp({ obra, nombreCliente, renders, avance, certif, certConformi
       </div>
       <div style={{ position: "absolute", top: TOPPAD(18), left: 22, right: 22, bottom: 18, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
         <div style={{ width: 104, height: 104, borderRadius: "50%", border: `2px solid ${T.brass}`, overflow: "hidden", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 18px rgba(0,0,0,.5)", flexShrink: 0 }}>
-          {logo ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={44} c="#0d0d0f" />}
+          {logo ? <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <Ico n="building" s={44} c="#0d0e10" />}
         </div>
         <div style={{ fontSize: 10.5, letterSpacing: ".22em", textTransform: "uppercase", color: "rgba(242,240,235,.75)", marginTop: 16 }}>Hola, {nombreCliente}</div>
-        <div style={{ fontFamily: FONT.serif, fontWeight: 600, fontSize: 27, color: "#f2f0eb", marginTop: 6, lineHeight: 1.15, textShadow: "0 2px 12px rgba(0,0,0,.45)" }}>{obra.nombre}</div>
+        <div style={{ fontFamily: FONT.serif, fontWeight: 600, fontSize: 27, color: "#ece8e1", marginTop: 6, lineHeight: 1.15, textShadow: "0 2px 12px rgba(0,0,0,.45)" }}>{obra.nombre}</div>
         {(obra.sector || obra.inicio) && <div style={{ fontSize: 11.5, color: "rgba(242,240,235,.7)", marginTop: 5 }}>{obra.sector || ""}{obra.sector && obra.inicio ? " · " : ""}{obra.inicio ? `Inicio ${obra.inicio}` : ""}</div>}
       </div>
       {fotosR.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 18, display: "flex", gap: 4 }}>

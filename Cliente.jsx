@@ -786,15 +786,15 @@ async function ejecutarAccion(accion, miSide, ctx) {
 function accionLabel(a) { if (!a) return ""; if (a.tipo === "crear_pedido") return `Crear pedido → ${a.para === "cliente" ? "V+V/Cliente" : "V+V"}: “${a.asunto || ""}”`; if (a.tipo === "responder_pedido") return "Responder pedido"; if (a.tipo === "resolver_pedido") return "Marcar pedido como resuelto"; if (a.tipo === "enviar_mensaje") return `Enviar mensaje a V+V: “${(a.texto || "").slice(0, 60)}”`; if (a.tipo === "preguntar_ia") return `Consultar a la IA de V+V: “${(a.texto || "").slice(0, 60)}”`; if (a.tipo === "whatsapp") return `WhatsApp a ${a.persona || a.rol || "contacto"}: “${(a.texto || "").slice(0, 50)}”`; if (a.tipo === "traer_fotos") return `Traer ${a.videos ? "videos" : "fotos"} de ${a.obra || "la obra"}`; if (a.tipo === "traer_plano") return `Traer plano de ${a.obra || "la obra"}`; if (a.tipo === "cargar_personal") return `Cargar personal al sitio “${a.sitio || ""}”${a.obra ? ` (obra ${a.obra})` : a.personal && a.personal !== "todos" ? ` (${Array.isArray(a.personal) ? a.personal.join(", ") : a.personal})` : " (todos)"}`; return a.tipo; }
 
 const ESTADOS = { pendiente: { l: "Pendiente", c: "#94A3B8", b: "rgba(255,255,255,.04)" }, curso: { l: "En curso", c: "#10B981", b: "rgba(22,163,74,.14)" }, pausada: { l: "Pausada", c: "#F59E0B", b: "rgba(180,83,9,.14)" }, terminada: { l: "Terminada", c: "#6366F1", b: "#EEF2FF" } };
-const BRASS = "#B0894F";
+const BRASS = "#b8915a";
 const DEFAULT_CFG = { nombre: "Belfast Construction Management", sigla: "BELFAST", logo: "", accent: "#1E3A5F" };
 const LUXE_BG = "radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px) 0 0/22px 22px, radial-gradient(1100px 520px at 50% -8%, rgba(176,137,79,0.13), transparent 62%), linear-gradient(180deg,#0b141f 0%,#0a1019 100%)";
 const LUXE_HERO = "radial-gradient(620px 220px at 86% 0%, rgba(176,137,79,0.20), transparent 60%), linear-gradient(135deg,#101C2C 0%,#17283c 100%)";
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Michroma&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:#0d0d0f;overscroll-behavior:none;font-family:'Inter',sans-serif;}
+  body{background:#0d0e10;overscroll-behavior:none;font-family:'Barlow',system-ui,sans-serif;}
   button{cursor:pointer;font-family:inherit;}input,textarea,select{font-family:inherit;}
   input:focus,textarea:focus{outline:none;}textarea{resize:none;}::-webkit-scrollbar{display:none;}
   @keyframes slidein{from{transform:translateY(-120%);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -806,8 +806,8 @@ const css = `
 // "claro". El modo elegido define los valores de base; si el usuario
 // además tocó algún color individual en Ajustes (Fondo/Texto/etc.), ese
 // toque puntual manda por encima del modo.
-const TEMA_OSCURO = { bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", accent: "#B0894F", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
-const TEMA_CLARO = { bg: "#F5F6F8", card: "#ffffff", border: "#E6E9EE", text: "#131C2B", sub: "#4A5565", muted: "#97A0AE", accent: "#B0894F", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
+const TEMA_OSCURO = { bg: "#0d0e10", card: "#16171a", border: "#2a2c31", text: "#ece8e1", sub: "rgba(242,240,235,.6)", muted: "rgba(242,240,235,.42)", accent: "#b8915a", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+const TEMA_CLARO = { bg: "#F5F6F8", card: "#ffffff", border: "#E6E9EE", text: "#131C2B", sub: "#4A5565", muted: "#97A0AE", accent: "#b8915a", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
 // ── INTENSIDAD DEL OSCURO ────────────────────────────────────────────
 // cfg.oscuroIntensidad: 100 = tan oscuro como siempre, menos = más clarito/transparente.
 // Solo aplica en modo oscuro y solo si el usuario no fijó un color manual en "Ajuste fino".
@@ -831,7 +831,7 @@ function paletaBrillo(brillo) {
 function theme(cfg) {
   const c = cfg || {};
   if (c.brillo != null) {
-    const p = paletaBrillo(c.brillo); const accent0 = c.accent || "#B0894F";
+    const p = paletaBrillo(c.brillo); const accent0 = c.accent || "#b8915a";
     return { bg: p.bg, card: p.card, border: p.border, text: p.text, sub: p.sub, muted: p.muted, accent: accent0, accentLight: hexToRgba(accent0, .14), navy: p.oscuro ? p.bg : p.navy, r: 12, rsm: 8, shadow: p.oscuro ? TEMA_OSCURO.shadow : TEMA_CLARO.shadow };
   }
   const base = c.modo === "claro" ? TEMA_CLARO : TEMA_OSCURO;
@@ -980,14 +980,14 @@ function AvanceView({ T, obras, avance, setAvance, apiKey, cfg, certif = {}, env
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 16px; text-align: center; }
+      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 14px; margin-bottom: 16px; text-align: center; }
       .logo { max-height: 96px; max-width: 320px; object-fit: contain; display: block; margin: 0 auto 10px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
       h1 { font-size: 15px; color: #0F1B2D; margin: 6px 0 2px; }
       .meta { font-size: 11px; color: #5B6B7F; }
       .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
-      .fecha { font-size: 13px; font-weight: 800; color: #B0894F; margin-bottom: 8px; }
+      .fecha { font-size: 13px; font-weight: 800; color: #b8915a; margin-bottom: 8px; }
       .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
       .fotos img { width: calc(50% - 3px); max-height: 260px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
       .fotos img:only-child { width: 100%; max-height: 340px; }
@@ -1496,11 +1496,11 @@ function AdicionalesClienteView({ T, obras, adicionales, cfg, obraIdFijo }) {
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 24px 28px 32px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 4px; }
+      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 10px; margin-bottom: 4px; }
       .marca { font-size: 16px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
       .warn { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 9px 12px; font-size: 10.5px; color: #92400E; line-height: 1.5; margin: 12px 0; }
-      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 7px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 7px; padding-left: 9px; border-left: 3px solid #b8915a; }
       .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; font-size: 11.5px; }
       .grid2 div { padding: 3px 0; border-bottom: 1px solid #EEF1F5; }
       .grid2 b { color: #5B6B7F; font-weight: 600; }
@@ -1661,24 +1661,24 @@ function AuditoriaClienteView({ T, obras, auditoria, cfg, desdeSemana }) {
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
+      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 14px; text-align: center; }
       .logo { max-height: 84px; max-width: 290px; object-fit: contain; display: block; margin: 0 auto 10px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
       .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 16px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
       .barra b { color: #0F1B2D; }
       .grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
       .grid > div { flex: 1 1 45%; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 8px 11px; }
       .grid span { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #94A3B8; margin-bottom: 2px; }
       .grid b { font-size: 12.5px; color: #0F1B2D; }
-      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #b8915a; }
       table { width: 100%; border-collapse: collapse; }
       th { background: rgba(255,255,255,.06); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
       td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
       ul { margin: 0; padding-left: 20px; } li { font-size: 12px; line-height: 1.55; margin-bottom: 3px; }
       .vacio { font-size: 11.5px; color: #98A2B3; font-style: italic; }
       .parr { font-size: 12px; line-height: 1.6; text-align: justify; }
-      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
+      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-left: 3px solid #b8915a; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
       .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 14px; color: ${colorRes}; border: 1.5px solid ${colorRes}; }
       .firmas { display: flex; gap: 40px; margin-top: 34px; page-break-inside: avoid; }
       .firma { flex: 1; text-align: center; }
@@ -1864,15 +1864,15 @@ function BitacoraView({ T, obras, bitacora, setBitacora, cfg }) {
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 14px; }
+      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 10px; margin-bottom: 14px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; letter-spacing: -.01em; }
-      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
       .meta { font-size: 11px; color: #5B6B7F; margin-top: 8px; }
       h1 { font-size: 15px; color: #0F1B2D; margin: 4px 0 2px; }
       .hecho { border: 1px solid #E3E8EF; border-left: 3px solid #1B3A5B; border-radius: 8px; padding: 11px 13px; margin-bottom: 11px; page-break-inside: avoid; }
       .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; flex-wrap: wrap; }
       .num { background: #0F1B2D; color: #fff; font-size: 10px; font-weight: 800; border-radius: 20px; padding: 1px 8px; }
-      .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
+      .fecha { font-size: 11px; font-weight: 800; color: #b8915a; }
       .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
       .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
       .adj { font-size: 10.5px; color: #1B3A5B; background: rgba(255,255,255,.06); border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
@@ -2263,12 +2263,12 @@ const money_OG = (n) => (Number(n) || 0).toLocaleString("es-AR") + " $";
 
 const hoyStr_OG = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`; };
 
-const T = { bg: "var(--bg,#0d0d0f)", card: "var(--card,#111214)", border: "var(--border,#232227)", text: "var(--text,#f2f0eb)", sub: "var(--sub,#B8B5AE)", muted: "var(--muted,#7A776F)", accent: "var(--accent,#B0894F)", accentLight: "var(--al,rgba(176,137,79,.14))", navy: "var(--navy,#0d0d0f)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
+const T = { bg: "var(--bg,#0d0e10)", card: "var(--card,#16171a)", border: "var(--border,#2a2c31)", text: "var(--text,#ece8e1)", sub: "var(--sub,#B8B5AE)", muted: "var(--muted,#7A776F)", accent: "var(--accent,#b8915a)", accentLight: "var(--al,rgba(176,137,79,.14))", navy: "var(--navy,#0d0e10)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(0,0,0,.2),0 10px 30px rgba(0,0,0,.35)" };
 
 function Card_OG({ children, style = {}, onClick }) { return <div onClick={onClick} style={{ background: T.card, borderRadius: T.r, border: `1px solid ${T.border}`, boxShadow: T.shadow, ...style }}>{children}</div>; }
 function Badge_OG({ color, bg, children, style = {} }) { return <span style={{ display: "inline-flex", alignItems: "center", fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 20, padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.04em", ...style }}>{children}</span>; }
 function PBtn_OG({ children, onClick, disabled, full, style = {}, variant = "primary" }) {
-    const v = { primary: { background: disabled ? "rgba(255,255,255,.08)" : "var(--accent,#B0894F)", color: disabled ? "#7A776F" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", color: "#EF4444", boxShadow: "none" } };
+    const v = { primary: { background: disabled ? "rgba(255,255,255,.08)" : "var(--accent,#b8915a)", color: disabled ? "#7A776F" : "#fff", boxShadow: disabled ? "none" : "0 2px 8px rgba(0,0,0,.18)", border: "none" }, ghost: { background: "none", border: `1.5px solid ${T.border}`, color: T.sub, boxShadow: "none" }, danger: { background: "rgba(239,68,68,.10)", border: "1.5px solid rgba(239,68,68,.30)", color: "#EF4444", boxShadow: "none" } };
     return <button onClick={onClick} disabled={disabled} style={{ ...v[variant], borderRadius: T.rsm, padding: "11px 20px", fontSize: 14, fontWeight: 600, width: full ? "100%" : "auto", transition: "all .15s", ...style }}>{children}</button>;
 }
 function Sheet({ title, onClose, children }) { return (<div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 200, display: "flex", alignItems: "flex-end", backdropFilter: "blur(2px)" }}><div style={{ background: T.card, borderRadius: "20px 20px 0 0", width: "100%", maxHeight: "90vh", overflow: "auto", animation: "up .25s ease", paddingBottom: 32 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 0" }}><span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{title}</span><button onClick={onClose} style={{ background: T.bg, border: "none", borderRadius: 20, width: 32, height: 32, fontSize: 18, color: T.muted, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button></div><div style={{ padding: "14px 20px 0" }}>{children}</div></div></div>); }
@@ -2277,7 +2277,7 @@ function TInput({ value, onChange, placeholder, type = "text", extraStyle = {} }
 function Sel({ value, onChange, children }) { return <select value={value} onChange={onChange} style={{ width: "100%", background: T.bg, border: `1.5px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 14px", fontSize: 14, color: T.text }}>{children}</select>; }
 function FieldRow({ children }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>{children}</div>; }
 function Field({ label, children }) { return <div style={{ marginBottom: 12 }}><Lbl>{label}</Lbl>{children}</div>; }
-function PlusBtn({ onClick }) { return <button onClick={onClick} style={{ background: "var(--accent,#B0894F)", color: "#fff", border: "none", borderRadius: 20, width: 34, height: 34, fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,.2)" }}>+</button>; }
+function PlusBtn({ onClick }) { return <button onClick={onClick} style={{ background: "var(--accent,#b8915a)", color: "#fff", border: "none", borderRadius: 20, width: 34, height: 34, fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,.2)" }}>+</button>; }
 function AppHeader({ title, sub, right, back, onBack }) { return (<div style={{ background: T.card, borderBottom: `1px solid ${T.border}`, padding: "12px 18px", flexShrink: 0, position: "sticky", top: 0, zIndex: 10 }}><div style={{ display: "flex", alignItems: "center", gap: 10 }}>{back && <button onClick={onBack} style={{ background: T.bg, border: "none", borderRadius: 10, width: 32, height: 32, fontSize: 16, color: T.sub, display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>}<div style={{ flex: 1 }}><div style={{ fontSize: 17, fontWeight: 700, color: T.text, lineHeight: 1.2 }}>{title}</div>{sub && <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>{sub}</div>}</div>{right}</div></div>); }
 
 function MontoInput({ value, onChange, placeholder }) {
@@ -2712,7 +2712,7 @@ function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [],
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 600 }}>{t(cfg, 'obras_avance')}</span><span style={{ fontSize: 14, fontWeight: 800, color: T.accent }}>{detail.avance}%</span></div>
                     <div style={{ height: 8, background: T.bg, borderRadius: 4 }}><div style={{ height: 8, background: T.accent, borderRadius: 4, width: `${detail.avance}%`, transition: "width .5s" }} /></div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_inicio')}: {detail.inicio || "—"}</span><span style={{ fontSize: 11, color: T.muted }}>{t(cfg, 'obras_cierre')}: {detail.cierre || "—"}</span></div>
-                    <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#B0894F)", marginTop: 10 }} />
+                    <input type="range" min="0" max="100" value={detail.avance} onChange={e => upd(detail.id, { avance: parseInt(e.target.value) })} style={{ width: "100%", accentColor: "var(--accent,#b8915a)", marginTop: 10 }} />
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", paddingBottom: 80 }}>
                     {tab !== "info" && <button onClick={() => setTab("info")} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "8px 12px", fontSize: 12, fontWeight: 700, color: T.text, cursor: "pointer", marginBottom: 12 }}>← Volver a la obra</button>}
@@ -2860,7 +2860,7 @@ function Obras({ obras, setObras, adicionales = [], modelosObra = [], lics = [],
 // Señal: hilo de bronce (regla membrete, anillo FAB, viñetas de sección).
 // ════════════════════════════════════════════════════════════════════
 
-const BRASS_OG = "#B0894F";
+const BRASS_OG = "#b8915a";
 const INST_COLORS = { accent:"#1E3A5F", al:"rgba(255,255,255,.08)", bg:"#F5F6F8", card:"#FFFFFF", border:"#E6E9EE", text:"#131C2B", sub:"#4A5565", muted:"#97A0AE", navy:"#101C2C" };
 
 const SAMPLE_OBRAS = [
@@ -3107,8 +3107,8 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
 
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Color principal</label>
       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 8 }}>
-        {["#B0894F", "#1E3A5F", "#1F5C49", "#6E3B2E", "#46406E", "#0E5A66", "#7A2E50"].map(col => <button key={col} onClick={() => setCfg(p => ({ ...p, accent: col }))} style={{ width: 32, height: 32, borderRadius: 5, background: col, border: `2px solid ${cfg.accent === col ? T.text : T.border}` }} />)}
-        <input type="color" value={cfg.accent || "#B0894F"} onChange={e => setCfg(p => ({ ...p, accent: e.target.value }))} style={{ width: 32, height: 32, border: "none", background: "none" }} />
+        {["#b8915a", "#1E3A5F", "#1F5C49", "#6E3B2E", "#46406E", "#0E5A66", "#7A2E50"].map(col => <button key={col} onClick={() => setCfg(p => ({ ...p, accent: col }))} style={{ width: 32, height: 32, borderRadius: 5, background: col, border: `2px solid ${cfg.accent === col ? T.text : T.border}` }} />)}
+        <input type="color" value={cfg.accent || "#b8915a"} onChange={e => setCfg(p => ({ ...p, accent: e.target.value }))} style={{ width: 32, height: 32, border: "none", background: "none" }} />
       </div>
 
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginTop: 18 }}>Ajuste fino (opcional, encima del modo)</label>
@@ -3124,7 +3124,7 @@ function AjustesScreen({ T, cfg, setCfg, obras = [], setObras, renders = {}, set
             <input type="color" value={cfg[key] || def} onChange={e => setCfg(p => ({ ...p, [key]: e.target.value }))} style={{ width: 32, height: 26, border: `1px solid ${T.border}`, borderRadius: 5, background: "none", cursor: "pointer", padding: 0 }} />
           </div>
         ))}
-        <button onClick={() => setCfg(p => { const n = { ...p }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; n.accent = "#B0894F"; return n; })} style={{ width: "100%", marginTop: 10, background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Restaurar colores del modo actual</button>
+        <button onClick={() => setCfg(p => { const n = { ...p }; delete n.themeBg; delete n.themeCard; delete n.themeText; delete n.themeBorder; n.accent = "#b8915a"; return n; })} style={{ width: "100%", marginTop: 10, background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 7, padding: "9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Restaurar colores del modo actual</button>
       </div>
       <div style={{ marginTop: 22, marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", letterSpacing: "0.05em" }}>Agente IA</label></div>
       <div onClick={() => setCfg(p => ({ ...p, autoIA: !p.autoIA }))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "13px 14px", cursor: "pointer" }}>
@@ -4054,10 +4054,10 @@ function docBelfast(cfg, obraNombre, titulo, subtitulo, bloques, fotos) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
     @page { margin: 15mm; }
     body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #16202e; margin: 0; padding: 22px; }
-    .head { text-align: center; border-bottom: 2px solid #B0894F; padding-bottom: 12px; margin-bottom: 18px; }
+    .head { text-align: center; border-bottom: 2px solid #b8915a; padding-bottom: 12px; margin-bottom: 18px; }
     .head img { max-height: 54px; margin-bottom: 8px; }
     .marca { font-size: 15px; font-weight: 800; letter-spacing: .06em; color: #0F1B2D; }
-    .tipo { font-size: 9px; font-weight: 800; letter-spacing: .12em; color: #B0894F; text-transform: uppercase; margin-top: 5px; }
+    .tipo { font-size: 9px; font-weight: 800; letter-spacing: .12em; color: #b8915a; text-transform: uppercase; margin-top: 5px; }
     h1 { font-size: 17px; margin: 12px 0 4px; }
     .sub { font-size: 11.5px; color: #5B6B7F; }
     .bloque { margin-bottom: 14px; }
@@ -4112,13 +4112,13 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem =
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
+      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
       .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
       .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
       .barra b { color: #0F1B2D; }
-      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #b8915a; }
       ul { margin: 0 0 4px; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.6; margin-bottom: 3px; }
       .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
       .obs { font-size: 12px; line-height: 1.55; color: #1a2433; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
@@ -4151,13 +4151,13 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem =
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
+      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 14px; text-align: center; }
       .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
       .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
       .barra b { color: #0F1B2D; }
-      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #b8915a; }
       .parr { font-size: 12.5px; line-height: 1.6; text-align: justify; }
       ul { margin: 0; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.55; margin-bottom: 3px; }
       .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
@@ -4165,7 +4165,7 @@ function InformesScreen({ T, obras, formularios = [], certif = {}, informesSem =
       th { background: rgba(255,255,255,.06); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
       td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
       .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
-      .fecha { font-size: 12.5px; font-weight: 800; color: #B0894F; margin-bottom: 7px; }
+      .fecha { font-size: 12.5px; font-weight: 800; color: #b8915a; margin-bottom: 7px; }
       .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
       .fotos img { width: calc(50% - 3px); max-height: 240px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
       .fotos img:only-child { width: 100%; max-height: 320px; }
@@ -4349,7 +4349,7 @@ function FormulariosScreen({ T, obras, formularios = [] }) {
   </div>);
 }
 
-const TIPOS_PEDIDO_CLI = { material: { label: "Materiales", icon: "box", color: "#1B3A5B" }, definicion: { label: "Definiciones", icon: "ruler", color: "#B0894F" }, plano: { label: "Planos", icon: "plans", color: "#3B6E9E" } };
+const TIPOS_PEDIDO_CLI = { material: { label: "Materiales", icon: "box", color: "#1B3A5B" }, definicion: { label: "Definiciones", icon: "ruler", color: "#b8915a" }, plano: { label: "Planos", icon: "plans", color: "#3B6E9E" } };
 const tipoPedCli = (id) => TIPOS_PEDIDO_CLI[id] || TIPOS_PEDIDO_CLI.material;
 const itemsTexto = (p) => (p.items || []).map(it => (p.tipo && p.tipo !== "material") ? `${it.nombre}${it.detalle ? ` (${it.detalle})` : ""}` : `${it.cantidad || ""} ${it.unidad || ""} ${it.nombre}`.trim());
 
@@ -4429,7 +4429,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
     const faltantes = grupos.map(g => ({ rubro: g.rubro, items: g.items.filter(i => !i.tiene) })).filter(g => g.items.length);
     const rowsHtml = faltantes.map(g => `<tr class="rub"><td colspan="2">${g.rubro}</td></tr>` + g.items.map(i => `<tr><td class="dot">•</td><td>${i.nombre}${i.obs ? `<div style="font-size:11px;color:#5B6B7F;margin-top:2px">Obs: ${String(i.obs).replace(/</g, "&lt;")}</div>` : ""}</td></tr>`).join("")).join("");
     const pct = items.length ? Math.round(tienen / items.length * 100) : 0;
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Definiciones faltantes ${obraNom(obraId)}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 40px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 34px;border-bottom:4px solid #B0894F}.brand{font-size:20px;font-weight:800}.brand small{display:block;font-size:9px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{font-size:12px;font-weight:800;color:#B0894F;text-transform:uppercase;letter-spacing:1px;margin-top:6px}.wrap{padding:0 34px}.meta{display:flex;justify-content:space-between;margin:18px 0;font-size:12px;color:#5B6B7F}.kpi{display:flex;gap:0;margin:14px 0;border:1px solid #E3E8EF;border-radius:8px;overflow:hidden}.kpi div{flex:1;text-align:center;padding:10px;border-right:1px solid #E3E8EF}.kpi div:last-child{border-right:none}.kpi b{display:block;font-size:20px}.kpi span{font-size:8px;color:#5B6B7F;text-transform:uppercase}table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}td{padding:7px 8px;border-bottom:1px solid #EEF1F5;vertical-align:top}.rub td{background:#EAF0F7;color:#1B3A5B;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.dot{width:20px;color:#B0894F;text-align:center}.obs{font-size:10px;color:#5B6B7F;margin-top:20px;border-top:1px solid #D6DCE4;padding-top:8px}.firmas{display:flex;justify-content:space-between;margin-top:44px}.firma{width:44%;text-align:center;font-size:10px;color:#5B6B7F}.firma .ln{border-top:1px solid #0F1B2D;padding-top:5px;margin-top:34px}@media print{.noprint{display:none}}</style></head><body><div class="head"><div class="brand">V+V CONSTRUCCIONES<small>CONSTRUCTORA</small></div><div class="doc">Definiciones faltantes de obra</div></div><div class="wrap"><div class="meta"><div>Obra: <b>${obraNom(obraId)}</b></div><div>Fecha: ${hoyStr()}</div></div><div class="kpi"><div><b style="color:#B91C1C">${faltan}</b><span>Faltantes</span></div><div><b style="color:#16A34A">${tienen}</b><span>Definidas</span></div><div><b>${items.length}</b><span>Total</span></div><div><b>${pct}%</b><span>Definido</span></div></div>${faltantes.length ? `<table><tbody>${rowsHtml}</tbody></table>` : '<p style="padding:20px 0;text-align:center;color:#16A34A;font-weight:700">No hay definiciones faltantes. Todas resueltas.</p>'}<div class="obs">Las definiciones pendientes atrasan el normal desarrollo de las tareas de albañilería, revoques y colocaciones. Es importante resolverlas para poder dar curso a las tareas, contrataciones y pedidos de materiales.</div><div class="firmas"><div class="firma"><div class="ln">${empresa || "V+V Construcciones"}</div></div><div class="firma"><div class="ln">Belfast CM — Recibido</div></div></div></div></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Definiciones faltantes ${obraNom(obraId)}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 40px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 34px;border-bottom:4px solid #b8915a}.brand{font-size:20px;font-weight:800}.brand small{display:block;font-size:9px;color:#b8915a;letter-spacing:2px;margin-top:2px}.doc{font-size:12px;font-weight:800;color:#b8915a;text-transform:uppercase;letter-spacing:1px;margin-top:6px}.wrap{padding:0 34px}.meta{display:flex;justify-content:space-between;margin:18px 0;font-size:12px;color:#5B6B7F}.kpi{display:flex;gap:0;margin:14px 0;border:1px solid #E3E8EF;border-radius:8px;overflow:hidden}.kpi div{flex:1;text-align:center;padding:10px;border-right:1px solid #E3E8EF}.kpi div:last-child{border-right:none}.kpi b{display:block;font-size:20px}.kpi span{font-size:8px;color:#5B6B7F;text-transform:uppercase}table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}td{padding:7px 8px;border-bottom:1px solid #EEF1F5;vertical-align:top}.rub td{background:#EAF0F7;color:#1B3A5B;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.dot{width:20px;color:#b8915a;text-align:center}.obs{font-size:10px;color:#5B6B7F;margin-top:20px;border-top:1px solid #D6DCE4;padding-top:8px}.firmas{display:flex;justify-content:space-between;margin-top:44px}.firma{width:44%;text-align:center;font-size:10px;color:#5B6B7F}.firma .ln{border-top:1px solid #0F1B2D;padding-top:5px;margin-top:34px}@media print{.noprint{display:none}}</style></head><body><div class="head"><div class="brand">V+V CONSTRUCCIONES<small>CONSTRUCTORA</small></div><div class="doc">Definiciones faltantes de obra</div></div><div class="wrap"><div class="meta"><div>Obra: <b>${obraNom(obraId)}</b></div><div>Fecha: ${hoyStr()}</div></div><div class="kpi"><div><b style="color:#B91C1C">${faltan}</b><span>Faltantes</span></div><div><b style="color:#16A34A">${tienen}</b><span>Definidas</span></div><div><b>${items.length}</b><span>Total</span></div><div><b>${pct}%</b><span>Definido</span></div></div>${faltantes.length ? `<table><tbody>${rowsHtml}</tbody></table>` : '<p style="padding:20px 0;text-align:center;color:#16A34A;font-weight:700">No hay definiciones faltantes. Todas resueltas.</p>'}<div class="obs">Las definiciones pendientes atrasan el normal desarrollo de las tareas de albañilería, revoques y colocaciones. Es importante resolverlas para poder dar curso a las tareas, contrataciones y pedidos de materiales.</div><div class="firmas"><div class="firma"><div class="ln">${empresa || "V+V Construcciones"}</div></div><div class="firma"><div class="ln">Belfast CM — Recibido</div></div></div></div></body></html>`;
     setPdfHtml(html);
   }
   function waFaltantes() {
@@ -4458,7 +4458,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
   body{font-family:Calibri,Arial,sans-serif;color:#0F1B2D;font-size:11pt}
   h1{font-size:15pt;color:#0F1B2D;margin:0 0 2px}
   .marca{font-size:16pt;font-weight:bold;color:#0F1B2D}
-  .doc{font-size:10pt;font-weight:bold;color:#B0894F;text-transform:uppercase;letter-spacing:1px}
+  .doc{font-size:10pt;font-weight:bold;color:#b8915a;text-transform:uppercase;letter-spacing:1px}
   .meta{font-size:10pt;color:#5B6B7F;margin:10px 0 4px}
   table{border-collapse:collapse;width:100%;margin-top:8px}
   th{background:#0F1B2D;color:#fff;font-size:10pt;padding:7px 8px;border:1px solid #0F1B2D;text-align:left}
@@ -4953,7 +4953,7 @@ function crCPM(tareas) {
 // ── Línea de tiempo del cronograma, SOLO LECTURA (espejo visual de la app de V+V) ──
 function crDowDe(iso) { return iso ? new Date(iso + "T12:00:00").getDay() : -1; }
 function crColorEtapa(etapa) {
-  const M = { "Preliminares": "#94A3B8", "Estructura": "#B0894F", "Albañilería": "#C2703D", "Instalaciones": "#2563EB", "Terminaciones": "#16A34A", "Cierre": "#7C3AED" };
+  const M = { "Preliminares": "#94A3B8", "Estructura": "#b8915a", "Albañilería": "#C2703D", "Instalaciones": "#2563EB", "Terminaciones": "#16A34A", "Cierre": "#7C3AED" };
   return M[etapa] || "#64748B";
 }
 function GanttLectura({ T, o, tareas }) {
@@ -6289,7 +6289,7 @@ function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, ava
       </div>
       <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
         <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${TXR},.55)` }}>{cfg?.nombre || "Belfast"}</div>
-        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: TXC, marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
+        <div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: 24, color: TXC, marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
       </div>
       {listaCarrusel.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>
         {listaCarrusel.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % listaCarrusel.length) ? BRASS : `rgba(${TXR},.35)` }} />)}
@@ -6297,7 +6297,7 @@ function InicioScreen({ T, cfg, gestion, obras, renders, mensajes, bitacora, ava
     </div>
     <div style={{ padding: "22px 22px 30px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
-        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 40, lineHeight: 1, color: TXC }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
+        <div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: 40, lineHeight: 1, color: TXC }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
         <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div>
       </div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
