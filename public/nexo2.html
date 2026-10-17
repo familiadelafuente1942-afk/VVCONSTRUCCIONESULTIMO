@@ -1284,6 +1284,14 @@ const ROLE=()=>S.u?.rol;
 /* claves de propietario: cada obra tiene la suya; el estudio o la constructora se la entrega al propietario */
 const CLAVES={o1:'LP132-4827',o2:'CA475-3159',o3:'GO293-7062',o4:'LP246-9514',o5:'SB88-2406'};
 OBRAS.forEach(o=>{o.clave=CLAVES[o.id]});
+const CLAVES_LS='nexo2_claves';
+try{const g=JSON.parse(localStorage.getItem(CLAVES_LS)||'{}');OBRAS.forEach(o=>{if(g[o.id])o.clave=g[o.id]})}catch(e){}
+const claveGuardarLS=()=>{try{localStorage.setItem(CLAVES_LS,JSON.stringify(Object.fromEntries(OBRAS.map(o=>[o.id,o.clave]))))}catch(e){}};
+function claveGenerar(o){const ini=o.nombre.split(/\s+/).map(w=>/^[A-Za-zÁÉÍÓÚÑ]/.test(w)?w[0]:'').join('').toUpperCase().replace(/Á/g,'A').replace(/É/g,'E').replace(/Í/g,'I').replace(/Ó/g,'O').replace(/Ú/g,'U');const num=(o.nombre.match(/\d+/)||[''])[0];let c;do{c=ini+num+'-'+String(1000+Math.floor(Math.random()*9000))}while(OBRAS.some(x=>x!==o&&x.clave===c));return c}
+function claveRow(o,edit){
+  return `<div class="entry" style="gap:8px"><b>${esc(o.nombre)}</b><span class="muted small">${esc(o.ubic)} · propietario</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="ck-${o.id}" value="${esc(o.clave)}" ${edit?'':'readonly'} autocapitalize="characters" spellcheck="false" style="flex:1;min-width:150px;letter-spacing:.08em;text-transform:uppercase;font-weight:600">
+  ${edit?`<button class="btn sm gold" data-act="guardarClave" data-o="${o.id}">Guardar</button><button class="btn sm" data-act="genClave" data-o="${o.id}">Generar</button>`:''}<button class="btn sm" data-act="copiarClave" data-o="${o.id}">Copiar</button><button class="btn sm" data-act="copiarMsg" data-o="${o.id}">Copiar mensaje</button></div></div>`}
 const COBRA=()=>OBRAS.find(o=>o.id===S.cobra)||OBRAS[0];
 const PROP_LS='nexo2_obras_prop';
 const propGuardadas=()=>{try{return(JSON.parse(localStorage.getItem(PROP_LS))||[]).filter(id=>OBRAS.some(o=>o.id===id))}catch(e){return[]}};
@@ -1681,7 +1689,7 @@ function tabEquipo(o){
   <div class="irow"><span class="muted">Auditoría</span><b>Auditoría de ${ORG}</b></div>
   <div class="irow"><span><span class="muted">Estudio · dirección de obra</span><br><b>${esc(o.estudio)}</b></span>${inv('estudio')}</div>
   <div class="irow"><span><span class="muted">Propietario</span><br><b>Propietario de ${esc(o.nombre)}</b></span>${inv('propietario')}</div>
-  ${dir||ROLE()==='estudio'?`<div class="irow"><span><span class="muted">Clave de acceso del propietario</span><br><b style="letter-spacing:.08em">${esc(o.clave)}</b></span><button class="btn sm" data-act="copiarClave" data-o="${o.id}">Copiar</button></div>`:''}
+  ${dir||ROLE()==='estudio'?`<span class="eyebrow" style="margin-top:10px">Acceso del propietario</span>${claveRow(o,dir)}`:''}
   ${dir||ed?`<div class="row2">${o.invitados.estudio!=='aceptada'?`<button class="btn" data-act="invitar" data-o="${o.id}" data-r="estudio">Invitar al estudio</button>`:''}${o.invitados.propietario!=='aceptada'?`<button class="btn" data-act="invitar" data-o="${o.id}" data-r="propietario">Invitar al propietario</button>`:''}</div>`:''}</div>`;
 }
 
@@ -1804,6 +1812,10 @@ function aplicarFuentes(sel){
   }catch(e){}
 }
 aplicarFuentes(leerFuentes());
+function vClaves(){
+  return `<button class="back" data-act="tab" data-t="mas">← Volver a Más</button><section class="sec"><h1>Acceso de propietarios</h1><p class="muted">Cada obra tiene su clave. Asignala o generala acá y pasásela al propietario: con esa clave entra solo a su obra, desde <b>${esc(location.host||'la app')}/nexo2.html#propietario</b>. Si cambiás una clave, la anterior deja de servir para entrar.</p>
+  <div class="list">${obrasOrg().map(o=>claveRow(o,esDir())).join('')}</div></section>`;
+}
 function vConfig(){
   const sel=leerFuentes();
   return `<button class="back" data-act="tab" data-t="mas">← Volver a Más</button><section class="sec"><h1>Configuración de la app</h1><p class="muted">Elegí el tipo de letra de cada parte. Se aplica enseguida y queda guardado en este aparato.</p>
@@ -1812,7 +1824,7 @@ function vConfig(){
 }
 document.addEventListener('change',e=>{const t=e.target;if(t&&t.dataset&&t.dataset.fontrole){const n=leerFuentes();n[t.dataset.fontrole]=t.value;try{localStorage.setItem(FONT_LS,JSON.stringify(n))}catch(x){}aplicarFuentes(n);t.style.fontFamily="'"+t.value+"'";const p=t.parentNode.querySelector('.fprev');if(p)p.style.fontFamily="'"+t.value+"',sans-serif"}});
 function vMas(){
-  const r=ROLE();const items=r==='direccion'?[['matriz','Usuarios y accesos','Quién ve y quién carga qué, por obra y por rol'],['invites','Invitaciones','Estudios y propietarios invitados a cada obra'],['modelos','Modelos de obra','Duraciones base por rubro, anticipación y tarjetas de cada rubro. Editable.'],['config','Configuración de la app','Tipos de letra de cada parte de la app']]:[['modelos','Modelos de obra','Cómo se arma el cronograma base (lo define la Dirección)'],['cambiarObras','Obras a cargo','Cambiar las obras que tenés a cargo'],['config','Configuración de la app','Tipos de letra de cada parte de la app']];
+  const r=ROLE();const items=r==='direccion'?[['matriz','Usuarios y accesos','Quién ve y quién carga qué, por obra y por rol'],['invites','Invitaciones','Estudios y propietarios invitados a cada obra'],['modelos','Modelos de obra','Duraciones base por rubro, anticipación y tarjetas de cada rubro. Editable.'],['claves','Acceso de propietarios','Una clave por obra: asignala y pasásela a cada propietario'],['config','Configuración de la app','Tipos de letra de cada parte de la app']]:[['modelos','Modelos de obra','Cómo se arma el cronograma base (lo define la Dirección)'],['cambiarObras','Obras a cargo','Cambiar las obras que tenés a cargo'],['config','Configuración de la app','Tipos de letra de cada parte de la app']];
   return `<section class="sec"><h1>Más</h1><div class="list">${items.map(([a,t,dd])=>`<button class="entry" style="text-align:left" data-act="${a}"><b>${t}</b><span class="muted small">${dd}</span></button>`).join('')}</div></section>`;
 }
 
@@ -2197,6 +2209,10 @@ const A={
   volver:()=>{S.step='panels';draw()},
   entrarProp:ds=>{S.cobra=ds.o;S.chat=[];login('cli')},
   otraObra:()=>{S.u=null;S.step='clave';draw();scrollTo(0,0)},
+  claves:()=>{S.tab='claves';draw();scrollTo(0,0)},
+  guardarClave:ds=>{const o=findO(ds.o);const v=val('ck-'+o.id).toUpperCase().replace(/\s+/g,'');if(!/^[A-Z0-9-]{4,20}$/.test(v)){toast('La clave: 4 a 20 letras o números, sin espacios');return}if(OBRAS.some(x=>x!==o&&normClave(x.clave)===normClave(v))){toast('Esa clave ya la usa otra obra');return}o.clave=v;claveGuardarLS();toast('Clave guardada para '+o.nombre);draw()},
+  genClave:ds=>{const o=findO(ds.o);o.clave=claveGenerar(o);claveGuardarLS();toast('Clave nueva para '+o.nombre);draw()},
+  copiarMsg:ds=>{const o=findO(ds.o);const t=`Hola, te paso el acceso a Nexo para seguir tu obra ${o.nombre}.\nEntrá desde: ${location.origin}/nexo2.html#propietario\nTu clave: ${o.clave}`;try{navigator.clipboard.writeText(t).then(()=>toast('Mensaje copiado'),()=>toast(t))}catch(e){toast(t)}},
   copiarClave:ds=>{const o=findO(ds.o);try{navigator.clipboard.writeText(o.clave).then(()=>toast('Clave copiada'),()=>toast('Clave: '+o.clave))}catch(e){toast('Clave: '+o.clave)}},
   volverRoles:()=>{S.step='roles';draw()},
   salir:()=>{S.u=null;S.step=LOCK==='constructora'?'roles':'panels';closeSheet();draw();scrollTo(0,0)},
@@ -2339,12 +2355,12 @@ const ICON={inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1
 function navItems(){const r=ROLE();return{direccion:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['desempeno','Desempeño','chart'],['mas','Más','mas']],jefe:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['registro','Registro','registro'],['mas','Más','mas']],auditor:[['inicio','Inicio','inicio'],['obras','Obras','obras']],estudio:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['docs','Documentos','folder']],cliente:[['cliente','Mi obra','inicio']]}[r]||[]}
 function draw(){
   const r=ROLE();
-  const view=!S.u?(S.step==='roles'?vRoles():S.step==='obras'||S.step==='obrasAud'?vSelObras():S.step==='cons'?vCons():S.step==='clave'?vClave():vLogin()):({inicio:vInicio,obras:vObras,obra:vObra,pedidos:vPedidos,registro:vRegistro,mas:vMas,config:vConfig,desempeno:vDesempeno,docs:vDocs,cliente:vCliente}[S.tab]||vInicio)();
+  const view=!S.u?(S.step==='roles'?vRoles():S.step==='obras'||S.step==='obrasAud'?vSelObras():S.step==='cons'?vCons():S.step==='clave'?vClave():vLogin()):({inicio:vInicio,obras:vObras,obra:vObra,pedidos:vPedidos,registro:vRegistro,mas:vMas,config:vConfig,claves:vClaves,desempeno:vDesempeno,docs:vDocs,cliente:vCliente}[S.tab]||vInicio)();
   $('#view').innerHTML=view;
   $('#who').innerHTML=S.u?`<span><b>${esc(S.u.name)}</b>${r==='jefe'||r==='auditor'?`<span class="rol">${plural(misObras().length,'obra','obras')}</span>`:r==='estudio'?`<button class="rol rolbtn" data-act="cambiarCons">${esc(CONSTRUCTORAS.find(c=>c.id===S.cons).n)} ▾</button>`:r==='direccion'?`<span class="rol">${ORG}</span>`:''}</span>${LOCK&&LOCK!=='constructora'?'':'<button class="btn ghost sm" data-act="salir">Salir</button>'}`:'<span class="muted">Ingresá con tu cuenta</span>';
   const nb=misNotifs().filter(n=>!n.leido).length;
   const badge=r==='estudio'?estPend().filter(c=>color(c)==='rojo').length:cardsDe(misObras()).filter(c=>color(c)==='rojo').length;
-  $('#nav').innerHTML=navItems().map(([k,l,ic])=>`<button data-act="tab" data-t="${k}" ${S.tab===k||(S.tab==='obra'&&k==='obras')||(S.tab==='config'&&k==='mas')?'aria-current="page"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[ic]}</svg>${l}${k==='pedidos'&&badge?`<span class="badge">${badge}</span>`:''}${(k==='inicio'||k==='cliente')&&nb?`<span class="badge gold">${nb}</span>`:''}</button>`).join('');
+  $('#nav').innerHTML=navItems().map(([k,l,ic])=>`<button data-act="tab" data-t="${k}" ${S.tab===k||(S.tab==='obra'&&k==='obras')||(S.tab==='config'&&k==='mas')||(S.tab==='claves'&&k==='mas')?'aria-current="page"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[ic]}</svg>${l}${k==='pedidos'&&badge?`<span class="badge">${badge}</span>`:''}${(k==='inicio'||k==='cliente')&&nb?`<span class="badge gold">${nb}</span>`:''}</button>`).join('');
   $('#nav').parentElement.hidden=!S.u;
   const g=$('#gwrap');if(g)g.scrollLeft=+g.dataset.scroll||0;
 }
