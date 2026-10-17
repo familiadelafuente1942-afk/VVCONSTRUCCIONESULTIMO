@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEXO · Cómo funciona</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}
+body{margin:0;background:#0b0c0e;color:#f0ece4;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:16px}
+h1{font-size:20px;font-weight:600;letter-spacing:.2em;color:#c9a24b;margin:8px 0 4px}
+p{color:#a9a49a;margin:4px 0 14px;text-align:center;max-width:620px;line-height:1.45}
+video{width:100%;max-width:960px;border-radius:14px;background:#000;border:1px solid #2a2c31}
+.row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:14px 0}
+button{background:#c9a24b;color:#111;border:0;border-radius:10px;padding:13px 18px;font-size:16px;font-weight:600;cursor:pointer}
+button.g{background:#1b1d21;color:#f0ece4;border:1px solid #3a3c42}
+button:disabled{opacity:.45;cursor:default}
+#st{color:#c9a24b;min-height:22px;text-align:center}
+.bar{width:100%;max-width:520px;height:6px;background:#1b1d21;border-radius:3px;overflow:hidden;margin:6px auto}.bar i{display:block;height:100%;width:0;background:#c9a24b;transition:width .2s}
+a{color:#c9a24b}
+</style></head><body>
+<h1>N E X O</h1>
+<p>Recorrido por la plataforma, rol por rol. Con la voz de Nexo IA.</p>
+<video id="v" src="/nexo-video/NEXO_como_funciona.mp4" playsinline muted preload="auto"></video>
+<div class="bar"><i id="pb"></i></div>
+<div id="st">Tocá “Preparar voz” para empezar.</div>
+<div class="row">
+<button id="bp">1 · Preparar voz</button>
+<button id="bv" class="g" disabled>2 · Ver con voz</button>
+<button id="bg" class="g" disabled>Grabar y descargar con voz</button>
+<button id="bs" class="g">Ver sin voz</button>
+</div>
+<p style="font-size:13px">“Grabar y descargar” reproduce el video completo (unos 4 minutos) y te baja un archivo con imagen y voz para mandar. Usá Chrome en la computadora.</p>
+<script>
+const TL=[{"id": "intro", "t": 0, "txt": "Esto es NEXO: la plataforma que conecta a toda la obra, en tiempo real. Te muestro cómo funciona, rol por rol."}, {"id": "portada", "t": 5.0, "txt": "Una sola app con tres paneles: constructora, estudio de arquitectura y propietario. Cada persona entra con su código y ve solo lo que le corresponde."}, {"id": "roles", "t": 18.54, "txt": "La constructora tiene tres roles: Dirección, jefatura de obra y auditoría."}, {"id": "dir_inicio", "t": 29.75, "txt": "La Dirección ve todas sus obras de un vistazo: el avance real, la etapa, la entrega prevista, las tarjetas vencidas y el ahorro o la pérdida de cada obra."}, {"id": "dir_ia", "t": 44.34, "txt": "Y con Nexo IA puede preguntar lo que quiera: responde por texto o por voz, arma PDFs y muestra fotos y renders."}, {"id": "dir_obras", "t": 49.43, "txt": "En la cartera de obras ve el modelo, los metros cuadrados, la jefatura y el estudio de cada una. Y desde acá se crean obras nuevas."}, {"id": "dir_pedidos", "t": 56.36, "txt": "En pedidos controla las tarjetas: cada tarea pide planos, materiales y condiciones, con un semáforo que avisa qué está vencido o urgente."}, {"id": "dir_desempeno", "t": 63.54, "txt": "En desempeño responde tres preguntas por obra: si la jefatura llegó a tiempo, si el equipo rinde y si la obra llega en plazo."}, {"id": "dir_mas", "t": 71.51, "txt": "En Más están los usuarios y accesos, las invitaciones y los modelos de obra."}, {"id": "dir_codigos", "t": 75.16, "txt": "Acá la Dirección asigna un código por obra para cada rol. Quien tiene dos obras carga dos códigos y ve solo esas."}, {"id": "obra_crono", "t": 84.49, "txt": "La ficha de cada obra empieza por el cronograma: el avance real contra lo planificado, qué se hace ahora, qué sigue y cuánto se pierde por esperas."}, {"id": "obra_planos", "t": 96.36, "txt": "Los planos están ordenados por rubro, con su estado: vigentes, en revisión o por subir."}, {"id": "obra_informes", "t": 104.07, "txt": "El informe semanal junta el avance por tarea, los días trabajados, la lluvia y las fotos, y deja un resumen para el propietario."}, {"id": "obra_avances", "t": 109.43, "txt": "En avances se cargan fotos de lo que se hizo. La inteligencia artificial las compara con la foto anterior y resume el avance."}, {"id": "obra_adic", "t": 118.33, "txt": "Los adicionales nacen de un cambio anotado en el registro diario, y la app verifica los requisitos antes de avanzar."}, {"id": "obra_audit", "t": 124.07, "txt": "La pestaña de auditoría muestra la próxima supervisión, los planos en revisión y el próximo certificado de etapa."}, {"id": "obra_equipo", "t": 129.82, "txt": "Y en equipo, la dotación de hoy, la jefatura y el estudio asignados, y los códigos de la obra."}, {"id": "jefe_inicio", "t": 139.36, "txt": "La jefatura de obra ve únicamente las obras que tiene a cargo, con la tarea actual, la próxima y los avisos de lo que vence."}, {"id": "jefe_pedidos", "t": 146.67, "txt": "Acá completa las tarjetas: lo que la obra necesita antes de cada tarea, ya sean planos, materiales o condiciones."}, {"id": "jefe_registro", "t": 154.49, "txt": "En el registro diario anota novedades, pedidos, incidencias y cambios, cada uno con fecha, hora y foto."}, {"id": "est_inicio", "t": 163.63, "txt": "El estudio de arquitectura ve qué tiene que entregar en cada obra, cuántos planos faltan subir y qué porcentaje entregó a tiempo."}, {"id": "est_tarjetas", "t": 170.54, "txt": "Responde cada tarjeta con el archivo, y queda vinculado a la carpeta de documentos."}, {"id": "est_docs", "t": 177.98, "txt": "Y toda la documentación de cada obra está centralizada, con el estado en tiempo real."}, {"id": "aud_inicio", "t": 183.6, "txt": "La auditoría ve su agenda: documentos por revisar, la próxima supervisión y las certificaciones de los próximos treinta días."}, {"id": "aud_sup", "t": 190.9, "txt": "Carga las supervisiones de obra, con sus observaciones, y las emite en PDF."}, {"id": "aud_rev", "t": 197.15, "txt": "Revisa los planos que sube el estudio, con resultado conforme, con observaciones o no conforme."}, {"id": "aud_cert", "t": 202.51, "txt": "Y certifica cada etapa terminada, para que quede el registro."}, {"id": "cli_inicio", "t": 209.24, "txt": "El propietario ve su obra clara y simple: los renders de su casa, el porcentaje de avance y las semanas que faltan para la entrega."}, {"id": "cli_casa", "t": 216.28, "txt": "Puede recorrer su casa etapa por etapa, y comparar cómo está hoy con cómo va a quedar."}, {"id": "cli_resto", "t": 222.02, "txt": "Y recibe los informes, los avances con fotos, los certificados y las próximas fechas importantes."}, {"id": "outro", "t": 227.89, "txt": "Cada uno ve lo suyo, y todos trabajan sobre la misma verdad. Eso es NEXO."}];
+const VOZ='5VgdpNxWgMIhe51dTjhI';
+const v=document.getElementById('v'),st=document.getElementById('st'),pb=document.getElementById('pb');
+const bp=document.getElementById('bp'),bv=document.getElementById('bv'),bg=document.getElementById('bg'),bs=document.getElementById('bs');
+let AC=null,buffers={},cur=-1,playing=false,dest=null,rec=null,chunks=[];
+const msg=t=>st.textContent=t;
+async function preparar(){
+  bp.disabled=true;AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+  let ok=0;
+  for(const s of TL){
+    if(buffers[s.id]){ok++;continue}
+    let intento=0,done=false;
+    while(!done&&intento<3){
+      try{
+        const r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:s.txt,voz:VOZ})});
+        if(!r.ok)throw new Error(r.status);
+        buffers[s.id]=await AC.decodeAudioData(await r.arrayBuffer());done=true;ok++;
+      }catch(e){intento++;await new Promise(r=>setTimeout(r,800))}
+    }
+    pb.style.width=(100*ok/TL.length)+'%';msg(`Generando la voz… ${ok} de ${TL.length}`);
+  }
+  if(ok===TL.length){msg('Voz lista. Ya podés verlo o grabarlo.');bv.disabled=false;bg.disabled=false}
+  else{msg('No se pudo generar toda la voz. Revisá la conexión y probá de nuevo.');bp.disabled=false}
+}
+function sonar(i){
+  const b=buffers[TL[i].id];if(!b)return Promise.resolve();
+  return new Promise(res=>{const src=AC.createBufferSource();src.buffer=b;src.connect(AC.destination);if(dest)src.connect(dest);src.onended=res;src.start()});
+}
+let loop=null;
+async function reproducir(){
+  await AC.resume();cur=-1;playing=true;v.currentTime=0;v.muted=true;
+  let hablando=false;
+  const tick=async()=>{
+    if(!playing)return;
+    const t=v.currentTime;let k=-1;
+    for(let i=0;i<TL.length;i++)if(t>=TL[i].t)k=i;
+    if(k>cur&&!hablando){
+      cur=k;hablando=true;
+      const largo=buffers[TL[k].id]?buffers[TL[k].id].duration:0;
+      const sig=TL[k+1]?TL[k+1].t:v.duration;
+      sonar(k).then(()=>{hablando=false;if(v.paused&&!v.ended&&playing)v.play()});
+      msg(TL[k].txt);
+    }
+    // si la escena siguiente llega y todavía se está hablando, esperar con la imagen quieta
+    if(hablando&&cur+1<TL.length&&t>=TL[cur+1].t-0.05&&!v.paused){v.pause()}
+    if(v.ended){playing=false;if(rec&&rec.state==='recording'){setTimeout(()=>rec.stop(),800)}msg(rec?'Listo, bajando el archivo…':'Fin.');return}
+    loop=requestAnimationFrame(tick);
+  };
+  await v.play();loop=requestAnimationFrame(tick);
+}
+bp.onclick=preparar;
+bv.onclick=()=>{rec=null;dest=null;reproducir()};
+bs.onclick=()=>{playing=false;v.muted=false;v.currentTime=0;v.play();msg('Sin voz.')};
+bg.onclick=async()=>{
+  try{
+    await AC.resume();dest=AC.createMediaStreamDestination();
+    const vs=v.captureStream?v.captureStream():null;
+    if(!vs){msg('Este navegador no permite grabar. Usá Chrome en la computadora.');return}
+    const tracks=[...vs.getVideoTracks(),...dest.stream.getAudioTracks()];
+    const ms=new MediaStream(tracks);
+    const mt=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported(m));
+    rec=new MediaRecorder(ms,{mimeType:mt,videoBitsPerSecond:4e6});chunks=[];
+    rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+    rec.onstop=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));a.download='NEXO_como_funciona_con_voz.webm';a.click();msg('Listo. Se bajó NEXO_como_funciona_con_voz.webm');rec=null;dest=null};
+    rec.start(1000);reproducir();
+  }catch(e){msg('No se pudo grabar: '+e.message)}
+};
+</script></body></html>
