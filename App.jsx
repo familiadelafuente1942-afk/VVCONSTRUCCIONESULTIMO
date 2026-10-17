@@ -725,7 +725,7 @@ function isDirectivo(user) {
 // ── TEMA ───────────────────────────────────────────────────────────────
 const THEME_PRESETS = [
     { id: "azul", label: "Azul", accent: "#1D4ED8", al: "rgba(37,99,235,.14)", bg: "rgba(255,255,255,.06)", card: "#fff", border: "#E2E8F0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#0F172A" },
-    { id: "oscuro", label: "Oscuro", accent: "#b8915a", al: "#241c14", bg: "#0d0e10", card: "#16171a", border: "#2a2c31", text: "#ece8e1", sub: "#B8B5AE", muted: "#7A776F", navy: "#0d0e10" },
+    { id: "oscuro", label: "Oscuro", accent: "#B0894F", al: "#241c14", bg: "#0d0d0f", card: "#111214", border: "#232227", text: "#f2f0eb", sub: "#B8B5AE", muted: "#7A776F", navy: "#0d0d0f" },
     { id: "verde", label: "Verde", accent: "#16A34A", al: "rgba(22,163,74,.18)", bg: "#F0FDF4", card: "#fff", border: "#BBF7D0", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#14532D" },
     { id: "violeta", label: "Violeta", accent: "#7C3AED", al: "rgba(139,92,246,.14)", bg: "#FAF5FF", card: "#fff", border: "#E9D5FF", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#3B0764" },
     { id: "rojo", label: "Rojo", accent: "#DC2626", al: "rgba(239,68,68,.10)", bg: "#FFF5F5", card: "#fff", border: "rgba(239,68,68,.30)", text: "#0F172A", sub: "#475569", muted: "#94A3B8", navy: "#7F1D1D" },
@@ -1186,7 +1186,7 @@ function parseMonto(val) { return String(val).replace(/[^\d]/g, ''); }
 const T = { bg: "var(--bg,rgba(255,255,255,.06))", card: "var(--card,#fff)", border: "var(--border,#E2E8F0)", text: "var(--text,#0F172A)", sub: "var(--sub,#475569)", muted: "var(--muted,#94A3B8)", accent: "var(--accent,#1D4ED8)", accentLight: "var(--al,rgba(37,99,235,.14))", navy: "var(--navy,#0F172A)", r: "var(--r,14px)", rsm: "var(--rsm,10px)", shadow: "0 1px 2px rgba(16,28,44,.05),0 6px 20px rgba(16,28,44,.06)" };
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Montserrat:wght@400;600;700;800&family=Michroma&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Montserrat:wght@400;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg,rgba(255,255,255,.06));overscroll-behavior:none;}
   input,textarea,select,button{font-family:var(--font,'Plus Jakarta Sans'),sans-serif;}
@@ -2542,7 +2542,7 @@ function Obras({ obras, setObras, lics, detailId, setDetailId, requireAuth, cfg,
 // Señal: hilo de bronce (regla membrete, anillo FAB, viñetas de sección).
 // ════════════════════════════════════════════════════════════════════
 
-const BRASS = "#b8915a";
+const BRASS = "#B0894F";
 const INST_COLORS = { accent:"#1E3A5F", al:"rgba(255,255,255,.08)", bg:"#F5F6F8", card:"#FFFFFF", border:"#E6E9EE", text:"#131C2B", sub:"#4A5565", muted:"#97A0AE", navy:"#101C2C" };
 
 const SAMPLE_OBRAS = [
@@ -2906,13 +2906,13 @@ function InformeSemanalView({ db, cfg, onBack }) {
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
       .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
       .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
       .barra b { color: #0F1B2D; }
-      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #b8915a; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
       ul { margin: 0 0 4px; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.6; margin-bottom: 3px; }
       .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
       .obs { font-size: 12px; line-height: 1.55; color: #1a2433; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
@@ -2991,7 +2991,7 @@ function InformeSemanalView({ db, cfg, onBack }) {
       <ListaEditable items={hechos} setItems={setHechos} nuevo={nuevoH} setNuevo={setNuevoH} add={addH} ph="Ej: Se terminó la mampostería de PB…" color="#10B981" />
 
       <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 6 }}><Ico n="pin" /> A realizar la próxima semana</div>
-      <ListaEditable items={proxima} setItems={setProxima} nuevo={nuevoP} setNuevo={setNuevoP} add={addP} ph="Ej: Iniciar contrapisos del 1º piso…" color="#b8915a" />
+      <ListaEditable items={proxima} setItems={setProxima} nuevo={nuevoP} setNuevo={setNuevoP} add={addP} ph="Ej: Iniciar contrapisos del 1º piso…" color="#B0894F" />
 
       <label style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Observaciones (opcional)</label>
       <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3} placeholder="Clima, faltantes, pedidos a la dirección de obra, etc." style={{ ...inp, resize: "vertical", lineHeight: 1.5, margin: "6px 0 14px" }} />
@@ -3134,24 +3134,24 @@ function AuditoriaView({ db, cfg, onBack, desdeSemana }) {
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 14px; text-align: center; }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
       .logo { max-height: 84px; max-width: 290px; object-fit: contain; display: block; margin: 0 auto 10px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
       .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 16px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
       .barra b { color: #0F1B2D; }
       .grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
       .grid > div { flex: 1 1 45%; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 8px; padding: 8px 11px; }
       .grid span { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #94A3B8; margin-bottom: 2px; }
       .grid b { font-size: 12.5px; color: #0F1B2D; }
-      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #b8915a; }
+      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
       table { width: 100%; border-collapse: collapse; }
       th { background: rgba(255,255,255,.06); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
       td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
       ul { margin: 0; padding-left: 20px; } li { font-size: 12px; line-height: 1.55; margin-bottom: 3px; }
       .vacio { font-size: 11.5px; color: #98A2B3; font-style: italic; }
       .parr { font-size: 12px; line-height: 1.6; text-align: justify; }
-      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-left: 3px solid #b8915a; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
+      .decl { font-size: 12.5px; line-height: 1.65; text-align: justify; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-left: 3px solid #B0894F; border-radius: 8px; padding: 11px 13px; margin: 14px 0 4px; }
       .res { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 6px; padding: 5px 12px; margin-top: 14px; color: ${colorRes}; border: 1.5px solid ${colorRes}; }
       .firmas { display: flex; gap: 40px; margin-top: 34px; page-break-inside: avoid; }
       .firma { flex: 1; text-align: center; }
@@ -3553,15 +3553,15 @@ function BitacoraView({ db, cfg, onBack }) {
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 10px; margin-bottom: 14px; }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 14px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; letter-spacing: -.01em; }
-      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
       .meta { font-size: 11px; color: #5B6B7F; margin-top: 8px; }
       h1 { font-size: 15px; color: #0F1B2D; margin: 4px 0 2px; }
       .hecho { border: 1px solid #E3E8EF; border-left: 3px solid #1B3A5B; border-radius: 8px; padding: 11px 13px; margin-bottom: 11px; page-break-inside: avoid; }
       .hh { display: flex; align-items: baseline; gap: 9px; margin-bottom: 5px; flex-wrap: wrap; }
       .num { background: #0F1B2D; color: #fff; font-size: 10px; font-weight: 800; border-radius: 20px; padding: 1px 8px; }
-      .fecha { font-size: 11px; font-weight: 800; color: #b8915a; }
+      .fecha { font-size: 11px; font-weight: 800; color: #B0894F; }
       .tit { font-size: 13.5px; font-weight: 700; color: #0F1B2D; }
       .desc { font-size: 12px; color: #1a2433; line-height: 1.5; white-space: normal; }
       .adj { font-size: 10.5px; color: #1B3A5B; background: rgba(255,255,255,.06); border: 1px solid #E3E8EF; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
@@ -3919,11 +3919,11 @@ function AdicionalesView({ db, cfg, onBack, obraIdFijo }) {
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 24px 28px 32px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 10px; margin-bottom: 4px; }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 10px; margin-bottom: 4px; }
       .marca { font-size: 16px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .1em; text-transform: uppercase; margin-top: 2px; }
       .warn { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 9px 12px; font-size: 10.5px; color: #92400E; line-height: 1.5; margin: 12px 0; }
-      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 7px; padding-left: 9px; border-left: 3px solid #b8915a; }
+      h2 { font-size: 11.5px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 7px; padding-left: 9px; border-left: 3px solid #B0894F; }
       .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; font-size: 11.5px; }
       .grid2 div { padding: 3px 0; border-bottom: 1px solid #EEF1F5; }
       .grid2 b { color: #5B6B7F; font-weight: 600; }
@@ -4115,7 +4115,7 @@ function AdicionalesView({ db, cfg, onBack, obraIdFijo }) {
 // Los pedidos ahora pueden ser de 3 tipos, todos con el mismo mecanismo.
 const TIPOS_PEDIDO = [
   { id: "material", label: "Materiales", sing: "material", icon: "box", color: "#1B3A5B" },
-  { id: "definicion", label: "Definiciones", sing: "definición", icon: "ruler", color: "#b8915a" },
+  { id: "definicion", label: "Definiciones", sing: "definición", icon: "ruler", color: "#B0894F" },
   { id: "plano", label: "Planos", sing: "plano", icon: "plans", color: "#3B6E9E" },
 ];
 const tipoDe = (id) => TIPOS_PEDIDO.find(t => t.id === id) || TIPOS_PEDIDO[0];
@@ -4227,7 +4227,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
     const faltantes = grupos.map(g => ({ rubro: g.rubro, items: g.items.filter(i => !i.tiene) })).filter(g => g.items.length);
     const rowsHtml = faltantes.map(g => `<tr class="rub"><td colspan="2">${g.rubro}</td></tr>` + g.items.map(i => `<tr><td class="dot">•</td><td>${i.nombre}${i.obs ? `<div style="font-size:11px;color:#5B6B7F;margin-top:2px">Obs: ${String(i.obs).replace(/</g, "&lt;")}</div>` : ""}</td></tr>`).join("")).join("");
     const pct = items.length ? Math.round(tienen / items.length * 100) : 0;
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Definiciones faltantes ${obraNom(obraId)}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 40px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 34px;border-bottom:4px solid #b8915a}.brand{font-size:20px;font-weight:800}.brand small{display:block;font-size:9px;color:#b8915a;letter-spacing:2px;margin-top:2px}.doc{font-size:12px;font-weight:800;color:#b8915a;text-transform:uppercase;letter-spacing:1px;margin-top:6px}.wrap{padding:0 34px}.meta{display:flex;justify-content:space-between;margin:18px 0;font-size:12px;color:#5B6B7F}.kpi{display:flex;gap:0;margin:14px 0;border:1px solid #E3E8EF;border-radius:8px;overflow:hidden}.kpi div{flex:1;text-align:center;padding:10px;border-right:1px solid #E3E8EF}.kpi div:last-child{border-right:none}.kpi b{display:block;font-size:20px}.kpi span{font-size:8px;color:#5B6B7F;text-transform:uppercase}table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}td{padding:7px 8px;border-bottom:1px solid #EEF1F5;vertical-align:top}.rub td{background:#EAF0F7;color:#1B3A5B;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.dot{width:20px;color:#b8915a;text-align:center}.obs{font-size:10px;color:#5B6B7F;margin-top:20px;border-top:1px solid #D6DCE4;padding-top:8px}.firmas{display:flex;justify-content:space-between;margin-top:44px}.firma{width:44%;text-align:center;font-size:10px;color:#5B6B7F}.firma .ln{border-top:1px solid #0F1B2D;padding-top:5px;margin-top:34px}@media print{.noprint{display:none}}</style></head><body><div class="head"><div class="brand">V+V CONSTRUCCIONES<small>CONSTRUCTORA</small></div><div class="doc">Definiciones faltantes de obra</div></div><div class="wrap"><div class="meta"><div>Obra: <b>${obraNom(obraId)}</b></div><div>Fecha: ${hoyStr()}</div></div><div class="kpi"><div><b style="color:#B91C1C">${faltan}</b><span>Faltantes</span></div><div><b style="color:#16A34A">${tienen}</b><span>Definidas</span></div><div><b>${items.length}</b><span>Total</span></div><div><b>${pct}%</b><span>Definido</span></div></div>${faltantes.length ? `<table><tbody>${rowsHtml}</tbody></table>` : '<p style="padding:20px 0;text-align:center;color:#16A34A;font-weight:700">No hay definiciones faltantes. Todas resueltas.</p>'}<div class="obs">Las definiciones pendientes atrasan el normal desarrollo de las tareas de albañilería, revoques y colocaciones. Es importante resolverlas para poder dar curso a las tareas, contrataciones y pedidos de materiales.</div><div class="firmas"><div class="firma"><div class="ln">${empresa || "V+V Construcciones"}</div></div><div class="firma"><div class="ln">Belfast CM — Recibido</div></div></div></div></body></html>`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Definiciones faltantes ${obraNom(obraId)}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;color:#0F1B2D;padding:0 0 40px;line-height:1.5}.head{background:#0F1B2D;color:#fff;padding:20px 34px;border-bottom:4px solid #B0894F}.brand{font-size:20px;font-weight:800}.brand small{display:block;font-size:9px;color:#B0894F;letter-spacing:2px;margin-top:2px}.doc{font-size:12px;font-weight:800;color:#B0894F;text-transform:uppercase;letter-spacing:1px;margin-top:6px}.wrap{padding:0 34px}.meta{display:flex;justify-content:space-between;margin:18px 0;font-size:12px;color:#5B6B7F}.kpi{display:flex;gap:0;margin:14px 0;border:1px solid #E3E8EF;border-radius:8px;overflow:hidden}.kpi div{flex:1;text-align:center;padding:10px;border-right:1px solid #E3E8EF}.kpi div:last-child{border-right:none}.kpi b{display:block;font-size:20px}.kpi span{font-size:8px;color:#5B6B7F;text-transform:uppercase}table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}td{padding:7px 8px;border-bottom:1px solid #EEF1F5;vertical-align:top}.rub td{background:#EAF0F7;color:#1B3A5B;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.03em}.dot{width:20px;color:#B0894F;text-align:center}.obs{font-size:10px;color:#5B6B7F;margin-top:20px;border-top:1px solid #D6DCE4;padding-top:8px}.firmas{display:flex;justify-content:space-between;margin-top:44px}.firma{width:44%;text-align:center;font-size:10px;color:#5B6B7F}.firma .ln{border-top:1px solid #0F1B2D;padding-top:5px;margin-top:34px}@media print{.noprint{display:none}}</style></head><body><div class="head"><div class="brand">V+V CONSTRUCCIONES<small>CONSTRUCTORA</small></div><div class="doc">Definiciones faltantes de obra</div></div><div class="wrap"><div class="meta"><div>Obra: <b>${obraNom(obraId)}</b></div><div>Fecha: ${hoyStr()}</div></div><div class="kpi"><div><b style="color:#B91C1C">${faltan}</b><span>Faltantes</span></div><div><b style="color:#16A34A">${tienen}</b><span>Definidas</span></div><div><b>${items.length}</b><span>Total</span></div><div><b>${pct}%</b><span>Definido</span></div></div>${faltantes.length ? `<table><tbody>${rowsHtml}</tbody></table>` : '<p style="padding:20px 0;text-align:center;color:#16A34A;font-weight:700">No hay definiciones faltantes. Todas resueltas.</p>'}<div class="obs">Las definiciones pendientes atrasan el normal desarrollo de las tareas de albañilería, revoques y colocaciones. Es importante resolverlas para poder dar curso a las tareas, contrataciones y pedidos de materiales.</div><div class="firmas"><div class="firma"><div class="ln">${empresa || "V+V Construcciones"}</div></div><div class="firma"><div class="ln">Belfast CM — Recibido</div></div></div></div></body></html>`;
     setPdfHtml(html);
   }
   function waFaltantes() {
@@ -4256,7 +4256,7 @@ function DefinicionesView({ obras, empresa, definiciones, persistDef }) {
   body{font-family:Calibri,Arial,sans-serif;color:#0F1B2D;font-size:11pt}
   h1{font-size:15pt;color:#0F1B2D;margin:0 0 2px}
   .marca{font-size:16pt;font-weight:bold;color:#0F1B2D}
-  .doc{font-size:10pt;font-weight:bold;color:#b8915a;text-transform:uppercase;letter-spacing:1px}
+  .doc{font-size:10pt;font-weight:bold;color:#B0894F;text-transform:uppercase;letter-spacing:1px}
   .meta{font-size:10pt;color:#5B6B7F;margin:10px 0 4px}
   table{border-collapse:collapse;width:100%;margin-top:8px}
   th{background:#0F1B2D;color:#fff;font-size:10pt;padding:7px 8px;border:1px solid #0F1B2D;text-align:left}
@@ -5432,7 +5432,7 @@ function MasConfig({ cfg, setCfg, onBack }) {
       </>); })()}
       <div style={{ marginTop:20 }}><Eyebrow>Color principal</Eyebrow></div>
       <div style={{ display:"flex", alignItems:"center", gap:9, flexWrap:"wrap" }}>
-        {["#1E3A5F","#101C2C","#1F5C49","#6E3B2E","#46406E","#0E5A66","#7A2E50","#b8915a","#1F2937"].map(col=>(<button key={col} onClick={()=>setAccent(col)} style={{ width:32, height:32, borderRadius:5, background:col, border:`2px solid ${c.accent===col?T.text:T.border}`, cursor:"pointer" }} />))}
+        {["#1E3A5F","#101C2C","#1F5C49","#6E3B2E","#46406E","#0E5A66","#7A2E50","#B0894F","#1F2937"].map(col=>(<button key={col} onClick={()=>setAccent(col)} style={{ width:32, height:32, borderRadius:5, background:col, border:`2px solid ${c.accent===col?T.text:T.border}`, cursor:"pointer" }} />))}
         <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:T.sub, cursor:"pointer" }}><input type="color" value={c.accent} onChange={e=>setAccent(e.target.value)} style={{ width:32, height:32, border:"none", background:"none", cursor:"pointer" }} />Personalizado</label>
       </div>
       <div style={{ marginTop:20 }}><Eyebrow>Colores avanzados</Eyebrow></div>
@@ -7776,7 +7776,7 @@ function PdfEditorView({ archivo, obras, cfg, onGuardar, onCerrar }) {
         <canvas ref={cvRef} style={{ display: "block", width: "100%" }} />
         {enPag.map(t => (
           <div key={t.i} onClick={e => { e.stopPropagation(); if (confirm("¿Borrar este texto?")) quitar(t.i); }}
-            style={{ position: "absolute", left: (t.xPct * 100) + "%", top: (t.yPct * 100) + "%", fontSize: t.size, color: "#0F1B2D", background: "rgba(176,137,79,.16)", border: "1px dashed #b8915a", borderRadius: 3, padding: "0 2px", whiteSpace: "nowrap", cursor: "pointer", transform: "translateY(-2px)" }}>{t.txt}</div>
+            style={{ position: "absolute", left: (t.xPct * 100) + "%", top: (t.yPct * 100) + "%", fontSize: t.size, color: "#0F1B2D", background: "rgba(176,137,79,.16)", border: "1px dashed #B0894F", borderRadius: 3, padding: "0 2px", whiteSpace: "nowrap", cursor: "pointer", transform: "translateY(-2px)" }}>{t.txt}</div>
         ))}
       </div>
       {!msg && <div style={{ color: "#94a3b8", fontSize: 11.5, textAlign: "center", padding: "10px 14px", lineHeight: 1.5 }}>Tocá el documento donde quieras escribir. Para borrar un texto, tocalo.</div>}
@@ -7797,7 +7797,7 @@ function PdfEditorView({ archivo, obras, cfg, onGuardar, onCerrar }) {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setEdit(null)} style={{ flex: 1, background: "#F5F7FA", border: "1px solid #E3E8EF", color: "#5B6B7F", borderRadius: 9, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Cancelar</button>
-          <button onClick={confirmar} style={{ flex: 2, background: "#0F1B2D", color: "#fff", border: "1px solid #b8915a", borderRadius: 9, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Colocar</button>
+          <button onClick={confirmar} style={{ flex: 2, background: "#0F1B2D", color: "#fff", border: "1px solid #B0894F", borderRadius: 9, padding: "13px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Colocar</button>
         </div>
       </div>
     </div>}
@@ -9726,17 +9726,17 @@ function CertifRubroPanel({ obraId, obraNombre, cfg, certifRubro, setCertifRubro
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 4px; text-align: center; }
       .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
       .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
       .barra b { color: #0F1B2D; }
       table { width: 100%; border-collapse: collapse; margin-top: 6px; }
       th { background: rgba(255,255,255,.06); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 8px 10px; border: 1px solid #E3E8EF; }
       td { font-size: 12px; padding: 8px 10px; border: 1px solid #E3E8EF; }
       .total { margin-top: 16px; text-align: center; background: rgba(255,255,255,.04); border: 1px solid #E3E8EF; border-radius: 10px; padding: 14px; }
-      .total .n { font-size: 26px; font-weight: 800; color: #b8915a; }
+      .total .n { font-size: 26px; font-weight: 800; color: #B0894F; }
       .total .l { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #5B6B7F; margin-top: 2px; }
       .foot { margin-top: 22px; font-size: 9px; color: #98A2B3; text-align: center; border-top: 1px solid #E3E8EF; padding-top: 8px; }
     </style></head><body><div class="sheet">
@@ -9906,14 +9906,14 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 26px 30px 34px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 14px; margin-bottom: 16px; text-align: center; }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; margin-bottom: 16px; text-align: center; }
       .logo { max-height: 96px; max-width: 320px; object-fit: contain; display: block; margin: 0 auto 10px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
       h1 { font-size: 15px; color: #0F1B2D; margin: 6px 0 2px; }
       .meta { font-size: 11px; color: #5B6B7F; }
       .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
-      .fecha { font-size: 13px; font-weight: 800; color: #b8915a; margin-bottom: 8px; }
+      .fecha { font-size: 13px; font-weight: 800; color: #B0894F; margin-bottom: 8px; }
       .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
       .fotos img { width: calc(50% - 3px); max-height: 260px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
       .fotos img:only-child { width: 100%; max-height: 340px; }
@@ -10049,13 +10049,13 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       .sheet { max-width: 780px; margin: 0 auto; background: #fff; padding: 28px 34px 36px; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
       @media screen { body { padding: 14px; } }
       @media print { body { background: #fff; padding: 0; } .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; } }
-      .hdr { border-bottom: 2px solid #b8915a; padding-bottom: 14px; text-align: center; }
+      .hdr { border-bottom: 2px solid #B0894F; padding-bottom: 14px; text-align: center; }
       .logo { max-height: 88px; max-width: 300px; object-fit: contain; display: block; margin: 0 auto 10px; }
       .marca { font-size: 17px; font-weight: 800; color: #0F1B2D; }
-      .tipo { font-size: 10px; font-weight: 700; color: #b8915a; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
+      .tipo { font-size: 10px; font-weight: 700; color: #B0894F; letter-spacing: .18em; text-transform: uppercase; margin-top: 3px; }
       .barra { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #5B6B7F; margin: 14px 0 18px; padding-bottom: 10px; border-bottom: 1px solid #E3E8EF; }
       .barra b { color: #0F1B2D; }
-      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #b8915a; }
+      h2 { font-size: 12px; color: #1B3A5B; text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; padding-left: 9px; border-left: 3px solid #B0894F; }
       .parr { font-size: 12.5px; line-height: 1.6; text-align: justify; }
       ul { margin: 0; padding-left: 20px; } li { font-size: 12.5px; line-height: 1.55; margin-bottom: 3px; }
       .vacio { font-size: 12px; color: #98A2B3; font-style: italic; }
@@ -10063,7 +10063,7 @@ function AvanceView({ obras, avance, setAvance, apiKey, cfg, bitacora = [], cert
       th { background: rgba(255,255,255,.06); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #1B3A5B; text-align: left; padding: 7px 9px; border: 1px solid #E3E8EF; }
       td { font-size: 11.5px; padding: 7px 9px; border: 1px solid #E3E8EF; vertical-align: top; line-height: 1.45; }
       .ent { border: 1px solid #E3E8EF; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
-      .fecha { font-size: 12.5px; font-weight: 800; color: #b8915a; margin-bottom: 7px; }
+      .fecha { font-size: 12.5px; font-weight: 800; color: #B0894F; margin-bottom: 7px; }
       .fotos { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
       .fotos img { width: calc(50% - 3px); max-height: 240px; object-fit: contain; background: #0b0f14; border-radius: 6px; page-break-inside: avoid; break-inside: avoid; }
       .fotos img:only-child { width: 100%; max-height: 320px; }
@@ -10698,7 +10698,7 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], matpedidos 
       </div>
       <div style={{ position: "absolute", bottom: 20, left: 22, right: 22 }}>
         <div style={{ fontSize: 9.5, letterSpacing: ".2em", textTransform: "uppercase", color: `rgba(${TXR},.55)` }}>V+V Construcciones</div>
-        <div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontWeight: 600, fontSize: 24, color: TXC, marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontWeight: 600, fontSize: 24, color: TXC, marginTop: 4 }}>{obraActual ? obraActual.nombre : "Panel de obras"}</div>
       </div>
       {lista.length > 1 && <div style={{ position: "absolute", bottom: 8, right: 16, display: "flex", gap: 4 }}>
         {lista.map((o, i) => <span key={o.id} style={{ width: 5, height: 5, borderRadius: "50%", background: i === (slideIdx % lista.length) ? BRASS : `rgba(${TXR},.35)` }} />)}
@@ -10706,7 +10706,7 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], matpedidos 
     </div>
     <div style={{ padding: "22px 22px 30px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 20 }}>
-        <div style={{ fontFamily: "'Barlow Condensed','Arial Narrow',sans-serif", fontSize: 38, fontWeight: 600, color: TXC }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 38, fontWeight: 600, color: TXC }}>{obraActual ? (obraActual.avance || 0) : 0}</div>
         <div style={{ fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: `rgba(${TXR},.45)`, lineHeight: 1.3 }}>% de avance<br />general</div>
       </div>
       <div style={{ height: 1, background: `rgba(${TXR},.1)`, marginBottom: 18 }} />
@@ -10741,7 +10741,7 @@ function InicioViewVV({ cfg, gestion, obras, personal, pedidos = [], matpedidos 
         </div>)}
       </div>}
       {pend.length > 0 && <div onClick={() => onIr("mas-pedidos")} style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(229,137,137,.08)", border: "1px solid rgba(229,137,137,.25)", borderRadius: 6, padding: "12px 14px", marginBottom: 16, cursor: "pointer" }}>
-        <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#E58989", color: "#0d0e10", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{pend.length}</span>
+        <span style={{ width: 26, height: 26, borderRadius: "50%", background: "#E58989", color: "#0d0d0f", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{pend.length}</span>
         <div><div style={{ fontSize: 12, fontWeight: 700, color: TXC }}>{pend.length} pedido{pend.length > 1 ? "s" : ""} pendiente{pend.length > 1 ? "s" : ""} de respuesta</div><div style={{ fontSize: 10.5, color: `rgba(${TXR},.5)`, marginTop: 1 }}>Tocá para ver →</div></div>
       </div>}
 
@@ -10773,12 +10773,12 @@ function WebHero({ cfg, obras, personal }) {
       <div style={{ maxWidth:1180, margin:"0 auto", padding:"18px 24px 28px", display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:24, flexWrap:"wrap" }}>
         <div>
           <div style={{ fontSize:10, fontWeight:700, color:BRASS, letterSpacing:"0.26em", textTransform:"uppercase", marginBottom:9 }}>V+V Construcciones</div>
-          <div style={{ fontFamily:"'Barlow Condensed','Arial Narrow',sans-serif", fontWeight:600, fontSize:30, letterSpacing:"-0.01em", lineHeight:1.1, maxWidth:560 }}>Gestión integral de obra</div>
+          <div style={{ fontFamily:"'Fraunces',serif", fontWeight:600, fontSize:30, letterSpacing:"-0.01em", lineHeight:1.1, maxWidth:560 }}>Gestión integral de obra</div>
           <div style={{ fontSize:13, color:"rgba(255,255,255,.68)", marginTop:10, maxWidth:520, lineHeight:1.6 }}>Seguimiento de obras, personal, documentación y certificación, en un solo lugar.</div>
         </div>
         <div style={{ display:"flex", gap:28 }}>
           {[["Obras activas",activas],["Avance prom.",avg+"%"],["Personal",personal.length]].map(([l,v],i)=>(
-            <div key={i} style={{ textAlign:"center" }}><div style={{ fontFamily:"'Barlow Condensed','Arial Narrow',sans-serif", fontWeight:600, fontSize:26 }}>{v}</div><div style={{ fontSize:9.5, color:"rgba(255,255,255,.55)", textTransform:"uppercase", letterSpacing:"0.06em", marginTop:3 }}>{l}</div></div>
+            <div key={i} style={{ textAlign:"center" }}><div style={{ fontFamily:"'Fraunces',serif", fontWeight:600, fontSize:26 }}>{v}</div><div style={{ fontSize:9.5, color:"rgba(255,255,255,.55)", textTransform:"uppercase", letterSpacing:"0.06em", marginTop:3 }}>{l}</div></div>
           ))}
         </div>
       </div>
@@ -10988,7 +10988,7 @@ function App() {
     <div style={{ width:"100%", height:"100dvh", background:LUXE_BG }}>
       <style>{css}</style>
       <style>{buildThemeCSS(cfg)}</style>
-      <div style={{ width:"100%", height:"100dvh", background:"transparent", display:"flex", flexDirection:"column", position:"relative", color:"var(--text,#131C2B)", fontFamily:"var(--font,'Barlow'),sans-serif", overflow:"hidden" }}>
+      <div style={{ width:"100%", height:"100dvh", background:"transparent", display:"flex", flexDirection:"column", position:"relative", color:"var(--text,#131C2B)", fontFamily:"var(--font,'Inter'),sans-serif", overflow:"hidden" }}>
         {view!=="dashboard" && <WebHeader cfg={cfg} view={view} go={(v)=>{ go(v); if(v==="mas") setMasSub(null); }} pendientes={pendVV} badges={navBadgesNuevo} />}
         <div style={{ flex:1, overflow:"hidden", display:"flex", justifyContent:"center", background:"transparent" }}>
           <div style={{ width:"100%", maxWidth:1180, display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--bg,#F5F6F8)", borderLeft:`1px solid rgba(176,137,79,0.28)`, borderRight:`1px solid rgba(176,137,79,0.28)`, boxShadow:"0 0 80px rgba(0,0,0,0.45)" }}>
