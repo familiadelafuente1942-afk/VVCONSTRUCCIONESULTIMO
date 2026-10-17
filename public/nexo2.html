@@ -3330,9 +3330,8 @@ try{if(!localStorage.getItem('nexo2_reset_v2')){['nexo2_obras_prop','nexo2_obras
 {let ok=!LOCK;try{const d=JSON.parse(localStorage.getItem(SES_LS)||'null');if(LOCK&&d)ok=LOCK==='cliente'?d.r==='cli':LOCK==='estudio'?d.r==='est':['dir','jefe','aud'].includes(d.r)}catch(e){}if(ok)sesRestaurar()}
 /* ================= sincronización compartida (Supabase): lo que cambia la dirección se guarda en la nube y llega a todos los dispositivos ================= */
 {
-const SU='https://bxhjgxzvayszfqwlwinq.supabase.co',SK='sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5';
-const H={apikey:SK,Authorization:'Bearer '+SK,'Content-Type':'application/json'};
-const MAP={nexo2_obras_cfg:'nexo2:cfg',nexo2_codigos:'nexo2:codigos'};
+const API='/api/nexo2';
+const MAP={nexo2_obras_cfg:'cfg',nexo2_codigos:'codigos'};
 const VACIO='{"mod":{},"nuevas":[]}';
 const rawSet=Storage.prototype.setItem,rawGet=Storage.prototype.getItem;
 const lget=k=>{try{return rawGet.call(localStorage,k)}catch(e){return null}};
@@ -3341,7 +3340,7 @@ let listo=false;const sucio=new Set();const tim={};
 async function subir(k){
   const v=lget(k);if(v==null||v===VACIO)return;
   const t=Date.now();
-  try{const r=await fetch(SU+'/rest/v1/bco_storage',{method:'POST',headers:{...H,Prefer:'resolution=merge-duplicates'},body:JSON.stringify({key:MAP[k],value:JSON.stringify({t,v})})});
+  try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:MAP[k],t,v})});
     if(r.ok){lset('nexo2_sync_t_'+k,String(t));sucio.delete(k)}}catch(e){}
 }
 Storage.prototype.setItem=function(k,v){
@@ -3351,16 +3350,14 @@ Storage.prototype.setItem=function(k,v){
 async function bajar(){
   let cambio=false;
   try{
-    const ks=Object.values(MAP).map(encodeURIComponent).join(',');
-    const r=await fetch(SU+'/rest/v1/bco_storage?select=key,value&key=in.('+ks+')',{headers:H});
+    const r=await fetch(API,{cache:'no-store'});
     if(r.ok){
       const rows=await r.json();
       for(const k of Object.keys(MAP)){
-        const row=rows.find(x=>x.key===MAP[k]);
-        if(!row)continue;
-        let d;try{d=JSON.parse(row.value)}catch(e){continue}
+        const d=rows[MAP[k]];
+        if(!d)continue;
         const lt=+lget('nexo2_sync_t_'+k)||0;
-        if(d&&d.t>lt){
+        if(d.t>lt){
           if(d.v!==lget(k)){rawSet.call(localStorage,k,d.v);cambio=true}
           lset('nexo2_sync_t_'+k,String(d.t));sucio.delete(k);
         }
