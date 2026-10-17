@@ -1774,8 +1774,35 @@ function vCliente(){
 }
 
 /* ================= más ================= */
+/* ================= configuración de la app: tipos de letra ================= */
+const FONT_ROLES=[
+ {k:'tech',n:'Títulos y portada',d:'NEXO, nombres de paneles y encabezados de sección',def:'Michroma',opts:['Michroma','Barlow Condensed','Oswald','Montserrat','Poppins','Playfair Display','Bebas Neue','Space Grotesk']},
+ {k:'display',n:'Encabezados y números',d:'Nombres de obra, porcentajes y cifras grandes',def:'Barlow Condensed',opts:['Barlow Condensed','Oswald','Bebas Neue','Barlow','Montserrat','Poppins','Playfair Display','Roboto Condensed']},
+ {k:'body',n:'Texto general',d:'Párrafos, botones, listas y formularios',def:'Barlow',opts:['Barlow','Inter','Poppins','Montserrat','Roboto','Plus Jakarta Sans','DM Sans','Lato','Open Sans','Nunito']},
+ {k:'mono',n:'Fechas y datos',d:'La fecha de arriba y los datos tipo código',def:'IBM Plex Mono',opts:['IBM Plex Mono','Space Mono','JetBrains Mono','Roboto Mono','Barlow']}];
+const FONT_LS='nexo2_fuentes';
+function leerFuentes(){try{return JSON.parse(localStorage.getItem(FONT_LS)||'{}')||{}}catch(e){return{}}}
+function aplicarFuentes(sel){
+  try{
+    const base=['Michroma','Barlow Condensed','Barlow','IBM Plex Mono'];
+    const usados=[...new Set(FONT_ROLES.map(r=>(sel&&sel[r.k])||r.def))].filter(n=>!base.includes(n));
+    let l=document.getElementById('nexo-fuentes-extra');
+    if(!l){l=document.createElement('link');l.id='nexo-fuentes-extra';l.rel='stylesheet';document.head.appendChild(l)}
+    l.href=usados.length?'https://fonts.googleapis.com/css2?'+usados.map(n=>'family='+n.replace(/ /g,'+')+':wght@400;500;600;700').join('&')+'&display=swap':'';
+    const fb={tech:'"Barlow Condensed",sans-serif',display:'"Arial Narrow",sans-serif',body:'system-ui,sans-serif',mono:'ui-monospace,monospace'};
+    FONT_ROLES.forEach(r=>document.documentElement.style.setProperty('--'+r.k,'"'+((sel&&sel[r.k])||r.def)+'",'+fb[r.k]));
+  }catch(e){}
+}
+aplicarFuentes(leerFuentes());
+function vConfig(){
+  const sel=leerFuentes();
+  return `<button class="back" data-act="tab" data-t="mas">← Volver a Más</button><section class="sec"><h1>Configuración de la app</h1><p class="muted">Elegí el tipo de letra de cada parte. Se aplica enseguida y queda guardado en este aparato.</p>
+  <div class="list">${FONT_ROLES.map(r=>{const v=sel[r.k]||r.def;return `<div class="entry"><b>${r.n}</b><span class="muted small">${r.d}</span><select data-fontrole="${r.k}" style="font-family:'${v}'">${r.opts.map(o=>`<option value="${o}"${o===v?' selected':''}>${o}${o===r.def?' (la de la 2.0)':''}</option>`).join('')}</select><span class="fprev" style="font-size:19px;font-family:'${v}',sans-serif">La obra que se anticipa 0123456789</span></div>`}).join('')}</div>
+  <button class="btn ghost full" data-act="fontReset">Volver a las letras de la 2.0</button></section>`;
+}
+document.addEventListener('change',e=>{const t=e.target;if(t&&t.dataset&&t.dataset.fontrole){const n=leerFuentes();n[t.dataset.fontrole]=t.value;try{localStorage.setItem(FONT_LS,JSON.stringify(n))}catch(x){}aplicarFuentes(n);t.style.fontFamily="'"+t.value+"'";const p=t.parentNode.querySelector('.fprev');if(p)p.style.fontFamily="'"+t.value+"',sans-serif"}});
 function vMas(){
-  const r=ROLE();const items=r==='direccion'?[['matriz','Usuarios y accesos','Quién ve y quién carga qué, por obra y por rol'],['invites','Invitaciones','Estudios y propietarios invitados a cada obra'],['modelos','Modelos de obra','Duraciones base por rubro, anticipación y tarjetas de cada rubro. Editable.']]:[['modelos','Modelos de obra','Cómo se arma el cronograma base (lo define la Dirección)'],['cambiarObras','Obras a cargo','Cambiar las obras que tenés a cargo']];
+  const r=ROLE();const items=r==='direccion'?[['matriz','Usuarios y accesos','Quién ve y quién carga qué, por obra y por rol'],['invites','Invitaciones','Estudios y propietarios invitados a cada obra'],['modelos','Modelos de obra','Duraciones base por rubro, anticipación y tarjetas de cada rubro. Editable.'],['config','Configuración de la app','Tipos de letra de cada parte de la app']]:[['modelos','Modelos de obra','Cómo se arma el cronograma base (lo define la Dirección)'],['cambiarObras','Obras a cargo','Cambiar las obras que tenés a cargo'],['config','Configuración de la app','Tipos de letra de cada parte de la app']];
   return `<section class="sec"><h1>Más</h1><div class="list">${items.map(([a,t,dd])=>`<button class="entry" style="text-align:left" data-act="${a}"><b>${t}</b><span class="muted small">${dd}</span></button>`).join('')}</div></section>`;
 }
 
@@ -2135,6 +2162,8 @@ const reDraw=(fn)=>{draw();fn&&fn()};
 function setItem(c,i,v){i.estado=v;if(v==='ok'){i.fecha=TODAY;if(i.respuesta)i.respuesta.nuevo=false;i.obs=''}if(v==='recibido'&&!i.respuesta)i.respuesta={txt:'Recibido por fuera de la app.',fecha:TODAY,file:null,nuevo:false,por:'Jefatura'};if(v==='pedido'&&!c.enviada)c.enviada=TODAY;if(v==='falta'){i.fecha=null}
   if(cDone(c)){if(c.tipo==='doc')notify('estudio',c.obra,`Tarjeta completa: ${titulo(c)}`,{t:'card',id:c.id});toast('Tarjeta completa')}}
 const A={
+  config:()=>{S.tab='config';draw();scrollTo(0,0)},
+  fontReset:()=>{try{localStorage.removeItem(FONT_LS)}catch(e){}aplicarFuentes({});draw()},
   scrim:(ds,el,e)=>{if(e.target===el)closeSheet()},
   close:()=>closeSheet(),
   panel:ds=>{if(ds.p==='constructora'){S.step='roles';draw();scrollTo(0,0)}else if(ds.p==='estudio'){S.step='cons';draw();scrollTo(0,0)}else login('cli')},
@@ -2285,12 +2314,12 @@ const ICON={inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1
 function navItems(){const r=ROLE();return{direccion:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['desempeno','Desempeño','chart'],['mas','Más','mas']],jefe:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['registro','Registro','registro'],['mas','Más','mas']],auditor:[['inicio','Inicio','inicio'],['obras','Obras','obras']],estudio:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['docs','Documentos','folder']],cliente:[['cliente','Mi obra','inicio']]}[r]||[]}
 function draw(){
   const r=ROLE();
-  const view=!S.u?(S.step==='roles'?vRoles():S.step==='obras'||S.step==='obrasAud'?vSelObras():S.step==='cons'?vCons():vLogin()):({inicio:vInicio,obras:vObras,obra:vObra,pedidos:vPedidos,registro:vRegistro,mas:vMas,desempeno:vDesempeno,docs:vDocs,cliente:vCliente}[S.tab]||vInicio)();
+  const view=!S.u?(S.step==='roles'?vRoles():S.step==='obras'||S.step==='obrasAud'?vSelObras():S.step==='cons'?vCons():vLogin()):({inicio:vInicio,obras:vObras,obra:vObra,pedidos:vPedidos,registro:vRegistro,mas:vMas,config:vConfig,desempeno:vDesempeno,docs:vDocs,cliente:vCliente}[S.tab]||vInicio)();
   $('#view').innerHTML=view;
   $('#who').innerHTML=S.u?`<span><b>${esc(S.u.name)}</b>${r==='jefe'||r==='auditor'?`<span class="rol">${plural(misObras().length,'obra','obras')}</span>`:r==='estudio'?`<button class="rol rolbtn" data-act="cambiarCons">${esc(CONSTRUCTORAS.find(c=>c.id===S.cons).n)} ▾</button>`:r==='direccion'?`<span class="rol">${ORG}</span>`:''}</span>${LOCK&&LOCK!=='constructora'?'':'<button class="btn ghost sm" data-act="salir">Salir</button>'}`:'<span class="muted">Ingresá con tu cuenta</span>';
   const nb=misNotifs().filter(n=>!n.leido).length;
   const badge=r==='estudio'?estPend().filter(c=>color(c)==='rojo').length:cardsDe(misObras()).filter(c=>color(c)==='rojo').length;
-  $('#nav').innerHTML=navItems().map(([k,l,ic])=>`<button data-act="tab" data-t="${k}" ${S.tab===k||(S.tab==='obra'&&k==='obras')?'aria-current="page"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[ic]}</svg>${l}${k==='pedidos'&&badge?`<span class="badge">${badge}</span>`:''}${(k==='inicio'||k==='cliente')&&nb?`<span class="badge gold">${nb}</span>`:''}</button>`).join('');
+  $('#nav').innerHTML=navItems().map(([k,l,ic])=>`<button data-act="tab" data-t="${k}" ${S.tab===k||(S.tab==='obra'&&k==='obras')||(S.tab==='config'&&k==='mas')?'aria-current="page"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[ic]}</svg>${l}${k==='pedidos'&&badge?`<span class="badge">${badge}</span>`:''}${(k==='inicio'||k==='cliente')&&nb?`<span class="badge gold">${nb}</span>`:''}</button>`).join('');
   $('#nav').parentElement.hidden=!S.u;
   const g=$('#gwrap');if(g)g.scrollLeft=+g.dataset.scroll||0;
 }
