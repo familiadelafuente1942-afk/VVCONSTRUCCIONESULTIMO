@@ -6,6 +6,8 @@
 // Tabla: public.nexo2_estado (clave, valor jsonb, actualizado), cerrada para la clave pública.
 // Los códigos viven SOLO acá: nunca se devuelven salvo a quien presenta el código de Dirección.
 
+import crypto from "crypto";
+
 const URL_BASE = process.env.SUPABASE_URL || "https://qaubkwiwtszebdgfrizr.supabase.co";
 const OLD_URL = "https://bxhjgxzvayszfqwlwinq.supabase.co"; // app anterior (fotos de avance ya cargadas)
 const OLD_KEY = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
@@ -47,6 +49,35 @@ async function leerCodigos(H) {
   return { dir: "", obras: JSON.parse(JSON.stringify(SEED)), seed: true };
 }
 const dirVigente = (c) => c.dir || process.env.NEXO_DIR_CODE || process.env.NEXO2_DIR_CODE || "";
+
+// ===== sesión del aparato (cookie firmada de 400 días) =====
+// Recuerda en el servidor qué códigos ya se ingresaron en este aparato, así no se vuelven a pedir aunque
+// el navegador borre su memoria local. No usa la IP (cambia con el wifi/datos y la comparten varias personas).
+const COOKIE = "nexo2_dev";
+const secreto = () => process.env.NEXO_COOKIE_SECRET || process.env.SUPABASE_SERVICE_KEY || "";
+function firmar(obj) {
+  const p = Buffer.from(JSON.stringify(obj)).toString("base64url");
+  return p + "." + crypto.createHmac("sha256", secreto()).update(p).digest("base64url");
+}
+function abrirTok(tok) {
+  try {
+    const [p, f] = String(tok || "").split(".");
+    if (!p || !f) return null;
+    const e = crypto.createHmac("sha256", secreto()).update(p).digest("base64url");
+    const a = Buffer.from(f), c = Buffer.from(e);
+    if (a.length !== c.length || !crypto.timingSafeEqual(a, c)) return null;
+    return JSON.parse(Buffer.from(p, "base64url").toString("utf8"));
+  } catch { return null; }
+}
+function leerSes(req) {
+  const m = String(req.headers.cookie || "").match(new RegExp("(?:^|;\\s*)" + COOKIE + "=([^;]+)"));
+  const d = m && abrirTok(decodeURIComponent(m[1]));
+  return d && typeof d === "object" ? d : {};
+}
+function ponerSes(res, d) {
+  res.setHeader("Set-Cookie", `${COOKIE}=${encodeURIComponent(firmar(d))}; Max-Age=34560000; Path=/; HttpOnly; Secure; SameSite=Lax`);
+}
+const limpio = (c) => String(c || "").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 24);
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default async function handler(req, res) {
@@ -80,14 +111,44 @@ export default async function handler(req, res) {
       const n = norm(b.codigo);
       if (b.rol === "dir") {
         if (!dirVigente(cods)) { res.status(200).json({ ok: false, error: "Falta NEXO_DIR_CODE en Vercel." }); return; }
-        if (dirOk(b.codigo)) { res.status(200).json({ ok: true }); return; }
+        if (dirOk(b.codigo)) { const ses = leerSes(req); ses.dir = limpio(b.codigo); ses.last = { r: "dir" }; ponerSes(res, ses); res.status(200).json({ ok: true }); return; }
       } else if (FIELD[b.rol] && n) {
         const id = Object.keys(cods.obras).find((k) => norm((cods.obras[k] || {})[FIELD[b.rol]]) === n);
-        if (id && n !== norm(dirVigente(cods))) { res.status(200).json({ ok: true, obra: id }); return; }
+        if (id && n !== norm(dirVigente(cods))) {
+          const ses = leerSes(req); const k = b.rol; ses[k] = ses[k] || {}; ses[k][id] = limpio(b.codigo);
+          ses.last = { r: k === "prop" ? "cli" : k, cobra: k === "prop" ? id : undefined };
+          ponerSes(res, ses);
+          res.status(200).json({ ok: true, obra: id }); return;
+        }
       }
       await pausa(600);
       res.status(200).json({ ok: false });
       return;
+    }
+
+    if (b.op === "sesion") {
+      // devuelve lo que este aparato ya tenía autorizado (y sigue siendo válido con los códigos de hoy)
+      const ses = leerSes(req);
+      const out = { ok: true, prop: [], jefe: [], aud: [], last: ses.last || null };
+      if (ses.dir && dirOk(ses.dir)) out.dir = ses.dir; else delete ses.dir;
+      for (const rol of ["prop", "jefe", "aud"]) {
+        for (const [id, cod] of Object.entries(ses[rol] || {})) {
+          const o = cods.obras[id];
+          if (o && norm(o[FIELD[rol]]) === norm(cod)) out[rol].push({ id, codigo: cod }); else delete ses[rol][id];
+        }
+      }
+      if (!out.dir && !out.prop.length && !out.jefe.length && !out.aud.length && !(ses.last && ses.last.r === "est")) { res.status(200).json({ ok: false }); return; }
+      ponerSes(res, ses);
+      res.status(200).json(out); return;
+    }
+    if (b.op === "sesion_set") {
+      const ses = leerSes(req); const l = b.last || {};
+      if (["dir", "jefe", "aud", "cli", "est"].includes(l.r)) { ses.last = { r: l.r, cobra: String(l.cobra || "").slice(0, 40) || undefined, cons: String(l.cons || "").slice(0, 80) || undefined }; ponerSes(res, ses); }
+      res.status(200).json({ ok: true }); return;
+    }
+    if (b.op === "sesion_borrar") {
+      res.setHeader("Set-Cookie", `${COOKIE}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`);
+      res.status(200).json({ ok: true }); return;
     }
 
     if (b.op === "cods_get") {
