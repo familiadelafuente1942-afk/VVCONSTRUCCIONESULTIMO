@@ -23,7 +23,7 @@ const SEED = {
   o4: { clave: "LP246-9514", j: "J-LP246-1738", a: "A-LP246-5809" },
   o5: { clave: "SB88-2406", j: "J-SB88-7342", a: "A-SB88-3961" },
 };
-const FIELD = { prop: "clave", jefe: "j", aud: "a" };
+const FIELD = { prop: "clave", jefe: "j", aud: "a", est: "e" };
 
 function headers(sk) {
   return { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "application/json" };
@@ -129,15 +129,15 @@ export default async function handler(req, res) {
     if (b.op === "sesion") {
       // devuelve lo que este aparato ya tenía autorizado (y sigue siendo válido con los códigos de hoy)
       const ses = leerSes(req);
-      const out = { ok: true, prop: [], jefe: [], aud: [], last: ses.last || null };
+      const out = { ok: true, prop: [], jefe: [], aud: [], est: [], last: ses.last || null };
       if (ses.dir && dirOk(ses.dir)) out.dir = ses.dir; else delete ses.dir;
-      for (const rol of ["prop", "jefe", "aud"]) {
+      for (const rol of ["prop", "jefe", "aud", "est"]) {
         for (const [id, cod] of Object.entries(ses[rol] || {})) {
           const o = cods.obras[id];
           if (o && norm(o[FIELD[rol]]) === norm(cod)) out[rol].push({ id, codigo: cod }); else delete ses[rol][id];
         }
       }
-      if (!out.dir && !out.prop.length && !out.jefe.length && !out.aud.length && !(ses.last && ses.last.r === "est")) { res.status(200).json({ ok: false }); return; }
+      if (!out.dir && !out.prop.length && !out.jefe.length && !out.aud.length && !out.est.length && !(ses.last && ses.last.r === "est")) { res.status(200).json({ ok: false }); return; }
       ponerSes(res, ses);
       res.status(200).json(out); return;
     }
@@ -168,7 +168,7 @@ export default async function handler(req, res) {
       for (const [id, x] of Object.entries(d.obras || {})) {
         if (!/^[A-Za-z0-9_-]{1,40}$/.test(id) || typeof x !== "object") continue;
         const o = {};
-        for (const f of ["clave", "j", "a"]) {
+        for (const f of ["clave", "j", "a", "e"]) {
           const n = norm(x[f]);
           if (n) { if (vistos.has(n)) { res.status(400).json({ error: "Código repetido: " + x[f] }); return; } vistos.add(n); }
           o[f] = String(x[f] || "").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 24);
