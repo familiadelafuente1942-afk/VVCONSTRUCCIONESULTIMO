@@ -330,6 +330,21 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, resumen: items[i].resumen });
         return;
       }
+      if (b.op === "av_edit") {
+        const it = b.item || {};
+        const v = await leer(H, clave);
+        const items = (v && v.items) || [];
+        const i = items.findIndex((x) => x.id === b.id);
+        if (i < 0) { res.status(404).json({ error: "No existe el avance" }); return; }
+        const fotos = (Array.isArray(it.fotos) ? it.fotos : []).filter((u) => typeof u === "string" && (u.startsWith(NEW_PUB) || u.startsWith(OLD_PUB))).slice(0, 12);
+        const nuevo = { ...items[i], sector: String(it.sector || "").slice(0, 120), txt: String(it.txt || "").slice(0, 2000), fotos, editado: Date.now() };
+        if (typeof it.resumen === "string") nuevo.resumen = it.resumen.replace(/\s+/g, " ").trim().slice(0, 4000);
+        if (!nuevo.txt && !fotos.length && !nuevo.resumen) { res.status(400).json({ error: "El avance quedaría vacío" }); return; }
+        items[i] = nuevo;
+        await escribir(H, clave, { items });
+        res.status(200).json({ ok: true, item: nuevo });
+        return;
+      }
       if (b.op === "av_del") {
         const v = await leer(H, clave);
         const items = ((v && v.items) || []).filter((x) => x.id !== b.id);
