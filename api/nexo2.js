@@ -206,24 +206,30 @@ export default async function handler(req, res) {
         return;
       }
       const map = b.map || {};
-      let creados = 0, saltados = 0;
+      let creados = 0, saltados = 0, completados = 0;
       for (const [oldId, nuevo] of Object.entries(map)) {
         if (!nuevo || !/^[A-Za-z0-9_-]{1,40}$/.test(nuevo) || !Array.isArray(avOld[oldId])) continue;
         const clave = "avances_" + nuevo;
         const v = await leer(H, clave);
         const items = (v && v.items) || [];
         const ids = new Set(items.map((x) => x.id));
+        const porId = new Map(items.map((x) => [x.id, x]));
         for (const h of avOld[oldId]) {
           if (!h || !h.id) continue;
           const id = "imp_" + String(h.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
-          if (ids.has(id)) { saltados++; continue; }
+          if (ids.has(id)) {
+            // los informes importados antes se habían cortado a 700 caracteres: se completan
+            const ex = porId.get(id), full = String(h.avance || "").replace(/\s+/g, " ").trim().slice(0, 4000);
+            if (ex && ex.importado && full.length > String(ex.resumen || "").length) { ex.resumen = full; completados++; }
+            saltados++; continue;
+          }
           let fotos = Array.isArray(h.fotos) ? h.fotos : [];
           if (!fotos.length && h.fotoUrl) fotos = [h.fotoUrl];
           fotos = fotos.filter((u) => typeof u === "string" && u.startsWith(OLD_PUB)).slice(0, 12);
           let fecha = Number(h.ts) || 0;
           if (!fecha && typeof h.fecha === "string") { const [d, m, a] = h.fecha.split("/"); if (a) fecha = Date.parse(`20${a.slice(-2)}-${m}-${d}T12:00:00-03:00`); }
           if (!fecha) fecha = Date.now();
-          const resumen = String(h.avance || "").replace(/\s+/g, " ").trim().slice(0, 700);
+          const resumen = String(h.avance || "").replace(/\s+/g, " ").trim().slice(0, 4000);
           const txt = String(h.descripcion || "").replace(/\s+/g, " ").trim().slice(0, 700);
           if (!fotos.length && !resumen && !txt) continue;
           items.push({ id, fecha, sector: "", txt: resumen ? "" : txt, resumen, autor: "App anterior", fotos, importado: true });
@@ -231,7 +237,7 @@ export default async function handler(req, res) {
         }
         await escribir(H, clave, { items: items.sort((x, y) => x.fecha - y.fecha).slice(-1000) });
       }
-      res.status(200).json({ ok: true, creados, saltados });
+      res.status(200).json({ ok: true, creados, saltados, completados });
       return;
     }
 
@@ -309,15 +315,15 @@ export default async function handler(req, res) {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
           body: JSON.stringify({
-            model: "claude-sonnet-5", max_tokens: 400,
-            system: "Sos un inspector de obra civil en Argentina. Comparás fotos de avance con criterio técnico y sos honesto: no inventes lo que no se ve. Respondé en español rioplatense (vos), claro y breve, sin títulos ni listas, máximo 3 oraciones.",
+            model: "claude-sonnet-5", max_tokens: 1200,
+            system: "Sos un inspector de obra civil en Argentina. Comparás fotos de avance con criterio técnico y sos honesto: no inventes lo que no se ve. Respondé en español rioplatense (vos), claro y breve, sin títulos ni listas, máximo 4 oraciones, y terminá siempre la última oración completa.",
             messages: [{ role: "user", content }],
           }),
         });
         const d = await r.json();
         const txt = d && d.content && d.content.find((c) => c.type === "text");
         if (!r.ok || !txt) { res.status(502).json({ error: "No se pudo analizar las fotos" }); return; }
-        items[i] = { ...cur, resumen: txt.text.trim().slice(0, 900) };
+        items[i] = { ...cur, resumen: txt.text.trim().slice(0, 3000) };
         const v2 = await leer(H, clave);
         const items2 = ((v2 && v2.items) || []).map((x) => (x.id === cur.id ? items[i] : x));
         await escribir(H, clave, { items: items2 });
