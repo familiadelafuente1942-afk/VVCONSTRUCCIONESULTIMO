@@ -298,7 +298,7 @@ export default async function handler(req, res) {
         const nuevos = dias.map((dk, k) => {
           const fs = grupos[dk];
           const ts = Math.min(...fs.map((f) => f.f));
-          const it = { id: "av" + id + "_" + dk.replace(/-/g, ""), fecha: ts, sector: "", txt: k === dias.length - 1 ? corto : "", autor: inf.autor, fotos: fs.map((f) => f.u), inf: id };
+          const it = { id: "av" + id + "_" + dk.replace(/-/g, ""), fecha: ts, sector: inf.etapa, txt: k === dias.length - 1 ? corto : "", autor: inf.autor, fotos: fs.map((f) => f.u), inf: id };
           const rr = prevRes[it.fotos[0]]; if (rr) it.resumen = rr;
           return it;
         });
