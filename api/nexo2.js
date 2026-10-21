@@ -281,7 +281,7 @@ export default async function handler(req, res) {
         const fotos = (Array.isArray(it.fotos) ? it.fotos : []).filter((u) => typeof u === "string" && u.startsWith(NEW_PUB)).slice(0, 12);
         const item = {
           id: "av" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-          fecha: Number(it.fecha) || Date.now(),
+          fecha: Number(it.fecha) > 0 && Number(it.fecha) <= Date.now() + 36e5 ? Number(it.fecha) : Date.now(),
           sector: String(it.sector || "").slice(0, 120),
           txt: String(it.txt || "").slice(0, 2000),
           autor: String(it.autor || (quien === "dir" ? "Dirección" : "Jefatura de obra")).slice(0, 80),
@@ -330,6 +330,39 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, resumen: items[i].resumen });
         return;
       }
+      if (b.op === "av_comparar") {
+        const key = process.env.ANTHROPIC_API_KEY;
+        if (!key) { res.status(500).json({ error: "Falta ANTHROPIC_API_KEY" }); return; }
+        const v = await leer(H, clave);
+        const items = (v && v.items) || [];
+        const cur = items.find((x) => x.id === b.id);
+        if (!cur) { res.status(404).json({ error: "No existe el avance" }); return; }
+        if (!cur.fotos || !cur.fotos.length) { res.status(200).json({ ok: false, error: "Este avance no tiene fotos para comparar." }); return; }
+        const prev = items.filter((x) => x.id !== cur.id && x.fecha < cur.fecha && x.fotos && x.fotos.length).sort((p, q) => q.fecha - p.fecha)[0];
+        if (!prev) { res.status(200).json({ ok: false, error: "No hay fotos anteriores de esta obra para comparar." }); return; }
+        const img = (u) => ({ type: "image", source: { type: "url", url: u } });
+        const fechaTxt = (t) => new Date(t - 108e5).toISOString().slice(0, 10);
+        const content = [{ type: "text", text: "FOTOS ANTERIORES (" + fechaTxt(prev.fecha) + "):" }];
+        prev.fotos.slice(0, 3).forEach((u) => content.push(img(u)));
+        content.push({ type: "text", text: "FOTOS ACTUALES (" + fechaTxt(cur.fecha) + "):" });
+        cur.fotos.slice(0, 4).forEach((u) => content.push(img(u)));
+        content.push({ type: "text", text: `Las fotos anteriores son del ${fechaTxt(prev.fecha)} y las actuales del ${fechaTxt(cur.fecha)}. ` + (cur.sector ? `Sector: ${cur.sector}. ` : "") + (cur.txt ? `El jefe de obra escribió: "${cur.txt}". ` : "") + "Resumí en 2 o 3 oraciones qué cambió y qué avance se ve entre las fotos anteriores y las actuales, y qué se ve pendiente. Si no se puede comparar, decilo." });
+        const r = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({
+            model: "claude-sonnet-5", max_tokens: 1200,
+            system: "Sos un inspector de obra civil en Argentina. Comparás fotos de avance con criterio técnico y sos honesto: no inventes lo que no se ve. Respondé en español rioplatense (vos), claro y breve, sin títulos ni listas, máximo 4 oraciones, y terminá siempre la última oración completa.",
+            messages: [{ role: "user", content }],
+          }),
+        });
+        const d = await r.json();
+        const txt = d && d.content && d.content.find((c) => c.type === "text");
+        if (!r.ok || !txt) { res.status(502).json({ error: "No se pudo analizar las fotos" }); return; }
+        // es una sugerencia: no se guarda hasta que el usuario la confirme
+        res.status(200).json({ ok: true, texto: txt.text.trim().slice(0, 3000), previo: { id: prev.id, fecha: prev.fecha }, actual: { id: cur.id, fecha: cur.fecha } });
+        return;
+      }
       if (b.op === "av_edit") {
         const it = b.item || {};
         const v = await leer(H, clave);
@@ -338,6 +371,7 @@ export default async function handler(req, res) {
         if (i < 0) { res.status(404).json({ error: "No existe el avance" }); return; }
         const fotos = (Array.isArray(it.fotos) ? it.fotos : []).filter((u) => typeof u === "string" && (u.startsWith(NEW_PUB) || u.startsWith(OLD_PUB))).slice(0, 12);
         const nuevo = { ...items[i], sector: String(it.sector || "").slice(0, 120), txt: String(it.txt || "").slice(0, 2000), fotos, editado: Date.now() };
+        if (Number(it.fecha) > 0 && Number(it.fecha) <= Date.now() + 36e5) nuevo.fecha = Number(it.fecha);
         if (typeof it.resumen === "string") nuevo.resumen = it.resumen.replace(/\s+/g, " ").trim().slice(0, 4000);
         if (!nuevo.txt && !fotos.length && !nuevo.resumen) { res.status(400).json({ error: "El avance quedaría vacío" }); return; }
         items[i] = nuevo;
