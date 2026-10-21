@@ -241,6 +241,82 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ===== informes semanales (único punto de carga; de ahí salen los avances) =====
+    if (typeof b.op === "string" && b.op.startsWith("inf_")) {
+      const obra = String(b.obra || "");
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const clave = "informes_" + obra, claveAv = "avances_" + obra;
+      if (b.op === "inf_list") {
+        const v = await leer(H, clave);
+        res.status(200).json({ items: (v && v.items) || [] });
+        return;
+      }
+      const cr = b.cred || {};
+      let quien = "";
+      if (cr.rol === "dir" && dirOk(cr.codigo)) quien = "dir";
+      else if (cr.rol === "jefe" && norm(cr.codigo) && norm((cods.obras[obra] || {}).j) === norm(cr.codigo)) quien = "jefe";
+      if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código para guardar el informe." }); return; }
+      const dia = (t) => new Date(t - 108e5).toISOString().slice(0, 10);
+      const quitarAv = async (infId) => {
+        const a = await leer(H, claveAv);
+        const items = ((a && a.items) || []);
+        const quedan = items.filter((x) => x.inf !== infId);
+        return { items, quedan };
+      };
+      if (b.op === "inf_save") {
+        const q = b.informe || {};
+        const id = String(q.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+        if (!id) { res.status(400).json({ error: "Informe inválido" }); return; }
+        const num = (x, lo, hi) => Math.min(hi, Math.max(lo, Number(x) || 0));
+        const str = (x, n) => String(x == null ? "" : x).slice(0, n);
+        const fotos = (Array.isArray(q.fotos) ? q.fotos : [])
+          .filter((f) => f && typeof f.u === "string" && (f.u.startsWith(NEW_PUB) || f.u.startsWith(OLD_PUB)))
+          .map((f) => ({ u: f.u, f: Number(f.f) > 0 && Number(f.f) <= Date.now() + 36e5 ? Number(f.f) : Date.now() }))
+          .slice(0, 40);
+        const inf = {
+          id, n: num(q.n, 1, 9999), desde: num(q.desde, 0, 4e12), hasta: num(q.hasta, 0, 4e12),
+          etapa: str(q.etapa, 80), av: num(q.av, 0, 100), avPlan: num(q.avPlan, 0, 100), trab: num(q.trab, 0, 7), lluvia: num(q.lluvia, 0, 7),
+          dot: num(q.dot, 0, 9999), fin: str(q.fin, 40),
+          tareas: (Array.isArray(q.tareas) ? q.tareas : []).slice(0, 60).map((t) => ({ name: str(t.name, 120), equipo: str(t.equipo, 80), av: num(t.av, 0, 100), estado: str(t.estado, 20), causa: str(t.causa, 80) })),
+          ejecutados: str(q.ejecutados, 6000), proxima: str(q.proxima, 4000), obs: str(q.obs, 4000), resumen: str(q.resumen, 4000),
+          fotos, fecha: num(q.fecha, 0, 4e12), autor: quien === "dir" ? "Dirección" : "Jefatura de obra", editado: Date.now(),
+        };
+        if (!inf.ejecutados || !fotos.length) { res.status(400).json({ error: "El informe necesita lo ejecutado y al menos una foto" }); return; }
+        const v = await leer(H, clave);
+        let items = ((v && v.items) || []).filter((x) => x.id !== id && x.desde !== inf.desde);
+        items.push(inf);
+        items = items.sort((x, y) => x.desde - y.desde).slice(-300);
+        await escribir(H, clave, { items });
+        // los avances de este informe se rearman: una entrada por día de foto, con el resumen del informe
+        const { items: avPrev, quedan } = await quitarAv(id);
+        const prevRes = {};
+        avPrev.filter((x) => x.inf === id).forEach((x) => { if (x.resumen) prevRes[x.fotos && x.fotos[0] ? x.fotos[0] : x.id] = x.resumen; });
+        const grupos = {};
+        fotos.forEach((f) => { (grupos[dia(f.f)] = grupos[dia(f.f)] || []).push(f); });
+        const dias = Object.keys(grupos).sort();
+        const corto = inf.ejecutados.replace(/\s+/g, " ").trim().slice(0, 420);
+        const nuevos = dias.map((dk, k) => {
+          const fs = grupos[dk];
+          const ts = Math.min(...fs.map((f) => f.f));
+          const it = { id: "av" + id + "_" + dk.replace(/-/g, ""), fecha: ts, sector: "", txt: k === dias.length - 1 ? corto : "", autor: inf.autor, fotos: fs.map((f) => f.u), inf: id };
+          const rr = prevRes[it.fotos[0]]; if (rr) it.resumen = rr;
+          return it;
+        });
+        await escribir(H, claveAv, { items: [...quedan, ...nuevos].sort((x, y) => x.fecha - y.fecha).slice(-500) });
+        res.status(200).json({ ok: true, informe: inf, avances: nuevos.map((x) => x.id) });
+        return;
+      }
+      if (b.op === "inf_del") {
+        const id = String(b.id || "");
+        const v = await leer(H, clave);
+        await escribir(H, clave, { items: ((v && v.items) || []).filter((x) => x.id !== id) });
+        const { quedan } = await quitarAv(id);
+        await escribir(H, claveAv, { items: quedan });
+        res.status(200).json({ ok: true });
+        return;
+      }
+    }
+
     // ===== avances de obra con fotos =====
     if (typeof b.op === "string" && b.op.startsWith("av_")) {
       const obra = String(b.obra || "");
