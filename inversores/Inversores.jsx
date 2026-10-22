@@ -13,7 +13,7 @@ const CONCEPT_SRC = [c1, c2, c3, c4, c5];
 import { defaultContent } from "./brochure.js";
 const concepts = Array.from({ length: 5 }, (_, i) => ({ id: -(i + 1), fileName: `concept-${i + 1}.jpeg`, contentType: "image/jpeg", category: "Dise\xF1o conceptual", title: `Arquitectura Belfast \xB7 propuesta ${String(i + 1).padStart(2, "0")}`, caption: "Imagen conceptual ilustrativa. No representa un proyecto aprobado ni un lote definitivo.", createdAt: "", src: CONCEPT_SRC[i] }));
 const mediaUrl = (item) => item.src ?? api.mediaUrl(item);
-const nav = [["propuesta", "Propuesta"], ["modalidad", "Modalidad"], ["simulador", "Simulador"], ["proyecto", "Proyecto"], ["avances", "Avances"], ["documentos", "Documentaci\xF3n"], ["tu-inversion", "Tu inversi\xF3n"], ["contacto", "Contacto"]];
+const nav = [["propuesta", "Propuesta"], ["modalidad", "Modalidad"], ["simulador", "Simulador"], ["proyecto", "Proyecto"], ["avances", "Avances"], ["documentos", "Documentaci\xF3n"], ["presentaciones", "Presentaciones"], ["tu-inversion", "Tu inversi\xF3n"], ["contacto", "Contacto"]];
 function Home() {
   const [content, setContent] = useState(defaultContent);
   const [draft, setDraft] = useState(defaultContent);
@@ -21,6 +21,9 @@ function Home() {
   const [admin, setAdmin] = useState({ authenticated: false, admin: false, email: "" });
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [verPres, setVerPres] = useState(typeof location !== "undefined" && location.hash === "#presentaciones");
+  useEffect(() => { const f = () => setVerPres(location.hash === "#presentaciones"); window.addEventListener("hashchange", f); return () => window.removeEventListener("hashchange", f); }, []);
+  useEffect(() => { document.body.style.overflow = verPres ? "hidden" : ""; }, [verPres]);
   const [loginOpen, setLoginOpen] = useState(false);
   const [resumen, setResumen] = useState({ total: 0, interesados: 0 });
   const [saveState, setSaveState] = useState("");
@@ -103,6 +106,7 @@ function Home() {
     setDraft(content);
   }}><Pencil size={16} />Editar</button> : <button className="admin-link" onClick={() => setLoginOpen(true)}><LockKeyhole size={15} />Acceso Belfast</button>}<button className="menu-button" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button></div>
     </header>
+    {verPres && <div style={{ position: "fixed", top: (typeof document !== "undefined" && document.querySelector(".topbar")?.offsetHeight) || 104, left: 0, right: 0, bottom: 0, zIndex: 20, background: "#f4f1ec" }}><iframe title="Presentaciones" src="/presentaciones.html" style={{ width: "100%", height: "100%", border: 0 }} /></div>}
 
     <section className="hero" id="inicio"><div className="hero-concept-board"><div className="concept-label"><strong>REFERENCIAS DE DISEÑO</strong><span>Distintas alternativas. Un mismo lenguaje.</span></div><div className="concept-triptych">{concepts.slice(0, 3).map((item, index) => <button key={item.id} onClick={() => setActiveMedia(item)}><img src={mediaUrl(item)} alt={`Alternativa conceptual ${index + 1} de arquitectura Belfast`} /><span>Alternativa {String(index + 1).padStart(2, "0")}</span></button>)}</div><p>Estas imágenes muestran posibles diseños y el estilo buscado. Ninguna representa el edificio definitivo. Lote, altura, distribución y amenities se definirán con la factibilidad y el anteproyecto.</p></div><div className="hero-shade" /><div className="hero-content">
       <p className="kicker">BELFAST DESARROLLOS / PROPIEDAD HORIZONTAL</p><p className="project-edition">{content.projectName} — INVERSORES</p><h1>{content.heroTitle}</h1><p className="hero-copy">{content.heroSubtitle}</p>
