@@ -1,6 +1,13 @@
 <!doctype html>
 <html lang="es">
 <head>
+<style>html.lock body>*:not(#gate){display:none!important}#gate{position:fixed;inset:0;display:grid;place-items:center;background:#f4f1ec;font-family:system-ui,sans-serif;z-index:99999}#gate form{background:#fff;padding:28px;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.12);width:min(340px,90vw);display:grid;gap:12px}#gate h2{margin:0;font-size:18px}#gate input{padding:11px;border:1px solid #cfc8bb;border-radius:8px;font-size:16px}#gate button{padding:11px;border:0;border-radius:8px;background:#b8915a;color:#1a1612;font-weight:700;font-size:15px}#gate small{color:#b23b2e;min-height:1em}</style>
+<script>(function(){var H="c0487fdfaad98832812a319ccfab287c4a12c25459b69b4c19fad75f530b3de8",K="pres_ok";function sha(t){return crypto.subtle.digest("SHA-256",new TextEncoder().encode(t)).then(function(b){return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,"0")}).join("")})}
+var ok=false;try{ok=sessionStorage.getItem(K)===H}catch(e){}
+if(ok)return;document.documentElement.classList.add("lock");
+document.addEventListener("DOMContentLoaded",function(){var g=document.createElement("div");g.id="gate";g.innerHTML='<form><h2>Presentaci\u00f3n reservada</h2><input type="password" id="gp" placeholder="Clave de acceso" autocomplete="off"><button type="submit">Entrar</button><small id="ge"></small></form>';document.body.appendChild(g);
+g.querySelector("form").onsubmit=function(e){e.preventDefault();sha(document.getElementById("gp").value.trim()).then(function(h){if(h===H){try{sessionStorage.setItem(K,H)}catch(x){}document.documentElement.classList.remove("lock");g.remove()}else document.getElementById("ge").textContent="Clave incorrecta"})}})})();</script>
+
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
