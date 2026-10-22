@@ -21,7 +21,6 @@ export default defineConfig({
         nexoobra: resolve(__dirname, 'nexoobra.html'),
         propietario: resolve(__dirname, 'propietario.html'),
         inversores: resolve(__dirname, 'inversores.html'),
-        presentaciones: resolve(__dirname, 'presentaciones.html'),
       },
     },
   },
