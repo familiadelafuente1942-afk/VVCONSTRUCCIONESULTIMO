@@ -16,7 +16,7 @@ const storage = {
 // Keys que Mi Asistente ya lee de forma específica en otro lado — se excluyen
 // del índice genérico de "otras apps" para no duplicar ni ensuciarle el prompt a la IA.
 const KEYS_YA_LEIDAS = new Set([
-  "miasistente_pin", "sebastian_pagos", "sebastian_cobros", "sebastian_cierres", "sebastian_archivos", "sebastian_agenda", "sebastian_gastos",
+  "miasistente_pin", "sebastian_pagos", "sebastian_cobros", "sebastian_cierres", "sebastian_archivos", "sebastian_agenda", "sebastian_gastos", "sebastian_caja",
   "sebastian_contactos", "sebastian_entreno", "sebastian_suplementos", "sebastian_cfg", "sebastian_perfil",
   "sebastian_chat", "sebastian_modelos", "sebastian_google_token",
   "vv_obras", "vv_personal", "vv_pedidos", "vv_matpedidos", "vv_mensajes", "vv_formularios", "vv_documentacion", "vv_camaras",
@@ -270,6 +270,7 @@ export default function MiAsistente() {
   const [filtroObraCobro, setFiltroObraCobro] = useState("");
   const [perfil, setPerfil] = useState("");
   const [gastos, setGastos] = useState([]);
+  const [caja, setCaja] = useState([]); const cajaWrite = useRef(0);
   const [cierres, setCierres] = useState({});
   const cierresWrite = useRef(0);
   const chatWrite = useRef(0);
@@ -387,8 +388,8 @@ export default function MiAsistente() {
       if (Date.now() - pagosWrite.current > 4000) { const rp = await storage.get("sebastian_pagos"); if (!alive) return; let pg = parse(rp); { const c = canonizarObras(pg, obrasRaw); if (c.cambio) { pg = c.out; storage.set("sebastian_pagos", JSON.stringify(pg)).catch(() => { }); } } { const mm = new Map(); pg.forEach(x => { if (x && x.id != null) mm.set(x.id, x); }); if (mm.size < pg.length) { pg = Array.from(mm.values()); storage.set("sebastian_pagos", JSON.stringify(pg)).catch(() => { }); } } setPagos(prev => JSON.stringify(pg) !== JSON.stringify(prev) ? pg : prev); }
       if (Date.now() - cobrosWrite.current > 4000) { const rcb = await storage.get("sebastian_cobros"); if (!alive) return; let cb = parse(rcb); { const c = canonizarObras(cb, obrasRaw); if (c.cambio) { cb = c.out; storage.set("sebastian_cobros", JSON.stringify(cb)).catch(() => { }); } } { const mm = new Map(); cb.forEach(x => { if (x && x.id != null) mm.set(x.id, x); }); if (mm.size < cb.length) { cb = Array.from(mm.values()); storage.set("sebastian_cobros", JSON.stringify(cb)).catch(() => { }); } } setCobros(prev => JSON.stringify(cb) !== JSON.stringify(prev) ? cb : prev); }
       if (Date.now() - cierresWrite.current > 4000) { const rci = await storage.get("sebastian_cierres"); if (!alive) return; let ci = {}; try { ci = rci?.value ? JSON.parse(rci.value) : {}; } catch { ci = {}; } if (Array.isArray(ci)) ci = {}; setCierres(prev => JSON.stringify(ci) !== JSON.stringify(prev) ? ci : prev); }
-      const [ra, rag, rg, rcon, rcam, rent, rsup] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("sebastian_entreno"), storage.get("sebastian_suplementos")]);
-      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); if (rent?.value) { try { const ed = JSON.parse(rent.value); setEntrenoInicio(prev => ed.inicio || prev); setEntrenoHechas(prev => JSON.stringify(ed.hechas || {}) !== JSON.stringify(prev) ? (ed.hechas || {}) : prev); } catch { } } if (rsup?.value) { try { const sd = JSON.parse(rsup.value); setSuplSel(prev => JSON.stringify(sd.sel || []) !== JSON.stringify(prev) ? (sd.sel || []) : prev); setSuplTomados(prev => JSON.stringify(sd.tomados || {}) !== JSON.stringify(prev) ? (sd.tomados || {}) : prev); } catch { } } }
+      const [ra, rag, rg, rcon, rcam, rent, rsup, rcaja] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("sebastian_entreno"), storage.get("sebastian_suplementos"), storage.get("sebastian_caja")]);
+      if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); if (Date.now() - cajaWrite.current > 4000) { const cj = parse(rcaja); setCaja(prev => JSON.stringify(cj) !== JSON.stringify(prev) ? cj : prev); } const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); if (rent?.value) { try { const ed = JSON.parse(rent.value); setEntrenoInicio(prev => ed.inicio || prev); setEntrenoHechas(prev => JSON.stringify(ed.hechas || {}) !== JSON.stringify(prev) ? (ed.hechas || {}) : prev); } catch { } } if (rsup?.value) { try { const sd = JSON.parse(rsup.value); setSuplSel(prev => JSON.stringify(sd.sel || []) !== JSON.stringify(prev) ? (sd.sel || []) : prev); setSuplTomados(prev => JSON.stringify(sd.tomados || {}) !== JSON.stringify(prev) ? (sd.tomados || {}) : prev); } catch { } } }
       if (!modelos.length) { const rmod = await storage.get("sebastian_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
       const rc = await storage.get("sebastian_cfg"); if (alive && rc?.value) { try { const c = JSON.parse(rc.value); setCfg(prev => JSON.stringify({ ...CFG_DEF, ...c }) !== JSON.stringify(prev) ? { ...CFG_DEF, ...c } : prev); } catch { } }
     }
@@ -618,6 +619,7 @@ export default function MiAsistente() {
     const proximaSesion = sesionesPlan.find(s => !entrenoHechas[s.id]);
     const hechasCount = sesionesPlan.filter(s => entrenoHechas[s.id]).length;
     const entrenoTxt = !entrenoInicio ? "(todavía no arrancó el plan de entrenamiento)" : `Plan de estabilización lumbar/glúteos/core, 6 semanas, 3 sesiones por semana (lun/mié/vie). Llevás ${hechasCount}/18 sesiones hechas.${proximaSesion ? `\nPróxima sesión: ${proximaSesion.fecha} (semana ${proximaSesion.semana}, tipo ${proximaSesion.tipo}) — ejercicios: ${proximaSesion.ejercicios.map(e => e.n).join(", ")}.` : "\n¡Plan completo!"}`;
+    const cajaR = calcCaja(caja, gastos, pagos); const cajaTxt = cajaR.vacia ? "(todavía no cargó su efectivo en la solapa Caja)" : `Efectivo disponible: $${cajaR.saldo.toLocaleString("es-AR")} (desde ${cajaR.desdeTxt}; entró $${cajaR.entro.toLocaleString("es-AR")}, salió en gastos $${cajaR.gastos.toLocaleString("es-AR")} y en pagos $${cajaR.pagos.toLocaleString("es-AR")}${cajaR.retiros ? `, retiros $${cajaR.retiros.toLocaleString("es-AR")}` : ""})`;
     const gs = (gastos || []).slice(0, 40).map(g => `· ${g.fecha} — ${g.concepto} $${(g.monto || 0).toLocaleString("es-AR")}`).join("\n") || "(sin gastos)";
     const totDia = (gastos || []).filter(g => g.fecha === hoyG).reduce((a, g) => a + (g.monto || 0), 0);
     const totMes = (gastos || []).filter(g => mesKeyDe(g.fecha) === mesG).reduce((a, g) => a + (g.monto || 0), 0);
@@ -697,6 +699,7 @@ Acciones:
 {"tipo":"agendar","tipoAgenda":"pago","titulo":"Nombre a quién pagarle","fecha":"DD/MM/AA","monto":50000,"nota":"opcional"}
 {"tipo":"calendar_crear","titulo":"Reunión con Belfast","fecha":"DD/MM/AA","hora":"10:00","duracion_min":60,"ubicacion":"opcional","nota":"opcional"}
 {"tipo":"cargar_gasto","gastos":[{"concepto":"Nafta","monto":15000,"fecha":"DD/MM/AA"},{"concepto":"Comida","monto":8000},{"concepto":"Ferretería","monto":5000}]}
+{"tipo":"caja","mov":"ingreso","monto":100000,"concepto":"opcional","fecha":"DD/MM/AA"}
 {"tipo":"cargar_pago","persona":"Humberto","monto":50000,"obra":"Castores 475","estado":"pagado","metodo":"efectivo","nota":""}
 {"tipo":"cargar_cobro","obra":"Castores 475","monto":800000,"tipo_cobro":"certificado|obra sin certificar|ajuste","estado":"cobrado","nota":""}
 {"tipo":"generar_pdf","tipo_doc":"presupuesto|comprobante|nota","titulo":"...","cliente":"...","obra":"...","texto":"cuerpo si es nota/comprobante","items":[{"desc":"Contrapiso","cantidad":100,"unidad":"m2","precio":8000}],"pie":"condiciones/validez"}
@@ -715,6 +718,7 @@ Reglas:
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora. Si es un PAGO A REALIZAR en el futuro (ej: "el 10 tengo que pagarle a Juan 50000", "recordame pagar el alquiler el día 5"), usá "tipoAgenda":"pago" con titulo (a quién/qué), fecha y monto — le va a llegar como recordatorio igual que los demás eventos, y aparece marcado como pago en la Agenda.
 - "calendar_crear" cuando pide expresamente que lo agendes en GOOGLE CALENDAR / "mi calendario de Google" / "mi calendario del celu" (algo que quiere ver también fuera de esta app, con recordatorio real de Google) — NO para la Agenda interna de esta app, para eso usá "agendar". Estado actual: ${googleConectado ? "SÍ está conectado a Google Calendar, podés usar esta acción con confianza." : "TODAVÍA NO conectó su Google Calendar. Si pide esto, avisale en tu respuesta (sin bloque de acción) que tiene que ir a Ajustes → \"Conectar Google Calendar\" primero, una sola vez."}
 - "cargar_gasto" cuando dice "cargá un gasto de nafta 15000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto, sin obra). IMPORTANTE: si te da VARIOS gastos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "gastos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una.
+- "caja" cuando dice cuánto efectivo tiene guardado o que suma/saca efectivo ("tengo 300 lucas en efectivo", "sumá 50000 a la caja", "saqué 20000 de la caja"). "mov": "inicial" = con cuánto efectivo arranca la caja (solo la primera vez; desde esa fecha se descuentan solos sus gastos y pagos en efectivo), "ingreso" = suma efectivo, "retiro" = saca efectivo (lo depositó, etc). Los gastos y los pagos pagados (sin método o en efectivo) se descuentan SOLOS de la caja: no hace falta cargarlos de nuevo. Si te pregunta cuánto efectivo tiene, respondé con el dato "Caja" de abajo.
 - "cargar_pago" para registrar en la planilla de Pagos cualquier pago que menciona, se lo haya pedido o simplemente esté contando ("pagale a Humberto 50000", "anotá un pago a Juan de 30 lucas", "le pagué a X"). Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método.
 - "cargar_cobro" para registrar en la planilla de Cobros cualquier cobro que menciona ("cobramos un certificado de Castores 475 por 800000", "nos pagaron un ajuste de Terralagos", "cargá una obra sin certificar de 300 lucas en Canning 260"). El campo "tipo_cobro" tiene que ser EXACTAMENTE uno de estos tres: "certificado", "obra sin certificar" o "ajuste" — inferilo de lo que dice (si no lo aclara, asumí "certificado"). Interpretá también obra, monto y estado (cobrado/pendiente).
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
@@ -772,6 +776,9 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
   async function persistArch(next) { setArchivos(next); await storage.set("sebastian_archivos", JSON.stringify(next)).catch(() => { }); }
   async function persistGastos(next) { setGastos(next); try { localStorage.setItem("sebastian_gastos", JSON.stringify(next)); } catch { } await storage.set("sebastian_gastos", JSON.stringify(next)).catch(() => { }); }
+  async function persistCaja(next) { cajaWrite.current = Date.now(); setCaja(next); try { localStorage.setItem("sebastian_caja", JSON.stringify(next)); } catch { } await storage.set("sebastian_caja", JSON.stringify(next)).catch(() => { }); }
+  function cargarCaja(a) { const m = Math.abs(Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0); if (!m) return null; const e = { id: uid() + Date.now(), mov: ["inicial", "retiro"].includes(a.mov) ? a.mov : "ingreso", monto: m, concepto: a.concepto || "", fecha: a.fecha || hoyStr(), ts: Date.now() }; persistCaja([e, ...(caja || [])]); return e; }
+  function marcarNoCaja(tipo, id) { if (tipo === "gasto") persistGastos((gastos || []).map(g => g.id === id ? { ...g, noCaja: !g.noCaja } : g)); else persistPagos((pagos || []).map(p => p.id === id ? { ...p, noCaja: !p.noCaja } : p)); }
   function cargarGasto(a) { const g = { id: uid() + Date.now(), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }; persistGastos([g, ...(gastos || [])]); return g; }
   const [leyendoTicket, setLeyendoTicket] = useState(false);
   async function analizarTicket(file) {
@@ -1188,6 +1195,11 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       else setMsgs(prev => [...prev, { role: "assistant", content: "No pude generar el PDF (revisá la conexión a internet e intentá de nuevo)." }]);
       setBusy(false); return;
     }
+    if (accion && accion.tipo === "caja") {
+      const e = cargarCaja(accion);
+      setMsgs(prev => [...prev, { role: "assistant", content: e ? `💵 Anoté en Caja: ${e.mov === "inicial" ? "efectivo inicial" : e.mov === "retiro" ? "retiro" : "ingreso"} de $${e.monto.toLocaleString("es-AR")}${e.concepto ? " (" + e.concepto + ")" : ""}.${limpio ? "\n\n" + limpio : ""}\n\nMirá el saldo en la solapa Caja.` : "No pude leer el monto. Decime cuánto efectivo es." }]);
+      setBusy(false); return;
+    }
     if (accion && accion.tipo === "cargar_gasto") {
       const arr = Array.isArray(accion.gastos) ? accion.gastos : [accion];
       const nuevos = arr.filter(x => x && (x.concepto || x.texto || x.monto != null)).map(a => ({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }));
@@ -1279,13 +1291,14 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["resultados", "Resultados"], ["obras", "Obras"], ["proyectos", "Proyectos"], ["reuniones", "Reuniones"], ["agenda", "Agenda"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["caja", "Caja"], ["resultados", "Resultados"], ["obras", "Obras"], ["proyectos", "Proyectos"], ["reuniones", "Reuniones"], ["agenda", "Agenda"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} renombrarObra={renombrarObraPago} quitarObra={quitarObraPago} />}
     {vista === "cobros" && <CobrosBody cobros={cobros} obras={db.obras} filtroObra={filtroObraCobro} setFiltroObra={setFiltroObraCobro} exportar={exportarCobrosExcel} borrar={(id) => persistCobros((cobros || []).filter(c => c.id !== id))} onAdd={cargarCobro} onEditarFecha={(id, fecha) => persistCobros((cobros || []).map(c => c.id === id ? { ...c, fecha } : c))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
+    {vista === "caja" && <CajaBody caja={caja} gastos={gastos} pagos={pagos} onAdd={cargarCaja} borrar={(id) => persistCaja((caja || []).filter(c => c.id !== id))} marcar={marcarNoCaja} />}
     {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} exportarPDF={exportarResultadosPDF} />}
     {vista === "proyectos" && <ProyectosBody proyectos={proyectos} sel={proySel} setSel={setProySel} guardar={persistProyectos} hablar={(n) => { setVista("chat"); setInput(`Sobre ${n}: `); }} pasarAObra={(p, obs) => { crearObra({ nombre: p.nombre, estado: "En curso", obs }); persistProyectos(proyRef.current.filter(x => x.id !== p.id)); setProySel(null); setVista("obras"); }} />}
     {vista === "reuniones" && <ReunionesBody proyectos={proyectos} guardarProyectos={persistProyectos} cargarJsPDF={cargarJsPDF} />}
@@ -1887,6 +1900,67 @@ function CobrosBody({ cobros, obras, filtroObra, setFiltroObra, exportar, borrar
   </div>);
 }
 
+
+// ===== Caja: efectivo guardado. Se descuentan solos los gastos y los pagos pagados (sin método o en efectivo) desde la fecha en que arranca la caja =====
+function fechaTs(f) { const p = String(f || "").split("/").map(n => parseInt(n, 10)); if (!p[0] || !p[1]) return 0; let y = p[2]; if (y == null || isNaN(y)) y = new Date().getFullYear() % 100; if (y < 100) y += 2000; return new Date(y, p[1] - 1, p[0]).getTime(); }
+const pagoEnEfectivo = (p) => p.estado === "pagado" && !p.noCaja && (!String(p.metodo || "").trim() || /efectiv|cash/i.test(p.metodo));
+function calcCaja(caja, gastos, pagos) {
+  const L = (caja || []).filter(c => c && c.monto);
+  if (!L.length) return { vacia: true, saldo: 0 };
+  const ini = L.filter(c => c.mov === "inicial");
+  const desde = Math.min(...(ini.length ? ini : L).map(c => fechaTs(c.fecha) || c.ts || 0));
+  const entro = L.filter(c => c.mov !== "retiro").reduce((a, c) => a + c.monto, 0);
+  const retiros = L.filter(c => c.mov === "retiro").reduce((a, c) => a + c.monto, 0);
+  const gs = (gastos || []).filter(g => !g.noCaja && fechaTs(g.fecha) >= desde);
+  const ps = (pagos || []).filter(p => pagoEnEfectivo(p) && fechaTs(p.fecha) >= desde);
+  const tg = gs.reduce((a, g) => a + (g.monto || 0), 0), tp = ps.reduce((a, p) => a + (p.monto || 0), 0);
+  const d = new Date(desde);
+  return { vacia: false, saldo: entro - retiros - tg - tp, entro, retiros, gastos: tg, pagos: tp, desde, desdeTxt: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`, gs, ps };
+}
+function CajaBody({ caja, gastos, pagos, onAdd, borrar, marcar }) {
+  const [f, setF] = React.useState({ mov: "ingreso", monto: "", concepto: "" });
+  const R = calcCaja(caja, gastos, pagos);
+  const money = (n) => "$" + Math.abs(Number(n) || 0).toLocaleString("es-AR");
+  const hayInicial = (caja || []).some(c => c.mov === "inicial");
+  const movs = [
+    ...(caja || []).map(c => ({ k: "c" + c.id, tipo: "caja", id: c.id, t: fechaTs(c.fecha) || c.ts, ts: c.ts || 0, fecha: c.fecha, txt: c.mov === "inicial" ? "Efectivo inicial" : c.mov === "retiro" ? "Retiro" : "Ingreso", sub: c.concepto, monto: c.mov === "retiro" ? -c.monto : c.monto })),
+    ...(R.vacia ? [] : [
+      ...(gastos || []).filter(g => fechaTs(g.fecha) >= R.desde).map(g => ({ k: "g" + g.id, tipo: "gasto", id: g.id, t: fechaTs(g.fecha), ts: g.ts || 0, fecha: g.fecha, txt: "Gasto", sub: g.concepto, monto: -(g.monto || 0), fuera: !!g.noCaja })),
+      ...(pagos || []).filter(p => p.estado === "pagado" && fechaTs(p.fecha) >= R.desde).map(p => ({ k: "p" + p.id, tipo: "pago", id: p.id, t: fechaTs(p.fecha), ts: p.ts || 0, fecha: p.fecha, txt: "Pago", sub: [p.persona, p.obra].filter(Boolean).join(" · ") + (p.metodo ? " · " + p.metodo : ""), monto: -(p.monto || 0), fuera: !pagoEnEfectivo(p), motivo: p.noCaja ? "marcado como no efectivo" : "pagado por " + p.metodo })),
+    ]),
+  ].sort((a, b) => (b.t - a.t) || (b.ts - a.ts));
+  const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, boxSizing: "border-box" };
+  return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
+    <div style={{ background: T.navy, borderRadius: 14, padding: "18px 18px 16px", marginBottom: 14, color: "#fff" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", opacity: .65 }}>Efectivo disponible</div>
+      {R.vacia ? <div style={{ fontSize: 14, lineHeight: 1.6, marginTop: 8, opacity: .9 }}>Cargá abajo con cuánto efectivo arrancás. Desde esa fecha, tus gastos y pagos en efectivo se descuentan solos.</div> : <>
+        <div style={{ fontFamily: T.serif, fontSize: 34, fontWeight: 600, marginTop: 4, color: R.saldo < 0 ? "#FF8A80" : "#fff" }}>{R.saldo < 0 ? "−" : ""}{money(R.saldo)}</div>
+        <div style={{ fontSize: 12, opacity: .75, marginTop: 8, lineHeight: 1.7 }}>Desde el {R.desdeTxt}: entró {money(R.entro)} · gastos −{money(R.gastos)} · pagos −{money(R.pagos)}{R.retiros ? ` · retiros −${money(R.retiros)}` : ""}</div>
+        {R.saldo < 0 && <div style={{ fontSize: 12, color: "#FF8A80", marginTop: 6 }}>El saldo da negativo: falta cargar efectivo que entró, o algún gasto/pago no salió de la caja (tocá "no fue efectivo" abajo).</div>}</>}
+    </div>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Mover efectivo</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        {[["ingreso", "Sumar"], ["retiro", "Sacar"], ["inicial", hayInicial ? "Nuevo inicial" : "Efectivo inicial"]].map(([v, lb]) => (<button key={v} onClick={() => setF({ ...f, mov: v })} style={{ flex: 1, background: f.mov === v ? T.navy : T.bg, color: f.mov === v ? "#fff" : T.text, border: `1px solid ${f.mov === v ? T.navy : T.border}`, borderRadius: 9, padding: "9px 4px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{lb}</button>))}
+      </div>
+      <input value={f.concepto} onChange={e => setF({ ...f, concepto: e.target.value })} placeholder="Concepto (opcional: cobré en mano, depósito…)" style={{ ...inp, marginBottom: 8 }} />
+      <div style={{ display: "flex", gap: 7 }}>
+        <input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ ...inp, flex: 1, width: "auto" }} />
+        <button onClick={() => { if (!f.monto) { alert("Poné el monto."); return; } if (f.mov === "inicial" && hayInicial && !confirm("Ya hay un efectivo inicial. Si cargás otro, la caja cuenta desde la fecha más vieja. ¿Seguir?")) return; if (!onAdd(f)) { alert("No pude leer el monto."); return; } setF({ ...f, monto: "", concepto: "" }); }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>＋</button>
+      </div>
+    </div>
+    <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Movimientos{movs.length ? ` · ${movs.length}` : ""}</div>
+    {movs.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "26px 18px", lineHeight: 1.6 }}>Todavía no hay movimientos.<br />Desde el Chat: <span style={{ color: T.sub }}>"tengo 300 mil en efectivo"</span></div>}
+    {movs.map(m => (<div key={m.k} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rsm, padding: "11px 13px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, opacity: m.fuera ? .55 : 1 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: m.monto < 0 ? T.text : T.accent, textDecoration: m.fuera ? "line-through" : "none" }}>{m.txt}{m.sub ? " · " + m.sub : ""} · <span style={{ fontFamily: T.serif, fontWeight: 600 }}>{m.monto < 0 ? "−" : "+"}{money(m.monto)}</span></div>
+        <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{m.fecha}{m.fuera ? " · no descuenta de la caja" + (m.motivo ? " (" + m.motivo + ")" : "") : ""}</div>
+      </div>
+      {m.tipo === "caja" ? <button onClick={() => borrar(m.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
+        : (/pagado por/.test(m.motivo || "") ? null : <button onClick={() => marcar(m.tipo, m.id)} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, color: T.sub, fontSize: 11, padding: "6px 8px", cursor: "pointer", flexShrink: 0 }}>{m.fuera ? "Sí fue efectivo" : "No fue efectivo"}</button>)}
+    </div>))}
+  </div>);
+}
 function GastosBody({ gastos, onAdd, exportar, borrar, onFotoTicket, leyendo }) {
   const [f, setF] = React.useState({ concepto: "", monto: "" });
   const ticketRef = React.useRef(null);
