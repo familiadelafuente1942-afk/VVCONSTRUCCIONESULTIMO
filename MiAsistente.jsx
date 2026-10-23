@@ -619,7 +619,7 @@ export default function MiAsistente() {
     const proximaSesion = sesionesPlan.find(s => !entrenoHechas[s.id]);
     const hechasCount = sesionesPlan.filter(s => entrenoHechas[s.id]).length;
     const entrenoTxt = !entrenoInicio ? "(todavía no arrancó el plan de entrenamiento)" : `Plan de estabilización lumbar/glúteos/core, 6 semanas, 3 sesiones por semana (lun/mié/vie). Llevás ${hechasCount}/18 sesiones hechas.${proximaSesion ? `\nPróxima sesión: ${proximaSesion.fecha} (semana ${proximaSesion.semana}, tipo ${proximaSesion.tipo}) — ejercicios: ${proximaSesion.ejercicios.map(e => e.n).join(", ")}.` : "\n¡Plan completo!"}`;
-    const cajaR = calcCaja(caja, gastos, pagos); const cajaTxt = cajaR.vacia ? "(todavía no cargó su efectivo en la solapa Caja)" : `Efectivo disponible: $${cajaR.saldo.toLocaleString("es-AR")} (desde ${cajaR.desdeTxt}; entró $${cajaR.entro.toLocaleString("es-AR")}, salió en gastos $${cajaR.gastos.toLocaleString("es-AR")} y en pagos $${cajaR.pagos.toLocaleString("es-AR")}${cajaR.retiros ? `, retiros $${cajaR.retiros.toLocaleString("es-AR")}` : ""})`;
+    const cajaR = calcCaja(caja, gastos, pagos, cobros); const cajaTxt = cajaR.vacia ? "(todavía no cargó su efectivo en la solapa Caja)" : `Efectivo disponible: $${cajaR.saldo.toLocaleString("es-AR")} (desde ${cajaR.desdeTxt}; entró $${cajaR.entro.toLocaleString("es-AR")}${cajaR.cobros ? `, cobros +$${cajaR.cobros.toLocaleString("es-AR")}` : ""}, salió en gastos $${cajaR.gastos.toLocaleString("es-AR")} y en pagos $${cajaR.pagos.toLocaleString("es-AR")}${cajaR.retiros ? `, retiros $${cajaR.retiros.toLocaleString("es-AR")}` : ""})`;
     const gs = (gastos || []).slice(0, 40).map(g => `· ${g.fecha} — ${g.concepto} $${(g.monto || 0).toLocaleString("es-AR")}`).join("\n") || "(sin gastos)";
     const totDia = (gastos || []).filter(g => g.fecha === hoyG).reduce((a, g) => a + (g.monto || 0), 0);
     const totMes = (gastos || []).filter(g => mesKeyDe(g.fecha) === mesG).reduce((a, g) => a + (g.monto || 0), 0);
@@ -718,7 +718,7 @@ Reglas:
 - "agendar" cuando dice "agendá / anotá en la agenda / recordame" un evento, reunión o cita (ej: "agendá reunión con Belfast el jueves a las 10"). Interpretá fecha (jueves, mañana, 15/07) y hora. Si es un PAGO A REALIZAR en el futuro (ej: "el 10 tengo que pagarle a Juan 50000", "recordame pagar el alquiler el día 5"), usá "tipoAgenda":"pago" con titulo (a quién/qué), fecha y monto — le va a llegar como recordatorio igual que los demás eventos, y aparece marcado como pago en la Agenda.
 - "calendar_crear" cuando pide expresamente que lo agendes en GOOGLE CALENDAR / "mi calendario de Google" / "mi calendario del celu" (algo que quiere ver también fuera de esta app, con recordatorio real de Google) — NO para la Agenda interna de esta app, para eso usá "agendar". Estado actual: ${googleConectado ? "SÍ está conectado a Google Calendar, podés usar esta acción con confianza." : "TODAVÍA NO conectó su Google Calendar. Si pide esto, avisale en tu respuesta (sin bloque de acción) que tiene que ir a Ajustes → \"Conectar Google Calendar\" primero, una sola vez."}
 - "cargar_gasto" cuando dice "cargá un gasto de nafta 15000", "gasté 5000 en la ferretería". Son gastos generales del día (concepto + monto, sin obra). IMPORTANTE: si te da VARIOS gastos juntos (una lista de 2, 3, 5 o los que sean), poné TODOS dentro del array "gastos" en UN SOLO bloque de acción. NO cargues de a uno ni pidas que te los diga por separado: leé toda la lista y cargala completa de una.
-- "caja" cuando dice cuánto efectivo tiene guardado o que suma/saca efectivo ("tengo 300 lucas en efectivo", "sumá 50000 a la caja", "saqué 20000 de la caja"). "mov": "inicial" = con cuánto efectivo arranca la caja (solo la primera vez; desde esa fecha se descuentan solos sus gastos y pagos en efectivo), "ingreso" = suma efectivo, "retiro" = saca efectivo (lo depositó, etc). Los gastos y los pagos pagados (sin método o en efectivo) se descuentan SOLOS de la caja: no hace falta cargarlos de nuevo. Si te pregunta cuánto efectivo tiene, respondé con el dato "Caja" de abajo.
+- "caja" cuando dice cuánto efectivo tiene guardado o que suma/saca efectivo ("tengo 300 lucas en efectivo", "sumá 50000 a la caja", "saqué 20000 de la caja"). "mov": "inicial" = con cuánto efectivo arranca la caja (solo la primera vez; desde esa fecha se descuentan solos sus gastos y pagos en efectivo), "ingreso" = suma efectivo, "retiro" = saca efectivo (lo depositó, etc). "inicial" ya viene con lo pagado hasta ese momento descontado: NO se vuelven a restar los pagos/gastos cargados antes. Desde ahí, cada gasto y pago pagado (sin método o en efectivo) que se cargue se descuenta SOLO de la caja y cada cobro cobrado se suma SOLO: no hace falta cargarlos de nuevo. Si te pregunta cuánto efectivo tiene, respondé con el dato "Caja" de abajo.
 - "cargar_pago" para registrar en la planilla de Pagos cualquier pago que menciona, se lo haya pedido o simplemente esté contando ("pagale a Humberto 50000", "anotá un pago a Juan de 30 lucas", "le pagué a X"). Interpretá monto ("50 lucas"=50000, "50 mil"=50000), obra, estado (pagado/pendiente) y método.
 - "cargar_cobro" para registrar en la planilla de Cobros cualquier cobro que menciona ("cobramos un certificado de Castores 475 por 800000", "nos pagaron un ajuste de Terralagos", "cargá una obra sin certificar de 300 lucas en Canning 260"). El campo "tipo_cobro" tiene que ser EXACTAMENTE uno de estos tres: "certificado", "obra sin certificar" o "ajuste" — inferilo de lo que dice (si no lo aclara, asumí "certificado"). Interpretá también obra, monto y estado (cobrado/pendiente).
 - "generar_pdf" cuando pide un PRESUPUESTO, COMPROBANTE o NOTA en PDF. Para presupuestos usá "items" (desc, cantidad, unidad, precio); el sistema calcula subtotales y total solo. Para comprobantes/notas usá "texto". ${modelo ? `Sebastián subió un MODELO de presupuesto: seguí su estructura, títulos y estilo. MODELO: """${(modelo.texto||"").slice(0,2500)}"""` : "Si pide presupuesto y no hay modelo, armá uno profesional igual."}
@@ -778,7 +778,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   async function persistGastos(next) { setGastos(next); try { localStorage.setItem("sebastian_gastos", JSON.stringify(next)); } catch { } await storage.set("sebastian_gastos", JSON.stringify(next)).catch(() => { }); }
   async function persistCaja(next) { cajaWrite.current = Date.now(); setCaja(next); try { localStorage.setItem("sebastian_caja", JSON.stringify(next)); } catch { } await storage.set("sebastian_caja", JSON.stringify(next)).catch(() => { }); }
   function cargarCaja(a) { const m = Math.abs(Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0); if (!m) return null; const e = { id: uid() + Date.now(), mov: ["inicial", "retiro"].includes(a.mov) ? a.mov : "ingreso", monto: m, concepto: a.concepto || "", fecha: a.fecha || hoyStr(), ts: Date.now() }; persistCaja([e, ...(caja || [])]); return e; }
-  function marcarNoCaja(tipo, id) { if (tipo === "gasto") persistGastos((gastos || []).map(g => g.id === id ? { ...g, noCaja: !g.noCaja } : g)); else persistPagos((pagos || []).map(p => p.id === id ? { ...p, noCaja: !p.noCaja } : p)); }
+  function marcarNoCaja(tipo, id) { if (tipo === "gasto") persistGastos((gastos || []).map(g => g.id === id ? { ...g, noCaja: !g.noCaja } : g)); else if (tipo === "cobro") persistCobros((cobros || []).map(c => c.id === id ? { ...c, noCaja: !c.noCaja } : c)); else persistPagos((pagos || []).map(p => p.id === id ? { ...p, noCaja: !p.noCaja } : p)); }
   function cargarGasto(a) { const g = { id: uid() + Date.now(), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }; persistGastos([g, ...(gastos || [])]); return g; }
   const [leyendoTicket, setLeyendoTicket] = useState(false);
   async function analizarTicket(file) {
@@ -1298,7 +1298,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} renombrarObra={renombrarObraPago} quitarObra={quitarObraPago} />}
     {vista === "cobros" && <CobrosBody cobros={cobros} obras={db.obras} filtroObra={filtroObraCobro} setFiltroObra={setFiltroObraCobro} exportar={exportarCobrosExcel} borrar={(id) => persistCobros((cobros || []).filter(c => c.id !== id))} onAdd={cargarCobro} onEditarFecha={(id, fecha) => persistCobros((cobros || []).map(c => c.id === id ? { ...c, fecha } : c))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
-    {vista === "caja" && <CajaBody caja={caja} gastos={gastos} pagos={pagos} onAdd={cargarCaja} borrar={(id) => persistCaja((caja || []).filter(c => c.id !== id))} marcar={marcarNoCaja} />}
+    {vista === "caja" && <CajaBody caja={caja} gastos={gastos} pagos={pagos} cobros={cobros} onAdd={cargarCaja} borrar={(id) => persistCaja((caja || []).filter(c => c.id !== id))} marcar={marcarNoCaja} />}
     {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} exportarPDF={exportarResultadosPDF} />}
     {vista === "proyectos" && <ProyectosBody proyectos={proyectos} sel={proySel} setSel={setProySel} guardar={persistProyectos} hablar={(n) => { setVista("chat"); setInput(`Sobre ${n}: `); }} pasarAObra={(p, obs) => { crearObra({ nombre: p.nombre, estado: "En curso", obs }); persistProyectos(proyRef.current.filter(x => x.id !== p.id)); setProySel(null); setVista("obras"); }} />}
     {vista === "reuniones" && <ReunionesBody proyectos={proyectos} guardarProyectos={persistProyectos} cargarJsPDF={cargarJsPDF} />}
@@ -1901,41 +1901,48 @@ function CobrosBody({ cobros, obras, filtroObra, setFiltroObra, exportar, borrar
 }
 
 
-// ===== Caja: efectivo guardado. Se descuentan solos los gastos y los pagos pagados (sin método o en efectivo) desde la fecha en que arranca la caja =====
+// ===== Caja: efectivo guardado. El "efectivo inicial" ya viene con todo lo cargado hasta ese momento descontado:
+// desde que lo cargás, cada gasto y pago en efectivo que cargues resta, y cada cobro cobrado que cargues suma. =====
 function fechaTs(f) { const p = String(f || "").split("/").map(n => parseInt(n, 10)); if (!p[0] || !p[1]) return 0; let y = p[2]; if (y == null || isNaN(y)) y = new Date().getFullYear() % 100; if (y < 100) y += 2000; return new Date(y, p[1] - 1, p[0]).getTime(); }
+// momento en que se cargó el ítem en la app (ts, o los 13 dígitos finales del id)
+function cargadoTs(x) { if (x && x.ts) return x.ts; const m = String((x && x.id) || "").match(/(1[5-9]\d{11})$/); return m ? Number(m[1]) : 0; }
 const pagoEnEfectivo = (p) => p.estado === "pagado" && !p.noCaja && (!String(p.metodo || "").trim() || /efectiv|cash/i.test(p.metodo));
-function calcCaja(caja, gastos, pagos) {
+const cobroEnEfectivo = (c) => c.estado === "cobrado" && !c.noCaja && (!String(c.metodo || "").trim() || /efectiv|cash/i.test(c.metodo));
+function calcCaja(caja, gastos, pagos, cobros) {
   const L = (caja || []).filter(c => c && c.monto);
   if (!L.length) return { vacia: true, saldo: 0 };
   const ini = L.filter(c => c.mov === "inicial");
-  const desde = Math.min(...(ini.length ? ini : L).map(c => fechaTs(c.fecha) || c.ts || 0));
+  const desde = Math.min(...(ini.length ? ini : L).map(c => c.ts || fechaTs(c.fecha) || 0));
+  const nuevo = (x) => cargadoTs(x) > desde;
   const entro = L.filter(c => c.mov !== "retiro").reduce((a, c) => a + c.monto, 0);
   const retiros = L.filter(c => c.mov === "retiro").reduce((a, c) => a + c.monto, 0);
-  const gs = (gastos || []).filter(g => !g.noCaja && fechaTs(g.fecha) >= desde);
-  const ps = (pagos || []).filter(p => pagoEnEfectivo(p) && fechaTs(p.fecha) >= desde);
-  const tg = gs.reduce((a, g) => a + (g.monto || 0), 0), tp = ps.reduce((a, p) => a + (p.monto || 0), 0);
+  const gs = (gastos || []).filter(g => !g.noCaja && nuevo(g));
+  const ps = (pagos || []).filter(p => pagoEnEfectivo(p) && nuevo(p));
+  const cs = (cobros || []).filter(c => cobroEnEfectivo(c) && nuevo(c));
+  const tg = gs.reduce((a, g) => a + (g.monto || 0), 0), tp = ps.reduce((a, p) => a + (p.monto || 0), 0), tc = cs.reduce((a, c) => a + (c.monto || 0), 0);
   const d = new Date(desde);
-  return { vacia: false, saldo: entro - retiros - tg - tp, entro, retiros, gastos: tg, pagos: tp, desde, desdeTxt: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`, gs, ps };
+  return { vacia: false, saldo: entro + tc - retiros - tg - tp, entro, cobros: tc, retiros, gastos: tg, pagos: tp, desde, nuevo, desdeTxt: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` };
 }
-function CajaBody({ caja, gastos, pagos, onAdd, borrar, marcar }) {
+function CajaBody({ caja, gastos, pagos, cobros, onAdd, borrar, marcar }) {
   const [f, setF] = React.useState({ mov: "ingreso", monto: "", concepto: "" });
-  const R = calcCaja(caja, gastos, pagos);
+  const R = calcCaja(caja, gastos, pagos, cobros);
   const money = (n) => "$" + Math.abs(Number(n) || 0).toLocaleString("es-AR");
   const hayInicial = (caja || []).some(c => c.mov === "inicial");
   const movs = [
     ...(caja || []).map(c => ({ k: "c" + c.id, tipo: "caja", id: c.id, t: fechaTs(c.fecha) || c.ts, ts: c.ts || 0, fecha: c.fecha, txt: c.mov === "inicial" ? "Efectivo inicial" : c.mov === "retiro" ? "Retiro" : "Ingreso", sub: c.concepto, monto: c.mov === "retiro" ? -c.monto : c.monto })),
     ...(R.vacia ? [] : [
-      ...(gastos || []).filter(g => fechaTs(g.fecha) >= R.desde).map(g => ({ k: "g" + g.id, tipo: "gasto", id: g.id, t: fechaTs(g.fecha), ts: g.ts || 0, fecha: g.fecha, txt: "Gasto", sub: g.concepto, monto: -(g.monto || 0), fuera: !!g.noCaja })),
-      ...(pagos || []).filter(p => p.estado === "pagado" && fechaTs(p.fecha) >= R.desde).map(p => ({ k: "p" + p.id, tipo: "pago", id: p.id, t: fechaTs(p.fecha), ts: p.ts || 0, fecha: p.fecha, txt: "Pago", sub: [p.persona, p.obra].filter(Boolean).join(" · ") + (p.metodo ? " · " + p.metodo : ""), monto: -(p.monto || 0), fuera: !pagoEnEfectivo(p), motivo: p.noCaja ? "marcado como no efectivo" : "pagado por " + p.metodo })),
+      ...(gastos || []).filter(R.nuevo).map(g => ({ k: "g" + g.id, tipo: "gasto", id: g.id, t: fechaTs(g.fecha), ts: cargadoTs(g), fecha: g.fecha, txt: "Gasto", sub: g.concepto, monto: -(g.monto || 0), fuera: !!g.noCaja })),
+      ...(pagos || []).filter(p => p.estado === "pagado" && R.nuevo(p)).map(p => ({ k: "p" + p.id, tipo: "pago", id: p.id, t: fechaTs(p.fecha), ts: cargadoTs(p), fecha: p.fecha, txt: "Pago", sub: [p.persona, p.obra].filter(Boolean).join(" · ") + (p.metodo ? " · " + p.metodo : ""), monto: -(p.monto || 0), fuera: !pagoEnEfectivo(p), motivo: p.noCaja ? "" : "pagado por " + p.metodo })),
+      ...(cobros || []).filter(c => c.estado === "cobrado" && R.nuevo(c)).map(c => ({ k: "c2" + c.id, tipo: "cobro", id: c.id, t: fechaTs(c.fecha), ts: cargadoTs(c), fecha: c.fecha, txt: "Cobro", sub: c.obra + (c.metodo ? " · " + c.metodo : ""), monto: c.monto || 0, fuera: !cobroEnEfectivo(c), motivo: c.noCaja ? "" : "cobrado por " + c.metodo })),
     ]),
   ].sort((a, b) => (b.t - a.t) || (b.ts - a.ts));
   const inp = { width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, boxSizing: "border-box" };
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <div style={{ background: T.navy, borderRadius: 14, padding: "18px 18px 16px", marginBottom: 14, color: "#fff" }}>
       <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", opacity: .65 }}>Efectivo disponible</div>
-      {R.vacia ? <div style={{ fontSize: 14, lineHeight: 1.6, marginTop: 8, opacity: .9 }}>Cargá abajo con cuánto efectivo arrancás. Desde esa fecha, tus gastos y pagos en efectivo se descuentan solos.</div> : <>
+      {R.vacia ? <div style={{ fontSize: 14, lineHeight: 1.6, marginTop: 8, opacity: .9 }}>Cargá abajo el efectivo que te quedó hoy (ya con lo pagado hasta ahora descontado). Desde ese momento, cada pago o gasto en efectivo que cargues resta y cada cobro que cargues suma.</div> : <>
         <div style={{ fontFamily: T.serif, fontSize: 34, fontWeight: 600, marginTop: 4, color: R.saldo < 0 ? "#FF8A80" : "#fff" }}>{R.saldo < 0 ? "−" : ""}{money(R.saldo)}</div>
-        <div style={{ fontSize: 12, opacity: .75, marginTop: 8, lineHeight: 1.7 }}>Desde el {R.desdeTxt}: entró {money(R.entro)} · gastos −{money(R.gastos)} · pagos −{money(R.pagos)}{R.retiros ? ` · retiros −${money(R.retiros)}` : ""}</div>
+        <div style={{ fontSize: 12, opacity: .75, marginTop: 8, lineHeight: 1.7 }}>Desde que cargaste el efectivo inicial ({R.desdeTxt}): entró {money(R.entro)}{R.cobros ? ` · cobros +${money(R.cobros)}` : ""} · gastos −{money(R.gastos)} · pagos −{money(R.pagos)}{R.retiros ? ` · retiros −${money(R.retiros)}` : ""}</div>
         {R.saldo < 0 && <div style={{ fontSize: 12, color: "#FF8A80", marginTop: 6 }}>El saldo da negativo: falta cargar efectivo que entró, o algún gasto/pago no salió de la caja (tocá "no fue efectivo" abajo).</div>}</>}
     </div>
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
@@ -1957,7 +1964,7 @@ function CajaBody({ caja, gastos, pagos, onAdd, borrar, marcar }) {
         <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{m.fecha}{m.fuera ? " · no descuenta de la caja" + (m.motivo ? " (" + m.motivo + ")" : "") : ""}</div>
       </div>
       {m.tipo === "caja" ? <button onClick={() => borrar(m.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
-        : (/pagado por/.test(m.motivo || "") ? null : <button onClick={() => marcar(m.tipo, m.id)} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, color: T.sub, fontSize: 11, padding: "6px 8px", cursor: "pointer", flexShrink: 0 }}>{m.fuera ? "Sí fue efectivo" : "No fue efectivo"}</button>)}
+        : (/(pagado|cobrado) por/.test(m.motivo || "") ? null : <button onClick={() => marcar(m.tipo, m.id)} style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 8, color: T.sub, fontSize: 11, padding: "6px 8px", cursor: "pointer", flexShrink: 0 }}>{m.fuera ? "Sí fue efectivo" : "No fue efectivo"}</button>)}
     </div>))}
   </div>);
 }
