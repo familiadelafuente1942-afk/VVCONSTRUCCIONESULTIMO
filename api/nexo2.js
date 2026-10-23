@@ -283,6 +283,7 @@ export default async function handler(req, res) {
             av: (t.av === null || t.av === undefined || t.av === "") ? null : num(t.av, 0, 100), previsto: num(t.previsto, 0, 100),
             estado: str(t.estado, 20), causa: str(t.causa, 120), causaTxt: str(t.causaTxt, 200), resp: str(t.resp, 40), desdeF: num(t.desdeF, 0, 4e12), card: str(t.card, 200),
             vinc: (Array.isArray(t.vinc) ? t.vinc : []).slice(0, 12).map((x) => str(x, 60)), add: !!t.add,
+            sd: !!t.sd,
             nueva: t.nueva && typeof t.nueva === "object" ? { name: str(t.nueva.name, 120), etapa: str(t.nueva.etapa, 80) } : undefined,
           })),
           ejecutados: str(q.ejecutados, 6000), proxima: str(q.proxima, 4000), obs: str(q.obs, 4000), resumen: str(q.resumen, 4000),
