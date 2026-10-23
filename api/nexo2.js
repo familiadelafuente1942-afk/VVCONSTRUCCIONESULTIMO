@@ -277,12 +277,22 @@ export default async function handler(req, res) {
           id, n: num(q.n, 1, 9999), desde: num(q.desde, 0, 4e12), hasta: num(q.hasta, 0, 4e12),
           etapa: str(q.etapa, 80), av: num(q.av, 0, 100), avPlan: num(q.avPlan, 0, 100), trab: num(q.trab, 0, 7), lluvia: num(q.lluvia, 0, 7),
           dot: num(q.dot, 0, 9999), fin: str(q.fin, 40),
-          tareas: (Array.isArray(q.tareas) ? q.tareas : []).slice(0, 60).map((t) => ({ name: str(t.name, 120), equipo: str(t.equipo, 80), av: num(t.av, 0, 100), estado: str(t.estado, 20), causa: str(t.causa, 80) })),
+          v: num(q.v, 0, 9), cierre: num(q.cierre, 0, 4e12),
+          tareas: (Array.isArray(q.tareas) ? q.tareas : []).slice(0, 150).map((t) => ({
+            tid: str(t.tid, 60), name: str(t.name, 120), equipo: str(t.equipo, 80), fase: num(t.fase, 0, 9), etapa: str(t.etapa, 80), nivel: str(t.nivel, 40), tipo: str(t.tipo, 20),
+            av: (t.av === null || t.av === undefined || t.av === "") ? null : num(t.av, 0, 100), previsto: num(t.previsto, 0, 100),
+            estado: str(t.estado, 20), causa: str(t.causa, 120), causaTxt: str(t.causaTxt, 200), resp: str(t.resp, 40), desdeF: num(t.desdeF, 0, 4e12), card: str(t.card, 200),
+            vinc: (Array.isArray(t.vinc) ? t.vinc : []).slice(0, 12).map((x) => str(x, 60)), add: !!t.add,
+            nueva: t.nueva && typeof t.nueva === "object" ? { name: str(t.nueva.name, 120), etapa: str(t.nueva.etapa, 80) } : undefined,
+          })),
           ejecutados: str(q.ejecutados, 6000), proxima: str(q.proxima, 4000), obs: str(q.obs, 4000), resumen: str(q.resumen, 4000),
           fotos, fecha: num(q.fecha, 0, 4e12), autor: quien === "dir" ? "Dirección" : "Jefatura de obra", editado: Date.now(),
         };
         if (!inf.ejecutados || !fotos.length) { res.status(400).json({ error: "El informe necesita lo ejecutado y al menos una foto" }); return; }
         const v = await leer(H, clave);
+        const choque = ((v && v.items) || []).find((x) => x.id !== id && x.desde === inf.desde);
+        if (choque && String(b.reemplazar || "") !== choque.id) { res.status(409).json({ ok: false, error: "dup", id: choque.id }); return; }
+        if (choque) { const { quedan: q2 } = await quitarAv(choque.id); await escribir(H, claveAv, { items: q2 }); }
         let items = ((v && v.items) || []).filter((x) => x.id !== id && x.desde !== inf.desde);
         items.push(inf);
         items = items.sort((x, y) => x.desde - y.desde).slice(-300);
