@@ -1,0 +1,617 @@
+<title>N District</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: sticky nav, photo hero, then one reading column that follows the lot from the avenue to the back */
+:root{
+  --bg:#f6f2ea; --surface:#ece5d8; --ink:#231e17; --muted:#6b6255; --line:#d9cfbd;
+  --accent:#a8652a; --accent-ink:#fffaf2; --accent-soft:#f0dcc4; --plaza:#6f7d4f; --plaza-soft:#dfe3cf;
+  --display:"Bodoni Moda", Georgia, "Times New Roman", serif;
+  --body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#16130f; --surface:#211c16; --ink:#efe7da; --muted:#a99d8b; --line:#3a3228;
+  --accent:#e0a062; --accent-ink:#1d140b; --accent-soft:#3d2b1a; --plaza:#a9b682; --plaza-soft:#2b3022; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#16130f; --surface:#211c16; --ink:#efe7da; --muted:#a99d8b; --line:#3a3228;
+  --accent:#e0a062; --accent-ink:#1d140b; --accent-soft:#3d2b1a; --plaza:#a9b682; --plaza-soft:#2b3022; color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.65;margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top, 0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+.navbar{position:sticky;top:env(safe-area-inset-top, 0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.navbar .wrap{display:flex;align-items:center;gap:20px;padding-block:12px}
+.brand{font-family:var(--display);font-size:1.1rem;white-space:nowrap}
+.brand b{font-weight:500}
+.navbar nav{display:flex;gap:18px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.navbar nav::-webkit-scrollbar{display:none}
+.navbar a{color:var(--muted);text-decoration:none;font-size:.85rem;white-space:nowrap}
+.navbar a:hover,.navbar a:focus-visible{color:var(--ink)}
+a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section[id],header[id]{scroll-margin-top:70px}
+.hero{position:relative;margin:20px 0 0;border-radius:14px;overflow:hidden;background:var(--surface);aspect-ratio:2/1;max-width:100%}
+.hero img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1.2s ease}
+.hero img.on{opacity:1}
+@media (prefers-reduced-motion:reduce){.hero img{transition:none}}
+.hero .dots{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;gap:8px}
+.hero .dots button{width:9px;height:9px;padding:0;border-radius:999px;border:0;background:rgba(255,255,255,.55);cursor:pointer}
+.hero .dots button[aria-current="true"]{background:#fff;width:22px}
+.hero .cap{position:absolute;left:14px;top:12px;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:#fff;background:rgba(20,15,10,.45);padding:4px 10px;border-radius:999px}
+.note{font-size:.82rem;color:var(--muted);margin:8px 0 0;max-width:75ch}
+.intro{display:grid;grid-template-columns:1.3fr 1fr;gap:40px;padding-block:32px 40px;align-items:end}
+.intro>*{min-width:0}
+.kicker{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(2.8rem,8vw,5.2rem);line-height:.95;margin:0;letter-spacing:-.01em}
+h1 em{font-style:italic;color:var(--accent)}
+.claim{font-family:var(--display);font-size:clamp(1.3rem,3vw,1.7rem);line-height:1.25;margin:18px 0 8px;text-wrap:balance;max-width:26ch}
+.lede{color:var(--muted);margin:0;max-width:40ch}
+.ctas{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.btn{display:inline-block;padding:11px 18px;border-radius:999px;font:500 .92rem var(--body);text-decoration:none;border:1px solid var(--accent);cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--accent)}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+.facts div{padding:14px 10px 0 0}
+.facts strong{display:block;font-family:var(--display);font-weight:400;font-size:1.9rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.facts span{font-size:.8rem;color:var(--muted)}
+section{padding-block:48px;border-top:1px solid var(--line)}
+.eyebrow{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:600;margin:0 0 10px}
+h2{font-family:var(--display);font-weight:400;font-size:clamp(1.8rem,4.5vw,2.6rem);line-height:1.1;margin:0 0 16px;text-wrap:balance;max-width:24ch}
+h3{text-wrap:balance}
+p{margin:0 0 14px;max-width:65ch}
+.ideas{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-top:24px}
+.ideas>*{min-width:0}
+.label{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.ideas h3{font-family:var(--display);font-weight:400;font-size:1.45rem;margin:6px 0 8px;line-height:1.15}
+.ideas p{color:var(--muted);font-size:.95rem;margin:0}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 0}
+.pill{font:500 .88rem var(--body);padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
+.pill[aria-selected="true"],.pill[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.piece{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:24px;align-items:start}
+.piece>*{min-width:0}
+.piece h3{font-family:var(--display);font-weight:400;font-size:1.7rem;line-height:1.15;margin:6px 0 10px}
+.piece ul{margin:14px 0 0;padding-left:1.1em;color:var(--muted)}
+.piece li{margin-bottom:4px}
+.shots{display:grid;gap:12px}
+.shots figure{margin:0}
+.shots img{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;border-radius:12px;background:var(--surface)}
+.shots figcaption{font-size:.8rem;color:var(--muted);margin-top:4px}
+.sub{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:4px}
+.sub>*{min-width:0}
+.sub h4{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 2px}
+.sub h3{font-size:1.25rem;margin:0 0 6px}
+.sub p{color:var(--muted);font-size:.95rem}
+.day{display:grid;grid-template-columns:repeat(4,1fr);margin-top:28px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.day div{padding:16px;border-right:1px solid var(--line)}
+.day div:last-child{border-right:0}
+.day .h{font-family:var(--display);font-style:italic;color:var(--accent);font-size:1.05rem}
+.day p{font-size:.88rem;color:var(--muted);margin:4px 0 0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.two>*{min-width:0}
+.plan{background:var(--surface);border-radius:12px;padding:18px;overflow-x:auto}
+.plan h3{font-size:.95rem;font-weight:600;margin:0 0 4px}
+.plan p{font-size:.88rem;color:var(--muted);margin:10px 0 0}
+.plan svg{display:block;width:100%;height:auto;min-width:260px}
+.verdict{display:inline-block;font-size:.75rem;font-weight:600;padding:2px 10px;border-radius:999px;margin-bottom:10px}
+.no{background:var(--accent-soft);color:var(--accent)}
+.si{background:var(--plaza-soft);color:var(--plaza)}
+.tbl{overflow-x:auto;margin-top:16px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:.95rem}
+td,th{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td.num,th.num{text-align:right;white-space:nowrap}
+.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+.role{background:var(--surface);border-radius:12px;padding:20px}
+.role h3{font-family:var(--display);font-weight:400;font-size:1.3rem;margin:4px 0 6px}
+.role p{font-size:.92rem;color:var(--muted);margin:0}
+.steps{list-style:none;margin:28px 0 0;padding:0}
+.steps li{display:grid;grid-template-columns:56px 1fr;gap:12px;padding:16px 0;border-top:1px solid var(--line)}
+.steps li>*{min-width:0}
+.steps .n{font-family:var(--display);font-size:1.6rem;color:var(--accent);line-height:1;font-variant-numeric:tabular-nums}
+.steps h3{font-size:1.05rem;font-weight:600;margin:0 0 4px}
+.steps p{color:var(--muted);font-size:.93rem;margin:0}
+.viewer{margin-top:20px}
+.viewer .main{position:relative;border-radius:14px;overflow:hidden;background:var(--surface)}
+.viewer .main img{display:block;width:100%;height:auto;aspect-ratio:2/1;object-fit:cover}
+.viewer .bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}
+.viewer .count{font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.arrows{display:flex;gap:8px}
+.arrow{width:40px;height:40px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:1.1rem;cursor:pointer}
+.thumbs{display:flex;gap:8px;overflow-x:auto;margin-top:12px;padding-bottom:4px}
+.thumb{flex:0 0 auto;border:2px solid transparent;border-radius:10px;padding:0;background:none;cursor:pointer;text-align:left}
+.thumb img{display:block;width:120px;height:68px;object-fit:cover;border-radius:8px;background:var(--surface)}
+.thumb span{display:block;font-size:.75rem;color:var(--muted);padding:2px 2px 0}
+.thumb[aria-current="true"]{border-color:var(--accent)}
+.q{margin-top:22px;display:grid;gap:22px;max-width:680px}
+.q fieldset{border:0;margin:0;padding:0}
+.q legend{font-weight:600;font-size:.98rem;margin-bottom:8px}
+.q textarea{font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;min-height:96px;resize:vertical}
+.err{color:var(--accent);font-size:.88rem;min-height:1.2em;margin:0}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+footer{border-top:1px solid var(--line);padding-block:24px 40px;font-size:.8rem;color:var(--muted)}
+@media (max-width:760px){
+  .intro,.two,.piece,.sub{grid-template-columns:1fr;gap:20px}
+  .ideas,.roles{grid-template-columns:1fr;gap:16px}
+  .day{grid-template-columns:1fr 1fr}
+  .day div:nth-child(2){border-right:0}
+  .day div:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .facts strong{font-size:1.5rem}
+}
+.zones{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:22px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.zones>div{padding:20px;border-right:1px solid var(--line);min-width:0}
+.zones>div:last-child{border-right:0}
+.zones h3{font-family:var(--display);font-weight:400;font-size:1.3rem;margin:4px 0 6px}
+.zones p{font-size:.92rem;color:var(--muted);margin:0 0 10px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tags span{font-size:.8rem;padding:3px 10px;border-radius:999px;background:var(--surface);color:var(--ink)}
+.park{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+.park>div{background:var(--surface);border-radius:12px;padding:18px;min-width:0}
+.park h3{font-size:1rem;font-weight:600;margin:0 0 6px}
+.park p{font-size:.9rem;color:var(--muted);margin:0}
+@media (max-width:760px){.zones,.park{grid-template-columns:1fr}.zones>div{border-right:0;border-bottom:1px solid var(--line)}.zones>div:last-child{border-bottom:0}}
+.vshots{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}
+.vshots figure{margin:0;min-width:0}
+.vshots img{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;border-radius:12px;background:var(--surface)}
+.vshots figcaption{font-size:.85rem;color:var(--muted);margin-top:6px}
+@media (max-width:760px){.vshots{grid-template-columns:1fr}}
+.gantt-wrap{overflow-x:auto;margin-top:22px;border:1px solid var(--line);border-radius:12px}
+.gantt{min-width:860px;display:grid;grid-template-columns:230px repeat(30,1fr);font-size:.8rem;font-variant-numeric:tabular-nums}
+.gantt>div{border-bottom:1px solid var(--line);min-height:30px;display:flex;align-items:center}
+.gh{color:var(--muted);justify-content:center;font-size:.72rem;border-left:1px solid var(--line)}
+.gl{padding:6px 10px;line-height:1.25;color:var(--ink)}
+.gs{padding:10px;font-weight:600;font-size:.85rem;background:var(--surface);grid-column:1 / -1}
+.gb{border-radius:5px;height:14px;margin:0 1px}
+.e1{background:var(--accent)}.e2{background:var(--plaza)}.e3{background:var(--muted)}
+.gm{justify-content:center}
+.gm span{width:13px;height:13px;transform:rotate(45deg);background:var(--ink);display:block}
+.gm.e1x span{background:var(--accent)}.gm.e2x span{background:var(--plaza)}.gm.e3x span{background:var(--muted)}
+.gcell{border-left:1px solid var(--line)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:.85rem;color:var(--muted)}
+.legend i{display:inline-block;width:14px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+.stages{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+.stage{border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0}
+.stage .m{font-family:var(--display);font-size:2rem;line-height:1;font-variant-numeric:tabular-nums}
+.stage h3{font-size:1rem;font-weight:600;margin:8px 0 6px}
+.stage p{font-size:.9rem;color:var(--muted);margin:0}
+.rules{list-style:none;margin:20px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:0 28px}
+.rules li{padding:12px 0;border-top:1px solid var(--line);font-size:.95rem;min-width:0}
+.rules b{display:block;font-weight:600;margin-bottom:2px}
+.rules span{color:var(--muted)}
+@media (max-width:760px){.stages,.rules{grid-template-columns:1fr}}
+</style>
+<style>
+.st{display:inline-block;font-size:.72rem;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.st.ok{background:var(--plaza-soft);color:var(--plaza)}
+.st.sup{background:var(--accent-soft);color:var(--accent)}
+.st.pend{background:var(--surface);color:var(--muted);border:1px solid var(--line)}
+.facts .st{margin-top:6px}
+.docs{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+.docs>div{border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0}
+.docs h3{font-size:1rem;font-weight:600;margin:0 0 8px}
+.docs ul{margin:0;padding-left:1.1em;color:var(--muted);font-size:.93rem}
+.docs li{margin-bottom:4px}
+.flow{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+.flow>div{background:var(--surface);border-radius:12px;padding:18px;min-width:0}
+.flow h3{font-size:1rem;font-weight:600;margin:0 0 6px}
+.flow p{font-size:.9rem;color:var(--muted);margin:0}
+.etapa{border:1px solid var(--line);border-radius:12px;padding:20px;margin-top:16px}
+.etapa header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.etapa .m{font-family:var(--display);font-size:1.8rem;line-height:1;font-variant-numeric:tabular-nums}
+.etapa h3{font-size:1.05rem;font-weight:600;margin:0}
+.etapa dl{display:grid;grid-template-columns:180px 1fr;gap:6px 16px;margin:0;font-size:.93rem}
+.etapa dt{color:var(--muted)}
+.etapa dd{margin:0;min-width:0}
+.team{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+.team>div{border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0}
+.team h3{font-family:var(--display);font-weight:400;font-size:1.3rem;margin:4px 0 6px}
+.team p{font-size:.92rem;color:var(--muted);margin:0}
+.pending{border:1px dashed var(--line);border-radius:12px;padding:18px;margin-top:16px;color:var(--muted);font-size:.93rem}
+.ask{background:var(--accent-soft);border-radius:14px;padding:24px;margin-top:24px}
+.ask h3{font-family:var(--display);font-weight:400;font-size:1.5rem;margin:0 0 8px;color:var(--ink)}
+.ask p{margin:0;color:var(--ink)}
+.cap2{font-size:.85rem;color:var(--muted);margin-top:6px}
+@media (max-width:760px){.docs,.flow,.team{grid-template-columns:1fr}.etapa dl{grid-template-columns:1fr}.etapa dt{margin-top:6px}}
+</style>
+
+<div class="navbar"><div class="wrap">
+  <div class="brand"><b>Belfast</b> Desarrollos</div>
+  <nav aria-label="Secciones">
+    <a href="#proyecto">La propuesta</a>
+    <a href="#tierra-op">La tierra</a>
+    <a href="#distrito">El distrito</a>
+    <a href="#experiencias">Los espacios</a>
+    <a href="#llegar">Llegar y abastecer</a>
+    <a href="#factibilidad">Factibilidad</a>
+    <a href="#obra">Etapas</a>
+    <a href="#tierra">Propietarios</a>
+    <a href="#equipo">Equipo</a>
+    <a href="#imagenes">Galería</a>
+    <a href="#mirada">Tu mirada</a>
+  </nav>
+</div></div>
+
+<div class="wrap">
+<header id="proyecto">
+  <figure class="hero" id="hero" aria-roledescription="carrusel" aria-label="Imágenes del proyecto">
+    <img class="on" src="images/n11.jpg" data-cap="Vista general" alt="Vista aérea de día: doce edificios a los lados de la plaza peatonal y el hotel bajo al fondo, desde la Ruta 27.">
+    <img src="images/n01.jpg" data-cap="Frente sobre Ruta 27" alt="Frente con mercado, farmacia, panadería y café, y la rampa al subsuelo." loading="lazy">
+    <img src="images/n05.jpg" data-cap="La plaza" alt="Plaza al mediodía con lavandería, veterinaria y restaurantes." loading="lazy">
+    <img src="images/n06.jpg" data-cap="De noche" alt="Plaza de noche con los locales abiertos." loading="lazy">
+    <img src="images/n03.jpg" data-cap="El hotel" alt="Vista desde el fondo con el hotel spa y su pileta en la terraza." loading="lazy">
+    <img src="images/n10.jpg" data-cap="Desde la terraza" alt="Vista de la plaza desde una terraza residencial." loading="lazy">
+    <span class="cap" id="hcap">Vista general</span>
+    <div class="dots" id="hdots"></div>
+  </figure>
+  <p class="note">Imágenes de intención arquitectónica. No representan un proyecto aprobado; volumetría y dimensiones están pendientes de validación.</p>
+
+  <div class="intro">
+    <div>
+      <p class="kicker">Zona Nordelta · Ruta 27, Benavídez · Tigre</p>
+      <h1>N <em>District</em></h1>
+      <p class="claim">Un pequeño distrito. Una nueva forma de encontrarse.</p>
+      <p class="lede">Un distrito de barrio que integra residencias, servicios cotidianos, hotel y espacios de encuentro alrededor de una plaza peatonal abierta a la Ruta 27.</p>
+      <div class="ctas">
+        <a class="btn primary" href="#distrito">Explorar el distrito</a>
+        <a class="btn ghost" href="#tierra">Propuesta a propietarios</a>
+      </div>
+    </div>
+    <div class="facts">
+      <div><strong>12.500 m²</strong><span>9.500 + 3.000 m² · dos parcelas</span><br><span class="st sup">Informado · a mensurar</span></div>
+      <div><strong>Hasta 6</strong><span>Pisos · zona C5</span><br><span class="st sup">Informado</span></div>
+      <div><strong>1 plaza</strong><span>Peatonal, abierta a la ruta</span><br><span class="st ok">Propuesta</span></div>
+    </div>
+  </div>
+</header>
+
+<section id="pedido" style="padding-bottom:0">
+  <div class="ask">
+    <h3>Qué buscamos acordar en esta reunión</h3>
+    <p>Una evaluación conjunta de factibilidad de las dos parcelas: qué documentación reúne cada parte, quién es responsable de cada estudio y en qué plazo. Sin condiciones económicas comprometidas hasta tener los resultados.</p>
+  </div>
+</section>
+
+<section id="tierra-op">
+  <p class="eyebrow">La tierra y la oportunidad</p>
+  <h2>Dos parcelas sobre la Ruta 27, en el corredor de Nordelta.</h2>
+  <p>La parcela principal tiene 9.500 m² en forma de martillo: 25 m de frente sobre la ruta y 250 m de fondo. La contigua, del mismo propietario, tiene 3.000 m² y otros 25 m de frente. Si el martillo se ensancha hacia el fondo, como sugieren las superficies, las dos juntas forman un rectángulo de 50 × 250 m. Sin la contigua, los primeros 120 m tienen solo 25 m de ancho: entra un edificio y un pasaje. Con las dos aparece la plaza que le da sentido al proyecto.</p>
+  <svg viewBox="0 0 620 130" role="img" aria-label="Hipótesis de las parcelas: la principal en martillo, 25 m de ancho en los primeros 120 m y 50 m en los 130 m del fondo; la contigua de 25 por 120 m completa el frente." style="width:100%;height:auto;margin-top:16px;display:block">
+    <text x="0" y="12" font-size="12" fill="var(--muted)" font-family="Figtree, sans-serif">Ruta 27</text>
+    <line x1="2" y1="20" x2="2" y2="120" stroke="var(--ink)" stroke-width="2"/>
+    <polygon points="6,20 290,20 290,70 614,70 614,120 6,120" transform="translate(0,0)" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <polygon points="6,20 290,20 290,70 6,70" fill="var(--plaza-soft)" stroke="var(--plaza)"/>
+    <text x="148" y="50" text-anchor="middle" font-size="12" fill="var(--plaza)" font-family="Figtree, sans-serif" font-weight="600">Contigua · 3.000 m² · 25 × 120 m</text>
+    <text x="300" y="100" text-anchor="middle" font-size="12" fill="var(--accent)" font-family="Figtree, sans-serif" font-weight="600">Principal en martillo · 9.500 m²</text>
+    <text x="452" y="62" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="Figtree, sans-serif">el martillo ocupa los 50 m en el fondo</text>
+  </svg>
+  <p class="note">Hipótesis armada con las superficies informadas (25 × 120 + 50 × 130 = 9.500 m²). Se confirma con la mensura. La propuesta de 50 m de frente depende de incorporar la parcela contigua y acordar su precio; las dos parcelas quedan pendientes de mensura.</p>
+  <div class="two" style="margin-top:20px">
+    <div class="plan">
+      <span class="verdict no">25 m de frente</span>
+      <h3>Un edificio y un pasaje</h3>
+      <svg viewBox="0 0 300 150" role="img" aria-label="Con 25 metros: retiro de 3 m, edificio de 13 m, pasaje de 6 m y retiro de 3 m.">
+        <text x="0" y="12" font-size="11" fill="var(--muted)" font-family="Figtree, sans-serif">← Ruta 27</text>
+        <rect x="0" y="20" width="300" height="100" rx="4" fill="var(--bg)" stroke="var(--line)"/>
+        <rect x="0" y="32" width="300" height="52" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width=".8"/>
+        <text x="150" y="62" text-anchor="middle" font-size="12" fill="var(--accent)" font-family="Figtree, sans-serif">Edificio · 13 m</text>
+        <rect x="0" y="84" width="300" height="24" fill="var(--plaza-soft)" stroke="var(--plaza)" stroke-width=".8"/>
+        <text x="150" y="100" text-anchor="middle" font-size="11" fill="var(--plaza)" font-family="Figtree, sans-serif">Pasaje 6 m</text>
+        <text x="0" y="140" font-size="10" fill="var(--muted)" font-family="Figtree, sans-serif">3 + 13 + 6 + 3 = 25 m</text>
+      </svg>
+      <p>Un pasillo de 6 m entre un edificio de 6 pisos y la medianera: sin plaza ni lugar para la rampa.</p>
+    </div>
+    <div class="plan">
+      <span class="verdict si">50 m de frente</span>
+      <h3>Dos tiras y una plaza de 20 m</h3>
+      <svg viewBox="0 0 300 230" role="img" aria-label="Con 50 metros: retiro de 3 m, tira de 12 m, plaza de 20 m, tira de 12 m y retiro de 3 m.">
+        <text x="0" y="12" font-size="11" fill="var(--muted)" font-family="Figtree, sans-serif">← Ruta 27</text>
+        <rect x="0" y="20" width="300" height="190" rx="4" fill="var(--bg)" stroke="var(--line)"/>
+        <rect x="0" y="32" width="300" height="44" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width=".8"/>
+        <text x="150" y="58" text-anchor="middle" font-size="12" fill="var(--accent)" font-family="Figtree, sans-serif">Tira 1 · 12 m</text>
+        <rect x="0" y="76" width="300" height="74" fill="var(--plaza-soft)" stroke="var(--plaza)" stroke-width=".8"/>
+        <text x="170" y="117" text-anchor="middle" font-size="13" fill="var(--plaza)" font-family="Figtree, sans-serif">Plaza 20 m</text>
+        <rect x="0" y="32" width="56" height="18" fill="var(--surface)" stroke="var(--muted)" stroke-width=".8"/>
+        <text x="28" y="45" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="Figtree, sans-serif">Rampa</text>
+        <rect x="0" y="150" width="300" height="44" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width=".8"/>
+        <text x="150" y="176" text-anchor="middle" font-size="12" fill="var(--accent)" font-family="Figtree, sans-serif">Tira 2 · 12 m</text>
+        <text x="0" y="224" font-size="10" fill="var(--muted)" font-family="Figtree, sans-serif">3 + 12 + 20 + 12 + 3 = 50 m · servicio por subsuelo</text>
+      </svg>
+      <p>Plaza de 20 m con edificios de altura similar: proporción a escala humana. La rampa entra bajo la primera tira y el servicio se resuelve en el subsuelo.</p>
+    </div>
+  </div>
+  <p class="note">Primeros 70 m del terreno a escala. Retiros laterales de 3 m como supuesto: si la zona admite construir entre medianeras, se libera ancho.</p>
+  <div class="docs">
+    <div><h3>Documentación disponible</h3><ul><li>Presentación comercial: Partida 5614, Circ. III, Chacra 9, Sección D.</li><li>Superficies informadas: 9.500 m² (principal) y 3.000 m² (contigua).</li><li>Zonificación informada: C5, a verificar ante el municipio.</li><li>Titularidad: persona física, ambas del mismo propietario.</li></ul></div>
+    <div><h3>Documentación a reunir</h3><ul><li>Mensura y forma exacta de las dos parcelas; la presentación las nombra 3B y 3C de forma inconsistente.</li><li>Certificado de zonificación y usos admitidos.</li><li>Estudio de suelos y nivel de napa.</li><li>Cota de inundación y factibilidad de servicios.</li></ul></div>
+  </div>
+</section>
+
+<section id="distrito">
+  <p class="eyebrow">Cómo funciona el distrito</p>
+  <h2>Todo lo de todos los días, sin agarrar el auto.</h2>
+  <p>Quien vive en N District baja y resuelve el día a pie. Quien vive en Nordelta tiene un motivo para venir varias veces por semana. El comercio se sostiene con los dos públicos.</p>
+  <div class="zones">
+    <div><span class="label">Frente · Ruta 27</span><h3>Compra rápida</h3><p>Los locales de mayor rotación, visibles desde la ruta y junto a la llegada en auto.</p><div class="tags"><span>Mercado de cercanía</span><span>Farmacia</span><span>Kiosco</span><span>Panadería</span><span>Café</span></div></div>
+    <div><span class="label">Primer tramo de la plaza</span><h3>Servicios diarios</h3><p>Lo que se usa varias veces por semana, a pocos pasos de casa.</p><div class="tags"><span>Lavandería</span><span>Tintorería</span><span>Veterinaria</span><span>Consultorios</span><span>Pilates</span></div></div>
+    <div><span class="label">Centro y fondo</span><h3>Destino</h3><p>Lo que hace que alguien elija venir y quedarse.</p><div class="tags"><span>Restaurantes</span><span>Heladería</span><span>Terrazas</span><span>Hotel spa</span></div></div>
+  </div>
+  <p style="margin-top:20px">Las residencias ocupan los pisos altos de las dos tiras, con halls de entrada propios separados de los locales.</p>
+  <div class="vshots">
+    <figure><img src="images/n08.jpg" alt="Mercado de cercanía con verdulería y góndolas de madera." loading="lazy"><figcaption>Mercado de cercanía en planta baja</figcaption></figure>
+    <figure><img src="images/n07.jpg" alt="Hall de entrada residencial junto a la panadería." loading="lazy"><figcaption>Entrada a las residencias, separada del comercio</figcaption></figure>
+  </div>
+  <div class="day" aria-label="Un día en el distrito">
+    <div><span class="h">8 h</span><p>Café y panadería antes de salir a trabajar.</p></div>
+    <div><span class="h">13 h</span><p>Farmacia, mercado y lavandería a pie.</p></div>
+    <div><span class="h">18 h</span><p>Spa, compras y terrazas al atardecer.</p></div>
+    <div><span class="h">21 h</span><p>Cenas al aire libre y huéspedes del hotel.</p></div>
+  </div>
+  <p class="note">Mezcla de locales preliminar, a ajustar con estudio de mercado y operadores.</p>
+</section>
+
+<section id="experiencias">
+  <p class="eyebrow">Los espacios</p>
+  <h2>Las piezas de N District.</h2>
+  <p>Programa preliminar. Superficies y capacidades a definir en el anteproyecto.</p>
+  <div class="pills" role="tablist" aria-label="Piezas del distrito">
+    <button class="pill" role="tab" id="t-plaza" aria-controls="p-plaza" aria-selected="true">Plaza</button>
+    <button class="pill" role="tab" id="t-res" aria-controls="p-res" aria-selected="false">Residencias</button>
+    <button class="pill" role="tab" id="t-hotel" aria-controls="p-hotel" aria-selected="false">Hotel &amp; spa</button>
+    <button class="pill" role="tab" id="t-gastro" aria-controls="p-gastro" aria-selected="false">Comercio y servicios</button>
+    <button class="pill" role="tab" id="t-garaje" aria-controls="p-garaje" aria-selected="false">Movilidad y estacionamiento</button>
+  </div>
+  <div class="piece" role="tabpanel" id="p-plaza" aria-labelledby="t-plaza">
+    <div><span class="label">El punto de encuentro</span><h3>Una plaza para quedarse.</h3>
+      <p>Abierta a la vereda de Ruta 27, con entrada peatonal amplia y locales vidriados hacia la avenida y hacia adentro.</p>
+      <ul><li>Paseo peatonal y áreas de descanso.</li><li>Verde medido, canteros bajos y una fuente lineal.</li><li>Sin autos en superficie.</li></ul></div>
+    <div class="shots"><figure><img src="images/n05.jpg" alt="Plaza con lavandería, veterinaria, restaurantes y vecinos caminando." loading="lazy"></figure></div>
+  </div>
+  <div class="piece" role="tabpanel" id="p-res" aria-labelledby="t-res" hidden>
+    <div><span class="label">Escala residencial</span><h3>Así podría sentirse una residencia.</h3>
+      <p>Una vivienda luminosa, conectada con la plaza, con materiales cálidos e interiores que se continúan hacia el balcón.</p>
+      <ul><li>Uno y dos dormitorios en los pisos altos.</li><li>Halls independientes del comercio.</li><li>Tipologías y terminaciones a definir.</li></ul></div>
+    <div class="shots"><figure><img src="images/interior-habitacion.jpg" alt="Dormitorio con ventanal curvo y balcón con vista a la plaza." loading="lazy"></figure></div>
+  </div>
+  <div class="piece" role="tabpanel" id="p-hotel" aria-labelledby="t-hotel" hidden>
+    <div class="sub">
+      <div><h4>Bienestar</h4><h3>Spa &amp; relax</h3><p>Piedra, madera y agua, conectado con un jardín de luz.</p></div>
+      <div><h4>Hospitalidad</h4><h3>Hotel boutique</h3><p>Unas 50 habitaciones, ampliables a 65, con operador profesional. Luminosas, con balcón y vista a la plaza. Sus huéspedes llegan todos los días y usan la gastronomía, los servicios y la plaza.</p></div>
+    </div>
+    <div class="shots">
+      <figure><img src="images/n03.jpg" alt="El hotel cerrando el fondo de la plaza, con pileta en la terraza." loading="lazy"></figure>
+      <figure><img src="images/interior-spa.jpg" alt="Spa del hotel con pileta climatizada y ventanales al jardín." loading="lazy"></figure>
+    </div>
+  </div>
+  <div class="piece" role="tabpanel" id="p-gastro" aria-labelledby="t-gastro" hidden>
+    <div><span class="label">Comercio y servicios</span><h3>Lo cotidiano adelante, el encuentro al fondo.</h3>
+      <p>Mercado, farmacia, panadería y café sobre la ruta; lavandería, consultorios y servicios en el primer tramo; restaurantes y heladería hacia el hotel.</p>
+      <ul><li>Vidrieras propias hacia la plaza y la ruta.</li><li>Carga y descarga por subsuelo.</li><li>Operadores y superficies a definir.</li></ul></div>
+    <div class="shots">
+      <figure><img src="images/n01.jpg" alt="Frente sobre Ruta 27 con mercado, farmacia y café." loading="lazy"></figure>
+      <figure><img src="images/gastro.jpg" alt="Restaurante abierto a la plaza al atardecer." loading="lazy"></figure>
+    </div>
+  </div>
+  <div class="piece" role="tabpanel" id="p-garaje" aria-labelledby="t-garaje" hidden>
+    <div class="sub">
+      <div><h4>Visitantes</h4><h3>Llegar y subir a la plaza</h3><p>Rampa en el frente y ascensor vidriado directo a la plaza.</p></div>
+      <div><h4>Residentes</h4><h3>Garaje y guardado</h3><p>Cocheras con módulos privados de guardado y mantenimiento.</p></div>
+    </div>
+    <div class="shots">
+      <figure><img src="images/n09.jpg" alt="Ascensor vidriado desde el estacionamiento de visitantes a la plaza." loading="lazy"></figure>
+      <figure><img src="images/garage-estacionamiento-premium.jpg" alt="Estacionamiento subterráneo de referencia." loading="lazy"></figure>
+    </div>
+  </div>
+  <p class="note" style="margin-top:22px">Las imágenes expresan el lenguaje y la experiencia buscada. No representan una implantación definitiva.</p>
+</section>
+
+<section id="llegar">
+  <p class="eyebrow">Llegar, vivir y abastecer</p>
+  <h2>Cada recorrido por su lado.</h2>
+  <p>Sin un lugar donde dejar el auto nadie para a comprar. Y sin una logística resuelta, la plaza se llena de camiones. Por eso visitantes, residentes y servicio tienen recorridos separados.</p>
+  <div class="flow">
+    <div><h3>Visitantes</h3><p>Rampa en el lateral izquierdo del frente, primer subsuelo de visitantes y ascensor vidriado a la plaza. Tiempo libre de cargo con compra, como propuesta a estudiar.</p></div>
+    <div><h3>Residentes y hotel</h3><p>Segundo subsuelo con cocheras privadas y guardado. Halls de acceso propios en cada edificio. Cantidad de niveles sujeta al estudio de suelos.</p></div>
+    <div><h3>Servicio y emergencias</h3><p>Carga y descarga, residuos y entregas del hotel en un sector de servicio del primer subsuelo. Parada corta sobre el frente para delivery y taxis, como propuesta sujeta a autorización vial. Acceso de emergencia por la plaza.</p></div>
+  </div>
+  <div class="vshots">
+    <figure><img src="images/n09.jpg" alt="Ascensor vidriado y escalera desde el estacionamiento a la plaza, junto a la rampa." loading="lazy"><figcaption>Llegada desde el subsuelo de visitantes</figcaption></figure>
+    <figure><img src="images/n01.jpg" alt="Frente sobre la ruta con la rampa al subsuelo a la izquierda." loading="lazy"><figcaption>Rampa al subsuelo sin tapar vidrieras</figcaption></figure>
+  </div>
+  <p class="note">Algunos renders muestran una calle lateral de servicio: el ancho real no la admite y el servicio se resuelve en el subsuelo.</p>
+</section>
+
+<section id="factibilidad">
+  <p class="eyebrow">Factibilidad y capacidad del terreno</p>
+  <h2>Qué sabemos, qué suponemos y qué falta verificar.</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Tema</th><th>Dato de trabajo</th><th>Estado</th></tr></thead>
+    <tbody>
+      <tr><td>Superficie</td><td>9.500 m² + 3.000 m² según presentación; forma de 50 × 250 m deducida</td><td><span class="st sup">Informado</span></td></tr>
+      <tr><td>Zonificación</td><td>C5, zona central de uso mixto: comercial, servicios y vivienda multifamiliar</td><td><span class="st sup">Informado</span></td></tr>
+      <tr><td>Densidad</td><td>400 hab/ha · unos 500 habitantes en 12.500 m², ampliable con premios</td><td><span class="st sup">Informado</span></td></tr>
+      <tr><td>F.O.S.</td><td>0,6 · hasta 7.500 m² de ocupación</td><td><span class="st sup">Supuesto</span></td></tr>
+      <tr><td>F.O.T.</td><td>1,8 · 22.500 m² construibles; no equivale a superficie vendible</td><td><span class="st sup">Supuesto</span></td></tr>
+      <tr><td>Premios de F.O.T.</td><td>Previstos por la normativa provincial; cuáles aplican y en qué medida</td><td><span class="st pend">Pendiente</span></td></tr>
+      <tr><td>Altura</td><td>Hasta 6 pisos</td><td><span class="st sup">Informado</span></td></tr>
+      <tr><td>Retiros laterales</td><td>3 m por lado como supuesto</td><td><span class="st pend">Pendiente</span></td></tr>
+      <tr><td>Subsuelos</td><td>Uno o dos niveles según napa</td><td><span class="st pend">Pendiente</span></td></tr>
+      <tr><td>Rampa y logística</td><td>Gálibo, pendiente y radios de giro para camiones de servicio; separación entre servicio y visitantes</td><td><span class="st pend">Pendiente</span></td></tr>
+      <tr><td>Parada corta sobre Ruta 27</td><td>Dársena para delivery y taxis</td><td><span class="st pend">Pendiente</span></td></tr>
+      <tr><td>Cocheras exigidas</td><td>Según código por m² comercial y residencial</td><td><span class="st pend">Pendiente</span></td></tr>
+      <tr><td>Concepto urbano</td><td>Plaza peatonal, comercio diario, hotel, residencias</td><td><span class="st ok">Propuesta</span></td></tr>
+      <tr><td>Escenario de diseño</td><td>12 edificios de planta baja comercial más 5 pisos y un hotel de unas 50 habitaciones al fondo. A verificar: premios, densidad, estacionamiento y superficies definen cuántos edificios son viviendas y cuántos oficinas o consultorios.</td><td><span class="st pend">Pendiente</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Las superficies vendibles y los números del negocio se calculan recién con estos datos confirmados.</p>
+</section>
+
+<section id="obra">
+  <p class="eyebrow">Desarrollo por etapas</p>
+  <h2>Primeras entregas a los 12 meses. El resto, por etapas.</h2>
+  <p>La obra avanza de la ruta hacia el fondo. Cada etapa se cierra, se habilita y empieza a funcionar mientras la siguiente sigue en construcción. Escenario preliminar: los meses se cuentan desde el inicio efectivo de obra, con proyecto aprobado.</p>
+  <svg viewBox="0 0 620 120" role="img" aria-label="Planta del terreno en tres etapas: frente hasta 70 m, mes 12; centro hasta 150 m, mes 21; fondo y hotel hasta 250 m, mes 30." style="width:100%;height:auto;margin-top:18px;display:block">
+    <text x="0" y="14" font-size="12" fill="var(--muted)" font-family="Figtree, sans-serif">Ruta 27</text>
+    <line x1="0" y1="22" x2="0" y2="112" stroke="var(--ink)" stroke-width="2"/>
+    <rect x="6" y="22" width="168" height="90" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <text x="90" y="62" text-anchor="middle" font-size="14" fill="var(--accent)" font-family="Figtree, sans-serif" font-weight="600">Etapa 1 · mes 12</text>
+    <text x="90" y="82" text-anchor="middle" font-size="11" fill="var(--accent)" font-family="Figtree, sans-serif">0 a 70 m · con rampa</text>
+    <rect x="178" y="22" width="192" height="90" rx="4" fill="var(--plaza-soft)" stroke="var(--plaza)"/>
+    <text x="274" y="62" text-anchor="middle" font-size="14" fill="var(--plaza)" font-family="Figtree, sans-serif" font-weight="600">Etapa 2 · mes 21</text>
+    <text x="274" y="82" text-anchor="middle" font-size="11" fill="var(--plaza)" font-family="Figtree, sans-serif">70 a 150 m</text>
+    <rect x="374" y="22" width="240" height="90" rx="4" fill="var(--surface)" stroke="var(--muted)"/>
+    <text x="494" y="62" text-anchor="middle" font-size="14" fill="var(--ink)" font-family="Figtree, sans-serif" font-weight="600">Etapa 3 · mes 30</text>
+    <text x="494" y="82" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="Figtree, sans-serif">150 a 250 m · hotel spa</text>
+  </svg>
+  <div class="etapa">
+    <header><span class="m" style="color:var(--accent)">Mes 12</span><h3>Etapa 1 · Frente sobre Ruta 27</h3></header>
+    <dl>
+      <dt>Qué se construye</dt><dd>Los dos edificios del frente, la rampa y el tramo de subsuelo con visitantes y sector de servicio.</dd>
+      <dt>Qué queda operativo</dt><dd>Mercado, farmacia, panadería y café, primeras residencias y la plaza de acceso.</dd>
+      <dt>Cómo se accede</dt><dd>Peatones desde la vereda; autos por la rampa al subsuelo de visitantes.</dd>
+      <dt>Separación de la obra</dt><dd>Cerramiento al final del tramo y muro provisorio en el subsuelo.</dd>
+      <dt>Para pasar a la siguiente</dt><dd>Final de obra parcial y servicios del sector conectados.</dd>
+    </dl>
+  </div>
+  <div class="etapa">
+    <header><span class="m" style="color:var(--plaza)">Mes 21</span><h3>Etapa 2 · Centro de la plaza</h3></header>
+    <dl>
+      <dt>Qué se construye</dt><dd>Las tiras centrales y su tramo de subsuelo.</dd>
+      <dt>Qué queda operativo</dt><dd>Servicios diarios, más residencias y la plaza hasta la mitad del terreno.</dd>
+      <dt>Cómo se accede</dt><dd>Por la plaza ya habilitada; el subsuelo se conecta al abrir el muro provisorio.</dd>
+      <dt>Separación de la obra</dt><dd>El cerramiento se corre al final del tramo central.</dd>
+      <dt>Para pasar a la siguiente</dt><dd>Habilitación parcial y ventas de la etapa en curso.</dd>
+    </dl>
+  </div>
+  <div class="etapa">
+    <header><span class="m">Mes 30</span><h3>Etapa 3 · Fondo y hotel spa</h3></header>
+    <dl>
+      <dt>Qué se construye</dt><dd>Las últimas tiras, el hotel de unas 50 habitaciones y el último tramo de subsuelo.</dd>
+      <dt>Qué queda operativo</dt><dd>Restaurantes, heladería, hotel spa y la plaza completa.</dd>
+      <dt>Cómo se accede</dt><dd>Por toda la plaza; el hotel suma su propio acceso de servicio por subsuelo.</dd>
+      <dt>Separación de la obra</dt><dd>Durante la obra, el ingreso de camiones se coordina en horarios sin apertura comercial.</dd>
+      <dt>Cierre</dt><dd>Final de obra total y propiedad horizontal definitiva.</dd>
+    </dl>
+  </div>
+  <div class="gantt-wrap"><div class="gantt"><div class="gl" style="font-weight:600;color:var(--muted)">Mes de obra</div><div class="gh">1</div><div class="gh">2</div><div class="gh">3</div><div class="gh">4</div><div class="gh">5</div><div class="gh">6</div><div class="gh">7</div><div class="gh">8</div><div class="gh">9</div><div class="gh">10</div><div class="gh">11</div><div class="gh">12</div><div class="gh">13</div><div class="gh">14</div><div class="gh">15</div><div class="gh">16</div><div class="gh">17</div><div class="gh">18</div><div class="gh">19</div><div class="gh">20</div><div class="gh">21</div><div class="gh">22</div><div class="gh">23</div><div class="gh">24</div><div class="gh">25</div><div class="gh">26</div><div class="gh">27</div><div class="gh">28</div><div class="gh">29</div><div class="gh">30</div><div class="gs">Etapa 1 · Frente sobre Ruta 27 (0 a 70 m)</div><div class="gl">Excavación, depresión de napa y submuración</div><div class="gcell" style="grid-column:span 3"><div class="gb e1" style="width:100%" title="Meses 1 a 3"></div></div><div class="gcell" style="grid-column:span 27"></div><div class="gl">Subsuelo y losa de planta baja</div><div class="gcell" style="grid-column:span 2"></div><div class="gcell" style="grid-column:span 2"><div class="gb e1" style="width:100%" title="Meses 3 a 4"></div></div><div class="gcell" style="grid-column:span 26"></div><div class="gl">Estructura pisos 1 a 5</div><div class="gcell" style="grid-column:span 3"></div><div class="gcell" style="grid-column:span 5"><div class="gb e1" style="width:100%" title="Meses 4 a 8"></div></div><div class="gcell" style="grid-column:span 22"></div><div class="gl">Mampostería, instalaciones y fachada</div><div class="gcell" style="grid-column:span 5"></div><div class="gcell" style="grid-column:span 6"><div class="gb e1" style="width:100%" title="Meses 6 a 11"></div></div><div class="gcell" style="grid-column:span 19"></div><div class="gl">Terminaciones, ascensores y plaza de acceso</div><div class="gcell" style="grid-column:span 8"></div><div class="gcell" style="grid-column:span 4"><div class="gb e1" style="width:100%" title="Meses 9 a 12"></div></div><div class="gcell" style="grid-column:span 18"></div><div class="gl">Entrega etapa 1</div><div class="gcell" style="grid-column:2 / span 11"></div><div class="gm e1x gcell" title="Mes 12"><span></span></div><div class="gcell" style="grid-column:span 18"></div><div class="gs">Etapa 2 · Centro de la plaza (70 a 150 m)</div><div class="gl">Excavación y subsuelo</div><div class="gcell" style="grid-column:span 7"></div><div class="gcell" style="grid-column:span 4"><div class="gb e2" style="width:100%" title="Meses 8 a 11"></div></div><div class="gcell" style="grid-column:span 19"></div><div class="gl">Estructura pisos 1 a 5</div><div class="gcell" style="grid-column:span 10"></div><div class="gcell" style="grid-column:span 6"><div class="gb e2" style="width:100%" title="Meses 11 a 16"></div></div><div class="gcell" style="grid-column:span 14"></div><div class="gl">Mampostería, instalaciones y fachada</div><div class="gcell" style="grid-column:span 12"></div><div class="gcell" style="grid-column:span 7"><div class="gb e2" style="width:100%" title="Meses 13 a 19"></div></div><div class="gcell" style="grid-column:span 11"></div><div class="gl">Terminaciones y plaza central</div><div class="gcell" style="grid-column:span 16"></div><div class="gcell" style="grid-column:span 5"><div class="gb e2" style="width:100%" title="Meses 17 a 21"></div></div><div class="gcell" style="grid-column:span 9"></div><div class="gl">Entrega etapa 2</div><div class="gcell" style="grid-column:2 / span 20"></div><div class="gm e2x gcell" title="Mes 21"><span></span></div><div class="gcell" style="grid-column:span 9"></div><div class="gs">Etapa 3 · Fondo y hotel spa (150 a 250 m)</div><div class="gl">Excavación y subsuelo</div><div class="gcell" style="grid-column:span 15"></div><div class="gcell" style="grid-column:span 4"><div class="gb e3" style="width:100%" title="Meses 16 a 19"></div></div><div class="gcell" style="grid-column:span 11"></div><div class="gl">Estructura de tiras y hotel</div><div class="gcell" style="grid-column:span 18"></div><div class="gcell" style="grid-column:span 6"><div class="gb e3" style="width:100%" title="Meses 19 a 24"></div></div><div class="gcell" style="grid-column:span 6"></div><div class="gl">Mampostería, instalaciones y fachada</div><div class="gcell" style="grid-column:span 20"></div><div class="gcell" style="grid-column:span 7"><div class="gb e3" style="width:100%" title="Meses 21 a 27"></div></div><div class="gcell" style="grid-column:span 3"></div><div class="gl">Terminaciones, hotel spa y plaza completa</div><div class="gcell" style="grid-column:span 24"></div><div class="gcell" style="grid-column:span 6"><div class="gb e3" style="width:100%" title="Meses 25 a 30"></div></div><div class="gl">Entrega final</div><div class="gcell" style="grid-column:2 / span 29"></div><div class="gm e3x gcell" title="Mes 30"><span></span></div></div></div>
+  <div class="legend"><span><i style="background:var(--accent)"></i>Etapa 1</span><span><i style="background:var(--plaza)"></i>Etapa 2</span><span><i style="background:var(--muted)"></i>Etapa 3</span><span>◆ Entrega y habilitación</span></div>
+  <p class="note">Plazos contados desde el inicio efectivo de obra, con proyecto aprobado y financiación disponible. Antes del mes 1 hay unos 6 meses de proyecto ejecutivo, estudio de suelos y aprobaciones. El mes 12 depende de resolver la napa al inicio y de encargar ascensores y carpinterías en los meses 2 y 3.</p>
+</section>
+
+<section id="tierra">
+  <p class="eyebrow">Propuesta a los propietarios</p>
+  <h2>La tierra como punto de partida.</h2>
+  <p>Proponemos trabajar junto a los dueños del predio para evaluar un desarrollo de usos mixtos con identidad propia. Belfast integra el análisis del terreno, el anteproyecto, los costos, la estructura del negocio y la gestión del desarrollo en un mismo proceso.</p>
+  <div class="roles">
+    <div class="role"><span class="label">Los propietarios</span><h3>La oportunidad de la tierra</h3><p>Aportan antecedentes y documentación del predio, y sus expectativas para definir una modalidad de participación.</p></div>
+    <div class="role"><span class="label">Belfast</span><h3>El desarrollo integral</h3><p>Estudios técnicos, anteproyecto, números y propuesta de gestión para evaluar el negocio en conjunto.</p></div>
+    <div class="role"><span class="label">El acuerdo</span><h3>Una estructura a definir</h3><p>Aporte de tierra, canje o adquisición, a comparar después de la factibilidad. Se estudiará un pago en efectivo y en metros; valuación, unidades, etapa de entrega, garantías y condiciones quedan por definir juntos.</p></div>
+  </div>
+  <ol class="steps">
+    <li><span class="n">01</span><div><h3>Reunir la documentación y validar la factibilidad</h3><p>Mensura, situación dominial, zonificación, suelos, napa e infraestructura.</p></div></li>
+    <li><span class="n">02</span><div><h3>Definir el conjunto y sus etapas</h3><p>Anteproyecto con superficies computables y vendibles.</p></div></li>
+    <li><span class="n">03</span><div><h3>Evaluar los números del desarrollo</h3><p>Costos, ingresos por componente y flujo por etapa.</p></div></li>
+    <li><span class="n">04</span><div><h3>Acordar la participación de las partes</h3><p>Con la factibilidad y los números sobre la mesa.</p></div></li>
+  </ol>
+  <div class="ask">
+    <h3>Lo que proponemos hoy</h3>
+    <p>Acordar una evaluación conjunta de factibilidad, con la documentación a reunir, los responsables de cada parte y un plazo definido. Sin compromiso de condiciones económicas hasta tener los resultados.</p>
+  </div>
+</section>
+
+<section id="equipo">
+  <p class="eyebrow">Belfast y el equipo</p>
+  <h2>Quiénes llevan adelante el proyecto.</h2>
+  <div class="team">
+    <div><span class="label">Desarrollo</span><h3>Belfast Desarrollos</h3><p>Estructura del negocio, relación con propietarios e inversores, comercialización.</p></div>
+    <div><span class="label">Gerenciamiento</span><h3>Belfast Construction Management</h3><p>Dirección y gerenciamiento de la obra, compras, plazos y calidad.</p></div>
+    <div><span class="label">Construcción</span><h3>V+V Construcciones</h3><p>Estructura y obra gris, con experiencia en obra residencial en barrios privados de zona norte.</p></div>
+  </div>
+</section>
+
+
+<section id="imagenes">
+  <p class="eyebrow">Galería del proyecto</p>
+  <h2>Un recorrido por el distrito.</h2>
+  <div class="viewer">
+    <div class="main"><img id="vimg" src="images/n11.jpg" alt="Vista general"></div>
+    <div class="bar"><span class="count" id="vcount"></span><div class="arrows"><button class="arrow" id="prev" type="button" aria-label="Imagen anterior">←</button><button class="arrow" id="next" type="button" aria-label="Imagen siguiente">→</button></div></div>
+    <p class="cap2" id="vdesc"></p>
+    <div class="thumbs" id="thumbs"></div>
+  </div>
+  <p class="note">Renders de intención arquitectónica. El diseño y las capacidades no constituyen compromisos del proyecto.</p>
+</section>
+
+<section id="mirada">
+  <p class="eyebrow">Próxima conversación</p>
+  <h2>¿Cómo te gustaría participar?</h2>
+  <p>Esta consulta no implica una reserva ni un compromiso de inversión. Nos ayuda a entender qué propuesta tendría más sentido.</p>
+  <form class="q" id="f" novalidate>
+    <fieldset id="q1"><legend>¿Desde dónde mirás el proyecto?</legend><div class="pills" style="margin:0">
+      <button type="button" class="pill" aria-pressed="false">Propietario de la tierra</button><button type="button" class="pill" aria-pressed="false">Inversor</button><button type="button" class="pill" aria-pressed="false">Futuro residente</button><button type="button" class="pill" aria-pressed="false">Operador comercial</button>
+    </div></fieldset>
+    <fieldset id="q2"><legend>¿Qué te interesaría evaluar?</legend><div class="pills" style="margin:0">
+      <button type="button" class="pill" aria-pressed="false">Renta</button><button type="button" class="pill" aria-pressed="false">Capitalización y reventa</button><button type="button" class="pill" aria-pressed="false">Compra de una unidad</button><button type="button" class="pill" aria-pressed="false">Participar en el desarrollo</button><button type="button" class="pill" aria-pressed="false">Todavía no lo sé</button>
+    </div></fieldset>
+    <div><label for="estudio" style="font-weight:600;font-size:.98rem;display:block;margin-bottom:8px">¿Qué te gustaría que estudiemos?</label><textarea id="estudio"></textarea></div>
+    <p class="err" id="err" aria-live="polite"></p>
+    <div class="actions">
+      <a class="btn primary" id="wa" href="https://wa.me/" target="_blank" rel="noopener">Preparar respuesta para WhatsApp ↗</a>
+      <button class="btn ghost" type="button" id="copy">Copiar respuesta</button>
+      <span class="note" id="copied" aria-live="polite" style="margin:0"></span>
+    </div>
+    <p class="note" style="margin:0">Se abre WhatsApp con el mensaje listo y elegís a quién enviarlo. Esta página no guarda ni registra respuestas.</p>
+  </form>
+</section>
+
+<footer>Belfast Desarrollos / N District · Presentación conceptual · Anteproyecto y factibilidad pendientes.</footer>
+</div>
+
+<script>
+(function(){
+  var hs=[].slice.call(document.querySelectorAll('#hero img')),hd=document.getElementById('hdots'),hc=document.getElementById('hcap'),hi=0,ht;
+  function hgo(k){hs[hi].classList.remove('on');hi=(k+hs.length)%hs.length;hs[hi].classList.add('on');hc.textContent=hs[hi].dataset.cap;[].forEach.call(hd.children,function(b,j){b.setAttribute('aria-current',j===hi);});}
+  hs.forEach(function(im,j){var b=document.createElement('button');b.type='button';b.setAttribute('aria-label',im.dataset.cap);b.setAttribute('aria-current',j===0);b.addEventListener('click',function(){hgo(j);restart();});hd.appendChild(b);});
+  var still=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function restart(){clearInterval(ht);if(!still)ht=setInterval(function(){hgo(hi+1);},5000);}
+  restart();
+
+  var tabs=[].slice.call(document.querySelectorAll('#experiencias [role=tab]'));
+  tabs.forEach(function(t){t.addEventListener('click',function(){tabs.forEach(function(x){var on=x===t;x.setAttribute('aria-selected',on);document.getElementById(x.getAttribute('aria-controls')).hidden=!on;});});});
+
+  var slides=[
+    ['images/n11.jpg','Vista general','El conjunto completo desde la Ruta 27 hasta el hotel. Proporciones ilustrativas.'],
+    ['images/n01.jpg','Frente sobre Ruta 27','Mercado, farmacia, panadería y café; la rampa baja al subsuelo a la izquierda.'],
+    ['images/n09.jpg','Llegada en auto','Ascensor vidriado desde el estacionamiento de visitantes a la plaza.'],
+    ['images/n08.jpg','Mercado','Mercado de cercanía en planta baja, abierto a la plaza.'],
+    ['images/n07.jpg','Entrada residencial','Hall de doble altura separado de los locales.'],
+    ['images/n05.jpg','La plaza','Lavandería, veterinaria y restaurantes alrededor de la fuente lineal.'],
+    ['images/n06.jpg','La plaza de noche','Los locales abiertos y la plaza iluminada.'],
+    ['images/gastro.jpg','Gastronomía','Un restaurante abierto a la plaza al atardecer.'],
+    ['images/n10.jpg','Desde la terraza','La plaza vista desde una terraza residencial.'],
+    ['images/interior-habitacion.jpg','Residencias','Dormitorio con balcón curvo hacia la plaza.'],
+    ['images/n03.jpg','El hotel','El hotel spa cierra el fondo, con pileta en la terraza.'],
+    ['images/interior-spa.jpg','Spa','Pileta climatizada bajo techo de madera.'],
+    ['images/n04.jpg','Lateral','Las tiras de costado con sus balcones redondeados. La calle lateral del render no forma parte del proyecto: el servicio va por subsuelo.']
+  ];
+  var vimg=document.getElementById('vimg'),vc=document.getElementById('vcount'),vd=document.getElementById('vdesc'),th=document.getElementById('thumbs'),cur=0;
+  function show(k){cur=(k+slides.length)%slides.length;var s=slides[cur];vimg.src=s[0];vimg.alt=s[1];vc.textContent=String(cur+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0')+'   '+s[1];vd.textContent=s[2];[].forEach.call(th.children,function(b,i){b.setAttribute('aria-current',i===cur);});}
+  slides.forEach(function(s,i){var b=document.createElement('button');b.type='button';b.className='thumb';b.setAttribute('aria-label',s[1]);var im=document.createElement('img');im.src=s[0];im.alt='';im.loading='lazy';var sp=document.createElement('span');sp.textContent=s[1];b.appendChild(im);b.appendChild(sp);b.addEventListener('click',function(){show(i);});th.appendChild(b);});
+  show(0);
+  document.getElementById('prev').addEventListener('click',function(){show(cur-1);});
+  document.getElementById('next').addEventListener('click',function(){show(cur+1);});
+
+  [].forEach.call(document.querySelectorAll('#f .pill'),function(p){p.addEventListener('click',function(){p.setAttribute('aria-pressed',p.getAttribute('aria-pressed')!=='true');document.getElementById('err').textContent='';update();});});
+  var est=document.getElementById('estudio'),wa=document.getElementById('wa'),err=document.getElementById('err');
+  est.addEventListener('input',function(){err.textContent='';update();});
+  function picked(id){return [].filter.call(document.querySelectorAll('#'+id+' .pill'),function(p){return p.getAttribute('aria-pressed')==='true';}).map(function(p){return p.textContent;});}
+  function text(){var a=picked('q1'),b=picked('q2'),c=est.value.trim();if(!a.length&&!b.length&&!c)return '';
+    var t='Hola, vi la propuesta de N District.';if(a.length)t+='\nLo miro como: '+a.join(', ')+'.';if(b.length)t+='\nMe interesaría evaluar: '+b.join(', ')+'.';if(c)t+='\nMe gustaría que estudien: '+c;return t;}
+  function update(){wa.href='https://wa.me/?text='+encodeURIComponent(text());}
+  update();
+  var msg='Elegí al menos una opción o escribí qué te gustaría que estudiemos.';
+  wa.addEventListener('click',function(e){if(!text()){e.preventDefault();err.textContent=msg;}});
+  document.getElementById('copy').addEventListener('click',function(){var t=text(),s=document.getElementById('copied');if(!t){err.textContent=msg;return;}
+    try{navigator.clipboard.writeText(t).then(function(){s.textContent='Copiado';},function(){est.value=t;est.select();s.textContent='Seleccionado: copialo con el teclado';});}catch(x){est.value=t;est.select();s.textContent='Seleccionado: copialo con el teclado';}});
+})();
+</script>
