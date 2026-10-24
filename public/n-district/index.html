@@ -30,6 +30,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .navbar nav::-webkit-scrollbar{display:none}
 .navbar a{color:var(--muted);text-decoration:none;font-size:.85rem;white-space:nowrap}
 .navbar a:hover,.navbar a:focus-visible{color:var(--ink)}
+.navbar a[aria-current="page"]{color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--accent);padding-bottom:4px}
+.cover{margin:0 0 26px}
+.cover img{display:block;width:100%;aspect-ratio:21/9;object-fit:cover;border-radius:14px;background:var(--surface)}
+.cover figcaption{font-size:.8rem;color:var(--muted);margin-top:6px}
+.pager{display:flex;justify-content:space-between;gap:12px;margin:8px 0 40px;flex-wrap:wrap}
+.pager a{color:var(--accent);text-decoration:none;font-weight:600;font-size:.95rem;padding:10px 0}
+.pager a:hover{text-decoration:underline}
+body.paged section{border-top:0}
+
 a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 section[id],header[id]{scroll-margin-top:70px}
 .hero{position:relative;margin:20px 0 0;border-radius:14px;overflow:hidden;background:var(--surface);aspect-ratio:2/1;max-width:100%}
@@ -273,6 +282,7 @@ footer{border-top:1px solid var(--line);padding-block:24px 40px;font-size:.8rem;
 </section>
 
 <section id="tierra-op">
+  <figure class="cover"><img src="images/n11.jpg" alt="Vista aérea del distrito completo desde la Ruta 27." loading="lazy"><figcaption>Las dos parcelas juntas forman el frente de 50 m que permite la plaza.</figcaption></figure>
   <p class="eyebrow">La tierra y la oportunidad</p>
   <h2>Dos parcelas sobre la Ruta 27, en el corredor de Nordelta.</h2>
   <p>La parcela principal tiene 9.500 m² en forma de martillo: 25 m de frente sobre la ruta y 250 m de fondo. La contigua, del mismo propietario, tiene 3.000 m² y otros 25 m de frente. Si el martillo se ensancha hacia el fondo, como sugieren las superficies, las dos juntas forman un rectángulo de 50 × 250 m. Sin la contigua, los primeros 120 m tienen solo 25 m de ancho: entra un edificio y un pasaje. Con las dos aparece la plaza que le da sentido al proyecto.</p>
@@ -422,6 +432,7 @@ footer{border-top:1px solid var(--line);padding-block:24px 40px;font-size:.8rem;
 </section>
 
 <section id="factibilidad">
+  <figure class="cover"><img src="images/mod01.jpg" alt="Edificio módulo con locales abajo y balcones curvos arriba." loading="lazy"><figcaption>Módulo tipo de 12 × 24 m: locales en planta baja y cinco pisos de departamentos.</figcaption></figure>
   <p class="eyebrow">Factibilidad y capacidad del terreno</p>
   <h2>Qué sabemos, qué suponemos y qué falta verificar.</h2>
   <div class="tbl"><table>
@@ -447,6 +458,7 @@ footer{border-top:1px solid var(--line);padding-block:24px 40px;font-size:.8rem;
 </section>
 
 <section id="obra">
+  <figure class="cover"><img src="images/n04.jpg" alt="Vista lateral de las tiras de edificios con balcones redondeados." loading="lazy"><figcaption>Las tiras se construyen desde la ruta hacia el fondo, en tres etapas.</figcaption></figure>
   <p class="eyebrow">Desarrollo por etapas</p>
   <h2>Primeras entregas a los 12 meses. El resto, por etapas.</h2>
   <p>La obra avanza de la ruta hacia el fondo. Cada etapa se cierra, se habilita y empieza a funcionar mientras la siguiente sigue en construcción. Escenario preliminar: los meses se cuentan desde el inicio efectivo de obra, con proyecto aprobado.</p>
@@ -499,6 +511,7 @@ footer{border-top:1px solid var(--line);padding-block:24px 40px;font-size:.8rem;
 </section>
 
 <section id="tierra">
+  <figure class="cover"><img src="images/n06.jpg" alt="La plaza de noche con los locales abiertos." loading="lazy"><figcaption>Un proyecto pensado junto a los propietarios de la tierra.</figcaption></figure>
   <p class="eyebrow">Propuesta a los propietarios</p>
   <h2>La tierra como punto de partida.</h2>
   <p>Proponemos trabajar junto a los dueños del predio para evaluar un desarrollo de usos mixtos con identidad propia. Belfast integra el análisis del terreno, el anteproyecto, los costos, la estructura del negocio y la gestión del desarrollo en un mismo proceso.</p>
@@ -520,6 +533,7 @@ footer{border-top:1px solid var(--line);padding-block:24px 40px;font-size:.8rem;
 </section>
 
 <section id="equipo">
+  <figure class="cover"><img src="images/n07.jpg" alt="Hall de entrada residencial junto a la panadería." loading="lazy"><figcaption>Diseño, gerenciamiento y obra con un mismo equipo.</figcaption></figure>
   <p class="eyebrow">Belfast y el equipo</p>
   <h2>Quiénes llevan adelante el proyecto.</h2>
   <div class="team">
@@ -543,6 +557,7 @@ footer{border-top:1px solid var(--line);padding-block:24px 40px;font-size:.8rem;
 </section>
 
 <section id="mirada">
+  <figure class="cover"><img src="images/n05.jpg" alt="La plaza al mediodía con vecinos y locales abiertos." loading="lazy"><figcaption>Contanos cómo te gustaría participar.</figcaption></figure>
   <p class="eyebrow">Próxima conversación</p>
   <h2>¿Cómo te gustaría participar?</h2>
   <p>Esta consulta no implica una reserva ni un compromiso de inversión. Nos ayuda a entender qué propuesta tendría más sentido.</p>
@@ -575,6 +590,31 @@ footer{border-top:1px solid var(--line);padding-block:24px 40px;font-size:.8rem;
   var still=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
   function restart(){clearInterval(ht);if(!still)ht=setInterval(function(){hgo(hi+1);},5000);}
   restart();
+
+  var PAGES={'proyecto':['proyecto','pedido'],'tierra-op':['tierra-op'],'distrito':['distrito'],'experiencias':['experiencias'],'llegar':['llegar'],'factibilidad':['factibilidad'],'obra':['obra'],'tierra':['tierra'],'equipo':['equipo'],'imagenes':['imagenes'],'mirada':['mirada']};
+  var ORDER=Object.keys(PAGES), navLinks=[].slice.call(document.querySelectorAll('.navbar nav a'));
+  var LABEL={};navLinks.forEach(function(a){LABEL[a.getAttribute('href').slice(1)]=a.textContent;});
+  var all=[];ORDER.forEach(function(k){PAGES[k].forEach(function(id){var el=document.getElementById(id);if(el)all.push(el);});});
+  var pager=document.createElement('div');pager.className='pager';
+  document.body.classList.add('paged');
+  function page(k,scroll){
+    if(!PAGES[k])k='proyecto';
+    all.forEach(function(el){el.hidden=PAGES[k].indexOf(el.id)<0;});
+    navLinks.forEach(function(a){if(a.getAttribute('href')==='#'+k)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+    var i=ORDER.indexOf(k),last=document.getElementById(PAGES[k][PAGES[k].length-1]);
+    pager.innerHTML=(i>0?'<a href="#'+ORDER[i-1]+'">← '+LABEL[ORDER[i-1]]+'</a>':'<span></span>')+(i<ORDER.length-1?'<a href="#'+ORDER[i+1]+'">'+LABEL[ORDER[i+1]]+' →</a>':'');
+    last.parentNode.insertBefore(pager,last.nextSibling);
+    var cur=navLinks.filter(function(a){return a.getAttribute('aria-current');})[0];
+    if(cur&&cur.scrollIntoView)try{cur.scrollIntoView({block:'nearest',inline:'center'});}catch(e){}
+    if(scroll!==false)window.scrollTo(0,0);
+  }
+  function fromHash(){var h=(location.hash||'').slice(1);var k=PAGES[h]?h:null;
+    if(!k){ORDER.forEach(function(p){if(PAGES[p].indexOf(h)>=0)k=p;});}
+    page(k||'proyecto');}
+  document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href^="#"]');if(!a)return;var h=a.getAttribute('href').slice(1);
+    if(PAGES[h]||ORDER.some(function(p){return PAGES[p].indexOf(h)>=0;})){e.preventDefault();if(location.hash!=='#'+h)history.pushState(null,'','#'+h);fromHash();}});
+  window.addEventListener('popstate',fromHash);window.addEventListener('hashchange',fromHash);
+  fromHash();
 
   var tabs=[].slice.call(document.querySelectorAll('#experiencias [role=tab]'));
   tabs.forEach(function(t){t.addEventListener('click',function(){tabs.forEach(function(x){var on=x===t;x.setAttribute('aria-selected',on);document.getElementById(x.getAttribute('aria-controls')).hidden=!on;});});});
