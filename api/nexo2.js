@@ -86,6 +86,25 @@ export default async function handler(req, res) {
   const H = headers(sk);
   res.setHeader("Cache-Control", "no-store");
   try {
+    if (req.method === "GET" && req.query && req.query.stats) {
+      // solo conteos (sin nombres ni contenido) para el panel NEXO Control
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      const cods = await leerCodigos(H);
+      const ids = Object.keys(cods.obras || {});
+      const ahora = Date.now(), DIA = 864e5, ini = Math.floor((ahora - 108e5) / DIA) * DIA + 108e5;
+      const out = { ok: true, obras: ids.length, informes: 0, informesHoy: 0, informes7: 0, avances: 0, avancesHoy: 0, avances7: 0, fotos: 0, ultima: 0, obrasConInforme: 0 };
+      for (const id of ids) {
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(id)) continue;
+        const [iv, av] = await Promise.all([leer(H, "informes_" + id), leer(H, "avances_" + id)]);
+        const I = (iv && iv.items) || [], A = (av && av.items) || [];
+        if (I.length) out.obrasConInforme++;
+        I.forEach((x) => { out.informes++; const t = Number(x.editado) || Number(x.fecha) || 0; if (t >= ini) out.informesHoy++; if (t >= ahora - 7 * DIA) out.informes7++; if (t > out.ultima) out.ultima = t; });
+        A.forEach((x) => { out.avances++; out.fotos += (x.fotos || []).length; const t = Number(x.creado) || Number(x.fecha) || 0; if (t >= ini) out.avancesHoy++; if (t >= ahora - 7 * DIA) out.avances7++; });
+      }
+      const cfg = await leer(H, "cfg"); if (cfg && Number(cfg.t) > out.ultima) out.ultima = Number(cfg.t);
+      res.status(200).json(out);
+      return;
+    }
     if (req.method === "GET") {
       const v = await leer(H, "cfg");
       res.status(200).json(v ? { cfg: v } : {});
