@@ -2041,7 +2041,7 @@ function vObras(){
 function vObra(){
   const o=OBRAS.find(x=>x.id===S.obra);if(!o||!puedeVer(o)){S.tab='obras';return vObras()}
   const r=ROLE(),est=r==='estudio',aud=r==='auditor',a=actual(o),n=proxima(o);
-  const tabs=est?[['crono','Cronograma'],['sol','Tarjetas'],['docs','Planos'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría']]:aud?[['asup','Supervisiones'],['arev','Revisión de doc.'],['acert','Certificación'],['crono','Cronograma'],['docs','Planos'],['avances','Avances']]:[['crono','Cronograma'],['docs','Planos'],['informes','Informes'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría'],['equipo','Equipo'],...(r==='direccion'?[['gestion','Gestión']]:[])];
+  const tabs=est?[['crono','Cronograma'],['sol','Tarjetas'],['docs','Planos'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría']]:aud?[['asup','Supervisiones'],['arev','Revisión de doc.'],['acert','Certificación'],['crono','Cronograma'],['docs','Planos'],['avances','Avances']]:[['crono','Cronograma'],['docs','Planos'],['informes','Informes'],['avances','Avances'],['adic','Adicionales'],['audit','Auditoría'],['equipo','Equipo'],...(r==='direccion'?[['gestion','Registros']]:[])];
   if(!tabs.find(t=>t[0]===S.otab))S.otab=tabs[0][0];
   const cs=est?o.cards.filter(c=>c.tipo==='doc'):o.cards;const falt=cs.filter(c=>!cDone(c)&&color(c)!=='futuro').length,res=cs.filter(cDone).length,nuevos=o.cards.filter(cNuevos).length;
   const dv=desvioSem(o);
@@ -4581,7 +4581,7 @@ A.ceroObra=async ds=>{if(!esDir())return;const L=ds.o==='todas'?OBRAS.filter(o=>
 const GES={};let GF=null;const GSEL={};
 const gesCred=()=>({rol:'dir',codigo:dirAuthGet()});
 async function gesLoad(o,fuerza){const a=GES[o.id]=GES[o.id]||{items:null,cargando:false,t:0,err:''};if(a.cargando||(!fuerza&&a.items&&Date.now()-a.t<20000))return;a.cargando=true;
-  try{const r=await codApi({op:'ges_list',obra:o.id,cred:gesCred()});if(r.error)throw new Error(r.error);a.items=r.items||[];a.err=''}catch(e){a.err='No se pudo leer la gestión. Revisá tu código de Dirección o la conexión.';if(!a.items)a.items=[]}
+  try{const r=await codApi({op:'ges_list',obra:o.id,cred:gesCred()});if(r.error)throw new Error(r.error);a.items=r.items||[];a.err=''}catch(e){a.err='No se pudo leer los registros. Revisá tu código de Dirección o la conexión.';if(!a.items)a.items=[]}
   a.cargando=false;a.t=Date.now();if(S.otab==='gestion'&&S.obra===o.id&&!document.querySelector('.sheet form'))draw()}
 const gesNum=(x,def)=>x===''||x==null||isNaN(+x)?def:+x;
 function gesCalc(r){if(r.tipo==='hecho')return{est:0,real:0,arr:0,dif:0,dias:0,monto:gesNum(r.costo,0),fuera:false};const est=gesNum(r.estDias,0);
@@ -4597,11 +4597,11 @@ function gesResumen(o,L){const C=L.map(r=>({r,c:gesCalc(r)})),tot=C.reduce((a,x)
   return{C,tot,mon,evit,imp:by(r=>(r.imputable||'').split(/\s*[+,\/]\s*/).filter(Boolean)),cau:by(r=>r.causas&&r.causas.length?r.causas:(r.causaTxt?[r.causaTxt]:[]))}}
 function gesObraAtraso(o){const sem=desvioSem(o);return{sem,dias:sem*5}}
 function tabGestion(o){
-  if(!esDir())return '<div class="infobox">La gestión de obra es interna: solo la ve la Dirección.</div>';
+  if(!esDir())return '<div class="infobox">Los registros de obra son internos: solo la ve la Dirección.</div>';
   const a=GES[o.id];if(!a||!a.items||Date.now()-a.t>30000)gesLoad(o);
   const L=((a&&a.items)||[]).slice().sort((p,q)=>(q.inicio||q.fin||q.fecha||q.creado||0)-(p.inicio||p.fin||p.fecha||p.creado||0)),R=gesResumen(o,L),at=gesObraAtraso(o),sel=GSEL[o.id]=GSEL[o.id]||{};
   const nSel=L.filter(r=>sel[r.id]!==false).length;
-  return `<div class="infobox"><b>Gestión de obra · interna</b><br><span class="small">Acá cargás lo que fue pasando (retrasos, causas, quién lo provocó, fotos y cuánto costó) para poder demostrarlo. Es independiente de las tarjetas y del informe semanal. El cronograma no se mueve.</span></div>
+  return `<div class="infobox"><b>Registros de obra · internos</b><br><span class="small">Acá cargás lo que fue pasando (retrasos, causas, quién lo provocó, fotos y cuánto costó) para poder demostrarlo. Es independiente de las tarjetas y del informe semanal. El cronograma no se mueve.</span></div>
   <div class="fbtns"><button class="btn gold" data-act="gesNuevo" data-o="${o.id}">+ Registrar un retraso</button><button class="btn" data-act="gesHecho" data-o="${o.id}">+ Registrar otro hecho (cambio, decisión, lo que sea)</button></div>
   ${a&&a.err?`<p class="small t-rojo">${esc(a.err)}</p>`:''}${!a||!a.items?'<p class="muted">Cargando…</p>':''}
   ${L.length?`<div class="card"><span class="eyebrow">Resumen para la reunión</span>
@@ -4628,7 +4628,7 @@ function gesLeer(){if(!GF||!$('#g-tarea'))return;const g=id=>{const e=$('#'+id);
 function sheetGestion(){const o=findO(GF.obra),c=gesCalc(GF),tasks=o.tasks.slice().sort((a,b)=>(a.fase||0)-(b.fase||0)||a.start-b.start);
   const inp=(id,v,ph,ty)=>`<input id="${id}" ${ty?`type="${ty}"`:''} value="${esc(v==null?'':v)}" ${ph?`placeholder="${esc(ph)}"`:''}>`;
   const ph=(L,k)=>`<div class="infph">${L.map((f,i)=>`<div class="ph1"><span><img src="${esc(FILES[f.id]?FILES[f.id].url:f.u)}" alt="Foto"><button type="button" data-act="gesQuitarFoto" data-k="${k}" data-i="${i}" aria-label="Quitar">✕</button></span></div>`).join('')}</div>`;
-  openSheet(`<span class="eyebrow">${esc(o.nombre)} · Gestión interna</span><h2>${GF.id?'Registro de retraso':'Registrar un retraso'}</h2><p class="muted small">Tarea, cuánto debía demorar, cuánto demoró y por qué. El cronograma no se mueve.</p>
+  openSheet(`<span class="eyebrow">${esc(o.nombre)} · Registros internos</span><h2>${GF.id?'Registro de retraso':'Registrar un retraso'}</h2><p class="muted small">Tarea, cuánto debía demorar, cuánto demoró y por qué. El cronograma no se mueve.</p>
   <form class="frm" data-submit="gestionReg">
   <label class="f">Título (opcional)${inp('g-tit',GF.titulo,'Si lo dejás vacío se arma solo: Retraso en … : causa')}</label>
   <label class="f">1 · ¿Qué tarea?<select id="g-tarea" data-chg="gesAuto"><option value="">Otra (la escribo abajo)</option>${tasks.map(t=>`<option value="${esc(t.id)}" ${GF.tid===t.id?'selected':''}>F${t.fase||'-'} · ${esc(t.name)}${t.nivel?' · '+esc(t.nivel):''}</option>`).join('')}</select></label>
@@ -4652,7 +4652,7 @@ function sheetGestion(){const o=findO(GF.obra),c=gesCalc(GF),tasks=o.tasks.slice
   <span class="eyebrow">Fotos de inicio</span>${ph(GF.fi,'fi')}<div class="row2"><label class="f">Fecha de estas fotos<input id="g-fdi" type="date" value="${esc(GF.fdIni||(GF.inicio?iso(GF.inicio):''))}"></label><label class="btn sm" for="g-fo-i" style="cursor:pointer;align-self:end">+ Fotos de inicio</label></div><input id="g-fo-i" type="file" accept="image/*" multiple data-chg="gesFoto" data-k="fi" hidden>
   <span class="eyebrow">Fotos de fin</span>${ph(GF.ff,'ff')}<div class="row2"><label class="f">Fecha de estas fotos<input id="g-fdf" type="date" value="${esc(GF.fdFin||(GF.fin?iso(GF.fin):''))}"></label><label class="btn sm" for="g-fo-f" style="cursor:pointer;align-self:end">+ Fotos de fin</label></div><input id="g-fo-f" type="file" accept="image/*" multiple data-chg="gesFoto" data-k="ff" hidden>
   <label class="f">Nota interna (opcional)<textarea id="g-nota" rows="3">${esc(GF.nota||'')}</textarea></label>
-  <button class="btn gold full" type="submit" ${GF.sub?'disabled':''}>${GF.sub?esc(GF.sub):'Guardar registro'}</button><button class="btn full" type="button" data-act="gesCerrar">Cancelar</button></form>`,'Gestión de obra')}
+  <button class="btn gold full" type="submit" ${GF.sub?'disabled':''}>${GF.sub?esc(GF.sub):'Guardar registro'}</button><button class="btn full" type="button" data-act="gesCerrar">Cancelar</button></form>`,'Registros de obra')}
 CHG.gesAuto=(v,el)=>{if(!GF)return;const antes=GF.tid;gesLeer();const o=findO(GF.obra);
   if(GF.tid!==antes&&GF.tid){const t=o.tasks.find(x=>x.id===GF.tid),b=baseDe(o,t)||t;GF.etapa=t.etapa||ETAPA[t.rubro]||GF.etapa;GF.resp=GF.resp||t.equipo||'';GF.estDias=workBetween(b.start-DAY,b.end);GF.posible=GF.posible||b.start}
   if(el&&['g-pos','g-ini','g-fin'].includes(el.id)){GF.realDias='';GF.arranqueDias=''}
@@ -4664,7 +4664,7 @@ A.gesQuitarFoto=ds=>{const H=GF.tipo==='hecho';H?hechoLeer():gesLeer();GF[ds.k].
 A.gesNuevo=ds=>{const o=findO(ds.o);if(o)gesNuevoForm(o,null)};
 A.gesEditar=ds=>{const o=findO(ds.o),r=((GES[ds.o]||{}).items||[]).find(x=>x.id===ds.id);if(!o||!r)return;if(r.tipo==='hecho')hechoForm(o,r);else gesNuevoForm(o,r)};
 A.gesCerrar=()=>{GF=null;closeSheet()};
-A.gesBorrar=async ds=>{const o=findO(ds.o);if(!o||!confirm('¿Borrar este registro de gestión? No se puede deshacer.'))return;try{const r=await codApi({op:'ges_del',obra:o.id,cred:gesCred(),id:ds.id});if(r.error)throw new Error(r.error);toast('Registro borrado');gesLoad(o,true)}catch(e){toast('No se pudo borrar. Probá de nuevo.')}};
+A.gesBorrar=async ds=>{const o=findO(ds.o);if(!o||!confirm('¿Borrar este registro? No se puede deshacer.'))return;try{const r=await codApi({op:'ges_del',obra:o.id,cred:gesCred(),id:ds.id});if(r.error)throw new Error(r.error);toast('Registro borrado');gesLoad(o,true)}catch(e){toast('No se pudo borrar. Probá de nuevo.')}};
 CHG.gesSel=(v,el)=>{const s=GSEL[el.dataset.o]=GSEL[el.dataset.o]||{};s[el.dataset.id]=el.checked;draw()};
 A.gesSelTodos=ds=>{const L=((GES[ds.o]||{}).items||[]),s=GSEL[ds.o]=GSEL[ds.o]||{};L.forEach(r=>s[r.id]=ds.v==='1');draw()};
 SUBMIT.gestionReg=async()=>{gesLeer();const o=findO(GF.obra),cr=gesCred();if(GF.sub)return;
@@ -4687,7 +4687,7 @@ function hechoForm(o,r){GF=r?{...JSON.parse(JSON.stringify(r)),tipo:'hecho',obra
 function hechoLeer(){if(!GF||!$('#h-tit'))return;const g=id=>($('#'+id)||{}).value||'';GF.titulo=g('h-tit').trim();GF.fecha=g('h-fec')?d(g('h-fec')):TODAY;GF.resp=g('h-resp').trim();GF.personal=g('h-pers').trim();GF.imputable=g('h-imp').trim();GF.costo=g('h-costo');GF.desc=g('h-desc').trim();GF.fdIni=g('h-fdi')}
 function sheetHecho(){const o=findO(GF.obra);
   const ph=GF.fi.map((f,i)=>`<div class="ph1"><span><img src="${esc(FILES[f.id]?FILES[f.id].url:f.u)}" alt="Foto"><button type="button" data-act="gesQuitarFoto" data-k="fi" data-i="${i}" aria-label="Quitar">✕</button></span></div>`).join('');
-  openSheet(`<span class="eyebrow">${esc(o.nombre)} · Gestión interna</span><h2>${GF.id?'Registro':'Registrar un hecho'}</h2><p class="muted small">Para dejar asentado cualquier cosa que pasó en la obra: un cambio, una decisión, una modificación, una visita, un problema. Lo cargás a mano y queda en el PDF.</p>
+  openSheet(`<span class="eyebrow">${esc(o.nombre)} · Registros internos</span><h2>${GF.id?'Registro':'Registrar un hecho'}</h2><p class="muted small">Para dejar asentado cualquier cosa que pasó en la obra: un cambio, una decisión, una modificación, una visita, un problema. Lo cargás a mano y queda en el PDF.</p>
   <form class="frm" data-submit="gestionHecho">
   <label class="f">¿Qué pasó? (título)<input id="h-tit" value="${esc(GF.titulo||'')}" placeholder="Ej: Se modificó el tabique del baño"></label>
   <div class="row2"><label class="f">Fecha<input id="h-fec" type="date" value="${esc(iso(GF.fecha||TODAY))}"></label><label class="f">Responsable / quién lo hizo<input id="h-resp" value="${esc(GF.resp||'')}"></label></div>
@@ -4696,7 +4696,7 @@ function sheetHecho(){const o=findO(GF.obra);
   <div class="row2"><label class="f">Imputable a (opcional)<input id="h-imp" value="${esc(GF.imputable||'')}" placeholder="Ej: Estudio"></label><label class="f">Costo $ (opcional)<input id="h-costo" type="number" min="0" value="${esc(GF.costo===''||GF.costo==null?'':GF.costo)}"></label></div>
   <span class="eyebrow">Fotos</span><div class="infph">${ph}</div>
   <div class="row2"><label class="f">Fecha de las fotos (si no, la del hecho)<input id="h-fdi" type="date" value="${esc(GF.fdIni)}"></label><label class="btn sm" for="h-fo" style="cursor:pointer;align-self:end">+ Fotos</label></div><input id="h-fo" type="file" accept="image/*" multiple data-chg="gesFoto" data-k="fi" hidden>
-  <button class="btn gold full" type="submit" ${GF.sub?'disabled':''}>${GF.sub?esc(GF.sub):'Guardar registro'}</button><button class="btn full" type="button" data-act="gesCerrar">Cancelar</button></form>`,'Gestión de obra')}
+  <button class="btn gold full" type="submit" ${GF.sub?'disabled':''}>${GF.sub?esc(GF.sub):'Guardar registro'}</button><button class="btn full" type="button" data-act="gesCerrar">Cancelar</button></form>`,'Registros de obra')}
 SUBMIT.gestionHecho=async()=>{hechoLeer();const o=findO(GF.obra),cr=gesCred(),D=GF;if(D.sub)return;if(!D.titulo){toast('Poné qué pasó');return}
   try{D.sub='guardando';sheetHecho();const out=[];for(let i=0;i<D.fi.length;i++){const f=D.fi[i];let u=f.u;if(!u){D.sub=`foto ${i+1} de ${D.fi.length}`;sheetHecho();const r=await codApi({op:'av_foto',obra:o.id,cred:cr,data:FILES[f.id].url});if(!r.url)throw new Error(r.error||'foto');u=r.url;f.u=u}out.push({u,f:d(D.fdIni||iso(D.fecha))||D.fecha})}
     const reg={id:D.id||'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),tipo:'hecho',titulo:D.titulo,fecha:D.fecha,resp:D.resp,personal:D.personal,imputable:D.imputable,costo:gesNum(D.costo,0),desc:D.desc,fotosIni:out,fotosFin:[],creado:D.creado||Date.now()};
@@ -4705,7 +4705,7 @@ SUBMIT.gestionHecho=async()=>{hechoLeer();const o=findO(GF.obra),cr=gesCred(),D=
 /* --- salida: PDF y Excel de los registros marcados --- */
 function gesElegidos(o){const sel=GSEL[o.id]||{};return((GES[o.id]||{}).items||[]).filter(r=>sel[r.id]!==false).sort((p,q)=>(p.inicio||p.fin||p.fecha||0)-(q.inicio||q.fin||q.fecha||0))}
 function gesDoc(o,L){const R=gesResumen(o,L),at=gesObraAtraso(o);
-  const doc={titulo:'Gestión de obra',sub:'Registros seleccionados',obra:o.nombre,num:L.length+(L.length===1?' registro':' registros'),fecha:fmt(TODAY),
+  const doc={titulo:'Registros de obra',sub:'Registros seleccionados',obra:o.nombre,num:L.length+(L.length===1?' registro':' registros'),fecha:fmt(TODAY),
     campos:[['Atraso de la obra (cronograma)',`${at.sem>0?'+':''}${at.sem} ${Math.abs(at.sem)===1?'semana':'semanas'} · ≈ ${at.dias>0?'+':''}${at.dias} días hábiles`],['Días de retraso registrados',`${R.tot} días hábiles (${R.evit} evitables)`],['Perjuicio económico total',money(R.mon)],['Registros',String(L.length)]],secciones:[]};
   if(R.imp.length)doc.secciones.push({h:'Imputable a',tabla:{cols:['Imputable a (si es compartido, cuenta en cada uno)','Registros','Días','Perjuicio'],w:[.46,.14,.14,.26],rows:R.imp.map(([k,v])=>[k,String(v.n),String(v.d),money(v.$)])}});
   if(R.cau.length)doc.secciones.push({h:'Causas',tabla:{cols:['Causa','Registros','Días'],w:[.66,.17,.17],rows:R.cau.map(([k,v])=>[k,String(v.n),String(v.d)])}});
@@ -4718,11 +4718,11 @@ function gesDoc(o,L){const R=gesResumen(o,L),at=gesObraAtraso(o);
     if(c.monto)doc.secciones.push({h:'Perjuicio',texto:`${c.dias} días de retraso × ${r.personas} personas × ${money(r.valor)} por persona por día = ${money(c.monto)}${r.detenida?'\nTarea detenida: '+r.detenida:''}`});
     else if(r.nota)doc.secciones.push({h:'Nota',texto:r.nota})});
   doc.firmas=[['Dirección',o.nombre],['','Constructora']];return doc}
-A.gesPdf=async ds=>{const o=findO(ds.o),L=gesElegidos(o);if(!L.length){toast('Marcá al menos un registro');return}toast('Generando PDF…');try{const b=await docPDF(gesDoc(o,L));bajar(b,`Gestion_${slug(o.nombre)}_${isoAR(Date.now())}.pdf`)}catch(e){toast('No se pudo generar el PDF')}};
+A.gesPdf=async ds=>{const o=findO(ds.o),L=gesElegidos(o);if(!L.length){toast('Marcá al menos un registro');return}toast('Generando PDF…');try{const b=await docPDF(gesDoc(o,L));bajar(b,`Registros_${slug(o.nombre)}_${isoAR(Date.now())}.pdf`)}catch(e){toast('No se pudo generar el PDF')}};
 A.gesCsv=ds=>{const o=findO(ds.o),L=gesElegidos(o);if(!L.length){toast('Marcá al menos un registro');return}
   const cab=['Registro','Etapa','Responsable','Personal','Podría arrancar','Inicio','Fin','Estimados','Reales','Arranque','Diferencia','Causa','Evitable','Imputable a','Tarea detenida','Cobro afectado','Personas','Valor día','Perjuicio'];
   const f=r=>{const c=gesCalc(r);if(r.tipo==='hecho')return[gesTitulo(r)+' (hecho)',r.desc,r.resp,r.personal,'',fD(r.fecha),'','','','','','','',r.imputable,'','','','',c.monto];return[gesTitulo(r),r.etapa,r.resp,r.personal,fD(r.posible),fD(r.inicio),fD(r.fin),c.est,c.real,c.arr,c.dif,gesTexto(r),r.evitable?'Sí':'No',r.imputable,r.detenida,r.certAfecta,r.personas,r.valor,c.monto]};
-  const csv='﻿'+[cab,...L.map(f)].map(r=>r.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(';')).join('\r\n');bajar(new Blob([csv],{type:'text/csv'}),`Gestion_${slug(o.nombre)}.csv`)};
+  const csv='﻿'+[cab,...L.map(f)].map(r=>r.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(';')).join('\r\n');bajar(new Blob([csv],{type:'text/csv'}),`Registros_${slug(o.nombre)}.csv`)};
 
 try{document.querySelectorAll('.brand .mono').forEach(e=>{if(/20\d\d$/.test(e.textContent.trim()))e.textContent=new Date(TODAY).toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).replace(/[.,]/g,'')})}catch(e){}
 ovInit();draw();
