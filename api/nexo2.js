@@ -260,6 +260,54 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ===== Gestión de obra (interna, solo Dirección): registros de retrasos con causa, fotos y perjuicio =====
+    if (typeof b.op === "string" && b.op.startsWith("ges_")) {
+      const obra = String(b.obra || "");
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const cr = b.cred || {};
+      if (!(cr.rol === "dir" && dirOk(cr.codigo))) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código de Dirección." }); return; }
+      const clave = "gestion_" + obra;
+      if (b.op === "ges_list") {
+        const v = await leer(H, clave);
+        res.status(200).json({ items: (v && v.items) || [] });
+        return;
+      }
+      if (b.op === "ges_del") {
+        const v = await leer(H, clave);
+        await escribir(H, clave, { items: ((v && v.items) || []).filter((x) => x.id !== b.id) });
+        res.status(200).json({ ok: true });
+        return;
+      }
+      if (b.op === "ges_save") {
+        const q = b.registro || {};
+        const id = String(q.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+        if (!id) { res.status(400).json({ error: "Registro inválido" }); return; }
+        const str = (x, n) => String(x == null ? "" : x).slice(0, n);
+        const num = (x, lo, hi) => Math.min(hi, Math.max(lo, Number(x) || 0));
+        const fts = (arr) => (Array.isArray(arr) ? arr : [])
+          .filter((f) => f && typeof f.u === "string" && (f.u.startsWith(NEW_PUB) || f.u.startsWith(OLD_PUB)))
+          .map((f) => ({ u: f.u, f: num(f.f, 0, 4e12) })).slice(0, 40);
+        const r = {
+          id, titulo: str(q.titulo, 200), tid: str(q.tid, 60), tarea: str(q.tarea, 200), etapa: str(q.etapa, 120),
+          resp: str(q.resp, 120), personal: str(q.personal, 400),
+          posible: num(q.posible, 0, 4e12), inicio: num(q.inicio, 0, 4e12), fin: num(q.fin, 0, 4e12),
+          estDias: num(q.estDias, 0, 2000), realDias: num(q.realDias, 0, 2000), arranqueDias: num(q.arranqueDias, 0, 2000),
+          causas: (Array.isArray(q.causas) ? q.causas : []).slice(0, 10).map((c) => str(c, 120)), causaTxt: str(q.causaTxt, 500),
+          evitable: !!q.evitable, imputable: str(q.imputable, 120), detenida: str(q.detenida, 300), certAfecta: str(q.certAfecta, 300),
+          personas: num(q.personas, 0, 500), valor: num(q.valor, 0, 1e9), nota: str(q.nota, 2000),
+          fotosIni: fts(q.fotosIni), fotosFin: fts(q.fotosFin), creado: num(q.creado, 0, 4e12) || Date.now(), editado: Date.now(),
+        };
+        const v = await leer(H, clave);
+        const items = ((v && v.items) || []).filter((x) => x.id !== id);
+        items.push(r);
+        await escribir(H, clave, { items: items.slice(-300) });
+        res.status(200).json({ ok: true, registro: r });
+        return;
+      }
+      res.status(400).json({ error: "Operación desconocida" });
+      return;
+    }
+
     // ===== informes semanales (único punto de carga; de ahí salen los avances) =====
     if (typeof b.op === "string" && b.op.startsWith("inf_")) {
       const obra = String(b.obra || "");
