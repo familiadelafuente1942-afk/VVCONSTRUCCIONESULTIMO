@@ -295,6 +295,7 @@ export default async function handler(req, res) {
           causas: (Array.isArray(q.causas) ? q.causas : []).slice(0, 10).map((c) => str(c, 120)), causaTxt: str(q.causaTxt, 500),
           evitable: !!q.evitable, imputable: str(q.imputable, 120), detenida: str(q.detenida, 300), certAfecta: str(q.certAfecta, 300),
           personas: num(q.personas, 0, 500), valor: num(q.valor, 0, 1e9), nota: str(q.nota, 2000),
+          tipo: q.tipo === "hecho" ? "hecho" : "retraso", desc: str(q.desc, 3000), fecha: num(q.fecha, 0, 4e12), costo: num(q.costo, 0, 1e12),
           fotosIni: fts(q.fotosIni), fotosFin: fts(q.fotosFin), creado: num(q.creado, 0, 4e12) || Date.now(), editado: Date.now(),
         };
         const v = await leer(H, clave);
