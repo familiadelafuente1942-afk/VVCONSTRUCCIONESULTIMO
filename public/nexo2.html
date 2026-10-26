@@ -1475,6 +1475,8 @@ const OBRAS=[
   {id:'o5',constructora:'Delta',nombre:'Santa Bárbara 88',ubic:'Pilar',plantas:2,subsuelo:false,pileta:false,m2:300,nivel:'estandar',inicio:'2026-06-01',jefe:'—',estudio:'Pacífica Arquitectura',jornal:70000,dot:5,late:.3,margen:15,edits:[]},
   {id:'o6',constructora:'Norte',nombre:'El Yacht 410',ubic:'Nordelta',plantas:1,subsuelo:false,pileta:true,m2:260,nivel:'alto',inicio:'2026-09-07',jefe:'—',estudio:'Pacífica Arquitectura',jornal:72000,dot:4,late:.1,margen:15,edits:[]}
 ];
+/* solo quedan las obras correctamente cargadas (Golf 293 y Los Puentes 246) */
+{const KEEP=new Set(['o3','o4']);for(let i=OBRAS.length-1;i>=0;i--)if(!KEEP.has(OBRAS[i].id))OBRAS.splice(i,1)}
 const DOCS=[],ADIC=[],REGISTRO=[],AUD=[],NOTIF=[],INVITES=[];
 function addDoc(o,cat,nombre,ver,estado,por,fecha,extra={}){const x={id:'d'+(++uid),obra:o,cat,nombre,ver,estado,por,fecha,file:null,obs:'',nuevo:false,...extra};DOCS.push(x);return x}
 function notify(to,o,txt,act,extra={}){NOTIF.unshift({id:'n'+(++uid),to,obra:o,txt,act,fecha:TODAY,leido:false,...extra})}
