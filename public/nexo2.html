@@ -1468,15 +1468,15 @@ function readFile(file){return new Promise(res=>{const r=new FileReader();r.onlo
 
 /* ================= obras de ejemplo ================= */
 const OBRAS=[
-  {id:'o1',constructora:ORG,nombre:'Los Puentes 132',ubic:'Nordelta',plantas:2,subsuelo:false,pileta:true,m2:620,nivel:'alto',inicio:'2026-03-16',jefe:'Matías',estudio:'Pacífica Arquitectura',jornal:75000,dot:7,late:.18,margen:15,edits:[['sanit',1]]},
-  {id:'o2',constructora:ORG,nombre:'Castores 475',ubic:'Nordelta',plantas:2,subsuelo:false,pileta:false,m2:380,nivel:'estandar',inicio:'2026-04-13',jefe:'Lucía',estudio:'Pacífica Arquitectura',jornal:75000,dot:6,late:.42,margen:15,edits:[['revoques',2],['cielorrasos',1]]},
+  {id:'o1',constructora:ORG,nombre:'Los Puentes 132',sinTarjetas:true,ubic:'Nordelta',plantas:2,subsuelo:false,pileta:true,m2:620,nivel:'alto',inicio:'2026-03-16',jefe:'Matías',estudio:'Pacífica Arquitectura',jornal:75000,dot:7,late:.18,margen:15,edits:[['sanit',1]]},
+  {id:'o2',constructora:ORG,nombre:'Castores 475',sinTarjetas:true,ubic:'Nordelta',plantas:2,subsuelo:false,pileta:false,m2:380,nivel:'estandar',inicio:'2026-04-13',jefe:'Lucía',estudio:'Pacífica Arquitectura',jornal:75000,dot:6,late:.42,margen:15,edits:[['revoques',2],['cielorrasos',1]]},
   {id:'o3',constructora:ORG,nombre:'Golf 293',ubic:'Nordelta · Barrio El Golf',plantas:2,subsuelo:false,pileta:true,m2:450,nivel:'alto',inicio:'2026-07-06',jefe:'Facundo',estudio:'Mada Arquitectos',jornal:75000,dot:5,late:.06,margen:15,edits:[]},
   {id:'o4',constructora:ORG,nombre:'Los Puentes 246',ubic:'Nordelta',plantas:2,subsuelo:true,pileta:false,m2:850,nivel:'premium',inicio:'2026-08-17',jefe:'Ignacio',estudio:'House Estudio',jornal:75000,dot:8,late:.15,margen:15,edits:[]},
   {id:'o5',constructora:'Delta',nombre:'Santa Bárbara 88',ubic:'Pilar',plantas:2,subsuelo:false,pileta:false,m2:300,nivel:'estandar',inicio:'2026-06-01',jefe:'—',estudio:'Pacífica Arquitectura',jornal:70000,dot:5,late:.3,margen:15,edits:[]},
   {id:'o6',constructora:'Norte',nombre:'El Yacht 410',ubic:'Nordelta',plantas:1,subsuelo:false,pileta:true,m2:260,nivel:'alto',inicio:'2026-09-07',jefe:'—',estudio:'Pacífica Arquitectura',jornal:72000,dot:4,late:.1,margen:15,edits:[]}
 ];
-/* solo quedan las obras correctamente cargadas (Golf 293 y Los Puentes 246) */
-{const KEEP=new Set(['o3','o4']);for(let i=OBRAS.length-1;i>=0;i--)if(!KEEP.has(OBRAS[i].id))OBRAS.splice(i,1)}
+/* quedan Los Puentes 132 y Castores 475 (sin tarjetas), Golf 293 y Los Puentes 246 */
+{const KEEP=new Set(['o1','o2','o3','o4']);for(let i=OBRAS.length-1;i>=0;i--)if(!KEEP.has(OBRAS[i].id))OBRAS.splice(i,1)}
 const DOCS=[],ADIC=[],REGISTRO=[],AUD=[],NOTIF=[],INVITES=[];
 function addDoc(o,cat,nombre,ver,estado,por,fecha,extra={}){const x={id:'d'+(++uid),obra:o,cat,nombre,ver,estado,por,fecha,file:null,obs:'',nuevo:false,...extra};DOCS.push(x);return x}
 function notify(to,o,txt,act,extra={}){NOTIF.unshift({id:'n'+(++uid),to,obra:o,txt,act,fecha:TODAY,leido:false,...extra})}
@@ -1506,6 +1506,7 @@ function buildObra(o){
   o.cert=o.tpl?tplCert(o):[];if(!o.tpl)o.tasks.forEach(t=>{if(t.rubro==='losa')o.cert.push({id:'k'+(++uid),task:t,etapa:'Hormigonado de '+t.name.replace('Estructura · losa sobre','losa sobre'),estado:''});if(t.rubro==='fund')o.cert.push({id:'k'+(++uid),task:t,etapa:'Hormigonado de platea',estado:''});if(t.rubro==='mamp')o.cert.push({id:'k'+(++uid),task:t,etapa:t.name,estado:''});if(t.rubro==='sanit')o.cert.push({id:'k'+(++uid),task:t,etapa:'Instalaciones previo a revoques',estado:''});if(t.rubro==='cubierta')o.cert.push({id:'k'+(++uid),task:t,etapa:'Cubierta e impermeabilización',estado:''});if(t.rubro==='pileta')o.cert.push({id:'k'+(++uid),task:t,etapa:'Estructura de pileta',estado:''})});
   if(!o.nuevo&&!o.tpl&&!o.cero)seedReal(o);
   if(o.cero)o.sup=o.sup.filter(s=>s.estado==='programada');
+  if(o.sinTarjetas)o.cards=[];
   return o;
 }
 const certFecha=c=>['losa','fund','pileta'].includes(c.task.rubro)?c.task.end-2*DAY:c.task.end;
