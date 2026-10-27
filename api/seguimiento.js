@@ -60,7 +60,7 @@ const COLS = {
     orden: num(q.orden, 0, 99999),
   }),
   personal: (q) => ({ obra: ident(q.obra), nombre: str(q.nombre, 80), rol: str(q.rol, 80), haciendo: str(q.haciendo, 200), nota: str(q.nota, 300), activo: q.activo !== false }),
-  agenda: (q) => ({ fecha: num(q.fecha, 0, 4e12), quien: ["Nicolás", "Sebastián", "Ambos", "Nadie"].includes(q.quien) ? q.quien : "Nicolás", lugar: str(q.lugar, 80), obra: ident(q.obra), motivo: str(q.motivo, 400), hecho: !!q.hecho }),
+  agenda: (q) => ({ fecha: num(q.fecha, 0, 4e12), quien: ["Nicolás", "Sebastián", "Ambos", "Nadie"].includes(q.quien) ? q.quien : "Nicolás", lugar: str(q.lugar, 80), obra: ident(q.obra), motivo: str(q.motivo, 400), hecho: !!q.hecho, fijar: !!q.fijar }),
   gastos: (q) => ({
     fecha: num(q.fecha, 0, 4e12), concepto: str(q.concepto, 200), monto: num(q.monto, 0, 1e12), cat: str(q.cat, 60),
     de: q.de === "Nicolás" ? "Nicolás" : "Empresa", obra: ident(q.obra), nota: str(q.nota, 400),

@@ -1225,6 +1225,14 @@ html{--display:'Playfair Display',Georgia,serif;--cond:'Playfair Display',Georgi
 .gantt .grow .gtrack,.gantt .gmonths .gtrack{background-image:linear-gradient(to right,rgba(128,128,128,.28) 1px,transparent 1px),linear-gradient(to right,rgba(128,128,128,.6) 1px,transparent 1px);background-size:var(--pxd) 100%,var(--W) 100%;background-position:0 0,var(--mon,0px) 0}
 .gantt .gdays .gtrack,.gantt .gquin .gtrack{background-image:none}
 .tcard{position:relative}.tcard>.delx{position:absolute;right:10px;bottom:8px;margin:0}
+.minis{display:flex;flex-direction:column;gap:2px;margin-top:8px}
+.mini{display:grid;grid-template-columns:10px 1fr auto;grid-template-areas:"d a c" "d b c";column-gap:10px;align-items:center;text-align:left;width:100%;padding:7px 10px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,transparent);cursor:pointer;color:var(--fg)}
+.mini .dot2{grid-area:d;width:8px;height:8px;border-radius:50%;background:var(--futuro,#999);font-style:normal}
+.mini .m1{grid-area:a;font-size:13px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini .m2{grid-area:b;font-size:11px;opacity:.65;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini .m3{grid-area:c;font-size:12px;font-weight:700;white-space:nowrap;padding-left:6px}
+.dot2.c-rojo{background:var(--rojo,#dc2626)!important}.dot2.c-naranja{background:var(--naranja,#f97316)!important}.dot2.c-amarillo{background:#eab308!important}.dot2.c-verde{background:var(--verde,#16a34a)!important}.dot2.c-gold{background:var(--gold,#b8892e)!important}
+.pinx{flex:none;width:30px;height:30px;border-radius:50%;border:1px solid var(--line,#ccc);background:transparent;font-size:13px;cursor:pointer;margin-left:6px;opacity:.45}.pinx.on{opacity:1;border-color:var(--gold,#b8892e);background:rgba(184,137,46,.18)}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1470,26 +1478,33 @@ function vLogin(){return `<div class="loginbox"><span class="eyebrow">V+V Constr
 
 /* ---------- Inicio ---------- */
 function filaAg(a){return `<div class="agrow"><span class="tc-ico ${a.hecho?'t-verde':''}" style="width:30px;height:30px;cursor:pointer" data-act="hechoAg" data-id="${a.id}" title="Marcar como hecha">${a.hecho?svg('chk',16):''}</span>
- <div style="flex:1;min-width:0;cursor:pointer" data-act="editAg" data-id="${a.id}"><b class="${a.quien==='Nicolás'?'t-azul':a.quien==='Sebastián'?'t-gold':'t-verde'}">${a.quien==='Nadie'?'No va nadie':a.quien==='Ambos'?'Van los dos':'Va '+a.quien}</b> <span class="muted small">${[a.lugar||'Nordelta',a.obra?nombreObra(a.obra):'',a.motivo].filter(Boolean).map(esc).join(' · ')}</span></div><button class="delx" data-act="del" data-c="agenda" data-id="${a.id}" aria-label="Borrar" title="Borrar">✕</button></div>`}
+ <div style="flex:1;min-width:0;cursor:pointer" data-act="editAg" data-id="${a.id}"><b class="${a.quien==='Nicolás'?'t-azul':a.quien==='Sebastián'?'t-gold':'t-verde'}">${a.quien==='Nadie'?'No va nadie':a.quien==='Ambos'?'Van los dos':'Va '+a.quien}</b> <span class="muted small">${[a.lugar||'Nordelta',a.obra?nombreObra(a.obra):'',a.motivo].filter(Boolean).map(esc).join(' · ')}</span></div><button class="pinx ${a.fijar?'on':''}" data-act="fijarAg" data-id="${a.id}" aria-label="Anclar en Inicio" title="Mostrar en Inicio">📌</button><button class="delx" data-act="del" data-c="agenda" data-id="${a.id}" aria-label="Borrar" title="Borrar">✕</button></div>`}
 const agDe=f=>col('agenda').filter(a=>a.fecha===f);
 function filaObraRes(o){const T=tareasDe('obra:'+o.id),h=T.filter(t=>t.estado==='hecha').length,at=T.filter(atrasada).length,n=obreros(o.id).length,p=proxima(o),nx=nxPend(o);
   return `<button class="card" data-act="obra" data-id="${o.id}" style="text-align:left;width:100%;display:block"><div class="sub-h"><b style="font-size:17px">${esc(o.nombre)}</b><span style="display:flex;gap:6px">${at?`<span class="badge" style="position:static;background:var(--rojo);color:#fff;border-radius:999px;font-size:11px;padding:0 6px;line-height:18px">${at} atras.</span>`:''}${nx?`<span class="chip gold">${nx} en NEXO</span>`:''}</span></div>
   <div class="bar" style="margin:8px 0 6px"><i style="width:${T.length?Math.round(h*100/T.length):0}%"></i></div>
   <span class="muted small" style="display:block">Etapa: <b style="color:var(--fg)">${esc(etapaDe(o)||'sin definir')}</b> · ${plural(n,'obrero','obreros')}</span>
   <span class="muted small" style="display:block">Próxima tarea: <b style="color:var(--fg)">${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></span></button>`}
+function miniNx(o,c){const k=c.color==='rojo'?'rojo':c.color==='naranja'?'naranja':'amarillo',rs=[...new Set(c.pend.map(i=>i.resp).filter(Boolean))].join(', ');
+  return `<button class="mini" data-act="irNx" data-id="${o.id}"><i class="dot2 c-${k}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${esc(c.tarea)}</span><span class="m2">${c.tipo==='mat'?'Materiales':'Documentación'}${rs?' · debe '+esc(rs):''}</span><span class="m3">${c.limite?fmt(c.limite):''}</span></button>`}
 function vInicio(){
   const pg=pendGen().length,at=atrasadasTodas().length,ob=col('obras').reduce((a,o)=>a+obreros(o.id).length,0);
   const prox=col('tareas').filter(t=>t.estado!=='hecha'&&(atrasada(t)||t.ambito==='general')).sort((a,b)=>(a.fin||a.inicio||9e12)-(b.fin||b.inicio||9e12)).slice(0,6);
   const sueldo=col('sueldos').find(s=>s.mes===MES_HOY),gMes=col('gastos').filter(g=>mesDe(g.fecha)===MES_HOY).reduce((a,g)=>a+g.monto,0);
-  const nxAll=col('obras').flatMap(o=>{const n=nxDe(o);return n?n.cards.map(c=>({o,c})):[]}).sort((a,b)=>({rojo:0,naranja:1,amarillo:2,verde:3}[a.c.color]??4)-({rojo:0,naranja:1,amarillo:2,verde:3}[b.c.color]??4)).slice(0,5);
+  const todas=col('obras').flatMap(o=>{const n=nxDe(o);return n?n.cards.map(c=>({o,c})):[]});
+  const venc=todas.filter(x=>x.c.color==='rojo').sort((a,b)=>a.c.limite-b.c.limite),porv=todas.filter(x=>x.c.color==='naranja'||x.c.color==='amarillo').sort((a,b)=>a.c.limite-b.c.limite);
+  const nxCargado=col('obras').some(o=>nxDe(o)&&nxDe(o).snapT);
+  const obrasP=col('obras').map(o=>({o,p:proxima(o),at:tareasDe('obra:'+o.id).filter(atrasada).length})).sort((a,b)=>(a.p?a.p.inicio:9e15)-(b.p?b.p.inicio:9e15));
+  const fij=col('agenda').filter(a=>a.fijar&&!a.hecho&&a.fecha>=TODAY-DAY).sort((a,b)=>a.fecha-b.fecha);
   return `<div><span class="eyebrow">${esc(S.quien)}</span><h1>Inicio</h1></div>
-  <div class="kpis k3"><button class="kpi ${pg?'k-rojo':''}" data-act="tab" data-k="tareas"><span class="kgo">ver ›</span><b>${pg}</b><span class="kl">tareas pendientes</span></button>
-  <button class="kpi ${at?'k-naranja':''}" data-act="tab" data-k="obras"><span class="kgo">ver ›</span><b>${at}</b><span class="kl">atrasadas</span></button>
-  <button class="kpi" data-act="tab" data-k="gente"><span class="kgo">ver ›</span><b>${ob}</b><span class="kl">obreros</span></button></div>
-  <div class="card"><span class="eyebrow">Nordelta</span>${[TODAY,TODAY+DAY].map(f=>{const L=agDe(f);return `<div class="agday ${f===TODAY?'':''}"><span class="muted small">${f===TODAY?'Hoy':'Mañana'} · ${diaTxt(f)}</span>${L.length?L.map(filaAg).join(''):`<div class="agrow"><span class="muted" style="flex:1">Sin asignar</span><button class="dchip" data-act="agRap" data-f="${f}" data-q="Nicolás">+ Nicolás</button><button class="dchip" data-act="agRap" data-f="${f}" data-q="Sebastián">+ Sebastián</button></div>`}</div>`}).join('')}<button class="btn sm ghost" data-act="tab" data-k="agenda" style="margin-top:8px">Ver agenda completa</button></div>
-  <div><span class="eyebrow">Obras</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${col('obras').map(filaObraRes).join('')}</div></div>
-  ${nxAll.length?`<div><span class="eyebrow">Nos deben · desde NEXO 2</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${nxAll.map(({o,c})=>tcardNx(o,c)).join('')}</div><button class="btn sm ghost" data-act="tab" data-k="obras" style="margin-top:8px">Ver por obra</button></div>`:''}
-  ${(()=>{const H=col('hitos').filter(h=>!h.hecho).sort((a,b)=>(a.prevista||a.fecha)-(b.prevista||b.fecha)).slice(0,8);return `<div><span class="eyebrow">Hitos · cómo venimos</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${H.length?H.map(h=>hitoCard(h,nombreObra(h.obra))).join(''):'<div class="card muted">Todavía no hay hitos. Cargalos en cada obra, en "Fechas clave".</div>'}</div></div>`})()}
+  <div class="kpis k3"><button class="kpi ${venc.length?'k-rojo':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${venc.length}</b><span class="kl">tarjetas vencidas</span></button>
+  <button class="kpi ${porv.length?'k-naranja':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${porv.length}</b><span class="kl">por vencer</span></button>
+  <button class="kpi ${pg?'k-rojo':''}" data-act="tab" data-k="tareas"><span class="kgo">ver ›</span><b>${pg}</b><span class="kl">tareas pendientes</span></button></div>
+  <div><span class="eyebrow">Tarjetas vencidas · nos deben (NEXO 2)</span><div class="minis">${venc.length?venc.map(x=>miniNx(x.o,x.c)).join(''):`<div class="muted small">${nxCargado?'Ninguna vencida.':'NEXO 2 todavía no publicó las tarjetas: se actualizan cuando Dirección abre NEXO 2.'}</div>`}</div></div>
+  <div><span class="eyebrow">Por vencer</span><div class="minis">${porv.length?porv.map(x=>miniNx(x.o,x.c)).join(''):'<div class="muted small">Ninguna por vencer.</div>'}</div></div>
+  <div><span class="eyebrow">Próxima tarea de cada obra</span><div class="minis">${obrasP.map(({o,p,at:a})=>`<button class="mini" data-act="obra" data-id="${o.id}"><i class="dot2 ${a?'c-rojo':p?'c-verde':'c-futuro'}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${p?esc(p.titulo):'sin tarea cargada'}</span><span class="m2">${esc(etapaDe(o)||'')}${a?(etapaDe(o)?' · ':'')+plural(a,'atrasada','atrasadas'):''}</span><span class="m3">${p?fmt(p.inicio):''}</span></button>`).join('')}</div></div>
+  ${fij.length?`<div><span class="eyebrow">Anclado de tu agenda</span><div class="minis">${fij.map(a=>`<button class="mini" data-act="editAg" data-id="${a.id}"><i class="dot2 c-gold"></i><span class="m1"><b>${esc(a.motivo||a.lugar||'Agenda')}</b>${a.obra?' · '+esc(nombreObra(a.obra)):''}</span><span class="m2">${a.quien==='Nadie'?'':a.quien==='Ambos'?'Los dos':esc(a.quien)}${a.lugar&&a.motivo?' · '+esc(a.lugar):''}</span><span class="m3">${diaTxt(a.fecha)}${a.hora?' '+esc(a.hora):''}</span></button>`).join('')}</div></div>`:''}
+  ${(()=>{const H=col('hitos').filter(h=>!h.hecho).sort((a,b)=>(a.prevista||a.fecha)-(b.prevista||b.fecha)).slice(0,8);return H.length?`<div><span class="eyebrow">Hitos · cómo venimos</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${H.map(h=>hitoCard(h,nombreObra(h.obra))).join('')}</div></div>`:''})()}
   <div><span class="eyebrow">Para atender</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${prox.length?prox.map(t=>tcardT(t,{ctx:ctxT(t),limite:t.ambito==='general'})).join(''):'<div class="card muted">Todo al día. No hay nada pendiente.</div>'}</div></div>
   <div class="card" data-act="tab" data-k="gastos" style="cursor:pointer"><span class="eyebrow">Este mes · ${mesTxt(MES_HOY)}</span><div class="facts" style="margin-top:8px"><div class="fact"><span>Sueldo de Nicolás</span><b>${sueldo?(sueldo.pagado?'Pagado · '+money(sueldo.monto):'Pendiente · '+money(sueldo.monto)):'Sin cargar'}</b></div><div class="fact"><span>Gastos del mes</span><b>${money(gMes)}</b></div></div></div>`;
 }
@@ -1817,6 +1832,7 @@ function formAgenda(a,f){
   <div class="row2"><label class="f">Día<input id="f-fec" type="date" value="${iso(a.fecha)}"></label><label class="f">¿Quién va?<select id="f-q">${['Nicolás','Sebastián','Ambos','Nadie'].map(q=>`<option ${a.quien===q?'selected':''}>${q}</option>`).join('')}</select></label></div>
   <div class="row2"><label class="f">Lugar<input id="f-lugar" value="${esc(a.lugar||'Nordelta')}"></label><label class="f">Obra (opcional)<select id="f-obra"><option value="">—</option>${optObras(a.obra)}</select></label></div>
   <label class="f">Motivo (opcional)<input id="f-mot" value="${esc(a.motivo||'')}" placeholder="Ej: Controlar hormigonado, pagar a la cuadrilla"></label>
+  <label class="f" style="flex-direction:row;align-items:center;gap:10px;color:var(--fg)"><input id="f-fijar" type="checkbox" ${a.fijar?'checked':''} style="width:22px;height:22px"> Mostrar en Inicio (anclar)</label>
   <label class="f" style="flex-direction:row;align-items:center;gap:10px;color:var(--fg)"><input id="f-hecho" type="checkbox" ${a.hecho?'checked':''} style="width:22px;height:22px"> Ya fue</label>
   ${a.id?'':'<label class="f">Repetir cada semana<select id="f-rep"><option value="0">No repetir</option><option value="3">Las próximas 3 semanas</option><option value="7">Las próximas 7 semanas</option><option value="11">Las próximas 11 semanas</option></select></label>'}${btns(a.id,'delAg','Eliminar')}</form>`,'Visita');
 }
@@ -1835,13 +1851,15 @@ const SUBMIT={
   gasto(){const con=val('f-con').trim(),m=+val('f-monto');if(!con){toast('Poné el concepto',true);return}if(!(m>0)){toast('Poné el monto',true);return}const id=val('f-id');guardar('gastos',{id:id||undefined,concepto:con,monto:m,fecha:dt(val('f-fec'))||TODAY,de:val('f-de'),obra:val('f-obra'),cat:val('f-cat').trim()})},
   sueldo(){const m=+val('f-monto'),mes=val('f-mes');if(!mes){toast('Elegí el mes',true);return}if(!(m>0)){toast('Poné el monto',true);return}const id=val('f-id'),pag=$('#f-pag').checked;guardar('sueldos',{id:id||undefined,mes,monto:m,fecha:dt(val('f-fec'))||(pag?TODAY:0),pagado:pag,nota:val('f-nota').trim()})},
   obra(){const n=val('f-nom').trim();if(!n){toast('Poné el nombre',true);return}const id=val('f-id');guardar('obras',{...(id?byId('obras',id):{}),id:id||undefined,nombre:n,etapa:val('f-etapa').trim(),nexo:val('f-nexo').trim(),nota:val('f-nota').trim(),orden:id?(byId('obras',id).orden||0):col('obras').length}).then(()=>cargarNexo())},
-  agenda(){const id=val('f-id'),f=dt(val('f-fec'));if(!f){toast('Elegí el día',true);return}const base={quien:val('f-q'),lugar:val('f-lugar').trim()||'Nordelta',obra:val('f-obra'),motivo:val('f-mot').trim(),hecho:$('#f-hecho').checked};const rep=+val('f-rep')||0;
+  agenda(){const id=val('f-id'),f=dt(val('f-fec'));if(!f){toast('Elegí el día',true);return}const base={quien:val('f-q'),lugar:val('f-lugar').trim()||'Nordelta',obra:val('f-obra'),motivo:val('f-mot').trim(),hecho:$('#f-hecho').checked,fijar:$('#f-fijar').checked};const rep=+val('f-rep')||0;
     if(id){guardar('agenda',{...byId('agenda',id),...base,fecha:f});return}
     for(let k=0;k<=rep;k++)guardar('agenda',{...base,fecha:f+k*7*DAY,hecho:k?false:base.hecho})}
 };
 
 /* ---------- acciones ---------- */
 const A={
+  irNxTodo:()=>{const o=col('obras').find(o=>nxDe(o)&&nxDe(o).cards.length);if(o){S.tab='obras';S.obra=o.id;S.otab='nexo';draw();window.scrollTo(0,0)}else toast('No hay tarjetas publicadas todavía')},
+  fijarAg:ds=>{const a=byId('agenda',ds.id);if(a)guardar('agenda',{...a,fijar:!a.fijar})},
   traerNexo:()=>importarNexo(true),
   nuevoReg:ds=>formReg(ds.t,null,ds.o),editReg:ds=>{const r=byId('registros',ds.id);if(r)formReg(r.tipo,r,r.obra)},
   delReg:ds=>{if(confirm('¿Eliminar este registro?')){RF=null;closeSheet();borrar('registros',ds.id)}},
