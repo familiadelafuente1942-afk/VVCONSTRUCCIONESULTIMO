@@ -1351,6 +1351,10 @@ main{padding-top:10px!important}
 .card>.eyebrow,.g-aten>.eyebrow,.pagos>.eyebrow{font-size:14px!important;font-weight:700!important;letter-spacing:.1em!important;color:#2e7d4f!important}
 :root[data-theme="dark"] .card>.eyebrow,:root[data-theme="dark"] .pagos>.eyebrow{color:#6fcf97!important}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .card>.eyebrow,:root:not([data-theme="light"]) .pagos>.eyebrow{color:#6fcf97!important}}
+/* fechas de las mini-filas: todas en una columna fija contra el borde derecho */
+.minis .mini,.mini{grid-template-columns:10px minmax(0,1fr) auto!important}
+.mini:has(.m3:not(:empty)){grid-template-columns:10px minmax(0,1fr) 132px!important}
+.minis .mini .m3,.mini .m3{justify-self:stretch!important;text-align:right!important;padding-left:0!important}
 </style></head><body>
 <div class="app">
   <header class="top">
