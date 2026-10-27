@@ -1348,6 +1348,9 @@ main{padding-top:10px!important}
 #view.cols #cB{grid-column:3;grid-row:3;align-self:start;display:flex;flex-direction:column;gap:12px}
 #view.cols .g-venc,#view.cols .g-porv,#view.cols .g-hitos,#view.cols .g-aten,#view.cols .g-anc{grid-column:auto!important;grid-row:auto!important}
 }
+.card>.eyebrow,.g-aten>.eyebrow,.pagos>.eyebrow{font-size:14px!important;font-weight:700!important;letter-spacing:.1em!important;color:#2e7d4f!important}
+:root[data-theme="dark"] .card>.eyebrow,:root[data-theme="dark"] .pagos>.eyebrow{color:#6fcf97!important}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .card>.eyebrow,:root:not([data-theme="light"]) .pagos>.eyebrow{color:#6fcf97!important}}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1617,7 +1620,7 @@ function vInicio(){
   const obrasP=col('obras').map(o=>({o,p:proxima(o),at:tareasDe('obra:'+o.id).filter(atrasada).length})).sort((a,b)=>(a.p?a.p.inicio:9e15)-(b.p?b.p.inicio:9e15));
   const HH=col('hitos').filter(h=>!h.hecho).sort((a,b)=>(a.prevista||a.fecha)-(b.prevista||b.fecha)).slice(0,8);
   const hitosHtml=HH.length?`<div class="g-hitos card"><span class="eyebrow">Hitos · cómo venimos</span><div class="minis">${HH.map(miniHito).join('')}</div></div>`:'';
-  const fij=col('agenda').filter(a=>a.fijar&&!a.hecho&&a.fecha>=TODAY-DAY).sort((a,b)=>a.fecha-b.fecha);
+  const fij=col('agenda').filter(a=>a.fijar&&!a.hecho).sort((a,b)=>a.fecha-b.fecha);
   return `<div><span class="eyebrow">${esc(S.quien)}</span><h1>Inicio</h1></div>
   <div class="kpis k3"><button class="kpi ${venc.length?'k-rojo':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${venc.length}</b><span class="kl">tarjetas vencidas</span></button>
   <button class="kpi ${porv.length?'k-naranja':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${porv.length}</b><span class="kl">por vencer</span></button>
@@ -1633,7 +1636,7 @@ function vInicio(){
 
   <div class="cA" id="cA2">
   <div class="g-aten card"><span class="eyebrow">Para atender</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${prox.length?prox.map(t=>tcardT(t,{ctx:ctxT(t),limite:t.ambito==='general'})).join(''):'<div class="card muted">Todo al día. No hay nada pendiente.</div>'}</div></div>
-  ${fij.length?`<div class="g-anc card"><span class="eyebrow">Anclado de tu agenda</span><div class="minis">${fij.map(a=>`<button class="mini" data-act="editAg" data-id="${a.id}"><i class="dot2 c-gold"></i><span class="m1"><b>${esc(a.motivo||a.lugar||'Agenda')}</b>${a.obra?' · '+esc(nombreObra(a.obra)):''}</span><span class="m2">${a.quien==='Nadie'?'':a.quien==='Ambos'?'Los dos':esc(a.quien)}${a.lugar&&a.motivo?' · '+esc(a.lugar):''}</span><span class="m3">${diaTxt(a.fecha)}${a.hora?' '+esc(a.hora):''}</span></button>`).join('')}</div></div>`:''}
+  ${fij.length?`<div class="g-anc card"><span class="eyebrow">Anclado de tu agenda</span><div class="minis">${fij.map(a=>`<button class="mini" data-act="editAg" data-id="${a.id}"><i class="dot2 ${a.fecha<TODAY?'c-rojo':'c-gold'}"></i><span class="m1"><b>${esc(a.motivo||a.lugar||'Agenda')}</b>${a.obra?' · '+esc(nombreObra(a.obra)):''}</span><span class="m2">${a.quien==='Nadie'?'':a.quien==='Ambos'?'Los dos':esc(a.quien)}${a.lugar&&a.motivo?' · '+esc(a.lugar):''}</span><span class="m3">${diaTxt(a.fecha)}${a.hora?' '+esc(a.hora):''}</span></button>`).join('')}</div></div>`:''}
 
   </div>
 
