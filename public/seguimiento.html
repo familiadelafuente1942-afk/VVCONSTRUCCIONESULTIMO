@@ -1695,7 +1695,7 @@ const A={
   delS:ds=>{if(confirm('¿Eliminar este pago?')){closeSheet();borrar('sueldos',ds.id)}},
   delAg:ds=>{if(confirm('¿Eliminar esta visita?')){closeSheet();borrar('agenda',ds.id)}},
   delO:ds=>{const o=byId('obras',ds.id);if(confirm('¿Eliminar "'+o.nombre+'" con sus tareas, fechas clave y personal? No se puede deshacer.')){closeSheet();S.obra=null;borrar('obras',ds.id)}},
-  actualizar:()=>cargar(),
+  actualizar:()=>{toast('Actualizando…');const u=new URL(location.href);u.searchParams.set('v',Date.now());setTimeout(()=>location.replace(u.toString()),150)},
   brillo:()=>openSheet(`<span class="eyebrow">Aspecto</span><h2>Claro u oscuro</h2><div class="seg2" style="margin:10px 0"><button class="btn" data-act="tema" data-k="claro">Claro</button><button class="btn" data-act="tema" data-k="oscuro">Oscuro</button><button class="btn" data-act="tema" data-k="auto">Automático</button></div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><button class="btn full" data-act="salir">Cambiar de persona (soy ${S.quien==="Nicolás"?"Sebastián":"Nicolás"})</button>`,'Aspecto'),
   tema:ds=>{try{window.__tema(ds.k)}catch(e){}closeSheet()},
   cambiarCod:()=>{const c=prompt('Código nuevo (mínimo 4 letras o números). Los otros aparatos van a pedirlo de nuevo.');if(!c)return;closeSheet();api({op:'cambiar_codigo',codigo:c}).then(()=>toast('Código cambiado')).catch(e=>toast('No se pudo cambiar: '+e.message,true))},
