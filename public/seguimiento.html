@@ -1396,11 +1396,17 @@ header.top{padding-inline:20px!important}
 #view.cols{row-gap:14px;column-gap:20px}
 }
 .mini .m3{display:flex!important;justify-content:flex-end!important;text-align:right!important;align-items:center}
+.ptitle{display:none}
+@media (min-width:1100px){
+.ptitle{display:block;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--display);font-weight:600;font-size:26px;line-height:1.1;color:var(--fg);white-space:nowrap;pointer-events:none}
+.intop{display:none!important}
+#view{padding-top:4px}
+}
 </style></head><body>
 <div class="app">
   <header class="top">
     <div class="brand"><span style="display:flex;align-items:center;gap:8px"><img src="/seguimiento-icon.png" alt="" style="width:22px;height:22px;border-radius:5px"><b>V+V</b></span><span class="mono" id="fecha"></span></div>
-    <div class="who" id="who"></div>
+    <div class="who" id="who"></div><div class="ptitle" id="ptitle"></div>
   </header>
   <main id="view"></main>
 </div>
@@ -1898,6 +1904,7 @@ function draw(){
   $('#who').innerHTML=`<span><b>${esc(S.quien)}</b><span class="rol">Seguimiento interno</span></span><button class="btn ghost sm" data-act="actualizar" aria-label="Actualizar" title="Actualizar">↻</button><button class="btn ghost sm" data-act="brillo" aria-label="Del blanco al negro" title="Aspecto"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4v16" /></svg></button>`;
   $('#nav').innerHTML=nav()+`<div class="navwho"><b>${esc(S.quien)}</b><button data-act="actualizar" aria-label="Actualizar" title="Actualizar">↻</button><button data-act="brillo" aria-label="Aspecto" title="Aspecto"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4v16"/></svg></button></div>`;$('#nav').parentElement.hidden=false;
   const g=$('#gwrap');if(g){g.scrollLeft=gsl!=null?gsl:(+g.dataset.scroll||0)}
+  {const h1=$('#view h1'),pt=$('#ptitle');if(pt){pt.textContent=h1?h1.textContent:'';const w=h1&&h1.parentElement;if(w&&w.children.length===2&&w.firstElementChild.classList.contains('eyebrow'))w.classList.add('intop')}}
   window.scrollTo(0,y);
 }
 
