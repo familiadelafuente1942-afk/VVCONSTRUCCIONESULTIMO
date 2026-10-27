@@ -1215,6 +1215,11 @@ input,select,textarea,.gp-row input,.gp-row select{font-size:16px!important}
 html,body{overscroll-behavior:none;-webkit-text-size-adjust:100%;touch-action:manipulation}
 body.sheetopen{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 .scrim .sheet{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.gfulld .gdays,.gfulld .gdays .gtrack{height:34px}
+.gdd{position:absolute;top:0;height:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;font:600 11px/1.1 var(--mono,monospace);border-left:1px solid var(--line,#ddd);box-sizing:border-box;color:var(--fg)}
+.gdd i{font-style:normal;font-size:9px;opacity:.6;font-weight:500}
+.gdd.fin{background:rgba(120,120,120,.14);color:var(--muted,#888)}
+.gdd.hoy{background:var(--rojo,#dc2626);color:#fff}.gdd.hoy i{opacity:.9}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1247,7 +1252,7 @@ const diaTxt=t=>{const x=new Date(t);return DOW[x.getUTCDay()]+' '+x.getUTCDate(
 const lunesDe=t=>{const x=new Date(t).getUTCDay();return t-((x+6)%7)*DAY};
 const ago=t=>{if(!t)return '';const m=Math.round((Date.now()-t)/6e4);return m<2?'recién':m<60?'hace '+m+' min':m<1440?'hace '+Math.round(m/60)+' h':'hace '+Math.round(m/1440)+' d'};
 
-const S={tk:'',quien:'',D:{obras:[],tareas:[],personal:[],gastos:[],sueldos:[],agenda:[],hitos:[],bitacora:[],adicionales:[]},NX:{},tab:'inicio',obra:null,otab:'crono',ovista:'lista',gtab:'gastos',gde:'todos',tfil:'pend',cargado:false,err:'',gw:34,gfull:null,gpanel:true,sel:null};
+const S={tk:'',quien:'',D:{obras:[],tareas:[],personal:[],gastos:[],sueldos:[],agenda:[],hitos:[],bitacora:[],adicionales:[]},NX:{},tab:'inicio',obra:null,otab:'crono',ovista:'lista',gtab:'gastos',gde:'todos',tfil:'pend',cargado:false,err:'',gw:98,gfull:null,gpanel:true,sel:null};
 const LS=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){return null}};
 const ckGet=()=>{const m=document.cookie.match(/(?:^|; )seg_tk=([^;]*)/);return m?decodeURIComponent(m[1]):''};
 const ckSet=v=>{document.cookie='seg_tk='+encodeURIComponent(v)+';path=/;SameSite=Lax;max-age='+(v?34560000:0)};
@@ -1408,7 +1413,9 @@ function ganttHTML(o,C){
   for(let m=Date.UTC(new Date(start).getUTCFullYear(),new Date(start).getUTCMonth(),1);m<end;){const q=new Date(m),nm=Date.UTC(q.getUTCFullYear(),q.getUTCMonth()+1,1),q16=Date.UTC(q.getUTCFullYear(),q.getUTCMonth(),16);
     const a=Math.max(m,start);if(nm>start)months+=`<span class="gm" style="left:${x(a)}px;width:${x(Math.min(nm,end))-x(a)}px">${MESL[q.getUTCMonth()]}${q.getUTCMonth()===0||m<=start?' '+q.getUTCFullYear():''}</span>`;
     [[m,'1ª quincena'],[q16,'2ª quincena']].forEach(([s,l],i)=>{const e=i?nm:q16;if(e<=start||s>=end)return;const a2=Math.max(s,start);quin+=`<span class="gq" style="left:${x(a2)}px;width:${x(Math.min(e,end))-x(a2)}px">${W>=26?l:''}</span>`});m=nm}
-  for(let w=start;w<end;w+=7*DAY){days+=`<span class="gd" style="left:${x(w)}px">${new Date(w).getUTCDate()}</span>`}
+  const full=pxd>=13,L1=['D','L','M','M','J','V','S'];
+  if(full){for(let d=start;d<end;d+=DAY){const g=new Date(d),dw=g.getUTCDay();days+=`<span class="gdd ${dw===0||dw===6?'fin':''} ${d===TODAY?'hoy':''}" style="left:${x(d)}px;width:${pxd}px"><i>${L1[dw]}</i>${g.getUTCDate()}</span>`}}
+  else for(let w=start;w<end;w+=7*DAY){days+=`<span class="gd" style="left:${x(w)}px">${new Date(w).getUTCDate()}</span>`}
   const lanes=[-1e9,-1e9];
   const hl=h=>{const dd=h.prevista&&!h.hecho?Math.round((h.prevista-h.fecha)/DAY):0;const n=h.titulo+(dd?(dd>0?' (+':' (')+dd+' d)':''),px=x(h.fecha)+10,ln=lanes.findIndex(e=>px>=e+8);if(ln<0)return '';lanes[ln]=px+n.length*5.6;return `<span class="ghl" style="left:${px}px;top:${ln?27:5}px">${esc(n)}</span>`};
   const hit=`<div class="grow ghit" style="height:44px"><div class="glabel rubro">Fechas clave</div><div class="gtrack" style="width:${width}px">${H.map(h=>`<button class="ghito ${S.sel===h.id?'gsel':''}" data-act="${C.edit?'selH':'editH'}" data-id="${h.id}" data-drag="h" title="${esc(h.titulo)} · ${fmt(h.fecha)}" style="left:${x(h.fecha)-7}px;${h.hecho?'background:var(--verde)':''}" aria-label="${esc(h.titulo)} ${fmt(h.fecha)}"></button>${hl(h)}`).join('')}</div></div>`;
@@ -1416,10 +1423,10 @@ function ganttHTML(o,C){
     const pr=t.estado==='hecha'?100:t.estado==='curso'?Math.max(8,Math.min(95,Math.round((TODAY-(t.inicioReal||t.inicio))/Math.max(DAY,t.fin-(t.inicioReal||t.inicio))*100))):late?100:0;
     return `<div class="grow"><button class="glabel" data-act="${C.edit?'selT':'editT'}" data-id="${t.id}" title="${esc(t.titulo)}"><span class="gl-n">${esc(t.titulo)}</span><span class="gl-d">${fmt(t.inicio)} → ${fmt(t.fin)}${t.resp?' · '+esc(t.resp):''}</span></button><div class="gtrack" style="width:${width}px"><button class="gbar ${cls} ${S.sel===t.id?'gsel':''}" data-act="${C.edit?'selT':'editT'}" data-id="${t.id}" data-drag="m" style="left:${x(t.inicio)}px;width:${Math.max(8,x(t.fin+DAY)-x(t.inicio))}px" title="${esc(t.titulo)} · ${fmt(t.inicio)} → ${fmt(t.fin)}"><i style="width:${pr}%"></i><span class="gh l" data-drag="l"></span><span class="gh r" data-drag="r"></span></button><span class="gpct" style="left:${x(t.fin+DAY)+4}px">${fmt(t.fin)}</span></div></div>`}).join('');
   const vacio=!T.length&&!H.length?`<p class="muted" style="padding:14px">Todavía no hay tareas con fechas. Agregá la primera con inicio y fin, o una fecha clave (hormigonado, etapa…).</p>`:'';
-  return `<div class="gwrap" id="gwrap" data-scroll="${Math.max(0,x(TODAY)-220)}"><div class="gantt g6" data-start="${start}" data-pxd="${pxd}" style="width:${width+LBL}px;--W:${W}px;--LBL:${LBL}px">
+  return `<div class="gwrap" id="gwrap" data-scroll="${Math.max(0,x(TODAY)-220)}"><div class="gantt g6 ${full?'gfulld':''}" data-start="${start}" data-pxd="${pxd}" style="width:${width+LBL}px;--W:${W}px;--LBL:${LBL}px">
   <div class="gmonths"><div class="glabel">${esc(o.nombre)}</div><div class="gtrack" style="width:${width}px">${months}</div></div>
   <div class="gquin"><div class="glabel muted">Quincena</div><div class="gtrack" style="width:${width}px">${quin}</div></div>
-  <div class="gdays"><div class="glabel muted">Día (lunes)</div><div class="gtrack" style="width:${width}px">${days}</div></div>
+  <div class="gdays"><div class="glabel muted">${full?'Día':'Día (lunes)'}</div><div class="gtrack" style="width:${width}px">${days}</div></div>
   ${hit}${rows}<span class="gtoday" style="left:${LBL+x(TODAY)}px"><b>hoy ${new Date(TODAY).getUTCDate()}/${new Date(TODAY).getUTCMonth()+1}</b></span></div>${vacio}</div>`;
 }
 function ganttGeneral(){
@@ -1435,7 +1442,7 @@ function ganttGeneral(){
   return `<div class="gwrap" id="gwrap" data-scroll="${Math.max(0,x(TODAY)-220)}"><div class="gantt g6" style="width:${width+LBL}px;--W:${W}px;--LBL:${LBL}px"><div class="gmonths"><div class="glabel">Todas las obras</div><div class="gtrack" style="width:${width}px">${months}</div></div>${rows}<span class="gtoday" style="left:${LBL+x(TODAY)}px"><b>hoy ${new Date(TODAY).getUTCDate()}/${new Date(TODAY).getUTCMonth()+1}</b></span></div></div>
   <div class="legend2"><span><i style="background:var(--verde)"></i>hecha</span><span><i style="background:var(--azul)"></i>en curso</span><span><i style="background:var(--futuro)"></i>pendiente</span><span><i style="background:var(--rojo)"></i>atrasada</span><span>◆ fecha clave</span></div>`;
 }
-const zoomBtns=()=>`<span class="seg2">${[['Día',70],['Semana',34],['Mes',14]].map(([l,w])=>`<button class="btn sm ${S.gw===w?'gold':'ghost'}" data-act="zoom" data-w="${w}">${l}</button>`).join('')}</span>`;
+const zoomBtns=()=>`<span class="seg2">${[['Día',154],['Semana',98],['Mes',34]].map(([l,w])=>`<button class="btn sm ${S.gw===w?'gold':'ghost'}" data-act="zoom" data-w="${w}">${l}</button>`).join('')}</span>`;
 
 /* ---------- Obras ---------- */
 function vObras(){
@@ -1550,7 +1557,7 @@ function gfRender(first){
   const g=$('#gfull');if(!g||!S.gfull)return;
   const todas=S.gfull==='todas',o=todas?null:byId('obras',S.gfull);if(!todas&&!o){gfCerrar();return}
   const gl=g.querySelector('.gleft'),sx=gl?gl.scrollLeft:0,sy=gl?gl.scrollTop:0,gr=g.querySelector('.gright'),ry=gr?gr.scrollTop:0;
-  const W=S.gw*(innerWidth>1000?1.35:1);
+  const W=S.gw*(innerWidth>1000&&S.gw<150?1.2:1);
   const top=`<div class="gtop"><button class="btn sm ghost" data-act="gcerrar">${BACK} Salir</button><h2>${todas?'Todas las obras':esc(o.nombre)} · Gantt</h2>${todas?'':`<button class="btn sm gold" data-act="gnuevaT">+ Tarea</button><button class="btn sm" data-act="gnuevoH">+ Fecha clave</button>`}${zoomBtns()}<button class="btn sm ghost" data-act="gpanel">${S.gpanel?'Ocultar':'Mostrar'} panel</button><button class="btn sm ghost" data-act="gpantalla">Pantalla completa</button><button class="btn sm ghost" data-act="gventana">Abrir en otra ventana</button></div>`;
   const T=todas?[]:tareasDe('obra:'+o.id).slice().sort(ordenF),H=todas?[]:hitosDe(o.id);
   const panel=todas?'':`<div class="gright"><span class="eyebrow">Tareas · editá y el Gantt se actualiza</span><div style="margin-top:8px">${T.map(t=>`<div class="gp-row" data-id="${t.id}"><button class="dot ${t.estado}" data-act="ciclo" data-id="${t.id}" title="Estado"></button><input data-chg="gtit" data-id="${t.id}" value="${esc(t.titulo)}" placeholder="Tarea"><input type="date" data-chg="gini" data-id="${t.id}" value="${iso(t.inicio)}"><input type="date" data-chg="gfin" data-id="${t.id}" value="${iso(t.fin)}"><button class="x" data-act="gdelT" data-id="${t.id}" title="Eliminar">✕</button></div>`).join('')}</div>
