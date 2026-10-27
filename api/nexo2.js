@@ -321,7 +321,9 @@ export default async function handler(req, res) {
         id: str(c.id, 40), tipo: c.tipo === "mat" ? "mat" : "doc", tarea: str(c.tarea, 120), limite: num(c.limite), color: str(c.color, 12), n: num(c.n),
         pend: (Array.isArray(c.pend) ? c.pend : []).slice(0, 12).map((i) => ({ txt: str(i.txt, 160), resp: str(i.resp, 60), tipo: str(i.tipo, 40) })),
       }));
-      await escribir(H, "snap_" + obra, { t: Date.now(), nombre: str(b.nombre, 80), cards });
+      const I = b.info || {}; const dots = I.dots || {};
+      const info = { avance: num(I.avance), modelo: str(I.modelo, 120), jefe: str(I.jefe, 60), estudio: str(I.estudio, 60), entrega: num(I.entrega), base: num(I.base), desvio: Math.max(-999, Math.min(999, Math.round(Number(I.desvio) || 0))), vencidas: num(I.vencidas), defsOk: num(I.defsOk), defsTot: num(I.defsTot), etapa: str(I.etapa, 120), foto: /^https?:\/\//.test(String(I.foto || "")) ? str(I.foto, 400) : "", dots: { rojo: num(dots.rojo), naranja: num(dots.naranja), amarillo: num(dots.amarillo), verde: num(dots.verde), ok: num(dots.ok) } };
+      await escribir(H, "snap_" + obra, { t: Date.now(), nombre: str(b.nombre, 80), cards, info });
       res.status(200).json({ ok: true });
       return;
     }

@@ -157,7 +157,7 @@ export default async function handler(req, res) {
         const I = ((inf && inf.items) || []).slice().sort((x, y) => (y.desde || 0) - (x.desde || 0));
         const ult = I[0];
         const frenadas = ult ? (ult.tareas || []).filter((t) => t.causa && (t.av === null || t.av < 100) && t.causa !== "Interna de la constructora").map((t) => ({ name: t.name, causa: t.causa, causaTxt: t.causaTxt || "", resp: t.resp || "", desde: t.desdeF || 0, card: t.card || "", av: t.av })) : [];
-        out[o.id] = { nexo: nid, snapT: (snap && snap.t) || 0, cards: (snap && snap.cards) || [], informeDesde: ult ? ult.desde : 0, informeHasta: ult ? ult.hasta : 0, frenadas };
+        out[o.id] = { nexo: nid, snapT: (snap && snap.t) || 0, info: (snap && snap.info) || null, cards: (snap && snap.cards) || [], informeDesde: ult ? ult.desde : 0, informeHasta: ult ? ult.hasta : 0, frenadas };
       }
       res.status(200).json({ ok: true, nexo: out });
       return;

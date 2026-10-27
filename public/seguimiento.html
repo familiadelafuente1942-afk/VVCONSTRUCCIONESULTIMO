@@ -1408,6 +1408,10 @@ header.top{padding-inline:20px!important}
 .brand>span:first-child{display:none!important}
 }
 @media (min-width:1100px){.brand{justify-content:flex-end!important}}
+.o2-img.sinfoto{background:#000 url(/seguimiento-icon.png) center/46px no-repeat}
+.obras-l{display:flex;flex-direction:column;gap:10px}
+.orow2 .ohd{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media (min-width:1100px){.obras-l{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1660,11 +1664,13 @@ function vLogin(){return `<div class="loginbox"><span class="eyebrow">V+V Constr
 function filaAg(a){return `<div class="agrow"><span class="tc-ico ${a.hecho?'t-verde':''}" style="width:30px;height:30px;cursor:pointer" data-act="hechoAg" data-id="${a.id}" title="Marcar como hecha">${a.hecho?svg('chk',16):''}</span>
  <div style="flex:1;min-width:0;cursor:pointer" data-act="editAg" data-id="${a.id}"><b class="${a.quien==='Nicolás'?'t-azul':a.quien==='Sebastián'?'t-gold':'t-verde'}">${a.quien==='Nadie'?'No va nadie':a.quien==='Ambos'?'Van los dos':'Va '+a.quien}</b> <span class="muted small">${[a.hora?'🕒 '+a.hora:'',a.lugar||'Nordelta',a.obra?nombreObra(a.obra):'',a.motivo].filter(Boolean).map(esc).join(' · ')}</span></div><button class="pinx ${a.fijar?'on':''}" data-act="fijarAg" data-id="${a.id}" aria-label="Anclar en Inicio" title="Mostrar en Inicio">📌</button><button class="delx" data-act="del" data-c="agenda" data-id="${a.id}" aria-label="Borrar" title="Borrar">✕</button></div>`}
 const agDe=f=>col('agenda').filter(a=>a.fecha===f).sort((a,b)=>(a.hora||'99')<(b.hora||'99')?-1:1);
-function filaObraRes(o){const T=tareasDe('obra:'+o.id),h=T.filter(t=>t.estado==='hecha').length,at=T.filter(atrasada).length,n=obreros(o.id).length,p=proxima(o),nx=nxPend(o);
-  return `<button class="card" data-act="obra" data-id="${o.id}" style="text-align:left;width:100%;display:block"><div class="sub-h"><b style="font-size:17px">${esc(o.nombre)}</b><span style="display:flex;gap:6px">${at?`<span class="badge" style="position:static;background:var(--rojo);color:#fff;border-radius:999px;font-size:11px;padding:0 6px;line-height:18px">${at} atras.</span>`:''}${nx?`<span class="chip gold">${nx} en NEXO</span>`:''}</span></div>
-  <div class="bar" style="margin:8px 0 6px"><i style="width:${T.length?Math.round(h*100/T.length):0}%"></i></div>
-  <span class="muted small" style="display:block">Etapa: <b style="color:var(--fg)">${esc(etapaDe(o)||'sin definir')}</b> · ${plural(n,'obrero','obreros')}</span>
-  <span class="muted small" style="display:block">Próxima tarea: <b style="color:var(--fg)">${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></span></button>`}
+function filaObraRes(o){const T=tareasDe('obra:'+o.id),h=T.filter(t=>t.estado==='hecha').length,at=T.filter(atrasada).length,n=obreros(o.id).length,p=proxima(o),nx=nxDe(o),I=nx&&nx.info;
+  const foto=(I&&I.foto)||(nx&&['o1','o2','o3','o4'].includes(nx.nexo)?'/seg-obra-'+nx.nexo+'.jpg':'');
+  const pct=I?I.avance:(T.length?Math.round(h*100/T.length):0);
+  const dots=I&&I.dots?[['rojo','vencidas'],['naranja','urgentes'],['amarillo','pedir ya'],['verde','ventana abierta'],['ok','completas']].map(([k,l])=>I.dots[k]?`<span class="chip" title="${l}">${k==='ok'?'<b class="t-verde">✓</b>':`<span class="dot c-${k}"></span>`}${I.dots[k]}</span>`:'').join(''):'';
+  const g=I?`<span><span>Entrega prevista</span><b class="${I.desvio>0?'t-naranja':''}">${fmt(I.entrega)}${I.desvio>0?' (+'+I.desvio+' sem)':''}</b></span><span><span>Vencidas</span><b class="${I.vencidas?'t-rojo':''}">${plural(I.vencidas,'tarjeta','tarjetas')}</b></span><span><span>Definiciones</span><b>${I.defsOk} de ${I.defsTot} tareas</b></span>`
+   :`<span><span>Etapa</span><b>${esc(etapaDe(o)||'Sin definir')}</b></span><span><span>Próxima tarea</span><b>${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></span><span><span>Atrasadas</span><b class="${at?'t-rojo':''}">${plural(at,'tarea','tareas')}</b></span>`;
+  return `<button class="orow2" data-act="obra" data-id="${o.id}"><span class="o2-img${foto?'':' sinfoto'}" ${foto?`style="background-image:url('${foto}')"`:''}><span class="o2-pct">${pct}%</span></span><span class="info"><span class="ohd"><b>${esc(o.nombre)}</b>${at?`<span class="chip" style="color:var(--rojo)">${at} atras.</span>`:''}${nxPend(o)?`<span class="chip gold">${nxPend(o)} en NEXO</span>`:''}</span>${I?`<span class="muted small">${esc(I.modelo)}</span><span class="muted small">Jefatura: ${esc(I.jefe)} · Estudio: ${esc(I.estudio)}</span>`:`<span class="muted small">${plural(n,'obrero','obreros')}</span>`}<span class="ogrid">${g}</span>${dots?`<span class="ddots">${dots}</span>`:''}${I?`<span class="muted small">Ahora: <b style="color:var(--fg)">${esc(etapaDe(o)||I.etapa||'Sin definir')}</b> · Próxima tarea: <b style="color:var(--fg)">${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></span>`:''}</span></button>`}
 function miniNx(o,c){const k=c.color==='rojo'?'rojo':c.color==='naranja'?'naranja':'amarillo',rs=[...new Set(c.pend.map(i=>i.resp).filter(Boolean))].join(', ');
   return `<button class="mini" data-act="irNx" data-id="${o.id}"><i class="dot2 c-${k}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${esc(c.tarea)}</span><span class="m2">${c.tipo==='mat'?'Materiales':'Documentación'}${rs?' · debe '+esc(rs):''}</span><span class="m3">${c.limite?fmt(c.limite):''}</span></button>`}
 function miniHito(h){const e=hitoEst(h),pv=h.prevista||h.fecha,falta=Math.round((pv-TODAY)/DAY),k=e.c==='futuro'?'verde':e.c;
@@ -1755,7 +1761,7 @@ function vObras(){
   return `<div><span class="eyebrow">V+V Construcciones</span><h1>Obras</h1></div>
   <div class="tabs" role="tablist"><button role="tab" data-act="ovista" data-k="lista" aria-selected="${S.ovista==='lista'}">Obras</button><button role="tab" data-act="ovista" data-k="gantt" aria-selected="${S.ovista==='gantt'}">Gantt general</button></div>
   ${S.ovista==='gantt'?`<div class="sub-h">${zoomBtns()}<button class="btn sm" data-act="gfull" data-o="todas">Pantalla completa</button></div>${ganttGeneral()}`
-  :`<div style="display:flex;flex-direction:column;gap:8px">${col('obras').map(filaObraRes).join('')}</div><button class="btn full ghost" data-act="nuevaObra">+ Agregar obra</button>`}`;
+  :`<div class="list obras-l">${col('obras').map(filaObraRes).join('')}</div><button class="btn full ghost" data-act="nuevaObra">+ Agregar obra</button>`}`;
 }
 function vObra(){
   const o=byId('obras',S.obra);if(!o){S.obra=null;return vObras()}

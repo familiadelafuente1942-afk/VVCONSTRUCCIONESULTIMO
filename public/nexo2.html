@@ -2922,12 +2922,14 @@ function snapPublicar(){
     for(const o of OBRAS){
       if(!o.cards||!o.cards.length)continue;
       const cards=o.cards.filter(c=>(c.tipo==='doc'||c.tipo==='mat')&&!cDone(c)&&color(c)!=='futuro').map(c=>({id:String(c.id),tipo:c.tipo,tarea:c.task.name,limite:timing(c).limit,color:color(c),n:c.items.length,pend:c.items.filter(i=>!iDone(i)).map(i=>({txt:i.txt,resp:i.resp||'',tipo:i.tipo||''}))}));
-      out.push({o,cards});
+      const docs=o.cards.filter(c=>c.tipo==='doc'),cn=k=>docs.filter(c=>color(c)===k).length;
+      const info={avance:avance(o),modelo:modeloFull(o),jefe:o.jefe||'',estudio:o.estudio||'',entrega:finObra(o),base:finBase(o),desvio:desvioSem(o),vencidas:o.cards.filter(c=>color(c)==='rojo').length,defsOk:docs.filter(cDone).length,defsTot:docs.length,dots:{rojo:cn('rojo'),naranja:cn('naranja'),amarillo:cn('amarillo'),verde:cn('verde'),ok:cn('ok')},etapa:etapaDe(o),foto:/^https?:\/\//.test(o.imgUrl||'')?o.imgUrl:''};
+      out.push({o,cards,info});
     }
-    const h=JSON.stringify(out.map(x=>[x.o.id,x.cards]));
+    const h=JSON.stringify(out.map(x=>[x.o.id,x.cards,x.info]));
     if(h===_snapH)return;
     _snapH=h;_snapT=Date.now();
-    out.forEach(x=>codApi({op:'snap_save',obra:x.o.id,nombre:x.o.nombre,cards:x.cards,cred:{rol:'dir',codigo:dirAuthGet()}}).catch(()=>{_snapH=''}));
+    out.forEach(x=>codApi({op:'snap_save',obra:x.o.id,nombre:x.o.nombre,cards:x.cards,info:x.info,cred:{rol:'dir',codigo:dirAuthGet()}}).catch(()=>{_snapH=''}));
   }catch(e){}
 }
 function draw(){
