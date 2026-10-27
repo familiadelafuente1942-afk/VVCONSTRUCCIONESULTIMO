@@ -150,8 +150,20 @@ export default async function handler(req, res) {
       const MAP = { puentes132: "o1", castores475: "o2", puentes246: "o4" };
       const obras = await leerCol(H, "obras");
       const out = {};
+      // obras de NEXO 2 que no están vinculadas a mano: se casan por nombre exacto (sin tildes ni mayúsculas)
+      const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      let snaps = [];
+      try {
+        const rs = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=like.snap_*`, { headers: H });
+        if (rs.ok) snaps = (await rs.json()).map((r) => ({ nid: String(r.clave).slice(5), nombre: (r.valor && r.valor.nombre) || "" }));
+      } catch (e) { snaps = []; }
+      const porNombre = (nom) => {
+        const n = nrm(nom); if (!n) return "";
+        const igual = snaps.filter((x) => nrm(x.nombre) === n);
+        return igual.length ? igual[0].nid : "";
+      };
       for (const o of obras) {
-        const nid = o.nexo || MAP[o.id];
+        const nid = o.nexo || MAP[o.id] || porNombre(o.nombre);
         if (!nid || !/^[A-Za-z0-9_-]{1,40}$/.test(nid)) continue;
         const [snap, inf] = await Promise.all([leer(H, "snap_" + nid), leer(H, "informes_" + nid)]);
         const I = ((inf && inf.items) || []).slice().sort((x, y) => (y.desde || 0) - (x.desde || 0));

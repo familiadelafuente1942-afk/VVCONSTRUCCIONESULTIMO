@@ -1412,6 +1412,8 @@ header.top{padding-inline:20px!important}
 .obras-l{display:flex;flex-direction:column;gap:10px}
 .orow2 .ohd{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 @media (min-width:1100px){.obras-l{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
+.hero2 .hs.sinfoto{background:#000 url(/seguimiento-icon.png) center/56px no-repeat}
+.ohead .bigpct{margin-left:auto}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1666,8 +1668,18 @@ function vLogin(){return `<div class="loginbox"><span class="eyebrow">V+V Constr
 function filaAg(a){return `<div class="agrow"><span class="tc-ico ${a.hecho?'t-verde':''}" style="width:30px;height:30px;cursor:pointer" data-act="hechoAg" data-id="${a.id}" title="Marcar como hecha">${a.hecho?svg('chk',16):''}</span>
  <div style="flex:1;min-width:0;cursor:pointer" data-act="editAg" data-id="${a.id}"><b class="${a.quien==='Nicolás'?'t-azul':a.quien==='Sebastián'?'t-gold':'t-verde'}">${a.quien==='Nadie'?'No va nadie':a.quien==='Ambos'?'Van los dos':'Va '+a.quien}</b> <span class="muted small">${[a.hora?'🕒 '+a.hora:'',a.lugar||'Nordelta',a.obra?nombreObra(a.obra):'',a.motivo].filter(Boolean).map(esc).join(' · ')}</span></div><button class="pinx ${a.fijar?'on':''}" data-act="fijarAg" data-id="${a.id}" aria-label="Anclar en Inicio" title="Mostrar en Inicio">📌</button><button class="delx" data-act="del" data-c="agenda" data-id="${a.id}" aria-label="Borrar" title="Borrar">✕</button></div>`}
 const agDe=f=>col('agenda').filter(a=>a.fecha===f).sort((a,b)=>(a.hora||'99')<(b.hora||'99')?-1:1);
+const STAT={"o1": ["seg-obra-o1.jpg", "seg-obra-o1-1.jpg", "seg-obra-o1-2.jpg", "seg-obra-o1-3.jpg", "seg-obra-o1-4.jpg", "seg-obra-o1-5.jpg", "seg-obra-o1-6.jpg", "seg-obra-o1-7.jpg", "seg-obra-o1-8.jpg", "seg-obra-o1-9.jpg", "seg-obra-o1-10.jpg", "seg-obra-o1-11.jpg", "seg-obra-o1-12.jpg", "seg-obra-o1-13.jpg", "seg-obra-o1-14.jpg"], "o2": ["seg-obra-o2.jpg", "seg-obra-o2-1.jpg", "seg-obra-o2-2.jpg", "seg-obra-o2-3.jpg", "seg-obra-o2-4.jpg", "seg-obra-o2-5.jpg", "seg-obra-o2-6.jpg", "seg-obra-o2-7.jpg", "seg-obra-o2-8.jpg", "seg-obra-o2-9.jpg", "seg-obra-o2-10.jpg", "seg-obra-o2-11.jpg", "seg-obra-o2-12.jpg", "seg-obra-o2-13.jpg", "seg-obra-o2-14.jpg"], "o3": ["seg-obra-o3.jpg", "seg-obra-o3-1.jpg", "seg-obra-o3-2.jpg"], "o4": ["seg-obra-o4.jpg", "seg-obra-o4-1.jpg"]};
+let HEROT=0;
+function fotosDe(o){const nx=nxDe(o),I=nx&&nx.info,L=[];
+  ((I&&I.fotos)||[]).forEach(u=>{if(!L.includes(u))L.push(u)});if(I&&I.foto&&!L.includes(I.foto))L.unshift(I.foto);
+  ((nx&&STAT[nx.nexo])||[]).forEach(f=>L.push('/'+f));
+  ((S.REND||{})[o.id]||[]).forEach(u=>{if(!L.includes(u))L.push(u)});return L}
+function heroPar(o){const L=fotosDe(o),n=L.length;if(!n)return[null,null];if(n===1)return[L[0],null];if(n===2)return[L[0],L[1]];return[L[HEROT%n],L[(HEROT+1)%n]]}
+function heroDosS(o){const[a,b]=heroPar(o);if(!a)return'';return `<div class="hero2" data-o="${o.id}">${[a,b].map(u=>u?`<div class="hs"><img class="on" src="${esc(u)}" alt=""><img src="" alt="" aria-hidden="true"></div>`:'<div class="hs sinfoto"></div>').join('')}</div>`}
+setInterval(()=>{if(document.hidden)return;const hs=document.querySelectorAll('.hero2[data-o]');if(!hs.length)return;HEROT++;
+  hs.forEach(h=>{const o=byId('obras',h.dataset.o);if(!o||fotosDe(o).length<3)return;const par=heroPar(o);h.querySelectorAll('.hs').forEach((sl,i)=>{const cur=sl.querySelector('img.on'),nx=[...sl.querySelectorAll('img')].find(x=>x!==cur);if(!cur||!nx||cur.getAttribute('src')===par[i])return;nx.onload=()=>{nx.classList.add('on');cur.classList.remove('on')};nx.src=par[i]})})},4500);
 function filaObraRes(o){const T=tareasDe('obra:'+o.id),h=T.filter(t=>t.estado==='hecha').length,at=T.filter(atrasada).length,n=obreros(o.id).length,p=proxima(o),nx=nxDe(o),I=nx&&nx.info;
-  const foto=(I&&I.foto)||(nx&&['o1','o2','o3','o4'].includes(nx.nexo)?'/seg-obra-'+nx.nexo+'.jpg':'')||((S.REND||{})[o.id]||[])[0]||'';
+  const foto=fotosDe(o)[0]||'';
   const pct=I?I.avance:(T.length?Math.round(h*100/T.length):0);
   const dots=I&&I.dots?[['rojo','vencidas'],['naranja','urgentes'],['amarillo','pedir ya'],['verde','ventana abierta'],['ok','completas']].map(([k,l])=>I.dots[k]?`<span class="chip" title="${l}">${k==='ok'?'<b class="t-verde">✓</b>':`<span class="dot c-${k}"></span>`}${I.dots[k]}</span>`:'').join(''):'';
   const g=I?`<span><span>Entrega prevista</span><b class="${I.desvio>0?'t-naranja':''}">${fmt(I.entrega)}${I.desvio>0?' (+'+I.desvio+' sem)':''}</b></span><span><span>Vencidas</span><b class="${I.vencidas?'t-rojo':''}">${plural(I.vencidas,'tarjeta','tarjetas')}</b></span><span><span>Definiciones</span><b>${I.defsOk} de ${I.defsTot} tareas</b></span>`
@@ -1777,7 +1789,10 @@ function vObra(){
   :S.otab==='adic'?vAdic(o)
   :S.otab==='gente'?`<button class="btn sm gold" data-act="nuevaP" data-obra="${o.id}" style="align-self:flex-start">+ Persona</button><div class="card">${listaGente(o.id)}</div>`
   :vNexoObra(o);
-  return `<div class="ohead"><button class="back" data-act="volver">${BACK} Obras</button><div class="sub-h" style="margin-top:8px"><div><span class="eyebrow">Obra</span><h1>${esc(o.nombre)}</h1></div><button class="btn sm ghost" data-act="editObra" data-id="${o.id}">Editar</button></div></div>
+  const I=nx&&nx.info,pct=I?I.avance:(T.length?Math.round(T.filter(t=>t.estado==='hecha').length*100/T.length):0);
+  return `<div class="ohead"><button class="back" data-act="volver">${BACK} Obras</button>${heroDosS(o)}<div class="sub-h" style="margin-top:8px;align-items:flex-end"><div><span class="eyebrow">${esc((I&&I.ubic)||'Obra')}</span><h1>${esc(o.nombre)}</h1></div><span class="bigpct">${pct}%</span></div>
+  <div><button class="btn sm ghost" data-act="editObra" data-id="${o.id}">Editar</button></div>
+  ${I?`<div class="bar"><i style="width:${I.avance}%"></i><s style="left:${I.plan||0}%"></s></div><span class="muted small">Avance real ${I.avance}% · según la base debería ir ${I.plan||0}% · etapa: ${esc(etapaDe(o)||I.etapa||'Sin definir')}</span><div class="dots">${I.ubic?`<span class="chip">${esc(I.ubic)}</span>`:''}<span class="chip gold">${esc(I.modelo)}</span><span class="chip">Jefatura: ${esc(I.jefe)}</span><span class="chip">Estudio: ${esc(I.estudio)}</span></div>`:''}</div>
   <div class="facts"><div class="fact"><span>Ahora · etapa</span><b>${esc(etapaDe(o)||'Sin definir')}</b></div><div class="fact"><span>Próxima tarea a arrancar</span><b>${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></div><div class="fact"><span>Obreros</span><b>${gente.length}</b></div><div class="fact"><span>Pendiente en NEXO 2</span><b class="${nxPend(o)?'t-rojo':''}">${nx?nxPend(o):'—'}</b></div></div>
   <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-act="otab" data-k="${k}" aria-selected="${S.otab===k}">${l}${k==='crono'&&at?` <span class="badge" style="position:static;background:var(--rojo);color:#fff;border-radius:999px;font-size:10px;padding:0 5px">${at}</span>`:''}</button>`).join('')}</div>${body}`;
 }
