@@ -24,7 +24,7 @@ function ap(p){p=p||pref();if(String(p).indexOf('nivel:')===0){nivel(+String(p).
 window.__tema=function(p){try{if(p)localStorage.setItem(K,p)}catch(e){}ap(p||pref())};window.__temaPref=pref;
 if(mq){var f=function(){if(pref()==='auto')ap('auto')};mq.addEventListener?mq.addEventListener('change',f):mq.addListener&&mq.addListener(f)}
 ap();})();</script><link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"><style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet"><style>
 /* Layout: app de una columna tipo celular; barra inferior distinta por rol; hojas deslizantes para detalle y formularios */
 :root{
   --bg:#0d0e10; --surface:#16171a; --raise:#1d1f23; --line:#2a2c31; --fg:#ece8e1; --muted:#8f8b84;
@@ -1220,6 +1220,11 @@ body.sheetopen{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 .gdd i{font-style:normal;font-size:9px;opacity:.6;font-weight:500}
 .gdd.fin{background:rgba(120,120,120,.14);color:var(--muted,#888)}
 .gdd.hoy{background:var(--rojo,#dc2626);color:#fff}.gdd.hoy i{opacity:.9}
+*,*::before,*::after{font-family:'Playfair Display',Georgia,'Times New Roman',serif!important}
+html{--display:'Playfair Display',Georgia,serif;--cond:'Playfair Display',Georgia,serif;--body:'Playfair Display',Georgia,serif;--mono:'Playfair Display',Georgia,serif}
+.gantt .grow .gtrack,.gantt .gmonths .gtrack{background-image:linear-gradient(to right,rgba(128,128,128,.28) 1px,transparent 1px),linear-gradient(to right,rgba(128,128,128,.6) 1px,transparent 1px);background-size:var(--pxd) 100%,var(--W) 100%;background-position:0 0,var(--mon,0px) 0}
+.gantt .gdays .gtrack,.gantt .gquin .gtrack{background-image:none}
+.tcard{position:relative}.tcard>.delx{position:absolute;right:10px;bottom:8px;margin:0}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1424,7 +1429,7 @@ function ganttHTML(o,C){
     const pr=t.estado==='hecha'?100:t.estado==='curso'?Math.max(8,Math.min(95,Math.round((TODAY-(t.inicioReal||t.inicio))/Math.max(DAY,t.fin-(t.inicioReal||t.inicio))*100))):late?100:0;
     return `<div class="grow"><button class="glabel" data-act="${C.edit?'selT':'editT'}" data-id="${t.id}" title="${esc(t.titulo)}"><span class="gl-n">${esc(t.titulo)}</span><span class="gl-d">${fmt(t.inicio)} → ${fmt(t.fin)}${t.resp?' · '+esc(t.resp):''}</span></button><div class="gtrack" style="width:${width}px"><button class="gbar ${cls} ${S.sel===t.id?'gsel':''}" data-act="${C.edit?'selT':'editT'}" data-id="${t.id}" data-drag="m" style="left:${x(Math.max(t.inicio,start))}px;width:${Math.max(8,x(t.fin+DAY)-x(Math.max(t.inicio,start)))}px" title="${esc(t.titulo)} · ${fmt(t.inicio)} → ${fmt(t.fin)}"><i style="width:${pr}%"></i><span class="gh l" data-drag="l"></span><span class="gh r" data-drag="r"></span></button><span class="gpct" style="left:${x(t.fin+DAY)+4}px">${fmt(t.fin)}</span></div></div>`}).join('');
   const vacio=!T.length&&!H.length?`<p class="muted" style="padding:14px">Todavía no hay tareas con fechas. Agregá la primera con inicio y fin, o una fecha clave (hormigonado, etapa…).</p>`:'';
-  return `<div class="gwrap" id="gwrap" data-scroll="${Math.max(0,x(TODAY)-220)}"><div class="gantt g6 ${full?'gfulld':''}" data-start="${start}" data-pxd="${pxd}" style="width:${width+LBL}px;--W:${W}px;--LBL:${LBL}px">
+  return `<div class="gwrap" id="gwrap" data-scroll="${Math.max(0,x(TODAY)-220)}"><div class="gantt g6 ${full?'gfulld':''}" data-start="${start}" data-pxd="${pxd}" style="width:${width+LBL}px;--W:${W}px;--LBL:${LBL}px;--pxd:${pxd}px;--mon:${((8-new Date(start).getUTCDay())%7)*pxd}px">
   <div class="gmonths"><div class="glabel">${esc(o.nombre)}</div><div class="gtrack" style="width:${width}px">${months}</div></div>
   <div class="gquin"><div class="glabel muted">Quincena</div><div class="gtrack" style="width:${width}px">${quin}</div></div>
   <div class="gdays"><div class="glabel muted">${full?'Día':'Día (lunes)'}</div><div class="gtrack" style="width:${width}px">${days}</div></div>
@@ -1440,7 +1445,7 @@ function ganttGeneral(){
     const segs=L.map(t=>{const c=t.estado==='hecha'?'var(--verde)':atrasada(t)?'var(--rojo)':t.estado==='curso'?'var(--azul)':'var(--futuro)';return `<span class="gseg" data-act="obra" data-id="${o.id}" title="${esc(t.titulo)} · ${fmt(t.inicio)} → ${fmt(t.fin)}" style="left:${x(Math.max(t.inicio,start))}px;width:${Math.max(4,x(t.fin+DAY)-x(Math.max(t.inicio,start)))}px;background:${c};top:${t.estado==='curso'?10:14}px;height:${t.estado==='curso'?12:8}px;cursor:pointer"></span>`}).join('');
     const hs=HH.map(h=>{const fh=Math.max(h.fecha,start);const px=x(fh)+10,ln=lanes.findIndex(e=>px>=e+8);const lab=ln<0?'':(lanes[ln]=px+h.titulo.length*5.6,`<span class="ghl" style="left:${px}px;top:${ln?30:2}px">${esc(h.titulo)}</span>`);return `<button class="ghito" data-act="obra" data-id="${o.id}" style="left:${x(fh)-7}px;top:${ln?26:6}px;${h.hecho?'background:var(--verde)':''}" title="${esc(h.titulo)} · ${fmt(h.fecha)}"></button>${lab}`}).join('');
     return `<div class="grow" style="height:46px"><button class="glabel" data-act="obra" data-id="${o.id}"><span class="gl-n">${esc(o.nombre)}</span><span class="gl-d">${esc(etapaDe(o)||'sin etapa')}</span></button><div class="gtrack" style="width:${width}px">${segs}${hs}</div></div>`}).join('');
-  return `<div class="gwrap" id="gwrap" data-scroll="${Math.max(0,x(TODAY)-220)}"><div class="gantt g6" style="width:${width+LBL}px;--W:${W}px;--LBL:${LBL}px"><div class="gmonths"><div class="glabel">Todas las obras</div><div class="gtrack" style="width:${width}px">${months}</div></div>${rows}<span class="gtoday" style="left:${LBL+x(TODAY)}px"><b>hoy ${new Date(TODAY).getUTCDate()}/${new Date(TODAY).getUTCMonth()+1}</b></span></div></div>
+  return `<div class="gwrap" id="gwrap" data-scroll="${Math.max(0,x(TODAY)-220)}"><div class="gantt g6" style="width:${width+LBL}px;--W:${W}px;--LBL:${LBL}px;--pxd:${W/7}px;--mon:${((8-new Date(start).getUTCDay())%7)*W/7}px"><div class="gmonths"><div class="glabel">Todas las obras</div><div class="gtrack" style="width:${width}px">${months}</div></div>${rows}<span class="gtoday" style="left:${LBL+x(TODAY)}px"><b>hoy ${new Date(TODAY).getUTCDate()}/${new Date(TODAY).getUTCMonth()+1}</b></span></div></div>
   <div class="legend2"><span><i style="background:var(--verde)"></i>hecha</span><span><i style="background:var(--azul)"></i>en curso</span><span><i style="background:var(--futuro)"></i>pendiente</span><span><i style="background:var(--rojo)"></i>atrasada</span><span>◆ fecha clave</span></div>`;
 }
 const zoomBtns=()=>`<span class="seg2">${[['Día',154],['Semana',98],['Mes',34]].map(([l,w])=>`<button class="btn sm ${S.gw===w?'gold':'ghost'}" data-act="zoom" data-w="${w}">${l}</button>`).join('')}</span>`;
@@ -1559,7 +1564,7 @@ function gfRender(first){
   const todas=S.gfull==='todas',o=todas?null:byId('obras',S.gfull);if(!todas&&!o){gfCerrar();return}
   const gl=g.querySelector('.gleft'),sx=gl?gl.scrollLeft:0,sy=gl?gl.scrollTop:0,gr=g.querySelector('.gright'),ry=gr?gr.scrollTop:0;
   const W=S.gw*(innerWidth>1000&&S.gw<150?1.2:1);
-  const top=`<div class="gtop"><button class="btn sm ghost" data-act="gcerrar">${BACK} Salir</button><h2>${todas?'Todas las obras':esc(o.nombre)} · Gantt</h2>${todas?'':`<button class="btn sm gold" data-act="gnuevaT">+ Tarea</button><button class="btn sm" data-act="gnuevoH">+ Fecha clave</button>`}${zoomBtns()}<button class="btn sm ghost" data-act="gpanel">${S.gpanel?'Ocultar':'Mostrar'} panel</button><button class="btn sm ghost" data-act="gpantalla">Pantalla completa</button><button class="btn sm ghost" data-act="gventana">Abrir en otra ventana</button></div>`;
+  const top=`<div class="gtop"><button class="btn sm ghost" data-act="gcerrar">${BACK} Salir</button><h2>${todas?'Todas las obras':esc(o.nombre)} · Gantt</h2>${todas?'':`<button class="btn sm gold" data-act="gnuevaT">+ Tarea</button><button class="btn sm" data-act="gnuevoH">+ Fecha clave</button>`}${zoomBtns()}<button class="btn sm ghost" data-act="gpanel">${S.gpanel?'Ocultar':'Mostrar'} panel</button><button class="btn sm ghost" data-act="gpantalla">Pantalla completa</button></div>`;
   const T=todas?[]:tareasDe('obra:'+o.id).slice().sort(ordenF),H=todas?[]:hitosDe(o.id);
   const panel=todas?'':`<div class="gright"><span class="eyebrow">Tareas · editá y el Gantt se actualiza</span><div style="margin-top:8px">${T.map(t=>`<div class="gp-row" data-id="${t.id}"><button class="dot ${t.estado}" data-act="ciclo" data-id="${t.id}" title="Estado"></button><input data-chg="gtit" data-id="${t.id}" value="${esc(t.titulo)}" placeholder="Tarea"><input type="date" data-chg="gini" data-id="${t.id}" value="${iso(t.inicio)}"><input type="date" data-chg="gfin" data-id="${t.id}" value="${iso(t.fin)}"><button class="x" data-act="gdelT" data-id="${t.id}" title="Eliminar">✕</button></div>`).join('')}</div>
    <button class="btn sm gold full" data-act="gnuevaT" style="margin:4px 0 14px">+ Agregar fila</button>
