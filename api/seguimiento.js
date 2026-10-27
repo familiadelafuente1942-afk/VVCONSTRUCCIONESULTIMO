@@ -43,7 +43,8 @@ const ESTADOS = ["pend", "curso", "hecha"];
 
 // Campos permitidos por colección
 const COLS = {
-  obras: (q) => ({ nombre: str(q.nombre, 80), orden: num(q.orden, 0, 999), nota: str(q.nota, 400), etapa: str(q.etapa, 120) }),
+  obras: (q) => ({ nombre: str(q.nombre, 80), orden: num(q.orden, 0, 999), nota: str(q.nota, 400), etapa: str(q.etapa, 120), nexo: ident(q.nexo) }),
+  hitos: (q) => ({ obra: ident(q.obra), titulo: str(q.titulo, 120), fecha: num(q.fecha, 0, 4e12), tipo: ["hormigonado", "etapa", "entrega", "otro"].includes(q.tipo) ? q.tipo : "otro", hecho: !!q.hecho, nota: str(q.nota, 300) }),
   tareas: (q) => ({
     ambito: str(q.ambito, 60), titulo: str(q.titulo, 200), nota: str(q.nota, 1000),
     inicio: num(q.inicio, 0, 4e12), fin: num(q.fin, 0, 4e12), inicioReal: num(q.inicioReal, 0, 4e12), finReal: num(q.finReal, 0, 4e12),
@@ -125,8 +126,26 @@ export default async function handler(req, res) {
         obras = OBRAS0.map(([id, nombre], i) => ({ id, nombre, orden: i, nota: "", por: "sistema", creado: Date.now(), editado: Date.now() }));
         await escribir(H, "seg_obras", { items: obras });
       }
-      const [tareas, personal, gastos, sueldos, agenda] = await Promise.all(["tareas", "personal", "gastos", "sueldos", "agenda"].map((c) => leerCol(H, c)));
-      res.status(200).json({ ok: true, quien, obras, tareas, personal, gastos, sueldos, agenda, ahora: Date.now() });
+      const [tareas, personal, gastos, sueldos, agenda, hitos] = await Promise.all(["tareas", "personal", "gastos", "sueldos", "agenda", "hitos"].map((c) => leerCol(H, c)));
+      res.status(200).json({ ok: true, quien, obras, tareas, personal, gastos, sueldos, agenda, hitos, ahora: Date.now() });
+      return;
+    }
+
+    // ---- lectura de NEXO 2 (solo lectura: acá nunca se escribe nada en NEXO 2) ----
+    if (b.op === "nexo") {
+      const MAP = { puentes132: "o1", castores475: "o2", puentes246: "o4" };
+      const obras = await leerCol(H, "obras");
+      const out = {};
+      for (const o of obras) {
+        const nid = o.nexo || MAP[o.id];
+        if (!nid || !/^[A-Za-z0-9_-]{1,40}$/.test(nid)) continue;
+        const [snap, inf] = await Promise.all([leer(H, "snap_" + nid), leer(H, "informes_" + nid)]);
+        const I = ((inf && inf.items) || []).slice().sort((x, y) => (y.desde || 0) - (x.desde || 0));
+        const ult = I[0];
+        const frenadas = ult ? (ult.tareas || []).filter((t) => t.causa && (t.av === null || t.av < 100) && t.causa !== "Interna de la constructora").map((t) => ({ name: t.name, causa: t.causa, causaTxt: t.causaTxt || "", resp: t.resp || "", desde: t.desdeF || 0, card: t.card || "", av: t.av })) : [];
+        out[o.id] = { nexo: nid, snapT: (snap && snap.t) || 0, cards: (snap && snap.cards) || [], informeDesde: ult ? ult.desde : 0, informeHasta: ult ? ult.hasta : 0, frenadas };
+      }
+      res.status(200).json({ ok: true, nexo: out });
       return;
     }
 
@@ -154,7 +173,7 @@ export default async function handler(req, res) {
       const items = await leerCol(H, col);
       await escribir(H, "seg_" + col, { items: items.filter((x) => x.id !== id) });
       if (col === "obras") {
-        for (const c of ["tareas", "personal"]) {
+        for (const c of ["tareas", "personal", "hitos"]) {
           const L = await leerCol(H, c);
           const k = c === "tareas" ? (x) => x.ambito === "obra:" + id : (x) => x.obra === id;
           if (L.some(k)) await escribir(H, "seg_" + c, { items: L.filter((x) => !k(x)) });

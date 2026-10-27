@@ -309,6 +309,23 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ===== resumen de tarjetas abiertas (lo publica NEXO 2 para la app interna de seguimiento; solo se lee desde allá) =====
+    if (b.op === "snap_save") {
+      const obra = String(b.obra || "");
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const cr = b.cred || {};
+      if (!(cr.rol === "dir" && dirOk(cr.codigo))) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código de Dirección." }); return; }
+      const str = (x, n) => String(x == null ? "" : x).slice(0, n);
+      const num = (x) => Math.min(4e12, Math.max(0, Number(x) || 0));
+      const cards = (Array.isArray(b.cards) ? b.cards : []).slice(0, 80).map((c) => ({
+        id: str(c.id, 40), tipo: c.tipo === "mat" ? "mat" : "doc", tarea: str(c.tarea, 120), limite: num(c.limite), color: str(c.color, 12), n: num(c.n),
+        pend: (Array.isArray(c.pend) ? c.pend : []).slice(0, 12).map((i) => ({ txt: str(i.txt, 160), resp: str(i.resp, 60), tipo: str(i.tipo, 40) })),
+      }));
+      await escribir(H, "snap_" + obra, { t: Date.now(), nombre: str(b.nombre, 80), cards });
+      res.status(200).json({ ok: true });
+      return;
+    }
+
     // ===== informes semanales (único punto de carga; de ahí salen los avances) =====
     if (typeof b.op === "string" && b.op.startsWith("inf_")) {
       const obra = String(b.obra || "");

@@ -2914,8 +2914,25 @@ document.addEventListener('submit',e=>{const f=e.target.closest('[data-submit]')
 /* ================= navegación ================= */
 const ICON={inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',obras:'<path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"/>',pedidos:'<rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/>',registro:'<path d="M5 4h11l3 3v13H5zM9 10h6M9 14h6"/>',mas:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',folder:'<path d="M3 7h6l2 2h10v10H3z"/>'};
 function navItems(){const r=ROLE();return{direccion:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['desempeno','Desempeño','chart'],['mas','Más','mas']],jefe:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['registro','Registro','registro'],['mas','Más','mas']],auditor:[['inicio','Inicio','inicio'],['obras','Obras','obras']],estudio:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['docs','Documentos','folder']],cliente:[['cliente','Mi obra','inicio']]}[r]||[]}
+let _snapH='',_snapT=0;
+function snapPublicar(){
+  try{
+    if(ROLE()!=='direccion'||!dirAuthGet()||Date.now()-_snapT<30000)return;
+    const out=[];
+    for(const o of OBRAS){
+      if(!o.cards||!o.cards.length)continue;
+      const cards=o.cards.filter(c=>(c.tipo==='doc'||c.tipo==='mat')&&!cDone(c)&&color(c)!=='futuro').map(c=>({id:String(c.id),tipo:c.tipo,tarea:c.task.name,limite:timing(c).limit,color:color(c),n:c.items.length,pend:c.items.filter(i=>!iDone(i)).map(i=>({txt:i.txt,resp:i.resp||'',tipo:i.tipo||''}))}));
+      out.push({o,cards});
+    }
+    const h=JSON.stringify(out.map(x=>[x.o.id,x.cards]));
+    if(h===_snapH)return;
+    _snapH=h;_snapT=Date.now();
+    out.forEach(x=>codApi({op:'snap_save',obra:x.o.id,nombre:x.o.nombre,cards:x.cards,cred:{rol:'dir',codigo:dirAuthGet()}}).catch(()=>{_snapH=''}));
+  }catch(e){}
+}
 function draw(){
   const r=ROLE();
+  setTimeout(snapPublicar,1500);
   const view=!S.u?(S.step==='roles'?vRoles():S.step==='obras'||S.step==='obrasAud'?vSelObras():S.step==='cons'?vCons():S.step==='clave'?vClave():vLogin()):({inicio:vInicio,obras:vObras,obra:vObra,pedidos:vPedidos,registro:vRegistro,mas:vMas,config:vConfig,claves:vClaves,desempeno:vDesempeno,docs:vDocs,cliente:vCliente}[S.tab]||vInicio)();
   $('#view').innerHTML=view;
   $('#who').innerHTML=S.u?`<span><b>${esc(S.u.name)}</b>${r==='jefe'||r==='auditor'?`<span class="rol">${plural(misObras().length,'obra','obras')}</span>`:r==='estudio'?`<button class="rol rolbtn" data-act="cambiarCons">${esc(CONSTRUCTORAS.find(c=>c.id===S.cons).n)} ▾</button>`:r==='direccion'?`<span class="rol">${ORG}</span>`:''}</span><button class="btn ghost sm" data-act="actualizar" aria-label="Actualizar la app" title="Actualizar">↻</button><button class="btn ghost sm" data-act="brillo" aria-label="Del blanco al negro" title="Del blanco al negro"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button>${LOCK&&LOCK!=='constructora'?'':'<button class="btn ghost sm" data-act="salir">Salir</button>'}`:'<span class="muted">Ingresá con tu cuenta</span>';
