@@ -1310,7 +1310,8 @@ async function borrar(c,id){
   try{await api({op:'borrar',col:c,id});badge()}catch(e){if(e.message==='sesion')return;toast('No se pudo borrar: '+e.message,true);await cargar(true)}
 }
 function cuentaGlobo(){const ids=new Set([...pendGen(),...atrasadasTodas()].map(t=>t.id));return ids.size+col('hitos').filter(h=>!h.hecho&&h.prevista&&h.prevista>h.fecha).length}
-function badge(){const n=cuentaGlobo();try{if(navigator.setAppBadge){n?navigator.setAppBadge(n):navigator.clearAppBadge()}}catch(e){}}
+function estadoGlobo(){const sop=!!navigator.setAppBadge,inst=(navigator.standalone===true)||matchMedia('(display-mode: standalone)').matches,perm=('Notification' in window)?Notification.permission:'no disponible';return{sop,inst,perm,n:cuentaGlobo()}}
+function badge(forzar){const n=typeof forzar==='number'?forzar:cuentaGlobo();try{if(navigator.setAppBadge){return (n?navigator.setAppBadge(n):navigator.clearAppBadge()).catch(()=>{})}}catch(e){}}
 
 /* ---------- sesión ---------- */
 function salirLocal(){S.tk='';S.cargado=false;gfCerrar(true);draw()}
@@ -1667,6 +1668,8 @@ const SUBMIT={
 /* ---------- acciones ---------- */
 const A={
   tab:ds=>{S.tab=ds.k;if(ds.k!=='obras')S.obra=null;draw();window.scrollTo(0,0)},
+  globoEstado:()=>{const e=estadoGlobo();toast(`Instalada: ${e.inst?'sí':'NO (abrila desde el ícono de la pantalla de inicio)'} · Permiso: ${e.perm} · Soporte: ${e.sop?'sí':'NO'} · Número: ${e.n}`,!(e.inst&&e.perm==='granted'&&e.sop))},
+  globoProbar:async()=>{await badge(7);toast('Puse un 7 en el ícono. Salí de la app y mirá el ícono.')},
   globo:async()=>{try{if(!('Notification' in window)){toast('Instalá la app en la pantalla de inicio para usar el globo',true);return}const r=await Notification.requestPermission();toast(r==='granted'?'Globo activado en el ícono':'No se activó. Habilitá las notificaciones de la app en Ajustes del iPhone',r!=='granted');badge()}catch(e){toast('No se pudo activar',true)}},
   soy:ds=>{S.quien=ds.q;S.tk='open';LS('seg_q',ds.q);cargar().then(abrirDeLink)},
   obra:ds=>{S.tab='obras';S.obra=ds.id;S.otab='crono';if(S.gfull)gfCerrar(true);draw();window.scrollTo(0,0)},
@@ -1698,7 +1701,7 @@ const A={
   delAg:ds=>{if(confirm('¿Eliminar esta visita?')){closeSheet();borrar('agenda',ds.id)}},
   delO:ds=>{const o=byId('obras',ds.id);if(confirm('¿Eliminar "'+o.nombre+'" con sus tareas, fechas clave y personal? No se puede deshacer.')){closeSheet();S.obra=null;borrar('obras',ds.id)}},
   actualizar:()=>{toast('Actualizando…');const u=new URL(location.href);u.searchParams.set('v',Date.now());setTimeout(()=>location.replace(u.toString()),150)},
-  brillo:()=>openSheet(`<span class="eyebrow">Aspecto</span><h2>Claro u oscuro</h2><div class="seg2" style="margin:10px 0"><button class="btn" data-act="tema" data-k="claro">Claro</button><button class="btn" data-act="tema" data-k="oscuro">Oscuro</button><button class="btn" data-act="tema" data-k="auto">Automático</button></div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><button class="btn full" data-act="globo" style="margin-bottom:8px">Activar globo rojo en el ícono</button><button class="btn full" data-act="salir">Cambiar de persona (soy ${S.quien==="Nicolás"?"Sebastián":"Nicolás"})</button>`,'Aspecto'),
+  brillo:()=>openSheet(`<span class="eyebrow">Aspecto</span><h2>Claro u oscuro</h2><div class="seg2" style="margin:10px 0"><button class="btn" data-act="tema" data-k="claro">Claro</button><button class="btn" data-act="tema" data-k="oscuro">Oscuro</button><button class="btn" data-act="tema" data-k="auto">Automático</button></div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><button class="btn full" data-act="globo" style="margin-bottom:8px">Activar globo rojo en el ícono</button><button class="btn full ghost" data-act="globoEstado" style="margin-bottom:8px">Ver estado del globo</button><button class="btn full ghost" data-act="globoProbar" style="margin-bottom:8px">Probar globo (poner un 7)</button><button class="btn full" data-act="salir">Cambiar de persona (soy ${S.quien==="Nicolás"?"Sebastián":"Nicolás"})</button>`,'Aspecto'),
   tema:ds=>{try{window.__tema(ds.k)}catch(e){}closeSheet()},
   cambiarCod:()=>{const c=prompt('Código nuevo (mínimo 4 letras o números). Los otros aparatos van a pedirlo de nuevo.');if(!c)return;closeSheet();api({op:'cambiar_codigo',codigo:c}).then(()=>toast('Código cambiado')).catch(e=>toast('No se pudo cambiar: '+e.message,true))},
   salir:()=>{closeSheet();LS('seg_q',null);S.quien='';salirLocal()},
@@ -1726,7 +1729,8 @@ document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.tar
 document.addEventListener('submit',e=>{const f=e.target.dataset.submit;if(f&&SUBMIT[f]){e.preventDefault();SUBMIT[f]()}});
 document.addEventListener('input',e=>{if(e.target.id==='f-prev'||e.target.id==='f-fec'){const o=dt(val('f-fec')),n=dt(val('f-prev')),el=$('#f-dif');if(el&&o&&n){const d=Math.round((n-o)/DAY);el.textContent=d>0?'Se demora '+plural(d,'día','días'):d<0?'Se adelanta '+plural(-d,'día','días'):'Se cumple en fecha';el.style.color=d>0?'var(--rojo)':d<0?'var(--verde)':''}}});
 document.addEventListener('change',e=>{const el=e.target.closest('[data-chg]');if(el&&CHG[el.dataset.chg])CHG[el.dataset.chg](el.value,el)});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.tk)cargar(true)});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)badge();else if(S.tk)cargar(true)});
+try{if('serviceWorker' in navigator)navigator.serviceWorker.register('/seguimiento-sw.js').catch(()=>{})}catch(e){}
 setInterval(()=>{if(S.tk&&!document.hidden)cargar(true)},40000);
 setInterval(()=>{const f=$('#fecha');if(f)f.textContent=diaTxt(TODAY)+' '+new Date(TODAY).getUTCFullYear()},1000);
 
