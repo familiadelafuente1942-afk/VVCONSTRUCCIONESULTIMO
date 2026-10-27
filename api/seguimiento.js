@@ -48,8 +48,9 @@ const COLS = {
   registros: (q) => ({
     obra: ident(q.obra), tipo: q.tipo === "retraso" ? "retraso" : "hecho", titulo: str(q.titulo, 200), fecha: num(q.fecha, 0, 4e12),
     resp: str(q.resp, 120), personal: str(q.personal, 400), imputable: str(q.imputable, 120), costo: num(q.costo, 0, 1e12), desc: str(q.desc, 3000),
-    tarea: str(q.tarea, 200), desde: num(q.desde, 0, 4e12), hasta: num(q.hasta, 0, 4e12), causa: str(q.causa, 120), evitable: !!q.evitable,
-    fotos: (Array.isArray(q.fotos) ? q.fotos : []).filter((f) => f && typeof f.u === "string" && f.u.startsWith(URL_BASE + "/storage/v1/object/public/")).slice(0, 40).map((f) => ({ u: f.u.slice(0, 400), f: num(f.f, 0, 4e12) })),
+    tarea: str(q.tarea, 200), desde: num(q.desde, 0, 4e12), hasta: num(q.hasta, 0, 4e12), causa: str(q.causa, 200), evitable: !!q.evitable,
+    dias: num(q.dias, 0, 5000), etapa: str(q.etapa, 120), detenida: str(q.detenida, 300), certAfecta: str(q.certAfecta, 300), origen: q.origen === "nexo" ? "nexo" : "", nexoId: ident(q.nexoId), nexoEd: num(q.nexoEd, 0, 4e12),
+    fotos: (Array.isArray(q.fotos) ? q.fotos : []).filter((f) => f && typeof f.u === "string" && /^https:\/\/[a-z0-9.-]+\.supabase\.co\/storage\/v1\/object\/public\//.test(f.u)).slice(0, 40).map((f) => ({ u: f.u.slice(0, 400), f: num(f.f, 0, 4e12) })),
   }),
   adicionales: (q) => ({ obra: ident(q.obra), fecha: num(q.fecha, 0, 4e12), titulo: str(q.titulo, 160), monto: num(q.monto, 0, 1e12), estado: ["pendiente", "aprobado", "rechazado", "cobrado"].includes(q.estado) ? q.estado : "pendiente", nota: str(q.nota, 600) }),
   tareas: (q) => ({
@@ -159,6 +160,54 @@ export default async function handler(req, res) {
         out[o.id] = { nexo: nid, snapT: (snap && snap.t) || 0, cards: (snap && snap.cards) || [], informeDesde: ult ? ult.desde : 0, informeHasta: ult ? ult.hasta : 0, frenadas };
       }
       res.status(200).json({ ok: true, nexo: out });
+      return;
+    }
+
+    // ---- trae los registros de NEXO 2 (solo lectura sobre NEXO 2: se copian acá y se mantienen al día) ----
+    if (b.op === "importar_nexo") {
+      const NX = [["o1", "Los Puentes 132"], ["o2", "Castores 475"], ["o3", "Golf 293"], ["o4", "Los Puentes 246"]];
+      const MAP0 = { puentes132: "o1", castores475: "o2", puentes246: "o4" };
+      let obras = await leerCol(H, "obras");
+      let regs = await leerCol(H, "registros");
+      const hab = (a, bb) => { let n = 0; for (let d = a + 864e5; d <= bb; d += 864e5) { const w = new Date(d).getUTCDay(); if (w > 0 && w < 6) n++; } return n; };
+      let nuevos = 0, actualizados = 0, quitados = 0, obrasNuevas = 0;
+      for (const [nid, nombre] of NX) {
+        const v = await leer(H, "gestion_" + nid);
+        const items = (v && v.items) || [];
+        let ob = obras.find((o) => o.nexo === nid || (!o.nexo && MAP0[o.id] === nid));
+        if (!ob) {
+          if (!items.length) continue;
+          ob = { id: nombre.toLowerCase().replace(/[^a-z0-9]/g, ""), nombre, orden: obras.length, nota: "", etapa: "", nexo: nid, por: "sistema", creado: Date.now(), editado: Date.now() };
+          obras.push(ob); obrasNuevas++;
+        }
+        const vistos = new Set();
+        for (const r of items) {
+          const id = "n_" + nid + "_" + ident(r.id);
+          vistos.add(id);
+          const prev = regs.find((x) => x.id === id);
+          if (prev && (prev.nexoEd || 0) >= (r.editado || 0)) continue;
+          const esH = r.tipo === "hecho";
+          const est = Number(r.estDias) || 0;
+          const real = r.realDias !== "" && r.realDias != null ? Number(r.realDias) || 0 : (r.inicio && r.fin ? hab(r.inicio - 864e5, r.fin) : 0);
+          const arr = r.arranqueDias !== "" && r.arranqueDias != null ? Number(r.arranqueDias) || 0 : (r.posible && r.inicio && r.inicio > r.posible ? hab(r.posible - 864e5, r.inicio - 864e5) : 0);
+          const dias = esH ? 0 : Math.max(0, real + arr - est);
+          const monto = esH ? Number(r.costo) || 0 : dias * (Number(r.personas) || 0) * (Number(r.valor) || 0) + (Number(r.costo) || 0);
+          const causas = (r.causas || []).concat(r.causaTxt ? [r.causaTxt] : []).join(" + ");
+          const titulo = esH ? (r.titulo || "Registro") : (r.titulo || ("Retraso en " + (r.tarea || "la obra") + (causas ? " : " + causas : "")));
+          const desc = esH ? (r.desc || "") : [r.causaTxt, r.nota, r.detenida ? "Tarea detenida: " + r.detenida : "", r.certAfecta ? "Esto atrasó el cobro de: " + r.certAfecta : ""].filter(Boolean).join("\n");
+          const fotos = [...(r.fotosIni || []), ...(r.fotosFin || [])].map((f) => ({ u: f.u, f: f.f || 0 }));
+          const nuevo = COLS.registros({ obra: ob.id, tipo: esH ? "hecho" : "retraso", titulo, fecha: r.fecha || r.inicio || r.fin || r.creado || 0, resp: r.resp, personal: r.personal, imputable: r.imputable, costo: monto, desc, tarea: r.tarea, desde: r.posible || r.inicio || 0, hasta: r.fin || 0, causa: causas, evitable: r.evitable, dias, etapa: r.etapa, detenida: r.detenida, certAfecta: r.certAfecta, origen: "nexo", nexoId: ident(r.id), nexoEd: r.editado || 1, fotos });
+          const it = { ...nuevo, id, por: "NEXO 2", creado: (prev && prev.creado) || r.creado || Date.now(), editado: Date.now(), editor: "NEXO 2" };
+          regs = regs.filter((x) => x.id !== id); regs.push(it);
+          prev ? actualizados++ : nuevos++;
+        }
+        const antes = regs.length;
+        regs = regs.filter((x) => !(x.origen === "nexo" && x.obra === ob.id && x.id.startsWith("n_" + nid + "_") && !vistos.has(x.id)));
+        quitados += antes - regs.length;
+      }
+      if (nuevos || actualizados || quitados) await escribir(H, "seg_registros", { items: regs.slice(-3000) });
+      if (obrasNuevas) await escribir(H, "seg_obras", { items: obras });
+      res.status(200).json({ ok: true, nuevos, actualizados, quitados, obrasNuevas });
       return;
     }
 

@@ -1393,7 +1393,9 @@ async function cargar(silencioso){
   catch(e){if(e.message==='sesion')return;S.err='Sin conexión. Mostrando lo último que se vio.';if(!silencioso)toast('No se pudo actualizar. Revisá la conexión.',true)}
   badge();redraw(true);cargarNexo();
 }
-async function cargarNexo(){try{const j=await api({op:'nexo'});S.NX=j.nexo||{};redraw(true)}catch(e){}}
+let _imp=0;
+async function importarNexo(manual){try{const j=await api({op:'importar_nexo'});_imp=Date.now();if(j.nuevos||j.actualizados||j.quitados||j.obrasNuevas){await cargar(true);if(manual)toast(`Traídos de NEXO 2: ${j.nuevos} nuevos, ${j.actualizados} actualizados`)}else if(manual)toast('Ya está todo al día con NEXO 2')}catch(e){if(manual)toast('No se pudo traer de NEXO 2',true)}}
+async function cargarNexo(){if(Date.now()-_imp>120000)importarNexo(false);try{const j=await api({op:'nexo'});S.NX=j.nexo||{};redraw(true)}catch(e){}}
 function redraw(soft){if(document.querySelector('#layer .scrim'))return;if(S.gfull){if(!soft||!document.querySelector('#gfull input:focus,#gfull select:focus'))gfRender()}else draw()}
 async function guardar(c,item,quiet){
   closeSheet();
@@ -1568,15 +1570,16 @@ const X2=(c,i)=>`<button class="delx" data-act="del" data-c="${c}" data-id="${i}
 const CAUSAS=['Lluvia o clima','Falta de materiales','Falta de información o planos','Falta de personal','Demora del cliente o estudio','Cambio de diseño','Falta de equipos o herramientas','Otra'];
 const fD=t=>t?(()=>{const x=new Date(t);return String(x.getUTCDate()).padStart(2,'0')+'/'+String(x.getUTCMonth()+1).padStart(2,'0')+'/'+x.getUTCFullYear()})():'—';
 function dhab(a,b){if(!a||!b||b<a)return 0;let n=0;for(let d=a;d<=b;d+=DAY){const w=new Date(d).getUTCDay();if(w>0&&w<6)n++}return n}
+const regDias=r=>r.tipo!=='retraso'?0:(r.origen==='nexo'?(r.dias||0):dhab(r.desde,r.hasta));
 const regTit=r=>r.titulo||(r.tipo==='retraso'?'Retraso':'Registro');
 const rsel=id=>S.rsel[id]!==false;
 function vRegs(o){
   const L=col('registros').filter(x=>x.obra===o.id).sort((a,b)=>(b.fecha||0)-(a.fecha||0)),n=L.filter(r=>rsel(r.id)).length;
   return `<p class="muted small">Para dejar asentado lo que pasa en la obra: retrasos con su causa y cualquier otro hecho. Con fotos. Pueden cargar Sebastián y Nicolás.</p>
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm gold" data-act="nuevoReg" data-o="${o.id}" data-t="retraso">+ Registrar un retraso</button><button class="btn sm" data-act="nuevoReg" data-o="${o.id}" data-t="hecho">+ Otro hecho</button></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm gold" data-act="nuevoReg" data-o="${o.id}" data-t="retraso">+ Registrar un retraso</button><button class="btn sm" data-act="nuevoReg" data-o="${o.id}" data-t="hecho">+ Otro hecho</button><button class="btn sm ghost" data-act="traerNexo">↻ Traer de NEXO 2</button></div>
   ${L.length?`<div class="sub-h"><span class="muted small">${n} de ${L.length} marcados para el PDF</span><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" data-act="regMarcar" data-o="${o.id}" data-v="1">Todos</button><button class="btn sm ghost" data-act="regMarcar" data-o="${o.id}" data-v="0">Ninguno</button></span></div>
   <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm gold" data-act="regPdf" data-o="${o.id}">PDF de los marcados</button><button class="btn sm" data-act="regCsv" data-o="${o.id}">Excel (CSV)</button></div>`:''}
-  <div style="display:flex;flex-direction:column;gap:8px">${L.length?L.map(r=>{const d=r.tipo==='retraso'?dhab(r.desde,r.hasta):0;return `<div class="card" style="position:relative"><div class="sub-h"><label style="display:flex;gap:10px;align-items:center"><input type="checkbox" data-chg="regSel" data-id="${r.id}" ${rsel(r.id)?'checked':''} style="width:20px;height:20px"><span><span class="eyebrow">${r.tipo==='retraso'?'Retraso':'Hecho'} · ${fD(r.fecha||r.desde)}</span><br><b>${esc(regTit(r))}</b></span></label></div>
+  <div style="display:flex;flex-direction:column;gap:8px">${L.length?L.map(r=>{const d=regDias(r);return `<div class="card" style="position:relative"><div class="sub-h"><label style="display:flex;gap:10px;align-items:center"><input type="checkbox" data-chg="regSel" data-id="${r.id}" ${rsel(r.id)?'checked':''} style="width:20px;height:20px"><span><span class="eyebrow">${r.tipo==='retraso'?'Retraso':'Hecho'} · ${fD(r.fecha||r.desde)}</span><br><b>${esc(regTit(r))}</b></span></label></div>
    <div class="small muted" style="margin-top:6px;cursor:pointer" data-act="editReg" data-id="${r.id}">${[r.tipo==='retraso'&&r.causa?r.causa:'',d?d+' días hábiles':'',r.costo?money(r.costo):'',r.imputable?'Imputable a '+r.imputable:'',(r.fotos||[]).length?plural(r.fotos.length,'foto','fotos'):''].filter(Boolean).map(esc).join(' · ')}<div style="white-space:pre-wrap;margin-top:4px;color:var(--fg)">${esc((r.desc||'').slice(0,160))}${(r.desc||'').length>160?'…':''}</div><span class="muted">${esc(r.por||'')}</span></div>
    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn sm ghost" data-act="regPdf" data-o="${o.id}" data-id="${r.id}">PDF de este</button><button class="btn sm ghost" data-act="editReg" data-id="${r.id}">Editar</button></div>${X2('registros',r.id)}</div>`}).join(''):'<div class="card muted">Todavía no hay registros.</div>'}</div>`}
 let RF=null;
@@ -1595,7 +1598,7 @@ function sheetReg(){
   ${ret?`<label class="f">Tarea afectada<input id="r-tarea" list="r-tl" value="${esc(R.tarea)}"><datalist id="r-tl">${tareas.map(t=>`<option>${esc(t.titulo)}</option>`).join('')}</datalist></label>
   <div class="row2"><label class="f">Desde (debía arrancar)<input id="r-des" type="date" value="${iso(R.desde)}"></label><label class="f">Hasta (arrancó o terminó)<input id="r-has" type="date" value="${iso(R.hasta)}"></label></div>
   <p class="small" id="r-dias" style="margin:-4px 0 0"><b>${dhab(R.desde,R.hasta)}</b> días hábiles</p>
-  <label class="f">Causa<select id="r-causa"><option value="">—</option>${CAUSAS.map(c=>`<option ${R.causa===c?'selected':''}>${c}</option>`).join('')}</select></label>
+  <label class="f">Causa<select id="r-causa"><option value="">—</option>${(R.causa&&!CAUSAS.includes(R.causa)?[R.causa,...CAUSAS]:CAUSAS).map(c=>`<option ${R.causa===c?'selected':''}>${esc(c)}</option>`).join('')}</select></label>
   <label class="f" style="flex-direction:row;align-items:center;gap:10px;color:var(--fg)"><input id="r-evi" type="checkbox" ${R.evitable?'checked':''} style="width:22px;height:22px"> Era evitable</label>`:''}
   <label class="f">Personal involucrado<input id="r-pers" value="${esc(R.personal)}" placeholder="Nombres, separados por comas"></label>
   <label class="f">Detalle<textarea id="r-desc" rows="5" placeholder="Contá qué pasó, por qué, quién lo pidió, qué consecuencias tuvo">${esc(R.desc)}</textarea></label>
@@ -1608,15 +1611,15 @@ async function regGuardar(){
   regLeer();const R=RF;if(R.sub)return;if(!R.titulo.trim()){toast('Poné el título',true);return}
   try{R.sub='guardando';sheetReg();const out=[];
     for(let i=0;i<R.fotos.length;i++){const f=R.fotos[i];let u=f.u;if(!u){R.sub=`foto ${i+1} de ${R.fotos.length}`;sheetReg();const r=await api({op:'foto',data:FILES[f.id].url});if(!r.url)throw new Error('foto');u=r.url;f.u=u}out.push({u,f:dt(R.fdf)||f.f||R.fecha})}
-    const item={...(R.id?byId('registros',R.id):{}),id:R.id||undefined,obra:R.obra,tipo:R.tipo,titulo:R.titulo.trim(),fecha:R.fecha||TODAY,resp:R.resp.trim(),personal:R.personal.trim(),desc:R.desc.trim(),imputable:R.imputable.trim(),costo:+R.costo||0,tarea:R.tarea||'',desde:R.desde||0,hasta:R.hasta||0,causa:R.causa||'',evitable:!!R.evitable,fotos:out};
+    const item={...(R.id?byId('registros',R.id):{}),id:R.id||undefined,obra:R.obra,tipo:R.tipo,titulo:R.titulo.trim(),fecha:R.fecha||TODAY,resp:R.resp.trim(),personal:R.personal.trim(),desc:R.desc.trim(),imputable:R.imputable.trim(),costo:+R.costo||0,tarea:R.tarea||'',desde:R.desde||0,hasta:R.hasta||0,causa:R.causa||'',evitable:!!R.evitable,fotos:out};if(R.id&&byId('registros',R.id)&&byId('registros',R.id).origen==='nexo'){const pv=byId('registros',R.id);item.dias=(R.desde===pv.desde&&R.hasta===pv.hasta)?pv.dias:0;item.origen='';item.nexoId=pv.nexoId}
     RF=null;await guardar('registros',item);toast('Registro guardado')}
   catch(e){if(RF){RF.sub='';sheetReg()}toast('No se pudo guardar el registro. Probá de nuevo.',true)}
 }
 function regDoc(o,L){
-  const dias=L.filter(r=>r.tipo==='retraso').reduce((a,r)=>a+dhab(r.desde,r.hasta),0),costo=L.reduce((a,r)=>a+(r.costo||0),0);
+  const dias=L.filter(r=>r.tipo==='retraso').reduce((a,r)=>a+regDias(r),0),costo=L.reduce((a,r)=>a+(r.costo||0),0);
   const doc={titulo:'Registros de obra',sub:'Registros seleccionados',obra:o.nombre,num:L.length+(L.length===1?' registro':' registros'),fecha:fD(TODAY),campos:[['Registros',String(L.length)],['Días de retraso registrados',dias+' días hábiles'],['Costo total registrado',money(costo)]],secciones:[]};
   L.forEach(r=>{const rr=[['Registro',regTit(r)],['Tipo',r.tipo==='retraso'?'Retraso':'Hecho'],['Fecha',fD(r.fecha||r.desde)]];
-    if(r.tipo==='retraso'){if(r.tarea)rr.push(['Tarea afectada',r.tarea]);rr.push(['Desde',fD(r.desde)],['Hasta',fD(r.hasta)],['Días hábiles',String(dhab(r.desde,r.hasta))]);if(r.causa)rr.push(['Causa',r.causa+(r.evitable?' (evitable)':' (no evitable)')])}
+    if(r.tipo==='retraso'){if(r.tarea)rr.push(['Tarea afectada',r.tarea]);if(r.etapa)rr.push(['Etapa de obra',r.etapa]);rr.push(['Desde',fD(r.desde)],['Hasta',fD(r.hasta)],['Días de retraso',String(regDias(r))]);if(r.detenida)rr.push(['Tarea detenida',r.detenida]);if(r.certAfecta)rr.push(['Atrasó el cobro de',r.certAfecta]);if(r.causa)rr.push(['Causa',r.causa+(r.evitable?' (evitable)':' (no evitable)')])}
     if(r.resp)rr.push(['Responsable',r.resp]);if(r.personal)rr.push(['Personal involucrado',r.personal]);if(r.imputable)rr.push(['Imputable a',r.imputable]);if(r.costo)rr.push(['Costo',money(r.costo)]);
     doc.secciones.push({h:regTit(r).slice(0,80),tabla:{cols:['Concepto','Detalle'],w:[.34,.66],rows:rr}});
     if(r.desc)doc.secciones.push({h:'Detalle',texto:r.desc});
@@ -1839,14 +1842,15 @@ const SUBMIT={
 
 /* ---------- acciones ---------- */
 const A={
+  traerNexo:()=>importarNexo(true),
   nuevoReg:ds=>formReg(ds.t,null,ds.o),editReg:ds=>{const r=byId('registros',ds.id);if(r)formReg(r.tipo,r,r.obra)},
   delReg:ds=>{if(confirm('¿Eliminar este registro?')){RF=null;closeSheet();borrar('registros',ds.id)}},
   regMarcar:ds=>{col('registros').filter(r=>r.obra===ds.o).forEach(r=>{S.rsel[r.id]=ds.v==='1'});draw()},
   regQuitarFoto:ds=>{regLeer();RF.fotos.splice(+ds.i,1);sheetReg()},
   regPdf:async ds=>{const o=byId('obras',ds.o),all=col('registros').filter(r=>r.obra===ds.o).sort((a,b)=>(a.fecha||a.desde||0)-(b.fecha||b.desde||0)),L=ds.id?all.filter(r=>r.id===ds.id):all.filter(r=>rsel(r.id));if(!L.length){toast('Marcá al menos un registro',true);return}toast('Generando PDF…');try{const bl=await docPDF(regDoc(o,L));bajar(bl,`Registros_${slug(o.nombre)}_${new Date(Date.now()-108e5).toISOString().slice(0,10)}.pdf`)}catch(e){toast('No se pudo generar el PDF',true)}},
   regCsv:ds=>{const o=byId('obras',ds.o),L=col('registros').filter(r=>r.obra===ds.o&&rsel(r.id)).sort((a,b)=>(a.fecha||a.desde||0)-(b.fecha||b.desde||0));if(!L.length){toast('Marcá al menos un registro',true);return}
-    const cab=['Registro','Tipo','Fecha','Tarea afectada','Desde','Hasta','Días hábiles','Causa','Evitable','Responsable','Personal','Imputable a','Costo','Detalle','Fotos'];
-    const csv='\ufeff'+[cab,...L.map(r=>[regTit(r),r.tipo==='retraso'?'Retraso':'Hecho',fD(r.fecha),r.tarea,r.tipo==='retraso'?fD(r.desde):'',r.tipo==='retraso'?fD(r.hasta):'',r.tipo==='retraso'?dhab(r.desde,r.hasta):'',r.causa,r.tipo==='retraso'?(r.evitable?'Sí':'No'):'',r.resp,r.personal,r.imputable,r.costo,r.desc,(r.fotos||[]).length])].map(x=>x.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(';')).join('\r\n');bajar(new Blob([csv],{type:'text/csv'}),`Registros_${slug(o.nombre)}.csv`)},
+    const cab=['Registro','Tipo','Fecha','Tarea afectada','Desde','Hasta','Días de retraso','Causa','Evitable','Responsable','Personal','Imputable a','Costo','Detalle','Fotos'];
+    const csv='\ufeff'+[cab,...L.map(r=>[regTit(r),r.tipo==='retraso'?'Retraso':'Hecho',fD(r.fecha),r.tarea,r.tipo==='retraso'?fD(r.desde):'',r.tipo==='retraso'?fD(r.hasta):'',r.tipo==='retraso'?regDias(r):'',r.causa,r.tipo==='retraso'?(r.evitable?'Sí':'No'):'',r.resp,r.personal,r.imputable,r.costo,r.desc,(r.fotos||[]).length])].map(x=>x.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(';')).join('\r\n');bajar(new Blob([csv],{type:'text/csv'}),`Registros_${slug(o.nombre)}.csv`)},
   nuevoAd:ds=>formAdic(null,ds.o),editAd:ds=>{const a=byId('adicionales',ds.id);if(a)formAdic(a)},
   delAd:ds=>{if(confirm('¿Eliminar este adicional?')){closeSheet();borrar('adicionales',ds.id)}},
   tab:ds=>{S.tab=ds.k;if(ds.k!=='obras')S.obra=null;draw();window.scrollTo(0,0)},
