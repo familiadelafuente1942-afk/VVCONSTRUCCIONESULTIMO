@@ -1294,6 +1294,19 @@ nav.bottom .in{max-width:900px}
 .hfecha s{font-size:14px!important}
 .tcard .t1{font-size:16px}
 .mini .m1,.mini .m2{white-space:normal}
+
+.cA{display:contents}
+@media (min-width:1100px){
+#view.cols{grid-template-columns:repeat(3,minmax(0,1fr))!important;grid-template-rows:auto auto min-content min-content 1fr!important;column-gap:28px;row-gap:22px}
+#view.cols .g-venc{grid-column:1;grid-row:3}
+#view.cols .g-porv{grid-column:2;grid-row:3}
+#view.cols #cB{grid-column:3;grid-row:3 / span 3;align-self:start}
+#view.cols .g-hitos{grid-column:1;grid-row:4}
+#view.cols .g-aten{grid-column:2;grid-row:4}
+#view.cols .g-anc{grid-column:1 / span 2;grid-row:5;align-self:start}
+#view.cols #cA2{align-self:auto}
+}
+@media (min-width:1100px){#view.cols{column-gap:12px!important}}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1560,23 +1573,23 @@ function vInicio(){
   const nxCargado=col('obras').some(o=>nxDe(o)&&nxDe(o).snapT);
   const obrasP=col('obras').map(o=>({o,p:proxima(o),at:tareasDe('obra:'+o.id).filter(atrasada).length})).sort((a,b)=>(a.p?a.p.inicio:9e15)-(b.p?b.p.inicio:9e15));
   const HH=col('hitos').filter(h=>!h.hecho).sort((a,b)=>(a.prevista||a.fecha)-(b.prevista||b.fecha)).slice(0,8);
-  const hitosHtml=HH.length?`<div><span class="eyebrow">Hitos · cómo venimos</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${HH.map(h=>hitoCard(h,nombreObra(h.obra))).join('')}</div></div>`:'';
+  const hitosHtml=HH.length?`<div class="g-hitos"><span class="eyebrow">Hitos · cómo venimos</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${HH.map(h=>hitoCard(h,nombreObra(h.obra))).join('')}</div></div>`:'';
   const fij=col('agenda').filter(a=>a.fijar&&!a.hecho&&a.fecha>=TODAY-DAY).sort((a,b)=>a.fecha-b.fecha);
   return `<div><span class="eyebrow">${esc(S.quien)}</span><h1>Inicio</h1></div>
   <div class="kpis k3"><button class="kpi ${venc.length?'k-rojo':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${venc.length}</b><span class="kl">tarjetas vencidas</span></button>
   <button class="kpi ${porv.length?'k-naranja':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${porv.length}</b><span class="kl">por vencer</span></button>
   <button class="kpi ${pg?'k-rojo':''}" data-act="tab" data-k="tareas"><span class="kgo">ver ›</span><b>${pg}</b><span class="kl">tareas pendientes</span></button></div>
   <div class="cA" id="cA1">${hitosHtml}
-  ${venc.length?`<div><span class="eyebrow">Tarjetas vencidas · nos deben (NEXO 2)</span><div class="minis">${venc.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
-  ${porv.length?`<div><span class="eyebrow">Tarjetas por vencer</span><div class="minis">${porv.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
+  ${venc.length?`<div class="g-venc"><span class="eyebrow">Tarjetas vencidas · nos deben (NEXO 2)</span><div class="minis">${venc.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
+  ${porv.length?`<div class="g-porv"><span class="eyebrow">Tarjetas por vencer</span><div class="minis">${porv.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
   </div>
   <div class="colwrap" id="cB">
   <div class="card cuadro"><span class="eyebrow">Próxima tarea de cada obra</span><div class="minis">${obrasP.map(({o,p,at:a})=>`<button class="mini" data-act="obra" data-id="${o.id}"><i class="dot2 ${a?'c-rojo':p?'c-verde':'c-futuro'}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${p?esc(p.titulo):'sin tarea cargada'}</span><span class="m2">${esc(etapaDe(o)||'')}${a?(etapaDe(o)?' · ':'')+plural(a,'atrasada','atrasadas'):''}</span><span class="m3">${p?fmt(p.inicio):''}</span></button>`).join('')}</div></div><div class="card cuadro2 pagos" data-act="tab" data-k="gastos"><span class="eyebrow">Para pagar · ${mesTxt(MES_HOY)}</span><div class="facts" style="margin-top:6px"><div class="fact"><span>Sueldo de Nicolás</span><b class="${sueldo&&!sueldo.pagado?'t-rojo':''}">${sueldo?(sueldo.pagado?'Pagado':'A pagar · '+money(sueldo.monto)):'Sin cargar'}</b></div><div class="fact"><span>Gastos del mes</span><b>${money(gMes)}</b></div><div class="fact"><span>Adeudado en total</span><b class="${deuda?'t-rojo':''}">${money(deuda)}</b></div></div></div>
   </div>
 
   <div class="cA" id="cA2">
-  ${fij.length?`<div><span class="eyebrow">Anclado de tu agenda</span><div class="minis">${fij.map(a=>`<button class="mini" data-act="editAg" data-id="${a.id}"><i class="dot2 c-gold"></i><span class="m1"><b>${esc(a.motivo||a.lugar||'Agenda')}</b>${a.obra?' · '+esc(nombreObra(a.obra)):''}</span><span class="m2">${a.quien==='Nadie'?'':a.quien==='Ambos'?'Los dos':esc(a.quien)}${a.lugar&&a.motivo?' · '+esc(a.lugar):''}</span><span class="m3">${diaTxt(a.fecha)}${a.hora?' '+esc(a.hora):''}</span></button>`).join('')}</div></div>`:''}
-  <div><span class="eyebrow">Para atender</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${prox.length?prox.map(t=>tcardT(t,{ctx:ctxT(t),limite:t.ambito==='general'})).join(''):'<div class="card muted">Todo al día. No hay nada pendiente.</div>'}</div></div>
+  ${fij.length?`<div class="g-anc"><span class="eyebrow">Anclado de tu agenda</span><div class="minis">${fij.map(a=>`<button class="mini" data-act="editAg" data-id="${a.id}"><i class="dot2 c-gold"></i><span class="m1"><b>${esc(a.motivo||a.lugar||'Agenda')}</b>${a.obra?' · '+esc(nombreObra(a.obra)):''}</span><span class="m2">${a.quien==='Nadie'?'':a.quien==='Ambos'?'Los dos':esc(a.quien)}${a.lugar&&a.motivo?' · '+esc(a.lugar):''}</span><span class="m3">${diaTxt(a.fecha)}${a.hora?' '+esc(a.hora):''}</span></button>`).join('')}</div></div>`:''}
+  <div class="g-aten"><span class="eyebrow">Para atender</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${prox.length?prox.map(t=>tcardT(t,{ctx:ctxT(t),limite:t.ambito==='general'})).join(''):'<div class="card muted">Todo al día. No hay nada pendiente.</div>'}</div></div>
   </div>
 
 `;
