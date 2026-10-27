@@ -1375,6 +1375,27 @@ nav.bottom{width:92px;padding:14px 6px}
 main{padding-left:14px!important;padding-right:20px!important}
 header.top{padding-inline:14px 20px!important}
 }
+.navwho{display:none}
+@media (min-width:1100px){
+/* título de punta a punta; el menú arranca debajo */
+body{padding-left:0!important}
+nav.bottom{top:74px!important;width:92px;padding:10px 6px 12px}
+nav.bottom .in{height:100%;box-sizing:border-box}
+main{padding-left:108px!important}
+header.top{padding-inline:20px!important}
+#who .btn{display:none}
+.navwho{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:auto;padding:10px 0 4px;border-top:1px solid var(--line);width:100%}
+.navwho b{font-family:var(--display);font-size:12px;color:var(--fg);text-align:center;word-break:break-word}
+.navwho button{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:none;color:var(--fg);font-size:16px;display:flex;align-items:center;justify-content:center;padding:0}
+/* tarjetas más chicas */
+.card{padding:9px 12px!important}
+.kpi{padding:7px 12px!important}.kpi b{font-size:20px!important}
+.mini{padding:5px 10px!important;column-gap:9px}
+.mini .m1{font-size:14px!important}.mini .m2{font-size:11.5px!important}.mini .m3{font-size:13px!important}
+.minis{gap:3px}
+#view.cols{row-gap:14px;column-gap:20px}
+}
+.mini .m3{display:flex!important;justify-content:flex-end!important;text-align:right!important;align-items:center}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1875,7 +1896,7 @@ function draw(){
   $('#view').innerHTML=`${S.err?`<p class="small t-rojo">${esc(S.err)}</p>`:''}${S.cargado?V():'<p class="muted">Cargando…</p>'}`;
   $('#view').className=(S.tab==='inicio')?'cols':'';
   $('#who').innerHTML=`<span><b>${esc(S.quien)}</b><span class="rol">Seguimiento interno</span></span><button class="btn ghost sm" data-act="actualizar" aria-label="Actualizar" title="Actualizar">↻</button><button class="btn ghost sm" data-act="brillo" aria-label="Del blanco al negro" title="Aspecto"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4v16" /></svg></button>`;
-  $('#nav').innerHTML=nav();$('#nav').parentElement.hidden=false;
+  $('#nav').innerHTML=nav()+`<div class="navwho"><b>${esc(S.quien)}</b><button data-act="actualizar" aria-label="Actualizar" title="Actualizar">↻</button><button data-act="brillo" aria-label="Aspecto" title="Aspecto"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4v16"/></svg></button></div>`;$('#nav').parentElement.hidden=false;
   const g=$('#gwrap');if(g){g.scrollLeft=gsl!=null?gsl:(+g.dataset.scroll||0)}
   window.scrollTo(0,y);
 }
