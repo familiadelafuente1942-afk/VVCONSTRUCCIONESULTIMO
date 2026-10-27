@@ -60,7 +60,7 @@ h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)
 .gantt .eje,.card .eje{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--mut);margin-top:6px;white-space:nowrap}
 .ob{display:block;width:100%;text-align:left;cursor:pointer}
 nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
-nav button{flex:1;border:0;background:transparent;padding:6px 0;color:var(--mut);font-size:11px;font-weight:600;cursor:pointer;position:relative;border-radius:10px}
+nav button{flex:1;border:0;background:transparent;padding:6px 0;color:var(--mut);font-size:10.5px;font-weight:600;cursor:pointer;position:relative;border-radius:10px}
 nav button svg{display:block;margin:0 auto 2px;width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav button.on{color:var(--gold)}
 nav .badge{position:absolute;top:0;left:calc(50% + 4px)}
@@ -100,7 +100,7 @@ const mesDe=t=>{const x=new Date(t);return x.getUTCFullYear()+'-'+String(x.getUT
 const mesTxt=m=>{const[y,mm]=m.split('-');return MESL[+mm-1]+' '+y};
 const MES_HOY=mesDe(TODAY);
 
-const S={tk:'',quien:'',D:{obras:[],tareas:[],personal:[],gastos:[],sueldos:[]},tab:'hoy',obra:null,otab:'crono',gtab:'gastos',gde:'todos',tfil:'pend',cargado:false,err:''};
+const S={tk:'',quien:'',D:{obras:[],tareas:[],personal:[],gastos:[],sueldos:[],agenda:[]},tab:'hoy',obra:null,otab:'crono',gtab:'gastos',gde:'todos',tfil:'pend',cargado:false,err:''};
 const LS=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){return null}};
 const ckGet=()=>{const m=document.cookie.match(/(?:^|; )seg_tk=([^;]*)/);return m?decodeURIComponent(m[1]):''};
 const ckSet=v=>{document.cookie='seg_tk='+encodeURIComponent(v)+';max-age=34560000;path=/;SameSite=Lax'+(v?'':';max-age=0')};
@@ -124,14 +124,17 @@ const ordenT=(a,b)=>(a.estado==='hecha')-(b.estado==='hecha')||((a.inicio||a.fin
 const generales=()=>col('tareas').filter(t=>t.ambito==='general');
 const pendGen=()=>generales().filter(t=>t.estado!=='hecha');
 const atrasadasTodas=()=>col('tareas').filter(atrasada);
+const etapaDe=o=>o.etapa||tareasDe('obra:'+o.id).filter(t=>t.estado==='curso').map(t=>t.titulo).slice(0,3).join(' · ')||'';
+const haceDe=p=>p.haciendo||'';
 function obreros(oid){return col('personal').filter(p=>p.obra===oid&&p.activo!==false)}
 
 async function cargar(silencioso){
-  try{const j=await api({op:'todo'});S.quien=j.quien;['obras','tareas','personal','gastos','sueldos'].forEach(c=>S.D[c]=j[c]||[]);S.D.obras.sort((a,b)=>(a.orden||0)-(b.orden||0));S.cargado=true;S.err='';LS('seg_q',j.quien)}
+  try{const j=await api({op:'todo'});S.quien=j.quien;['obras','tareas','personal','gastos','sueldos','agenda'].forEach(c=>S.D[c]=j[c]||[]);S.D.obras.sort((a,b)=>(a.orden||0)-(b.orden||0));S.cargado=true;S.err='';LS('seg_q',j.quien)}
   catch(e){if(e.message==='sesion')return;S.err='Sin conexión. Mostrando lo último que se vio.';if(!silencioso)toast('No se pudo actualizar. Revisá la conexión.',true)}
   badge();if(!document.querySelector('.sheet'))draw();
 }
 async function guardar(c,item){
+  closeSheet();
   const prev=item.id?JSON.parse(JSON.stringify(byId(c,item.id)||null)):null;
   const tmp=item.id?item:{...item,id:'tmp'+Date.now()};
   const i=col(c).findIndex(x=>x.id===tmp.id);if(i>=0)col(c)[i]={...col(c)[i],...tmp};else col(c).push(tmp);draw();
@@ -170,10 +173,11 @@ const ICON={
   tareas:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg>',
   gente:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.9.2 5 2.5 5 5.3"/></svg>',
   nexo:'<svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>',
+  agenda:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   gastos:'<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg>'
 };
 function nav(){
-  const T=[['hoy','Hoy'],['obras','Obras'],['tareas','Tareas'],['gente','Personal'],['nexo','Nexo'],['gastos','Gastos']];
+  const T=[['hoy','Hoy'],['agenda','Agenda'],['obras','Obras'],['tareas','Tareas'],['gente','Personal'],['nexo','Nexo'],['gastos','Gastos']];
   const nP=pendGen().length;
   return `<nav>${T.map(([k,l])=>`<button data-a="tab" data-k="${k}" class="${S.tab===k?'on':''}">${ICON[k==='gente'?'gente':k]}${l}${k==='tareas'&&nP?`<span class="badge">${nP}</span>`:''}</button>`).join('')}</nav>`;
 }
@@ -211,6 +215,8 @@ function vHoy(){
   <div class="tiles"><button class="tile ${pg?'alert':''}" data-a="tab" data-k="tareas"><b>${pg}</b><span>tareas pendientes</span></button>
   <button class="tile ${at?'alert':''}" data-a="tab" data-k="obras"><b>${at}</b><span>atrasadas</span></button>
   <button class="tile" data-a="tab" data-k="gente"><b>${ob}</b><span>obreros</span></button></div>
+  <h3>Nordelta</h3><div class="card">${[TODAY,TODAY+DAY].map(f=>{const L=agDe(f);return `<div style="padding:6px 0"><span class="small mut">${f===TODAY?'Hoy':'Mañana'} · ${diaTxt(f)}</span>${L.length?L.map(filaAg).join(''):`<div class="row"><span class="g mut">Sin asignar</span><button class="chip" data-a="agRap" data-f="${f}" data-q="Nicolás">+ Nicolás</button><button class="chip" data-a="agRap" data-f="${f}" data-q="Sebastián">+ Sebastián</button></div>`}</div>`}).join('')}<button class="btn sm" data-a="tab" data-k="agenda" style="margin-top:6px">Ver agenda completa</button></div>
+  <h3>Obras: gente y etapa</h3><div class="card">${col('obras').map(o=>{const n=obreros(o.id).length,e=etapaDe(o);return `<div class="row small" style="padding:6px 0" data-a="tab" data-k="gente"><b class="g">${esc(o.nombre)}</b><span class="mut">${esc(e||'sin etapa')}</span><span class="chip">${n}</span></div>`}).join('')}</div>
   <h3>Para atender</h3>
   <div class="card">${prox.length?prox.map(t=>filaTarea(t,{ctx:ctxT(t),limite:t.ambito==='general'})).join(''):'<div class="empty">Todo al día. No hay nada pendiente.</div>'}</div>
   <h3>Este mes · ${mesTxt(MES_HOY)}</h3>
@@ -236,13 +242,20 @@ function vObra(){
   const T=tareasDe('obra:'+o.id).sort(ordenT);const at=T.filter(atrasada).length;
   const gente=obreros(o.id);
   return `<div class="row" style="margin-bottom:6px"><button class="btn sm" data-a="volver">‹ Obras</button><span class="g"></span><button class="btn sm" data-a="editObra" data-id="${o.id}">Editar</button></div>
-  <h2 style="margin-top:2px">${esc(o.nombre)}</h2>
+  <h2 style="margin-top:2px">${esc(o.nombre)}</h2><p class="small" style="margin:-6px 0 10px"><span class="mut">Etapa actual:</span> <b>${esc(etapaDe(o)||'sin definir')}</b></p>
   <div class="seg"><button class="${S.otab==='crono'?'on':''}" data-a="otab" data-k="crono">Cronograma${at?` <span class="badge">${at}</span>`:''}</button><button class="${S.otab==='gente'?'on':''}" data-a="otab" data-k="gente">Personal (${gente.length})</button></div>
   ${S.otab==='crono'?`<button class="add" data-a="nuevaT" data-amb="obra:${o.id}">+ Agregar tarea</button>${gantt(T)}
    <div class="card">${T.length?T.map(t=>filaTarea(t)).join(''):'<div class="empty">Todavía no hay tareas. Agregá la primera con inicio y fin.</div>'}</div>`
   :`<button class="add" data-a="nuevaP" data-obra="${o.id}">+ Agregar persona</button><div class="card">${listaGente(o.id)}</div>`}`;
 }
-function listaGente(oid){const L=obreros(oid);return L.length?L.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p=>`<div class="task" style="align-items:center"><div class="t" data-a="editP" data-id="${p.id}" style="cursor:pointer"><b>${esc(p.nombre)}</b><span class="small mut">${esc(p.rol||'Obrero')}${p.nota?' · '+esc(p.nota):''}</span></div></div>`).join(''):'<div class="empty">Nadie cargado en esta obra.</div>'}
+function listaGente(oid){const L=obreros(oid);return L.length?L.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p=>`<div class="task" style="align-items:center"><div class="t" data-a="editP" data-id="${p.id}" style="cursor:pointer"><b>${esc(p.nombre)}</b><span class="small mut">${esc(p.rol||'Obrero')}${p.nota?' · '+esc(p.nota):''}</span>${p.haciendo?`<span class="small" style="display:block">Haciendo: <b>${esc(p.haciendo)}</b></span>`:'<span class="small rojo" style="display:block">Sin actividad asignada</span>'}</div></div>`).join(''):'<div class="empty">Nadie cargado en esta obra.</div>'}
+function vGente(){
+  const tot=col('obras').reduce((a,o)=>a+obreros(o.id).length,0);
+  return `<h2>Personal por obra</h2><div class="card"><span class="small mut">Total de obreros en todas las obras</span><div class="tot">${tot}</div>
+  ${col('obras').map(o=>{const n=obreros(o.id).length,e=etapaDe(o);return `<div class="row small" style="padding:6px 0;border-top:1px solid var(--line)"><b class="g">${esc(o.nombre)}</b><span class="mut">${esc(e||'sin etapa')}</span><span class="chip">${n}</span></div>`}).join('')}</div>
+  ${col('obras').map(o=>{const n=obreros(o.id).length,e=etapaDe(o);return `<div class="card"><div class="row"><b class="g" style="font-size:17px">${esc(o.nombre)}</b><span class="chip">${n} ${n===1?'obrero':'obreros'}</span></div>
+   <div class="small" style="margin:6px 0 4px"><span class="mut">Etapa actual:</span> <b>${esc(e||'sin definir')}</b> <button class="chip" data-a="editObra" data-id="${o.id}">cambiar</button></div>${listaGente(o.id)}<button class="btn sm" data-a="nuevaP" data-obra="${o.id}" style="margin-top:8px">+ Agregar</button></div>`}).join('')}`;
+}
 function vTareas(){
   const L=generales(),pend=L.filter(t=>t.estado!=='hecha').sort(ordenT),hech=L.filter(t=>t.estado==='hecha').sort((a,b)=>(b.finReal||0)-(a.finReal||0));
   const sh=S.tfil==='pend'?pend:hech;
@@ -251,16 +264,42 @@ function vTareas(){
   <div class="card">${sh.length?sh.map(t=>filaTarea(t,{limite:true})).join(''):`<div class="empty">${S.tfil==='pend'?'No hay tareas pendientes.':'Todavía no hay tareas hechas.'}</div>`}</div>
   <p class="small mut">Tocá el círculo para pasar de pendiente a en curso y a hecha. El globo rojo del menú cuenta las pendientes.</p>`;
 }
-function vGente(){
-  const tot=col('obras').reduce((a,o)=>a+obreros(o.id).length,0);
-  return `<h2>Personal por obra</h2><div class="card"><span class="small mut">Total de obreros</span><div class="tot">${tot}</div></div>
-  ${col('obras').map(o=>{const n=obreros(o.id).length;return `<div class="card"><div class="row"><b class="g" style="font-size:17px">${esc(o.nombre)}</b><span class="chip">${n} ${n===1?'obrero':'obreros'}</span></div>${listaGente(o.id)}<button class="btn sm" data-a="nuevaP" data-obra="${o.id}" style="margin-top:8px">+ Agregar</button></div>`}).join('')}`;
-}
 function vNexo(){
   const T=tareasDe('nexo').sort(ordenT),h=T.filter(t=>t.estado==='hecha').length;
   return `<h2>Nexo entorno app</h2><div class="card"><span class="small mut">Desarrollo y etapas del proyecto</span><div class="bar" style="margin:10px 0 6px"><i style="width:${T.length?Math.round(h*100/T.length):0}%"></i></div><span class="small">${T.length?`${h} de ${T.length} etapas listas (${Math.round(h*100/T.length)}%)`:'Sin etapas cargadas'}</span></div>
   <button class="add" data-a="nuevaT" data-amb="nexo">+ Agregar etapa o tarea</button>${gantt(T)}
   <div class="card">${T.length?T.map(t=>filaTarea(t)).join(''):'<div class="empty">Cargá las etapas del proyecto: diseño, desarrollo, pruebas, lanzamiento…</div>'}</div>`;
+}
+
+/* ---------- agenda: quién va a Nordelta ---------- */
+const DOW=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const diaTxt=t=>{const x=new Date(t);return DOW[x.getUTCDay()]+' '+x.getUTCDate()+' '+MES[x.getUTCMonth()]};
+const lunes=t=>{const x=new Date(t).getUTCDay();return t-((x+6)%7)*DAY};
+const agDe=f=>col('agenda').filter(a=>a.fecha===f);
+const colorQ=q=>q==='Nicolás'?'var(--azul)':q==='Sebastián'?'var(--gold)':q==='Ambos'?'var(--verde)':'var(--mut)';
+function filaAg(a){return `<div class="row" style="padding:6px 0"><button class="chk ${a.hecho?'hecha':''}" data-a="hechoAg" data-id="${a.id}" aria-label="Marcar como hecha la visita">${a.hecho?'✓':''}</button>
+ <div class="g" data-a="editAg" data-id="${a.id}" style="cursor:pointer"><b style="color:${colorQ(a.quien)}">${a.quien==='Nadie'?'No va nadie':a.quien==='Ambos'?'Van los dos':'Va '+a.quien}</b> <span class="small mut">${[a.lugar||'Nordelta',a.obra?nombreObra(a.obra):'',a.motivo].filter(Boolean).map(esc).join(' · ')}</span></div></div>`}
+function vAgenda(){
+  const ini=lunes(TODAY);let html='<h2>Agenda de Nordelta</h2><p class="small mut" style="margin-top:-6px">Quién va cada día. Tocá <b>Nicolás</b> o <b>Sebastián</b> para asignar el día.</p>';
+  for(let w=0;w<4;w++){const d0=ini+w*7*DAY;
+    html+=`<h3>Semana del ${fmt(d0)}</h3><div class="card">`;
+    for(let k=0;k<6;k++){const f=d0+k*DAY,L=agDe(f),hoy=f===TODAY,pas=f<TODAY;
+      html+=`<div style="padding:10px 0;border-top:${k?'1px solid var(--line)':'0'};${hoy?'background:var(--sel);margin:0 -14px;padding-left:14px;padding-right:14px;':''}${pas?'opacity:.6':''}">
+       <div class="row"><b class="g">${diaTxt(f)}${hoy?' <span class="chip late" style="cursor:default">Hoy</span>':''}</b>${L.length?'':'<span class="small mut">sin asignar</span>'}</div>
+       ${L.map(filaAg).join('')}
+       <div class="row" style="margin-top:6px;gap:6px"><button class="chip" data-a="agRap" data-f="${f}" data-q="Nicolás">+ Nicolás</button><button class="chip" data-a="agRap" data-f="${f}" data-q="Sebastián">+ Sebastián</button><button class="chip" data-a="agRap" data-f="${f}" data-q="Ambos">+ Los dos</button><button class="chip" data-a="nuevoAg" data-f="${f}">Detalle…</button></div></div>`}
+    html+='</div>'}
+  return html;
+}
+function formAgenda(a,f){
+  a=a||{fecha:f||TODAY,quien:'Nicolás',lugar:'Nordelta'};
+  sheet(`<h2>${a.id?'Editar visita':'Visita a obra'}</h2><form data-f="agenda"><input type="hidden" id="f-id" value="${a.id||''}">
+  <div class="two"><label class="f">Día<input id="f-fec" type="date" value="${iso(a.fecha)}"></label><label class="f">¿Quién va?<select id="f-q">${['Nicolás','Sebastián','Ambos','Nadie'].map(q=>`<option ${a.quien===q?'selected':''}>${q}</option>`).join('')}</select></label></div>
+  <div class="two"><label class="f">Lugar<input id="f-lugar" value="${esc(a.lugar||'Nordelta')}"></label><label class="f">Obra (opcional)<select id="f-obra"><option value="">—</option>${optObras(a.obra)}</select></label></div>
+  <label class="f">Motivo (opcional)<input id="f-mot" value="${esc(a.motivo||'')}" placeholder="Ej: Controlar hormigonado, pagar a la cuadrilla"></label>
+  <label class="f" style="display:flex;gap:10px;align-items:center;color:var(--ink)"><input id="f-hecho" type="checkbox" ${a.hecho?'checked':''} style="width:22px;height:22px;margin:0"> Ya fue</label>
+  ${a.id?'':'<label class="f">Repetir cada semana<select id="f-rep"><option value="0">No repetir</option><option value="3">Las próximas 3 semanas</option><option value="7">Las próximas 7 semanas</option><option value="11">Las próximas 11 semanas</option></select></label>'}
+  <button class="btn gold full" type="submit">Guardar</button>${a.id?'<button class="btn del full" type="button" data-a="delAg" data-id="'+a.id+'" style="margin-top:8px">Eliminar</button>':''}<button class="btn full" type="button" data-a="cerrar" style="margin-top:8px">Cancelar</button></form>`);
 }
 function vGastos(){
   const seg=`<div class="seg"><button class="${S.gtab==='gastos'?'on':''}" data-a="gtab" data-k="gastos">Gastos</button><button class="${S.gtab==='sueldo'?'on':''}" data-a="gtab" data-k="sueldo">Sueldo de Nicolás</button></div>`;
@@ -280,7 +319,7 @@ function vGastos(){
 function draw(){
   const app=$('#app');
   if(!S.tk){app.innerHTML=login();return}
-  const V={hoy:vHoy,obras:vObras,tareas:vTareas,gente:vGente,nexo:vNexo,gastos:vGastos}[S.tab];
+  const V={hoy:vHoy,agenda:vAgenda,obras:vObras,tareas:vTareas,gente:vGente,nexo:vNexo,gastos:vGastos}[S.tab];
   const y=window.scrollY;
   app.innerHTML=`<header><h1>Seguimiento V+V</h1><button class="yo" data-a="menu">${esc(S.quien)}</button></header><main>${S.err?`<p class="small rojo">${esc(S.err)}</p>`:''}${S.cargado?V():'<p class="empty">Cargando…</p>'}</main>${nav()}`;
   window.scrollTo(0,y);
@@ -308,6 +347,7 @@ function formPersona(p,obra){
   <label class="f">Nombre<input id="f-nom" value="${esc(p.nombre||'')}"></label>
   <label class="f">Oficio o tarea<input id="f-rol" list="rol-l" value="${esc(p.rol||'')}" placeholder="Ej: Oficial, Ayudante, Capataz"><datalist id="rol-l"><option>Capataz</option><option>Oficial</option><option>Medio oficial</option><option>Ayudante</option><option>Herrero</option><option>Encofrador</option></datalist></label>
   <label class="f">Obra<select id="f-obra">${optObras(p.obra)}</select></label>
+  <label class="f">¿Qué está haciendo ahora?<input id="f-hac" list="hac-l" value="${esc(p.haciendo||'')}" placeholder="Ej: Armado de hierros de platea"><datalist id="hac-l">${tareasDe('obra:'+(p.obra||'')).filter(t=>t.estado!=='hecha').map(t=>`<option>${esc(t.titulo)}</option>`).join('')}</datalist></label>
   <label class="f">Nota (opcional)<input id="f-nota" value="${esc(p.nota||'')}"></label>
   <button class="btn gold full" type="submit">Guardar</button>${p.id?'<button class="btn del full" type="button" data-a="delP" data-id="'+p.id+'" style="margin-top:8px">Quitar de la obra</button>':''}<button class="btn full" type="button" data-a="cerrar" style="margin-top:8px">Cancelar</button></form>`);
 }
@@ -333,7 +373,7 @@ function formSueldo(s){
 function formObra(o){
   o=o||{};
   sheet(`<h2>${o.id?'Editar obra':'Agregar obra'}</h2><form data-f="obra"><input type="hidden" id="f-id" value="${o.id||''}">
-  <label class="f">Nombre<input id="f-nom" value="${esc(o.nombre||'')}"></label><label class="f">Nota (opcional)<input id="f-nota" value="${esc(o.nota||'')}"></label>
+  <label class="f">Nombre<input id="f-nom" value="${esc(o.nombre||'')}"></label><label class="f">Etapa actual de la obra<input id="f-etapa" value="${esc(o.etapa||'')}" placeholder="Ej: Estructura · platea" list="etapa-l"><datalist id="etapa-l"><option>Preliminares</option><option>Movimiento de suelo</option><option>Fundaciones</option><option>Estructura</option><option>Mampostería</option><option>Losa</option><option>Revoques</option><option>Pisos</option></datalist></label><label class="f">Nota (opcional)<input id="f-nota" value="${esc(o.nota||'')}"></label>
   <button class="btn gold full" type="submit">Guardar</button>${o.id?'<button class="btn del full" type="button" data-a="delO" data-id="'+o.id+'" style="margin-top:8px">Eliminar obra</button>':''}<button class="btn full" type="button" data-a="cerrar" style="margin-top:8px">Cancelar</button></form>`);
 }
 const SUBMIT={
@@ -342,11 +382,14 @@ const SUBMIT={
     if(ini&&fin&&fin<ini){toast('El fin no puede ser antes del inicio',true);return}
     const t={...(prev||{}),id:id||undefined,ambito:amb,titulo:tit,inicio:ini,fin,resp:val('f-resp').trim(),estado:est,prio:val('f-prio')||'normal',nota:val('f-nota').trim()};
     if(est==='curso'&&!t.inicioReal)t.inicioReal=TODAY;if(est==='hecha'){if(!t.inicioReal)t.inicioReal=TODAY;t.finReal=t.finReal||TODAY}if(est==='pend'){t.inicioReal=0;t.finReal=0}
-    closeSheet();guardar('tareas',t)},
-  persona(){const nom=val('f-nom').trim();if(!nom){toast('Poné el nombre',true);return}const id=val('f-id');closeSheet();guardar('personal',{...(id?byId('personal',id):{}),id:id||undefined,nombre:nom,rol:val('f-rol').trim(),obra:val('f-obra'),nota:val('f-nota').trim(),activo:true})},
-  gasto(){const con=val('f-con').trim(),m=+val('f-monto');if(!con){toast('Poné el concepto',true);return}if(!(m>0)){toast('Poné el monto',true);return}const id=val('f-id');closeSheet();guardar('gastos',{id:id||undefined,concepto:con,monto:m,fecha:dt(val('f-fec'))||TODAY,de:val('f-de'),obra:val('f-obra'),cat:val('f-cat').trim()})},
-  sueldo(){const m=+val('f-monto'),mes=val('f-mes');if(!mes){toast('Elegí el mes',true);return}if(!(m>0)){toast('Poné el monto',true);return}const id=val('f-id'),pag=$('#f-pag').checked;closeSheet();guardar('sueldos',{id:id||undefined,mes,monto:m,fecha:dt(val('f-fec'))||(pag?TODAY:0),pagado:pag,nota:val('f-nota').trim()})},
-  obra(){const n=val('f-nom').trim();if(!n){toast('Poné el nombre',true);return}const id=val('f-id');closeSheet();guardar('obras',{...(id?byId('obras',id):{}),id:id||undefined,nombre:n,nota:val('f-nota').trim(),orden:id?(byId('obras',id).orden||0):col('obras').length})}
+    guardar('tareas',t)},
+  persona(){const nom=val('f-nom').trim();if(!nom){toast('Poné el nombre',true);return}const id=val('f-id');guardar('personal',{...(id?byId('personal',id):{}),id:id||undefined,nombre:nom,rol:val('f-rol').trim(),obra:val('f-obra'),haciendo:val('f-hac').trim(),nota:val('f-nota').trim(),activo:true})},
+  gasto(){const con=val('f-con').trim(),m=+val('f-monto');if(!con){toast('Poné el concepto',true);return}if(!(m>0)){toast('Poné el monto',true);return}const id=val('f-id');guardar('gastos',{id:id||undefined,concepto:con,monto:m,fecha:dt(val('f-fec'))||TODAY,de:val('f-de'),obra:val('f-obra'),cat:val('f-cat').trim()})},
+  sueldo(){const m=+val('f-monto'),mes=val('f-mes');if(!mes){toast('Elegí el mes',true);return}if(!(m>0)){toast('Poné el monto',true);return}const id=val('f-id'),pag=$('#f-pag').checked;guardar('sueldos',{id:id||undefined,mes,monto:m,fecha:dt(val('f-fec'))||(pag?TODAY:0),pagado:pag,nota:val('f-nota').trim()})},
+  agenda(){const id=val('f-id'),f=dt(val('f-fec'));if(!f){toast('Elegí el día',true);return}const base={quien:val('f-q'),lugar:val('f-lugar').trim()||'Nordelta',obra:val('f-obra'),motivo:val('f-mot').trim(),hecho:$('#f-hecho').checked};
+    if(id){guardar('agenda',{...byId('agenda',id),...base,fecha:f});return}
+    const rep=+val('f-rep')||0;for(let k=0;k<=rep;k++)guardar('agenda',{...base,fecha:f+k*7*DAY,hecho:k?false:base.hecho})},
+  obra(){const n=val('f-nom').trim();if(!n){toast('Poné el nombre',true);return}const id=val('f-id');guardar('obras',{...(id?byId('obras',id):{}),id:id||undefined,nombre:n,etapa:val('f-etapa').trim(),nota:val('f-nota').trim(),orden:id?(byId('obras',id).orden||0):col('obras').length})}
 };
 
 /* ---------- acciones ---------- */
@@ -361,6 +404,10 @@ const A={
   nuevoG:()=>formGasto(),editG:ds=>{const g=byId('gastos',ds.id);if(g)formGasto(g)},
   nuevoS:()=>formSueldo(),editS:ds=>{const s=byId('sueldos',ds.id);if(s)formSueldo(s)},
   nuevaObra:()=>formObra(),editObra:ds=>formObra(byId('obras',ds.id)),
+  nuevoAg:ds=>formAgenda(null,+ds.f),editAg:ds=>{const a=byId('agenda',ds.id);if(a)formAgenda(a)},
+  agRap:ds=>guardar('agenda',{fecha:+ds.f,quien:ds.q,lugar:'Nordelta',hecho:false}),
+  hechoAg:ds=>{const a=byId('agenda',ds.id);if(a)guardar('agenda',{...a,hecho:!a.hecho})},
+  delAg:ds=>{if(confirm('¿Eliminar esta visita?')){closeSheet();borrar('agenda',ds.id)}},
   cerrar:closeSheet,
   ciclo:ds=>{const t=byId('tareas',ds.id);if(!t)return;const n={pend:'curso',curso:'hecha',hecha:'pend'}[t.estado];const u={...t,estado:n};
     if(n==='curso'){u.inicioReal=u.inicioReal||TODAY;u.finReal=0}if(n==='hecha'){u.inicioReal=u.inicioReal||TODAY;u.finReal=TODAY}if(n==='pend'){u.inicioReal=0;u.finReal=0}guardar('tareas',u)},

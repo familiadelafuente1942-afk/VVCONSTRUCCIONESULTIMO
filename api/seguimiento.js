@@ -43,14 +43,15 @@ const ESTADOS = ["pend", "curso", "hecha"];
 
 // Campos permitidos por colección
 const COLS = {
-  obras: (q) => ({ nombre: str(q.nombre, 80), orden: num(q.orden, 0, 999), nota: str(q.nota, 400) }),
+  obras: (q) => ({ nombre: str(q.nombre, 80), orden: num(q.orden, 0, 999), nota: str(q.nota, 400), etapa: str(q.etapa, 120) }),
   tareas: (q) => ({
     ambito: str(q.ambito, 60), titulo: str(q.titulo, 200), nota: str(q.nota, 1000),
     inicio: num(q.inicio, 0, 4e12), fin: num(q.fin, 0, 4e12), inicioReal: num(q.inicioReal, 0, 4e12), finReal: num(q.finReal, 0, 4e12),
     estado: ESTADOS.includes(q.estado) ? q.estado : "pend", resp: str(q.resp, 80), prio: ["alta", "normal"].includes(q.prio) ? q.prio : "normal",
     orden: num(q.orden, 0, 99999),
   }),
-  personal: (q) => ({ obra: ident(q.obra), nombre: str(q.nombre, 80), rol: str(q.rol, 80), nota: str(q.nota, 300), activo: q.activo !== false }),
+  personal: (q) => ({ obra: ident(q.obra), nombre: str(q.nombre, 80), rol: str(q.rol, 80), haciendo: str(q.haciendo, 200), nota: str(q.nota, 300), activo: q.activo !== false }),
+  agenda: (q) => ({ fecha: num(q.fecha, 0, 4e12), quien: ["Nicolás", "Sebastián", "Ambos", "Nadie"].includes(q.quien) ? q.quien : "Nicolás", lugar: str(q.lugar, 80), obra: ident(q.obra), motivo: str(q.motivo, 400), hecho: !!q.hecho }),
   gastos: (q) => ({
     fecha: num(q.fecha, 0, 4e12), concepto: str(q.concepto, 200), monto: num(q.monto, 0, 1e12), cat: str(q.cat, 60),
     de: q.de === "Nicolás" ? "Nicolás" : "Empresa", obra: ident(q.obra), nota: str(q.nota, 400),
@@ -124,8 +125,8 @@ export default async function handler(req, res) {
         obras = OBRAS0.map(([id, nombre], i) => ({ id, nombre, orden: i, nota: "", por: "sistema", creado: Date.now(), editado: Date.now() }));
         await escribir(H, "seg_obras", { items: obras });
       }
-      const [tareas, personal, gastos, sueldos] = await Promise.all(["tareas", "personal", "gastos", "sueldos"].map((c) => leerCol(H, c)));
-      res.status(200).json({ ok: true, quien, obras, tareas, personal, gastos, sueldos, ahora: Date.now() });
+      const [tareas, personal, gastos, sueldos, agenda] = await Promise.all(["tareas", "personal", "gastos", "sueldos", "agenda"].map((c) => leerCol(H, c)));
+      res.status(200).json({ ok: true, quien, obras, tareas, personal, gastos, sueldos, agenda, ahora: Date.now() });
       return;
     }
 
