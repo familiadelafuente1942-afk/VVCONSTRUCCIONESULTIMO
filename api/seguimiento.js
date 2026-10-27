@@ -169,6 +169,7 @@ export default async function handler(req, res) {
       const MAP0 = { puentes132: "o1", castores475: "o2", puentes246: "o4" };
       let obras = await leerCol(H, "obras");
       let regs = await leerCol(H, "registros");
+      const borrados = new Set(((await leer(H, "seg_borrados")) || {}).ids || []);
       const hab = (a, bb) => { let n = 0; for (let d = a + 864e5; d <= bb; d += 864e5) { const w = new Date(d).getUTCDay(); if (w > 0 && w < 6) n++; } return n; };
       let nuevos = 0, actualizados = 0, quitados = 0, obrasNuevas = 0;
       for (const [nid, nombre] of NX) {
@@ -184,6 +185,7 @@ export default async function handler(req, res) {
         for (const r of items) {
           const id = "n_" + nid + "_" + ident(r.id);
           vistos.add(id);
+          if (borrados.has(id)) continue;
           const prev = regs.find((x) => x.id === id);
           if (prev && (prev.nexoEd || 0) >= (r.editado || 0)) continue;
           const esH = r.tipo === "hecho";
@@ -208,6 +210,37 @@ export default async function handler(req, res) {
       if (nuevos || actualizados || quitados) await escribir(H, "seg_registros", { items: regs.slice(-3000) });
       if (obrasNuevas) await escribir(H, "seg_obras", { items: obras });
       res.status(200).json({ ok: true, nuevos, actualizados, quitados, obrasNuevas });
+      return;
+    }
+
+    // ---- trae las bitácoras de la app anterior de V+V (solo lectura sobre esa app) ----
+    if (b.op === "importar_bitacora") {
+      const OLD = "https://bxhjgxzvayszfqwlwinq.supabase.co", OK = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
+      const HO = { apikey: OK, Authorization: "Bearer " + OK };
+      const leerOld = async (k) => { const r = await fetch(`${OLD}/rest/v1/bco_storage?key=eq.${k}&select=value&limit=1`, { headers: HO }); if (!r.ok) throw new Error("old " + r.status); const rows = await r.json(); let v = rows[0] && rows[0].value; if (typeof v === "string") { try { v = JSON.parse(v); } catch { v = null; } } return v; };
+      const bit = await leerOld("vv_bitacora"), obOld = await leerOld("vv_obras");
+      if (!Array.isArray(bit)) { res.status(200).json({ ok: true, nuevos: 0, total: 0, sinObra: [] }); return; }
+      const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      const obras = await leerCol(H, "obras");
+      let regs = await leerCol(H, "registros");
+      const borrados = new Set(((await leer(H, "seg_borrados")) || {}).ids || []);
+      const nomOld = {}; (Array.isArray(obOld) ? obOld : []).forEach((o) => { nomOld[o.id] = o.nombre; });
+      const casar = (nom) => { const n = nrm(nom); if (!n) return null; return obras.find((o) => nrm(o.nombre) === n) || obras.find((o) => nrm(o.nombre).includes(n) || n.includes(nrm(o.nombre))) || null; };
+      const dts = (f) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(f || "")); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : 0; };
+      let nuevos = 0; const sinObra = new Set();
+      for (const h of bit) {
+        const nom = nomOld[h.obra_id] || h.obra_nombre || "";
+        const ob = casar(nom);
+        if (!ob) { if (nom) sinObra.add(nom); continue; }
+        const id = "v_" + ident(h.id || String(h.ts || Math.random()));
+        if (borrados.has(id) || regs.some((x) => x.id === id)) continue;
+        const dd = Number(h.diasDesvio) || 0;
+        const adj = (h.adjuntos || []).map((a) => `${a.nombre || "adjunto"}${a.url ? " (" + a.url + ")" : ""}`).join("\n");
+        const nuevo = COLS.registros({ obra: ob.id, tipo: dd > 0 ? "retraso" : "hecho", titulo: h.titulo || String(h.desc || "").slice(0, 80) || "Anotación", fecha: dts(h.fecha) || h.ts || 0, desc: [h.desc, adj ? "Adjuntos:\n" + adj : ""].filter(Boolean).join("\n\n"), causa: h.categoriaDesvio || h.causaDesvio || "", dias: dd, etapa: h.etapa || "", origen: "", fotos: (h.fotos || []).map((f) => ({ u: typeof f === "string" ? f : f && (f.url || f.u) || "", f: dts(h.fecha) })) });
+        regs.push({ ...nuevo, id, por: "App anterior", creado: h.ts || Date.now(), editado: Date.now(), editor: "App anterior" }); nuevos++;
+      }
+      if (nuevos) await escribir(H, "seg_registros", { items: regs.slice(-3000) });
+      res.status(200).json({ ok: true, nuevos, total: bit.length, sinObra: [...sinObra] });
       return;
     }
 
@@ -245,6 +278,7 @@ export default async function handler(req, res) {
 
     if (b.op === "borrar") {
       const id = ident(b.id);
+      if (col === "registros" && /^[nv]_/.test(id)) { const bo = (await leer(H, "seg_borrados")) || { ids: [] }; await escribir(H, "seg_borrados", { ids: [...new Set([...(bo.ids || []), id])].slice(-2000) }); }
       const items = await leerCol(H, col);
       await escribir(H, "seg_" + col, { items: items.filter((x) => x.id !== id) });
       if (col === "obras") {

@@ -1415,9 +1415,11 @@ async function cargar(silencioso){
   catch(e){if(e.message==='sesion')return;S.err='Sin conexión. Mostrando lo último que se vio.';if(!silencioso)toast('No se pudo actualizar. Revisá la conexión.',true)}
   badge();redraw(true);cargarNexo();
 }
+let _impB=0;
+async function importarBitacora(manual){try{const j=await api({op:'importar_bitacora'});_impB=Date.now();if(j.nuevos){await cargar(true)}if(manual)toast(j.nuevos?`Traídas ${j.nuevos} bitácoras de la app anterior${j.sinObra&&j.sinObra.length?'. Sin obra equivalente: '+j.sinObra.join(', '):''}`:(j.total?`Ya estaban todas (${j.total} en la app anterior)${j.sinObra&&j.sinObra.length?'. Sin obra equivalente: '+j.sinObra.join(', '):''}`:'No encontré bitácoras en la app anterior'),!j.nuevos&&!j.total)}catch(e){if(manual)toast('No se pudo leer la app anterior',true)}}
 let _imp=0;
 async function importarNexo(manual){try{const j=await api({op:'importar_nexo'});_imp=Date.now();if(j.nuevos||j.actualizados||j.quitados||j.obrasNuevas){await cargar(true);if(manual)toast(`Traídos de NEXO 2: ${j.nuevos} nuevos, ${j.actualizados} actualizados`)}else if(manual)toast('Ya está todo al día con NEXO 2')}catch(e){if(manual)toast('No se pudo traer de NEXO 2',true)}}
-async function cargarNexo(){if(Date.now()-_imp>120000)importarNexo(false);try{const j=await api({op:'nexo'});S.NX=j.nexo||{};redraw(true)}catch(e){}}
+async function cargarNexo(){if(Date.now()-_imp>120000)importarNexo(false);if(!_impB)importarBitacora(false);try{const j=await api({op:'nexo'});S.NX=j.nexo||{};redraw(true)}catch(e){}}
 function redraw(soft){if(document.querySelector('#layer .scrim'))return;if(S.gfull){if(!soft||!document.querySelector('#gfull input:focus,#gfull select:focus'))gfRender()}else draw()}
 async function guardar(c,item,quiet){
   closeSheet();
@@ -1608,7 +1610,7 @@ const rsel=id=>S.rsel[id]!==false;
 function vRegs(o){
   const L=col('registros').filter(x=>x.obra===o.id).sort((a,b)=>(b.fecha||0)-(a.fecha||0)),n=L.filter(r=>rsel(r.id)).length;
   return `<p class="muted small">Para dejar asentado lo que pasa en la obra: retrasos con su causa y cualquier otro hecho. Con fotos. Pueden cargar Sebastián y Nicolás.</p>
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm gold" data-act="nuevoReg" data-o="${o.id}" data-t="retraso">+ Registrar un retraso</button><button class="btn sm" data-act="nuevoReg" data-o="${o.id}" data-t="hecho">+ Otro hecho</button><button class="btn sm ghost" data-act="traerNexo">↻ Traer de NEXO 2</button></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm gold" data-act="nuevoReg" data-o="${o.id}" data-t="retraso">+ Registrar un retraso</button><button class="btn sm" data-act="nuevoReg" data-o="${o.id}" data-t="hecho">+ Otro hecho</button><button class="btn sm ghost" data-act="traerNexo">↻ Traer de NEXO 2</button><button class="btn sm ghost" data-act="traerBit">↻ Traer bitácoras de la app anterior</button></div>
   ${L.length?`<div class="sub-h"><span class="muted small">${n} de ${L.length} marcados para el PDF</span><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" data-act="regMarcar" data-o="${o.id}" data-v="1">Todos</button><button class="btn sm ghost" data-act="regMarcar" data-o="${o.id}" data-v="0">Ninguno</button></span></div>
   <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm gold" data-act="regPdf" data-o="${o.id}">PDF de los marcados</button><button class="btn sm" data-act="regCsv" data-o="${o.id}">Excel (CSV)</button></div>`:''}
   <div style="display:flex;flex-direction:column;gap:8px">${L.length?L.map(r=>{const d=regDias(r);return `<div class="card" style="position:relative"><div class="sub-h"><label style="display:flex;gap:10px;align-items:center"><input type="checkbox" data-chg="regSel" data-id="${r.id}" ${rsel(r.id)?'checked':''} style="width:20px;height:20px"><span><span class="eyebrow">${r.tipo==='retraso'?'Retraso':'Hecho'} · ${fD(r.fecha||r.desde)}</span><br><b>${esc(regTit(r))}</b></span></label></div>
@@ -1878,6 +1880,7 @@ const SUBMIT={
 const A={
   irNxTodo:()=>{const o=col('obras').find(o=>nxDe(o)&&nxDe(o).cards.length);if(o){S.tab='obras';S.obra=o.id;S.otab='nexo';draw();window.scrollTo(0,0)}else toast('No hay tarjetas publicadas todavía')},
   fijarAg:ds=>{const a=byId('agenda',ds.id);if(a)guardar('agenda',{...a,fijar:!a.fijar})},
+  traerBit:()=>importarBitacora(true),
   traerNexo:()=>importarNexo(true),
   nuevoReg:ds=>formReg(ds.t,null,ds.o),editReg:ds=>{const r=byId('registros',ds.id);if(r)formReg(r.tipo,r,r.obra)},
   delReg:ds=>{if(confirm('¿Eliminar este registro?')){RF=null;closeSheet();borrar('registros',ds.id)}},
