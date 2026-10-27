@@ -1150,8 +1150,6 @@ input::placeholder,textarea::placeholder{color:var(--muted)!important;opacity:.8
 .kp button:active{animation:kpShine .5s ease-out;background:var(--glint),linear-gradient(160deg,rgba(255,255,255,.5),rgba(255,255,255,.12))}
 @media (max-width:520px){.kp-d{grid-template-columns:repeat(3,68px);gap:12px}.kp-l{grid-template-columns:repeat(9,32px);gap:6px}.kp-l button{font-size:13px}}
 </style><style>/* ===== Seguimiento V+V: complementos sobre el estilo de NEXO 2 ===== */
-.app{max-width:760px}
-nav.bottom .in{max-width:760px}
 nav.bottom button{font-size:11px;padding:10px 2px 12px}
 .tcard{width:100%;text-align:left;cursor:pointer}
 .seg2{display:flex;gap:6px;flex-wrap:wrap}
@@ -1233,6 +1231,14 @@ html{--display:'Playfair Display',Georgia,serif;--cond:'Playfair Display',Georgi
 .mini .m3{grid-area:c;font-size:12px;font-weight:700;white-space:nowrap;padding-left:6px}
 .dot2.c-rojo{background:var(--rojo,#dc2626)!important}.dot2.c-naranja{background:var(--naranja,#f97316)!important}.dot2.c-amarillo{background:#eab308!important}.dot2.c-verde{background:var(--verde,#16a34a)!important}.dot2.c-gold{background:var(--gold,#b8892e)!important}
 .pinx{flex:none;width:30px;height:30px;border-radius:50%;border:1px solid var(--line,#ccc);background:transparent;font-size:13px;cursor:pointer;margin-left:6px;opacity:.45}.pinx.on{opacity:1;border-color:var(--gold,#b8892e);background:rgba(184,137,46,.18)}
+@media (min-width:1100px){
+#view.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:32px;row-gap:22px;align-items:start}
+#view.cols>:nth-child(1),#view.cols>.kpis{grid-column:1/-1}
+#view.cols .minis{max-width:none}
+nav.bottom .in{max-width:900px}
+}
+@media (min-width:1500px){#view.cols{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.mini .m3{justify-self:end}.mini{grid-template-columns:10px minmax(0,1fr) auto}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1712,6 +1718,7 @@ function draw(){
   const V={inicio:vInicio,obras:vObras,agenda:vAgenda,tareas:vTareas,gente:vGente,nexo:vNexo,gastos:vGastos}[S.tab];
   const y=window.scrollY,gs=$('#gwrap'),gsl=gs?gs.scrollLeft:null;
   $('#view').innerHTML=`${S.err?`<p class="small t-rojo">${esc(S.err)}</p>`:''}${S.cargado?V():'<p class="muted">Cargando…</p>'}`;
+  $('#view').className=(S.tab==='inicio')?'cols':'';
   $('#who').innerHTML=`<span><b>${esc(S.quien)}</b><span class="rol">Seguimiento interno</span></span><button class="btn ghost sm" data-act="actualizar" aria-label="Actualizar" title="Actualizar">↻</button><button class="btn ghost sm" data-act="brillo" aria-label="Del blanco al negro" title="Aspecto"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4v16" /></svg></button>`;
   $('#nav').innerHTML=nav();$('#nav').parentElement.hidden=false;
   const g=$('#gwrap');if(g){g.scrollLeft=gsl!=null?gsl:(+g.dataset.scroll||0)}
