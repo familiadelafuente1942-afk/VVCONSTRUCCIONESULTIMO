@@ -1255,6 +1255,24 @@ nav.bottom .in{max-width:900px}
 .card.cuadro2 .eyebrow{color:#2f5fb3}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .card.cuadro2 .fact{background:rgba(255,255,255,.06)}:root:not([data-theme="light"]) .card.cuadro2 .eyebrow{color:#8fb4f0}}
 :root[data-theme="dark"] .card.cuadro2 .fact{background:rgba(255,255,255,.06)}:root[data-theme="dark"] .card.cuadro2 .eyebrow{color:#8fb4f0}
+/* formularios: aire entre campos y fechas que no se salen en iPhone / iPad / PC */
+.frm{display:flex;flex-direction:column;gap:16px}
+.frm .f{display:flex;flex-direction:column;gap:6px;min-width:0}
+.frm .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:end}
+.frm .row2>*{min-width:0}
+.frm input,.frm select,.frm textarea{width:100%;min-width:0;max-width:100%;box-sizing:border-box;min-height:48px}
+.frm input[type=date],.frm input[type=month]{-webkit-appearance:none;appearance:none;display:block;text-align:left;padding-right:10px;overflow:hidden}
+.frm input[type=date]::-webkit-date-and-time-value{text-align:left;min-height:1.3em}
+.frm input[type=checkbox]{width:22px;min-height:22px}
+.frm textarea{min-height:110px}
+.frm .infph{margin:2px 0}
+.sheet{padding-bottom:max(24px,env(safe-area-inset-bottom))}
+@media (max-width:520px){.frm .row2{grid-template-columns:1fr}}
+@media (min-width:521px) and (max-width:900px){.frm .row2{gap:16px}}
+.frm .f{color:var(--fg)!important;font-size:13px;font-weight:600}
+.frm .f input,.frm .f select,.frm .f textarea{font-weight:400}
+.scrim .sheet{background:var(--bg)!important}
+.frm .muted,.sheet p.muted{color:var(--sub,var(--fg));opacity:.85}
 </style></head><body>
 <div class="app">
   <header class="top">
