@@ -1207,6 +1207,10 @@ body.gedit .ghito{cursor:grab}
 .gmonths .gm{color:var(--fg)!important;opacity:1!important;font-weight:700}
 .glabel.rubro{background:none!important;box-shadow:none!important;border:0!important;border-radius:0!important;filter:none!important;color:var(--gold,#b8892e);font-size:12px;font-weight:700;display:flex;align-items:center;padding:0 10px;text-transform:uppercase;letter-spacing:.08em}
 .gbar{background:#8a93a3}.gbar.curso{background:var(--azul,#3b82f6)}.gbar.late{background:var(--rojo,#dc2626)}.gbar.hecha{background:var(--verde,#16a34a)}
+.delx{flex:none;width:30px;height:30px;border-radius:50%;border:1px solid var(--line,#ccc);background:transparent;color:var(--rojo,#dc2626);font-size:14px;line-height:1;cursor:pointer;margin-left:6px;align-self:center}
+.delx:hover{background:var(--rojo,#dc2626);color:#fff}
+.nxrow{position:relative}.nxrow>.delx{position:absolute;right:0;top:6px}
+.nxrow.sub-h>.delx{position:static;margin-left:8px}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1341,7 +1345,7 @@ function tcardT(t,opts={}){
   const e=estadoTarea(t),f=t.inicio||t.fin?`${t.inicio?fmt(t.inicio):''}${t.inicio&&t.fin?' → ':''}${t.fin?(opts.limite?'vence '+fmt(t.fin):fmt(t.fin)):''}`:'';
   const real=t.estado==='curso'&&t.inicioReal?`arrancó ${fmt(t.inicioReal)}`:t.estado==='hecha'&&t.finReal?`terminada ${fmt(t.finReal)}`:'';
   const dias=t.estado!=='hecha'&&t.fin?(t.fin<TODAY?`<b class="t-rojo">${Math.round((TODAY-t.fin)/DAY)} d</b><span class="muted">de atraso</span>`:`<b>${Math.round((t.fin-TODAY)/DAY)} d</b><span class="muted">para el fin</span>`):'';
-  return `<div class="tcard" role="button" tabindex="0" data-act="editT" data-id="${t.id}"><span class="stripe c-${e.c}"></span><span class="tc-ico t-${e.c==='futuro'?'ok':e.c}" data-act="ciclo" data-id="${t.id}" title="Tocá para cambiar el estado">${svg(e.ic,18)}</span><span class="txt"><span class="tag t-${e.c==='futuro'?'ok':e.c}">${e.tag}${t.prio==='alta'&&t.estado!=='hecha'?' · prioridad alta':''}</span><span class="t1">${esc(t.titulo)}</span><span class="t2">${[opts.ctx,f,t.resp,real].filter(Boolean).map(esc).join(' · ')}</span>${t.nota?`<span class="t2">${esc(t.nota.slice(0,110))}${t.nota.length>110?'…':''}</span>`:''}</span><span class="when">${dias}</span></div>`;
+  return `<div class="tcard" role="button" tabindex="0" data-act="editT" data-id="${t.id}"><span class="stripe c-${e.c}"></span><span class="tc-ico t-${e.c==='futuro'?'ok':e.c}" data-act="ciclo" data-id="${t.id}" title="Tocá para cambiar el estado">${svg(e.ic,18)}</span><span class="txt"><span class="tag t-${e.c==='futuro'?'ok':e.c}">${e.tag}${t.prio==='alta'&&t.estado!=='hecha'?' · prioridad alta':''}</span><span class="t1">${esc(t.titulo)}</span><span class="t2">${[opts.ctx,f,t.resp,real].filter(Boolean).map(esc).join(' · ')}</span>${t.nota?`<span class="t2">${esc(t.nota.slice(0,110))}${t.nota.length>110?'…':''}</span>`:''}</span><span class="when">${dias}</span><button class="delx" data-act="del" data-c="tareas" data-id="${t.id}" aria-label="Borrar" title="Borrar">✕</button></div>`;
 }
 function ctxT(t){if(t.ambito==='general')return 'General';if(t.ambito==='nexo')return 'Nexo entorno app';if(t.ambito.startsWith('obra:'))return nombreObra(t.ambito.slice(5));return ''}
 
@@ -1350,7 +1354,7 @@ function vLogin(){return `<div class="loginbox"><span class="eyebrow">V+V Constr
 
 /* ---------- Inicio ---------- */
 function filaAg(a){return `<div class="agrow"><span class="tc-ico ${a.hecho?'t-verde':''}" style="width:30px;height:30px;cursor:pointer" data-act="hechoAg" data-id="${a.id}" title="Marcar como hecha">${a.hecho?svg('chk',16):''}</span>
- <div style="flex:1;min-width:0;cursor:pointer" data-act="editAg" data-id="${a.id}"><b class="${a.quien==='Nicolás'?'t-azul':a.quien==='Sebastián'?'t-gold':'t-verde'}">${a.quien==='Nadie'?'No va nadie':a.quien==='Ambos'?'Van los dos':'Va '+a.quien}</b> <span class="muted small">${[a.lugar||'Nordelta',a.obra?nombreObra(a.obra):'',a.motivo].filter(Boolean).map(esc).join(' · ')}</span></div></div>`}
+ <div style="flex:1;min-width:0;cursor:pointer" data-act="editAg" data-id="${a.id}"><b class="${a.quien==='Nicolás'?'t-azul':a.quien==='Sebastián'?'t-gold':'t-verde'}">${a.quien==='Nadie'?'No va nadie':a.quien==='Ambos'?'Van los dos':'Va '+a.quien}</b> <span class="muted small">${[a.lugar||'Nordelta',a.obra?nombreObra(a.obra):'',a.motivo].filter(Boolean).map(esc).join(' · ')}</span></div><button class="delx" data-act="del" data-c="agenda" data-id="${a.id}" aria-label="Borrar" title="Borrar">✕</button></div>`}
 const agDe=f=>col('agenda').filter(a=>a.fecha===f);
 function filaObraRes(o){const T=tareasDe('obra:'+o.id),h=T.filter(t=>t.estado==='hecha').length,at=T.filter(atrasada).length,n=obreros(o.id).length,p=proxima(o),nx=nxPend(o);
   return `<button class="card" data-act="obra" data-id="${o.id}" style="text-align:left;width:100%;display:block"><div class="sub-h"><b style="font-size:17px">${esc(o.nombre)}</b><span style="display:flex;gap:6px">${at?`<span class="badge" style="position:static;background:var(--rojo);color:#fff;border-radius:999px;font-size:11px;padding:0 6px;line-height:18px">${at} atras.</span>`:''}${nx?`<span class="chip gold">${nx} en NEXO</span>`:''}</span></div>
@@ -1431,7 +1435,7 @@ function vObra(){
   const body=S.otab==='crono'?`<div class="sub-h"><button class="btn sm gold" data-act="nuevaT" data-amb="obra:${o.id}">+ Tarea</button><span style="display:flex;gap:6px;flex-wrap:wrap">${zoomBtns()}<button class="btn sm" data-act="gfull" data-o="${o.id}">Pantalla completa</button></span></div>${ganttHTML(o)}
    <div style="display:flex;flex-direction:column;gap:8px">${T.length?T.map(t=>tcardT(t)).join(''):'<div class="card muted">Todavía no hay tareas. Agregá la primera con inicio y fin.</div>'}</div>`
   :S.otab==='hitos'?`<button class="btn sm gold" data-act="nuevoH" data-o="${o.id}" style="align-self:flex-start">+ Fecha clave</button><p class="muted small">Hormigonadas, cierres de etapa, entregas: aparecen como rombos en el Gantt.</p>
-   <div class="card">${h.length?h.map(x=>`<div class="agrow" style="cursor:pointer" data-act="editH" data-id="${x.id}"><span class="tc-ico ${x.hecho?'t-verde':'t-gold'}" style="width:30px;height:30px" data-act="hechoH" data-id="${x.id}">${x.hecho?svg('chk',16):svg('cal',16)}</span><div style="flex:1"><b>${esc(x.titulo)}</b><br><span class="muted small">${fmt(x.fecha)} · ${{hormigonado:'Hormigonado',etapa:'Etapa',entrega:'Entrega',otro:'Otro'}[x.tipo]||''}${x.fecha<TODAY&&!x.hecho?' · <b class="t-rojo">sin marcar</b>':''}</span></div></div>`).join(''):'<div class="muted">Todavía no hay fechas clave.</div>'}</div>`
+   <div class="card">${h.length?h.map(x=>`<div class="agrow" style="cursor:pointer" data-act="editH" data-id="${x.id}"><span class="tc-ico ${x.hecho?'t-verde':'t-gold'}" style="width:30px;height:30px" data-act="hechoH" data-id="${x.id}">${x.hecho?svg('chk',16):svg('cal',16)}</span><div style="flex:1"><b>${esc(x.titulo)}</b><br><span class="muted small">${fmt(x.fecha)} · ${{hormigonado:'Hormigonado',etapa:'Etapa',entrega:'Entrega',otro:'Otro'}[x.tipo]||''}${x.fecha<TODAY&&!x.hecho?' · <b class="t-rojo">sin marcar</b>':''}</span></div><button class="delx" data-act="del" data-c="hitos" data-id="${x.id}" aria-label="Borrar" title="Borrar">✕</button></div>`).join(''):'<div class="muted">Todavía no hay fechas clave.</div>'}</div>`
   :S.otab==='gente'?`<button class="btn sm gold" data-act="nuevaP" data-obra="${o.id}" style="align-self:flex-start">+ Persona</button><div class="card">${listaGente(o.id)}</div>`
   :vNexoObra(o);
   return `<div class="ohead"><button class="back" data-act="volver">${BACK} Obras</button><div class="sub-h" style="margin-top:8px"><div><span class="eyebrow">Obra</span><h1>${esc(o.nombre)}</h1></div><button class="btn sm ghost" data-act="editObra" data-id="${o.id}">Editar</button></div></div>
@@ -1449,7 +1453,7 @@ function vNexoObra(o){
   <span class="eyebrow" style="margin-top:6px">Frenadas en el último informe (${fr.length})</span>
   ${fr.length?fr.map(t=>`<div class="card"><b>${esc(t.name)}</b><br><span class="muted small">${esc(t.causa)}${t.causaTxt?' · '+esc(t.causaTxt):''}${t.resp?' · '+esc(t.resp):''}${t.desde?' · desde '+fmt(t.desde):''}</span></div>`).join(''):'<div class="card muted">Ninguna tarea frenada por falta de información, planos o materiales.</div>'}`;
 }
-function listaGente(oid){const L=obreros(oid);return L.length?L.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p=>`<div class="nxrow" style="cursor:pointer" data-act="editP" data-id="${p.id}"><b>${esc(p.nombre)}</b> <span class="muted small">${esc(p.rol||'Obrero')}${p.nota?' · '+esc(p.nota):''}</span>${p.haciendo?`<div class="small">Haciendo: <b>${esc(p.haciendo)}</b></div>`:'<div class="small t-rojo">Sin actividad asignada</div>'}</div>`).join(''):'<div class="muted">Nadie cargado en esta obra.</div>'}
+function listaGente(oid){const L=obreros(oid);return L.length?L.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p=>`<div class="nxrow" style="cursor:pointer" data-act="editP" data-id="${p.id}"><b>${esc(p.nombre)}</b> <span class="muted small">${esc(p.rol||'Obrero')}${p.nota?' · '+esc(p.nota):''}</span>${p.haciendo?`<div class="small">Haciendo: <b>${esc(p.haciendo)}</b></div>`:'<div class="small t-rojo">Sin actividad asignada</div>'}<button class="delx" data-act="del" data-c="personal" data-id="${p.id}" aria-label="Borrar" title="Borrar">✕</button></div>`).join(''):'<div class="muted">Nadie cargado en esta obra.</div>'}
 
 /* ---------- Agenda, Tareas, Personal, Nexo, Gastos ---------- */
 function vAgenda(){
@@ -1488,14 +1492,14 @@ function vGastos(){
     const L=col('sueldos').slice().sort((a,b)=>b.mes.localeCompare(a.mes)),pag=L.filter(s=>s.pagado).reduce((a,s)=>a+s.monto,0),deb=L.filter(s=>!s.pagado).reduce((a,s)=>a+s.monto,0);
     return `<div><span class="eyebrow">Privado</span><h1>Gastos</h1></div>${tabs}<div class="kpis" style="grid-template-columns:1fr 1fr"><div class="kpi k-verde"><b style="font-size:22px">${money(pag)}</b><span class="kl">pagado</span></div><div class="kpi ${deb?'k-rojo':''}"><b style="font-size:22px">${money(deb)}</b><span class="kl">pendiente</span></div></div>
     <button class="btn gold" data-act="nuevoS" style="align-self:flex-start">+ Cargar pago de sueldo</button>
-    <div class="card">${L.length?L.map(s=>`<div class="nxrow sub-h"><div style="cursor:pointer" data-act="editS" data-id="${s.id}"><b>${mesTxt(s.mes)}</b><br><span class="muted small">${money(s.monto)}${s.pagado&&s.fecha?' · pagado el '+fmt(s.fecha):''}${s.nota?' · '+esc(s.nota):''}</span></div><button class="chip ${s.pagado?'gold':''}" data-act="pagarS" data-id="${s.id}">${s.pagado?'Pagado':'Pendiente'}</button></div>`).join(''):'<div class="muted">Todavía no hay pagos cargados.</div>'}</div>`;
+    <div class="card">${L.length?L.map(s=>`<div class="nxrow sub-h"><div style="cursor:pointer" data-act="editS" data-id="${s.id}"><b>${mesTxt(s.mes)}</b><br><span class="muted small">${money(s.monto)}${s.pagado&&s.fecha?' · pagado el '+fmt(s.fecha):''}${s.nota?' · '+esc(s.nota):''}</span></div><button class="chip ${s.pagado?'gold':''}" data-act="pagarS" data-id="${s.id}">${s.pagado?'Pagado':'Pendiente'}</button><button class="delx" data-act="del" data-c="sueldos" data-id="${s.id}" aria-label="Borrar" title="Borrar">✕</button></div>`).join(''):'<div class="muted">Todavía no hay pagos cargados.</div>'}</div>`;
   }
   let L=col('gastos').slice().sort((a,b)=>b.fecha-a.fecha);if(S.gde!=='todos')L=L.filter(g=>g.de===S.gde);
   const mes=L.filter(g=>mesDe(g.fecha)===MES_HOY).reduce((a,g)=>a+g.monto,0),tot=L.reduce((a,g)=>a+g.monto,0);
   return `<div><span class="eyebrow">Privado</span><h1>Gastos</h1></div>${tabs}<div class="kpis" style="grid-template-columns:1fr 1fr"><div class="kpi"><b style="font-size:22px">${money(mes)}</b><span class="kl">este mes</span></div><div class="kpi"><b style="font-size:22px">${money(tot)}</b><span class="kl">total cargado</span></div></div>
   <div class="seg2">${['todos','Empresa','Nicolás'].map(k=>`<button class="btn sm ${S.gde===k?'gold':'ghost'}" data-act="gde" data-k="${k}">${k==='todos'?'Todos':k}</button>`).join('')}</div>
   <button class="btn gold" data-act="nuevoG" style="align-self:flex-start">+ Cargar gasto</button>
-  <div class="card">${L.length?L.map(g=>`<div class="nxrow sub-h" style="cursor:pointer" data-act="editG" data-id="${g.id}"><div><b>${esc(g.concepto)}</b><br><span class="muted small">${fmt(g.fecha)} · ${g.de}${g.cat?' · '+esc(g.cat):''}${g.obra?' · '+esc(nombreObra(g.obra)):''}</span></div><b>${money(g.monto)}</b></div>`).join(''):'<div class="muted">Todavía no hay gastos cargados.</div>'}</div>`;
+  <div class="card">${L.length?L.map(g=>`<div class="nxrow sub-h" style="cursor:pointer" data-act="editG" data-id="${g.id}"><div><b>${esc(g.concepto)}</b><br><span class="muted small">${fmt(g.fecha)} · ${g.de}${g.cat?' · '+esc(g.cat):''}${g.obra?' · '+esc(nombreObra(g.obra)):''}</span></div><b>${money(g.monto)}</b><button class="delx" data-act="del" data-c="gastos" data-id="${g.id}" aria-label="Borrar" title="Borrar">✕</button></div>`).join(''):'<div class="muted">Todavía no hay gastos cargados.</div>'}</div>`;
 }
 
 function draw(){
@@ -1658,6 +1662,7 @@ const A={
   nuevoAg:ds=>formAgenda(null,+ds.f),editAg:ds=>{const a=byId('agenda',ds.id);if(a)formAgenda(a)},
   agRap:ds=>guardar('agenda',{fecha:+ds.f,quien:ds.q,lugar:'Nordelta',hecho:false}),
   hechoAg:ds=>{const a=byId('agenda',ds.id);if(a)guardar('agenda',{...a,hecho:!a.hecho})},
+  del:ds=>{if(confirm('¿Borrar? No se puede deshacer.'))borrar(ds.c,ds.id)},
   close:closeSheet,scrim:(ds,el,e)=>{if(e.target===el)closeSheet()},
   ciclo:ds=>{const t=byId('tareas',ds.id);if(!t)return;const n={pend:'curso',curso:'hecha',hecha:'pend'}[t.estado];const u={...t,estado:n};
     if(n==='curso'){u.inicioReal=u.inicioReal||TODAY;u.finReal=0}if(n==='hecha'){u.inicioReal=u.inicioReal||TODAY;u.finReal=TODAY}if(n==='pend'){u.inicioReal=0;u.finReal=0}guardar('tareas',u)},
