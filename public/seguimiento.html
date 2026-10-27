@@ -1247,7 +1247,7 @@ const diaTxt=t=>{const x=new Date(t);return DOW[x.getUTCDay()]+' '+x.getUTCDate(
 const lunesDe=t=>{const x=new Date(t).getUTCDay();return t-((x+6)%7)*DAY};
 const ago=t=>{if(!t)return '';const m=Math.round((Date.now()-t)/6e4);return m<2?'recién':m<60?'hace '+m+' min':m<1440?'hace '+Math.round(m/60)+' h':'hace '+Math.round(m/1440)+' d'};
 
-const S={tk:'',quien:'',D:{obras:[],tareas:[],personal:[],gastos:[],sueldos:[],agenda:[],hitos:[]},NX:{},tab:'inicio',obra:null,otab:'crono',ovista:'lista',gtab:'gastos',gde:'todos',tfil:'pend',cargado:false,err:'',gw:34,gfull:null,gpanel:true,sel:null};
+const S={tk:'',quien:'',D:{obras:[],tareas:[],personal:[],gastos:[],sueldos:[],agenda:[],hitos:[],bitacora:[],adicionales:[]},NX:{},tab:'inicio',obra:null,otab:'crono',ovista:'lista',gtab:'gastos',gde:'todos',tfil:'pend',cargado:false,err:'',gw:34,gfull:null,gpanel:true,sel:null};
 const LS=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){return null}};
 const ckGet=()=>{const m=document.cookie.match(/(?:^|; )seg_tk=([^;]*)/);return m?decodeURIComponent(m[1]):''};
 const ckSet=v=>{document.cookie='seg_tk='+encodeURIComponent(v)+';path=/;SameSite=Lax;max-age='+(v?34560000:0)};
@@ -1291,7 +1291,7 @@ function nxDe(o){return S.NX[o.id]||null}
 const nxPend=o=>{const n=nxDe(o);return n?n.cards.length+n.frenadas.length:0};
 
 async function cargar(silencioso){
-  try{const j=await api({op:'todo'});S.quien=j.quien;['obras','tareas','personal','gastos','sueldos','agenda','hitos'].forEach(c=>S.D[c]=j[c]||[]);S.D.obras.sort((a,b)=>(a.orden||0)-(b.orden||0));S.cargado=true;S.err='';LS('seg_q',j.quien)}
+  try{const j=await api({op:'todo'});S.quien=j.quien;['obras','tareas','personal','gastos','sueldos','agenda','hitos','bitacora','adicionales'].forEach(c=>S.D[c]=j[c]||[]);S.D.obras.sort((a,b)=>(a.orden||0)-(b.orden||0));S.cargado=true;S.err='';LS('seg_q',j.quien)}
   catch(e){if(e.message==='sesion')return;S.err='Sin conexión. Mostrando lo último que se vio.';if(!silencioso)toast('No se pudo actualizar. Revisá la conexión.',true)}
   badge();redraw(true);cargarNexo();
 }
@@ -1306,7 +1306,7 @@ async function guardar(c,item,quiet){
   catch(e){if(e.message==='sesion')return;toast('No se pudo guardar: '+e.message,true);await cargar(true)}
 }
 async function borrar(c,id){
-  S.D[c]=col(c).filter(x=>x.id!==id);if(c==='obras'){S.D.tareas=S.D.tareas.filter(t=>t.ambito!=='obra:'+id);S.D.personal=S.D.personal.filter(p=>p.obra!==id);S.D.hitos=S.D.hitos.filter(p=>p.obra!==id)}redraw();
+  S.D[c]=col(c).filter(x=>x.id!==id);if(c==='obras'){S.D.tareas=S.D.tareas.filter(t=>t.ambito!=='obra:'+id);S.D.personal=S.D.personal.filter(p=>p.obra!==id);S.D.hitos=S.D.hitos.filter(p=>p.obra!==id);S.D.bitacora=S.D.bitacora.filter(p=>p.obra!==id);S.D.adicionales=S.D.adicionales.filter(p=>p.obra!==id)}redraw();
   try{await api({op:'borrar',col:c,id});badge()}catch(e){if(e.message==='sesion')return;toast('No se pudo borrar: '+e.message,true);await cargar(true)}
 }
 function cuentaGlobo(){const ids=new Set([...pendGen(),...atrasadasTodas()].map(t=>t.id));return ids.size+col('hitos').filter(h=>!h.hecho&&h.prevista&&h.prevista>h.fecha).length}
@@ -1448,17 +1448,30 @@ function vObras(){
 function vObra(){
   const o=byId('obras',S.obra);if(!o){S.obra=null;return vObras()}
   const T=tareasDe('obra:'+o.id).sort(ordenT),at=T.filter(atrasada).length,gente=obreros(o.id),p=proxima(o),nx=nxDe(o),h=hitosDe(o.id);
-  const tabs=[['crono','Cronograma'],['hitos','Fechas clave'],['gente','Personal ('+gente.length+')'],['nexo','NEXO 2'+(nxPend(o)?' ('+nxPend(o)+')':'')]];
+  const tabs=[['crono','Cronograma'],['hitos','Fechas clave'],['bita','Bitácora ('+col('bitacora').filter(x=>x.obra===o.id).length+')'],['adic','Adicionales ('+col('adicionales').filter(x=>x.obra===o.id).length+')'],['gente','Personal ('+gente.length+')'],['nexo','NEXO 2'+(nxPend(o)?' ('+nxPend(o)+')':'')]];
   const body=S.otab==='crono'?`<div class="sub-h"><button class="btn sm gold" data-act="nuevaT" data-amb="obra:${o.id}">+ Tarea</button><span style="display:flex;gap:6px;flex-wrap:wrap">${zoomBtns()}<button class="btn sm" data-act="gfull" data-o="${o.id}">Pantalla completa</button></span></div>${ganttHTML(o)}
    <div style="display:flex;flex-direction:column;gap:8px">${T.length?T.map(t=>tcardT(t)).join(''):'<div class="card muted">Todavía no hay tareas. Agregá la primera con inicio y fin.</div>'}</div>`
   :S.otab==='hitos'?`<button class="btn sm gold" data-act="nuevoH" data-o="${o.id}" style="align-self:flex-start">+ Fecha clave</button><p class="muted small">Hormigonadas, cierres de etapa, entregas: aparecen como rombos en el Gantt.</p>
    <div style="display:flex;flex-direction:column;gap:8px">${h.length?h.map(x=>hitoCard(x,'')).join(''):'<div class="card muted">Todavía no hay fechas clave.</div>'}</div>`
+  :S.otab==='bita'?vBita(o)
+  :S.otab==='adic'?vAdic(o)
   :S.otab==='gente'?`<button class="btn sm gold" data-act="nuevaP" data-obra="${o.id}" style="align-self:flex-start">+ Persona</button><div class="card">${listaGente(o.id)}</div>`
   :vNexoObra(o);
   return `<div class="ohead"><button class="back" data-act="volver">${BACK} Obras</button><div class="sub-h" style="margin-top:8px"><div><span class="eyebrow">Obra</span><h1>${esc(o.nombre)}</h1></div><button class="btn sm ghost" data-act="editObra" data-id="${o.id}">Editar</button></div></div>
   <div class="facts"><div class="fact"><span>Ahora · etapa</span><b>${esc(etapaDe(o)||'Sin definir')}</b></div><div class="fact"><span>Próxima tarea a arrancar</span><b>${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></div><div class="fact"><span>Obreros</span><b>${gente.length}</b></div><div class="fact"><span>Pendiente en NEXO 2</span><b class="${nxPend(o)?'t-rojo':''}">${nx?nxPend(o):'—'}</b></div></div>
   <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-act="otab" data-k="${k}" aria-selected="${S.otab===k}">${l}${k==='crono'&&at?` <span class="badge" style="position:static;background:var(--rojo);color:#fff;border-radius:999px;font-size:10px;padding:0 5px">${at}</span>`:''}</button>`).join('')}</div>${body}`;
 }
+const X2=(c,i)=>`<button class="delx" data-act="del" data-c="${c}" data-id="${i}" aria-label="Borrar" title="Borrar">✕</button>`;
+function vBita(o){const L=col('bitacora').filter(x=>x.obra===o.id).sort((a,b)=>b.fecha-a.fecha||(b.creado||0)-(a.creado||0));
+  return `<button class="btn sm gold" data-act="nuevaB" data-o="${o.id}" style="align-self:flex-start">+ Anotar en la bitácora</button><p class="muted small">Lo que pasó en la obra, día por día. Pueden cargar Sebastián y Nicolás.</p>
+  <div style="display:flex;flex-direction:column;gap:8px">${L.length?L.map(x=>`<div class="card" style="position:relative"><div class="sub-h"><b>${diaTxt(x.fecha)}</b><span class="muted small">${esc(x.por||x.editor||'')}</span></div><div class="small" style="margin:6px 0 0;white-space:pre-wrap;cursor:pointer" data-act="editB" data-id="${x.id}">${esc(x.texto)}</div><div style="text-align:right">${X2('bitacora',x.id)}</div></div>`).join(''):'<div class="card muted">Todavía no hay anotaciones.</div>'}</div>`}
+const ADE={pendiente:['Pendiente','naranja'],aprobado:['Aprobado','verde'],rechazado:['Rechazado','rojo'],cobrado:['Cobrado','verde']};
+function vAdic(o){const L=col('adicionales').filter(x=>x.obra===o.id).sort((a,b)=>b.fecha-a.fecha),tot=L.filter(x=>x.estado!=='rechazado').reduce((a,x)=>a+x.monto,0),pen=L.filter(x=>x.estado==='pendiente'||x.estado==='aprobado').reduce((a,x)=>a+x.monto,0);
+  return `<button class="btn sm gold" data-act="nuevoAd" data-o="${o.id}" style="align-self:flex-start">+ Adicional de obra</button>
+  <div class="kpis" style="grid-template-columns:1fr 1fr"><div class="kpi"><b style="font-size:20px">${money(tot)}</b><span class="kl">total adicionales</span></div><div class="kpi ${pen?'k-naranja':''}"><b style="font-size:20px">${money(pen)}</b><span class="kl">por cobrar</span></div></div>
+  <div style="display:flex;flex-direction:column;gap:8px">${L.length?L.map(x=>{const e=ADE[x.estado]||ADE.pendiente;return `<div class="tcard" role="button" tabindex="0" data-act="editAd" data-id="${x.id}"><span class="stripe c-${e[1]}"></span><span class="txt"><span class="tag t-${e[1]}">${e[0]}</span><span class="t1">${esc(x.titulo)}</span><span class="t2">${fmt(x.fecha)}${x.nota?' · '+esc(x.nota.slice(0,90)):''}</span></span><span class="when"><b>${money(x.monto)}</b></span>${X2('adicionales',x.id)}</div>`}).join(''):'<div class="card muted">Todavía no hay adicionales cargados.</div>'}</div>`}
+function formBita(b,obra){b=b||{obra,fecha:TODAY};openSheet(`<span class="eyebrow">${esc(nombreObra(b.obra))}</span><h2>${b.id?'Editar anotación':'Bitácora de obra'}</h2><form class="frm" data-submit="bita"><input type="hidden" id="f-id" value="${b.id||''}"><input type="hidden" id="f-obra" value="${esc(b.obra)}"><label class="f">Día<input id="f-fec" type="date" value="${iso(b.fecha)}"></label><label class="f">¿Qué pasó?<textarea id="f-txt" rows="6" placeholder="Ej: Se hormigonó la platea, llegaron 12 m³. Faltó el pump 1 hora.">${esc(b.texto||'')}</textarea></label>${btns(b.id,'delB','Eliminar')}</form>`,'Bitácora')}
+function formAdic(a,obra){a=a||{obra,fecha:TODAY,estado:'pendiente'};openSheet(`<span class="eyebrow">${esc(nombreObra(a.obra))}</span><h2>${a.id?'Editar adicional':'Adicional de obra'}</h2><form class="frm" data-submit="adic"><input type="hidden" id="f-id" value="${a.id||''}"><input type="hidden" id="f-obra" value="${esc(a.obra)}"><label class="f">¿Qué es el adicional?<input id="f-tit" value="${esc(a.titulo||'')}" placeholder="Ej: Muro extra de contención"></label><div class="row2"><label class="f">Monto ($)<input id="f-monto" type="number" inputmode="decimal" min="0" value="${a.monto||''}"></label><label class="f">Fecha<input id="f-fec" type="date" value="${iso(a.fecha)}"></label></div><label class="f">Estado<select id="f-est">${Object.entries(ADE).map(([k,v])=>`<option value="${k}" ${a.estado===k?'selected':''}>${v[0]}</option>`).join('')}</select></label><label class="f">Nota (opcional)<textarea id="f-nota" rows="3">${esc(a.nota||'')}</textarea></label>${btns(a.id,'delAd','Eliminar')}</form>`,'Adicional')}
 function vNexoObra(o){
   const n=nxDe(o);
   if(!n)return '<div class="card muted">Esta obra no está conectada con NEXO 2 (se conecta desde "Editar").</div>';
@@ -1648,6 +1661,8 @@ function formAgenda(a,f){
   ${a.id?'':'<label class="f">Repetir cada semana<select id="f-rep"><option value="0">No repetir</option><option value="3">Las próximas 3 semanas</option><option value="7">Las próximas 7 semanas</option><option value="11">Las próximas 11 semanas</option></select></label>'}${btns(a.id,'delAg','Eliminar')}</form>`,'Visita');
 }
 const SUBMIT={
+  bita(){const id=val('f-id'),tx=val('f-txt').trim();if(!tx){toast('Escribí qué pasó',true);return}guardar('bitacora',{...(id?byId('bitacora',id):{}),id:id||undefined,obra:val('f-obra'),fecha:dt(val('f-fec'))||TODAY,texto:tx})},
+  adic(){const id=val('f-id'),ti=val('f-tit').trim();if(!ti){toast('Poné qué es',true);return}guardar('adicionales',{...(id?byId('adicionales',id):{}),id:id||undefined,obra:val('f-obra'),titulo:ti,monto:+val('f-monto')||0,fecha:dt(val('f-fec'))||TODAY,estado:val('f-est'),nota:val('f-nota').trim()})},
   entrar,crear:crearCodigo,
   tarea(){const id=val('f-id'),amb=val('f-amb'),tit=val('f-tit').trim();if(!tit){toast('Escribí qué hay que hacer',true);return}
     const prev=id?byId('tareas',id):null,est=val('f-est'),ini=dt(val('f-ini')),fin=dt(val('f-fin'));
@@ -1667,6 +1682,8 @@ const SUBMIT={
 
 /* ---------- acciones ---------- */
 const A={
+  nuevaB:ds=>formBita(null,ds.o),editB:ds=>{const b=byId('bitacora',ds.id);if(b)formBita(b)},nuevoAd:ds=>formAdic(null,ds.o),editAd:ds=>{const a=byId('adicionales',ds.id);if(a)formAdic(a)},
+  delB:ds=>{if(confirm('¿Eliminar esta anotación?')){closeSheet();borrar('bitacora',ds.id)}},delAd:ds=>{if(confirm('¿Eliminar este adicional?')){closeSheet();borrar('adicionales',ds.id)}},
   tab:ds=>{S.tab=ds.k;if(ds.k!=='obras')S.obra=null;draw();window.scrollTo(0,0)},
   globoEstado:()=>{const e=estadoGlobo();toast(`Instalada: ${e.inst?'sí':'NO (abrila desde el ícono de la pantalla de inicio)'} · Permiso: ${e.perm} · Soporte: ${e.sop?'sí':'NO'} · Número: ${e.n}`,!(e.inst&&e.perm==='granted'&&e.sop))},
   globoProbar:async()=>{await badge(7);toast('Puse un 7 en el ícono. Salí de la app y mirá el ícono.')},

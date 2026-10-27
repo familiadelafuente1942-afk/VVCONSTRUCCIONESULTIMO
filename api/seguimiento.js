@@ -45,6 +45,8 @@ const ESTADOS = ["pend", "curso", "hecha"];
 const COLS = {
   obras: (q) => ({ nombre: str(q.nombre, 80), orden: num(q.orden, 0, 999), nota: str(q.nota, 400), etapa: str(q.etapa, 120), nexo: ident(q.nexo) }),
   hitos: (q) => ({ obra: ident(q.obra), titulo: str(q.titulo, 120), fecha: num(q.fecha, 0, 4e12), tipo: ["hormigonado", "etapa", "entrega", "otro"].includes(q.tipo) ? q.tipo : "otro", hecho: !!q.hecho, nota: str(q.nota, 300), prevista: num(q.prevista, 0, 4e12), motivo: str(q.motivo, 300) }),
+  bitacora: (q) => ({ obra: ident(q.obra), fecha: num(q.fecha, 0, 4e12), texto: str(q.texto, 2000) }),
+  adicionales: (q) => ({ obra: ident(q.obra), fecha: num(q.fecha, 0, 4e12), titulo: str(q.titulo, 160), monto: num(q.monto, 0, 1e12), estado: ["pendiente", "aprobado", "rechazado", "cobrado"].includes(q.estado) ? q.estado : "pendiente", nota: str(q.nota, 600) }),
   tareas: (q) => ({
     ambito: str(q.ambito, 60), titulo: str(q.titulo, 200), nota: str(q.nota, 1000),
     inicio: num(q.inicio, 0, 4e12), fin: num(q.fin, 0, 4e12), inicioReal: num(q.inicioReal, 0, 4e12), finReal: num(q.finReal, 0, 4e12),
@@ -125,8 +127,8 @@ export default async function handler(req, res) {
         obras = OBRAS0.map(([id, nombre], i) => ({ id, nombre, orden: i, nota: "", por: "sistema", creado: Date.now(), editado: Date.now() }));
         await escribir(H, "seg_obras", { items: obras });
       }
-      const [tareas, personal, gastos, sueldos, agenda, hitos] = await Promise.all(["tareas", "personal", "gastos", "sueldos", "agenda", "hitos"].map((c) => leerCol(H, c)));
-      res.status(200).json({ ok: true, quien, obras, tareas, personal, gastos, sueldos, agenda, hitos, ahora: Date.now() });
+      const [tareas, personal, gastos, sueldos, agenda, hitos, bitacora, adicionales] = await Promise.all(["tareas", "personal", "gastos", "sueldos", "agenda", "hitos", "bitacora", "adicionales"].map((c) => leerCol(H, c)));
+      res.status(200).json({ ok: true, quien, obras, tareas, personal, gastos, sueldos, agenda, hitos, bitacora, adicionales, ahora: Date.now() });
       return;
     }
 
@@ -172,7 +174,7 @@ export default async function handler(req, res) {
       const items = await leerCol(H, col);
       await escribir(H, "seg_" + col, { items: items.filter((x) => x.id !== id) });
       if (col === "obras") {
-        for (const c of ["tareas", "personal", "hitos"]) {
+        for (const c of ["tareas", "personal", "hitos", "bitacora", "adicionales"]) {
           const L = await leerCol(H, c);
           const k = c === "tareas" ? (x) => x.ambito === "obra:" + id : (x) => x.obra === id;
           if (L.some(k)) await escribir(H, "seg_" + c, { items: L.filter((x) => !k(x)) });
