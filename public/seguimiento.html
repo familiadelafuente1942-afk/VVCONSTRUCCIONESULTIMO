@@ -1995,6 +1995,9 @@ const SUBMIT={
 };
 
 /* ---------- acciones ---------- */
+function nivelActual(){try{const v=localStorage.getItem('nexo2_tema')||'';if(v.indexOf('nivel:')===0)return +v.slice(6)}catch(e){}return document.documentElement.getAttribute('data-tema')==='claro'?0:100}
+function nivelSlider(){return `<div class="nv"><span aria-hidden="true">☀</span><input type="range" class="nv-r" min="0" max="100" step="1" value="${nivelActual()}" aria-label="Del blanco al negro"><span aria-hidden="true">●</span></div>`}
+document.addEventListener('input',e=>{const t=e.target;if(t&&t.classList&&t.classList.contains('nv-r')){try{window.__nivel(+t.value)}catch(x){}}});
 const A={
   irNxTodo:()=>{const o=col('obras').find(o=>nxDe(o)&&nxDe(o).cards.length);if(o){S.tab='obras';S.obra=o.id;S.otab='nexo';draw();window.scrollTo(0,0)}else toast('No hay tarjetas publicadas todavía')},
   fijarAg:ds=>{const a=byId('agenda',ds.id);if(a)guardar('agenda',{...a,fijar:!a.fijar})},
@@ -2044,7 +2047,7 @@ const A={
   delAg:ds=>{if(confirm('¿Eliminar esta visita?')){closeSheet();borrar('agenda',ds.id)}},
   delO:ds=>{const o=byId('obras',ds.id);if(confirm('¿Eliminar "'+o.nombre+'" con sus tareas, fechas clave y personal? No se puede deshacer.')){closeSheet();S.obra=null;borrar('obras',ds.id)}},
   actualizar:()=>{toast('Actualizando…');const u=new URL(location.href);u.searchParams.set('v',Date.now());setTimeout(()=>location.replace(u.toString()),150)},
-  brillo:()=>openSheet(`<span class="eyebrow">Aspecto</span><h2>Claro u oscuro</h2><div class="seg2" style="margin:10px 0"><button class="btn" data-act="tema" data-k="claro">Claro</button><button class="btn" data-act="tema" data-k="oscuro">Oscuro</button><button class="btn" data-act="tema" data-k="auto">Automático</button></div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><button class="btn full" data-act="globo" style="margin-bottom:8px">Activar globo rojo en el ícono</button><button class="btn full ghost" data-act="globoEstado" style="margin-bottom:8px">Ver estado del globo</button><button class="btn full ghost" data-act="globoProbar" style="margin-bottom:8px">Probar globo (poner un 7)</button><button class="btn full" data-act="salir">Cambiar de persona (soy ${S.quien==="Nicolás"?"Sebastián":"Nicolás"})</button>`,'Aspecto'),
+  brillo:()=>openSheet(`<span class="eyebrow">Aspecto</span><h2>Del blanco al negro</h2><p class="muted small" style="margin:6px 0 2px">Deslizá el cursor para elegir cuánta luz querés. Queda guardado en este aparato.</p>${nivelSlider()}<div class="seg2" style="margin:10px 0"><button class="btn" data-act="tema" data-k="claro">Claro</button><button class="btn" data-act="tema" data-k="oscuro">Oscuro</button><button class="btn" data-act="tema" data-k="auto">Automático</button></div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><button class="btn full" data-act="globo" style="margin-bottom:8px">Activar globo rojo en el ícono</button><button class="btn full ghost" data-act="globoEstado" style="margin-bottom:8px">Ver estado del globo</button><button class="btn full ghost" data-act="globoProbar" style="margin-bottom:8px">Probar globo (poner un 7)</button><button class="btn full" data-act="salir">Cambiar de persona (soy ${S.quien==="Nicolás"?"Sebastián":"Nicolás"})</button>`,'Aspecto'),
   tema:ds=>{try{window.__tema(ds.k)}catch(e){}closeSheet()},
   cambiarCod:()=>{const c=prompt('Código nuevo (mínimo 4 letras o números). Los otros aparatos van a pedirlo de nuevo.');if(!c)return;closeSheet();api({op:'cambiar_codigo',codigo:c}).then(()=>toast('Código cambiado')).catch(e=>toast('No se pudo cambiar: '+e.message,true))},
   salir:()=>{closeSheet();LS('seg_q',null);S.quien='';salirLocal()},
