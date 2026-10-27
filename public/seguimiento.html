@@ -1273,6 +1273,17 @@ nav.bottom .in{max-width:900px}
 .frm .f input,.frm .f select,.frm .f textarea{font-weight:400}
 .scrim .sheet{background:var(--bg)!important}
 .frm .muted,.sheet p.muted{color:var(--sub,var(--fg));opacity:.85}
+.colwrap{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+.cA{display:flex;flex-direction:column;gap:20px;min-width:0}
+@media (min-width:1100px){
+#view.cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;grid-auto-rows:min-content}
+#view.cols #cA1{grid-column:1;grid-row:3}
+#view.cols #cB{grid-column:2;grid-row:3 / span 2;align-self:start}
+#view.cols #cA2{grid-column:1;grid-row:4}
+#view.cols>:nth-child(1),#view.cols>.kpis{grid-column:1/-1}
+}
+@media (min-width:1100px){#view.cols{grid-template-rows:auto auto min-content 1fr!important}#view.cols #cA2{align-self:start}}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1545,13 +1556,18 @@ function vInicio(){
   <div class="kpis k3"><button class="kpi ${venc.length?'k-rojo':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${venc.length}</b><span class="kl">tarjetas vencidas</span></button>
   <button class="kpi ${porv.length?'k-naranja':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${porv.length}</b><span class="kl">por vencer</span></button>
   <button class="kpi ${pg?'k-rojo':''}" data-act="tab" data-k="tareas"><span class="kgo">ver ›</span><b>${pg}</b><span class="kl">tareas pendientes</span></button></div>
-  ${hitosHtml}
+  <div class="cA" id="cA1">${hitosHtml}
   ${venc.length?`<div><span class="eyebrow">Tarjetas vencidas · nos deben (NEXO 2)</span><div class="minis">${venc.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
   ${porv.length?`<div><span class="eyebrow">Tarjetas por vencer</span><div class="minis">${porv.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
+  </div>
+  <div class="colwrap" id="cB">
   <div class="card cuadro"><span class="eyebrow">Próxima tarea de cada obra</span><div class="minis">${obrasP.map(({o,p,at:a})=>`<button class="mini" data-act="obra" data-id="${o.id}"><i class="dot2 ${a?'c-rojo':p?'c-verde':'c-futuro'}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${p?esc(p.titulo):'sin tarea cargada'}</span><span class="m2">${esc(etapaDe(o)||'')}${a?(etapaDe(o)?' · ':'')+plural(a,'atrasada','atrasadas'):''}</span><span class="m3">${p?fmt(p.inicio):''}</span></button>`).join('')}</div></div><div class="card cuadro2 pagos" data-act="tab" data-k="gastos"><span class="eyebrow">Para pagar · ${mesTxt(MES_HOY)}</span><div class="facts" style="margin-top:6px"><div class="fact"><span>Sueldo de Nicolás</span><b class="${sueldo&&!sueldo.pagado?'t-rojo':''}">${sueldo?(sueldo.pagado?'Pagado':'A pagar · '+money(sueldo.monto)):'Sin cargar'}</b></div><div class="fact"><span>Gastos del mes</span><b>${money(gMes)}</b></div><div class="fact"><span>Adeudado en total</span><b class="${deuda?'t-rojo':''}">${money(deuda)}</b></div></div></div>
+  </div>
 
+  <div class="cA" id="cA2">
   ${fij.length?`<div><span class="eyebrow">Anclado de tu agenda</span><div class="minis">${fij.map(a=>`<button class="mini" data-act="editAg" data-id="${a.id}"><i class="dot2 c-gold"></i><span class="m1"><b>${esc(a.motivo||a.lugar||'Agenda')}</b>${a.obra?' · '+esc(nombreObra(a.obra)):''}</span><span class="m2">${a.quien==='Nadie'?'':a.quien==='Ambos'?'Los dos':esc(a.quien)}${a.lugar&&a.motivo?' · '+esc(a.lugar):''}</span><span class="m3">${diaTxt(a.fecha)}${a.hora?' '+esc(a.hora):''}</span></button>`).join('')}</div></div>`:''}
   <div><span class="eyebrow">Para atender</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${prox.length?prox.map(t=>tcardT(t,{ctx:ctxT(t),limite:t.ambito==='general'})).join(''):'<div class="card muted">Todo al día. No hay nada pendiente.</div>'}</div></div>
+  </div>
 
 `;
 }
