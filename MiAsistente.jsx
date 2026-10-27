@@ -142,7 +142,7 @@ async function segResumen() {
     const nex = d.tareas.filter(t => t.ambito === "nexo");
     if (nex.length) L.push("NEXO ENTORNO APP (etapas): " + nex.map(t => `${t.titulo} [${est(t)}]`).join("; "));
     const ag = d.agenda.filter(a => a.fecha >= HOY - 86400000).sort((a, b) => a.fecha - b.fecha).slice(0, 20);
-    L.push("AGENDA NORDELTA (quién va): " + (ag.length ? ag.map(a => `${f(a.fecha)} ${a.quien}${a.obra ? " (" + obN(a.obra) + ")" : ""}${a.motivo ? " — " + a.motivo : ""}`).join("; ") : "sin visitas cargadas"));
+    L.push("AGENDA NORDELTA (quién va): " + (ag.length ? ag.map(a => `${f(a.fecha)}${a.hora ? " " + a.hora + "hs" : ""} ${a.quien}${a.obra ? " (" + obN(a.obra) + ")" : ""}${a.motivo ? " — " + a.motivo : ""}`).join("; ") : "sin visitas cargadas"));
     const mes = f(HOY).slice(3).split("/").reverse().join("-");
     const gm = d.gastos.filter(g => { const x = new Date(g.fecha); return x.getUTCFullYear() + "-" + String(x.getUTCMonth() + 1).padStart(2, "0") === mes; });
     L.push(`GASTOS del mes: ${$(gm.reduce((a, g) => a + g.monto, 0))}` + (gm.length ? " — " + gm.slice(0, 15).map(g => `${g.concepto} ${$(g.monto)} (${g.de})`).join("; ") : ""));
