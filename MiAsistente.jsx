@@ -103,6 +103,51 @@ async function subirBucket(dataUrl, nombre) {
 }
 function fileToDataUrl(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); }); }
 
+
+// Datos de "Seguimiento V+V" (obras, cronogramas, fechas clave, tareas, personal, agenda Nordelta, gastos, sueldo de Nicolás)
+// y lo que nos deben según NEXO 2. Solo lectura: se arma como texto para que el asistente responda con datos reales.
+async function segResumen() {
+  try {
+    const post = (b) => fetch("/api/seguimiento", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...b, quien: "Sebastián" }) }).then(r => r.ok ? r.json() : null).catch(() => null);
+    const [d, nx] = await Promise.all([post({ op: "todo" }), post({ op: "nexo" })]);
+    if (!d || !d.ok) return "";
+    const n = new Date(); const HOY = Date.UTC(n.getFullYear(), n.getMonth(), n.getDate());
+    const f = t => { if (!t) return "—"; const x = new Date(t); return `${String(x.getUTCDate()).padStart(2, "0")}/${String(x.getUTCMonth() + 1).padStart(2, "0")}/${x.getUTCFullYear()}`; };
+    const $ = v => "$" + Math.round(v || 0).toLocaleString("es-AR");
+    const obN = id => (d.obras.find(o => o.id === id) || {}).nombre || "";
+    const est = t => t.estado === "hecha" ? "hecha" : (t.fin && t.fin < HOY) ? "ATRASADA" : t.estado === "curso" ? "en curso" : "pendiente";
+    const L = [];
+    L.push("SEGUIMIENTO INTERNO V+V (app privada de Sebastián y Nicolás; datos al día de hoy " + f(HOY) + "):");
+    for (const o of d.obras) {
+      const T = d.tareas.filter(t => t.ambito === "obra:" + o.id).sort((a, b) => (a.inicio || 9e12) - (b.inicio || 9e12));
+      const gente = d.personal.filter(p => p.obra === o.id && p.activo !== false);
+      const prox = T.filter(t => t.estado === "pend" && t.inicio).sort((a, b) => a.inicio - b.inicio).find(t => t.inicio >= HOY);
+      const hit = d.hitos.filter(h => h.obra === o.id).sort((a, b) => a.fecha - b.fecha);
+      const N = nx && nx.nexo && nx.nexo[o.id];
+      L.push(`\n▸ ${o.nombre} — etapa actual: ${o.etapa || (T.filter(t => t.estado === "curso").map(t => t.titulo).join(", ")) || "sin definir"}; próxima tarea a arrancar: ${prox ? prox.titulo + " (" + f(prox.inicio) + ")" : "—"}; ${gente.length} obreros`);
+      if (T.length) L.push("  Tareas: " + T.map(t => `${t.titulo} [${est(t)}, ${f(t.inicio)}→${f(t.fin)}${t.resp ? ", " + t.resp : ""}]`).join("; "));
+      if (hit.length) L.push("  Fechas clave: " + hit.map(h => `${h.titulo} ${f(h.fecha)}${h.hecho ? " ✓" : ""}`).join("; "));
+      if (gente.length) L.push("  Personal: " + gente.map(p => `${p.nombre}${p.rol ? " (" + p.rol + ")" : ""}${p.haciendo ? " haciendo: " + p.haciendo : ""}`).join("; "));
+      if (N) {
+        if (N.cards.length) L.push("  NEXO 2 — nos deben: " + N.cards.map(c => `${c.tipo === "mat" ? "materiales" : "documentación"} para "${c.tarea}" (${c.color}, arranca ${f(c.limite)}): ${c.pend.map(i => i.txt + (i.resp ? " [debe " + i.resp + "]" : "")).join(", ")}`).join(" | "));
+        if (N.frenadas.length) L.push("  NEXO 2 — tareas frenadas en el último informe: " + N.frenadas.map(t => `${t.name} (${t.causa}${t.causaTxt ? ": " + t.causaTxt : ""})`).join("; "));
+      }
+    }
+    const gen = d.tareas.filter(t => t.ambito === "general" && t.estado !== "hecha");
+    L.push("\nTAREAS PENDIENTES GENERALES: " + (gen.length ? gen.map(t => `${t.titulo}${t.fin ? " (límite " + f(t.fin) + ")" : ""}${t.resp ? " [" + t.resp + "]" : ""}${t.prio === "alta" ? " ‼" : ""}`).join("; ") : "ninguna"));
+    const nex = d.tareas.filter(t => t.ambito === "nexo");
+    if (nex.length) L.push("NEXO ENTORNO APP (etapas): " + nex.map(t => `${t.titulo} [${est(t)}]`).join("; "));
+    const ag = d.agenda.filter(a => a.fecha >= HOY - 86400000).sort((a, b) => a.fecha - b.fecha).slice(0, 20);
+    L.push("AGENDA NORDELTA (quién va): " + (ag.length ? ag.map(a => `${f(a.fecha)} ${a.quien}${a.obra ? " (" + obN(a.obra) + ")" : ""}${a.motivo ? " — " + a.motivo : ""}`).join("; ") : "sin visitas cargadas"));
+    const mes = f(HOY).slice(3).split("/").reverse().join("-");
+    const gm = d.gastos.filter(g => { const x = new Date(g.fecha); return x.getUTCFullYear() + "-" + String(x.getUTCMonth() + 1).padStart(2, "0") === mes; });
+    L.push(`GASTOS del mes: ${$(gm.reduce((a, g) => a + g.monto, 0))}` + (gm.length ? " — " + gm.slice(0, 15).map(g => `${g.concepto} ${$(g.monto)} (${g.de})`).join("; ") : ""));
+    const sl = d.sueldos.sort((a, b) => b.mes.localeCompare(a.mes)).slice(0, 4);
+    L.push("SUELDO DE NICOLÁS: " + (sl.length ? sl.map(s => `${s.mes} ${$(s.monto)} ${s.pagado ? "pagado" : "PENDIENTE"}`).join("; ") : "sin pagos cargados"));
+    return "\n\n" + L.join("\n") + "\n(Si Sebastián pregunta por obras, cronogramas, qué falta, quién va a Nordelta, personal, qué nos deben o gastos, respondé con estos datos exactos.)";
+  } catch { return ""; }
+}
+
 async function callAI(msgs, sys, apiKey, useSearch) {
   msgs = (msgs || []).map(m => ({ role: m.role, content: m.content }));
   const body = { model: "claude-sonnet-5", max_tokens: 4096, thinking: { type: "disabled" }, messages: msgs };
@@ -1121,7 +1166,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
       for (const a of adj) { if (a.kind === "image") blocks.push({ type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } }); else if (a.kind === "document") blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: a.data } }); }
       if (hist.length && hist[hist.length - 1].role === "user") hist[hist.length - 1] = { role: "user", content: blocks }; else hist.push({ role: "user", content: blocks });
     }
-    const resp = await callAI(hist, buildSystem(), apiKey, useSearch);
+    const resp = await callAI(hist, buildSystem() + await segResumen(), apiKey, useSearch);
     const { limpio, accion } = parseAccion(resp);
     let extra = {};
     if (accion && accion.tipo === "mandar_mail") {
