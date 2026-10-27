@@ -1246,6 +1246,7 @@ nav.bottom .in{max-width:900px}
 .card.cuadro .mini{background:rgba(255,255,255,.55);border-color:rgba(184,137,46,.28)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .card.cuadro .mini{background:rgba(255,255,255,.06)}}
 :root[data-theme="dark"] .card.cuadro .mini{background:rgba(255,255,255,.06)}
+.card.gmes{padding:10px 14px}.card.gmes .facts{margin-top:6px!important}.card.gmes .fact{padding:6px 10px}.card.gmes .fact b{font-size:15px}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1519,9 +1520,10 @@ function vInicio(){
   ${venc.length?`<div><span class="eyebrow">Tarjetas vencidas · nos deben (NEXO 2)</span><div class="minis">${venc.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
   ${porv.length?`<div><span class="eyebrow">Tarjetas por vencer</span><div class="minis">${porv.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
   <div class="card cuadro"><span class="eyebrow">Próxima tarea de cada obra</span><div class="minis">${obrasP.map(({o,p,at:a})=>`<button class="mini" data-act="obra" data-id="${o.id}"><i class="dot2 ${a?'c-rojo':p?'c-verde':'c-futuro'}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${p?esc(p.titulo):'sin tarea cargada'}</span><span class="m2">${esc(etapaDe(o)||'')}${a?(etapaDe(o)?' · ':'')+plural(a,'atrasada','atrasadas'):''}</span><span class="m3">${p?fmt(p.inicio):''}</span></button>`).join('')}</div></div>
+  <div class="card gmes" data-act="tab" data-k="gastos" style="cursor:pointer"><span class="eyebrow">Este mes · ${mesTxt(MES_HOY)}</span><div class="facts" style="margin-top:8px"><div class="fact"><span>Sueldo de Nicolás</span><b>${sueldo?(sueldo.pagado?'Pagado · '+money(sueldo.monto):'Pendiente · '+money(sueldo.monto)):'Sin cargar'}</b></div><div class="fact"><span>Gastos del mes</span><b>${money(gMes)}</b></div></div></div>
   ${fij.length?`<div><span class="eyebrow">Anclado de tu agenda</span><div class="minis">${fij.map(a=>`<button class="mini" data-act="editAg" data-id="${a.id}"><i class="dot2 c-gold"></i><span class="m1"><b>${esc(a.motivo||a.lugar||'Agenda')}</b>${a.obra?' · '+esc(nombreObra(a.obra)):''}</span><span class="m2">${a.quien==='Nadie'?'':a.quien==='Ambos'?'Los dos':esc(a.quien)}${a.lugar&&a.motivo?' · '+esc(a.lugar):''}</span><span class="m3">${diaTxt(a.fecha)}${a.hora?' '+esc(a.hora):''}</span></button>`).join('')}</div></div>`:''}
   <div><span class="eyebrow">Para atender</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${prox.length?prox.map(t=>tcardT(t,{ctx:ctxT(t),limite:t.ambito==='general'})).join(''):'<div class="card muted">Todo al día. No hay nada pendiente.</div>'}</div></div>
-  <div class="card" data-act="tab" data-k="gastos" style="cursor:pointer"><span class="eyebrow">Este mes · ${mesTxt(MES_HOY)}</span><div class="facts" style="margin-top:8px"><div class="fact"><span>Sueldo de Nicolás</span><b>${sueldo?(sueldo.pagado?'Pagado · '+money(sueldo.monto):'Pendiente · '+money(sueldo.monto)):'Sin cargar'}</b></div><div class="fact"><span>Gastos del mes</span><b>${money(gMes)}</b></div></div></div>`;
+`;
 }
 const NXTIPO={doc:'Documentación',mat:'Materiales'};
 function tcardNx(o,c){const col2=c.color==='rojo'?'rojo':c.color==='naranja'?'naranja':c.color==='amarillo'?'amarillo':'verde';const rs=[...new Set(c.pend.map(i=>i.resp).filter(Boolean))].join(', ');
