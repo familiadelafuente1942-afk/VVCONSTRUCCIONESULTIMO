@@ -1307,6 +1307,34 @@ nav.bottom .in{max-width:900px}
 #view.cols #cA2{align-self:auto}
 }
 @media (min-width:1100px){#view.cols{column-gap:12px!important}}
+
+.mini .m3 small{display:block;font-size:11px;font-weight:500;opacity:.65;text-align:right}
+.g-anc.card{padding:12px}
+@media (min-width:1100px){
+header.top{padding-top:6px!important;padding-bottom:6px!important}
+main{padding-top:10px!important}
+#view.cols{row-gap:14px!important}
+#view.cols>:nth-child(1){display:flex;align-items:baseline;gap:12px}
+#view.cols>:nth-child(1) h1{font-size:26px;margin:0}
+.kpi{padding-top:10px!important;padding-bottom:10px!important}
+.kpi b{font-size:26px!important}
+#view.cols #cA2{display:flex;flex-direction:column;gap:14px;grid-column:2;grid-row:4;align-self:start}
+#view.cols .g-aten,#view.cols .g-anc{grid-column:auto;grid-row:auto}
+.tcard .t2{font-size:12px}
+.mini{padding:7px 12px}
+}
+.cuadro2 .facts{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.cuadro2 .fact{padding:6px 8px;min-width:0}.cuadro2 .fact span{font-size:10px;letter-spacing:.04em}.cuadro2 .fact b{font-size:13px;white-space:nowrap}
+.tcard>.delx{top:8px!important;bottom:auto!important}
+.tcard .when{padding-right:36px}
+@media (min-width:1100px){
+.mini .m1,.mini .m2{white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis}
+.mini{padding:6px 12px}
+.card.cuadro{padding:10px 12px}.card.cuadro .minis{margin-top:4px}
+.card.cuadro2{padding:10px 12px}
+.g-anc.card{padding:10px 12px}
+#view.cols #cB{gap:10px}
+}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1563,6 +1591,8 @@ function filaObraRes(o){const T=tareasDe('obra:'+o.id),h=T.filter(t=>t.estado===
   <span class="muted small" style="display:block">Próxima tarea: <b style="color:var(--fg)">${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></span></button>`}
 function miniNx(o,c){const k=c.color==='rojo'?'rojo':c.color==='naranja'?'naranja':'amarillo',rs=[...new Set(c.pend.map(i=>i.resp).filter(Boolean))].join(', ');
   return `<button class="mini" data-act="irNx" data-id="${o.id}"><i class="dot2 c-${k}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${esc(c.tarea)}</span><span class="m2">${c.tipo==='mat'?'Materiales':'Documentación'}${rs?' · debe '+esc(rs):''}</span><span class="m3">${c.limite?fmt(c.limite):''}</span></button>`}
+function miniHito(h){const e=hitoEst(h),pv=h.prevista||h.fecha,falta=Math.round((pv-TODAY)/DAY),k=e.c==='futuro'?'verde':e.c;
+  return `<button class="mini" data-act="editH" data-id="${h.id}"><i class="dot2 c-${k}"></i><span class="m1"><b>${esc(nombreObra(h.obra))}</b> · ${esc(h.titulo)}</span><span class="m2">${e.tag}${e.d?' '+(e.d>0?'+':'')+e.d+' d':''}${h.prevista&&h.prevista!==h.fecha?' · plan '+fmt(h.fecha):''}${h.motivo?' · '+esc(h.motivo):''}</span><span class="m3">${fmt(pv)}<small>${falta<0?Math.abs(falta)+' d atraso':'faltan '+falta+' d'}</small></span></button>`}
 function vInicio(){
   const pg=pendGen().length,at=atrasadasTodas().length,ob=col('obras').reduce((a,o)=>a+obreros(o.id).length,0);
   const prox=col('tareas').filter(t=>t.estado!=='hecha'&&(atrasada(t)||t.ambito==='general')).sort((a,b)=>(a.fin||a.inicio||9e12)-(b.fin||b.inicio||9e12)).slice(0,6);
@@ -1573,7 +1603,7 @@ function vInicio(){
   const nxCargado=col('obras').some(o=>nxDe(o)&&nxDe(o).snapT);
   const obrasP=col('obras').map(o=>({o,p:proxima(o),at:tareasDe('obra:'+o.id).filter(atrasada).length})).sort((a,b)=>(a.p?a.p.inicio:9e15)-(b.p?b.p.inicio:9e15));
   const HH=col('hitos').filter(h=>!h.hecho).sort((a,b)=>(a.prevista||a.fecha)-(b.prevista||b.fecha)).slice(0,8);
-  const hitosHtml=HH.length?`<div class="g-hitos"><span class="eyebrow">Hitos · cómo venimos</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${HH.map(h=>hitoCard(h,nombreObra(h.obra))).join('')}</div></div>`:'';
+  const hitosHtml=HH.length?`<div class="g-hitos"><span class="eyebrow">Hitos · cómo venimos</span><div class="minis">${HH.map(miniHito).join('')}</div></div>`:'';
   const fij=col('agenda').filter(a=>a.fijar&&!a.hecho&&a.fecha>=TODAY-DAY).sort((a,b)=>a.fecha-b.fecha);
   return `<div><span class="eyebrow">${esc(S.quien)}</span><h1>Inicio</h1></div>
   <div class="kpis k3"><button class="kpi ${venc.length?'k-rojo':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${venc.length}</b><span class="kl">tarjetas vencidas</span></button>
@@ -1588,8 +1618,9 @@ function vInicio(){
   </div>
 
   <div class="cA" id="cA2">
-  ${fij.length?`<div class="g-anc"><span class="eyebrow">Anclado de tu agenda</span><div class="minis">${fij.map(a=>`<button class="mini" data-act="editAg" data-id="${a.id}"><i class="dot2 c-gold"></i><span class="m1"><b>${esc(a.motivo||a.lugar||'Agenda')}</b>${a.obra?' · '+esc(nombreObra(a.obra)):''}</span><span class="m2">${a.quien==='Nadie'?'':a.quien==='Ambos'?'Los dos':esc(a.quien)}${a.lugar&&a.motivo?' · '+esc(a.lugar):''}</span><span class="m3">${diaTxt(a.fecha)}${a.hora?' '+esc(a.hora):''}</span></button>`).join('')}</div></div>`:''}
   <div class="g-aten"><span class="eyebrow">Para atender</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${prox.length?prox.map(t=>tcardT(t,{ctx:ctxT(t),limite:t.ambito==='general'})).join(''):'<div class="card muted">Todo al día. No hay nada pendiente.</div>'}</div></div>
+  ${fij.length?`<div class="g-anc card"><span class="eyebrow">Anclado de tu agenda</span><div class="minis">${fij.map(a=>`<button class="mini" data-act="editAg" data-id="${a.id}"><i class="dot2 c-gold"></i><span class="m1"><b>${esc(a.motivo||a.lugar||'Agenda')}</b>${a.obra?' · '+esc(nombreObra(a.obra)):''}</span><span class="m2">${a.quien==='Nadie'?'':a.quien==='Ambos'?'Los dos':esc(a.quien)}${a.lugar&&a.motivo?' · '+esc(a.lugar):''}</span><span class="m3">${diaTxt(a.fecha)}${a.hora?' '+esc(a.hora):''}</span></button>`).join('')}</div></div>`:''}
+
   </div>
 
 `;
