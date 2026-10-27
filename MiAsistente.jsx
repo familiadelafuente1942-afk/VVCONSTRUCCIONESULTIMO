@@ -128,8 +128,8 @@ async function segResumen() {
       if (T.length) L.push("  Tareas: " + T.map(t => `${t.titulo} [${est(t)}, ${f(t.inicio)}→${f(t.fin)}${t.resp ? ", " + t.resp : ""}]`).join("; "));
       if (hit.length) L.push("  Fechas clave: " + hit.map(h => `${h.titulo} plan ${f(h.fecha)}${h.hecho ? " ✓cumplido" : h.prevista && h.prevista !== h.fecha ? ` → ahora ${f(h.prevista)} (${h.prevista > h.fecha ? "se demora " + Math.round((h.prevista - h.fecha) / 864e5) + " d" : "se adelanta " + Math.round((h.fecha - h.prevista) / 864e5) + " d"})${h.motivo ? " por " + h.motivo : ""}` : ""}`).join("; "));
       if (gente.length) L.push("  Personal: " + gente.map(p => `${p.nombre}${p.rol ? " (" + p.rol + ")" : ""}${p.haciendo ? " haciendo: " + p.haciendo : ""}`).join("; "));
-      const bi = (d.bitacora || []).filter(x => x.obra === o.id).sort((a, b) => b.fecha - a.fecha).slice(0, 6);
-      if (bi.length) L.push("  Bitácora (últimas): " + bi.map(x => `${f(x.fecha)}: ${x.texto.replace(/\s+/g, " ").slice(0, 200)}`).join(" | "));
+      const bi = (d.registros || []).filter(x => x.obra === o.id).sort((a, b) => (b.fecha || 0) - (a.fecha || 0)).slice(0, 6);
+      if (bi.length) L.push("  Registros (últimos; retrasos y hechos): " + bi.map(x => `${f(x.fecha)} ${x.tipo === "retraso" ? "RETRASO" : "hecho"} ${x.titulo}${x.causa ? " (" + x.causa + ")" : ""}: ${(x.desc || "").replace(/\s+/g, " ").slice(0, 160)}`).join(" | "));
       const ad = (d.adicionales || []).filter(x => x.obra === o.id);
       if (ad.length) L.push("  Adicionales: " + ad.map(x => `${x.titulo} ${$(x.monto)} [${x.estado}]`).join("; "));
       if (N) {
