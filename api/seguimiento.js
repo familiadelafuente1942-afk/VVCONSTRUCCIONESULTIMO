@@ -244,6 +244,29 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ---- renders de la app anterior de V+V (solo lectura): se casan con las obras por nombre ----
+    if (b.op === "renders_obras") {
+      const OLD = "https://bxhjgxzvayszfqwlwinq.supabase.co", OK = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
+      const HO = { apikey: OK, Authorization: "Bearer " + OK };
+      const leerOld = async (k) => { const r = await fetch(`${OLD}/rest/v1/bco_storage?key=eq.${k}&select=value&limit=1`, { headers: HO }); if (!r.ok) throw new Error("old " + r.status); const rows = await r.json(); let v = rows[0] && rows[0].value; if (typeof v === "string") { try { v = JSON.parse(v); } catch { v = null; } } return v; };
+      let rend = null, obOld = null;
+      try { [rend, obOld] = await Promise.all([leerOld("vv_renders"), leerOld("vv_obras")]); } catch (e) { res.status(200).json({ ok: true, renders: {}, error: String(e.message || e) }); return; }
+      const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      const obras = await leerCol(H, "obras");
+      const out = {};
+      for (const ov of Array.isArray(obOld) ? obOld : []) {
+        const lista = rend && rend[ov.id];
+        if (!Array.isArray(lista) || !lista.length) continue;
+        const n = nrm(ov.nombre); if (!n) continue;
+        const ob = obras.find((o) => nrm(o.nombre) === n) || obras.find((o) => nrm(o.nombre).includes(n) || n.includes(nrm(o.nombre)));
+        if (!ob) continue;
+        const urls = lista.map((x) => (x && typeof x === "object" ? x.url : x)).filter((u) => typeof u === "string" && (/^https:\/\//.test(u) || (/^data:image\//.test(u) && u.length < 450000)));
+        if (urls.length) out[ob.id] = urls.slice(0, 1);
+      }
+      res.status(200).json({ ok: true, renders: out });
+      return;
+    }
+
     if (b.op === "foto") {
       const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(b.data || ""));
       if (!m || m[2].length > 4000000) { res.status(400).json({ error: "Foto inválida o muy pesada" }); return; }

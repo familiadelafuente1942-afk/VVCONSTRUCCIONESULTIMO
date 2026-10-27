@@ -1587,7 +1587,9 @@ let _impB=0;
 async function importarBitacora(manual){try{const j=await api({op:'importar_bitacora'});_impB=Date.now();if(j.nuevos){await cargar(true)}if(manual)toast(j.nuevos?`Traídas ${j.nuevos} bitácoras de la app anterior${j.sinObra&&j.sinObra.length?'. Sin obra equivalente: '+j.sinObra.join(', '):''}`:(j.total?`Ya estaban todas (${j.total} en la app anterior)${j.sinObra&&j.sinObra.length?'. Sin obra equivalente: '+j.sinObra.join(', '):''}`:'No encontré bitácoras en la app anterior'),!j.nuevos&&!j.total)}catch(e){if(manual)toast('No se pudo leer la app anterior',true)}}
 let _imp=0;
 async function importarNexo(manual){try{const j=await api({op:'importar_nexo'});_imp=Date.now();if(j.nuevos||j.actualizados||j.quitados||j.obrasNuevas){await cargar(true);if(manual)toast(`Traídos de NEXO 2: ${j.nuevos} nuevos, ${j.actualizados} actualizados`)}else if(manual)toast('Ya está todo al día con NEXO 2')}catch(e){if(manual)toast('No se pudo traer de NEXO 2',true)}}
-async function cargarNexo(){if(Date.now()-_imp>120000)importarNexo(false);if(!_impB)importarBitacora(false);try{const j=await api({op:'nexo'});S.NX=j.nexo||{};redraw(true)}catch(e){}}
+let _rendOk=0;
+async function cargarRenders(){if(_rendOk&&Date.now()-_rendOk<600000)return;try{const j=await api({op:'renders_obras'});_rendOk=Date.now();S.REND=j.renders||{};redraw(true)}catch(e){}}
+async function cargarNexo(){cargarRenders();if(Date.now()-_imp>120000)importarNexo(false);if(!_impB)importarBitacora(false);try{const j=await api({op:'nexo'});S.NX=j.nexo||{};redraw(true)}catch(e){}}
 function redraw(soft){if(document.querySelector('#layer .scrim'))return;if(S.gfull){if(!soft||!document.querySelector('#gfull input:focus,#gfull select:focus'))gfRender()}else draw()}
 async function guardar(c,item,quiet){
   closeSheet();
@@ -1665,7 +1667,7 @@ function filaAg(a){return `<div class="agrow"><span class="tc-ico ${a.hecho?'t-v
  <div style="flex:1;min-width:0;cursor:pointer" data-act="editAg" data-id="${a.id}"><b class="${a.quien==='Nicolás'?'t-azul':a.quien==='Sebastián'?'t-gold':'t-verde'}">${a.quien==='Nadie'?'No va nadie':a.quien==='Ambos'?'Van los dos':'Va '+a.quien}</b> <span class="muted small">${[a.hora?'🕒 '+a.hora:'',a.lugar||'Nordelta',a.obra?nombreObra(a.obra):'',a.motivo].filter(Boolean).map(esc).join(' · ')}</span></div><button class="pinx ${a.fijar?'on':''}" data-act="fijarAg" data-id="${a.id}" aria-label="Anclar en Inicio" title="Mostrar en Inicio">📌</button><button class="delx" data-act="del" data-c="agenda" data-id="${a.id}" aria-label="Borrar" title="Borrar">✕</button></div>`}
 const agDe=f=>col('agenda').filter(a=>a.fecha===f).sort((a,b)=>(a.hora||'99')<(b.hora||'99')?-1:1);
 function filaObraRes(o){const T=tareasDe('obra:'+o.id),h=T.filter(t=>t.estado==='hecha').length,at=T.filter(atrasada).length,n=obreros(o.id).length,p=proxima(o),nx=nxDe(o),I=nx&&nx.info;
-  const foto=(I&&I.foto)||(nx&&['o1','o2','o3','o4'].includes(nx.nexo)?'/seg-obra-'+nx.nexo+'.jpg':'');
+  const foto=(I&&I.foto)||(nx&&['o1','o2','o3','o4'].includes(nx.nexo)?'/seg-obra-'+nx.nexo+'.jpg':'')||((S.REND||{})[o.id]||[])[0]||'';
   const pct=I?I.avance:(T.length?Math.round(h*100/T.length):0);
   const dots=I&&I.dots?[['rojo','vencidas'],['naranja','urgentes'],['amarillo','pedir ya'],['verde','ventana abierta'],['ok','completas']].map(([k,l])=>I.dots[k]?`<span class="chip" title="${l}">${k==='ok'?'<b class="t-verde">✓</b>':`<span class="dot c-${k}"></span>`}${I.dots[k]}</span>`:'').join(''):'';
   const g=I?`<span><span>Entrega prevista</span><b class="${I.desvio>0?'t-naranja':''}">${fmt(I.entrega)}${I.desvio>0?' (+'+I.desvio+' sem)':''}</b></span><span><span>Vencidas</span><b class="${I.vencidas?'t-rojo':''}">${plural(I.vencidas,'tarjeta','tarjetas')}</b></span><span><span>Definiciones</span><b>${I.defsOk} de ${I.defsTot} tareas</b></span>`
