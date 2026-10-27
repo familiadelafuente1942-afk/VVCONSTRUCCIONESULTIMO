@@ -269,9 +269,19 @@ export default async function handler(req, res) {
       const item = { ...COLS[col](q), id, por: (prev && prev.por) || quien, creado: (prev && prev.creado) || Date.now(), editado: Date.now(), editor: quien };
       if (col === "tareas" && !item.ambito) { res.status(400).json({ error: "Falta el ámbito" }); return; }
       if (col === "obras" && !item.nombre) { res.status(400).json({ error: "Falta el nombre" }); return; }
-      const sin = items.filter((x) => x.id !== id);
-      sin.push(item);
-      await escribir(H, "seg_" + col, { items: sin.slice(-3000) });
+      // lectura, escritura y verificación: si dos pedidos pisan la misma lista, se reintenta para no perder datos
+      let base = items;
+      for (let t = 0; t < 4; t++) {
+        const sin = base.filter((x) => x.id !== id);
+        sin.push(item);
+        await escribir(H, "seg_" + col, { items: sin.slice(-3000) });
+        const ver = await leerCol(H, col);
+        if (ver.some((x) => x.id === id && x.editado === item.editado)) { if (t === 0 || base.every((x) => ver.some((y) => y.id === x.id))) break; }
+        base = ver.length ? ver : base;
+        await pausa(120 + Math.random() * 200);
+        const otra = await leerCol(H, col);
+        base = [...otra, ...base.filter((x) => !otra.some((y) => y.id === x.id))];
+      }
       res.status(200).json({ ok: true, item });
       return;
     }

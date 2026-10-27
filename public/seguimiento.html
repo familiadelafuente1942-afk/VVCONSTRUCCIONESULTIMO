@@ -1514,7 +1514,10 @@ function proxima(o){const L=tareasDe('obra:'+o.id).filter(t=>t.estado==='pend'&&
 function nxDe(o){return S.NX[o.id]||null}
 const nxPend=o=>{const n=nxDe(o);return n?n.cards.length+n.frenadas.length:0};
 
+let _Q=Promise.resolve(),_pend=0;
+function enq(fn){_pend++;const r=_Q.then(fn);_Q=r.catch(()=>{}).then(()=>{_pend--});return r}
 async function cargar(silencioso){
+  if(_pend>0){setTimeout(()=>cargar(silencioso),800);return}
   try{const j=await api({op:'todo'});S.quien=j.quien;['obras','tareas','personal','gastos','sueldos','agenda','hitos','registros','adicionales'].forEach(c=>S.D[c]=j[c]||[]);S.D.obras.sort((a,b)=>(a.orden||0)-(b.orden||0));S.cargado=true;S.err='';LS('seg_q',j.quien)}
   catch(e){if(e.message==='sesion')return;S.err='Sin conexión. Mostrando lo último que se vio.';if(!silencioso)toast('No se pudo actualizar. Revisá la conexión.',true)}
   badge();redraw(true);cargarNexo();
@@ -1530,12 +1533,12 @@ async function guardar(c,item,quiet){
   const tmp=item.id?item:{...item,id:'tmp'+Date.now()+Math.random().toString(36).slice(2,5)};
   const i=col(c).findIndex(x=>x.id===tmp.id);if(i>=0)col(c)[i]={...col(c)[i],...tmp};else col(c).push(tmp);
   if(!quiet)redraw();
-  try{const j=await api({op:'guardar',col:c,item:item.id?item:{...item}});const k=col(c).findIndex(x=>x.id===tmp.id);if(k>=0)col(c)[k]=j.item;if(S.sel===tmp.id)S.sel=j.item.id;badge();if(!quiet)redraw();return j.item}
+  try{const j=await enq(()=>api({op:'guardar',col:c,item:item.id?item:{...item}}));const k=col(c).findIndex(x=>x.id===tmp.id);if(k>=0)col(c)[k]=j.item;if(S.sel===tmp.id)S.sel=j.item.id;badge();if(!quiet)redraw();return j.item}
   catch(e){if(e.message==='sesion')return;toast('No se pudo guardar: '+e.message,true);await cargar(true)}
 }
 async function borrar(c,id){
   S.D[c]=col(c).filter(x=>x.id!==id);if(c==='obras'){S.D.tareas=S.D.tareas.filter(t=>t.ambito!=='obra:'+id);S.D.personal=S.D.personal.filter(p=>p.obra!==id);S.D.hitos=S.D.hitos.filter(p=>p.obra!==id);S.D.registros=S.D.registros.filter(p=>p.obra!==id);S.D.adicionales=S.D.adicionales.filter(p=>p.obra!==id)}redraw();
-  try{await api({op:'borrar',col:c,id});badge()}catch(e){if(e.message==='sesion')return;toast('No se pudo borrar: '+e.message,true);await cargar(true)}
+  try{await enq(()=>api({op:'borrar',col:c,id}));badge()}catch(e){if(e.message==='sesion')return;toast('No se pudo borrar: '+e.message,true);await cargar(true)}
 }
 function cuentaGlobo(){const ids=new Set([...pendGen(),...atrasadasTodas()].map(t=>t.id));return ids.size+col('hitos').filter(h=>!h.hecho&&h.prevista&&h.prevista>h.fecha).length}
 function estadoGlobo(){const sop=!!navigator.setAppBadge,inst=(navigator.standalone===true)||matchMedia('(display-mode: standalone)').matches,perm=('Notification' in window)?Notification.permission:'no disponible';return{sop,inst,perm,n:cuentaGlobo()}}
