@@ -1272,6 +1272,16 @@ const ordenF=(a,b)=>((a.inicio||a.fin||9e12)-(b.inicio||b.fin||9e12))||(a.orden|
 const generales=()=>col('tareas').filter(t=>t.ambito==='general');
 const pendGen=()=>generales().filter(t=>t.estado!=='hecha');
 const atrasadasTodas=()=>col('tareas').filter(atrasada);
+function hitoEst(h){
+  if(h.hecho)return{c:'verde',tag:'Cumplido',txt:'Cumplido'+(h.prevista&&h.prevista!==h.fecha?'':''),d:0};
+  const d=h.prevista?Math.round((h.prevista-h.fecha)/DAY):0;
+  if(d>0)return{c:'rojo',tag:'Se demora',txt:`se demora ${plural(d,'día','días')}`,d};
+  if(d<0)return{c:'verde',tag:'Se adelanta',txt:`se adelanta ${plural(-d,'día','días')}`,d};
+  if(h.fecha<TODAY)return{c:'naranja',tag:'Pasó la fecha',txt:'pasó la fecha sin marcar',d:0};
+  return{c:'futuro',tag:'En fecha',txt:'se cumple en fecha',d:0};
+}
+function hitoCard(h,ctx){const e=hitoEst(h),pv=h.prevista||h.fecha,falta=Math.round((pv-TODAY)/DAY);
+  return `<div class="tcard" role="button" tabindex="0" data-act="editH" data-id="${h.id}"><span class="stripe c-${e.c}"></span><span class="tc-ico t-${e.c==='futuro'?'ok':e.c}">${svg('cal',18)}</span><span class="txt"><span class="tag t-${e.c==='futuro'?'ok':e.c}">${e.tag}${e.d?' · '+(e.d>0?'+':'')+e.d+' d':''}</span><span class="t1">${esc(h.titulo)}</span><span class="t2">${[ctx,'plan '+fmt(h.fecha),h.prevista&&h.prevista!==h.fecha?'ahora '+fmt(h.prevista):''].filter(Boolean).map(esc).join(' · ')}</span>${h.motivo&&!h.hecho?`<span class="t2">Motivo: ${esc(h.motivo)}</span>`:''}</span><span class="when">${h.hecho?'':`<b class="${falta<0?'t-rojo':''}">${Math.abs(falta)} d</b><span class="muted">${falta<0?'de atraso':'faltan'}</span>`}</span><button class="delx" data-act="del" data-c="hitos" data-id="${h.id}" aria-label="Borrar" title="Borrar">✕</button></div>`}
 const hitosDe=oid=>col('hitos').filter(h=>h.obra===oid).sort((a,b)=>a.fecha-b.fecha);
 function obreros(oid){return col('personal').filter(p=>p.obra===oid&&p.activo!==false)}
 const enCurso=o=>tareasDe('obra:'+o.id).filter(t=>t.estado==='curso');
@@ -1377,6 +1387,7 @@ function vInicio(){
   <div class="card"><span class="eyebrow">Nordelta</span>${[TODAY,TODAY+DAY].map(f=>{const L=agDe(f);return `<div class="agday ${f===TODAY?'':''}"><span class="muted small">${f===TODAY?'Hoy':'Mañana'} · ${diaTxt(f)}</span>${L.length?L.map(filaAg).join(''):`<div class="agrow"><span class="muted" style="flex:1">Sin asignar</span><button class="dchip" data-act="agRap" data-f="${f}" data-q="Nicolás">+ Nicolás</button><button class="dchip" data-act="agRap" data-f="${f}" data-q="Sebastián">+ Sebastián</button></div>`}</div>`}).join('')}<button class="btn sm ghost" data-act="tab" data-k="agenda" style="margin-top:8px">Ver agenda completa</button></div>
   <div><span class="eyebrow">Obras</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${col('obras').map(filaObraRes).join('')}</div></div>
   ${nxAll.length?`<div><span class="eyebrow">Nos deben · desde NEXO 2</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${nxAll.map(({o,c})=>tcardNx(o,c)).join('')}</div><button class="btn sm ghost" data-act="tab" data-k="obras" style="margin-top:8px">Ver por obra</button></div>`:''}
+  ${(()=>{const H=col('hitos').filter(h=>!h.hecho).sort((a,b)=>(a.prevista||a.fecha)-(b.prevista||b.fecha)).slice(0,8);return `<div><span class="eyebrow">Hitos · cómo venimos</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${H.length?H.map(h=>hitoCard(h,nombreObra(h.obra))).join(''):'<div class="card muted">Todavía no hay hitos. Cargalos en cada obra, en "Fechas clave".</div>'}</div></div>`})()}
   <div><span class="eyebrow">Para atender</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${prox.length?prox.map(t=>tcardT(t,{ctx:ctxT(t),limite:t.ambito==='general'})).join(''):'<div class="card muted">Todo al día. No hay nada pendiente.</div>'}</div></div>
   <div class="card" data-act="tab" data-k="gastos" style="cursor:pointer"><span class="eyebrow">Este mes · ${mesTxt(MES_HOY)}</span><div class="facts" style="margin-top:8px"><div class="fact"><span>Sueldo de Nicolás</span><b>${sueldo?(sueldo.pagado?'Pagado · '+money(sueldo.monto):'Pendiente · '+money(sueldo.monto)):'Sin cargar'}</b></div><div class="fact"><span>Gastos del mes</span><b>${money(gMes)}</b></div></div></div>`;
 }
@@ -1397,7 +1408,7 @@ function ganttHTML(o,C){
     [[m,'1ª quincena'],[q16,'2ª quincena']].forEach(([s,l],i)=>{const e=i?nm:q16;if(e<=start||s>=end)return;const a2=Math.max(s,start);quin+=`<span class="gq" style="left:${x(a2)}px;width:${x(Math.min(e,end))-x(a2)}px">${W>=26?l:''}</span>`});m=nm}
   for(let w=start;w<end;w+=7*DAY){days+=`<span class="gd" style="left:${x(w)}px">${new Date(w).getUTCDate()}</span>`}
   const lanes=[-1e9,-1e9];
-  const hl=h=>{const n=h.titulo,px=x(h.fecha)+10,ln=lanes.findIndex(e=>px>=e+8);if(ln<0)return '';lanes[ln]=px+n.length*5.6;return `<span class="ghl" style="left:${px}px;top:${ln?27:5}px">${esc(n)}</span>`};
+  const hl=h=>{const dd=h.prevista&&!h.hecho?Math.round((h.prevista-h.fecha)/DAY):0;const n=h.titulo+(dd?(dd>0?' (+':' (')+dd+' d)':''),px=x(h.fecha)+10,ln=lanes.findIndex(e=>px>=e+8);if(ln<0)return '';lanes[ln]=px+n.length*5.6;return `<span class="ghl" style="left:${px}px;top:${ln?27:5}px">${esc(n)}</span>`};
   const hit=`<div class="grow ghit" style="height:44px"><div class="glabel rubro">Fechas clave</div><div class="gtrack" style="width:${width}px">${H.map(h=>`<button class="ghito ${S.sel===h.id?'gsel':''}" data-act="${C.edit?'selH':'editH'}" data-id="${h.id}" data-drag="h" title="${esc(h.titulo)} · ${fmt(h.fecha)}" style="left:${x(h.fecha)-7}px;${h.hecho?'background:var(--verde)':''}" aria-label="${esc(h.titulo)} ${fmt(h.fecha)}"></button>${hl(h)}`).join('')}</div></div>`;
   const rows=T.map(t=>{const late=atrasada(t),cls=t.estado==='hecha'?'hecha':late?'late':t.estado==='curso'?'curso':'';
     const pr=t.estado==='hecha'?100:t.estado==='curso'?Math.max(8,Math.min(95,Math.round((TODAY-(t.inicioReal||t.inicio))/Math.max(DAY,t.fin-(t.inicioReal||t.inicio))*100))):late?100:0;
@@ -1439,7 +1450,7 @@ function vObra(){
   const body=S.otab==='crono'?`<div class="sub-h"><button class="btn sm gold" data-act="nuevaT" data-amb="obra:${o.id}">+ Tarea</button><span style="display:flex;gap:6px;flex-wrap:wrap">${zoomBtns()}<button class="btn sm" data-act="gfull" data-o="${o.id}">Pantalla completa</button></span></div>${ganttHTML(o)}
    <div style="display:flex;flex-direction:column;gap:8px">${T.length?T.map(t=>tcardT(t)).join(''):'<div class="card muted">Todavía no hay tareas. Agregá la primera con inicio y fin.</div>'}</div>`
   :S.otab==='hitos'?`<button class="btn sm gold" data-act="nuevoH" data-o="${o.id}" style="align-self:flex-start">+ Fecha clave</button><p class="muted small">Hormigonadas, cierres de etapa, entregas: aparecen como rombos en el Gantt.</p>
-   <div class="card">${h.length?h.map(x=>`<div class="agrow" style="cursor:pointer" data-act="editH" data-id="${x.id}"><span class="tc-ico ${x.hecho?'t-verde':'t-gold'}" style="width:30px;height:30px" data-act="hechoH" data-id="${x.id}">${x.hecho?svg('chk',16):svg('cal',16)}</span><div style="flex:1"><b>${esc(x.titulo)}</b><br><span class="muted small">${fmt(x.fecha)} · ${{hormigonado:'Hormigonado',etapa:'Etapa',entrega:'Entrega',otro:'Otro'}[x.tipo]||''}${x.fecha<TODAY&&!x.hecho?' · <b class="t-rojo">sin marcar</b>':''}</span></div><button class="delx" data-act="del" data-c="hitos" data-id="${x.id}" aria-label="Borrar" title="Borrar">✕</button></div>`).join(''):'<div class="muted">Todavía no hay fechas clave.</div>'}</div>`
+   <div style="display:flex;flex-direction:column;gap:8px">${h.length?h.map(x=>hitoCard(x,'')).join(''):'<div class="card muted">Todavía no hay fechas clave.</div>'}</div>`
   :S.otab==='gente'?`<button class="btn sm gold" data-act="nuevaP" data-obra="${o.id}" style="align-self:flex-start">+ Persona</button><div class="card">${listaGente(o.id)}</div>`
   :vNexoObra(o);
   return `<div class="ohead"><button class="back" data-act="volver">${BACK} Obras</button><div class="sub-h" style="margin-top:8px"><div><span class="eyebrow">Obra</span><h1>${esc(o.nombre)}</h1></div><button class="btn sm ghost" data-act="editObra" data-id="${o.id}">Editar</button></div></div>
@@ -1584,7 +1595,11 @@ function formHito(h,obra){
   h=h||{obra,tipo:'hormigonado',fecha:TODAY,hecho:false};
   openSheet(`<span class="eyebrow">${esc(nombreObra(h.obra))}</span><h2>${h.id?'Editar fecha clave':'Nueva fecha clave'}</h2><form class="frm" data-submit="hito"><input type="hidden" id="f-id" value="${h.id||''}"><input type="hidden" id="f-obra" value="${esc(h.obra)}">
   <label class="f">¿Qué es?<input id="f-tit" value="${esc(h.titulo||'')}" placeholder="Ej: Hormigonado de losa PB"></label>
-  <div class="row2"><label class="f">Fecha<input id="f-fec" type="date" value="${iso(h.fecha)}"></label><label class="f">Tipo<select id="f-tipo">${[['hormigonado','Hormigonado'],['etapa','Cambio de etapa'],['entrega','Entrega'],['otro','Otro']].map(([k,l])=>`<option value="${k}" ${h.tipo===k?'selected':''}>${l}</option>`).join('')}</select></label></div>
+  <div class="row2"><label class="f">Fecha prevista originalmente<input id="f-fec" type="date" value="${iso(h.fecha)}"></label><label class="f">Tipo<select id="f-tipo">${[['hormigonado','Hormigonado'],['etapa','Cambio de etapa'],['entrega','Entrega'],['otro','Otro']].map(([k,l])=>`<option value="${k}" ${h.tipo===k?'selected':''}>${l}</option>`).join('')}</select></label></div>
+  <span class="eyebrow">¿Cómo venimos con este hito?</span>
+  <label class="f">Fecha en que se va a cumplir ahora<input id="f-prev" type="date" value="${iso(h.prevista||h.fecha)}"></label>
+  <p class="muted small" id="f-dif" style="margin:-4px 0 0"></p>
+  <label class="f">Motivo (si se demora o se adelanta)<input id="f-mot" value="${esc(h.motivo||'')}" placeholder="Ej: lluvia, falta de hierro, llegó antes el hormigón"></label>
   <label class="f" style="flex-direction:row;align-items:center;gap:10px;color:var(--fg)"><input id="f-hecho" type="checkbox" ${h.hecho?'checked':''} style="width:22px;height:22px"> Ya se hizo</label>
   <label class="f">Nota (opcional)<input id="f-nota" value="${esc(h.nota||'')}"></label>${btns(h.id,'delH','Eliminar')}</form>`,'Fecha clave');
 }
@@ -1638,7 +1653,7 @@ const SUBMIT={
     const t={...(prev||{}),id:id||undefined,ambito:amb,titulo:tit,inicio:ini,fin,resp:val('f-resp').trim(),estado:est,prio:val('f-prio')||'normal',nota:val('f-nota').trim()};
     if(est==='curso'&&!t.inicioReal)t.inicioReal=TODAY;if(est==='hecha'){if(!t.inicioReal)t.inicioReal=TODAY;t.finReal=t.finReal||TODAY}if(est==='pend'){t.inicioReal=0;t.finReal=0}
     guardar('tareas',t)},
-  hito(){const id=val('f-id'),tit=val('f-tit').trim();if(!tit){toast('Poné qué es',true);return}const f=dt(val('f-fec'));if(!f){toast('Elegí la fecha',true);return}guardar('hitos',{...(id?byId('hitos',id):{}),id:id||undefined,obra:val('f-obra'),titulo:tit,fecha:f,tipo:val('f-tipo'),hecho:$('#f-hecho').checked,nota:val('f-nota').trim()})},
+  hito(){const id=val('f-id'),tit=val('f-tit').trim();if(!tit){toast('Poné qué es',true);return}const f=dt(val('f-fec'));if(!f){toast('Elegí la fecha',true);return}guardar('hitos',{...(id?byId('hitos',id):{}),id:id||undefined,obra:val('f-obra'),titulo:tit,fecha:f,tipo:val('f-tipo'),hecho:$('#f-hecho').checked,nota:val('f-nota').trim(),prevista:(dt(val('f-prev'))&&dt(val('f-prev'))!==f)?dt(val('f-prev')):0,motivo:val('f-mot').trim()})},
   persona(){const nom=val('f-nom').trim();if(!nom){toast('Poné el nombre',true);return}const id=val('f-id');guardar('personal',{...(id?byId('personal',id):{}),id:id||undefined,nombre:nom,rol:val('f-rol').trim(),obra:val('f-obra'),haciendo:val('f-hac').trim(),nota:val('f-nota').trim(),activo:true})},
   gasto(){const con=val('f-con').trim(),m=+val('f-monto');if(!con){toast('Poné el concepto',true);return}if(!(m>0)){toast('Poné el monto',true);return}const id=val('f-id');guardar('gastos',{id:id||undefined,concepto:con,monto:m,fecha:dt(val('f-fec'))||TODAY,de:val('f-de'),obra:val('f-obra'),cat:val('f-cat').trim()})},
   sueldo(){const m=+val('f-monto'),mes=val('f-mes');if(!mes){toast('Elegí el mes',true);return}if(!(m>0)){toast('Poné el monto',true);return}const id=val('f-id'),pag=$('#f-pag').checked;guardar('sueldos',{id:id||undefined,mes,monto:m,fecha:dt(val('f-fec'))||(pag?TODAY:0),pagado:pag,nota:val('f-nota').trim()})},
@@ -1707,6 +1722,7 @@ const CHG={
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=A[el.dataset.act];if(f){f(el.dataset,el,e)}});
 document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.tcard')){e.preventDefault();e.target.click()}});
 document.addEventListener('submit',e=>{const f=e.target.dataset.submit;if(f&&SUBMIT[f]){e.preventDefault();SUBMIT[f]()}});
+document.addEventListener('input',e=>{if(e.target.id==='f-prev'||e.target.id==='f-fec'){const o=dt(val('f-fec')),n=dt(val('f-prev')),el=$('#f-dif');if(el&&o&&n){const d=Math.round((n-o)/DAY);el.textContent=d>0?'Se demora '+plural(d,'día','días'):d<0?'Se adelanta '+plural(-d,'día','días'):'Se cumple en fecha';el.style.color=d>0?'var(--rojo)':d<0?'var(--verde)':''}}});
 document.addEventListener('change',e=>{const el=e.target.closest('[data-chg]');if(el&&CHG[el.dataset.chg])CHG[el.dataset.chg](el.value,el)});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.tk)cargar(true)});
 setInterval(()=>{if(S.tk&&!document.hidden)cargar(true)},40000);

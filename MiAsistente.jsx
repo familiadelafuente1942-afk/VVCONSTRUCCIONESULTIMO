@@ -126,7 +126,7 @@ async function segResumen() {
       const N = nx && nx.nexo && nx.nexo[o.id];
       L.push(`\n▸ ${o.nombre} — etapa actual: ${o.etapa || (T.filter(t => t.estado === "curso").map(t => t.titulo).join(", ")) || "sin definir"}; próxima tarea a arrancar: ${prox ? prox.titulo + " (" + f(prox.inicio) + ")" : "—"}; ${gente.length} obreros`);
       if (T.length) L.push("  Tareas: " + T.map(t => `${t.titulo} [${est(t)}, ${f(t.inicio)}→${f(t.fin)}${t.resp ? ", " + t.resp : ""}]`).join("; "));
-      if (hit.length) L.push("  Fechas clave: " + hit.map(h => `${h.titulo} ${f(h.fecha)}${h.hecho ? " ✓" : ""}`).join("; "));
+      if (hit.length) L.push("  Fechas clave: " + hit.map(h => `${h.titulo} plan ${f(h.fecha)}${h.hecho ? " ✓cumplido" : h.prevista && h.prevista !== h.fecha ? ` → ahora ${f(h.prevista)} (${h.prevista > h.fecha ? "se demora " + Math.round((h.prevista - h.fecha) / 864e5) + " d" : "se adelanta " + Math.round((h.fecha - h.prevista) / 864e5) + " d"})${h.motivo ? " por " + h.motivo : ""}` : ""}`).join("; "));
       if (gente.length) L.push("  Personal: " + gente.map(p => `${p.nombre}${p.rol ? " (" + p.rol + ")" : ""}${p.haciendo ? " haciendo: " + p.haciendo : ""}`).join("; "));
       if (N) {
         if (N.cards.length) L.push("  NEXO 2 — nos deben: " + N.cards.map(c => `${c.tipo === "mat" ? "materiales" : "documentación"} para "${c.tarea}" (${c.color}, arranca ${f(c.limite)}): ${c.pend.map(i => i.txt + (i.resp ? " [debe " + i.resp + "]" : "")).join(", ")}`).join(" | "));
