@@ -1239,6 +1239,9 @@ nav.bottom .in{max-width:900px}
 }
 @media (min-width:1500px){#view.cols{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .mini .m3{justify-self:end}.mini{grid-template-columns:10px minmax(0,1fr) auto}
+.hobra{display:block;font-size:19px;font-weight:700;line-height:1.15;color:var(--fg)}
+.hfecha{display:block;font-size:22px;font-weight:700;line-height:1.2;margin-top:2px;color:var(--fg)}
+.hfecha s{opacity:.45;font-weight:500;font-size:17px}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1393,7 +1396,7 @@ function hitoEst(h){
   return{c:'futuro',tag:'En fecha',txt:'se cumple en fecha',d:0};
 }
 function hitoCard(h,ctx){const e=hitoEst(h),pv=h.prevista||h.fecha,falta=Math.round((pv-TODAY)/DAY);
-  return `<div class="tcard" role="button" tabindex="0" data-act="editH" data-id="${h.id}"><span class="stripe c-${e.c}"></span><span class="tc-ico t-${e.c==='futuro'?'ok':e.c}">${svg('cal',18)}</span><span class="txt"><span class="tag t-${e.c==='futuro'?'ok':e.c}">${e.tag}${e.d?' · '+(e.d>0?'+':'')+e.d+' d':''}</span><span class="t1">${esc(h.titulo)}</span><span class="t2">${[ctx,'plan '+fmt(h.fecha),h.prevista&&h.prevista!==h.fecha?'ahora '+fmt(h.prevista):''].filter(Boolean).map(esc).join(' · ')}</span>${h.motivo&&!h.hecho?`<span class="t2">Motivo: ${esc(h.motivo)}</span>`:''}</span><span class="when">${h.hecho?'':`<b class="${falta<0?'t-rojo':''}">${Math.abs(falta)} d</b><span class="muted">${falta<0?'de atraso':'faltan'}</span>`}</span><button class="delx" data-act="del" data-c="hitos" data-id="${h.id}" aria-label="Borrar" title="Borrar">✕</button></div>`}
+  return `<div class="tcard" role="button" tabindex="0" data-act="editH" data-id="${h.id}"><span class="stripe c-${e.c}"></span><span class="tc-ico t-${e.c==='futuro'?'ok':e.c}">${svg('cal',18)}</span><span class="txt"><span class="tag t-${e.c==='futuro'?'ok':e.c}">${e.tag}${e.d?' · '+(e.d>0?'+':'')+e.d+' d':''}</span>${ctx?`<span class="hobra">${esc(ctx)}</span>`:''}<span class="t1">${esc(h.titulo)}</span><span class="hfecha">${h.prevista&&h.prevista!==h.fecha?`<s>${fmt(h.fecha)}</s> → ${fmt(h.prevista)}`:fmt(h.fecha)}</span>${h.motivo&&!h.hecho?`<span class="t2">Motivo: ${esc(h.motivo)}</span>`:''}</span><span class="when">${h.hecho?'':`<b class="${falta<0?'t-rojo':''}">${Math.abs(falta)} d</b><span class="muted">${falta<0?'de atraso':'faltan'}</span>`}</span><button class="delx" data-act="del" data-c="hitos" data-id="${h.id}" aria-label="Borrar" title="Borrar">✕</button></div>`}
 const hitosDe=oid=>col('hitos').filter(h=>h.obra===oid).sort((a,b)=>a.fecha-b.fecha);
 function obreros(oid){return col('personal').filter(p=>p.obra===oid&&p.activo!==false)}
 const enCurso=o=>tareasDe('obra:'+o.id).filter(t=>t.estado==='curso');
