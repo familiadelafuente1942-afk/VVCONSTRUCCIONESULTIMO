@@ -1245,7 +1245,7 @@ const ckGet=()=>{const m=document.cookie.match(/(?:^|; )seg_tk=([^;]*)/);return 
 const ckSet=v=>{document.cookie='seg_tk='+encodeURIComponent(v)+';path=/;SameSite=Lax;max-age='+(v?34560000:0)};
 
 async function api(body){
-  const r=await fetch('/api/seguimiento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,token:S.tk})});
+  const r=await fetch('/api/seguimiento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,quien:S.quien})});
   let j={};try{j=await r.json()}catch(e){}
   if(r.status===401){salirLocal();throw new Error('sesion')}
   if(!r.ok)throw new Error(j.error||('Error '+r.status));
@@ -1294,7 +1294,7 @@ async function borrar(c,id){
 function badge(){const n=pendGen().length;try{if(navigator.setAppBadge){n?navigator.setAppBadge(n):navigator.clearAppBadge()}}catch(e){}}
 
 /* ---------- sesión ---------- */
-function salirLocal(){S.tk='';LS('seg_tk',null);ckSet('');S.cargado=false;gfCerrar(true);draw()}
+function salirLocal(){S.tk='';S.cargado=false;gfCerrar(true);draw()}
 async function entrar(){
   const q=document.querySelector('.quienb .on');const quien=q?q.dataset.q:'';const codigo=($('#cod')||{}).value||'';
   if(!quien){toast('Elegí quién sos',true);return}
@@ -1346,17 +1346,7 @@ function tcardT(t,opts={}){
 function ctxT(t){if(t.ambito==='general')return 'General';if(t.ambito==='nexo')return 'Nexo entorno app';if(t.ambito.startsWith('obra:'))return nombreObra(t.ambito.slice(5));return ''}
 
 /* ---------- login ---------- */
-function vLogin(){
-  if(S.config===undefined){fetch('/api/seguimiento',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"op":"estado"}'}).then(r=>r.json()).then(j=>{S.config=!!j.configurado;draw()}).catch(()=>{S.config=true;draw()});return '<div class="loginbox"><span class="eyebrow">V+V Construcciones</span><h1>Seguimiento</h1><p class="muted">Cargando…</p></div>'}
-  if(!S.config)return `<div class="loginbox"><span class="eyebrow">V+V Construcciones</span><h1>Seguimiento</h1><p class="muted">Primera vez: creá el código que van a usar Nicolás y vos. Hace falta el código de Dirección de NEXO.</p>
-   <form class="frm" data-submit="crear"><label class="f">Código de Dirección de NEXO<input id="cdir" autocapitalize="characters" autocomplete="off"></label>
-   <label class="f">Código nuevo para esta app<input id="cnuevo" autocapitalize="characters" autocomplete="off" placeholder="Mínimo 4 letras o números"></label>
-   <button class="btn gold full" type="submit">Crear código</button></form></div>`;
-  return `<div class="loginbox"><span class="eyebrow">V+V Construcciones · privado</span><h1>Seguimiento</h1><p class="muted">App interna de Sebastián y Nicolás.</p>
-   <span class="eyebrow">¿Quién sos?</span><div class="quienb"><button data-act="quien" data-q="Sebastián">Sebastián</button><button data-act="quien" data-q="Nicolás">Nicolás</button></div>
-   <form class="frm" data-submit="entrar"><label class="f">Código<input id="cod" type="password" autocapitalize="characters" autocomplete="off"></label><button class="btn gold full" type="submit">Entrar</button></form>
-   <p class="muted small">Entrás una sola vez en cada aparato: después te reconoce.</p></div>`;
-}
+function vLogin(){return `<div class="loginbox"><span class="eyebrow">V+V Construcciones · privado</span><h1>Seguimiento</h1><p class="muted">¿Quién sos?</p><div style="display:flex;flex-direction:column;gap:10px"><button class="btn gold full" data-act="soy" data-q="Sebastián">Sebastián</button><button class="btn gold full" data-act="soy" data-q="Nicolás">Nicolás</button></div><p class="muted small">Se acuerda de vos en este aparato.</p></div>`}
 
 /* ---------- Inicio ---------- */
 function filaAg(a){return `<div class="agrow"><span class="tc-ico ${a.hecho?'t-verde':''}" style="width:30px;height:30px;cursor:pointer" data-act="hechoAg" data-id="${a.id}" title="Marcar como hecha">${a.hecho?svg('chk',16):''}</span>
@@ -1651,7 +1641,7 @@ const SUBMIT={
 /* ---------- acciones ---------- */
 const A={
   tab:ds=>{S.tab=ds.k;if(ds.k!=='obras')S.obra=null;draw();window.scrollTo(0,0)},
-  quien:(ds,el)=>{document.querySelectorAll('.quienb button').forEach(b=>b.classList.toggle('on',b===el))},
+  soy:ds=>{S.quien=ds.q;S.tk='open';LS('seg_q',ds.q);cargar().then(abrirDeLink)},
   obra:ds=>{S.tab='obras';S.obra=ds.id;S.otab='crono';if(S.gfull)gfCerrar(true);draw();window.scrollTo(0,0)},
   irObra:ds=>{S.tab='obras';S.obra=ds.id;S.otab=ds.k||'crono';draw();window.scrollTo(0,0)},
   irNx:ds=>{S.tab='obras';S.obra=ds.id;S.otab='nexo';draw();window.scrollTo(0,0)},
@@ -1680,10 +1670,10 @@ const A={
   delAg:ds=>{if(confirm('¿Eliminar esta visita?')){closeSheet();borrar('agenda',ds.id)}},
   delO:ds=>{const o=byId('obras',ds.id);if(confirm('¿Eliminar "'+o.nombre+'" con sus tareas, fechas clave y personal? No se puede deshacer.')){closeSheet();S.obra=null;borrar('obras',ds.id)}},
   actualizar:()=>cargar(),
-  brillo:()=>openSheet(`<span class="eyebrow">Aspecto</span><h2>Claro u oscuro</h2><div class="seg2" style="margin:10px 0"><button class="btn" data-act="tema" data-k="claro">Claro</button><button class="btn" data-act="tema" data-k="oscuro">Oscuro</button><button class="btn" data-act="tema" data-k="auto">Automático</button></div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><button class="btn full" data-act="cambiarCod">Cambiar el código de la app</button><button class="btn full" data-act="salir" style="color:var(--rojo);margin-top:8px">Salir de este aparato</button>`,'Aspecto'),
+  brillo:()=>openSheet(`<span class="eyebrow">Aspecto</span><h2>Claro u oscuro</h2><div class="seg2" style="margin:10px 0"><button class="btn" data-act="tema" data-k="claro">Claro</button><button class="btn" data-act="tema" data-k="oscuro">Oscuro</button><button class="btn" data-act="tema" data-k="auto">Automático</button></div><hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><button class="btn full" data-act="salir">Cambiar de persona (soy ${S.quien==="Nicolás"?"Sebastián":"Nicolás"})</button>`,'Aspecto'),
   tema:ds=>{try{window.__tema(ds.k)}catch(e){}closeSheet()},
   cambiarCod:()=>{const c=prompt('Código nuevo (mínimo 4 letras o números). Los otros aparatos van a pedirlo de nuevo.');if(!c)return;closeSheet();api({op:'cambiar_codigo',codigo:c}).then(()=>toast('Código cambiado')).catch(e=>toast('No se pudo cambiar: '+e.message,true))},
-  salir:()=>{closeSheet();api({op:'logout'}).catch(()=>{});salirLocal()},
+  salir:()=>{closeSheet();LS('seg_q',null);S.quien='';salirLocal()},
   /* Gantt grande */
   gfull:ds=>gfAbrir(ds.o),gcerrar:()=>gfCerrar(),gpanel:()=>{S.gpanel=!S.gpanel;gfRender()},
   gpantalla:()=>{try{const g=$('#gfull');if(document.fullscreenElement)document.exitFullscreen();else g.requestFullscreen&&g.requestFullscreen()}catch(e){}},
@@ -1714,9 +1704,9 @@ setInterval(()=>{const f=$('#fecha');if(f)f.textContent=diaTxt(TODAY)+' '+new Da
 function abrirDeLink(){try{const p=new URLSearchParams(location.search).get('gantt');if(p&&S.tk&&S.cargado&&(p==='todas'||byId('obras',p))){S.tab='obras';gfAbrir(p)}}catch(e){}}
 /* ---------- arranque ---------- */
 (function(){
-  S.tk=LS('seg_tk')||ckGet();S.quien=LS('seg_q')||'';
+  S.quien=LS('seg_q')||'';S.tk=S.quien?'open':'';
   $('#fecha').textContent=diaTxt(TODAY)+' '+new Date(TODAY).getUTCFullYear();
-  if(S.tk){LS('seg_tk',S.tk);draw();cargar().then(abrirDeLink)}else draw();
+  if(S.tk){draw();cargar().then(abrirDeLink)}else draw();
 })();
 </script>
 </body>

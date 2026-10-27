@@ -101,12 +101,11 @@ export default async function handler(req, res) {
     }
 
     // ---- desde acá hace falta un aparato reconocido ----
-    const tk = (cfg.tokens || []).find((x) => b.token && x.h === sha(b.token));
-    if (!tk) { await pausa(300); res.status(401).json({ error: "Sesión vencida", sesion: false }); return; }
-    const quien = tk.quien;
+    // App abierta (sin código): solo se indica quién es.
+    const quien = QUIEN.includes(b.quien) ? b.quien : "Sebastián";
+    const tk = { h: "", quien };
 
     if (b.op === "logout") {
-      await escribir(H, "seg_cfg", { ...cfg, tokens: cfg.tokens.filter((x) => x !== tk) });
       res.status(200).json({ ok: true });
       return;
     }
