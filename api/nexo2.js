@@ -330,42 +330,69 @@ export default async function handler(req, res) {
     if (typeof b.op === "string" && b.op.startsWith("aud_") && b.op !== "aud_fotos_save") {
       const obra = String(b.obra || "");
       if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
-      const clave = "audreg_" + obra;
-      if (b.op === "aud_list") { const v = await leer(H, clave); res.status(200).json({ ok: true, items: (v && v.items) || [] }); return; }
+      const clave = "audreg_" + obra, claveT = "audtrash_" + obra;
+      const DIAS30 = 30 * 864e5;
+      const limpiarPapelera = async (tv) => { const t = ((tv && tv.items) || []); const vivos = t.filter((x) => Date.now() - (x.delAt || 0) < DIAS30); if (vivos.length !== t.length) await escribir(H, claveT, { items: vivos }); return vivos; };
+      if (b.op === "aud_list") { const [v, tv] = await Promise.all([leer(H, clave), leer(H, claveT)]); const tr = await limpiarPapelera(tv); res.status(200).json({ ok: true, items: (v && v.items) || [], trash: tr.map((x) => ({ id: x.id, tipo: x.tipo, num: x.num, fecha: x.fecha, delAt: x.delAt, delBy: x.delBy })) }); return; }
       const cr = b.cred || {};
       const quien = cr.rol === "dir" && dirOk(cr.codigo) ? "dir" : cr.rol === "aud" && norm(cr.codigo) && norm((cods.obras[obra] || {}).a) === norm(cr.codigo) ? "aud" : "";
       if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código para guardar el acta." }); return; }
       const S = (x, n) => String(x == null ? "" : x).slice(0, n);
+      const subirB64 = async (dataUrl, pref) => {
+        const m = /^data:(image\/(?:jpeg|png|webp)|application\/pdf);base64,(.+)$/.exec(String(dataUrl || ""));
+        if (!m || m[2].length > 4_000_000) return "";
+        const ext = m[1] === "image/jpeg" ? "jpg" : m[1] === "application/pdf" ? "pdf" : m[1].split("/")[1];
+        const path = `${obra}/${pref}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const subir = () => fetch(`${URL_BASE}/storage/v1/object/nexo2-fotos/${path}`, { method: "POST", headers: { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": m[1], "x-upsert": "true" }, body: Buffer.from(m[2], "base64") });
+        let r = await subir();
+        if (!r.ok) { await fetch(`${URL_BASE}/storage/v1/bucket`, { method: "POST", headers: H, body: JSON.stringify({ id: "nexo2-fotos", name: "nexo2-fotos", public: true }) }); r = await subir(); }
+        return r.ok ? `${NEW_PUB}${path}` : "";
+      };
+      if (b.op === "aud_foto") { const u = await subirB64(b.data, S(b.pref, 8).replace(/[^a-z]/g, "") || "aud"); if (!u) { res.status(400).json({ error: "No se pudo subir el archivo" }); return; } res.status(200).json({ ok: true, url: u }); return; }
       if (b.op === "aud_save") {
         const q = b.rec || {}; const D = q.data || {};
         const id = String(q.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 30);
         if (!id || !["sup", "rev", "cert"].includes(q.tipo)) { res.status(400).json({ error: "Acta inválida" }); return; }
-        const fotos = [];
-        for (const u of (Array.isArray(D.fotos) ? D.fotos : []).slice(0, 8)) {
-          const s = String(u || "");
-          if (s.startsWith(NEW_PUB)) { fotos.push(s); continue; }
-          const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(s);
-          if (!m || m[2].length > 900000) continue;
-          const ext = m[1] === "jpeg" ? "jpg" : m[1];
-          const path = `${obra}/aud-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-          const subir = () => fetch(`${URL_BASE}/storage/v1/object/nexo2-fotos/${path}`, { method: "POST", headers: { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "image/" + m[1], "x-upsert": "true" }, body: Buffer.from(m[2], "base64") });
-          let r = await subir();
-          if (!r.ok) { await fetch(`${URL_BASE}/storage/v1/bucket`, { method: "POST", headers: H, body: JSON.stringify({ id: "nexo2-fotos", name: "nexo2-fotos", public: true }) }); r = await subir(); }
-          if (r.ok) fotos.push(`${NEW_PUB}${path}`);
+        const pub = (u) => String(u || "").startsWith(NEW_PUB) ? String(u).slice(0, 600) : "";
+        const fotos = []; for (const u of (Array.isArray(D.fotos) ? D.fotos : []).slice(0, 12)) { const s = String(u || ""); const r = s.startsWith(NEW_PUB) ? s : await subirB64(s, "aud"); if (r) fotos.push(r); }
+        const adjuntos = []; for (const x of (Array.isArray(D.adjuntos) ? D.adjuntos : []).slice(0, 20)) { let u = pub(x && x.u); if (!u && x && x.data) u = await subirB64(x.data, "adj"); adjuntos.push({ u, n: S(x && x.n, 120), t: S(x && x.t, 60), d: S(x && x.d, 300) }); }
+        let firma = null; const Fm = D.firma;
+        if (Fm && typeof Fm === "object") {
+          let fu = pub(Fm.png); if (!fu && Fm.data) fu = await subirB64(Fm.data, "firma");
+          let pts = 0; const strokes = (Array.isArray(Fm.strokes) ? Fm.strokes : []).slice(0, 60).map((s) => (Array.isArray(s) ? s : []).slice(0, 800).map((p) => [Math.round(Number(p && p[0]) || 0), Math.round(Number(p && p[1]) || 0)])).filter((s) => (pts += s.length) < 4000);
+          firma = { png: fu, strokes, w: Math.min(2000, Number(Fm.w) || 0), h: Math.min(2000, Number(Fm.h) || 0), at: Math.min(4e12, Number(Fm.at) || Date.now()), nombre: S(Fm.nombre, 200) };
         }
-        const rec = { id, tipo: q.tipo, num: S(q.num, 30), fecha: Math.min(4e12, Math.max(0, Number(q.fecha) || 0)), resultado: S(q.resultado, 40), editado: Date.now(), por: quien,
-          data: { periodo: S(D.periodo, 200), presentes: S(D.presentes, 200), resultado: S(D.resultado, 40), conclusion: S(D.conclusion, 1500), responsable: S(D.responsable, 80), etapa: S(D.etapa, 160), plano: S(D.plano, 80), rev: S(D.rev, 20), directiva: S(D.directiva, 1500), ejecutado: S(D.ejecutado, 80), certId: S(D.certId, 40), supId: S(D.supId, 40),
-            obs: (Array.isArray(D.obs) ? D.obs : []).slice(0, 40).map((x) => ({ desc: S(x.desc, 800), sol: S(x.sol, 800), sector: S(x.sector, 100), crit: S(x.crit, 20) })),
+        const v = await leer(H, clave); const prev = ((v && v.items) || []).find((x) => x.id === id);
+        const rec = { id, tipo: q.tipo, num: S(prev ? prev.num : q.num, 30), fecha: Math.min(4e12, Math.max(0, Number(q.fecha) || 0)), resultado: S(q.resultado, 40), editado: Date.now(), por: prev ? prev.por : quien, ver: prev ? (prev.ver || 1) + 1 : 1,
+          hist: prev ? [...(prev.hist || []), { ver: prev.ver || 1, editado: prev.editado || 0, fecha: prev.fecha, resultado: prev.resultado, data: prev.data }].slice(-12) : [], log: prev ? prev.log || [] : [],
+          data: { periodo: S(D.periodo, 200), presentes: S(D.presentes, 200), resultado: S(D.resultado, 40), conclusion: S(D.conclusion, 1500), responsable: S(D.responsable, 200), etapa: S(D.etapa, 160), plano: S(D.plano, 80), rev: S(D.rev, 20), directiva: S(D.directiva, 1500), ejecutado: S(D.ejecutado, 80), certId: S(D.certId, 40), supId: S(D.supId, 40),
+            obs: (Array.isArray(D.obs) ? D.obs : []).slice(0, 40).map((x) => ({ desc: S(x.desc, 1200), sol: S(x.sol, 1200), sector: S(x.sector, 100), crit: S(x.crit, 20) })),
             interf: (Array.isArray(D.interf) ? D.interf : []).slice(0, 20).map((x) => S(x, 600)),
-            docs: (Array.isArray(D.docs) ? D.docs : []).slice(0, 30).map((x) => ({ nombre: S(x.nombre, 200), rev: S(x.rev, 20), doc: S(x.doc, 40) })), fotos } };
-        const v = await leer(H, clave); const items = ((v && v.items) || []).filter((x) => x.id !== id); items.push(rec);
+            docs: (Array.isArray(D.docs) ? D.docs : []).slice(0, 30).map((x) => ({ nombre: S(x.nombre, 200), rev: S(x.rev, 20), doc: S(x.doc, 40) })), fotos, adjuntos, firma } };
+        const items = ((v && v.items) || []).filter((x) => x.id !== id); items.push(rec);
         await escribir(H, clave, { items: items.slice(-400) });
         res.status(200).json({ ok: true, rec }); return;
       }
       if (b.op === "aud_del") {
-        const v = await leer(H, clave); const id = String(b.id || "");
+        const id = String(b.id || ""); const [v, tv] = await Promise.all([leer(H, clave), leer(H, claveT)]);
+        const rec = ((v && v.items) || []).find((x) => x.id === id);
+        if (!rec) { res.status(200).json({ ok: true }); return; }
+        const tr = await limpiarPapelera(tv);
+        tr.push({ ...rec, delAt: Date.now(), delBy: S(b.quien || (quien === "dir" ? "Dirección" : "Auditoría"), 60), log: [...(rec.log || []), { t: Date.now(), a: "eliminó", q: S(b.quien || quien, 60) }] });
+        await escribir(H, claveT, { items: tr.slice(-200) });
         await escribir(H, clave, { items: ((v && v.items) || []).filter((x) => x.id !== id) });
         res.status(200).json({ ok: true }); return;
+      }
+      if (b.op === "aud_trash") { const tr = await limpiarPapelera(await leer(H, claveT)); res.status(200).json({ ok: true, items: tr }); return; }
+      if (b.op === "aud_restore") {
+        const id = String(b.id || ""); const [v, tv] = await Promise.all([leer(H, clave), leer(H, claveT)]);
+        const tr = await limpiarPapelera(tv); const rec = tr.find((x) => x.id === id);
+        if (!rec) { res.status(404).json({ error: "No está en la papelera (pasaron más de 30 días)." }); return; }
+        const { delAt, delBy, ...limpio } = rec; limpio.log = [...(rec.log || []), { t: Date.now(), a: "restauró", q: S(b.quien || quien, 60) }];
+        const items = ((v && v.items) || []).filter((x) => x.id !== id); items.push(limpio);
+        await escribir(H, clave, { items: items.slice(-400) });
+        await escribir(H, claveT, { items: tr.filter((x) => x.id !== id) });
+        res.status(200).json({ ok: true, rec: limpio }); return;
       }
     }
     if (b.op === "aud_fotos_save") {
