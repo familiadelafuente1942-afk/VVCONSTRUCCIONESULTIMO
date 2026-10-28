@@ -260,7 +260,11 @@ export default async function handler(req, res) {
       const leerOld = async (k) => { const r = await fetch(`${OLD}/rest/v1/bco_storage?key=eq.${k}&select=value&limit=1`, { headers: HO }); if (!r.ok) throw new Error("old " + r.status); const rows = await r.json(); let v = rows[0] ? rows[0].value : null; if (typeof v === "string") { try { v = JSON.parse(v); } catch { v = null; } } return v; };
       let aud, obOld;
       try { [aud, obOld] = await Promise.all([leerOld("vv_auditoria"), leerOld("vv_obras")]); } catch (e) { res.status(200).json({ ok: true, por: {}, total: 0, sinObra: [], leidas: -1, error: String(e.message || e).slice(0, 80) }); return; }
-      if (!Array.isArray(aud)) { res.status(200).json({ ok: true, por: {}, total: 0, sinObra: [], leidas: 0, forma: aud === null ? "sin dato" : typeof aud }); return; }
+      if (!Array.isArray(aud)) {
+        let claves = []; try { const r = await fetch(`${OLD}/rest/v1/bco_storage?key=ilike.*audit*&select=key&limit=20`, { headers: HO }); if (r.ok) claves = (await r.json()).map((x) => x.key); } catch { }
+        aud = []; for (const k of claves.filter((k) => /^vv_audit/i.test(k) && !/bak/i.test(k)).slice(0, 3)) { try { const v = await leerOld(k); if (Array.isArray(v)) { aud = v; break; } } catch { } }
+        if (!aud.length) { res.status(200).json({ ok: true, por: {}, total: 0, sinObra: [], leidas: 0, forma: "claves parecidas: " + (claves.join(", ") || "ninguna") }); return; }
+      }
       const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
       const obras = await leerCol(H, "obras");
       const nomOld = {}; (Array.isArray(obOld) ? obOld : []).forEach((o) => { nomOld[o.id] = o.nombre; });
@@ -285,7 +289,12 @@ export default async function handler(req, res) {
           doc: { titulo: t[1], sub: "Auditoría de obra · App anterior", obra: ob.nombre, num: S(it.nro, 30), fecha: dmy(it.fecha), resultado: S(it.resultado, 40), conclusion: S(it.conclusion, 800), intro: "", campos, secciones: secs, fotos, firmas: [[S(it.responsable || "Responsable técnico", 60), "Auditoría de obra"], ["", "Jefatura de Obra / Dirección de Obra"]] } };
         (por[ob.id] = por[ob.id] || []).push(rec); total++;
       }
-      res.status(200).json({ ok: true, por, total, sinObra: [...sinObra], leidas: aud.length }); return;
+      const hist = ((await leer(H, "seg_auditoria_hist")) || {}).items || [];
+      const ids = new Set(hist.map((x) => x.id)); let nuevos = 0;
+      Object.entries(por).forEach(([oid, L]) => L.forEach((r) => { if (!ids.has(r.id)) { hist.push({ ...r, obra: oid }); nuevos++; } }));
+      if (nuevos) await escribir(H, "seg_auditoria_hist", { items: hist.slice(-1500) });
+      const out = {}; hist.forEach((r) => { (out[r.obra] = out[r.obra] || []).push(r); });
+      res.status(200).json({ ok: true, por: out, total: hist.length, sinObra: [...sinObra], leidas: aud.length }); return;
     }
     if (b.op === "importar_bitacora") {
       const OLD = "https://bxhjgxzvayszfqwlwinq.supabase.co", OK = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
