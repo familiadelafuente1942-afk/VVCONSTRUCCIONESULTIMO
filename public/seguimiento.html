@@ -1654,7 +1654,7 @@ let _imp=0;
 async function importarNexo(manual){try{const j=await api({op:'importar_nexo'});_imp=Date.now();if(j.nuevos||j.actualizados||j.quitados||j.obrasNuevas){await cargar(true);if(manual)toast(`Traídos de NEXO 2: ${j.nuevos} nuevos, ${j.actualizados} actualizados`)}else if(manual)toast('Ya está todo al día con NEXO 2')}catch(e){if(manual)toast('No se pudo traer de NEXO 2',true)}}
 let _rendOk=0;
 async function cargarRenders(){if(_rendOk&&Date.now()-_rendOk<600000)return;try{const j=await api({op:'renders_obras'});_rendOk=Date.now();S.REND=j.renders||{};redraw(true)}catch(e){}}
-async function cargarAudOld(){try{const j=await api({op:'aud_old'});S.AUDV=j.por||{};redraw(true)}catch(e){}}
+async function cargarAudOld(){try{const j=await api({op:'aud_old'});S.AUDV=j.por||{};S.AUDI={leidas:j.leidas,sin:j.sinObra||[],error:j.error||'',forma:j.forma||''};redraw(true)}catch(e){}}
 async function cargarNexo(){cargarRenders();cargarAudOld();if(Date.now()-_imp>120000)importarNexo(false);if(!_impB)importarBitacora(false);try{const j=await api({op:'nexo'});S.NX=j.nexo||{};redraw(true)}catch(e){}}
 function redraw(soft){if(document.querySelector('#layer .scrim'))return;if(S.gfull){if(!soft||!document.querySelector('#gfull input:focus,#gfull select:focus'))gfRender()}else draw()}
 async function guardar(c,item,quiet){
@@ -2153,7 +2153,7 @@ const AUDC={sup:['Supervisión de obra','a-sup'],rev:['Revisión de documentaci�
 function audLista(o){const A=audDe(o),v=(S.AUDV&&S.AUDV[o.id])||[];return [...((A&&A.l)||[]),...v].sort((x,y)=>(y.fecha||0)-(x.fecha||0))}
 function audDe(o){const n=nxDe(o);return n&&n.info&&n.info.aud||null}
 function vAudObra(o){const A=audDe(o),LL=audLista(o);
-  if(!A&&!LL.length)return `<div class="card muted">Todavía no hay auditoría publicada para esta obra. Aparece cuando la Dirección abre NEXO 2 (o si esta obra no está vinculada).</div>`;
+  if(!A&&!LL.length){const I=S.AUDI||{};const dx=!S.AUDI?'Buscando en la app anterior…':I.error?'No pude leer la app anterior ('+I.error+').':I.leidas===0?'En la app anterior no encontré auditorías guardadas'+(I.forma?' ('+I.forma+')':'')+'.':'En la app anterior leí '+I.leidas+' auditorías'+((I.sin||[]).length?'; ninguna coincide con esta obra. Obras sin equivalente: '+I.sin.join(', ')+'.':', pero ninguna es de esta obra.');return `<div class="card muted">Todavía no hay auditoría publicada de NEXO 2 para esta obra (aparece cuando la Dirección abre NEXO 2).<br><span class="small">${esc(dx)}</span></div>`}
   const K=(A&&A.k)||{},L=LL;
   return `${A?`<div class="kpis audk"><div class="kpi"><b>${K.prox?fmt(K.prox):'—'}</b><span class="kl">próxima supervisión</span></div><div class="kpi"><b>${K.rev||0}</b><span class="kl">planos en revisión</span></div><div class="kpi"><b>${K.cert?fmt(K.cert):'—'}</b><span class="kl">próximo certificado de etapa</span></div></div>`:''}
   <div class="card"><div class="top"><h3>Documentos de la auditoría</h3><span class="muted small">${L.length} en total</span></div>${L.length?L.map(a=>`<div class="docrow"><span class="dl"><span class="dn"><i class="adot ${(AUDC[a.tipo]||AUDC.sup)[1]}"></i>${esc((AUDC[a.tipo]||AUDC.sup)[0])} · ${esc(a.num)}${a.viejo?' <span class="chip" style="font-size:10px">App anterior</span>':''}</span><span class="dm">${fmt(a.fecha)} · ${esc(audResumen(a))}</span></span><button class="btn sm" data-act="verAud" data-o="${o.id}" data-id="${esc(a.id)}">Ver</button></div>`).join(''):'<span class="muted small">Sin documentos todavía.</span>'}</div>`}

@@ -258,8 +258,9 @@ export default async function handler(req, res) {
       const OLD = "https://bxhjgxzvayszfqwlwinq.supabase.co", OK = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
       const HO = { apikey: OK, Authorization: "Bearer " + OK };
       const leerOld = async (k) => { const r = await fetch(`${OLD}/rest/v1/bco_storage?key=eq.${k}&select=value&limit=1`, { headers: HO }); if (!r.ok) throw new Error("old " + r.status); const rows = await r.json(); let v = rows[0] ? rows[0].value : null; if (typeof v === "string") { try { v = JSON.parse(v); } catch { v = null; } } return v; };
-      const [aud, obOld] = await Promise.all([leerOld("vv_auditoria"), leerOld("vv_obras")]);
-      if (!Array.isArray(aud)) { res.status(200).json({ ok: true, por: {}, total: 0, sinObra: [] }); return; }
+      let aud, obOld;
+      try { [aud, obOld] = await Promise.all([leerOld("vv_auditoria"), leerOld("vv_obras")]); } catch (e) { res.status(200).json({ ok: true, por: {}, total: 0, sinObra: [], leidas: -1, error: String(e.message || e).slice(0, 80) }); return; }
+      if (!Array.isArray(aud)) { res.status(200).json({ ok: true, por: {}, total: 0, sinObra: [], leidas: 0, forma: aud === null ? "sin dato" : typeof aud }); return; }
       const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
       const obras = await leerCol(H, "obras");
       const nomOld = {}; (Array.isArray(obOld) ? obOld : []).forEach((o) => { nomOld[o.id] = o.nombre; });
@@ -284,7 +285,7 @@ export default async function handler(req, res) {
           doc: { titulo: t[1], sub: "Auditoría de obra · App anterior", obra: ob.nombre, num: S(it.nro, 30), fecha: dmy(it.fecha), resultado: S(it.resultado, 40), conclusion: S(it.conclusion, 800), intro: "", campos, secciones: secs, fotos, firmas: [[S(it.responsable || "Responsable técnico", 60), "Auditoría de obra"], ["", "Jefatura de Obra / Dirección de Obra"]] } };
         (por[ob.id] = por[ob.id] || []).push(rec); total++;
       }
-      res.status(200).json({ ok: true, por, total, sinObra: [...sinObra] }); return;
+      res.status(200).json({ ok: true, por, total, sinObra: [...sinObra], leidas: aud.length }); return;
     }
     if (b.op === "importar_bitacora") {
       const OLD = "https://bxhjgxzvayszfqwlwinq.supabase.co", OK = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
