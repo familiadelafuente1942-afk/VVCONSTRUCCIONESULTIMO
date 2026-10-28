@@ -133,6 +133,18 @@ export default async function handler(req, res) {
         obras = OBRAS0.map(([id, nombre], i) => ({ id, nombre, orden: i, nota: "", por: "sistema", creado: Date.now(), editado: Date.now() }));
         await escribir(H, "seg_obras", { items: obras });
       }
+      // Golf 293 (NEXO 2: o3) se agrega una sola vez; si después se borra a mano, no vuelve
+      try {
+        const fl = (await leer(H, "seg_flags")) || {};
+        if (!fl.golf293) {
+          const nr = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+          if (!obras.some((o) => nr(o.nombre) === "golf293" || o.nexo === "o3")) {
+            obras.push({ id: "golf293", nombre: "Golf 293", orden: obras.length, nota: "", etapa: "", nexo: "o3", capataz: "", por: "sistema", creado: Date.now(), editado: Date.now() });
+            await escribir(H, "seg_obras", { items: obras });
+          }
+          await escribir(H, "seg_flags", { ...fl, golf293: true });
+        }
+      } catch (e) { /* si falla, se reintenta en la próxima carga */ }
       const [tareas, personal, gastos, sueldos, agenda, hitos, bitOld, adicionales] = await Promise.all(["tareas", "personal", "gastos", "sueldos", "agenda", "hitos", "bitacora", "adicionales"].map((c) => leerCol(H, c)));
       let registros = await leerCol(H, "registros");
       if (bitOld.length) { // la "bitácora" pasó a llamarse Registros: se traen las anotaciones viejas
