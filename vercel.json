@@ -13,6 +13,9 @@
   "functions": {
     "api/nexo2.js": {
       "maxDuration": 60
+    },
+    "api/edificio.js": {
+      "maxDuration": 30
     }
   }
 }
