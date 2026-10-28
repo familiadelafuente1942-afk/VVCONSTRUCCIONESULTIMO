@@ -16,6 +16,9 @@
     },
     "api/edificio.js": {
       "maxDuration": 30
+    },
+    "api/auditoria.js": {
+      "maxDuration": 30
     }
   }
 }
