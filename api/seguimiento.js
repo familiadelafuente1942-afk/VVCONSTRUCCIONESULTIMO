@@ -74,18 +74,23 @@ async function leerCol(H, col) {
 }
 
 
+function audParas(t) {
+  const out = []; let cur = "";
+  String(t == null ? "" : t).split(/\r?\n/).forEach((raw) => { const l = raw.trim(); if (!l) { if (cur) out.push(cur); cur = ""; return; } if (cur && (/^(\d+[.)]|[-•*–])\s/.test(l) || /[.!?:;]$/.test(cur))) { out.push(cur); cur = l; } else cur = cur ? cur + " " + l : l; });
+  if (cur) out.push(cur); return out;
+}
 function audDeReg(v, obraNom) {
   const items = ((v && v.items) || []).slice().sort((x, y) => (y.fecha || 0) - (x.fecha || 0)).slice(0, 80);
   const T = { sup: "Acta de supervisión de obra", rev: "Informe de revisión de documentación", cert: "Certificado de etapa ejecutada" };
   const f2 = (t) => { const d = new Date(t || 0); return String(d.getUTCDate()).padStart(2, "0") + "/" + String(d.getUTCMonth() + 1).padStart(2, "0") + "/" + String(d.getUTCFullYear()).slice(2); };
   return items.map((r) => {
     const D = r.data || {}, obs = D.obs || [];
-    const obsSec = obs.length ? [{ h: r.tipo === "sup" ? "Observaciones de la supervisión" : "Observaciones", tabla: { cols: ["N°", "Observación", "Sector / ítem", "Criticidad"], rows: obs.map((x, i) => [String(i + 1), "Descripción\n" + x.desc + (x.sol ? "\nPosible solución\n" + x.sol : ""), x.sector || "—", x.crit || "—"]) } }] : [{ h: "Observaciones", texto: "Sin observaciones." }];
+    const obsSec = obs.length ? [{ h: r.tipo === "sup" ? "Observaciones de la supervisión" : "Observaciones", tabla: { cols: ["N°", "Observación", "Sector / ítem", "Criticidad"], rows: obs.map((x, i) => [String(i + 1), "Descripción\n" + audParas(x.desc).join("\n") + (x.sol ? "\nPosible solución\n" + audParas(x.sol).join("\n") : ""), x.sector || "—", x.crit || "—"]) } }] : [{ h: "Observaciones", texto: "Sin observaciones." }];
     let campos, secs, intro = "";
-    if (r.tipo === "sup") { campos = [["Período", D.periodo || ""], ["Presentes", D.presentes || ""]]; secs = [...obsSec, ...((D.interf || []).length ? [{ h: "Interferencias detectadas", lista: D.interf }] : [])]; }
+    if (r.tipo === "sup") { campos = [["Período", D.periodo || ""], ["Presentes", D.presentes || ""]]; secs = [...obsSec, ...((D.interf || []).length ? [{ h: "Interferencias detectadas", lista: D.interf.map((x) => audParas(x).join(" ")) }] : [])]; }
     else if (r.tipo === "rev") { const ds = D.docs || []; campos = [["Etapa a ejecutar", D.etapa || ""], ["Documentos revisados", String(ds.length)]]; secs = [{ h: "Documentos revisados", tabla: { cols: ["Plano / documento", "Revisión", "Origen"], rows: ds.map((x) => [x.nombre, x.rev || "—", "Panel del estudio"]) } }, ...obsSec]; }
-    else { campos = [["Etapa certificada", D.etapa || ""], ["Ejecutado por", D.ejecutado || ""], ["Plano de referencia", D.plano || ""], ["Versión / revisión", D.rev || ""]]; intro = `Se deja constancia de que la etapa ${D.etapa || ""} de la obra ${obraNom} fue ejecutada conforme al plano de referencia indicado y a la directiva impartida por la Jefatura de Obra que se transcribe a continuación.`; secs = [{ h: "Directiva de la Jefatura de Obra", texto: D.directiva || "—" }, ...obsSec]; }
-    return { id: r.id, tipo: r.tipo, num: r.num, fecha: r.fecha, doc: { titulo: T[r.tipo], sub: "Auditoría de obra · Belfast", obra: obraNom, num: r.num, fecha: f2(r.fecha), resultado: r.resultado, conclusion: D.conclusion || "", intro, campos, secciones: secs, fotos: (D.fotos || []).filter((u) => /^https:\/\//.test(u)).slice(0, 12), adj: (D.adjuntos || []).slice(0, 20).map((x) => ({ u: /^https:\/\//.test(x.u || "") ? x.u : "", n: String(x.n || "").slice(0, 120), t: String(x.t || "").slice(0, 60), d: String(x.d || "").slice(0, 300) })), firma: D.firma && /^https:\/\//.test(D.firma.png || "") ? { png: D.firma.png, at: D.firma.at || 0 } : null, ver: r.ver || 1, firmas: [[D.responsable || "Responsable técnico", "Auditoría de obra"]] } };
+    else { campos = [["Etapa certificada", D.etapa || ""], ["Ejecutado por", D.ejecutado || ""], ["Plano de referencia", D.plano || ""], ["Versión / revisión", D.rev || ""]]; intro = `Se deja constancia de que la etapa ${D.etapa || ""} de la obra ${obraNom} fue ejecutada conforme al plano de referencia indicado y a la directiva impartida por la Jefatura de Obra que se transcribe a continuación.`; secs = [{ h: "Directiva de la Jefatura de Obra", texto: audParas(D.directiva).join("\n") || "—" }, ...obsSec]; }
+    return { id: r.id, tipo: r.tipo, num: r.num, fecha: r.fecha, doc: { titulo: T[r.tipo], sub: "Auditoría de obra · Belfast", obra: obraNom, num: r.num, fecha: f2(r.fecha), resultado: r.resultado, conclusion: audParas(D.conclusion).join("\n"), intro, campos, secciones: secs, fotos: (D.fotos || []).filter((u) => /^https:\/\//.test(u)).slice(0, 12), adj: (D.adjuntos || []).slice(0, 20).map((x) => ({ u: /^https:\/\//.test(x.u || "") ? x.u : "", n: String(x.n || "").slice(0, 120), t: String(x.t || "").slice(0, 60), d: String(x.d || "").slice(0, 300) })), firma: D.firma && /^https:\/\//.test(D.firma.png || "") ? { png: D.firma.png, at: D.firma.at || 0 } : null, ver: r.ver || 1, firmas: [[D.responsable || "Responsable técnico", "Auditoría de obra"]] } };
   });
 }
 export default async function handler(req, res) {

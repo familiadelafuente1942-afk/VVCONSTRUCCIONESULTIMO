@@ -512,7 +512,7 @@ div.glabel{cursor:default}
 .paper .pres b.ok{color:#2f7d50}.paper .pres b.obs{color:#a0611f}.paper .pres b.no{color:#b5372d}
 .btn.warn{background:#fbeceb;color:#b5372d;border:1px solid #e3b4af}.btn.warn:hover{background:#f6d9d6}
 .adjbox{display:flex;flex-direction:column;gap:8px}.adjit{display:flex;gap:10px;align-items:flex-end}.adjit .f{flex:1;margin:0}.adjth{position:relative;flex:0 0 72px;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}.adjth img{width:100%;height:100%;object-fit:cover}.adjth button{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:0;background:rgba(0,0,0,.7);color:#fff;font-size:11px;padding:0}
-.paper .pobs{border:1px solid #d9d4ca;border-radius:8px;overflow:hidden;background:#fff}.paper .pob-h{display:flex;gap:10px;align-items:center;background:#f1ece2;padding:6px 10px;font-size:11.5px}.paper .pob-h b{letter-spacing:.06em}.paper .pob-h span{color:#7a756d;flex:1}.paper .pob-h em{font-style:normal;font-weight:700}.paper .pob-t{padding:8px 10px;white-space:pre-line}.paper .pob-s{margin:0 10px 10px;padding:8px 10px;background:#f6f0e3;border-left:3px solid #a8834e;border-radius:4px;white-space:pre-line}.paper .pob-s b{display:block;font-size:10.5px;letter-spacing:.08em;color:#8a6a37;margin-bottom:3px}
+.paper .pobs{border:1px solid #d9d4ca;border-radius:8px;overflow:hidden;background:#fff}.paper .pob-h{display:flex;gap:10px;align-items:center;background:#f1ece2;padding:6px 10px;font-size:11.5px}.paper .pob-h b{letter-spacing:.06em}.paper .pob-h span{color:#7a756d;flex:1}.paper .pob-h em{font-style:normal;font-weight:700}.paper .pob-t{padding:8px 10px}.paper .pob-t p,.paper .pob-s p{margin:0 0 5px}.paper .pob-s{margin:0 10px 10px;padding:8px 10px;background:#f6f0e3;border-left:3px solid #a8834e;border-radius:4px}.paper .pob-s b{display:block;font-size:10.5px;letter-spacing:.08em;color:#8a6a37;margin-bottom:3px}
 .paper .padj{margin:0 0 10px}.paper .padj img{width:100%;border-radius:6px;border:1px solid #d9d4ca;background:#fff}.paper .padj figcaption{font-size:11px;color:#7a756d;margin-top:3px}
 .paper .pfirma{display:flex;flex-direction:column;align-items:center;margin-top:22px;text-align:center;font-size:12px}.paper .pfirma img{height:64px;max-width:60%;object-fit:contain}.paper .nofirma{height:40px}.paper .pfirma i{display:block;width:70%;border-top:1px solid #6f695f;margin:2px 0 4px}.paper .pfirma span{color:#7a756d}.paper .pfirma small{color:#9a948a;font-size:10px;margin-top:2px}
 .paper .pfirmas{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:22px;text-align:center;font-size:11.5px}
@@ -2631,6 +2631,12 @@ function sheetAudVer(id,ver){const a0=AUD.find(x=>x.id===id);if(!a0)return;if(a0
   openSheet(`<span class="eyebrow">${esc(a.obra.nombre)}${a.ver>1?' · versión '+a.ver:''}${ver?' · anterior (solo lectura)':''}</span><h2>${AUD_TIPO[a.tipo].t} · ${a.num}</h2>${audHTML(a)}<div class="row2"><button class="btn gold" data-act="pdfAud" data-id="${a0.id}" ${ver?`data-v="${ver}"`:''}>Descargar PDF</button>${!ver&&ROLE()==='auditor'?`<button class="btn" data-act="editAud" data-id="${a0.id}">Editar (nueva versión)</button>`:''}</div>${canDelAud(a0)&&!ver?`<button class="btn warn full" data-act="delAud" data-id="${a0.id}">Eliminar</button>`:''}${hist}`,AUD_TIPO[a.tipo].t)}
 /* ===== Auditoría: PDF nuevo (ancho completo, paginado, firma a mano), adjuntos, eliminar con papelera ===== */
 const AUD_M=51; /* 18 mm */
+/* párrafos reales: se respetan solo los saltos que abren un punto nuevo (número, guion) o vienen después de un punto final; el resto se une (no cambia el texto guardado) */
+function audParas(t){const out=[];let cur='';String(t==null?'':t).split(/\r?\n/).forEach(raw=>{const l=raw.trim();if(!l){if(cur)out.push(cur);cur='';return}
+  if(cur&&(/^(\d+[.)]|[-•*–])\s/.test(l)||/[.!?:;]$/.test(cur)))out.push(cur),cur=l;else cur=cur?cur+' '+l:l});if(cur)out.push(cur);return out}
+async function heicAJpg(file){try{if(!(/image\/hei[cf]/i.test(file.type||'')||/\.hei[cf]$/i.test(file.name||'')))return file;
+  if(!window.heic2any){await new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js';sc.onload=res;sc.onerror=rej;document.head.appendChild(sc)})}
+  const out=await window.heic2any({blob:file,toType:'image/jpeg',quality:.92});const bl=Array.isArray(out)?out[0]:out;return new File([bl],(file.name||'foto').replace(/\.hei[cf]$/i,'')+'.jpg',{type:'image/jpeg'})}catch(e){toast('No pude convertir '+(file.name||'la foto HEIC')+' a JPG; sacala como JPG o subila de nuevo');return file}}
 function audSpec(a){
   const T=AUD_TIPO[a.tipo],D=a.data,ob=D.obs||[];
   const campos=a.tipo==='sup'?[['Período',D.periodo],['Presentes',D.presentes]]:a.tipo==='rev'?[['Etapa a ejecutar',D.etapa],['Documentos revisados',String((D.docs||[]).length)]]:[['Etapa certificada',D.etapa],['Ejecutado por',D.ejecutado||ORG],['Plano de referencia',D.plano],['Versión / revisión',D.rev]];
@@ -2644,9 +2650,9 @@ function audSpec(a){
 const AUD_CR={Alta:'#b5372d',Media:'#a0611f',Baja:'#7a756d'};
 /* imagen en buena resolución (sin bajar la calidad): hasta 2400 px, JPEG 0,92 */
 async function jpegHi(url,max=2400){
-  const cargar=u=>new Promise(res=>{const im=new Image();im.onload=()=>{try{const sc=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight));const c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.naturalWidth*sc));c.height=Math.max(1,Math.round(im.naturalHeight*sc));const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);const d=c.toDataURL('image/jpeg',.92),b=atob(d.split(',')[1]),u8=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u8[i]=b.charCodeAt(i);res({w:c.width,h:c.height,bytes:u8})}catch(e){res(null)}};im.onerror=()=>res(null);im.src=u});
+  const cargar=(u,cors)=>new Promise(res=>{const im=new Image();if(cors)im.crossOrigin='anonymous';im.onload=()=>{try{const sc=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight));const c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.naturalWidth*sc));c.height=Math.max(1,Math.round(im.naturalHeight*sc));const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);const d=c.toDataURL('image/jpeg',.92),b=atob(d.split(',')[1]),u8=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u8[i]=b.charCodeAt(i);res({w:c.width,h:c.height,bytes:u8})}catch(e){res(null)}};im.onerror=()=>res(null);im.src=u});
   if(/^https?:/.test(url||'')){try{const r=await fetch(url,{mode:'cors',cache:'no-cache'});if(r.ok){const bl=await r.blob(),u=URL.createObjectURL(bl),x=await cargar(u);URL.revokeObjectURL(u);if(x)return x}}catch(e){}}
-  return cargar(url);
+  return (await cargar(url))||(/^https?:/.test(url||'')?await cargar(url,true):null);
 }
 let _pdfjs=null;
 async function pdfjsCargar(){if(_pdfjs)return _pdfjs;return _pdfjs=new Promise((res,rej)=>{if(window.pdfjsLib)return res(window.pdfjsLib);const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=()=>{try{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';res(window.pdfjsLib)}catch(e){rej(e)}};s.onerror=()=>rej(new Error('pdfjs'));document.head.appendChild(s)})}
@@ -2677,15 +2683,15 @@ async function audPDF(a){
     if(s.tabla){head(s.h,40);const w=s.tabla.w,xs=[];let ax=L;w.forEach(v=>{xs.push(ax);ax+=v*CW});
       const hdr=()=>{P.rect(L,P.y,CW,18,'#f1ede5');s.tabla.cols.forEach((c,i)=>P.text(xs[i]+6,P.y+5,c.toUpperCase(),7,true,GREY));P.y+=20};hdr();
       s.tabla.rows.forEach(row=>{const cells=row.map((v,i)=>wrapTxt(v,9.5,false,w[i]*CW-12)),hh=Math.max(...cells.map(c=>c.length))*12.5+10;if(P.y+hh>BOT){P.newPage();hdr()}cells.forEach((c,i)=>c.forEach((ln,n)=>P.text(xs[i]+6,P.y+5+n*12.5,ln,9.5)));P.y+=hh;P.line(L,P.y,R,P.y,LINE)});P.y+=8}
-    else{head(s.h,30);wrapTxt(s.texto||'—',FS,false,CW).forEach(ln=>{ensure(LH);P.text(L,P.y,ln,FS);P.y+=LH});P.y+=6}
+    else{head(s.h,30);(audParas(s.texto||'—').length?audParas(s.texto||'—'):['—']).forEach(pp=>{wrapTxt(pp,FS,false,CW).forEach(ln=>{ensure(LH);P.text(L,P.y,ln,FS);P.y+=LH});P.y+=4});P.y+=2}
   }
   /* observaciones: texto a todo el ancho */
   head(S.obsH,60);
   if(!S.obs.length){P.text(L,P.y,'Sin observaciones.',FS,false,GREY);P.y+=LH+4}
   S.obs.forEach((o,k)=>{
-    const paras=String(o.desc||'').split('\n').map(x=>x.trim()).filter(Boolean);
+    const paras=audParas(o.desc);
     const dl=[];paras.forEach(p=>{const m=/^(\d+[.)]|[-•*])\s+(.*)$/.exec(p);if(m){const ls=wrapTxt(m[2],FS,false,CW-26-8);ls.forEach((ln,n)=>dl.push({t:ln,b:n?'':m[1],x:L+8+(n?0:0)+0,i:26}))}else wrapTxt(p,FS,false,CW-16).forEach(ln=>dl.push({t:ln,b:'',i:8}));dl.push({gap:4})});
-    const sl=[];String(o.sol||'').split('\n').map(x=>x.trim()).filter(Boolean).forEach(p=>{const m=/^(\d+[.)]|[-•*])\s+(.*)$/.exec(p);if(m)wrapTxt(m[2],FS,false,CW-16-26).forEach((ln,n)=>sl.push({t:ln,b:n?'':m[1],i:26}));else wrapTxt(p,FS,false,CW-16-10).forEach(ln=>sl.push({t:ln,b:'',i:10}))});
+    const sl=[];audParas(o.sol).forEach(p=>{const m=/^(\d+[.)]|[-•*])\s+(.*)$/.exec(p);if(m)wrapTxt(m[2],FS,false,CW-16-26).forEach((ln,n)=>sl.push({t:ln,b:n?'':m[1],i:26}));else wrapTxt(p,FS,false,CW-16-10).forEach(ln=>sl.push({t:ln,b:'',i:10}))});
     const hD=dl.reduce((s,l)=>s+(l.gap||LH),0),hS=sl.length?18+sl.length*LH+10:0,total=22+hD+hS+8;
     const band=()=>{P.rect(L,P.y,CW,20,'#f1ece2');P.text(L+8,P.y+5.5,'OBSERVACIÓN '+(k+1),9,true,INK);const cr=o.crit?'Criticidad: '+o.crit:'';const crw=cr?tw(cr,9,true):0;if(cr)P.text(R-8-crw,P.y+5.5,cr,9,true,AUD_CR[o.crit]||INK);let sec='Sector / ítem: '+(o.sector||'—');while(tw(sec,9)>CW-16-crw-100-12&&sec.length>12)sec=sec.slice(0,-2);P.text(L+110,P.y+5.5,sec,9,false,GREY);P.y+=24};
     if(total<=BOT-TOP-30)ensure(total);else ensure(22+LH*3);
@@ -2699,7 +2705,7 @@ async function audPDF(a){
     P.y+=6;P.line(L,P.y,R,P.y,LINE);P.y+=8;
   });
   /* interferencias */
-  if(S.interf.length){head('Interferencias detectadas',30);S.interf.forEach((t,n)=>{const ls=wrapTxt(t,FS,false,CW-26);ensure(ls.length*LH+4);P.text(L+8,P.y,(n+1)+'.',FS,false,GREY);ls.forEach(ln=>{P.text(L+26,P.y,ln,FS);P.y+=LH});P.y+=3})}
+  if(S.interf.length){head('Interferencias detectadas',30);S.interf.forEach((t,n)=>{const ls=wrapTxt(audParas(t).join(' '),FS,false,CW-26);ensure(ls.length*LH+4);P.text(L+8,P.y,(n+1)+'.',FS,false,GREY);ls.forEach(ln=>{P.text(L+26,P.y,ln,FS);P.y+=LH});P.y+=3})}
   /* fotos de obra: grilla pareja */
   head('Fotos',70);
   const fi=await Promise.all(S.fotos.map(id=>toJpeg(FILES[id].url)));const ims=fi.filter(Boolean);
@@ -2720,11 +2726,11 @@ async function audPDF(a){
     if(otros.length&&rows.length)P.y+=4;
     rows.forEach(row=>{const rh=rowH(row);ensure(rh);row.forEach((r,j)=>{const x=L+j*(tw2+g)+(tw2-r.w)/2;P.image(r.im,x,P.y,r.w,r.h);r.cl.forEach((ln,n)=>P.text(L+j*(tw2+g),P.y+r.h+5+n*11,ln,9,false,GREY))});P.y+=rh})}
   /* resultado + conclusión + firma: siempre juntos */
-  const cl=S.conclusion?wrapTxt(S.conclusion,FS,false,CW):[],rl=wrapTxt(S.resp||'Responsable técnico',10,true,330);
-  const hRes=26,hCon=S.conclusion?30+cl.length*LH:0,hFir=24+71+10+rl.length*13+16;
+  const cl=S.conclusion?audParas(S.conclusion).flatMap((pp,i)=>[...(i?['\u0001']:[]),...wrapTxt(pp,FS,false,CW)]):[],rl=wrapTxt(S.resp||'Responsable técnico',10,true,330);
+  const hRes=26,hCon=S.conclusion?30+cl.reduce((q,l)=>q+(l==='\u0001'?4:LH),0):0,hFir=24+71+10+rl.length*13+16;
   ensure(hRes+hCon+hFir+16);
   P.y+=14;P.text(L,P.y,'RESULTADO: ',10.5,true,INK);P.text(L+tw('RESULTADO: ',10.5,true),P.y,S.resultado.toUpperCase(),10.5,true,S.resultado==='Conforme'?'#2f7d50':S.resultado==='No conforme'?'#b5372d':'#a0611f');P.y+=hRes-8;
-  if(S.conclusion){P.y+=2;P.rect(L,P.y,3,12,GOLD);P.text(L+10,P.y+1,'CONCLUSIÓN',10,true,INK);P.y+=20;cl.forEach(ln=>{P.text(L,P.y,ln,FS);P.y+=LH});P.y+=6}
+  if(S.conclusion){P.y+=2;P.rect(L,P.y,3,12,GOLD);P.text(L+10,P.y+1,'CONCLUSIÓN',10,true,INK);P.y+=20;cl.forEach(ln=>{if(ln==='\u0001'){P.y+=4;return}P.text(L,P.y,ln,FS);P.y+=LH});P.y+=6}
   P.y+=22;
   const lw=270,lx=(P.W-lw)/2,ly=P.y+71;
   const F=S.firma;
@@ -2744,19 +2750,19 @@ async function pdfAud(id,ver){const a0=AUD.find(x=>x.id===id);if(!a0)return;cons
 /* versión anterior de un acta (solo lectura) */
 function audVersion(a,v){const h=(a.hist||[]).find(x=>x.ver===+v);if(!h)return a;return{...a,ver:h.ver,fecha:h.fecha||a.fecha,resultado:h.resultado||a.resultado,data:audDatosDeNube(h.data),hist:[]}}
 function audHTML(a){
-  const S=audSpec(a),esc2=x=>esc(x).replace(/\n/g,'<br>');
+  const S=audSpec(a),esc2=x=>esc(x).replace(/\n/g,'<br>'),par=t=>audParas(t).map(x=>`<p>${esc(x)}</p>`).join('')||'<p>—</p>';
   const tabla=s=>`<table><tr>${s.tabla.cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr>${s.tabla.rows.map(r=>`<tr>${r.map(v=>`<td>${esc2(v)}</td>`).join('')}</tr>`).join('')}</table>`;
-  const obsH=S.obs.length?S.obs.map((o,k)=>`<div class="pobs"><div class="pob-h"><b>OBSERVACIÓN ${k+1}</b><span>Sector / ítem: ${esc(o.sector||'—')}</span>${o.crit?`<em style="color:${AUD_CR[o.crit]||'#1d1d1f'}">Criticidad: ${esc(o.crit)}</em>`:''}</div><div class="pob-t">${esc2(o.desc)}</div>${o.sol?`<div class="pob-s"><b>POSIBLE SOLUCIÓN</b>${esc2(o.sol)}</div>`:''}</div>`).join(''):'<p class="pm">Sin observaciones.</p>';
-  const adjH=S.adj.map(x=>{const f=FILES[x.id],img=/^image\//.test(f.type||'')||/\.(jpe?g|png|webp)$/i.test(f.name);return img?`<figure class="padj"><img src="${f.url}" alt="${esc(f.name)}"><figcaption>${esc(x.desc||f.name)}</figcaption></figure>`:`<div class="irow"><span>${esc(f.name)} · ${esc((f.name.split('.').pop()||'').toUpperCase())}${x.desc?' · '+esc(x.desc):''}</span>${fileBtns(f)}</div>`}).join('');
+  const obsH=S.obs.length?S.obs.map((o,k)=>`<div class="pobs"><div class="pob-h"><b>OBSERVACIÓN ${k+1}</b><span>Sector / ítem: ${esc(o.sector||'—')}</span>${o.crit?`<em style="color:${AUD_CR[o.crit]||'#1d1d1f'}">Criticidad: ${esc(o.crit)}</em>`:''}</div><div class="pob-t">${par(o.desc)}</div>${o.sol?`<div class="pob-s"><b>POSIBLE SOLUCIÓN</b>${par(o.sol)}</div>`:''}</div>`).join(''):'<p class="pm">Sin observaciones.</p>';
+  const adjH=S.adj.map(x=>{const f=FILES[x.id],img=/^image\//.test(f.type||'')||/\.(jpe?g|png|webp|hei[cf])$/i.test(f.name);return img?`<figure class="padj"><img src="${f.url}" alt="${esc(f.name)}"><figcaption>${esc(x.desc||f.name)}</figcaption></figure>`:`<div class="irow"><span>${esc(f.name)} · ${esc((f.name.split('.').pop()||'').toUpperCase())}${x.desc?' · '+esc(x.desc):''}</span>${fileBtns(f)}</div>`}).join('');
   const F=S.firma;
   return `<div class="paper"><div class="ph"><b>${esc(S.titulo)}</b><span>${esc(S.sub)}</span></div><div class="pmeta"><span>Obra: <b>${esc(S.obra)}</b></span><span>N°: <b>${esc(S.num)}</b></span><span>Fecha: <b>${esc(S.fecha)}</b></span></div>
   <div class="pcampos">${S.campos.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v||'—')}</b></div>`).join('')}</div>${S.intro?`<div class="pintro">${esc(S.intro)}</div>`:''}
-  ${S.pre.map(s=>`<h5>${esc(s.h)}</h5>${s.tabla?tabla(s):`<p>${esc2(s.texto)}</p>`}`).join('')}
+  ${S.pre.map(s=>`<h5>${esc(s.h)}</h5>${s.tabla?tabla(s):par(s.texto)}`).join('')}
   <h5>${esc(S.obsH)}</h5>${obsH}
-  ${S.interf.length?`<h5>Interferencias detectadas</h5><ol>${S.interf.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:''}
+  ${S.interf.length?`<h5>Interferencias detectadas</h5><ol>${S.interf.map(x=>`<li>${esc(audParas(x).join(' '))}</li>`).join('')}</ol>`:''}
   <h5>Fotos</h5>${S.fotos.length?`<div class="pfotos">${S.fotos.map(id=>`<img src="${FILES[id].url}" alt="Foto">`).join('')}</div>`:'<p class="pm">Sin fotos adjuntas.</p>'}
   ${S.adj.length?`<h5>Archivos adjuntos</h5>${adjH}`:''}
-  <p class="pres">Resultado: <b class="${S.resultado==='Conforme'?'ok':S.resultado==='No conforme'?'no':'obs'}">${esc(S.resultado)}</b></p>${S.conclusion?`<h5>Conclusión</h5><p>${esc2(S.conclusion)}</p>`:''}
+  <p class="pres">Resultado: <b class="${S.resultado==='Conforme'?'ok':S.resultado==='No conforme'?'no':'obs'}">${esc(S.resultado)}</b></p>${S.conclusion?`<h5>Conclusión</h5>${par(S.conclusion)}`:''}
   <div class="pfirma">${F&&F.png?`<img src="${F.png}" alt="Firma">`:'<div class="nofirma"></div>'}<i></i><b>${esc(S.resp||'Responsable técnico')}</b><span>Auditoría de obra</span>${F&&F.at?`<small>Firmado el ${new Date(F.at).toLocaleString('es-AR')}${S.ver>1?' · versión '+S.ver:''}</small>`:''}</div>
   <p class="pfoot">Documento emitido con Nexo · ${esc(S.titulo)} · ${esc(S.num)}</p></div>`;
 }
@@ -3112,8 +3118,8 @@ const CHG={
   infFoto:async(v,el)=>{readInf();for(const f of [...(el.files||[])]){const r=await readFile(f);if(r)INFD.fotos.push(r.id)}sheetInformeForm()},
   afObra:v=>{readAF();AF.obra=v;AF.docs=AF.docs.filter(x=>!x.doc);AF.certId=null;sheetAudForm()},
   afCert:v=>{readAF();const o=findO(AF.obra);const c=o.cert.find(x=>x.id===v);AF.certId=c?c.id:null;if(c){AF.etapa=c.etapa;const pl=DOCS.find(x=>x.obra===o&&x.estado==='vigente'&&docItems(x).some(i=>i.card.task===c.task));if(pl){AF.plano=pl.nombre;AF.rev=pl.ver}}sheetAudForm()},
-  afFoto:async(v,el)=>{readAF();for(const f of [...(el.files||[])]){const r=await readFile(f);if(r)AF.fotos.push(r.id)}sheetAudForm()},
-  afAdj:async(v,el)=>{readAF();for(const f of [...(el.files||[])]){const r=await readFile(f);if(r)AF.adjuntos.push(r.id)}sheetAudForm()},
+  afFoto:async(v,el)=>{readAF();for(const f0 of [...(el.files||[])]){const f=await heicAJpg(f0);const r=await readFile(f);if(r)AF.fotos.push(r.id)}sheetAudForm()},
+  afAdj:async(v,el)=>{readAF();for(const f0 of [...(el.files||[])]){const f=await heicAJpg(f0);const r=await readFile(f);if(r)AF.adjuntos.push(r.id)}sheetAudForm()},
   afExt:async(v,el)=>{readAF();for(const f of [...(el.files||[])]){const r=await readFile(f);if(r)AF.docs.push({nombre:f.name.replace(/\.[^.]+$/,''),rev:'',doc:null,file:r.id})}sheetAudForm()},
   ecasc:(v,el)=>{ECASC=el.checked},
   eStart:(v,el)=>{const o=findO(EOID),L=EMODO==='base'?o.base:o.tasks,t=L.find(x=>x.id===el.dataset.id);if(!v)return;moverTarea(L,t,nextWork(d(v)),EMODO!=='base');draw();sheetEditor()},
