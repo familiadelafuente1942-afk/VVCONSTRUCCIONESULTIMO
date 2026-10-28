@@ -93,7 +93,7 @@ function audSan(A) {
         secciones: (Array.isArray(d.secciones) ? d.secciones : []).slice(0, 8).map((q) => ({ h: S(q.h, 80), texto: q.texto != null ? S(q.texto, 800) : undefined,
           lista: Array.isArray(q.lista) ? q.lista.slice(0, 20).map((t) => S(t, 400)) : undefined,
           tabla: q.tabla && Array.isArray(q.tabla.cols) ? { cols: q.tabla.cols.slice(0, 5).map((t) => S(t, 40)), rows: (Array.isArray(q.tabla.rows) ? q.tabla.rows : []).slice(0, 25).map((r) => (Array.isArray(r) ? r : []).slice(0, 5).map((t) => S(t, 700))) } : undefined })),
-        firmas: (Array.isArray(d.firmas) ? d.firmas : []).slice(0, 3).map((f) => [S(f && f[0], 60), S(f && f[1], 80)]) } };
+        fotos: (Array.isArray(d.fotos) ? d.fotos : []).filter((u) => /^https:\/\//.test(String(u))).slice(0, 8).map((u) => S(u, 600)), firmas: (Array.isArray(d.firmas) ? d.firmas : []).slice(0, 3).map((f) => [S(f && f[0], 60), S(f && f[1], 80)]) } };
   });
   return { k: { prox: Number(K.prox) || 0, rev: Number(K.rev) || 0, cert: Number(K.cert) || 0 }, l };
 }
@@ -327,6 +327,47 @@ export default async function handler(req, res) {
     }
 
     // ===== resumen de tarjetas abiertas (lo publica NEXO 2 para la app interna de seguimiento; solo se lee desde allá) =====
+    if (typeof b.op === "string" && b.op.startsWith("aud_") && b.op !== "aud_fotos_save") {
+      const obra = String(b.obra || "");
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const clave = "audreg_" + obra;
+      if (b.op === "aud_list") { const v = await leer(H, clave); res.status(200).json({ ok: true, items: (v && v.items) || [] }); return; }
+      const cr = b.cred || {};
+      const quien = cr.rol === "dir" && dirOk(cr.codigo) ? "dir" : cr.rol === "aud" && norm(cr.codigo) && norm((cods.obras[obra] || {}).a) === norm(cr.codigo) ? "aud" : "";
+      if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código para guardar el acta." }); return; }
+      const S = (x, n) => String(x == null ? "" : x).slice(0, n);
+      if (b.op === "aud_save") {
+        const q = b.rec || {}; const D = q.data || {};
+        const id = String(q.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 30);
+        if (!id || !["sup", "rev", "cert"].includes(q.tipo)) { res.status(400).json({ error: "Acta inválida" }); return; }
+        const fotos = [];
+        for (const u of (Array.isArray(D.fotos) ? D.fotos : []).slice(0, 8)) {
+          const s = String(u || "");
+          if (s.startsWith(NEW_PUB)) { fotos.push(s); continue; }
+          const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(s);
+          if (!m || m[2].length > 900000) continue;
+          const ext = m[1] === "jpeg" ? "jpg" : m[1];
+          const path = `${obra}/aud-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+          const subir = () => fetch(`${URL_BASE}/storage/v1/object/nexo2-fotos/${path}`, { method: "POST", headers: { apikey: sk, Authorization: "Bearer " + sk, "Content-Type": "image/" + m[1], "x-upsert": "true" }, body: Buffer.from(m[2], "base64") });
+          let r = await subir();
+          if (!r.ok) { await fetch(`${URL_BASE}/storage/v1/bucket`, { method: "POST", headers: H, body: JSON.stringify({ id: "nexo2-fotos", name: "nexo2-fotos", public: true }) }); r = await subir(); }
+          if (r.ok) fotos.push(`${NEW_PUB}${path}`);
+        }
+        const rec = { id, tipo: q.tipo, num: S(q.num, 30), fecha: Math.min(4e12, Math.max(0, Number(q.fecha) || 0)), resultado: S(q.resultado, 40), editado: Date.now(), por: quien,
+          data: { periodo: S(D.periodo, 200), presentes: S(D.presentes, 200), resultado: S(D.resultado, 40), conclusion: S(D.conclusion, 1500), responsable: S(D.responsable, 80), etapa: S(D.etapa, 160), plano: S(D.plano, 80), rev: S(D.rev, 20), directiva: S(D.directiva, 1500), ejecutado: S(D.ejecutado, 80), certId: S(D.certId, 40), supId: S(D.supId, 40),
+            obs: (Array.isArray(D.obs) ? D.obs : []).slice(0, 40).map((x) => ({ desc: S(x.desc, 800), sol: S(x.sol, 800), sector: S(x.sector, 100), crit: S(x.crit, 20) })),
+            interf: (Array.isArray(D.interf) ? D.interf : []).slice(0, 20).map((x) => S(x, 600)),
+            docs: (Array.isArray(D.docs) ? D.docs : []).slice(0, 30).map((x) => ({ nombre: S(x.nombre, 200), rev: S(x.rev, 20), doc: S(x.doc, 40) })), fotos } };
+        const v = await leer(H, clave); const items = ((v && v.items) || []).filter((x) => x.id !== id); items.push(rec);
+        await escribir(H, clave, { items: items.slice(-400) });
+        res.status(200).json({ ok: true, rec }); return;
+      }
+      if (b.op === "aud_del") {
+        const v = await leer(H, clave); const id = String(b.id || "");
+        await escribir(H, clave, { items: ((v && v.items) || []).filter((x) => x.id !== id) });
+        res.status(200).json({ ok: true }); return;
+      }
+    }
     if (b.op === "aud_fotos_save") {
       const obra = String(b.obra || "");
       if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
