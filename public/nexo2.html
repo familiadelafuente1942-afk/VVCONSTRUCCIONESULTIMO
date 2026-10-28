@@ -1730,6 +1730,7 @@ class PdfDoc{
   rect(x,y,w,h,fill,stroke){if(fill)this.c.push(`${this.rgb(fill)} rg ${x.toFixed(1)} ${(this.H-y-h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f`);if(stroke)this.c.push(`${this.rgb(stroke)} RG 0.6 w ${x.toFixed(1)} ${(this.H-y-h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re S`)}
   line(x1,y1,x2,y2,col='#d9d4ca',w=.6){this.c.push(`${this.rgb(col)} RG ${w} w ${x1.toFixed(1)} ${(this.H-y1).toFixed(1)} m ${x2.toFixed(1)} ${(this.H-y2).toFixed(1)} l S`)}
   image(img,x,y,w,h){this.imgs.push(img);const n=this.imgs.length;this.c.push(`q ${w.toFixed(1)} 0 0 ${h.toFixed(1)} ${x.toFixed(1)} ${(this.H-y-h).toFixed(1)} cm /Im${n} Do Q`)}
+  imageCover(img,x,y,w,h){this.imgs.push(img);const n=this.imgs.length,s=Math.max(w/img.w,h/img.h),dw=img.w*s,dh=img.h*s,dx=x+(w-dw)/2,dy=y+(h-dh)/2;this.c.push(`q ${x.toFixed(1)} ${(this.H-y-h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re W n ${dw.toFixed(1)} 0 0 ${dh.toFixed(1)} ${dx.toFixed(1)} ${(this.H-dy-dh).toFixed(1)} cm /Im${n} Do Q`)}
   build(){
     const enc=new TextEncoder(),chunks=[],offs=[];let len=0;
     const push=x=>{const b=typeof x==='string'?Uint8Array.from(x,ch=>ch.charCodeAt(0)&255):x;chunks.push(b);len+=b.length};
@@ -1768,16 +1769,24 @@ async function docPDF(doc){
   const head=h=>{ensure(40);P.y+=6;P.rect(L,P.y,3,12,GOLD);P.text(L+10,P.y+1,h.toUpperCase(),9,true,INK);P.y+=22};
   const imgs=await Promise.all(doc.secciones.flatMap(s=>s.fotos||[]).map(id=>FILES[id]?toJpeg(FILES[id].url):Promise.resolve(null)));let ii=0;
   for(const s of doc.secciones){
-    if(s.tabla){head(s.h);const w=s.tabla.w,xs=w.reduce((a,v,i)=>(a.push((a[i-1]??L)+(i?w[i-1]*CW:0)),a),[]);
+    if(s.obs){head(s.h);const CR={Alta:'#b5372d',Media:'#a0611f',Baja:'#7a756d'};
+      s.obs.forEach((o,k)=>{ensure(16+34);P.rect(L,P.y,CW,16,'#f4f0e8');P.text(L+8,P.y+4.5,'OBSERVACION '+(k+1),7.5,true,INK);const sec='Sector / item: '+(o.sector||'-');P.text(L+84,P.y+4.5,sec,8,false,GREY);const cr=o.crit?'Criticidad: '+o.crit:'';if(cr)P.text(R-8-tw(cr,8,true),P.y+4.5,cr,8,true,CR[o.crit]||INK);P.y+=21;
+        const par=(txt,bold)=>String(txt||'').split('\n').map(x=>x.trim()).filter(Boolean).forEach(p=>{wrapTxt(p,9,bold,CW-20).forEach(ln=>{if(P.y+11.5>bottom)P.newPage();P.text(L+10,P.y,ln,9,bold);P.y+=11.5});P.y+=2.5});
+        par(o.desc,false);if(o.sol){P.y+=2;if(P.y+24>bottom)P.newPage();P.text(L+10,P.y,'Posible solucion',8.5,true,GOLD);P.y+=12;par(o.sol,false)}
+        P.y+=3;P.line(L,P.y,R,P.y,LINE);P.y+=5});P.y+=1}
+    if(s.tabla&&!s.obs){head(s.h);const w=s.tabla.w,xs=w.reduce((a,v,i)=>(a.push((a[i-1]??L)+(i?w[i-1]*CW:0)),a),[]);
       const hdr=()=>{P.rect(L,P.y,CW,18,'#f1ede5');s.tabla.cols.forEach((c,i)=>P.text(xs[i]+6,P.y+5,c.toUpperCase(),7,true,GREY));P.y+=20};hdr();
       s.tabla.rows.forEach(row=>{const cells=row.map((v,i)=>wrapTxt(v,8.5,false,w[i]*CW-12));const hh=Math.max(...cells.map(c=>c.length))*11.5+10;if(P.y+hh>bottom){P.newPage();hdr()}cells.forEach((c,i)=>c.forEach((ln,n)=>{const b=/^(Descripción|Posible solución|Recomendación)/.test(ln);P.text(xs[i]+6,P.y+5+n*11.5,ln,8.5,b)}));P.y+=hh;P.line(L,P.y,R,P.y,LINE)});P.y+=8}
-    if(s.lista){head(s.h);s.lista.forEach((it,n)=>{const ls=wrapTxt((n+1)+'. '+it,9,false,CW-14);ensure(ls.length*12+4);ls.forEach(ln=>{P.text(L+8,P.y,ln,9);P.y+=12});P.y+=4})}
+    if(s.lista){head(s.h);const tx=s.lista.map((it,n)=>(n+1)+'. '+it).join('   ');const ls=wrapTxt(tx,8.5,false,CW-10);ls.forEach(ln=>{ensure(11.5);P.text(L+8,P.y,ln,8.5,false,GREY);P.y+=11.5});P.y+=4}
     if(s.texto!=null){head(s.h);wrapTxt(s.texto||'—',9.5,false,CW).forEach(ln=>{ensure(13);P.text(L,P.y,ln,9.5);P.y+=13});P.y+=6}
-    if(s.fotos){head(s.h);const cw=(CW-16)/3;s.fotos.forEach((id,n)=>{const im=imgs[ii++];if(!im)return;const h=cw*im.h/im.w;if(n%3===0)ensure(Math.min(h,170)+10);const x=L+(n%3)*(cw+8);const hh=Math.min(h,170),ww=hh*im.w/im.h;P.image(im,x,P.y,ww,hh);if(n%3===2||n===s.fotos.length-1)P.y+=hh+10});if(!s.fotos.length){P.text(L,P.y,'Sin fotos adjuntas.',9,false,GREY);P.y+=14}}
+    if(s.fotos){head(s.h);const N=s.fotos.length,cols=N<=2?2:N<=4?4:N<=6?3:4,gap=8,cw=(CW-gap*(cols-1))/cols,ph=cols>=4?cw*.98:cols===3?cw*.8:cw*.66;
+      const ims=s.fotos.map(()=>imgs[ii++]).filter(Boolean);
+      ims.forEach((im,n)=>{const c=n%cols;if(c===0)ensure(ph+8);P.imageCover(im,L+c*(cw+gap),P.y,cw,ph);if(c===cols-1||n===ims.length-1)P.y+=ph+gap});
+      if(!ims.length){P.text(L,P.y,'Sin fotos adjuntas.',9,false,GREY);P.y+=14}else P.y+=2}
   }
-  if(doc.resultado){ensure(30);P.y+=6;P.text(L,P.y,'RESULTADO: ',10,true,INK);P.text(L+tw('RESULTADO: ',10,true),P.y,doc.resultado.toUpperCase(),10,true,doc.resultado==='Conforme'?'#2f7d50':doc.resultado==='No conforme'?'#b5372d':'#a0611f');P.y+=22}
+  if(doc.resultado){ensure(30);P.y+=6;P.text(L,P.y,'RESULTADO: ',10,true,INK);P.text(L+tw('RESULTADO: ',10,true),P.y,doc.resultado.toUpperCase(),10,true,doc.resultado==='Conforme'?'#2f7d50':doc.resultado==='No conforme'?'#b5372d':'#a0611f');P.y+=18}
   if(doc.conclusion){head('Conclusión');wrapTxt(doc.conclusion,9.5,false,CW).forEach(ln=>{ensure(13);P.text(L,P.y,ln,9.5);P.y+=13});P.y+=6}
-  if(doc.firmas){ensure(70);P.y+=34;const cw=(CW-40)/2;doc.firmas.forEach(([n,c],j)=>{const x=L+j*(cw+40);P.line(x,P.y,x+cw,P.y,'#9a948a');P.text(x+(cw-tw(n||' ',8.5,true))/2,P.y+6,n||' ',8.5,true);P.text(x+(cw-tw(c,8,false))/2,P.y+18,c,8,false,GREY)});P.y+=36}
+  if(doc.firmas){ensure(44);P.y+=12;const cw=(CW-40)/2;doc.firmas.forEach(([n,c],j)=>{const x=L+j*(cw+40);P.line(x,P.y,x+cw,P.y,'#9a948a');P.text(x+(cw-tw(n||' ',8.5,true))/2,P.y+6,n||' ',8.5,true);P.text(x+(cw-tw(c,8,false))/2,P.y+18,c,8,false,GREY)});P.y+=30}
   const foot=`Documento emitido con Nexo · ${doc.titulo} · ${doc.num}`;
   P.pages.forEach((c,i)=>{P.c=c;P.text((P.W-tw(foot,7.5))/2,P.H-30,foot,7.5,false,GREY);const pg=`${i+1}/${P.pages.length}`;P.text(R-tw(pg,7.5),P.H-30,pg,7.5,false,GREY)});
   return P.build();
@@ -1838,8 +1847,8 @@ renumber();
 /* documento imprimible de cada registro */
 function audDoc(a){
   const T=AUD_TIPO[a.tipo],D=a.data,base={titulo:T.t,sub:'Auditoría de obra · '+ORG,obra:a.obra.nombre,num:a.num,fecha:fmtN(a.fecha),resultado:a.resultado,conclusion:D.conclusion,firmas:[[D.responsable||'Responsable técnico','Auditoría de obra'],['','Jefatura de Obra / Dirección de Obra']]};
-  const obsT=D.obs&&D.obs.length?[{h:a.tipo==='sup'?'Observaciones de la supervisión':'Observaciones',tabla:{cols:['N°','Observación','Sector / ítem','Criticidad'],w:[.07,.6,.2,.13],rows:D.obs.map((x,i)=>[String(i+1),'Descripción\n'+x.desc+(x.sol?'\nPosible solución\n'+x.sol:''),x.sector||'—',x.crit||'—'])}}]:[{h:'Observaciones',texto:'Sin observaciones.'}];
-  const fotos={h:'Fotos',fotos:D.fotos||[]};const adj=(D.adjuntos||[]).length?[{h:'Archivos adjuntos',lista:D.adjuntos.map(id=>FILES[id]?.name||'Archivo')}]:[];
+  const obsT=D.obs&&D.obs.length?[{h:a.tipo==='sup'?'Observaciones de la supervisión':'Observaciones',obs:D.obs.map(x=>({desc:x.desc,sol:x.sol,sector:x.sector,crit:x.crit})),tabla:{cols:['N°','Observación','Sector / ítem','Criticidad'],w:[.07,.6,.2,.13],rows:D.obs.map((x,i)=>[String(i+1),'Descripción\n'+x.desc+(x.sol?'\nPosible solución\n'+x.sol:''),x.sector||'—',x.crit||'—'])}}]:[{h:'Observaciones',texto:'Sin observaciones.'}];
+  const fotos={h:'Fotos',fotos:D.fotos||[]};const adjR=(D.adjuntos||[]).filter(id=>!(D.fotos||[]).includes(id));const adj=adjR.length?[{h:'Archivos adjuntos',lista:adjR.map(id=>FILES[id]?.name||'Archivo')}]:[];
   if(a.tipo==='sup')return{...base,campos:[['Período',D.periodo],['Presentes',D.presentes]],secciones:[...obsT,...(D.interf&&D.interf.length?[{h:'Interferencias detectadas',lista:D.interf}]:[]),fotos,...adj]};
   if(a.tipo==='rev')return{...base,campos:[['Etapa a ejecutar',D.etapa],['Documentos revisados',String(D.docs.length)]],secciones:[{h:'Documentos revisados',tabla:{cols:['Plano / documento','Revisión','Origen'],w:[.62,.14,.24],rows:D.docs.map(x=>{const dd=x.doc&&DOCS.find(y=>y.id===x.doc);return[x.nombre,x.rev||'—',dd&&dd.por==='Recibido por fuera de la app'||x.file?'Recibido por fuera de la app':'Panel del estudio']})}},...obsT,fotos,...adj]};
   return{...base,campos:[['Etapa certificada',D.etapa],['Ejecutado por',D.ejecutado||ORG],['Plano de referencia',D.plano],['Versión / revisión',D.rev]],intro:`Se deja constancia de que la etapa ${D.etapa} de la obra ${a.obra.nombre} fue ejecutada conforme al plano de referencia indicado y a la directiva impartida por la Jefatura de Obra que se transcribe a continuación.`,secciones:[{h:'Directiva de la Jefatura de Obra',texto:D.directiva||'—'},...obsT,fotos,...adj]};
