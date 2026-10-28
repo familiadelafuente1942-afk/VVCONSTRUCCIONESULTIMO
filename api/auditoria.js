@@ -58,7 +58,7 @@ async function cargarObras(H) {
   if (rs.ok) for (const s of await rs.json()) nombres[String(s.clave).slice(5)] = (s.valor && s.valor.nombre) || "";
   return regs.map((x) => {
     const nid = String(x.clave).slice(7);
-    const items = ((x.valor && x.valor.items) || []).filter((a) => a && a.id && a.tipo).slice().sort((p, q) => (q.fecha || 0) - (p.fecha || 0));
+    const items = ((x.valor && x.valor.items) || []).filter((a) => a && a.id && a.tipo).slice().sort((p, q) => (q.fecha || 0) - (p.fecha || 0) || String(q.num).localeCompare(String(p.num), "es", { numeric: true }));
     return { nid, nombre: nombres[nid] || nid, items };
   }).filter((o) => o.items.length);
 }
