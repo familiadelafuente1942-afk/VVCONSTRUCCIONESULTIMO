@@ -1729,9 +1729,6 @@ function vInicio(){
   const hitosHtml=HH.length?`<div class="g-hitos card"><span class="eyebrow">Hitos · cómo venimos</span><div class="minis">${HH.map(miniHito).join('')}</div></div>`:'';
   const fij=col('agenda').filter(a=>a.fijar&&!a.hecho).sort((a,b)=>a.fecha-b.fecha);
   return `<div><span class="eyebrow">${esc(S.quien)}</span><h1>Inicio</h1></div>
-  <div class="kpis k3"><button class="kpi ${venc.length?'k-rojo':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${venc.length}</b><span class="kl">tarjetas vencidas</span></button>
-  <button class="kpi ${porv.length?'k-naranja':''}" data-act="irNxTodo"><span class="kgo">ver ›</span><b>${porv.length}</b><span class="kl">por vencer</span></button>
-  <button class="kpi ${pg?'k-rojo':''}" data-act="tab" data-k="tareas"><span class="kgo">ver ›</span><b>${pg}</b><span class="kl">tareas pendientes</span></button></div>
   <div class="cA" id="cA1">
   ${venc.length?`<div class="g-venc card"><span class="eyebrow">Tarjetas vencidas · nos deben (NEXO 2)</span><div class="minis">${venc.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
   ${porv.length?`<div class="g-porv card"><span class="eyebrow">Tarjetas por vencer</span><div class="minis">${porv.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
