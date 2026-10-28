@@ -87,7 +87,7 @@ function audSan(A) {
   const K = A.k || {};
   const l = (Array.isArray(A.l) ? A.l : []).slice(0, 60).map((x) => {
     const d = x.doc || {};
-    return { id: S(x.id, 20), tipo: ["sup", "rev", "cert"].includes(x.tipo) ? x.tipo : "sup", num: S(x.num, 30), fecha: Number(x.fecha) || 0,
+    return { nf: Math.min(4, Number(x.nf) || 0), id: S(x.id, 20), tipo: ["sup", "rev", "cert"].includes(x.tipo) ? x.tipo : "sup", num: S(x.num, 30), fecha: Number(x.fecha) || 0,
       doc: { titulo: S(d.titulo, 80), sub: S(d.sub, 80), obra: S(d.obra, 80), num: S(d.num, 30), fecha: S(d.fecha, 30), resultado: S(d.resultado, 40), conclusion: S(d.conclusion, 600), intro: S(d.intro, 600),
         campos: (Array.isArray(d.campos) ? d.campos : []).slice(0, 8).map((c) => [S(c && c[0], 60), S(c && c[1], 200)]),
         secciones: (Array.isArray(d.secciones) ? d.secciones : []).slice(0, 8).map((q) => ({ h: S(q.h, 80), texto: q.texto != null ? S(q.texto, 800) : undefined,
@@ -327,6 +327,19 @@ export default async function handler(req, res) {
     }
 
     // ===== resumen de tarjetas abiertas (lo publica NEXO 2 para la app interna de seguimiento; solo se lee desde allá) =====
+    if (b.op === "aud_fotos_save") {
+      const obra = String(b.obra || "");
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const cr = b.cred || {};
+      if (!(cr.rol === "dir" && dirOk(cr.codigo))) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código de Dirección." }); return; }
+      const m = {}; let tot = 0;
+      for (const [id, arr] of Object.entries(b.fotos && typeof b.fotos === "object" ? b.fotos : {}).slice(0, 12)) {
+        if (!/^[A-Za-z0-9_-]{1,20}$/.test(id) || !Array.isArray(arr)) continue;
+        m[id] = arr.filter((u) => /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(String(u)) && String(u).length < 150000).slice(0, 4).filter((u) => (tot += String(u).length) < 3000000).map(String);
+      }
+      await escribir(H, "audfot_" + obra, { t: Date.now(), fotos: m });
+      res.status(200).json({ ok: true }); return;
+    }
     if (b.op === "snap_save") {
       const obra = String(b.obra || "");
       if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }

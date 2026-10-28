@@ -285,6 +285,13 @@ export default async function handler(req, res) {
     }
 
     // ---- renders de la app anterior de V+V (solo lectura): se casan con las obras por nombre ----
+    if (b.op === "aud_fotos") {
+      const nid = String(b.nexo || "");
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(nid)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const v = await leer(H, "audfot_" + nid);
+      const m = (v && v.fotos) || {};
+      res.status(200).json({ ok: true, fotos: m[String(b.id || "")] || [] }); return;
+    }
     if (b.op === "renders_obras") {
       const OLD = "https://bxhjgxzvayszfqwlwinq.supabase.co", OK = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
       const HO = { apikey: OK, Authorization: "Bearer " + OK };
