@@ -43,7 +43,7 @@ const ESTADOS = ["pend", "curso", "hecha"];
 
 // Campos permitidos por colección
 const COLS = {
-  obras: (q) => ({ nombre: str(q.nombre, 80), orden: num(q.orden, 0, 999), nota: str(q.nota, 400), etapa: str(q.etapa, 120), nexo: ident(q.nexo) }),
+  obras: (q) => ({ nombre: str(q.nombre, 80), orden: num(q.orden, 0, 999), nota: str(q.nota, 400), etapa: str(q.etapa, 120), nexo: ident(q.nexo), capataz: str(q.capataz, 60) }),
   hitos: (q) => ({ obra: ident(q.obra), titulo: str(q.titulo, 120), fecha: num(q.fecha, 0, 4e12), tipo: ["hormigonado", "etapa", "entrega", "otro"].includes(q.tipo) ? q.tipo : "otro", hecho: !!q.hecho, nota: str(q.nota, 300), prevista: num(q.prevista, 0, 4e12), motivo: str(q.motivo, 300) }),
   registros: (q) => ({
     obra: ident(q.obra), tipo: q.tipo === "retraso" ? "retraso" : "hecho", titulo: str(q.titulo, 200), fecha: num(q.fecha, 0, 4e12),
@@ -151,7 +151,7 @@ export default async function handler(req, res) {
       const obras = await leerCol(H, "obras");
       const out = {};
       // obras de NEXO 2 que no están vinculadas a mano: se casan por nombre exacto (sin tildes ni mayúsculas)
-      const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").replace(/(^|[^0-9])0+(?=[0-9])/g, "$1");
       let snaps = [];
       try {
         const rs = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=like.snap_*`, { headers: H });
@@ -263,7 +263,7 @@ export default async function handler(req, res) {
       const leerOld = async (k) => { const r = await fetch(`${OLD}/rest/v1/bco_storage?key=eq.${k}&select=value&limit=1`, { headers: HO }); if (!r.ok) throw new Error("old " + r.status); const rows = await r.json(); let v = rows[0] && rows[0].value; if (typeof v === "string") { try { v = JSON.parse(v); } catch { v = null; } } return v; };
       let rend = null, obOld = null;
       try { [rend, obOld] = await Promise.all([leerOld("vv_renders"), leerOld("vv_obras")]); } catch (e) { res.status(200).json({ ok: true, renders: {}, error: String(e.message || e) }); return; }
-      const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+      const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").replace(/(^|[^0-9])0+(?=[0-9])/g, "$1");
       const obras = await leerCol(H, "obras");
       const out = {};
       for (const ov of Array.isArray(obOld) ? obOld : []) {

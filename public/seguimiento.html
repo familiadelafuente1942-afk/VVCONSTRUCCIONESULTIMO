@@ -1414,6 +1414,12 @@ header.top{padding-inline:20px!important}
 @media (min-width:1100px){.obras-l{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
 .hero2 .hs.sinfoto{background:#000 url(/seguimiento-icon.png) center/56px no-repeat}
 .ohead .bigpct{margin-left:auto}
+.capbox{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:12px;background:var(--surface)}
+.capbox .capn{display:block;font-family:var(--display);font-size:24px;line-height:1.15;margin-top:2px}
+.capchip{display:flex;flex-direction:column;align-items:flex-start;gap:0;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:12px;background:var(--surface);color:var(--fg);padding:6px 14px;text-align:left}
+.capchip span{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.capchip b{font-family:var(--display);font-size:22px;line-height:1.15}
+.capline{font-size:13px}.capline b{font-family:var(--display);font-size:17px}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1684,7 +1690,8 @@ function filaObraRes(o){const T=tareasDe('obra:'+o.id),h=T.filter(t=>t.estado===
   const dots=I&&I.dots?[['rojo','vencidas'],['naranja','urgentes'],['amarillo','pedir ya'],['verde','ventana abierta'],['ok','completas']].map(([k,l])=>I.dots[k]?`<span class="chip" title="${l}">${k==='ok'?'<b class="t-verde">✓</b>':`<span class="dot c-${k}"></span>`}${I.dots[k]}</span>`:'').join(''):'';
   const g=I?`<span><span>Entrega prevista</span><b class="${I.desvio>0?'t-naranja':''}">${fmt(I.entrega)}${I.desvio>0?' (+'+I.desvio+' sem)':''}</b></span><span><span>Vencidas</span><b class="${I.vencidas?'t-rojo':''}">${plural(I.vencidas,'tarjeta','tarjetas')}</b></span><span><span>Definiciones</span><b>${I.defsOk} de ${I.defsTot} tareas</b></span>`
    :`<span><span>Etapa</span><b>${esc(etapaDe(o)||'Sin definir')}</b></span><span><span>Próxima tarea</span><b>${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></span><span><span>Atrasadas</span><b class="${at?'t-rojo':''}">${plural(at,'tarea','tareas')}</b></span>`;
-  return `<button class="orow2" data-act="obra" data-id="${o.id}"><span class="o2-img${foto?'':' sinfoto'}" ${foto?`style="background-image:url('${foto}')"`:''}><span class="o2-pct">${pct}%</span></span><span class="info"><span class="ohd"><b>${esc(o.nombre)}</b>${at?`<span class="chip" style="color:var(--rojo)">${at} atras.</span>`:''}${nxPend(o)?`<span class="chip gold">${nxPend(o)} en NEXO</span>`:''}</span>${I?`<span class="muted small">${esc(I.modelo)}</span><span class="muted small">Jefatura: ${esc(I.jefe)} · Estudio: ${esc(I.estudio)}</span>`:`<span class="muted small">${plural(n,'obrero','obreros')}</span>`}<span class="ogrid">${g}</span>${dots?`<span class="ddots">${dots}</span>`:''}${I?`<span class="muted small">Ahora: <b style="color:var(--fg)">${esc(etapaDe(o)||I.etapa||'Sin definir')}</b> · Próxima tarea: <b style="color:var(--fg)">${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></span>`:''}</span></button>`}
+  const sinF=!foto?`<span class="muted small" style="font-style:italic">${!I?'Sin render: no encontré esta obra en NEXO 2 con el mismo nombre.':I.fotosLoc>0?'NEXO 2 tiene '+plural(I.fotosLoc,'render guardado','renders guardados')+' solo en el aparato, sin subir a la nube.':'NEXO 2 no tiene renders cargados para esta obra.'}</span>`:'';
+  return `<button class="orow2" data-act="obra" data-id="${o.id}"><span class="o2-img${foto?'':' sinfoto'}" ${foto?`style="background-image:url('${foto}')"`:''}><span class="o2-pct">${pct}%</span></span><span class="info"><span class="ohd"><b>${esc(o.nombre)}</b>${at?`<span class="chip" style="color:var(--rojo)">${at} atras.</span>`:''}${nxPend(o)?`<span class="chip gold">${nxPend(o)} en NEXO</span>`:''}</span>${I?`<span class="capline">Capataz de obra: <b>${o.capataz?esc(o.capataz):'—'}</b></span><span class="muted small">${esc(I.modelo)}</span><span class="muted small">Jefatura: ${esc(I.jefe)} · Estudio: ${esc(I.estudio)}</span>`:`<span class="capline">Capataz de obra: <b>${o.capataz?esc(o.capataz):'—'}</b></span><span class="muted small">${plural(n,'obrero','obreros')}</span>`}<span class="ogrid">${g}</span>${sinF}${dots?`<span class="ddots">${dots}</span>`:''}${I?`<span class="muted small">Ahora: <b style="color:var(--fg)">${esc(etapaDe(o)||I.etapa||'Sin definir')}</b> · Próxima tarea: <b style="color:var(--fg)">${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></span>`:''}</span></button>`}
 function miniNx(o,c){const k=c.color==='rojo'?'rojo':c.color==='naranja'?'naranja':'amarillo',rs=[...new Set(c.pend.map(i=>i.resp).filter(Boolean))].join(', ');
   return `<button class="mini" data-act="irNx" data-id="${o.id}"><i class="dot2 c-${k}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${esc(c.tarea)}</span><span class="m2">${c.tipo==='mat'?'Materiales':'Documentación'}${rs?' · debe '+esc(rs):''}</span><span class="m3">${c.limite?fmt(c.limite):''}</span></button>`}
 function miniHito(h){const e=hitoEst(h),pv=h.prevista||h.fecha,falta=Math.round((pv-TODAY)/DAY),k=e.c==='futuro'?'verde':e.c;
@@ -1787,11 +1794,11 @@ function vObra(){
    <div style="display:flex;flex-direction:column;gap:8px">${h.length?h.map(x=>hitoCard(x,'')).join(''):'<div class="card muted">Todavía no hay fechas clave.</div>'}</div>`
   :S.otab==='regs'?vRegs(o)
   :S.otab==='adic'?vAdic(o)
-  :S.otab==='gente'?`<button class="btn sm gold" data-act="nuevaP" data-obra="${o.id}" style="align-self:flex-start">+ Persona</button><div class="card">${listaGente(o.id)}</div>`
+  :S.otab==='gente'?`${capBox(o)}<button class="btn sm gold" data-act="nuevaP" data-obra="${o.id}" style="align-self:flex-start">+ Persona</button><div class="card">${listaGente(o.id)}</div>`
   :vNexoObra(o);
   const I=nx&&nx.info,pct=I?I.avance:(T.length?Math.round(T.filter(t=>t.estado==='hecha').length*100/T.length):0);
   return `<div class="ohead"><button class="back" data-act="volver">${BACK} Obras</button>${heroDosS(o)}<div class="sub-h" style="margin-top:8px;align-items:flex-end"><div><span class="eyebrow">${esc((I&&I.ubic)||'Obra')}</span><h1>${esc(o.nombre)}</h1></div><span class="bigpct">${pct}%</span></div>
-  <div><button class="btn sm ghost" data-act="editObra" data-id="${o.id}">Editar</button></div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn sm ghost" data-act="editObra" data-id="${o.id}">Editar</button><button class="capchip" data-act="editCap" data-id="${o.id}"><span>Capataz de obra</span><b>${o.capataz?esc(o.capataz):'Asignar'}</b></button></div>
   ${I?`<div class="bar"><i style="width:${I.avance}%"></i><s style="left:${I.plan||0}%"></s></div><span class="muted small">Avance real ${I.avance}% · según la base debería ir ${I.plan||0}% · etapa: ${esc(etapaDe(o)||I.etapa||'Sin definir')}</span><div class="dots">${I.ubic?`<span class="chip">${esc(I.ubic)}</span>`:''}<span class="chip gold">${esc(I.modelo)}</span><span class="chip">Jefatura: ${esc(I.jefe)}</span><span class="chip">Estudio: ${esc(I.estudio)}</span></div>`:''}</div>
   <div class="facts"><div class="fact"><span>Ahora · etapa</span><b>${esc(etapaDe(o)||'Sin definir')}</b></div><div class="fact"><span>Próxima tarea a arrancar</span><b>${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></div><div class="fact"><span>Obreros</span><b>${gente.length}</b></div><div class="fact"><span>Pendiente en NEXO 2</span><b class="${nxPend(o)?'t-rojo':''}">${nx?nxPend(o):'—'}</b></div></div>
   <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-act="otab" data-k="${k}" aria-selected="${S.otab===k}">${l}${k==='crono'&&at?` <span class="badge" style="position:static;background:var(--rojo);color:#fff;border-radius:999px;font-size:10px;padding:0 5px">${at}</span>`:''}</button>`).join('')}</div>${body}`;
@@ -1899,7 +1906,7 @@ function vGente(){
   <div class="card"><span class="eyebrow">Total de obreros</span><div style="font-family:var(--display);font-size:40px;line-height:1">${tot}</div>
   ${col('obras').map(o=>`<div class="nxrow sub-h" style="cursor:pointer" data-act="irObra" data-id="${o.id}" data-k="gente"><b>${esc(o.nombre)}</b><span class="muted small">${esc(etapaDe(o)||'sin etapa')}</span><span class="chip">${obreros(o.id).length}</span></div>`).join('')}</div>
   ${col('obras').map(o=>{const n=obreros(o.id).length;return `<div class="card"><div class="sub-h"><b style="font-size:17px">${esc(o.nombre)}</b><span class="chip">${plural(n,'obrero','obreros')}</span></div>
-   <div class="small" style="margin:6px 0"><span class="muted">Etapa actual:</span> <b>${esc(etapaDe(o)||'sin definir')}</b> <button class="dchip" data-act="editObra" data-id="${o.id}">cambiar</button></div>${listaGente(o.id)}<button class="btn sm" data-act="nuevaP" data-obra="${o.id}" style="margin-top:8px">+ Agregar</button></div>`}).join('')}`;
+   <div class="small" style="margin:6px 0"><span class="muted">Etapa actual:</span> <b>${esc(etapaDe(o)||'sin definir')}</b> <button class="dchip" data-act="editObra" data-id="${o.id}">cambiar</button></div>${capBox(o)}${listaGente(o.id)}<button class="btn sm" data-act="nuevaP" data-obra="${o.id}" style="margin-top:8px">+ Agregar</button></div>`}).join('')}`;
 }
 function vNexo(){
   const T=tareasDe('nexo').sort(ordenT),h=T.filter(t=>t.estado==='hecha').length;
@@ -2037,12 +2044,15 @@ function formSueldo(s){
   <label class="f" style="flex-direction:row;align-items:center;gap:10px;color:var(--fg)"><input id="f-pag" type="checkbox" ${s.pagado?'checked':''} style="width:22px;height:22px"> Ya está pagado</label>
   <label class="f">Nota (opcional)<input id="f-nota" value="${esc(s.nota||'')}"></label>${btns(s.id,'delS','Eliminar')}</form>`,'Sueldo');
 }
+function capBox(o){return `<div class="capbox"><div><span class="eyebrow">Capataz de obra</span><b class="capn">${o.capataz?esc(o.capataz):'<span class="muted">Sin asignar</span>'}</b></div><button class="btn sm ghost" data-act="editCap" data-id="${o.id}">${o.capataz?'Cambiar':'Asignar'}</button></div>`}
+function formCap(o){openSheet(`<span class="eyebrow">${esc(o.nombre)}</span><h2>Capataz de obra</h2><form class="frm" data-submit="cap"><input type="hidden" id="f-id" value="${o.id}"><label class="f">Nombre del capataz<input id="f-cap" value="${esc(o.capataz||'')}" placeholder="Ej: Humberto" autocomplete="off"></label><button class="btn gold full" type="submit">Guardar</button></form>`,'Capataz')}
 function formObra(o){
   o=o||{};
   openSheet(`<span class="eyebrow">Obras</span><h2>${o.id?'Editar obra':'Agregar obra'}</h2><form class="frm" data-submit="obra"><input type="hidden" id="f-id" value="${o.id||''}">
   <label class="f">Nombre<input id="f-nom" value="${esc(o.nombre||'')}"></label>
   <label class="f">Etapa actual de la obra<input id="f-etapa" value="${esc(o.etapa||'')}" placeholder="Ej: Estructura · platea" list="etapa-l"><datalist id="etapa-l"><option>Preliminares</option><option>Movimiento de suelo</option><option>Fundaciones</option><option>Estructura</option><option>Mampostería</option><option>Losa</option><option>Revoques</option><option>Pisos</option></datalist></label>
   <label class="f">Código de la obra en NEXO 2 (para traer lo que nos deben)<input id="f-nexo" value="${esc(o.nexo||'')}" placeholder="Ej: o1 (vacío si no está en NEXO 2)"></label>
+  <label class="f">Capataz de obra<input id="f-cap" value="${esc(o.capataz||'')}" placeholder="Ej: Humberto" autocomplete="off"></label>
   <label class="f">Nota (opcional)<input id="f-nota" value="${esc(o.nota||'')}"></label>${btns(o.id,'delO','Eliminar obra')}</form>`,'Obra');
 }
 function formAgenda(a,f){
@@ -2070,7 +2080,8 @@ const SUBMIT={
   persona(){const nom=val('f-nom').trim();if(!nom){toast('Poné el nombre',true);return}const id=val('f-id');guardar('personal',{...(id?byId('personal',id):{}),id:id||undefined,nombre:nom,rol:val('f-rol').trim(),obra:val('f-obra'),haciendo:val('f-hac').trim(),nota:val('f-nota').trim(),activo:true})},
   gasto(){const con=val('f-con').trim(),m=+val('f-monto');if(!con){toast('Poné el concepto',true);return}if(!(m>0)){toast('Poné el monto',true);return}const id=val('f-id');guardar('gastos',{id:id||undefined,concepto:con,monto:m,fecha:dt(val('f-fec'))||TODAY,de:val('f-de'),obra:val('f-obra'),cat:val('f-cat').trim()})},
   sueldo(){const m=+val('f-monto'),mes=val('f-mes');if(!mes){toast('Elegí el mes',true);return}if(!(m>0)){toast('Poné el monto',true);return}const id=val('f-id'),pag=$('#f-pag').checked;guardar('sueldos',{id:id||undefined,mes,monto:m,fecha:dt(val('f-fec'))||(pag?TODAY:0),pagado:pag,nota:val('f-nota').trim()})},
-  obra(){const n=val('f-nom').trim();if(!n){toast('Poné el nombre',true);return}const id=val('f-id');guardar('obras',{...(id?byId('obras',id):{}),id:id||undefined,nombre:n,etapa:val('f-etapa').trim(),nexo:val('f-nexo').trim(),nota:val('f-nota').trim(),orden:id?(byId('obras',id).orden||0):col('obras').length}).then(()=>cargarNexo())},
+  cap(){const id=val('f-id'),o=byId('obras',id);if(o)guardar('obras',{...o,capataz:val('f-cap').trim()})},
+  obra(){const n=val('f-nom').trim();if(!n){toast('Poné el nombre',true);return}const id=val('f-id');guardar('obras',{...(id?byId('obras',id):{}),id:id||undefined,nombre:n,etapa:val('f-etapa').trim(),nexo:val('f-nexo').trim(),capataz:val('f-cap').trim(),nota:val('f-nota').trim(),orden:id?(byId('obras',id).orden||0):col('obras').length}).then(()=>cargarNexo())},
   agenda(){const id=val('f-id'),f=dt(val('f-fec'));if(!f){toast('Elegí el día',true);return}const base={hora:val('f-hora')||'',quien:val('f-q'),lugar:val('f-lugar').trim()||'Nordelta',obra:val('f-obra'),motivo:val('f-mot').trim(),hecho:$('#f-hecho').checked,fijar:$('#f-fijar').checked};const rep=+val('f-rep')||0;
     if(id){guardar('agenda',{...byId('agenda',id),...base,fecha:f});return}
     for(let k=0;k<=rep;k++)guardar('agenda',{...base,fecha:f+k*7*DAY,hecho:k?false:base.hecho})}
@@ -2082,6 +2093,7 @@ function nivelSlider(){return `<div class="nv"><span aria-hidden="true">☀</spa
 document.addEventListener('input',e=>{const t=e.target;if(t&&t.classList&&t.classList.contains('nv-r')){try{window.__nivel(+t.value)}catch(x){}}});
 const A={
   irNxTodo:()=>{const o=col('obras').find(o=>nxDe(o)&&nxDe(o).cards.length);if(o){S.tab='obras';S.obra=o.id;S.otab='nexo';draw();window.scrollTo(0,0)}else toast('No hay tarjetas publicadas todavía')},
+  editCap:ds=>{const o=byId('obras',ds.id);if(o)formCap(o)},
   fijarAg:ds=>{const a=byId('agenda',ds.id);if(a)guardar('agenda',{...a,fijar:!a.fijar})},
   traerBit:()=>importarBitacora(true),
   traerNexo:()=>importarNexo(true),
