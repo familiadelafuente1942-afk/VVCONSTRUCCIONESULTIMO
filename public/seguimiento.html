@@ -1425,6 +1425,21 @@ header.top{padding-inline:20px!important}
 @media (min-width:1100px){.obras-l{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .obras-l .orow2{height:100%;min-height:210px}
 .obras-l .orow2 .o2-img{min-height:100%}
+/* fichas más compactas para ver todas sin desplazar */
+.obras-l{gap:8px}
+.obras-l .orow2{min-height:0!important;grid-template-columns:132px minmax(0,1fr)}
+.obras-l .orow2 .o2-img{min-height:100%}
+.obras-l .orow2 .o2-pct{font-size:15px;left:6px;bottom:6px}
+.obras-l .orow2 .info{padding:8px 10px;gap:3px}
+.obras-l .orow2 .ohd b{font-size:17px}
+.obras-l .orow2 .capline{font-size:12px}.obras-l .orow2 .capline b{font-size:15px}
+.obras-l .orow2 .small{font-size:11.5px;line-height:1.25}
+.obras-l .orow2 .ogrid{gap:5px}
+.obras-l .orow2 .ogrid>span{padding:3px 6px}
+.obras-l .orow2 .ogrid>span>span{font-size:9.5px}
+.obras-l .orow2 .ogrid b{font-size:12.5px}
+.capdots{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.obras-l .orow2 .capdots .ddots{gap:4px}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1682,7 +1697,7 @@ const agDe=f=>col('agenda').filter(a=>a.fecha===f).sort((a,b)=>(a.hora||'99')<(b
 const STAT={"o1": ["seg-obra-o1.jpg", "seg-obra-o1-1.jpg", "seg-obra-o1-2.jpg", "seg-obra-o1-3.jpg", "seg-obra-o1-4.jpg", "seg-obra-o1-5.jpg", "seg-obra-o1-6.jpg", "seg-obra-o1-7.jpg", "seg-obra-o1-8.jpg", "seg-obra-o1-9.jpg", "seg-obra-o1-10.jpg", "seg-obra-o1-11.jpg", "seg-obra-o1-12.jpg", "seg-obra-o1-13.jpg", "seg-obra-o1-14.jpg"], "o2": ["seg-obra-o2.jpg", "seg-obra-o2-1.jpg", "seg-obra-o2-2.jpg", "seg-obra-o2-3.jpg", "seg-obra-o2-4.jpg", "seg-obra-o2-5.jpg", "seg-obra-o2-6.jpg", "seg-obra-o2-7.jpg", "seg-obra-o2-8.jpg", "seg-obra-o2-9.jpg", "seg-obra-o2-10.jpg", "seg-obra-o2-11.jpg", "seg-obra-o2-12.jpg", "seg-obra-o2-13.jpg", "seg-obra-o2-14.jpg"], "o3": ["seg-obra-o3.jpg", "seg-obra-o3-1.jpg", "seg-obra-o3-2.jpg"], "o4": ["seg-obra-o4.jpg", "seg-obra-o4-1.jpg"]};
 let HEROT=0;
 function fotosDe(o){const nx=nxDe(o),I=nx&&nx.info,L=[];
-  ((I&&I.fotos)||[]).forEach(u=>{if(!L.includes(u))L.push(u)});if(I&&I.foto&&!L.includes(I.foto))L.unshift(I.foto);
+  ((I&&I.fotos)||[]).forEach(u=>{if(!L.includes(u))L.push(u)});((nx&&nx.fotosCfg)||[]).forEach(u=>{if(!L.includes(u))L.push(u)});if(I&&I.foto&&!L.includes(I.foto))L.unshift(I.foto);
   ((nx&&STAT[nx.nexo])||[]).forEach(f=>L.push('/'+f));
   ((S.REND||{})[o.id]||[]).forEach(u=>{if(!L.includes(u))L.push(u)});return L}
 function heroPar(o){const L=fotosDe(o),n=L.length;if(!n)return[null,null];if(n===1)return[L[0],null];if(n===2)return[L[0],L[1]];return[L[HEROT%n],L[(HEROT+1)%n]]}
@@ -1696,7 +1711,7 @@ function filaObraRes(o){const T=tareasDe('obra:'+o.id),h=T.filter(t=>t.estado===
   const g=I?`<span><span>Entrega prevista</span><b class="${I.desvio>0?'t-naranja':''}">${fmt(I.entrega)}${I.desvio>0?' (+'+I.desvio+' sem)':''}</b></span><span><span>Vencidas</span><b class="${I.vencidas?'t-rojo':''}">${plural(I.vencidas,'tarjeta','tarjetas')}</b></span><span><span>Definiciones</span><b>${I.defsOk} de ${I.defsTot} tareas</b></span>`
    :`<span><span>Etapa</span><b>${esc(etapaDe(o)||'Sin definir')}</b></span><span><span>Próxima tarea</span><b>${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></span><span><span>Atrasadas</span><b class="${at?'t-rojo':''}">${plural(at,'tarea','tareas')}</b></span>`;
   const sinF=!foto?`<span class="muted small" style="font-style:italic">${!I?'Sin render: no encontré esta obra en NEXO 2 con el mismo nombre.':I.fotosLoc>0?'NEXO 2 tiene '+plural(I.fotosLoc,'render guardado','renders guardados')+' solo en el aparato, sin subir a la nube.':'NEXO 2 no tiene renders cargados para esta obra.'}</span>`:'';
-  return `<button class="orow2" data-act="obra" data-id="${o.id}"><span class="o2-img${foto?'':' sinfoto'}" ${foto?`style="background-image:url('${foto}')"`:''}><span class="o2-pct">${pct}%</span></span><span class="info"><span class="ohd"><b>${esc(o.nombre)}</b>${at?`<span class="chip" style="color:var(--rojo)">${at} atras.</span>`:''}${nxPend(o)?`<span class="chip gold">${nxPend(o)} en NEXO</span>`:''}</span>${I?`<span class="capline">Capataz de obra: <b>${o.capataz?esc(o.capataz):'—'}</b></span><span class="muted small">${esc(I.modelo)}</span><span class="muted small">Jefatura: ${esc(I.jefe)} · Estudio: ${esc(I.estudio)}</span>`:`<span class="capline">Capataz de obra: <b>${o.capataz?esc(o.capataz):'—'}</b></span><span class="muted small">${plural(n,'obrero','obreros')}</span>`}<span class="ogrid">${g}</span>${sinF}${dots?`<span class="ddots">${dots}</span>`:''}${I?`<span class="muted small">Ahora: <b style="color:var(--fg)">${esc(etapaDe(o)||I.etapa||'Sin definir')}</b> · Próxima tarea: <b style="color:var(--fg)">${p?esc(p.titulo)+' · '+fmt(p.inicio):'—'}</b></span>`:''}</span></button>`}
+  return `<button class="orow2" data-act="obra" data-id="${o.id}"><span class="o2-img${foto?'':' sinfoto'}" ${foto?`style="background-image:url('${foto}')"`:''}><span class="o2-pct">${pct}%</span></span><span class="info"><span class="ohd"><b>${esc(o.nombre)}</b>${at?`<span class="chip" style="color:var(--rojo)">${at} atras.</span>`:''}${nxPend(o)?`<span class="chip gold">${nxPend(o)} en NEXO</span>`:''}</span>${I?`<span class="capdots"><span class="capline">Capataz de obra: <b>${o.capataz?esc(o.capataz):'—'}</b></span>${dots?`<span class="ddots">${dots}</span>`:''}</span><span class="muted small">${esc(I.modelo)}</span><span class="muted small">Jefatura: ${esc(I.jefe)} · Estudio: ${esc(I.estudio)}</span>`:`<span class="capdots"><span class="capline">Capataz de obra: <b>${o.capataz?esc(o.capataz):'—'}</b></span><span class="muted small">· ${plural(n,'obrero','obreros')}</span></span>`}<span class="ogrid">${g}</span>${sinF}</span></button>`}
 function miniNx(o,c){const k=c.color==='rojo'?'rojo':c.color==='naranja'?'naranja':'amarillo',rs=[...new Set(c.pend.map(i=>i.resp).filter(Boolean))].join(', ');
   return `<button class="mini" data-act="irNx" data-id="${o.id}"><i class="dot2 c-${k}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${esc(c.tarea)}</span><span class="m2">${c.tipo==='mat'?'Materiales':'Documentación'}${rs?' · debe '+esc(rs):''}</span><span class="m3">${c.limite?fmt(c.limite):''}</span></button>`}
 function miniHito(h){const e=hitoEst(h),pv=h.prevista||h.fecha,falta=Math.round((pv-TODAY)/DAY),k=e.c==='futuro'?'verde':e.c;

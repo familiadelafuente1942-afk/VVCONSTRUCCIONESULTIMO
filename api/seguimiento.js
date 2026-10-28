@@ -157,6 +157,22 @@ export default async function handler(req, res) {
         const rs = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=like.snap_*`, { headers: H });
         if (rs.ok) snaps = (await rs.json()).map((r) => ({ nid: String(r.clave).slice(5), nombre: (r.valor && r.valor.nombre) || "" }));
       } catch (e) { snaps = []; }
+      // configuración de obras de NEXO 2 (nombres y renders subidos): se lee directo, sin esperar a que Dirección abra NEXO 2
+      const cfgFotos = {};
+      try {
+        const c = await leer(H, "cfg");
+        const O = (c && typeof c.v === "string" && JSON.parse(c.v)) || {};
+        const https = (u) => typeof u === "string" && /^https:\/\//.test(u) && u.length < 600;
+        for (const n of Array.isArray(O.nuevas) ? O.nuevas : []) {
+          if (!n || !ident(n.id)) continue;
+          cfgFotos[n.id] = [n.imgUrl, ...(Array.isArray(n.renders) ? n.renders : [])].filter(https).slice(0, 12);
+          if (!snaps.some((x) => x.nid === n.id)) snaps.push({ nid: n.id, nombre: n.nombre || "" });
+        }
+        for (const [id, ch] of Object.entries(O.mod || {})) {
+          const L = [ch && ch.imgUrl, ...(ch && Array.isArray(ch.renders) ? ch.renders : [])].filter(https).slice(0, 12);
+          if (L.length) cfgFotos[id] = L;
+        }
+      } catch (e) { /* sin configuración: se usa lo publicado */ }
       const porNombre = (nom) => {
         const n = nrm(nom); if (!n) return "";
         const igual = snaps.filter((x) => nrm(x.nombre) === n);
@@ -169,7 +185,7 @@ export default async function handler(req, res) {
         const I = ((inf && inf.items) || []).slice().sort((x, y) => (y.desde || 0) - (x.desde || 0));
         const ult = I[0];
         const frenadas = ult ? (ult.tareas || []).filter((t) => t.causa && (t.av === null || t.av < 100) && t.causa !== "Interna de la constructora").map((t) => ({ name: t.name, causa: t.causa, causaTxt: t.causaTxt || "", resp: t.resp || "", desde: t.desdeF || 0, card: t.card || "", av: t.av })) : [];
-        out[o.id] = { nexo: nid, snapT: (snap && snap.t) || 0, info: (snap && snap.info) || null, cards: (snap && snap.cards) || [], informeDesde: ult ? ult.desde : 0, informeHasta: ult ? ult.hasta : 0, frenadas };
+        out[o.id] = { nexo: nid, snapT: (snap && snap.t) || 0, info: (snap && snap.info) || null, fotosCfg: cfgFotos[nid] || [], cards: (snap && snap.cards) || [], informeDesde: ult ? ult.desde : 0, informeHasta: ult ? ult.hasta : 0, frenadas };
       }
       res.status(200).json({ ok: true, nexo: out });
       return;
