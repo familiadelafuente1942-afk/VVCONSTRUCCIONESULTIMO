@@ -80,6 +80,23 @@ function ponerSes(res, d) {
 const limpio = (c) => String(c || "").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 24);
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 
+
+function audSan(A) {
+  if (!A || typeof A !== "object") return null;
+  const S = (v, n) => String(v == null ? "" : v).slice(0, n);
+  const K = A.k || {};
+  const l = (Array.isArray(A.l) ? A.l : []).slice(0, 60).map((x) => {
+    const d = x.doc || {};
+    return { id: S(x.id, 20), tipo: ["sup", "rev", "cert"].includes(x.tipo) ? x.tipo : "sup", num: S(x.num, 30), fecha: Number(x.fecha) || 0,
+      doc: { titulo: S(d.titulo, 80), sub: S(d.sub, 80), obra: S(d.obra, 80), num: S(d.num, 30), fecha: S(d.fecha, 30), resultado: S(d.resultado, 40), conclusion: S(d.conclusion, 600), intro: S(d.intro, 600),
+        campos: (Array.isArray(d.campos) ? d.campos : []).slice(0, 8).map((c) => [S(c && c[0], 60), S(c && c[1], 200)]),
+        secciones: (Array.isArray(d.secciones) ? d.secciones : []).slice(0, 8).map((q) => ({ h: S(q.h, 80), texto: q.texto != null ? S(q.texto, 800) : undefined,
+          lista: Array.isArray(q.lista) ? q.lista.slice(0, 20).map((t) => S(t, 400)) : undefined,
+          tabla: q.tabla && Array.isArray(q.tabla.cols) ? { cols: q.tabla.cols.slice(0, 5).map((t) => S(t, 40)), rows: (Array.isArray(q.tabla.rows) ? q.tabla.rows : []).slice(0, 25).map((r) => (Array.isArray(r) ? r : []).slice(0, 5).map((t) => S(t, 700))) } : undefined })),
+        firmas: (Array.isArray(d.firmas) ? d.firmas : []).slice(0, 3).map((f) => [S(f && f[0], 60), S(f && f[1], 80)]) } };
+  });
+  return { k: { prox: Number(K.prox) || 0, rev: Number(K.rev) || 0, cert: Number(K.cert) || 0 }, l };
+}
 export default async function handler(req, res) {
   const sk = process.env.SUPABASE_SERVICE_KEY;
   if (!sk) { res.status(500).json({ error: "Falta SUPABASE_SERVICE_KEY en Vercel." }); return; }
@@ -322,7 +339,7 @@ export default async function handler(req, res) {
         pend: (Array.isArray(c.pend) ? c.pend : []).slice(0, 12).map((i) => ({ txt: str(i.txt, 160), resp: str(i.resp, 60), tipo: str(i.tipo, 40) })),
       }));
       const I = b.info || {}; const dots = I.dots || {};
-      const info = { avance: num(I.avance), modelo: str(I.modelo, 120), jefe: str(I.jefe, 60), estudio: str(I.estudio, 60), entrega: num(I.entrega), base: num(I.base), desvio: Math.max(-999, Math.min(999, Math.round(Number(I.desvio) || 0))), vencidas: num(I.vencidas), defsOk: num(I.defsOk), defsTot: num(I.defsTot), etapa: str(I.etapa, 120), foto: /^https:\/\//.test(String(I.foto || "")) ? str(I.foto, 600) : /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(String(I.foto || "")) && String(I.foto).length < 300000 ? String(I.foto) : "", ubic: str(I.ubic, 80), plan: num(I.plan), fotosLoc: num(I.fotosLoc), fotos: (Array.isArray(I.fotos) ? I.fotos : []).filter((u) => /^https:\/\//.test(String(u))).slice(0, 12).map((u) => str(u, 600)), dots: { rojo: num(dots.rojo), naranja: num(dots.naranja), amarillo: num(dots.amarillo), verde: num(dots.verde), ok: num(dots.ok) } };
+      const info = { avance: num(I.avance), modelo: str(I.modelo, 120), jefe: str(I.jefe, 60), estudio: str(I.estudio, 60), entrega: num(I.entrega), base: num(I.base), desvio: Math.max(-999, Math.min(999, Math.round(Number(I.desvio) || 0))), vencidas: num(I.vencidas), defsOk: num(I.defsOk), defsTot: num(I.defsTot), etapa: str(I.etapa, 120), foto: /^https:\/\//.test(String(I.foto || "")) ? str(I.foto, 600) : /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(String(I.foto || "")) && String(I.foto).length < 300000 ? String(I.foto) : "", ubic: str(I.ubic, 80), plan: num(I.plan), fotosLoc: num(I.fotosLoc), fotos: (Array.isArray(I.fotos) ? I.fotos : []).filter((u) => /^https:\/\//.test(String(u))).slice(0, 12).map((u) => str(u, 600)), aud: audSan(I.aud), dots: { rojo: num(dots.rojo), naranja: num(dots.naranja), amarillo: num(dots.amarillo), verde: num(dots.verde), ok: num(dots.ok) } };
       await escribir(H, "snap_" + obra, { t: Date.now(), nombre: str(b.nombre, 80), cards, info });
       res.status(200).json({ ok: true });
       return;

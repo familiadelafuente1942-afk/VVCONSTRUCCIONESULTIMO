@@ -1440,6 +1440,34 @@ header.top{padding-inline:20px!important}
 .obras-l .orow2 .ogrid b{font-size:12.5px}
 .capdots{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .obras-l .orow2 .capdots .ddots{gap:4px}
+
+.paper{background:#fbfaf7;color:#1d1d1f;border-radius:10px;padding:18px 16px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.45}
+.paper .ph{text-align:center;display:flex;flex-direction:column;gap:2px;border-bottom:1px solid #d9d4ca;padding-bottom:10px}
+.paper .ph b{font-family:var(--display);font-size:21px;letter-spacing:.04em;text-transform:uppercase}
+.paper .ph span{font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:#a8834e;font-weight:700}
+.paper .pmeta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:#7a756d;border-bottom:1px solid #d9d4ca;padding-bottom:8px}
+.paper .pmeta b{color:#1d1d1f}
+.paper .pcampos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.paper .pcampos div{border:1px solid #d9d4ca;border-radius:8px;padding:6px 8px;background:#fff}
+.paper .pcampos span{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#7a756d}
+.paper .pintro{background:#fbf6ec;border-left:3px solid #a8834e;padding:8px 10px;border-radius:4px}
+.paper h5{margin:6px 0 0;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;border-left:3px solid #a8834e;padding-left:8px}
+.paper table{border-collapse:collapse;width:100%;font-size:12px}
+.paper th{background:#f1ede5;text-align:left;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#7a756d;padding:5px 6px}
+.paper td{border-bottom:1px solid #d9d4ca;padding:6px;vertical-align:top}
+.paper ol{margin:0;padding-left:18px}
+.paper .pfotos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.paper .pfotos img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px}
+.paper .pm{color:#7a756d}
+.paper .pres b.ok{color:#2f7d50}.paper .pres b.obs{color:#a0611f}.paper .pres b.no{color:#b5372d}
+.paper .pfirmas{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:22px;text-align:center;font-size:11.5px}
+.paper .pfirmas i{display:block;border-top:1px solid #9a948a;margin-bottom:4px}
+.paper .pfirmas span{display:block;color:#7a756d}
+.paper .pfoot{font-size:10.5px;color:#7a756d;text-align:center;border-top:1px solid #d9d4ca;padding-top:8px}
+
+.adot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--verde,#3a9a6a)}.adot.a-rev{background:#4a7fd0}.adot.a-cert{background:#c8588a}
+.docrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line,rgba(128,128,128,.2))}.docrow:first-of-type{border-top:0}.docrow .dl{display:flex;flex-direction:column;gap:2px;min-width:0}.docrow .dm{font-size:12px;color:var(--soft,#888)}
+.audk{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.audk .kpi{display:flex;flex-direction:column;gap:2px;padding:10px}.audk .kpi b{font-size:18px}.audk .kl{font-size:11px;opacity:.7}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -1473,6 +1501,7 @@ class PdfDoc{
   rect(x,y,w,h,fill,stroke){if(fill)this.c.push(`${this.rgb(fill)} rg ${x.toFixed(1)} ${(this.H-y-h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f`);if(stroke)this.c.push(`${this.rgb(stroke)} RG 0.6 w ${x.toFixed(1)} ${(this.H-y-h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re S`)}
   line(x1,y1,x2,y2,col='#d9d4ca',w=.6){this.c.push(`${this.rgb(col)} RG ${w} w ${x1.toFixed(1)} ${(this.H-y1).toFixed(1)} m ${x2.toFixed(1)} ${(this.H-y2).toFixed(1)} l S`)}
   image(img,x,y,w,h){this.imgs.push(img);const n=this.imgs.length;this.c.push(`q ${w.toFixed(1)} 0 0 ${h.toFixed(1)} ${x.toFixed(1)} ${(this.H-y-h).toFixed(1)} cm /Im${n} Do Q`)}
+  imageCover(img,x,y,w,h){this.imgs.push(img);const n=this.imgs.length,s=Math.max(w/img.w,h/img.h),dw=img.w*s,dh=img.h*s,dx=x+(w-dw)/2,dy=y+(h-dh)/2;this.c.push(`q ${x.toFixed(1)} ${(this.H-y-h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re W n ${dw.toFixed(1)} 0 0 ${dh.toFixed(1)} ${dx.toFixed(1)} ${(this.H-dy-dh).toFixed(1)} cm /Im${n} Do Q`)}
   build(){
     const enc=new TextEncoder(),chunks=[],offs=[];let len=0;
     const push=x=>{const b=typeof x==='string'?Uint8Array.from(x,ch=>ch.charCodeAt(0)&255):x;chunks.push(b);len+=b.length};
@@ -1511,16 +1540,24 @@ async function docPDF(doc){
   const head=h=>{ensure(40);P.y+=6;P.rect(L,P.y,3,12,GOLD);P.text(L+10,P.y+1,h.toUpperCase(),9,true,INK);P.y+=22};
   const imgs=await Promise.all(doc.secciones.flatMap(s=>s.fotos||[]).map(id=>FILES[id]?toJpeg(FILES[id].url):Promise.resolve(null)));let ii=0;
   for(const s of doc.secciones){
-    if(s.tabla){head(s.h);const w=s.tabla.w,xs=w.reduce((a,v,i)=>(a.push((a[i-1]??L)+(i?w[i-1]*CW:0)),a),[]);
+    if(s.obs){head(s.h);const CR={Alta:'#b5372d',Media:'#a0611f',Baja:'#7a756d'};
+      s.obs.forEach((o,k)=>{ensure(16+34);P.rect(L,P.y,CW,16,'#f4f0e8');P.text(L+8,P.y+4.5,'OBSERVACION '+(k+1),7.5,true,INK);const sec='Sector / item: '+(o.sector||'-');P.text(L+84,P.y+4.5,sec,8,false,GREY);const cr=o.crit?'Criticidad: '+o.crit:'';if(cr)P.text(R-8-tw(cr,8,true),P.y+4.5,cr,8,true,CR[o.crit]||INK);P.y+=21;
+        const par=(txt,bold)=>String(txt||'').split('\n').map(x=>x.trim()).filter(Boolean).forEach(p=>{wrapTxt(p,9,bold,CW-20).forEach(ln=>{if(P.y+11.5>bottom)P.newPage();P.text(L+10,P.y,ln,9,bold);P.y+=11.5});P.y+=2.5});
+        par(o.desc,false);if(o.sol){P.y+=2;if(P.y+24>bottom)P.newPage();P.text(L+10,P.y,'Posible solucion',8.5,true,GOLD);P.y+=12;par(o.sol,false)}
+        P.y+=3;P.line(L,P.y,R,P.y,LINE);P.y+=5});P.y+=1}
+    if(s.tabla&&!s.obs){head(s.h);const w=s.tabla.w,xs=w.reduce((a,v,i)=>(a.push((a[i-1]??L)+(i?w[i-1]*CW:0)),a),[]);
       const hdr=()=>{P.rect(L,P.y,CW,18,'#f1ede5');s.tabla.cols.forEach((c,i)=>P.text(xs[i]+6,P.y+5,c.toUpperCase(),7,true,GREY));P.y+=20};hdr();
       s.tabla.rows.forEach(row=>{const cells=row.map((v,i)=>wrapTxt(v,8.5,false,w[i]*CW-12));const hh=Math.max(...cells.map(c=>c.length))*11.5+10;if(P.y+hh>bottom){P.newPage();hdr()}cells.forEach((c,i)=>c.forEach((ln,n)=>{const b=/^(Descripción|Posible solución|Recomendación)/.test(ln);P.text(xs[i]+6,P.y+5+n*11.5,ln,8.5,b)}));P.y+=hh;P.line(L,P.y,R,P.y,LINE)});P.y+=8}
-    if(s.lista){head(s.h);s.lista.forEach((it,n)=>{const ls=wrapTxt((n+1)+'. '+it,9,false,CW-14);ensure(ls.length*12+4);ls.forEach(ln=>{P.text(L+8,P.y,ln,9);P.y+=12});P.y+=4})}
+    if(s.lista){head(s.h);const tx=s.lista.map((it,n)=>(n+1)+'. '+it).join('   ');const ls=wrapTxt(tx,8.5,false,CW-10);ls.forEach(ln=>{ensure(11.5);P.text(L+8,P.y,ln,8.5,false,GREY);P.y+=11.5});P.y+=4}
     if(s.texto!=null){head(s.h);wrapTxt(s.texto||'—',9.5,false,CW).forEach(ln=>{ensure(13);P.text(L,P.y,ln,9.5);P.y+=13});P.y+=6}
-    if(s.fotos){head(s.h);const cw=(CW-16)/3;s.fotos.forEach((id,n)=>{const im=imgs[ii++];if(!im)return;const h=cw*im.h/im.w;if(n%3===0)ensure(Math.min(h,170)+10);const x=L+(n%3)*(cw+8);const hh=Math.min(h,170),ww=hh*im.w/im.h;P.image(im,x,P.y,ww,hh);if(n%3===2||n===s.fotos.length-1)P.y+=hh+10});if(!s.fotos.length){P.text(L,P.y,'Sin fotos adjuntas.',9,false,GREY);P.y+=14}}
+    if(s.fotos){head(s.h);const N=s.fotos.length,cols=N<=2?2:N<=4?4:N<=6?3:4,gap=8,cw=(CW-gap*(cols-1))/cols,ph=cols>=4?cw*.98:cols===3?cw*.8:cw*.66;
+      const ims=s.fotos.map(()=>imgs[ii++]).filter(Boolean);
+      ims.forEach((im,n)=>{const c=n%cols;if(c===0)ensure(ph+8);P.imageCover(im,L+c*(cw+gap),P.y,cw,ph);if(c===cols-1||n===ims.length-1)P.y+=ph+gap});
+      if(!ims.length){P.text(L,P.y,'Sin fotos adjuntas.',9,false,GREY);P.y+=14}else P.y+=2}
   }
-  if(doc.resultado){ensure(30);P.y+=6;P.text(L,P.y,'RESULTADO: ',10,true,INK);P.text(L+tw('RESULTADO: ',10,true),P.y,doc.resultado.toUpperCase(),10,true,doc.resultado==='Conforme'?'#2f7d50':doc.resultado==='No conforme'?'#b5372d':'#a0611f');P.y+=22}
+  if(doc.resultado){ensure(30);P.y+=6;P.text(L,P.y,'RESULTADO: ',10,true,INK);P.text(L+tw('RESULTADO: ',10,true),P.y,doc.resultado.toUpperCase(),10,true,doc.resultado==='Conforme'?'#2f7d50':doc.resultado==='No conforme'?'#b5372d':'#a0611f');P.y+=18}
   if(doc.conclusion){head('Conclusión');wrapTxt(doc.conclusion,9.5,false,CW).forEach(ln=>{ensure(13);P.text(L,P.y,ln,9.5);P.y+=13});P.y+=6}
-  if(doc.firmas){ensure(70);P.y+=34;const cw=(CW-40)/2;doc.firmas.forEach(([n,c],j)=>{const x=L+j*(cw+40);P.line(x,P.y,x+cw,P.y,'#9a948a');P.text(x+(cw-tw(n||' ',8.5,true))/2,P.y+6,n||' ',8.5,true);P.text(x+(cw-tw(c,8,false))/2,P.y+18,c,8,false,GREY)});P.y+=36}
+  if(doc.firmas){ensure(44);P.y+=12;const cw=(CW-40)/2;doc.firmas.forEach(([n,c],j)=>{const x=L+j*(cw+40);P.line(x,P.y,x+cw,P.y,'#9a948a');P.text(x+(cw-tw(n||' ',8.5,true))/2,P.y+6,n||' ',8.5,true);P.text(x+(cw-tw(c,8,false))/2,P.y+18,c,8,false,GREY)});P.y+=30}
   const foot=`Documento emitido con Nexo · ${doc.titulo} · ${doc.num}`;
   P.pages.forEach((c,i)=>{P.c=c;P.text((P.W-tw(foot,7.5))/2,P.H-30,foot,7.5,false,GREY);const pg=`${i+1}/${P.pages.length}`;P.text(R-tw(pg,7.5),P.H-30,pg,7.5,false,GREY)});
   return P.build();
@@ -1805,7 +1842,7 @@ function vObras(){
 function vObra(){
   const o=byId('obras',S.obra);if(!o){S.obra=null;return vObras()}
   const T=tareasDe('obra:'+o.id).sort(ordenT),at=T.filter(atrasada).length,gente=obreros(o.id),p=proxima(o),nx=nxDe(o),h=hitosDe(o.id);
-  const tabs=[['crono','Cronograma'],['hitos','Fechas clave'],['regs','Registros ('+col('registros').filter(x=>x.obra===o.id).length+')'],['adic','Adicionales ('+col('adicionales').filter(x=>x.obra===o.id).length+')'],['gente','Personal ('+gente.length+')'],['nexo','NEXO 2'+(nxPend(o)?' ('+nxPend(o)+')':'')]];
+  const tabs=[['crono','Cronograma'],['hitos','Fechas clave'],['regs','Registros ('+col('registros').filter(x=>x.obra===o.id).length+')'],['adic','Adicionales ('+col('adicionales').filter(x=>x.obra===o.id).length+')'],['gente','Personal ('+gente.length+')'],['nexo','NEXO 2'+(nxPend(o)?' ('+nxPend(o)+')':'')],['aud','Auditoría']];
   const body=S.otab==='crono'?`<div class="sub-h"><button class="btn sm gold" data-act="nuevaT" data-amb="obra:${o.id}">+ Tarea</button><span style="display:flex;gap:6px;flex-wrap:wrap">${zoomBtns()}<button class="btn sm" data-act="gfull" data-o="${o.id}">Pantalla completa</button></span></div>${ganttHTML(o)}
    <div style="display:flex;flex-direction:column;gap:8px">${T.length?T.map(t=>tcardT(t)).join(''):'<div class="card muted">Todavía no hay tareas. Agregá la primera con inicio y fin.</div>'}</div>`
   :S.otab==='hitos'?`<button class="btn sm gold" data-act="nuevoH" data-o="${o.id}" style="align-self:flex-start">+ Fecha clave</button><p class="muted small">Hormigonadas, cierres de etapa, entregas: aparecen como rombos en el Gantt.</p>
@@ -1813,6 +1850,7 @@ function vObra(){
   :S.otab==='regs'?vRegs(o)
   :S.otab==='adic'?vAdic(o)
   :S.otab==='gente'?`${capBox(o)}<button class="btn sm gold" data-act="nuevaP" data-obra="${o.id}" style="align-self:flex-start">+ Persona</button><div class="card">${listaGente(o.id)}</div>`
+  :S.otab==='aud'?vAudObra(o)
   :vNexoObra(o);
   const I=nx&&nx.info,pct=I?I.avance:(T.length?Math.round(T.filter(t=>t.estado==='hecha').length*100/T.length):0);
   return `<div class="ohead"><button class="back" data-act="volver">${BACK} Obras</button>${heroDosS(o)}<div class="sub-h" style="margin-top:8px;align-items:flex-end"><div><span class="eyebrow">${esc((I&&I.ubic)||'Obra')}</span><h1>${esc(o.nombre)}</h1></div><span class="bigpct">${pct}%</span></div>
@@ -2109,7 +2147,22 @@ const SUBMIT={
 function nivelActual(){try{const v=localStorage.getItem('nexo2_tema')||'';if(v.indexOf('nivel:')===0)return +v.slice(6)}catch(e){}return document.documentElement.getAttribute('data-tema')==='claro'?0:100}
 function nivelSlider(){return `<div class="nv"><span aria-hidden="true">☀</span><input type="range" class="nv-r" min="0" max="100" step="1" value="${nivelActual()}" aria-label="Del blanco al negro"><span aria-hidden="true">●</span></div>`}
 document.addEventListener('input',e=>{const t=e.target;if(t&&t.classList&&t.classList.contains('nv-r')){try{window.__nivel(+t.value)}catch(x){}}});
+
+const AUDC={sup:['Supervisión de obra','a-sup'],rev:['Revisión de documentación','a-rev'],cert:['Certificado de finalidad de etapa','a-cert']};
+function audDe(o){const n=nxDe(o);return n&&n.info&&n.info.aud||null}
+function vAudObra(o){const A=audDe(o);
+  if(!A)return `<div class="card muted">Todavía no hay auditoría publicada para esta obra. Aparece cuando la Dirección abre NEXO 2 (o si esta obra no está vinculada).</div>`;
+  const K=A.k||{},L=A.l||[];
+  return `<div class="kpis audk"><div class="kpi"><b>${K.prox?fmt(K.prox):'—'}</b><span class="kl">próxima supervisión</span></div><div class="kpi"><b>${K.rev||0}</b><span class="kl">planos en revisión</span></div><div class="kpi"><b>${K.cert?fmt(K.cert):'—'}</b><span class="kl">próximo certificado de etapa</span></div></div>
+  <div class="card"><div class="top"><h3>Documentos de la auditoría</h3><span class="muted small">${L.length} en total</span></div>${L.length?L.map(a=>`<div class="docrow"><span class="dl"><span class="dn"><i class="adot ${(AUDC[a.tipo]||AUDC.sup)[1]}"></i>${esc((AUDC[a.tipo]||AUDC.sup)[0])} · ${esc(a.num)}</span><span class="dm">${fmt(a.fecha)} · ${esc(audResumen(a))}</span></span><button class="btn sm" data-act="verAud" data-o="${o.id}" data-id="${esc(a.id)}">Ver</button></div>`).join(''):'<span class="muted small">Sin documentos todavía.</span>'}</div>`}
+function audResumen(a){const d=a.doc||{},c=d.campos||[];const base=a.tipo==='sup'?(c[0]&&c[0][1]):a.tipo==='rev'?(c[0]&&c[0][1]):(c[0]&&c[0][1]);const ob=(d.secciones||[]).find(s=>s.tabla&&/Observaciones/.test(s.h));const n=ob?ob.tabla.rows.length:0;return (base||'')+(n?' · '+n+(n===1?' observación':' observaciones'):'')}
+function audPaper(d){const sec=s=>`<h5>${esc(s.h)}</h5>`+(s.tabla?`<table><tr>${s.tabla.cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr>${s.tabla.rows.map(r=>`<tr>${r.map(v=>`<td>${esc(v).replace(/\n/g,'<br>')}</td>`).join('')}</tr>`).join('')}</table>`:s.lista?`<ol>${s.lista.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:`<p>${esc(s.texto||'')}</p>`);
+  return `<div class="paper"><div class="ph"><b>${esc(d.titulo)}</b><span>${esc(d.sub)}</span></div><div class="pmeta"><span>Obra: <b>${esc(d.obra)}</b></span><span>N°: <b>${esc(d.num)}</b></span><span>Fecha: <b>${esc(d.fecha)}</b></span></div>
+  <div class="pcampos">${(d.campos||[]).map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v||'—')}</b></div>`).join('')}</div>${d.intro?`<div class="pintro">${esc(d.intro)}</div>`:''}
+  ${(d.secciones||[]).map(sec).join('')}${d.resultado?`<p class="pres">Resultado: <b class="${d.resultado==='Conforme'?'ok':d.resultado==='No conforme'?'no':'obs'}">${esc(d.resultado)}</b></p>`:''}${d.conclusion?`<h5>Conclusión</h5><p>${esc(d.conclusion)}</p>`:''}
+  ${d.firmas?`<div class="pfirmas">${d.firmas.map(([n,c])=>`<div><i></i><b>${esc(n||'')}</b><span>${esc(c)}</span></div>`).join('')}</div>`:''}<p class="pfoot">Documento emitido con Nexo · ${esc(d.titulo)} · ${esc(d.num)}</p></div>`}
 const A={
+  verAud:ds=>{const o=col('obras').find(x=>x.id===ds.o),L=o&&audDe(o)||{l:[]};const a=(L.l||L).find(x=>x.id===ds.id);if(!a)return;openSheet(`<span class="eyebrow">${esc(a.doc.obra)}</span><h2>${esc(a.doc.titulo)} · ${esc(a.num)}</h2>${audPaper(a.doc)}`,a.doc.titulo)},
   irNxTodo:()=>{const o=col('obras').find(o=>nxDe(o)&&nxDe(o).cards.length);if(o){S.tab='obras';S.obra=o.id;S.otab='nexo';draw();window.scrollTo(0,0)}else toast('No hay tarjetas publicadas todavía')},
   editCap:ds=>{const o=byId('obras',ds.id);if(o)formCap(o)},
   fijarAg:ds=>{const a=byId('agenda',ds.id);if(a)guardar('agenda',{...a,fijar:!a.fijar})},
