@@ -1735,15 +1735,16 @@ function vInicio(){
   <div class="cA" id="cA1">
   ${venc.length?`<div class="g-venc card"><span class="eyebrow">Tarjetas vencidas · nos deben (NEXO 2)</span><div class="minis">${venc.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
   ${porv.length?`<div class="g-porv card"><span class="eyebrow">Tarjetas por vencer</span><div class="minis">${porv.map(x=>miniNx(x.o,x.c)).join('')}</div></div>`:''}
-  ${hitosHtml}
   </div>
   <div class="colwrap" id="cB">
-  <div class="card"><span class="eyebrow">Próxima tarea de cada obra</span><div class="minis">${obrasP.map(({o,p,at:a})=>`<button class="mini" data-act="obra" data-id="${o.id}"><i class="dot2 ${a?'c-rojo':p?'c-verde':'c-futuro'}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${p?esc(p.titulo):'sin tarea cargada'}</span><span class="m2">${esc(etapaDe(o)||'')}${a?(etapaDe(o)?' · ':'')+plural(a,'atrasada','atrasadas'):''}</span><span class="m3">${p?fmt(p.inicio):''}</span></button>`).join('')}</div></div><div class="card pagos" data-act="tab" data-k="gastos"><span class="eyebrow">Para pagar · ${mesTxt(MES_HOY)}</span><div class="facts" style="margin-top:6px"><div class="fact"><span>Sueldo de Nicolás</span><b class="${sueldo&&!sueldo.pagado?'t-rojo':''}">${sueldo?(sueldo.pagado?'Pagado':'A pagar · '+money(sueldo.monto)):'Sin cargar'}</b></div><div class="fact"><span>Gastos del mes</span><b>${money(gMes)}</b></div><div class="fact"><span>Adeudado en total</span><b class="${deuda?'t-rojo':''}">${money(deuda)}</b></div></div></div>
+  <div class="card"><span class="eyebrow">Próxima tarea de cada obra</span><div class="minis">${obrasP.map(({o,p,at:a})=>`<button class="mini" data-act="obra" data-id="${o.id}"><i class="dot2 ${a?'c-rojo':p?'c-verde':'c-futuro'}"></i><span class="m1"><b>${esc(o.nombre)}</b> · ${p?esc(p.titulo):'sin tarea cargada'}</span><span class="m2">${esc(etapaDe(o)||'')}${a?(etapaDe(o)?' · ':'')+plural(a,'atrasada','atrasadas'):''}</span><span class="m3">${p?fmt(p.inicio):''}</span></button>`).join('')}</div></div>
+  ${hitosHtml}
   </div>
 
   <div class="cA" id="cA2">
   <div class="g-aten card"><span class="eyebrow">Para atender</span><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${prox.length?prox.map(t=>tcardT(t,{ctx:ctxT(t),limite:t.ambito==='general'})).join(''):'<div class="card muted">Todo al día. No hay nada pendiente.</div>'}</div></div>
   ${fij.length?`<div class="g-anc card"><span class="eyebrow">Anclado de tu agenda</span><div class="minis">${fij.map(a=>`<button class="mini" data-act="editAg" data-id="${a.id}"><i class="dot2 ${a.fecha<TODAY?'c-rojo':'c-gold'}"></i><span class="m1"><b>${esc(a.motivo||a.lugar||'Agenda')}</b>${a.obra?' · '+esc(nombreObra(a.obra)):''}</span><span class="m2">${a.quien==='Nadie'?'':a.quien==='Ambos'?'Los dos':esc(a.quien)}${a.lugar&&a.motivo?' · '+esc(a.lugar):''}</span><span class="m3">${diaTxt(a.fecha)}${a.hora?' '+esc(a.hora):''}</span></button>`).join('')}</div></div>`:''}
+  <div class="card pagos" data-act="tab" data-k="gastos"><span class="eyebrow">Para pagar · ${mesTxt(MES_HOY)}</span><div class="facts" style="margin-top:6px"><div class="fact"><span>Sueldo de Nicolás</span><b class="${sueldo&&!sueldo.pagado?'t-rojo':''}">${sueldo?(sueldo.pagado?'Pagado':'A pagar · '+money(sueldo.monto)):'Sin cargar'}</b></div><div class="fact"><span>Gastos del mes</span><b>${money(gMes)}</b></div><div class="fact"><span>Adeudado en total</span><b class="${deuda?'t-rojo':''}">${money(deuda)}</b></div></div></div>
 
   </div>
 
