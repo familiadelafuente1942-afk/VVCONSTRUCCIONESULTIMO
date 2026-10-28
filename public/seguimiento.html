@@ -2150,7 +2150,7 @@ function nivelSlider(){return `<div class="nv"><span aria-hidden="true">☀</spa
 document.addEventListener('input',e=>{const t=e.target;if(t&&t.classList&&t.classList.contains('nv-r')){try{window.__nivel(+t.value)}catch(x){}}});
 
 const AUDC={sup:['Supervisión de obra','a-sup'],rev:['Revisión de documentación','a-rev'],cert:['Certificado de finalidad de etapa','a-cert']};
-function audLista(o){const A=audDe(o),v=(S.AUDV&&S.AUDV[o.id])||[];return [...((A&&A.l)||[]),...v].sort((x,y)=>(y.fecha||0)-(x.fecha||0))}
+function audLista(o){const A=audDe(o),nx=nxDe(o),v=(S.AUDV&&S.AUDV[o.id])||[];return [...((nx&&nx.audReg)||(A&&A.l)||[]),...v].sort((x,y)=>(y.fecha||0)-(x.fecha||0))}
 function audDe(o){const n=nxDe(o);return n&&n.info&&n.info.aud||null}
 function vAudObra(o){const A=audDe(o),LL=audLista(o);
   if(!A&&!LL.length){const I=S.AUDI||{};const dx=!S.AUDI?'Buscando en la app anterior…':I.error?'No pude leer la app anterior ('+I.error+').':I.leidas===0?'En la app anterior no encontré auditorías guardadas'+(I.forma?' ('+I.forma+')':'')+'.':'En la app anterior leí '+I.leidas+' auditorías'+((I.sin||[]).length?'; ninguna coincide con esta obra. Obras sin equivalente: '+I.sin.join(', ')+'.':', pero ninguna es de esta obra.');return `<div class="card muted">Todavía no hay auditoría publicada de NEXO 2 para esta obra (aparece cuando la Dirección abre NEXO 2).<br><span class="small">${esc(dx)}</span></div>`}

@@ -73,6 +73,21 @@ async function leerCol(H, col) {
   return (v && Array.isArray(v.items) && v.items) || [];
 }
 
+
+function audDeReg(v, obraNom) {
+  const items = ((v && v.items) || []).slice().sort((x, y) => (y.fecha || 0) - (x.fecha || 0)).slice(0, 80);
+  const T = { sup: "Acta de supervisión de obra", rev: "Informe de revisión de documentación", cert: "Certificado de etapa ejecutada" };
+  const f2 = (t) => { const d = new Date(t || 0); return String(d.getUTCDate()).padStart(2, "0") + "/" + String(d.getUTCMonth() + 1).padStart(2, "0") + "/" + String(d.getUTCFullYear()).slice(2); };
+  return items.map((r) => {
+    const D = r.data || {}, obs = D.obs || [];
+    const obsSec = obs.length ? [{ h: r.tipo === "sup" ? "Observaciones de la supervisión" : "Observaciones", tabla: { cols: ["N°", "Observación", "Sector / ítem", "Criticidad"], rows: obs.map((x, i) => [String(i + 1), "Descripción\n" + x.desc + (x.sol ? "\nPosible solución\n" + x.sol : ""), x.sector || "—", x.crit || "—"]) } }] : [{ h: "Observaciones", texto: "Sin observaciones." }];
+    let campos, secs, intro = "";
+    if (r.tipo === "sup") { campos = [["Período", D.periodo || ""], ["Presentes", D.presentes || ""]]; secs = [...obsSec, ...((D.interf || []).length ? [{ h: "Interferencias detectadas", lista: D.interf }] : [])]; }
+    else if (r.tipo === "rev") { const ds = D.docs || []; campos = [["Etapa a ejecutar", D.etapa || ""], ["Documentos revisados", String(ds.length)]]; secs = [{ h: "Documentos revisados", tabla: { cols: ["Plano / documento", "Revisión", "Origen"], rows: ds.map((x) => [x.nombre, x.rev || "—", "Panel del estudio"]) } }, ...obsSec]; }
+    else { campos = [["Etapa certificada", D.etapa || ""], ["Ejecutado por", D.ejecutado || ""], ["Plano de referencia", D.plano || ""], ["Versión / revisión", D.rev || ""]]; intro = `Se deja constancia de que la etapa ${D.etapa || ""} de la obra ${obraNom} fue ejecutada conforme al plano de referencia indicado y a la directiva impartida por la Jefatura de Obra que se transcribe a continuación.`; secs = [{ h: "Directiva de la Jefatura de Obra", texto: D.directiva || "—" }, ...obsSec]; }
+    return { id: r.id, tipo: r.tipo, num: r.num, fecha: r.fecha, doc: { titulo: T[r.tipo], sub: "Auditoría de obra · Belfast", obra: obraNom, num: r.num, fecha: f2(r.fecha), resultado: r.resultado, conclusion: D.conclusion || "", intro, campos, secciones: secs, fotos: (D.fotos || []).filter((u) => /^https:\/\//.test(u)).slice(0, 8), firmas: [[D.responsable || "Responsable técnico", "Auditoría de obra"], ["", "Jefatura de Obra / Dirección de Obra"]] } };
+  });
+}
 export default async function handler(req, res) {
   const sk = process.env.SUPABASE_SERVICE_KEY;
   if (!sk) { res.status(500).json({ error: "Falta SUPABASE_SERVICE_KEY en Vercel." }); return; }
@@ -193,11 +208,11 @@ export default async function handler(req, res) {
       for (const o of obras) {
         const nid = o.nexo || MAP[o.id] || porNombre(o.nombre);
         if (!nid || !/^[A-Za-z0-9_-]{1,40}$/.test(nid)) continue;
-        const [snap, inf] = await Promise.all([leer(H, "snap_" + nid), leer(H, "informes_" + nid)]);
+        const [snap, inf, areg] = await Promise.all([leer(H, "snap_" + nid), leer(H, "informes_" + nid), leer(H, "audreg_" + nid).catch(() => null)]);
         const I = ((inf && inf.items) || []).slice().sort((x, y) => (y.desde || 0) - (x.desde || 0));
         const ult = I[0];
         const frenadas = ult ? (ult.tareas || []).filter((t) => t.causa && (t.av === null || t.av < 100) && t.causa !== "Interna de la constructora").map((t) => ({ name: t.name, causa: t.causa, causaTxt: t.causaTxt || "", resp: t.resp || "", desde: t.desdeF || 0, card: t.card || "", av: t.av })) : [];
-        out[o.id] = { nexo: nid, snapT: (snap && snap.t) || 0, info: (snap && snap.info) || null, fotosCfg: cfgFotos[nid] || [], cards: (snap && snap.cards) || [], informeDesde: ult ? ult.desde : 0, informeHasta: ult ? ult.hasta : 0, frenadas };
+        out[o.id] = { audReg: audDeReg(areg, o.nombre), nexo: nid, snapT: (snap && snap.t) || 0, info: (snap && snap.info) || null, fotosCfg: cfgFotos[nid] || [], cards: (snap && snap.cards) || [], informeDesde: ult ? ult.desde : 0, informeHasta: ult ? ult.hasta : 0, frenadas };
       }
       res.status(200).json({ ok: true, nexo: out });
       return;

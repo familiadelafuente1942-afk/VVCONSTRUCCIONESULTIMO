@@ -2932,13 +2932,13 @@ async function audGuardar(a,reint){try{const o=a.obra,cr=credAud(o);if(!cr||!cr.
   const D=a.data,fu=[];for(const id of (D.fotos||[]).slice(0,8)){const f=FILES[id];if(!f)continue;const u=await audFotoSub(f.url);if(u)fu.push(u)}
   const rec={id:a.id,tipo:a.tipo,num:a.num,fecha:a.fecha,resultado:a.resultado,data:{...D,fotos:fu}};
   const r=await codApi({op:'aud_save',obra:o.id,cred:cr,rec});if(!r.ok)throw new Error(r.error||'guardar');
-  (r.rec.data.fotos||[]).forEach((u,k)=>{const id=(D.fotos||[])[k];if(id&&FILES[id]&&!/^https:/.test(FILES[id].url))FILES[id].url=u});a.cloud=true}
+  (r.rec.data.fotos||[]).forEach((u,k)=>{const id=(D.fotos||[])[k];if(id&&FILES[id]&&!/^https:/.test(FILES[id].url))FILES[id].url=u});a.cloud=true;toast('Acta guardada en la nube')}
  catch(e){if(!reint)setTimeout(()=>audGuardar(a,true),4000);else toast('No se pudo guardar el acta en la nube: '+(e.message||''))}}
 let _audT=0,_audSig={};
 async function audSync(fuerza){if(!S.u||(!fuerza&&Date.now()-_audT<60000))return;_audT=Date.now();let cambio=false;
   const vis=ROLE()==='direccion'?OBRAS:misObras();
   await Promise.all(vis.map(async o=>{try{const d=await codApi({op:'aud_list',obra:o.id});if(!d.ok)return;const items=d.items||[],sig=items.map(x=>x.id+':'+x.editado).join('|');if(sig===_audSig[o.id])return;_audSig[o.id]=sig;
-    const ids=new Set(items.map(x=>x.id));for(let i=AUD.length-1;i>=0;i--)if(AUD[i].real&&AUD[i].obra===o&&AUD[i].cloud&&!ids.has(AUD[i].id))AUD.splice(i,1);
+    const ids=new Set(items.map(x=>x.id));
     items.forEach(x=>{const dat={...x.data,fotos:(x.data.fotos||[]).map(u=>addFile('foto.jpg','image/jpeg',u).id),adjuntos:[]};let a=AUD.find(y=>y.id===x.id);if(a){a.data=dat;a.resultado=x.resultado;a.fecha=x.fecha;a.num=x.num}else{a={id:x.id,tipo:x.tipo,num:x.num,obra:o,fecha:x.fecha,resultado:x.resultado,data:dat,nuevo:false,real:true,cloud:true};AUD.push(a)}a.cloud=true;a.auto=false;
       if(x.tipo==='sup'&&dat.supId){const s=o.sup.find(z=>z.id===dat.supId);if(s&&s.estado!=='realizada'){s.estado='realizada';s.acta=a.id;s.resultado=a.resultado}}});cambio=true}catch(e){}}));
   if(cambio&&!document.querySelector('.sheet'))draw()}
