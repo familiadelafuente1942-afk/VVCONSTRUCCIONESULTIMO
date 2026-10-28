@@ -254,6 +254,38 @@ export default async function handler(req, res) {
     }
 
     // ---- trae las bitácoras de la app anterior de V+V (solo lectura sobre esa app) ----
+    if (b.op === "aud_old") {
+      const OLD = "https://bxhjgxzvayszfqwlwinq.supabase.co", OK = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
+      const HO = { apikey: OK, Authorization: "Bearer " + OK };
+      const leerOld = async (k) => { const r = await fetch(`${OLD}/rest/v1/bco_storage?key=eq.${k}&select=value&limit=1`, { headers: HO }); if (!r.ok) throw new Error("old " + r.status); const rows = await r.json(); let v = rows[0] ? rows[0].value : null; if (typeof v === "string") { try { v = JSON.parse(v); } catch { v = null; } } return v; };
+      const [aud, obOld] = await Promise.all([leerOld("vv_auditoria"), leerOld("vv_obras")]);
+      if (!Array.isArray(aud)) { res.status(200).json({ ok: true, por: {}, total: 0, sinObra: [] }); return; }
+      const nrm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+      const obras = await leerCol(H, "obras");
+      const nomOld = {}; (Array.isArray(obOld) ? obOld : []).forEach((o) => { nomOld[o.id] = o.nombre; });
+      const casar = (nom) => { const n = nrm(nom); if (!n) return null; return obras.find((o) => nrm(o.nombre) === n) || obras.find((o) => nrm(o.nombre).includes(n) || n.includes(nrm(o.nombre))) || null; };
+      const S = (x, n) => String(x == null ? "" : x).slice(0, n);
+      const dts = (f) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(f || "")); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : 0; };
+      const dmy = (f) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(f || "")); return m ? `${m[3]}/${m[2]}/${m[1].slice(2)}` : S(f, 20); };
+      const T = { supervision: ["sup", "Acta de supervisión de obra"], revision: ["rev", "Informe de revisión de documentación"], certificacion: ["cert", "Certificado de etapa ejecutada"] };
+      const por = {}; const sinObra = new Set(); let total = 0;
+      for (const it of aud) {
+        const t = T[it.tipo]; if (!t) continue;
+        const nom = nomOld[it.obra_id] || it.obra_nombre || "";
+        const ob = casar(nom); if (!ob) { if (nom) sinObra.add(nom); continue; }
+        const obs = (Array.isArray(it.obs) ? it.obs : []).slice(0, 40);
+        const obsSec = obs.length ? [{ h: it.tipo === "supervision" ? "Observaciones de la supervisión" : "Observaciones", tabla: { cols: ["N°", "Observación", "Sector / ítem", "Criticidad"], rows: obs.map((x, i) => [String(i + 1), S(x.txt, 800), S(x.sector || "—", 100), S(x.crit || "Media", 20)]) } }] : [{ h: "Observaciones", texto: "Sin observaciones." }];
+        let campos, secs;
+        if (it.tipo === "supervision") { campos = [["Período", S(it.periodo, 200)], ["Presentes", S(it.presentes, 200)]]; secs = [...obsSec, ...((it.interferencias || []).filter(Boolean).length ? [{ h: "Interferencias detectadas", lista: it.interferencias.filter(Boolean).slice(0, 20).map((x) => S(x, 600)) }] : [])]; }
+        else if (it.tipo === "revision") { const ds = (Array.isArray(it.docs) ? it.docs : []).slice(0, 30); campos = [["Etapa a ejecutar", S(it.etapa, 160)], ["Documentos revisados", String(ds.length)]]; secs = [{ h: "Documentos revisados", tabla: { cols: ["Plano / documento", "Revisión", "Fecha"], rows: ds.map((d) => [S(d.nombre, 200), S(d.version || "—", 20), S(d.fechaDoc || "—", 30)]) } }, ...obsSec]; }
+        else { campos = [["Etapa certificada", S(it.etapa, 160)], ["Ejecutado por", S(it.ejecutadoPor, 80)], ["Plano de referencia", S(it.planoRef, 80)], ["Versión / revisión", S(it.versionPlano, 20)]]; secs = [{ h: "Directiva de la Jefatura de Obra", texto: S(it.directiva || "—", 1500) }, ...obsSec]; }
+        const fotos = (Array.isArray(it.fotos) ? it.fotos : []).map((f) => (f && f.url) || "").filter((u) => /^https:\/\//.test(u)).slice(0, 8).map((u) => S(u, 600));
+        const rec = { id: "o_" + S(it.id, 30).replace(/[^A-Za-z0-9_-]/g, ""), tipo: t[0], num: S(it.nro, 30), fecha: dts(it.fecha) || Number(it.ts) || 0, viejo: true, sinFotos: (Array.isArray(it.fotos) ? it.fotos.length : 0) - fotos.length,
+          doc: { titulo: t[1], sub: "Auditoría de obra · App anterior", obra: ob.nombre, num: S(it.nro, 30), fecha: dmy(it.fecha), resultado: S(it.resultado, 40), conclusion: S(it.conclusion, 800), intro: "", campos, secciones: secs, fotos, firmas: [[S(it.responsable || "Responsable técnico", 60), "Auditoría de obra"], ["", "Jefatura de Obra / Dirección de Obra"]] } };
+        (por[ob.id] = por[ob.id] || []).push(rec); total++;
+      }
+      res.status(200).json({ ok: true, por, total, sinObra: [...sinObra] }); return;
+    }
     if (b.op === "importar_bitacora") {
       const OLD = "https://bxhjgxzvayszfqwlwinq.supabase.co", OK = "sb_publishable_13lg1fm-zw7UHvCkVPdFFQ_07TSH4i5";
       const HO = { apikey: OK, Authorization: "Bearer " + OK };

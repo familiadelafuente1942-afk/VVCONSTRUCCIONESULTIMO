@@ -1654,7 +1654,8 @@ let _imp=0;
 async function importarNexo(manual){try{const j=await api({op:'importar_nexo'});_imp=Date.now();if(j.nuevos||j.actualizados||j.quitados||j.obrasNuevas){await cargar(true);if(manual)toast(`Traídos de NEXO 2: ${j.nuevos} nuevos, ${j.actualizados} actualizados`)}else if(manual)toast('Ya está todo al día con NEXO 2')}catch(e){if(manual)toast('No se pudo traer de NEXO 2',true)}}
 let _rendOk=0;
 async function cargarRenders(){if(_rendOk&&Date.now()-_rendOk<600000)return;try{const j=await api({op:'renders_obras'});_rendOk=Date.now();S.REND=j.renders||{};redraw(true)}catch(e){}}
-async function cargarNexo(){cargarRenders();if(Date.now()-_imp>120000)importarNexo(false);if(!_impB)importarBitacora(false);try{const j=await api({op:'nexo'});S.NX=j.nexo||{};redraw(true)}catch(e){}}
+async function cargarAudOld(){try{const j=await api({op:'aud_old'});S.AUDV=j.por||{};redraw(true)}catch(e){}}
+async function cargarNexo(){cargarRenders();cargarAudOld();if(Date.now()-_imp>120000)importarNexo(false);if(!_impB)importarBitacora(false);try{const j=await api({op:'nexo'});S.NX=j.nexo||{};redraw(true)}catch(e){}}
 function redraw(soft){if(document.querySelector('#layer .scrim'))return;if(S.gfull){if(!soft||!document.querySelector('#gfull input:focus,#gfull select:focus'))gfRender()}else draw()}
 async function guardar(c,item,quiet){
   closeSheet();
@@ -2149,12 +2150,13 @@ function nivelSlider(){return `<div class="nv"><span aria-hidden="true">☀</spa
 document.addEventListener('input',e=>{const t=e.target;if(t&&t.classList&&t.classList.contains('nv-r')){try{window.__nivel(+t.value)}catch(x){}}});
 
 const AUDC={sup:['Supervisión de obra','a-sup'],rev:['Revisión de documentación','a-rev'],cert:['Certificado de finalidad de etapa','a-cert']};
+function audLista(o){const A=audDe(o),v=(S.AUDV&&S.AUDV[o.id])||[];return [...((A&&A.l)||[]),...v].sort((x,y)=>(y.fecha||0)-(x.fecha||0))}
 function audDe(o){const n=nxDe(o);return n&&n.info&&n.info.aud||null}
-function vAudObra(o){const A=audDe(o);
-  if(!A)return `<div class="card muted">Todavía no hay auditoría publicada para esta obra. Aparece cuando la Dirección abre NEXO 2 (o si esta obra no está vinculada).</div>`;
-  const K=A.k||{},L=A.l||[];
-  return `<div class="kpis audk"><div class="kpi"><b>${K.prox?fmt(K.prox):'—'}</b><span class="kl">próxima supervisión</span></div><div class="kpi"><b>${K.rev||0}</b><span class="kl">planos en revisión</span></div><div class="kpi"><b>${K.cert?fmt(K.cert):'—'}</b><span class="kl">próximo certificado de etapa</span></div></div>
-  <div class="card"><div class="top"><h3>Documentos de la auditoría</h3><span class="muted small">${L.length} en total</span></div>${L.length?L.map(a=>`<div class="docrow"><span class="dl"><span class="dn"><i class="adot ${(AUDC[a.tipo]||AUDC.sup)[1]}"></i>${esc((AUDC[a.tipo]||AUDC.sup)[0])} · ${esc(a.num)}</span><span class="dm">${fmt(a.fecha)} · ${esc(audResumen(a))}</span></span><button class="btn sm" data-act="verAud" data-o="${o.id}" data-id="${esc(a.id)}">Ver</button></div>`).join(''):'<span class="muted small">Sin documentos todavía.</span>'}</div>`}
+function vAudObra(o){const A=audDe(o),LL=audLista(o);
+  if(!A&&!LL.length)return `<div class="card muted">Todavía no hay auditoría publicada para esta obra. Aparece cuando la Dirección abre NEXO 2 (o si esta obra no está vinculada).</div>`;
+  const K=(A&&A.k)||{},L=LL;
+  return `${A?`<div class="kpis audk"><div class="kpi"><b>${K.prox?fmt(K.prox):'—'}</b><span class="kl">próxima supervisión</span></div><div class="kpi"><b>${K.rev||0}</b><span class="kl">planos en revisión</span></div><div class="kpi"><b>${K.cert?fmt(K.cert):'—'}</b><span class="kl">próximo certificado de etapa</span></div></div>`:''}
+  <div class="card"><div class="top"><h3>Documentos de la auditoría</h3><span class="muted small">${L.length} en total</span></div>${L.length?L.map(a=>`<div class="docrow"><span class="dl"><span class="dn"><i class="adot ${(AUDC[a.tipo]||AUDC.sup)[1]}"></i>${esc((AUDC[a.tipo]||AUDC.sup)[0])} · ${esc(a.num)}${a.viejo?' <span class="chip" style="font-size:10px">App anterior</span>':''}</span><span class="dm">${fmt(a.fecha)} · ${esc(audResumen(a))}</span></span><button class="btn sm" data-act="verAud" data-o="${o.id}" data-id="${esc(a.id)}">Ver</button></div>`).join(''):'<span class="muted small">Sin documentos todavía.</span>'}</div>`}
 function audResumen(a){const d=a.doc||{},c=d.campos||[];const base=a.tipo==='sup'?(c[0]&&c[0][1]):a.tipo==='rev'?(c[0]&&c[0][1]):(c[0]&&c[0][1]);const ob=(d.secciones||[]).find(s=>s.tabla&&/Observaciones/.test(s.h));const n=ob?ob.tabla.rows.length:0;return (base||'')+(n?' · '+n+(n===1?' observación':' observaciones'):'')}
 function audPaper(d){const sec=s=>`<h5>${esc(s.h)}</h5>`+(s.tabla?`<table><tr>${s.tabla.cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr>${s.tabla.rows.map(r=>`<tr>${r.map(v=>`<td>${esc(v).replace(/\n/g,'<br>')}</td>`).join('')}</tr>`).join('')}</table>`:s.lista?`<ol>${s.lista.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:`<p>${esc(s.texto||'')}</p>`);
   return `<div class="paper"><div class="ph"><b>${esc(d.titulo)}</b><span>${esc(d.sub)}</span></div><div class="pmeta"><span>Obra: <b>${esc(d.obra)}</b></span><span>N°: <b>${esc(d.num)}</b></span><span>Fecha: <b>${esc(d.fecha)}</b></span></div>
@@ -2162,7 +2164,7 @@ function audPaper(d){const sec=s=>`<h5>${esc(s.h)}</h5>`+(s.tabla?`<table><tr>${
   ${(d.secciones||[]).map(sec).join('')}${d.resultado?`<p class="pres">Resultado: <b class="${d.resultado==='Conforme'?'ok':d.resultado==='No conforme'?'no':'obs'}">${esc(d.resultado)}</b></p>`:''}${d.conclusion?`<h5>Conclusión</h5><p>${esc(d.conclusion)}</p>`:''}
   <h5>Fotos</h5>${(d.fotos||[]).length?`<div class="pfotos">${d.fotos.map(u=>`<img src="${esc(u)}" alt="Foto" loading="lazy">`).join('')}</div>`:'<p class="pm">Sin fotos adjuntas.</p>'}${d.firmas?`<div class="pfirmas">${d.firmas.map(([n,c])=>`<div><i></i><b>${esc(n||'')}</b><span>${esc(c)}</span></div>`).join('')}</div>`:''}<p class="pfoot">Documento emitido con Nexo · ${esc(d.titulo)} · ${esc(d.num)}</p></div>`}
 const A={
-  verAud:ds=>{const o=col('obras').find(x=>x.id===ds.o),L=o&&audDe(o)||{l:[]};const a=(L.l||L).find(x=>x.id===ds.id);if(!a)return;openSheet(`<span class="eyebrow">${esc(a.doc.obra)}</span><h2>${esc(a.doc.titulo)} · ${esc(a.num)}</h2>${audPaper(a.doc)}`,a.doc.titulo);},
+  verAud:ds=>{const o=col('obras').find(x=>x.id===ds.o);const a=o&&audLista(o).find(x=>x.id===ds.id);if(!a)return;openSheet(`<span class="eyebrow">${esc(a.doc.obra)}</span><h2>${esc(a.doc.titulo)} · ${esc(a.num)}</h2>${audPaper(a.doc)}`,a.doc.titulo);},
   irNxTodo:()=>{const o=col('obras').find(o=>nxDe(o)&&nxDe(o).cards.length);if(o){S.tab='obras';S.obra=o.id;S.otab='nexo';draw();window.scrollTo(0,0)}else toast('No hay tarjetas publicadas todavía')},
   editCap:ds=>{const o=byId('obras',ds.id);if(o)formCap(o)},
   fijarAg:ds=>{const a=byId('agenda',ds.id);if(a)guardar('agenda',{...a,fijar:!a.fijar})},
