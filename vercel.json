@@ -8,6 +8,15 @@
           "value": "no-store, max-age=0, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/belfast/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "https://chatgpt.com"
+        }
+      ]
     }
   ],
   "functions": {
