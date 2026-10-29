@@ -80,12 +80,12 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 const MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 const N=24;
 let uid=0;const nid=()=>'x'+Date.now().toString(36)+(++uid);
-/* ===== datos de arranque: presupuesto de Paseo Colón 735 (Construcción) con un cronograma típico de 24 meses ===== */
+/* ===== datos de arranque: presupuesto base (Construcción) con un cronograma típico de 24 meses ===== */
 const RUB0=[['Trabajos preliminares',1211097,184482254,1,3],['Movimiento de tierra',0,27176108,1,3],['Estructuras',442082330,433875582,3,12],['Mamposterías',155014218,195323315,6,14],['Capas aisladoras',836613,532328,7,15],['Cubiertas',16475522,12591474,12,16],['Revoques',22616646,192537012,10,18],['Contrapisos',19520992,63739837,14,18],['Cielorrasos',7912696,67057568,16,20],['Revestimientos',170177234,42110396,16,21],['Pisos',65645672,85987245,18,22],['Zócalos',11404702,12601774,20,23],['Carpinterías',435057805,38206683,14,22],['Vidrios',104146310,135870084,18,23],['Pinturas',335339258,118196508,19,24],['Instalaciones eléctricas',264325444,47733884,6,22],['Instalaciones sanitarias',12418998,20231427,6,22],['Instalaciones de gas',41263570,10760940,8,21],['Equipamiento',60358293,200851728,20,24]];
 const INT0=['Diseño e interiorismo','Habitaciones · mobiliario','Habitaciones · blancos y textiles','Habitaciones · tecnología y confort','Baños · accesorios y dotación','Kitchenette / comedor de unidad','Decoración y ambientación','Recepción, lobby y áreas comunes','Operación hotelera y limpieza','Logística, montaje y entrega'];
 function proyecto0(){
   const hoy=new Date();const m0=new Date(hoy.getFullYear(),hoy.getMonth()+1,1);
-  return{v:1,nombre:'Paseo Colón 735 · San Telmo',fx:1540,m2:2751,m2v:2035,ventaUsd:2550,loteUsd:0,inicio:m0.getFullYear()+'-'+String(m0.getMonth()+1).padStart(2,'0'),
+  return{v:1,nombre:'Edificio propio',fx:1540,m2:2751,m2v:2035,ventaUsd:2550,loteUsd:0,inicio:m0.getFullYear()+'-'+String(m0.getMonth()+1).padStart(2,'0'),
     pct:{gg:15,ut:20,imp:15},caja:{gg:true,ut:false,imp:true},infl:0,
     rubros:RUB0.map(r=>({id:nid(),g:'C',n:r[0],u:'gl',c:1,mat:r[1],mo:r[2],ini:r[3],fin:r[4]})).concat(INT0.map((n,i)=>({id:nid(),g:'I',n,u:'gl',c:1,mat:0,mo:0,ini:i<1?18:21,fin:i<1?22:24}))),
     fondos:[],metas:['Pagar el lote','Vender la otra casa','Ingresar ese dinero al proyecto','Inicio de obra','Fin de estructura','Fin de obra','Amoblamiento completo','Venta de las unidades'].map(t=>({id:nid(),t,fecha:'',hecha:false}))};
@@ -124,7 +124,7 @@ let _st=null;
 function marcar(t){ESTADO=t;const e=$('#estado');if(e)e.textContent=t}
 function guardarLuego(){if(_st)clearTimeout(_st);marcar('Guardando…');_st=setTimeout(guardar,900)}
 async function guardar(){try{const r=await fetch('/api/edificio',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op:'set',cod:COD,data:P,base:TBASE})});const j=await r.json();if(r.status===409){marcar('⚠ Hay una versión más nueva: recargá la página');return}if(!r.ok)throw new Error(j.error||'error');TBASE=j.t;marcar('Guardado ✓')}catch(e){marcar('⚠ Sin conexión: '+(e.message||''))}}
-async function cargar(){try{const r=await fetch('/api/edificio',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op:'get',cod:COD})});const j=await r.json();if(!r.ok)throw new Error(j.error||'error');P=j.data||proyecto0();TBASE=j.t||0;if(!j.data){guardarLuego()}return true}catch(e){return e.message||'error'}}
+async function cargar(){try{const r=await fetch('/api/edificio',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op:'get',cod:COD})});const j=await r.json();if(!r.ok)throw new Error(j.error||'error');P=j.data||proyecto0();if(P&&/Paseo Col|Telmo/i.test(P.nombre||''))P.nombre='Edificio propio';TBASE=j.t||0;if(!j.data){guardarLuego()}return true}catch(e){return e.message||'error'}}
 /* ===== vistas ===== */
 const fv=(v,m)=>typeof v==='number'?(m?sg(v,m):(Math.abs(v)>=1000?fN(v):String(v).replace('.',','))):v;
 const inp=(p,v,o={})=>`<input class="ni" data-p="${p}" value="${esc(o.t==='text'?v:fv(v,o.m))}" ${o.t==='text'?'':'inputmode="decimal"'} ${o.w?`style="width:${o.w}"`:''}>`;
@@ -135,7 +135,7 @@ function vCot(C){
     <tr class="sub"><td colspan="5">Subtotal</td><td class="r">${mf(rs.reduce((a,r)=>a+r.matT,0))}</td><td class="r">${mf(rs.reduce((a,r)=>a+r.moT,0))}</td><td class="r"><b>${mf(tot)}</b></td><td colspan="3"></td></tr></table></div><button class="btn sm" data-act="addR" data-g="${g}">+ Agregar rubro</button></div>`};
   const utilUsd=P.m2v?(P.ventaUsd*P.m2v-(C.cajaTot+C.lote)/P.fx)/P.m2v:0;
   const ingresos=P.ventaUsd*P.m2v;
-  return `<figure class="cover"><img src="/edificio/edif-fachada.jpg" alt="Fachada Paseo Colón 735"></figure><div class="kpis"><div class="kpi"><b>${mM(C.final)}</b><span class="kl">precio final llave en mano</span></div><div class="kpi"><b>${mM(C.dir.tot)}</b><span class="kl">costo directo</span></div><div class="kpi"><b>${mM(C.cajaTot)}</b><span class="kl">lo que desembolso en 24 meses</span></div><div class="kpi"><b>${mM(ingresos*P.fx)}</b><span class="kl">ingresos por venta</span></div></div>
+  return `<figure class="cover"><img src="/edificio/edif-fachada.jpg" alt="Fachada"></figure><div class="kpis"><div class="kpi"><b>${mM(C.final)}</b><span class="kl">precio final llave en mano</span></div><div class="kpi"><b>${mM(C.dir.tot)}</b><span class="kl">costo directo</span></div><div class="kpi"><b>${mM(C.cajaTot)}</b><span class="kl">lo que desembolso en 24 meses</span></div><div class="kpi"><b>${mM(ingresos*P.fx)}</b><span class="kl">ingresos por venta</span></div></div>
   <div class="card"><div class="ctop"><h3>Parámetros</h3><span class="muted small">lo que se edita acá recalcula todo</span></div>
    <div class="g2"><label class="f">Nombre de la obra<input class="ni tx" data-p="nombre" value="${esc(P.nombre)}"></label><label class="f">Mes 1 de obra (aaaa-mm)<input class="ni tx" data-p="inicio" value="${esc(P.inicio)}"></label>
    <label class="f">Cotización ARS por USD${inp('fx',P.fx,{m:'$ '})}</label><label class="f">Inflación mensual estimada (%)${inp('infl',P.infl)}</label>
@@ -189,7 +189,7 @@ function vFondos(C){
   <div class="card"><div class="ctop"><h3>Metas</h3><button class="btn sm gold" data-act="addM">+ Meta</button></div>
    ${P.metas.slice().sort((a,b)=>(a.fecha||'9')<(b.fecha||'9')?-1:1).map(m=>{const d=m.fecha?Math.round((new Date(m.fecha+'T00:00:00')-new Date(new Date().toDateString()))/864e5):null;return `<div class="frow meta ${m.hecha?'hecha':''}"><input type="checkbox" data-m="${m.id}:hecha" ${m.hecha?'checked':''} aria-label="Hecha"><input class="ni tx" data-m="${m.id}:t" value="${esc(m.t)}"><input class="ni tx" type="date" data-m="${m.id}:fecha" value="${esc(m.fecha)}" style="width:140px"><span class="muted small" style="min-width:70px">${m.hecha?'listo':d===null?'sin fecha':d<0?'hace '+(-d)+' d':d===0?'hoy':'en '+d+' d'}</span><button class="x" data-act="delM" data-id="${m.id}" aria-label="Quitar">✕</button></div>`}).join('')}</div>`;
 }
-const IMG=[['fachada','Fachada · Paseo Colón 735'],['noche','Fachada de noche'],['lobby','Lobby y recepción'],['living','Unidad amoblada · living'],['habitacion','Unidad amoblada · dormitorio'],['kitchenette','Unidad amoblada · cocina y comedor'],['bano','Unidad amoblada · baño'],['terraza','Terraza común y solárium'],['pileta','Pileta y spa'],['gimnasio','Gimnasio'],['coworking','Coworking y sala de reuniones'],['cochera','Cochera en subsuelo']];
+const IMG=[['fachada','Fachada'],['noche','Fachada de noche'],['lobby','Lobby y recepción'],['living','Unidad amoblada · living'],['habitacion','Unidad amoblada · dormitorio'],['kitchenette','Unidad amoblada · cocina y comedor'],['bano','Unidad amoblada · baño'],['terraza','Terraza común y solárium'],['pileta','Pileta y spa'],['gimnasio','Gimnasio'],['coworking','Coworking y sala de reuniones'],['cochera','Cochera en subsuelo']];
 function vImg(){return `<p class="muted">Imágenes conceptuales del proyecto: el edificio terminado y las unidades amobladas, listas para vender.</p><div class="gal">${IMG.map(([k,t],i)=>`<figure class="${i===0?'big':''}"><a href="/edificio/edif-${k}.jpg" target="_blank" rel="noopener"><img src="/edificio/edif-${k}.jpg" alt="${t}" loading="lazy"></a><figcaption>${t}</figcaption></figure>`).join('')}</div>`}
 function draw(){
   if(!P){return}
@@ -233,6 +233,6 @@ const A={
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;if(b.tagName==='A')e.preventDefault();const f=A[b.dataset.act];if(f)f(b.dataset)});
 function login(){document.body.classList.add('login');$('#view').innerHTML=`<div class="card" style="max-width:420px;margin:40px auto"><span class="eyebrow">Edificio propio</span><h2>Ingresá con tu código</h2><p class="muted small">El mismo código de Dirección que usás en NEXO 2.</p><input id="cod" class="ni tx" type="password" placeholder="Código" style="width:100%;margin:8px 0" autocomplete="off"><button class="btn gold full" data-act="entrar">Entrar</button><p id="msg" class="muted small"></p></div>`;$('#who').innerHTML='';$('#ptitle').innerHTML='<span>Edificio propio</span>'}
 try{const t=localStorage.getItem('edif_tema');if(t)document.documentElement.dataset.theme=t}catch(e){}
-(async()=>{const n=new Date();$('#fecha').textContent='Paseo Colón 735 · '+n.getDate()+' '+MES[n.getMonth()]+' '+n.getFullYear();let c='';try{c=localStorage.getItem('edif_cod')||''}catch(e){}
+(async()=>{const n=new Date();$('#fecha').textContent=''+n.getDate()+' '+MES[n.getMonth()]+' '+n.getFullYear();let c='';try{c=localStorage.getItem('edif_cod')||''}catch(e){}
   if(c){COD=c;const r=await cargar();if(r===true){marcar('Guardado ✓');draw();return}}login()})();
 </script>
