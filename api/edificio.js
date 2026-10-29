@@ -37,14 +37,20 @@ export default async function handler(req, res) {
   try {
     const dir = norm(await dirCode(H));
     if (!dir || norm(b.cod) !== dir) { await pausa(600); res.status(403).json({ error: "Código incorrecto." }); return; }
-    if (b.op === "get") { const v = await leer(H, CLAVE); res.status(200).json({ ok: true, data: v && v.data ? v.data : null, t: (v && v.t) || 0 }); return; }
+    // Documentos adicionales (ej. cotizador Belfast): doc "cotiz_<id>" -> clave "belfast_cotiz_<id>"
+    let K = CLAVE;
+    if (b.doc !== undefined && b.doc !== null && b.doc !== "") {
+      if (!/^cotiz_[a-z0-9_-]{1,40}$/.test(String(b.doc))) { res.status(400).json({ error: "Documento inválido" }); return; }
+      K = "belfast_" + b.doc;
+    }
+    if (b.op === "get") { const v = await leer(H, K); res.status(200).json({ ok: true, data: v && v.data ? v.data : null, t: (v && v.t) || 0 }); return; }
     if (b.op === "set") {
       const s = JSON.stringify(b.data || {});
       if (s.length > 400000) { res.status(400).json({ error: "Demasiado grande." }); return; }
-      const prev = await leer(H, CLAVE);
+      const prev = await leer(H, K);
       if (prev && Number(b.base) && Number(prev.t) > Number(b.base)) { res.status(409).json({ error: "Hay una versión más nueva guardada desde otro aparato.", t: prev.t }); return; }
       const t = Date.now();
-      await escribir(H, CLAVE, { t, data: b.data });
+      await escribir(H, K, { t, data: b.data });
       res.status(200).json({ ok: true, t }); return;
     }
     res.status(400).json({ error: "Operación inválida" });
