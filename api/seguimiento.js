@@ -232,6 +232,7 @@ export default async function handler(req, res) {
       const borrados = new Set(((await leer(H, "seg_borrados")) || {}).ids || []);
       const hab = (a, bb) => { let n = 0; for (let d = a + 864e5; d <= bb; d += 864e5) { const w = new Date(d).getUTCDay(); if (w > 0 && w < 6) n++; } return n; };
       let nuevos = 0, actualizados = 0, quitados = 0, obrasNuevas = 0;
+      let adics = await leerCol(H, "adicionales"), adCambio = false;
       for (const [nid, nombre] of NX) {
         const v = await leer(H, "gestion_" + nid);
         const items = (v && v.items) || [];
@@ -263,13 +264,39 @@ export default async function handler(req, res) {
           regs = regs.filter((x) => x.id !== id); regs.push(it);
           prev ? actualizados++ : nuevos++;
         }
+        // certificados de tareas adicionales cargados en NEXO 2 -> pestaña Adicionales de Seguimiento
+        {
+          const av = await leer(H, "adic_" + nid).catch(() => null);
+          const vistosA = new Set();
+          for (const c of (av && av.items) || []) {
+            const id = "n_adic_" + nid + "_" + ident(c.id);
+            vistosA.add(id);
+            if (borrados.has(id)) continue;
+            const prev = adics.find((x) => x.id === id);
+            if (prev && (prev.nexoEd || 0) >= (c.editado || 0)) continue;
+            const tot = ["materiales", "manoObra", "equipos", "subcontratos", "otros"].reduce((t, k) => { const q = (c.cotiz || {})[k] || {}; const f = (v) => Number(String(v == null ? "" : v).replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "")) || 0; return t + f(q.cant) * f(q.punit); }, 0);
+            const res = String(c.resolucion || "");
+            let est = res === "Rechazado" ? "rechazado" : /^(APROBADO|Aprobado)/.test(res) ? "aprobado" : "pendiente";
+            if (prev && prev.estado === "cobrado" && est === "aprobado") est = "cobrado";
+            const f = Date.parse(String(c.fecha || "") + "T12:00:00-03:00");
+            const titulo = ("Adicional N° " + (c.adicionalNro || "s/n") + (c.ubicacion ? " · " + c.ubicacion : "") + " — " + (c.descripcionTecnica || "")).slice(0, 160);
+            const nota = ["Certificado cargado en NEXO 2", c.solicitadoPor ? "Pidió: " + c.solicitadoPor + " (" + (c.medioPedido || "") + ")" : "", "Resolución: " + (res || "En revisión") + (c.autorizadoPor ? " · " + c.autorizadoPor : ""), c.incidenciaPlazo === "dias" ? "Suma " + (c.diasIncidencia || "?") + " días de plazo" : ""].filter(Boolean).join(" · ");
+            const nuevo = COLS.adicionales({ obra: ob.id, fecha: isNaN(f) ? (c.editado || Date.now()) : f, titulo, monto: tot, estado: est, nota });
+            const it = { ...nuevo, id, por: "NEXO 2", nexoEd: c.editado || 0, creado: (prev && prev.creado) || Date.now(), editado: Date.now(), editor: "NEXO 2" };
+            adics = adics.filter((x) => x.id !== id); adics.push(it); adCambio = true;
+          }
+          const n0 = adics.length;
+          adics = adics.filter((x) => !(x.obra === ob.id && String(x.id).startsWith("n_adic_" + nid + "_") && !vistosA.has(x.id)));
+          if (adics.length !== n0) adCambio = true;
+        }
         const antes = regs.length;
         regs = regs.filter((x) => !(x.origen === "nexo" && x.obra === ob.id && x.id.startsWith("n_" + nid + "_") && !vistos.has(x.id)));
         quitados += antes - regs.length;
       }
+      if (adCambio) await escribir(H, "seg_adicionales", { items: adics.slice(-2000) });
       if (nuevos || actualizados || quitados) await escribir(H, "seg_registros", { items: regs.slice(-3000) });
       if (obrasNuevas) await escribir(H, "seg_obras", { items: obras });
-      res.status(200).json({ ok: true, nuevos, actualizados, quitados, obrasNuevas });
+      res.status(200).json({ ok: true, nuevos, actualizados, quitados, obrasNuevas, adicionales: adCambio });
       return;
     }
 
