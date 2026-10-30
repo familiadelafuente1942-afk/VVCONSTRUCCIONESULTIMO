@@ -187,6 +187,40 @@ export default async function handler(req, res) {
     if (!dir || !q.k || !iguales(q.k, claveDe(dir, rev))) { await pausa(700); res.status(403).send("Enlace no válido."); return; }
     const obras = await cargarObras(H);
     const f = String(q.f || "");
+    if (q.todo !== undefined) {
+      // acceso de lectura a todo el entorno (solo consulta): índice, una sección completa o búsqueda de texto
+      const PROHIBIDO = /^(codigos|cfg|asist_cfg|seg_cfg|seg_flags)$|^audfot_|^audtrash_|token|hash|sesion/i;
+      const limpiarB64 = (v) => JSON.parse(JSON.stringify(v, (k, x) => (typeof x === "string" && /^data:/.test(x) ? "[imagen embebida omitida]" : x)));
+      const rs = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,actualizado&limit=2000&order=clave`, { headers: H });
+      if (!rs.ok) throw new Error("db " + rs.status);
+      const claves = (await rs.json()).filter((r) => !PROHIBIDO.test(r.clave));
+      if (q.s) {
+        const k = String(q.s);
+        if (PROHIBIDO.test(k) || !claves.some((r) => r.clave === k)) { res.status(404).send("Esa sección no existe. Pedí el índice con &todo=1"); return; }
+        const v = limpiarB64(await leer(H, k));
+        const txt = JSON.stringify(v);
+        if (f === "json" || txt.length > 0) { res.setHeader("Content-Type", "application/json; charset=utf-8"); res.status(200).send(txt.length > 900000 ? txt.slice(0, 900000) + '"…(cortado)"' : txt); return; }
+      }
+      if (q.q) {
+        const buscado = nrm(q.q);
+        if (buscado.length < 2) { res.status(400).send("Búsqueda muy corta"); return; }
+        const rr = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&limit=2000&clave=not.like.audfot_*`, { headers: H });
+        if (!rr.ok) throw new Error("db " + rr.status);
+        const hits = [];
+        for (const r of await rr.json()) {
+          if (PROHIBIDO.test(r.clave)) continue;
+          const items = Array.isArray(r.valor && r.valor.items) ? r.valor.items : [r.valor];
+          for (const it of items) { const t = JSON.stringify(limpiarB64(it)); if (nrm(t).includes(buscado)) hits.push({ seccion: r.clave, item: t.length > 700 ? t.slice(0, 700) + "…" : t }); if (hits.length >= 40) break; }
+          if (hits.length >= 40) break;
+        }
+        res.setHeader("Content-Type", "application/json; charset=utf-8"); res.status(200).send(JSON.stringify({ busqueda: q.q, resultados: hits }, null, 1)); return;
+      }
+      const L = ["ENTORNO COMPLETO (solo lectura)\n", "Cada sección se pide con: " + enlace(rev) + "&todo=1&s=<sección>", "Buscar texto en todo: " + enlace(rev) + "&todo=1&q=<palabra>\n",
+        "Guía: seg_obras, seg_tareas, seg_personal, seg_gastos, seg_sueldos, seg_agenda, seg_hitos, seg_registros, seg_adicionales = app de Seguimiento. snap_<obra> = estado de NEXO 2 (avance, tarjetas, planos). informes_<obra> = informes semanales y avances. audreg_<obra> = actas de auditoría. gestion_<obra> = registros de gestión de NEXO 2. adic_<obra> = certificados de tareas adicionales. edif_proyecto = edificio propio.\n", "SECCIONES:"];
+      claves.forEach((r) => L.push(`- ${r.clave} (actualizado ${fechaLarga(Date.parse(r.actualizado))})`));
+      L.push("\nTambién: &hoy=1 (lo cargado hoy), &obra=<nombre> (PDF de acta).");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(L.join("\n")); return;
+    }
     if (q.hoy !== undefined || q.fecha) {
       const ymd = /^\d{4}-\d{2}-\d{2}$/.test(String(q.fecha || "")) ? String(q.fecha) : new Date(Date.now() - 108e5).toISOString().slice(0, 10);
       const d0 = Date.parse(ymd + "T00:00:00-03:00"), d1 = d0 + 864e5;
