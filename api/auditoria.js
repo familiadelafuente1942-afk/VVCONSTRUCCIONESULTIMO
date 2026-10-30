@@ -187,8 +187,29 @@ export default async function handler(req, res) {
     if (!dir || !q.k || !iguales(q.k, claveDe(dir, rev))) { await pausa(700); res.status(403).send("Enlace no válido."); return; }
     const obras = await cargarObras(H);
     const f = String(q.f || "");
+    if (q.hoy !== undefined || q.fecha) {
+      const ymd = /^\d{4}-\d{2}-\d{2}$/.test(String(q.fecha || "")) ? String(q.fecha) : new Date(Date.now() - 108e5).toISOString().slice(0, 10);
+      const d0 = Date.parse(ymd + "T00:00:00-03:00"), d1 = d0 + 864e5;
+      const en = (...ts) => ts.some((t) => Number(t) >= d0 && Number(t) < d1);
+      const col = async (c) => { const v = await leer(H, "seg_" + c); return (v && Array.isArray(v.items) && v.items) || []; };
+      const [sObras, sRegs, sAdic] = await Promise.all([col("obras"), col("registros"), col("adicionales")]);
+      const nom = (id) => (sObras.find((x) => x.id === id) || {}).nombre || id;
+      const money = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("es-AR");
+      const out = [];
+      const [dd, mm, aa] = [ymd.slice(8), ymd.slice(5, 7), ymd.slice(0, 4)];
+      const L = ["CARGADO EL " + dd + "/" + mm + "/" + aa + " (todas las obras)\n"];
+      for (const o of obras) for (const a of o.items) if (en(a.fecha, a.editado)) out.push({ obra: o.nombre, tipo: "Acta", texto: `${TIPO[a.tipo] || a.tipo} ${a.num}${a.resultado ? " · " + a.resultado : ""}`, link: `${enlace(rev)}&obra=${encodeURIComponent(o.nid)}&acta=${encodeURIComponent(a.num)}` });
+      for (const r of sRegs) if (en(r.fecha, r.creado, r.editado)) out.push({ obra: nom(r.obra), tipo: r.tipo === "retraso" ? "Registro (retraso)" : "Registro", texto: `${r.titulo || "Registro"}${r.causa ? " · " + r.causa : ""}${r.costo ? " · " + money(r.costo) : ""}${(r.fotos || []).length ? " · " + r.fotos.length + " foto(s)" : ""}\n   ${String(r.desc || "").replace(/\s+/g, " ").slice(0, 600)}` });
+      for (const x of sAdic) if (en(x.fecha, x.creado, x.editado)) out.push({ obra: nom(x.obra), tipo: "Adicional", texto: `${x.titulo} · ${money(x.monto)} · ${x.estado}` });
+      if (f === "json") { res.status(200).json({ fecha: ymd, items: out }); return; }
+      if (!out.length) L.push("No hay nada cargado en esa fecha.");
+      const por = {}; out.forEach((i) => (por[i.obra] = por[i.obra] || []).push(i));
+      Object.keys(por).forEach((k) => { L.push("== " + k + " =="); por[k].forEach((i) => L.push(`- [${i.tipo}] ${i.texto}${i.link ? "\n   PDF: " + i.link : ""}`)); L.push(""); });
+      res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(L.join("\n")); return;
+    }
     if (!q.obra) {
       const L = ["AUDITORÍAS DE OBRA (más recientes primero)\n"];
+      L.push("Lo cargado hoy (todas las obras): " + enlace(rev) + "&hoy=1\n");
       for (const o of obras) {
         L.push(`== ${o.nombre} ==`);
         o.items.slice(0, 5).forEach((a, i) => L.push(`- ${a.num} · ${fechaLarga(a.fecha)} · ${TIPO[a.tipo] || a.tipo}${a.resultado ? " · " + a.resultado : ""}${i === 0 ? "  <- última" : ""}`));
