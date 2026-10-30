@@ -277,6 +277,30 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ===== Certificados de tareas adicionales (los carga la jefatura de obra o Dirección; incluyen cotización) =====
+    if (typeof b.op === "string" && b.op.startsWith("adic_")) {
+      const obra = String(b.obra || "");
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const cr = b.cred || {};
+      const quien = cr.rol === "dir" && dirOk(cr.codigo) ? "dir" : cr.rol === "jefe" && norm(cr.codigo) && norm((cods.obras[obra] || {}).j) === norm(cr.codigo) ? "jefe" : "";
+      if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código para ver o guardar adicionales." }); return; }
+      const clave = "adic_" + obra;
+      if (b.op === "adic_list") { const v = await leer(H, clave); res.status(200).json({ ok: true, items: (v && v.items) || [] }); return; }
+      const id = String((b.rec && b.rec.id) || b.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+      if (!id) { res.status(400).json({ error: "Adicional inválido" }); return; }
+      if (b.op === "adic_del") { const v = await leer(H, clave); await escribir(H, clave, { items: ((v && v.items) || []).filter((x) => x.id !== id) }); res.status(200).json({ ok: true }); return; }
+      if (b.op === "adic_save") {
+        const raw = JSON.stringify(b.rec || {});
+        if (raw.length > 20000) { res.status(400).json({ error: "El certificado es demasiado largo" }); return; }
+        const rec = { ...JSON.parse(raw), id, obra, editado: Date.now(), por: quien };
+        const v = await leer(H, clave);
+        const items = ((v && v.items) || []).filter((x) => x.id !== id); items.push(rec);
+        await escribir(H, clave, { items: items.slice(-300) });
+        res.status(200).json({ ok: true, rec }); return;
+      }
+      res.status(400).json({ error: "Operación desconocida" }); return;
+    }
+
     // ===== Gestión de obra (interna, solo Dirección): registros de retrasos con causa, fotos y perjuicio =====
     if (typeof b.op === "string" && b.op.startsWith("ges_")) {
       const obra = String(b.obra || "");
