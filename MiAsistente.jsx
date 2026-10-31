@@ -624,6 +624,7 @@ export default function MiAsistente() {
     });
   }
   function pararVoz() {
+    vozSeqRef.current++;
     try { if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current.src = ""; currentAudioRef.current = null; } } catch { }
     try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { }
     vozHablandoRef.current = false;
@@ -639,11 +640,13 @@ export default function MiAsistente() {
       synth.speak(u);
     } catch { }
   }
+  const vozSeqRef = useRef(0);
   async function hablar(texto) {
     const sinMarkdown = String(texto || "").replace(/[*_#>`~]/g, "").replace(/\s+/g, " ").trim();
     const limpio = normalizarNumerosParaVoz(sinMarkdown).slice(0, 900);
     if (!limpio) return;
     pararVoz();
+    const turno = ++vozSeqRef.current; // solo la última orden de hablar puede sonar (evita voces dobles)
     vozHablandoRef.current = true;
     try {
       const r = await fetch("/api/tts", {
@@ -653,15 +656,15 @@ export default function MiAsistente() {
       });
       if (!r.ok) throw new Error("tts_error");
       const blob = await r.blob();
-      if (!vozHablandoRef.current) return; // se canceló mientras esperábamos la respuesta
+      if (!vozHablandoRef.current || turno !== vozSeqRef.current) return; // se canceló o llegó una orden más nueva
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       currentAudioRef.current = audio;
       audio.onended = () => { URL.revokeObjectURL(url); if (currentAudioRef.current === audio) currentAudioRef.current = null; };
       audio.onerror = () => { URL.revokeObjectURL(url); if (currentAudioRef.current === audio) currentAudioRef.current = null; };
-      await audio.play().catch(() => { hablarNavegador(limpio); });
+      await audio.play().catch(() => { if (turno === vozSeqRef.current && !currentAudioRef.current) hablarNavegador(limpio); else if (turno === vozSeqRef.current && currentAudioRef.current === audio) { currentAudioRef.current = null; hablarNavegador(limpio); } });
     } catch {
-      if (vozHablandoRef.current) hablarNavegador(limpio);
+      if (vozHablandoRef.current && turno === vozSeqRef.current) hablarNavegador(limpio);
     }
   }
   const silencioRef = useRef(null);
