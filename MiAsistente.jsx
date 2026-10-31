@@ -229,6 +229,16 @@ html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.16),tr
 .masit{display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;color:#cfcfcf;font-size:11px;font-weight:600;padding:10px 2px;border-radius:16px;cursor:pointer}
 .masit .gem{display:flex;color:inherit}
 .masit.on{background:rgba(255,255,255,.1);color:#D8B06A}
+.rail{display:none}
+@media (min-width:900px){
+  .bnav,.masov{display:none!important}
+  .rail{display:flex;flex-direction:column;gap:4px;position:fixed;left:12px;top:50%;transform:translateY(-50%);z-index:20;padding:8px 6px;width:84px;max-height:calc(100vh - 24px);overflow-y:auto;border-radius:28px;background:linear-gradient(158deg,rgba(255,255,255,.17),rgba(255,255,255,.035));-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 0 0 1px rgba(255,255,255,.26),0 14px 30px -10px rgba(0,0,0,.5);scrollbar-width:none}
+  .rail::-webkit-scrollbar{display:none}
+  .rail .tabg{width:100%;min-width:0;border-radius:18px;padding:8px 0 7px;font-size:10px;color:#8f8b84;position:relative}
+  .rail .tabg.on{color:#ece8e1}
+  .rail .bdg.c{background:#B98A41;right:6px}
+  .rootapp{margin:0 auto 0 108px!important;max-width:1100px!important}
+}
 `;
 
 const GLASS_CLARO = `
@@ -249,6 +259,7 @@ html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.2),tra
 [style*="background: rgba(255, 255, 255, 0.7)"]{background:linear-gradient(158deg,rgba(255,255,255,.95),rgba(255,255,255,.55))!important;-webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6);box-shadow:inset 0 1.5px 1px #fff,inset 0 0 0 1px rgba(0,0,0,.08)!important;border:0!important}
 .bnav .in,.massheet{background:linear-gradient(158deg,rgba(255,255,255,.95),rgba(255,255,255,.6));box-shadow:inset 0 1.5px 1px #fff,inset 0 0 0 1px rgba(0,0,0,.08),0 14px 30px -10px rgba(40,40,70,.25)}
 .bnav .tabg{color:#5a5d66}.bnav .tabg.on{color:#111}.masit{color:#333}
+@media (min-width:900px){.rail{background:linear-gradient(158deg,rgba(255,255,255,.95),rgba(255,255,255,.6));box-shadow:inset 0 1.5px 1px #fff,inset 0 0 0 1px rgba(0,0,0,.08),0 14px 30px -10px rgba(40,40,70,.25)}.rail .tabg{color:#5a5d66}.rail .tabg.on{color:#111}}
 `;
 
 // Montos: se escriben con separador de miles (1.500.000) y se leen tanto así como en formato simple.
@@ -1510,6 +1521,9 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {masAbierto && <div className="masov" onClick={() => setMasAbierto(false)}><div className="massheet" onClick={e => e.stopPropagation()}>
       {NAV_MAS.map(([id, lb]) => { const c = cntDe(id); return <button key={id} className={"masit" + (vista === id ? " on" : "")} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); setMasAbierto(false); }}><span className="gem"><Icono n={id} size={22} /></span><span className="tl">{lb}{c ? ` ${c}` : ""}</span></button>; })}
     </div></div>}
+    <nav className="rail" aria-label="Secciones">
+      {[...NAV_PRINC, ...NAV_MAS].map(([id, lb]) => { const c = cntDe(id); return <button key={id} className={"tabg" + (vista === id ? " on" : "")} aria-current={vista === id ? "page" : "false"} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} style={{ color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : undefined }}>{id === "chat" && chatUnread > 0 && <span className="bdg">{chatUnread > 99 ? "99+" : chatUnread}</span>}{c ? <span className="bdg c">{c}</span> : null}<span className="gem"><Icono n={id} size={22} /></span><span className="tl">{lb}</span></button>; })}
+    </nav>
     <nav className="bnav"><div className="in">
       {NAV_PRINC.map(([id, lb]) => { const c = cntDe(id); return <button key={id} className={"tabg" + (vista === id ? " on" : "")} aria-current={vista === id ? "page" : "false"} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} style={{ color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : undefined }}>{id === "chat" && chatUnread > 0 && <span className="bdg">{chatUnread > 99 ? "99+" : chatUnread}</span>}<span className="gem"><Icono n={id} size={22} /></span><span className="tl">{lb}{c ? ` ${c}` : ""}</span></button>; })}
       <button className={"tabg" + (NAV_MAS.some(x => x[0] === vista) ? " on" : "")} onClick={() => setMasAbierto(v => !v)}><span className="gem"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg></span><span className="tl">Más</span></button>
