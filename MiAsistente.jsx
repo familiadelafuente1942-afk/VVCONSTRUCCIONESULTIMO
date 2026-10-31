@@ -1862,12 +1862,40 @@ function ModelosBody({ modelos, sel, setSel, subir, borrar }) {
 
 function AjustesBody({ cfg, saveCfg }) {
   const t = cfg.tema || "oscuro";
+  const icoRef = React.useRef(null); const [icoPrev, setIcoPrev] = React.useState(""); const [icoMsg, setIcoMsg] = React.useState(""); const [icoT] = React.useState(Date.now());
+  function subirIco(e) {
+    const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+    setIcoMsg("...");
+    const img = new Image(); const u = URL.createObjectURL(f);
+    img.onload = async () => {
+      try {
+        const c = document.createElement("canvas"); c.width = 180; c.height = 180; const x = c.getContext("2d");
+        const l = Math.min(img.width, img.height); x.drawImage(img, (img.width - l) / 2, (img.height - l) / 2, l, l, 0, 0, 180, 180);
+        const data = c.toDataURL("image/png"); URL.revokeObjectURL(u);
+        const r = await fetch(SUPA_URL + "/rest/v1/bco_storage", { method: "POST", headers: { ...SH(), "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify({ key: "sebastian_icono", value: data }) });
+        if (!r.ok) throw new Error("db");
+        setIcoPrev(data); setIcoMsg("Listo. Ahora borrá el ícono del escritorio y agregalo de nuevo desde Safari (Compartir → Agregar a pantalla de inicio).");
+      } catch { setIcoMsg("No pude guardar la foto. Probá de nuevo."); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(u); setIcoMsg("No pude leer esa imagen."); };
+    img.src = u;
+  }
   const op = [["auto", "Automático", <React.Fragment><circle cx="12" cy="12" r="8" /><path d="M12 4v16" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" /></React.Fragment>], ["claro", "Claro", <React.Fragment><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" /></React.Fragment>], ["oscuro", "Oscuro", <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />]];
   return (<div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16 }}>
       <div style={{ fontSize: 10.5, color: BRASS, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" }}>Aspecto</div>
       <div style={{ fontSize: 13, color: T.sub, margin: "6px 0 12px", lineHeight: 1.4 }}>Elegí cómo se ve la app. Automático sigue el modo de tu teléfono.</div>
       <div className="tema-seg">{op.map(([k, n, ic]) => (<button key={k} className={"tb" + (t === k ? " on" : "")} aria-pressed={t === k} onClick={() => saveCfg({ ...cfg, tema: k })}><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{ic}</svg>{n}</button>))}</div>
+    </div>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16, marginTop: 14 }}>
+      <div style={{ fontSize: 10.5, color: BRASS, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" }}>Ícono del escritorio</div>
+      <div style={{ fontSize: 13, color: T.sub, margin: "6px 0 12px", lineHeight: 1.4 }}>Elegí una foto para el ícono de la pantalla de inicio. Después borrá el ícono viejo y agregalo de nuevo desde Safari: Compartir → Agregar a pantalla de inicio.</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <img src={icoPrev || "/api/icono-asistente?t=" + icoT} alt="" width="64" height="64" style={{ borderRadius: 14, objectFit: "cover", background: "rgba(128,128,128,.2)" }} />
+        <button className="gbtn" style={{ padding: "12px 16px" }} onClick={() => icoRef.current && icoRef.current.click()}>{icoMsg === "..." ? "Guardando…" : "Elegir foto"}</button>
+        <input ref={icoRef} type="file" accept="image/*" style={{ display: "none" }} onChange={subirIco} />
+      </div>
+      {icoMsg && icoMsg !== "..." && <div style={{ fontSize: 12.5, color: T.sub, marginTop: 10, lineHeight: 1.4 }}>{icoMsg}</div>}
     </div>
   </div>);
 }
