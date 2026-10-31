@@ -74,6 +74,9 @@ svg.ch{width:100%;height:auto;color:var(--ink)}
 .brand .mark img{height:28px!important;width:auto!important;max-width:none;display:block}
 .brand b{margin-top:2px;line-height:1.25}.brand small{margin-top:6px;line-height:1.3}
 @media (min-width:900px){.brand{gap:22px!important}.brand .mark{padding:12px 20px!important;margin-bottom:4px}.brand .mark img{height:56px!important}.brand b{font-size:1.3rem;margin-bottom:4px}.brand small{letter-spacing:.14em;margin-top:8px}}
+
+.tagp{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.kwide{grid-column:1/-1}.kwide b{font-size:1.05rem!important;line-height:1.3}
 </style></head><body>
 <header class="navbar"><div class="wrap"><button class="brand" data-act="tab" data-t="cot"><span class="mark"><img src="/edificio/vv-logo.png" alt="V+V Construcciones"></span><span><b>Edificio propio</b><small>V+V Desarrollos</small></span></button><nav id="nav" aria-label="Secciones"></nav><span class="theme" role="group" aria-label="Tema"><button data-act="tema" data-m="light">Claro</button><button data-act="tema" data-m="dark">Oscuro</button></span></div></header>
 <div class="wrap"><section class="pagehead"><p class="eyebrow" id="fecha"></p><h1 id="ptitle"></h1><div id="who"></div></section><main id="view"></main></div>
@@ -138,7 +141,7 @@ let _st=null;
 function marcar(t){ESTADO=t;const e=$('#estado');if(e)e.textContent=t}
 function guardarLuego(){if(_st)clearTimeout(_st);marcar('Guardando…');_st=setTimeout(guardar,900)}
 async function guardar(){try{const r=await fetch('/api/edificio',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op:'set',cod:COD,data:STORE,base:TBASE})});const j=await r.json();if(r.status===409){marcar('⚠ Hay una versión más nueva: recargá la página');return}if(!r.ok)throw new Error(j.error||'error');TBASE=j.t;marcar('Guardado ✓')}catch(e){marcar('⚠ Sin conexión: '+(e.message||''))}}
-async function cargar(){try{const r=await fetch('/api/edificio',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op:'get',cod:COD})});const j=await r.json();if(!r.ok)throw new Error(j.error||'error');let d=j.data;if(d&&d.v===2&&d.A){STORE=d}else{STORE={v:2,act:'A',A:d||proyecto0(),B:null}}
+async function cargar(){try{const r=await fetch('/api/edificio',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op:'get',cod:COD})});const j=await r.json();if(!r.ok)throw new Error(j.error||'error');let d=j.data;if(d&&d.v===2&&d.A){STORE=d}else{STORE={v:2,act:'A',A:d||proyecto0(),B:null}}if(!STORE.plan)STORE.plan=plan0();
     if(/Paseo Col|Telmo/i.test(STORE.A.nombre||''))STORE.A.nombre='Edificio propio';
     let nuevo=!d;if(!STORE.B){STORE.B=proyectoB();nuevo=true}
     if(!STORE.A.etq){STORE.A.etq='Modelo A';STORE.A.desc='Torre con amenities';STORE.A.dir=''}
@@ -211,15 +214,48 @@ const IMGA=[['fachada','Fachada'],['noche','Fachada de noche'],['lobby','Lobby y
 const IMGB=[['fachada','Fachada · lote angosto'],['lobby','Hall de entrada'],['living','Unidad amoblada · living'],['habitacion','Unidad amoblada · dormitorio'],['kitchenette','Unidad amoblada · cocina y comedor'],['bano','Unidad amoblada · baño'],['terraza','Terraza común con parrilla']];
 const IMG=()=>P.dir?IMGB:IMGA;
 function vImg(){return `<p class="muted">Imágenes conceptuales del proyecto: el edificio terminado y las unidades amobladas, listas para vender.</p><div class="gal">${IMG().map(([k,t],i)=>`<figure class="${i===0?'big':''}"><a href="/edificio/${P.dir||''}edif-${k}.jpg" target="_blank" rel="noopener"><img src="/edificio/${P.dir||''}edif-${k}.jpg" alt="${t}" loading="lazy"></a><figcaption>${t}</figcaption></figure>`).join('')}</div>`}
+
+const AREAS=['Contactos','Mi prima','Primo y socio','Edificio','Dinero','Para mí'];
+function plan0(){const o=(mes,area,t,f)=>({id:nid(),mes,area,t,fecha:f,hecha:false,nota:''});
+  return{inicio:'2026-10-30',obj:[
+   o(1,'Contactos','Proponerle a mi prima sumarme a sus cenas y eventos de desarrolladores','2026-11-04'),
+   o(1,'Contactos','Asistir a 2 eventos o cenas de desarrolladores / real estate','2026-11-28'),
+   o(1,'Contactos','Armar mi lista de 30 contactos clave (desarrolladores, inmobiliarias, estudios, bancos, escribanos) y cargar los primeros 10','2026-11-15'),
+   o(1,'Mi prima','Reunión con mi prima: qué proyecto hacemos juntos, rol de cada uno y cómo se reparte','2026-11-12'),
+   o(1,'Edificio','Elegir Modelo A o B y cargar el terreno real, fecha de inicio y monto de venta de mi otra casa','2026-11-20'),
+   o(1,'Primo y socio','Armar la presentación para mi primo y su socio: terreno, números y tres alternativas','2026-11-27'),
+   o(1,'Para mí','Sumar una actividad fija por semana fuera del trabajo y un espacio para hablar de esta etapa','2026-11-10'),
+   o(2,'Primo y socio','Presentarles el proyecto y obtener una respuesta clara: con la empresa, aparte o no','2026-12-10'),
+   o(2,'Contactos','Asistir a 3 eventos más y tener 5 reuniones 1 a 1 (café o almuerzo) con contactos','2026-12-27'),
+   o(2,'Mi prima','Ver al menos 3 terrenos posibles con mi prima','2026-12-18'),
+   o(2,'Edificio','Cerrar el flujo de caja y Fondos y metas con el terreno real','2026-12-20'),
+   o(2,'Dinero','Definir con contador y abogado la estructura (sociedad o fideicomiso) para el edificio','2026-12-23'),
+   o(3,'Primo y socio','Decidir y dejar por escrito el camino: con la empresa, aparte o solo','2027-01-08'),
+   o(3,'Mi prima','Hacer una oferta por un terreno o firmar un acuerdo de intención con mi prima','2027-01-20'),
+   o(3,'Contactos','Tener 10 contactos nuevos en seguimiento activo','2027-01-25'),
+   o(3,'Dinero','Definir cuánto y cuándo entra de la venta de mi otra casa','2027-01-25'),
+   o(3,'Edificio','Revisar todo el plan y fijar los objetivos de los próximos 90 días','2027-01-28')],
+  contactos:[]}}
+const dDiff=f=>f?Math.round((new Date(f+'T00:00:00')-new Date(new Date().toDateString()))/864e5):null;
+function vPlan(){const PL=STORE.plan,L=PL.obj,h=L.filter(x=>x.hecha).length,dia=Math.max(0,-dDiff(PL.inicio)),fin=new Date(PL.inicio+'T00:00:00');fin.setDate(fin.getDate()+90);
+  const prox=L.filter(x=>!x.hecha).sort((a,b)=>(a.fecha||'9')<(b.fecha||'9')?-1:1)[0],pc=L.length?Math.round(h/L.length*100):0;
+  const MN=['Primer mes · hasta el 29 de noviembre','Segundo mes · hasta el 29 de diciembre','Tercer mes · hasta el 28 de enero'];
+  const fila=x=>{const d=dDiff(x.fecha),late=!x.hecha&&d!==null&&d<0;return `<div class="frow meta ${x.hecha?'hecha':''}"><input type="checkbox" data-pl="${x.id}:hecha" ${x.hecha?'checked':''} aria-label="Hecho"><span class="tagp">${esc(x.area)}</span><input class="ni tx" data-pl="${x.id}:t" value="${esc(x.t)}"><input class="ni tx" type="date" data-pl="${x.id}:fecha" value="${esc(x.fecha)}" style="width:140px"><span class="muted small" style="min-width:70px;${late?'color:var(--neg)':''}">${x.hecha?'✓':d===null?'':late?'vencido '+(-d)+' d':d===0?'hoy':'en '+d+' d'}</span><button class="btn sm ghost" data-act="delO" data-id="${x.id}" aria-label="Quitar">✕</button></div>`};
+  return `<p class="muted">Tu plan de 90 días: objetivos concretos por mes, para avanzar sin pausa y sin prisa. Tildá lo que cumplís; yo lo reviso con vos cada semana.</p>
+  <div class="kpis"><div class="kpi"><b>Día ${Math.min(dia,90)} de 90</b><span class="kl">hasta el ${fin.getDate()} ${MES[fin.getMonth()]} ${fin.getFullYear()}</span></div><div class="kpi"><b>${h} de ${L.length}</b><span class="kl">objetivos cumplidos · ${pc}%</span></div><div class="kpi kwide"><b>${prox?esc(prox.t.slice(0,60)):'¡Todo cumplido!'}</b><span class="kl">próximo objetivo${prox&&prox.fecha?' · '+esc(prox.fecha):''}</span></div></div>
+  ${[1,2,3].map(m=>`<div class="card"><div class="ctop"><h3>${MN[m-1]}</h3><span class="muted small">${L.filter(x=>x.mes===m&&x.hecha).length} de ${L.filter(x=>x.mes===m).length}</span></div>${L.filter(x=>x.mes===m).sort((a,b)=>(a.fecha||'9')<(b.fecha||'9')?-1:1).map(fila).join('')}<button class="btn sm" data-act="addO" data-mes="${m}" style="align-self:flex-start">+ Agregar objetivo</button></div>`).join('')}
+  <div class="card"><div class="ctop"><h3>Mis contactos nuevos</h3><span class="muted small">cada persona que conocés: dónde, qué quedó y cuándo retomar</span></div>
+  ${PL.contactos.length?`<div class="tw"><table class="tb"><tr><th>Nombre</th><th>Dónde / cómo lo conocí</th><th>Fecha</th><th>Qué quedamos</th><th>Retomar el</th><th></th></tr>${PL.contactos.map(c=>`<tr><td><input class="ni tx" data-ct="${c.id}:n" value="${esc(c.n)}"></td><td><input class="ni tx" data-ct="${c.id}:d" value="${esc(c.d)}"></td><td><input class="ni tx" type="date" data-ct="${c.id}:f" value="${esc(c.f)}"></td><td><input class="ni tx" data-ct="${c.id}:q" value="${esc(c.q)}"></td><td><input class="ni tx" type="date" data-ct="${c.id}:r" value="${esc(c.r)}"></td><td><button class="btn sm ghost" data-act="delC" data-id="${c.id}">✕</button></td></tr>`).join('')}</table></div>`:'<p class="muted small">Todavía no cargaste ninguno.</p>'}
+  <button class="btn sm" data-act="addC" style="align-self:flex-start">+ Agregar contacto</button></div>`}
 function draw(){
   if(!P){return}
   const C=calc();window.__C=C;
-  $('#ptitle').textContent=TAB==='cot'?'Cotizador':TAB==='flu'?'Flujo de caja a 24 meses':TAB==='fon'?'Fondos y metas':'Imágenes del proyecto';
+  $('#ptitle').textContent=TAB==='cot'?'Cotizador':TAB==='flu'?'Flujo de caja a 24 meses':TAB==='fon'?'Fondos y metas':TAB==='plan'?'Plan de 90 días':'Imágenes del proyecto';
   $('#who').innerHTML=`<span class="seg">${['A','B'].map(k=>`<button data-act="modelo" data-k="${k}" ${STORE.act===k?'aria-pressed="true"':''}>${esc(STORE[k].etq)}</button>`).join('')}</span><span><b>${esc(P.nombre)}</b></span><span class="muted small" id="estado">${esc(ESTADO)}</span><span class="seg"><button data-act="mon" data-m="ARS" ${MON==='ARS'?'aria-pressed="true"':''}>ARS</button><button data-act="mon" data-m="USD" ${MON==='USD'?'aria-pressed="true"':''}>USD</button></span>`;
   const sy=window.scrollY,sl=document.querySelectorAll('.tw');const sx=[...sl].map(e=>e.scrollLeft);
-  $('#view').innerHTML=TAB==='cot'?vCot(C):TAB==='flu'?vFlujo(C):TAB==='fon'?vFondos(C):vImg(C);
+  $('#view').innerHTML=TAB==='cot'?vCot(C):TAB==='flu'?vFlujo(C):TAB==='fon'?vFondos(C):TAB==='plan'?vPlan():vImg(C);
   document.querySelectorAll('.tw').forEach((e,i)=>{if(sx[i])e.scrollLeft=sx[i]});window.scrollTo(0,sy);
-  const T=[['cot','Cotizador'],['flu','Flujo de caja'],['fon','Fondos y metas'],['img','Imágenes']];
+  const T=[['cot','Cotizador'],['flu','Flujo de caja'],['fon','Fondos y metas'],['plan','Plan 90 días'],['img','Imágenes']];
   $('#nav').innerHTML=T.map(([k,l])=>`<a href="#${k}" data-act="tab" data-t="${k}" ${TAB===k?'aria-current="page"':''}>${l}</a>`).join('');
   document.querySelectorAll('.theme button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.m===(document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')))));
   
@@ -230,6 +266,8 @@ document.addEventListener('change',e=>{const t=e.target;if(!P||!t)return;
   else if(t.dataset.r){const [id,f]=t.dataset.r.split(':');const r=P.rubros.find(x=>x.id===id);if(r)r[f]=t.value}
   else if(t.dataset.c){P.caja[t.dataset.c]=t.checked}
   else if(t.dataset.f){const [id,f]=t.dataset.f.split(':');const x=P.fondos.find(z=>z.id===id);if(x)x[f]=f==='monto'?num(t.value):t.value}
+  else if(t.dataset.pl){const [id,f]=t.dataset.pl.split(':');const x=STORE.plan.obj.find(z=>z.id===id);if(x)x[f]=f==='hecha'?t.checked:t.value}
+  else if(t.dataset.ct){const [id,f]=t.dataset.ct.split(':');const x=STORE.plan.contactos.find(z=>z.id===id);if(x)x[f]=t.value}
   else if(t.dataset.m){const [id,f]=t.dataset.m.split(':');const x=P.metas.find(z=>z.id===id);if(x)x[f]=f==='hecha'?t.checked:t.value}
   else return;
   guardarLuego();draw()});
@@ -245,6 +283,10 @@ const A={
   delF:ds=>{P.fondos=P.fondos.filter(r=>r.id!==ds.id);guardarLuego();draw()},
   addM:()=>{P.metas.push({id:nid(),t:'Nueva meta',fecha:'',hecha:false});guardarLuego();draw()},
   delM:ds=>{P.metas=P.metas.filter(r=>r.id!==ds.id);guardarLuego();draw()},
+  addO:ds=>{STORE.plan.obj.push({id:nid(),mes:+ds.mes,area:'Contactos',t:'Nuevo objetivo',fecha:'',hecha:false,nota:''});guardarLuego();draw()},
+  delO:ds=>{if(!confirm('¿Quitar este objetivo?'))return;STORE.plan.obj=STORE.plan.obj.filter(x=>x.id!==ds.id);guardarLuego();draw()},
+  addC:()=>{STORE.plan.contactos.unshift({id:nid(),n:'',d:'',f:new Date().toISOString().slice(0,10),q:'',r:''});guardarLuego();draw()},
+  delC:ds=>{STORE.plan.contactos=STORE.plan.contactos.filter(x=>x.id!==ds.id);guardarLuego();draw()},
   csv:()=>{const C=calc(),k=MON==='USD'?P.fx:1;const L=[['Rubro',...Array.from({length:N},(_,i)=>'Mes '+(i+1)+' '+mesLabel(i+1)),'Total']];
     C.porRubro.forEach(x=>{L.push([x.r.n+' · materiales',...Array.from({length:N},(_,i)=>Math.round(x.mat[i+1]/k)),Math.round(x.r.matT/k)]);L.push([x.r.n+' · mano de obra',...Array.from({length:N},(_,i)=>Math.round(x.mo[i+1]/k)),Math.round(x.r.moT/k)])});
     L.push(['DESEMBOLSO DEL MES',...C.M.slice(1).map(d=>Math.round(d.tot/k)),Math.round(C.cajaTot/k)]);L.push(['ACUMULADO',...C.M.slice(1).map(d=>Math.round(d.ac/k)),'']);
