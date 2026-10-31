@@ -1510,11 +1510,14 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
         {modelo && <span style={{ fontSize: 10.5, color: T.muted }}>Modelo activo: {modelo.nombre}</span>}
       </div>
       {adjPend.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adjPend.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "🖼" : a.kind === "texto" ? "📊" : "📄"} {a.nombre.slice(0, 22)} <span onClick={() => setAdjPend(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
-      <button className={"ptt" + (escuchando ? " rec" : "") + (pttCuenta ? " cnt" : "")} title="Mantené apretado para hablar"
-        onPointerDown={e => { e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { } if (pttTimerRef.current) { clearInterval(pttTimerRef.current); pttTimerRef.current = null; setPttCuenta(0); if (recRef.current) { if (pttArmRef.current) pttArmRef.current(); return; } } if (!escuchando) dictar(true); }}
-        onPointerUp={() => { if (pttSoltarRef.current) pttSoltarRef.current(); }} onPointerCancel={() => { if (pttSoltarRef.current) pttSoltarRef.current(); }} onContextMenu={e => e.preventDefault()}>
+      <button className={"ptt" + (escuchando ? " rec" : "") + (pttCuenta ? " cnt" : "")} title="Tocá para empezar a hablar y tocá de nuevo cuando termines"
+        onClick={() => {
+          if (pttTimerRef.current) { clearInterval(pttTimerRef.current); pttTimerRef.current = null; setPttCuenta(0); if (recRef.current && pttArmRef.current) pttArmRef.current(); return; } // tocó durante la cuenta: sigue grabando
+          if (escuchando) { if (pttSoltarRef.current) pttSoltarRef.current(); else if (recRef.current) { try { recRef.current.stop(); } catch { } } return; } // terminó de hablar: cuenta de 3 s y envía
+          dictar(true);
+        }}>
         <span className="gem big"><Icono n="mic" size={28} /></span>
-        <span className="pt">{pttCuenta ? `Enviando en ${pttCuenta}… (tocá para seguir hablando)` : escuchando ? "Hablá… soltá cuando termines" : "Mantené apretado para hablar"}</span>
+        <span className="pt">{pttCuenta ? `Enviando en ${pttCuenta}… (tocá para seguir hablando)` : escuchando ? "Escuchando… tocá cuando termines" : "Tocá para hablar"}</span>
       </button>
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={dictar} title="Hablar" className="gbtn mic" style={{ flexShrink: 0 }}><span className="gem sm"><Icono n="mic" size={18} /></span></button>
