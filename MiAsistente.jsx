@@ -643,28 +643,33 @@ export default function MiAsistente() {
   const vozSeqRef = useRef(0);
   async function hablar(texto) {
     const sinMarkdown = String(texto || "").replace(/[*_#>`~]/g, "").replace(/\s+/g, " ").trim();
-    const limpio = normalizarNumerosParaVoz(sinMarkdown).slice(0, 900);
+    const limpio = normalizarNumerosParaVoz(sinMarkdown).slice(0, 6000);
     if (!limpio) return;
     pararVoz();
     const turno = ++vozSeqRef.current; // solo la última orden de hablar puede sonar (evita voces dobles)
     vozHablandoRef.current = true;
+    // El mensaje se parte en trozos (por frases) para que se lea completo, sin cortarse.
+    const trozos = []; { let resto = limpio; while (resto.length > 0) { if (resto.length <= 800) { trozos.push(resto); break; } let k = Math.max(resto.lastIndexOf(". ", 800), resto.lastIndexOf("? ", 800), resto.lastIndexOf("! ", 800), resto.lastIndexOf("; ", 800), resto.lastIndexOf(", ", 800)); if (k < 200) k = resto.lastIndexOf(" ", 800); if (k < 1) k = 800; trozos.push(resto.slice(0, k + 1).trim()); resto = resto.slice(k + 1).trim(); } }
+    const pedir = (t) => fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto: t }) }).then(r => { if (!r.ok) throw new Error("tts_error"); return r.blob(); });
+    const activo = () => vozHablandoRef.current && turno === vozSeqRef.current;
+    let sig = pedir(trozos[0]); let audio = null;
     try {
-      const r = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto: limpio }),
-      });
-      if (!r.ok) throw new Error("tts_error");
-      const blob = await r.blob();
-      if (!vozHablandoRef.current || turno !== vozSeqRef.current) return; // se canceló o llegó una orden más nueva
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      currentAudioRef.current = audio;
-      audio.onended = () => { URL.revokeObjectURL(url); if (currentAudioRef.current === audio) currentAudioRef.current = null; };
-      audio.onerror = () => { URL.revokeObjectURL(url); if (currentAudioRef.current === audio) currentAudioRef.current = null; };
-      await audio.play().catch(() => { if (turno === vozSeqRef.current && !currentAudioRef.current) hablarNavegador(limpio); else if (turno === vozSeqRef.current && currentAudioRef.current === audio) { currentAudioRef.current = null; hablarNavegador(limpio); } });
+      for (let n = 0; n < trozos.length; n++) {
+        const blob = await sig;
+        if (!activo()) return;
+        if (n + 1 < trozos.length) { sig = pedir(trozos[n + 1]); sig.catch(() => { }); }
+        const url = URL.createObjectURL(blob);
+        if (!audio) audio = new Audio(); // un solo reproductor para todos los trozos (iPhone no deja arrancar otro sin tocar)
+        audio.src = url;
+        currentAudioRef.current = audio;
+        const fin = new Promise(res => { audio.onended = res; audio.onerror = res; });
+        try { await audio.play(); } catch { URL.revokeObjectURL(url); if (activo()) { currentAudioRef.current = null; hablarNavegador(trozos.slice(n).join(" ")); } return; }
+        await fin; URL.revokeObjectURL(url);
+        if (currentAudioRef.current === audio) currentAudioRef.current = null;
+        if (!activo()) return;
+      }
     } catch {
-      if (vozHablandoRef.current && turno === vozSeqRef.current) hablarNavegador(limpio);
+      if (activo()) hablarNavegador(trozos.join(" "));
     }
   }
   const silencioRef = useRef(null);
