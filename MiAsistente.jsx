@@ -184,7 +184,7 @@ html,body{background:#000;color-scheme:dark}
 input,select,textarea{border-radius:14px!important;color-scheme:dark}
 input[type=date],input[type=time]{min-height:44px}
 .gbar{background:rgba(18,19,23,.66)!important;-webkit-backdrop-filter:blur(22px) saturate(1.8);backdrop-filter:blur(22px) saturate(1.8);box-shadow:inset 0 -1px 0 rgba(255,255,255,.08)}
-.gbar>div:nth-child(2){flex-wrap:nowrap!important;overflow-x:auto;justify-content:flex-start!important;gap:2px!important;scrollbar-width:none;margin-top:8px!important;padding-bottom:4px}.gbar>div:nth-child(2)::-webkit-scrollbar{display:none}.tabg{flex:none}
+.gbar>div:nth-child(2){display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px!important;margin-top:8px!important;padding-bottom:4px}.tabg{min-width:0;padding:5px 0 6px;font-size:10px}.tabg .gem{width:34px;height:34px;border-radius:12px}
 .tabg{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:62px;background:none;border:0;padding:6px 6px 8px;border-radius:16px;cursor:pointer;font-size:10.5px;letter-spacing:.01em;white-space:nowrap}
 .tabg .gem{width:38px;height:38px;border-radius:13px;display:flex;align-items:center;justify-content:center;color:#fff;position:relative;overflow:hidden;background:linear-gradient(160deg,#3a3a40,#1d1d21);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -7px 11px rgba(0,0,0,.45),0 8px 14px -8px rgba(0,0,0,.8)}
 .tabg .gem::before{content:"";position:absolute;left:3px;right:3px;top:2px;height:46%;border-radius:11px 11px 20px 20px;background:linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,0));pointer-events:none}
