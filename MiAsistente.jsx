@@ -179,6 +179,25 @@ async function callAI(msgs, sys, apiKey, useSearch) {
 
 const T = { navy: "#1B1A16", accent: "#22463A", al: "#ECF0EC", bg: "#F4F2EC", card: "#FFFFFF", border: "#E5E1D6", text: "#1A1813", sub: "#6E695E", muted: "#A49D8D", rsm: 10, serif: "'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif", sans: "'Inter',-apple-system,'SF Pro Text',system-ui,sans-serif" };
 let BRASS = "#A17C3E";
+const GLASS_CSS = `
+html,body{background:#000;color-scheme:dark}
+input,select,textarea{border-radius:14px!important;color-scheme:dark}
+input[type=date],input[type=time]{min-height:44px}
+.gbar{background:rgba(18,19,23,.66)!important;-webkit-backdrop-filter:blur(22px) saturate(1.8);backdrop-filter:blur(22px) saturate(1.8);box-shadow:inset 0 -1px 0 rgba(255,255,255,.08)}
+.gbar>div:nth-child(2){flex-wrap:nowrap!important;overflow-x:auto;justify-content:flex-start!important;gap:2px!important;scrollbar-width:none;margin-top:8px!important;padding-bottom:4px}.gbar>div:nth-child(2)::-webkit-scrollbar{display:none}.tabg{flex:none}
+.tabg{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:62px;background:none;border:0;padding:6px 6px 8px;border-radius:16px;cursor:pointer;font-size:10.5px;letter-spacing:.01em;white-space:nowrap}
+.tabg .gem{width:38px;height:38px;border-radius:13px;display:flex;align-items:center;justify-content:center;color:#fff;position:relative;overflow:hidden;background:linear-gradient(160deg,#3a3a40,#1d1d21);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -7px 11px rgba(0,0,0,.45),0 8px 14px -8px rgba(0,0,0,.8)}
+.tabg .gem::before{content:"";position:absolute;left:3px;right:3px;top:2px;height:46%;border-radius:11px 11px 20px 20px;background:linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,0));pointer-events:none}
+.tabg.on .gem{background:linear-gradient(160deg,#e0b870,#b0864a);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -7px 11px rgba(120,80,20,.35),0 9px 16px -7px rgba(176,134,74,.75)}
+.tabg.on{background:rgba(255,255,255,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 .5px rgba(255,255,255,.08)}
+`;
+
+// Montos: se escriben con separador de miles (1.500.000) y se leen tanto así como en formato simple.
+function numMonto(v) { if (typeof v === "number") return isFinite(v) ? v : 0; let t = String(v == null ? "" : v).replace(/[^\d.,-]/g, ""); if (!t) return 0; const neg = t.startsWith("-"); t = t.replace(/-/g, "");
+  if (t.includes(",") && t.includes(".")) t = t.replace(/\./g, "").replace(",", "."); else if (t.includes(",")) t = t.replace(/\./g, "").replace(",", "."); else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, "");
+  const n = Number(t); return isFinite(n) ? (neg ? -n : n) : 0; }
+function miles(v) { const d = String(v == null ? "" : v).replace(/\D/g, ""); return d ? Number(d).toLocaleString("es-AR") : ""; }
+
 const FONTS = {
   inter: { n: "Inter (moderna)", sans: "'Inter',-apple-system,'SF Pro Text',system-ui,sans-serif", serif: "'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif" },
   sistema: { n: "Sistema", sans: "-apple-system,system-ui,'Segoe UI',Roboto,sans-serif", serif: "Georgia,'Times New Roman',serif" },
@@ -343,10 +362,11 @@ export default function MiAsistente() {
   const chatFileRef = useRef(null);
   const modelo = (modelos || []).find(m => m.id === modeloSel) || null;
   const CFG_DEF = { titulo: "Mi Asistente", eyebrow: "Privado · Sebastián", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813", brass: "#A17C3E", borde: "#E5E1D6", sub: "#6E695E", rsm: 10, fontId: "inter", fondoUrl: "", fondoOp: 14, serif: true, escala: 100, iconoUrl: "", iconoColor: "#22463A" };
-  const [cfg, setCfg] = useState(() => { try { return { ...CFG_DEF, ...JSON.parse(localStorage.getItem("sebastian_cfg") || "{}") }; } catch { return CFG_DEF; } });
+  const LOOK_N2 = { look: "n2", accent: "#B98A41", navy: "#17171A", bg: "#000000", card: "rgba(255,255,255,.07)", text: "#F2F2F2", brass: "#D8B06A", borde: "rgba(255,255,255,.12)", sub: "#B8B8B8", iconoColor: "#B98A41" };
+  const [cfg, setCfg] = useState(() => { try { const g = JSON.parse(localStorage.getItem("sebastian_cfg") || "{}"); return { ...CFG_DEF, ...g, ...(g.look === "n2" ? {} : LOOK_N2) }; } catch { return { ...CFG_DEF, ...LOOK_N2 }; } });
   const iconRef = useRef(null); const fondoRef = useRef(null);
   // Aplica la personalización al tema (colores) en vivo.
-  T.accent = cfg.accent || "#22463A"; T.navy = cfg.navy || "#1B1A16"; T.bg = cfg.bg || "#F4F2EC"; T.card = cfg.card || "#FFFFFF"; T.text = cfg.text || "#1A1813";
+  T.al = "rgba(216,176,106,.16)"; T.muted = "#8c8c8c"; T.accent = cfg.accent || "#22463A"; T.navy = cfg.navy || "#1B1A16"; T.bg = cfg.bg || "#F4F2EC"; T.card = cfg.card || "#FFFFFF"; T.text = cfg.text || "#1A1813";
   T.border = cfg.borde || "#E5E1D6"; T.sub = cfg.sub || "#6E695E"; T.rsm = (cfg.rsm != null ? cfg.rsm : 10); BRASS = cfg.brass || "#A17C3E";
   { const F = FONTS[cfg.fontId] || FONTS.inter; T.sans = F.sans; T.serif = F.serif; }
   function saveCfg(next) { setCfg(next); try { localStorage.setItem("sebastian_cfg", JSON.stringify(next)); } catch { } storage.set("sebastian_cfg", JSON.stringify(next)).catch(() => { }); }
@@ -787,7 +807,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
   function cargarPago(a) {
     const obra = a.obra ? (db.obras || []).find(o => (o.nombre || "").toLowerCase().includes(String(a.obra).toLowerCase())) : null;
-    const p = { id: uid() + Date.now(), persona: a.persona || "", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, obra: obra?.nombre || a.obra || "", obra_id: obra?.id || "", estado: (a.estado || "pendiente").toLowerCase().includes("pag") ? "pagado" : "pendiente", metodo: a.metodo || "", nota: a.nota || "", fecha: a.fecha || hoyStr(), ts: Date.now() };
+    const p = { id: uid() + Date.now(), persona: a.persona || "", monto: numMonto(a.monto) || 0, obra: obra?.nombre || a.obra || "", obra_id: obra?.id || "", estado: (a.estado || "pendiente").toLowerCase().includes("pag") ? "pagado" : "pendiente", metodo: a.metodo || "", nota: a.nota || "", fecha: a.fecha || hoyStr(), ts: Date.now() };
     persistPagos([p, ...(pagos || [])]);
     return p;
   }
@@ -803,7 +823,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
   function cargarCobro(a) {
     const tc = String(a.tipo_cobro || "").toLowerCase();
-    const c = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), obra: a.obra || "", monto: Number(String(a.monto || 0).replace(/[^\d.-]/g, "")) || 0, tipo: ["certificado", "obra sin certificar", "ajuste"].includes(tc) ? tc : "certificado", estado: a.estado === "cobrado" ? "cobrado" : "pendiente", nota: a.nota || "", ts: Date.now() };
+    const c = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), obra: a.obra || "", monto: numMonto(a.monto || 0) || 0, tipo: ["certificado", "obra sin certificar", "ajuste"].includes(tc) ? tc : "certificado", estado: a.estado === "cobrado" ? "cobrado" : "pendiente", nota: a.nota || "", ts: Date.now() };
     persistCobros([c, ...(cobros || [])]);
     return c;
   }
@@ -826,9 +846,9 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   async function persistArch(next) { setArchivos(next); await storage.set("sebastian_archivos", JSON.stringify(next)).catch(() => { }); }
   async function persistGastos(next) { setGastos(next); try { localStorage.setItem("sebastian_gastos", JSON.stringify(next)); } catch { } await storage.set("sebastian_gastos", JSON.stringify(next)).catch(() => { }); }
   async function persistCaja(next) { cajaWrite.current = Date.now(); setCaja(next); try { localStorage.setItem("sebastian_caja", JSON.stringify(next)); } catch { } await storage.set("sebastian_caja", JSON.stringify(next)).catch(() => { }); }
-  function cargarCaja(a) { const m = Math.abs(Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0); if (!m) return null; const e = { id: uid() + Date.now(), mov: ["inicial", "retiro"].includes(a.mov) ? a.mov : "ingreso", monto: m, concepto: a.concepto || "", fecha: a.fecha || hoyStr(), ts: Date.now() }; persistCaja([e, ...(caja || [])]); return e; }
+  function cargarCaja(a) { const m = Math.abs(numMonto(a.monto) || 0); if (!m) return null; const e = { id: uid() + Date.now(), mov: ["inicial", "retiro"].includes(a.mov) ? a.mov : "ingreso", monto: m, concepto: a.concepto || "", fecha: a.fecha || hoyStr(), ts: Date.now() }; persistCaja([e, ...(caja || [])]); return e; }
   function marcarNoCaja(tipo, id) { if (tipo === "gasto") persistGastos((gastos || []).map(g => g.id === id ? { ...g, noCaja: !g.noCaja } : g)); else if (tipo === "cobro") persistCobros((cobros || []).map(c => c.id === id ? { ...c, noCaja: !c.noCaja } : c)); else persistPagos((pagos || []).map(p => p.id === id ? { ...p, noCaja: !p.noCaja } : p)); }
-  function cargarGasto(a) { const g = { id: uid() + Date.now(), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }; persistGastos([g, ...(gastos || [])]); return g; }
+  function cargarGasto(a) { const g = { id: uid() + Date.now(), concepto: a.concepto || a.texto || "Gasto", monto: numMonto(a.monto) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }; persistGastos([g, ...(gastos || [])]); return g; }
   const [leyendoTicket, setLeyendoTicket] = useState(false);
   async function analizarTicket(file) {
     setLeyendoTicket(true);
@@ -924,7 +944,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
   function agendarEvento(a) {
     const esPago = a.tipoAgenda === "pago" || a.tipo === "pago";
-    const ev = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), hora: a.hora || "", titulo: a.titulo || a.texto || "Evento", nota: a.nota || "", tipo: esPago ? "pago" : "evento", monto: esPago ? (Number(String(a.monto || 0).replace(/[^\d.-]/g, "")) || 0) : undefined, ts: Date.now() };
+    const ev = { id: uid() + Date.now(), fecha: a.fecha || hoyStr(), hora: a.hora || "", titulo: a.titulo || a.texto || "Evento", nota: a.nota || "", tipo: esPago ? "pago" : "evento", monto: esPago ? (numMonto(a.monto || 0) || 0) : undefined, ts: Date.now() };
     persistAgenda([...(agenda || []), ev].sort((x, y) => fechaAOrden(x.fecha, x.hora) - fechaAOrden(y.fecha, y.hora)));
     return ev;
   }
@@ -1251,7 +1271,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     }
     if (accion && accion.tipo === "cargar_gasto") {
       const arr = Array.isArray(accion.gastos) ? accion.gastos : [accion];
-      const nuevos = arr.filter(x => x && (x.concepto || x.texto || x.monto != null)).map(a => ({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), concepto: a.concepto || a.texto || "Gasto", monto: Number(String(a.monto).replace(/[^\d.-]/g, "")) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }));
+      const nuevos = arr.filter(x => x && (x.concepto || x.texto || x.monto != null)).map(a => ({ id: uid() + Date.now() + Math.floor(Math.random() * 9999), concepto: a.concepto || a.texto || "Gasto", monto: numMonto(a.monto) || 0, fecha: a.fecha || hoyStr(), ts: Date.now() }));
       if (nuevos.length) persistGastos([...nuevos, ...(gastos || [])]);
       const total = nuevos.reduce((s, g) => s + g.monto, 0);
       const detalle = nuevos.map(g => `• ${g.concepto} — $${g.monto.toLocaleString("es-AR")}`).join("\n");
@@ -1334,13 +1354,14 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
   }
 
   return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
-    <div style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
+    <style>{GLASS_CSS}</style>
+    <div className="gbar" style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v27 · agenda-orden</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["caja", "Caja"], ["resultados", "Resultados"], ["obras", "Obras"], ["proyectos", "Proyectos"], ["reuniones", "Reuniones"], ["agenda", "Agenda"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} style={{ position: "relative", background: "none", border: "none", borderBottom: vista === id ? `2px solid ${BRASS}` : "2px solid transparent", color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.55)"), fontSize: 13, fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 700, padding: "9px 13px", cursor: "pointer", whiteSpace: "nowrap" }}>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}{lb}{cnt ? ` ${cnt}` : ""}</button>; })}
+        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["caja", "Caja"], ["resultados", "Resultados"], ["obras", "Obras"], ["proyectos", "Proyectos"], ["reuniones", "Reuniones"], ["agenda", "Agenda"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} className={"tabg" + (vista === id ? " on" : "")} style={{ color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.62)"), fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 600 }}><span className="gem"><Icono n={id} size={19} /></span>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}<span className="tl">{lb}{cnt ? ` ${cnt}` : ""}</span></button>; })}
       </div>
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
@@ -1416,6 +1437,11 @@ function Icono({ n, size = 20 }) {
     obras: <React.Fragment><line x1="3" y1="21" x2="21" y2="21" /><path d="M6 21V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v16" /><path d="M14 21V10h3a1 1 0 0 1 1 1v10" /><line x1="9" y1="8" x2="10.5" y2="8" /><line x1="9" y1="12" x2="10.5" y2="12" /></React.Fragment>,
     ajustes: <React.Fragment><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></React.Fragment>,
     contactos: <React.Fragment><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></React.Fragment>,
+    cobros: <React.Fragment><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 10v.01M18 14v.01" /></React.Fragment>,
+    caja: <React.Fragment><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M16 3H8l-1 4h10z" /><path d="M12 11v5M10 13h4" /></React.Fragment>,
+    resultados: <React.Fragment><line x1="6" y1="20" x2="6" y2="11" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="18" y1="20" x2="18" y2="14" /></React.Fragment>,
+    proyectos: <React.Fragment><path d="M12 2l9 5-9 5-9-5z" /><path d="M3 12l9 5 9-5" /><path d="M3 17l9 5 9-5" /></React.Fragment>,
+    reuniones: <React.Fragment><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" y1="18" x2="12" y2="22" /></React.Fragment>,
     camaras: <React.Fragment><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></React.Fragment>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>{p[n] || null}</svg>;
@@ -1444,7 +1470,9 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, 
     {form && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo pago</div>
       <input value={form.persona} onChange={e => setForm({ ...form, persona: e.target.value })} placeholder="¿A quién? (ej: Humberto)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
-      <input value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <input value={form.monto} onChange={e => setForm({ ...form, monto: miles(e.target.value) })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Fecha de pago</div>
+      <input type="date" value={fechaAIso(form.fecha) || fechaAIso(hoyStr())} onChange={e => setForm({ ...form, fecha: isoAFecha(e.target.value) })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
       {(() => {
         const extras = ["Valeria", "Valentina"];
         const nombresObras = (obras || []).map(o => o.nombre).filter(Boolean);
@@ -1526,11 +1554,11 @@ function AgendaBody({ agenda, onAdd, onDel }) {
         {[["evento", "📅 Evento"], ["pago", "💰 Pago a realizar"]].map(([k, l]) => <button key={k} onClick={() => setF({ ...f, tipo: k })} style={{ flex: 1, background: f.tipo === k ? T.navy : T.bg, color: f.tipo === k ? "#fff" : T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
       </div>
       <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
-        <input value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} placeholder="Fecha (DD/MM/AA)" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />
-        {f.tipo === "evento" && <input value={f.hora} onChange={e => setF({ ...f, hora: e.target.value })} placeholder="Hora" style={{ width: 78, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />}
+        <input type="date" value={fechaAIso(f.fecha)} onChange={e => setF({ ...f, fecha: isoAFecha(e.target.value) })} aria-label="Fecha" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />
+        {f.tipo === "evento" && <input type="time" value={f.hora || ""} onChange={e => setF({ ...f, hora: e.target.value })} aria-label="Hora" style={{ width: 78, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text }} />}
       </div>
       <input value={f.titulo} onChange={e => setF({ ...f, titulo: e.target.value })} placeholder={f.tipo === "pago" ? "¿A quién le tenés que pagar?" : "Título (ej: Reunión con Belfast)"} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
-      {f.tipo === "pago" && <input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />}
+      {f.tipo === "pago" && <input value={f.monto} onChange={e => setF({ ...f, monto: miles(e.target.value) })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />}
       <input value={f.nota} onChange={e => setF({ ...f, nota: e.target.value })} placeholder="Nota (opcional)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px", fontSize: 16, color: T.text, marginBottom: 10, boxSizing: "border-box" }} />
       <button onClick={() => { if (!f.titulo.trim()) { alert(f.tipo === "pago" ? "Poné a quién." : "Poné un título."); return; } onAdd({ ...f, fecha: f.fecha || hoyStr() }); setF({ fecha: "", hora: "", titulo: "", nota: "", tipo: f.tipo, monto: "" }); }} style={{ width: "100%", background: T.navy, color: "#fff", border: `1px solid ${BRASS}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋ {f.tipo === "pago" ? "Agendar pago" : "Agendar"}</button>
     </div>
@@ -1879,7 +1907,7 @@ function CobrosBody({ cobros, obras, filtroObra, setFiltroObra, exportar, borrar
     {!form && <button onClick={() => setForm({ monto: "", obra: "", tipo: "certificado", estado: "pendiente", nota: "" })} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>＋ Cargar cobro a mano</button>}
     {form && <div style={{ background: T.card, border: `1px solid ${BRASS}`, borderRadius: 12, padding: 13, marginBottom: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo cobro</div>
-      <input value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
+      <input value={form.monto} onChange={e => setForm({ ...form, monto: miles(e.target.value) })} placeholder="Monto" inputMode="numeric" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
       <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Fecha del cobro</div>
       <input type="date" value={fechaAIso(form.fecha) || fechaAIso(hoyStr())} onChange={e => setForm({ ...form, fecha: isoAFecha(e.target.value) })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
       {obras && obras.length > 0 ? (<select value={form.obra} onChange={e => setForm({ ...form, obra: e.target.value })} style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }}>
@@ -2001,7 +2029,7 @@ function CajaBody({ caja, gastos, pagos, cobros, onAdd, borrar, marcar }) {
       </div>
       <input value={f.concepto} onChange={e => setF({ ...f, concepto: e.target.value })} placeholder="Concepto (opcional: cobré en mano, depósito…)" style={{ ...inp, marginBottom: 8 }} />
       <div style={{ display: "flex", gap: 7 }}>
-        <input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ ...inp, flex: 1, width: "auto" }} />
+        <input value={f.monto} onChange={e => setF({ ...f, monto: miles(e.target.value) })} placeholder="Monto" inputMode="numeric" style={{ ...inp, flex: 1, width: "auto" }} />
         <button onClick={() => { if (!f.monto) { alert("Poné el monto."); return; } if (f.mov === "inicial" && hayInicial && !confirm("Ya hay un efectivo inicial. Si cargás otro, la caja cuenta desde la fecha más vieja. ¿Seguir?")) return; if (!onAdd(f)) { alert("No pude leer el monto."); return; } setF({ ...f, monto: "", concepto: "" }); }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>＋</button>
       </div>
     </div>
@@ -2035,7 +2063,7 @@ function GastosBody({ gastos, onAdd, exportar, borrar, onFotoTicket, leyendo }) 
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 9 }}>Nuevo gasto (a mano)</div>
       <input value={f.concepto} onChange={e => setF({ ...f, concepto: e.target.value })} placeholder="Concepto (nafta, comida, ferretería…)" style={{ width: "100%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text, marginBottom: 8, boxSizing: "border-box" }} />
       <div style={{ display: "flex", gap: 7 }}>
-        <input value={f.monto} onChange={e => setF({ ...f, monto: e.target.value })} placeholder="Monto" inputMode="numeric" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
+        <input value={f.monto} onChange={e => setF({ ...f, monto: miles(e.target.value) })} placeholder="Monto" inputMode="numeric" style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 16, color: T.text }} />
         <button onClick={() => { if (!f.concepto.trim() || !f.monto) { alert("Poné concepto y monto."); return; } onAdd({ concepto: f.concepto, monto: f.monto }); setF({ concepto: "", monto: "" }); }} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>＋</button>
       </div>
     </div>
