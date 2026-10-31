@@ -5,6 +5,8 @@
 //  GET  /api/auditoria?k=CLAVE&obra=puentes246                  → PDF de la última acta de esa obra
 //  GET  /api/auditoria?k=CLAVE&obra=puentes246&acta=SUP-2026-057 → PDF de esa acta
 //  GET  ...&f=texto | f=json                                    → mismo contenido en texto / JSON
+//  GET  ...&plan=1                                              → Plan 90 días del edificio (texto)
+//  POST {k:CLAVE, op:"plan_obj_add"|"plan_obj_hecho"|"plan_contacto_add", ...} → agrega al Plan 90 días (no borra)
 //  POST {op:"link", cod:<código de Dirección>}                  → devuelve el enlace con la clave
 //  POST {op:"rotar", cod:<código de Dirección>}                 → anula la clave anterior y devuelve el enlace nuevo
 // La clave sale del código de Dirección + un número de versión (se guarda solo el número, no la clave).
@@ -177,6 +179,36 @@ export default async function handler(req, res) {
     const enlace = (r) => `https://${base}/api/auditoria?k=${claveDe(dir, r)}`;
     if (req.method === "POST") {
       let b = req.body; if (typeof b === "string") { try { b = JSON.parse(b); } catch { b = {}; } } b = b || {};
+      // El asistente (con el enlace privado) puede AGREGAR objetivos/contactos al Plan 90 días y tildar objetivos; nunca borra.
+      if (b.k && String(b.op || "").startsWith("plan_")) {
+        if (!dir || !iguales(b.k, claveDe(dir, rev))) { await pausa(700); res.status(403).json({ error: "Enlace no válido." }); return; }
+        const cur = await leer(H, "edif_proyecto");
+        const data = cur && cur.data;
+        if (!data || data.v !== 2 || !data.plan || !Array.isArray(data.plan.obj)) { res.status(409).json({ error: "El Plan 90 días todavía no está guardado en la nube: abrilo una vez en la app Edificio propio." }); return; }
+        const tx = (v, n) => String(v == null ? "" : v).replace(/[\u0000-\u001f]/g, " ").trim().slice(0, n);
+        const ymd = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? String(v) : "");
+        const id = () => "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const AREAS = ["Contactos", "Mi prima", "Primo y socio", "Edificio", "Dinero", "Para mí"];
+        const P = data.plan; let out;
+        if (b.op === "plan_obj_add") {
+          const t = tx(b.t, 300); if (!t) { res.status(400).json({ error: "Falta el texto (t)." }); return; }
+          const fecha = ymd(b.fecha); const ini = Date.parse((P.inicio || "2026-10-30") + "T00:00:00-03:00");
+          const mes = [1, 2, 3].includes(Number(b.mes)) ? Number(b.mes) : fecha ? Math.min(3, Math.max(1, Math.ceil((Date.parse(fecha + "T00:00:00-03:00") - ini + 864e5) / (30 * 864e5)))) : 1;
+          if (P.obj.length >= 200) { res.status(400).json({ error: "Demasiados objetivos." }); return; }
+          const o = { id: id(), mes, area: AREAS.includes(b.area) ? b.area : "Contactos", t, fecha, hecha: false, nota: tx(b.nota, 300) };
+          P.obj.push(o); out = o;
+        } else if (b.op === "plan_obj_hecho") {
+          const o = P.obj.find((x) => x.id === b.id); if (!o) { res.status(404).json({ error: "No existe ese objetivo." }); return; }
+          o.hecha = b.hecha !== false; out = o;
+        } else if (b.op === "plan_contacto_add") {
+          const n = tx(b.n, 120); if (!n) { res.status(400).json({ error: "Falta el nombre (n)." }); return; }
+          if ((P.contactos || []).length >= 500) { res.status(400).json({ error: "Demasiados contactos." }); return; }
+          const c = { id: id(), n, d: tx(b.d, 200), f: ymd(b.f) || new Date(Date.now() - 108e5).toISOString().slice(0, 10), q: tx(b.q, 300), r: ymd(b.r) };
+          P.contactos = P.contactos || []; P.contactos.unshift(c); out = c;
+        } else { res.status(400).json({ error: "Operación inválida" }); return; }
+        await escribir(H, "edif_proyecto", { t: Date.now(), data });
+        res.status(200).json({ ok: true, agregado: out }); return;
+      }
       if (!dir || norm(b.cod) !== norm(dir)) { await pausa(700); res.status(403).json({ error: "Código incorrecto." }); return; }
       if (b.op === "rotar") { await escribir(H, "asist_cfg", { rev: rev + 1, t: Date.now() }); res.status(200).json({ ok: true, enlace: enlace(rev + 1) }); return; }
       if (b.op === "link") { res.status(200).json({ ok: true, enlace: enlace(rev) }); return; }
@@ -187,6 +219,15 @@ export default async function handler(req, res) {
     if (!dir || !q.k || !iguales(q.k, claveDe(dir, rev))) { await pausa(700); res.status(403).send("Enlace no válido."); return; }
     const obras = await cargarObras(H);
     const f = String(q.f || "");
+    if (q.plan !== undefined) {
+      const cur = await leer(H, "edif_proyecto"); const P = cur && cur.data && cur.data.plan;
+      if (!P) { res.status(404).send("El Plan 90 días todavía no está guardado en la nube (abrilo una vez en la app Edificio propio)."); return; }
+      const L = ["PLAN 90 DÍAS (Edificio propio) · inicio " + P.inicio, ""];
+      [1, 2, 3].forEach((m) => { L.push("MES " + m); P.obj.filter((x) => x.mes === m).sort((x, y) => String(x.fecha || "9").localeCompare(String(y.fecha || "9"))).forEach((x) => L.push(`- [${x.hecha ? "x" : " "}] ${x.fecha || "sin fecha"} · ${x.area} · ${x.t}  (id ${x.id})`)); L.push(""); });
+      L.push("CONTACTOS NUEVOS"); (P.contactos || []).forEach((c) => L.push(`- ${c.n} · ${c.d} · ${c.f} · ${c.q}${c.r ? " · retomar " + c.r : ""}`));
+      L.push("", "Para agregar: POST a este mismo /api/auditoria con JSON {k:<clave del enlace>, op:'plan_obj_add', t:'texto', fecha:'aaaa-mm-dd', area:'Contactos|Mi prima|Primo y socio|Edificio|Dinero|Para mí'}; op:'plan_obj_hecho' {id}; op:'plan_contacto_add' {n,d,f,q,r}. No borra nada.");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(L.join("\n")); return;
+    }
     if (q.todo !== undefined) {
       // acceso de lectura a todo el entorno (solo consulta): índice, una sección completa o búsqueda de texto
       const PROHIBIDO = /^(codigos|cfg|asist_cfg|seg_cfg|seg_flags)$|^audfot_|^audtrash_|token|hash|sesion/i;
@@ -218,7 +259,7 @@ export default async function handler(req, res) {
       const L = ["ENTORNO COMPLETO (solo lectura)\n", "Cada sección se pide con: " + enlace(rev) + "&todo=1&s=<sección>", "Buscar texto en todo: " + enlace(rev) + "&todo=1&q=<palabra>\n",
         "Guía: seg_obras, seg_tareas, seg_personal, seg_gastos, seg_sueldos, seg_agenda, seg_hitos, seg_registros, seg_adicionales = app de Seguimiento. snap_<obra> = estado de NEXO 2 (avance, tarjetas, planos). informes_<obra> = informes semanales y avances. audreg_<obra> = actas de auditoría. gestion_<obra> = registros de gestión de NEXO 2. adic_<obra> = certificados de tareas adicionales. edif_proyecto = edificio propio.\n", "SECCIONES:"];
       claves.forEach((r) => L.push(`- ${r.clave} (actualizado ${fechaLarga(Date.parse(r.actualizado))})`));
-      L.push("\nTambién: &hoy=1 (lo cargado hoy), &obra=<nombre> (PDF de acta).");
+      L.push("\nTambién: &plan=1 (Plan 90 días del edificio, con permiso para agregar objetivos y contactos), &hoy=1 (lo cargado hoy), &obra=<nombre> (PDF de acta).");
       res.setHeader("Content-Type", "text/plain; charset=utf-8"); res.status(200).send(L.join("\n")); return;
     }
     if (q.hoy !== undefined || q.fecha) {
