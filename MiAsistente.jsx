@@ -239,6 +239,13 @@ html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.16),tr
   .rail .bdg.c{background:#B98A41;right:6px}
   .rootapp{margin:0 auto 0 108px!important;max-width:1100px!important}
 }
+.tswitch{position:relative;width:62px;height:32px;border:0;border-radius:999px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:0 9px;color:#cfcfcf;background:rgba(0,0,0,.55);box-shadow:inset 0 1px 3px rgba(0,0,0,.7),inset 0 0 0 1px rgba(255,255,255,.18)}
+.tswitch svg{position:relative;z-index:1}
+.tswitch .ts-k{position:absolute;top:3px;left:33px;width:26px;height:26px;border-radius:50%;background:linear-gradient(160deg,#f5f5f5,#9a9a9a);box-shadow:0 2px 6px rgba(0,0,0,.5),inset 0 1px 0 #fff;transition:left .22s}
+.tswitch .ts-m{color:#111}
+.tswitch.claro{background:rgba(255,255,255,.7);color:#555;box-shadow:inset 0 1px 3px rgba(0,0,0,.25),inset 0 0 0 1px rgba(0,0,0,.15)}
+.tswitch.claro .ts-k{left:3px;background:linear-gradient(160deg,#fff,#d4d4d4)}
+.tswitch.claro .ts-m{color:#555}.tswitch.claro .ts-s{color:#B98A41}
 `;
 
 const GLASS_CLARO = `
@@ -1449,7 +1456,14 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     <div className="gbar" style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v27 · agenda-orden</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button className={"tswitch" + (claro ? " claro" : "")} role="switch" aria-checked={claro} aria-label="Modo claro u oscuro" title={claro ? "Pasar a oscuro" : "Pasar a claro"} onClick={() => saveCfg({ ...cfg, tema: claro ? "oscuro" : "claro" })}>
+          <svg className="ts-s" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" /></svg>
+          <svg className="ts-m" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
+          <span className="ts-k" />
+        </button>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
+        </div>
       </div>
 
     </div>
