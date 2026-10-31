@@ -223,7 +223,7 @@ html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.16),tr
 .bnav .tabg{flex:1;min-width:0;font-size:10.5px;padding:7px 2px 6px;border-radius:999px;color:#8f8b84;position:relative}
 .bnav .tabg.on{color:#ece8e1}
 .bnav .tabg .gem{width:30px;height:26px}
-.bdg{position:absolute;top:2px;right:10px;background:#EF4444;color:#fff;border-radius:9px;min-width:15px;height:15px;font-size:8.5px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.bdg.c{background:#B98A41}.bdg{position:absolute;top:2px;right:10px;background:#EF4444;color:#fff;border-radius:9px;min-width:15px;height:15px;font-size:8.5px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 3px}
 .masov{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;padding:0 12px 100px}
 .massheet{width:100%;max-width:640px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:14px;border-radius:24px;background:linear-gradient(158deg,rgba(255,255,255,.2),rgba(255,255,255,.06));-webkit-backdrop-filter:blur(26px) saturate(1.8);backdrop-filter:blur(26px) saturate(1.8);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 0 0 1px rgba(255,255,255,.26)}
 .masit{display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;color:#cfcfcf;font-size:11px;font-weight:600;padding:10px 2px;border-radius:16px;cursor:pointer}
@@ -451,7 +451,7 @@ export default function MiAsistente() {
   const [masAbierto, setMasAbierto] = useState(false);
   const NAV_PRINC = [["chat", "Chat"], ["pagos", "Pagos"], ["agenda", "Agenda"], ["caja", "Caja"]];
   const NAV_MAS = [["cobros", "Cobros"], ["gastos", "Gastos"], ["resultados", "Resultados"], ["obras", "Obras"], ["proyectos", "Proyectos"], ["reuniones", "Reuniones"], ["ajustes", "Ajustes"]];
-  const cntDe = (id) => { const mk = hoyStr().slice(3); return id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mk).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mk).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mk).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; };
+  const cntDe = (id) => id === "agenda" ? (agenda || []).filter(e => String(e.fecha || "") === hoyStr()).length : 0; // el globo solo cuenta lo agendado para hoy
   const claro = cfg.tema === "claro" || (cfg.tema === "auto" && sysClaro);
   if (claro) { Object.assign(T, { accent: "#B98A41", navy: "#2A2A2E", bg: "#EEEEEE", card: "rgba(255,255,255,.7)", text: "#1A1A1A", sub: "#4A4A4A", muted: "#7a7a7a", border: "rgba(0,0,0,.12)", al: "rgba(185,138,65,.18)" }); BRASS = "#A8782F"; }
   else { Object.assign(T, { accent: "#B98A41", navy: "#17171A", bg: "#000000", card: "rgba(255,255,255,.07)", text: "#F2F2F2", sub: "#B8B8B8", muted: "#8c8c8c", border: "rgba(255,255,255,.12)", al: "rgba(216,176,106,.16)" }); BRASS = "#D8B06A"; }
@@ -1533,13 +1533,13 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     </div>
     </div>
     {masAbierto && <div className="masov" onClick={() => setMasAbierto(false)}><div className="massheet" onClick={e => e.stopPropagation()}>
-      {NAV_MAS.map(([id, lb]) => { const c = cntDe(id); return <button key={id} className={"masit" + (vista === id ? " on" : "")} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); setMasAbierto(false); }}><span className="gem"><Icono n={id} size={22} /></span><span className="tl">{lb}{c ? ` ${c}` : ""}</span></button>; })}
+      {NAV_MAS.map(([id, lb]) => { const c = cntDe(id); return <button key={id} className={"masit" + (vista === id ? " on" : "")} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); setMasAbierto(false); }}><span className="gem"><Icono n={id} size={22} /></span><span className="tl">{lb}</span></button>; })}
     </div></div>}
     <nav className="rail" aria-label="Secciones">
       {[...NAV_PRINC, ...NAV_MAS].map(([id, lb]) => { const c = cntDe(id); return <button key={id} className={"tabg" + (vista === id ? " on" : "")} aria-current={vista === id ? "page" : "false"} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} style={{ color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : undefined }}>{id === "chat" && chatUnread > 0 && <span className="bdg">{chatUnread > 99 ? "99+" : chatUnread}</span>}{c ? <span className="bdg c">{c}</span> : null}<span className="gem"><Icono n={id} size={22} /></span><span className="tl">{lb}</span></button>; })}
     </nav>
     <nav className="bnav"><div className="in">
-      {NAV_PRINC.map(([id, lb]) => { const c = cntDe(id); return <button key={id} className={"tabg" + (vista === id ? " on" : "")} aria-current={vista === id ? "page" : "false"} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} style={{ color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : undefined }}>{id === "chat" && chatUnread > 0 && <span className="bdg">{chatUnread > 99 ? "99+" : chatUnread}</span>}<span className="gem"><Icono n={id} size={22} /></span><span className="tl">{lb}{c ? ` ${c}` : ""}</span></button>; })}
+      {NAV_PRINC.map(([id, lb]) => { const c = cntDe(id); return <button key={id} className={"tabg" + (vista === id ? " on" : "")} aria-current={vista === id ? "page" : "false"} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} style={{ color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : undefined }}>{id === "chat" && chatUnread > 0 && <span className="bdg">{chatUnread > 99 ? "99+" : chatUnread}</span>}<span className="gem"><Icono n={id} size={22} /></span>{c ? <span className="bdg c">{c}</span> : null}<span className="tl">{lb}</span></button>; })}
       <button className={"tabg" + (NAV_MAS.some(x => x[0] === vista) ? " on" : "")} onClick={() => setMasAbierto(v => !v)}><span className="gem"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg></span><span className="tl">Más</span></button>
     </div></nav>
   </div>);
