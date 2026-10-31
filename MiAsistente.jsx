@@ -189,6 +189,20 @@ input[type=date],input[type=time]{min-height:44px}
 .tabg .gem{width:38px;height:38px;border-radius:13px;display:flex;align-items:center;justify-content:center;color:#fff;position:relative;overflow:hidden;background:linear-gradient(160deg,#3a3a40,#1d1d21);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -7px 11px rgba(0,0,0,.45),0 8px 14px -8px rgba(0,0,0,.8)}
 .tabg .gem::before{content:"";position:absolute;left:3px;right:3px;top:2px;height:46%;border-radius:11px 11px 20px 20px;background:linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,0));pointer-events:none}
 .tabg.on .gem{background:linear-gradient(160deg,#e0b870,#b0864a);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -7px 11px rgba(120,80,20,.35),0 9px 16px -7px rgba(176,134,74,.75)}
+.pill{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.07);border:0;border-radius:999px;padding:4px 12px 4px 5px;color:#d6d6d6;font-size:11.5px;font-weight:600;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),inset 0 0 0 .5px rgba(255,255,255,.1)}
+.pill.on{color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 0 0 1px #D8B06A}
+.gem.sm{width:26px;height:26px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;position:relative;overflow:hidden;background:linear-gradient(160deg,#3a3a40,#1d1d21);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -5px 8px rgba(0,0,0,.45)}
+.pill.on .gem.sm,.gbtn.send .gem.sm{background:linear-gradient(160deg,#e0b870,#b0864a);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -5px 8px rgba(120,80,20,.35)}
+.gem.sm::before,.gem.big::before{content:"";position:absolute;left:2px;right:2px;top:1px;height:46%;border-radius:9px 9px 16px 16px;background:linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,0));pointer-events:none}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:16px;padding:0 12px;background:rgba(255,255,255,.07);color:#fff;font-weight:700;font-size:14px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 .5px rgba(255,255,255,.1)}
+.gbtn.mic.rec,.gbtn.mic:active{box-shadow:inset 0 0 0 1px #DC2626}
+.gbtn:disabled{opacity:.45}
+.ptt{width:100%;display:flex;align-items:center;gap:14px;border:0;border-radius:22px;padding:10px 16px;margin-bottom:10px;background:linear-gradient(160deg,rgba(216,176,106,.22),rgba(255,255,255,.06));color:#fff;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 0 0 1px rgba(216,176,106,.55),0 12px 24px -14px rgba(0,0,0,.9)}
+.ptt .gem.big{width:58px;height:58px;border-radius:20px;display:flex;align-items:center;justify-content:center;flex:none;position:relative;overflow:hidden;color:#fff;background:linear-gradient(160deg,#e0b870,#b0864a);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -9px 14px rgba(120,80,20,.35),0 10px 18px -8px rgba(176,134,74,.8)}
+.ptt .pt{font-size:15px;font-weight:700;text-align:left;line-height:1.25}
+.ptt.rec{box-shadow:inset 0 0 0 2px #EF4444,0 0 0 4px rgba(239,68,68,.25)}
+.ptt.rec .gem.big{background:linear-gradient(160deg,#f87171,#b91c1c);animation:pul 1.1s ease-in-out infinite}
+@keyframes pul{50%{transform:scale(1.08)}}
 .tabg.on{background:rgba(255,255,255,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 .5px rgba(255,255,255,.08)}
 `;
 
@@ -460,7 +474,7 @@ export default function MiAsistente() {
       const [ra, rag, rg, rcon, rcam, rent, rsup, rcaja] = await Promise.all([storage.get("sebastian_archivos"), storage.get("sebastian_agenda"), storage.get("sebastian_gastos"), storage.get("sebastian_contactos"), storage.get("vv_camaras"), storage.get("sebastian_entreno"), storage.get("sebastian_suplementos"), storage.get("sebastian_caja")]);
       if (alive) { const av = parse(ra); setArchivos(prev => JSON.stringify(av) !== JSON.stringify(prev) ? av : prev); const ag = parse(rag); setAgenda(prev => JSON.stringify(ag) !== JSON.stringify(prev) ? ag : prev); if (Date.now() - cajaWrite.current > 4000) { const cj = parse(rcaja); setCaja(prev => JSON.stringify(cj) !== JSON.stringify(prev) ? cj : prev); } const gg = parse(rg); setGastos(prev => JSON.stringify(gg) !== JSON.stringify(prev) ? gg : prev); const cc = parse(rcon); setContactos(prev => JSON.stringify(cc) !== JSON.stringify(prev) ? cc : prev); const cm = parse(rcam); setCamaras(prev => JSON.stringify(cm) !== JSON.stringify(prev) ? cm : prev); if (rent?.value) { try { const ed = JSON.parse(rent.value); setEntrenoInicio(prev => ed.inicio || prev); setEntrenoHechas(prev => JSON.stringify(ed.hechas || {}) !== JSON.stringify(prev) ? (ed.hechas || {}) : prev); } catch { } } if (rsup?.value) { try { const sd = JSON.parse(rsup.value); setSuplSel(prev => JSON.stringify(sd.sel || []) !== JSON.stringify(prev) ? (sd.sel || []) : prev); setSuplTomados(prev => JSON.stringify(sd.tomados || {}) !== JSON.stringify(prev) ? (sd.tomados || {}) : prev); } catch { } } }
       if (!modelos.length) { const rmod = await storage.get("sebastian_modelos"); if (alive && rmod?.value) { try { const arr = JSON.parse(rmod.value); setModelos(arr); if (arr.length && !modeloSel) setModeloSel(arr[0].id); } catch { } } }
-      const rc = await storage.get("sebastian_cfg"); if (alive && rc?.value) { try { const c = JSON.parse(rc.value); setCfg(prev => JSON.stringify({ ...CFG_DEF, ...c }) !== JSON.stringify(prev) ? { ...CFG_DEF, ...c } : prev); } catch { } }
+      const rc = await storage.get("sebastian_cfg"); if (alive && rc?.value) { try { const c = JSON.parse(rc.value); const m = { ...CFG_DEF, ...c, ...(c.look === "n2" ? {} : LOOK_N2) }; if (c.look !== "n2") { try { localStorage.setItem("sebastian_cfg", JSON.stringify(m)); } catch { } storage.set("sebastian_cfg", JSON.stringify(m)).catch(() => { }); } setCfg(prev => JSON.stringify(m) !== JSON.stringify(prev) ? m : prev); } catch { } }
     }
     pull(); const iv = setInterval(pull, 5000); const onVis = () => { if (document.visibilityState === "visible") pull(); }; document.addEventListener("visibilitychange", onVis); window.addEventListener("focus", pull); return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("focus", pull); };
   }, [pinOk]);
@@ -620,7 +634,8 @@ export default function MiAsistente() {
     }
   }
   const silencioRef = useRef(null);
-  function dictar() {
+  const pttSoltarRef = useRef(null); const pttArmRef = useRef(null); const pttTimerRef = useRef(null); const [pttCuenta, setPttCuenta] = useState(0);
+  function dictar(ptt) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert("Este teléfono no permite dictar desde la app. Tocá el cuadro de texto y usá el micrófono del teclado (dictado del iPhone)."); try { inputRef.current && inputRef.current.focus(); } catch { } return; }
     if (escuchando && recRef.current) { try { recRef.current.stop(); } catch { } return; }
@@ -631,10 +646,13 @@ export default function MiAsistente() {
     // Después de 5 segundos sin que se reconozca nada nuevo, cortamos solos y mandamos —
     // así en el auto no hace falta tocar "Enviar".
     function resetSilencio() {
+      if (ptt) return;
       if (silencioRef.current) clearTimeout(silencioRef.current);
       silencioRef.current = setTimeout(() => { autoEnviar = true; try { rec.stop(); } catch { } }, 5000);
     }
     rec.onstart = () => { resetSilencio(); };
+    const soltar = () => { pttSoltarRef.current = null; let n = 3; setPttCuenta(n); const t = setInterval(() => { n -= 1; setPttCuenta(n > 0 ? n : 0); if (n <= 0) { clearInterval(t); setPttCuenta(0); autoEnviar = true; try { rec.stop(); } catch { } } }, 1000); pttTimerRef.current = t; };
+    if (ptt) { pttSoltarRef.current = soltar; pttArmRef.current = () => { pttSoltarRef.current = soltar; }; }
     rec.onresult = (e) => { let fin = "", inter = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) fin += t; else inter += t; } setInput((base + fin + inter).replace(/\s+/g, " ").trimStart()); if (fin) base += fin; resetSilencio(); };
     rec.onend = () => {
       setEscuchando(false); recRef.current = null;
@@ -1398,17 +1416,23 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
 
     <div style={{ padding: "10px 14px 14px", paddingBottom: "max(14px, env(safe-area-inset-bottom))", borderTop: `1px solid ${T.border}`, background: T.bg }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.sub, cursor: "pointer" }}><input type="checkbox" checked={useSearch} onChange={e => setUseSearch(e.target.checked)} /> Buscar en internet</label>
+        <button className={"pill" + (useSearch ? " on" : "")} onClick={() => setUseSearch(v => !v)}><span className="gem sm"><Icono n="buscar" size={15} /></span>Buscar en internet</button>
         <input ref={chatFileRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.dwg,.dxf" multiple onChange={subirEnChat} style={{ display: "none" }} />
-        <button onClick={() => chatFileRef.current && chatFileRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📎 Foto / archivo</button>
+        <button className="pill" onClick={() => chatFileRef.current && chatFileRef.current.click()}><span className="gem sm"><Icono n="clip" size={15} /></span>Foto / archivo</button>
         <input ref={modeloRef} type="file" accept=".docx" onChange={subirModelo} style={{ display: "none" }} />
-        <button onClick={() => modeloRef.current && modeloRef.current.click()} style={{ background: "none", border: `1px solid ${T.border}`, color: T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>📄 Subir modelo</button>
-        <button onClick={() => setVozOn(v => !v)} style={{ background: vozOn ? T.accent : "none", border: `1px solid ${vozOn ? T.accent : T.border}`, color: vozOn ? "#fff" : T.sub, borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>🔊 Voz {vozOn ? "activada" : ""}</button>
+        <button className="pill" onClick={() => modeloRef.current && modeloRef.current.click()}><span className="gem sm"><Icono n="modelos" size={15} /></span>Subir modelo</button>
+        <button className={"pill" + (vozOn ? " on" : "")} onClick={() => setVozOn(v => !v)}><span className="gem sm"><Icono n="altavoz" size={15} /></span>Voz {vozOn ? "activada" : ""}</button>
         {modelo && <span style={{ fontSize: 10.5, color: T.muted }}>Modelo activo: {modelo.nombre}</span>}
       </div>
       {adjPend.length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>{adjPend.map((a, i) => <span key={i} style={{ background: T.al, borderRadius: 7, padding: "5px 9px", fontSize: 11, color: T.accent, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>{a.kind === "image" ? "🖼" : a.kind === "texto" ? "📊" : "📄"} {a.nombre.slice(0, 22)} <span onClick={() => setAdjPend(p => p.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: T.muted }}>✕</span></span>)}</div>}
+      <button className={"ptt" + (escuchando ? " rec" : "") + (pttCuenta ? " cnt" : "")} title="Mantené apretado para hablar"
+        onPointerDown={e => { e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { } if (pttTimerRef.current) { clearInterval(pttTimerRef.current); pttTimerRef.current = null; setPttCuenta(0); if (recRef.current) { if (pttArmRef.current) pttArmRef.current(); return; } } if (!escuchando) dictar(true); }}
+        onPointerUp={() => { if (pttSoltarRef.current) pttSoltarRef.current(); }} onPointerCancel={() => { if (pttSoltarRef.current) pttSoltarRef.current(); }} onContextMenu={e => e.preventDefault()}>
+        <span className="gem big"><Icono n="mic" size={28} /></span>
+        <span className="pt">{pttCuenta ? `Enviando en ${pttCuenta}… (tocá para seguir hablando)` : escuchando ? "Hablá… soltá cuando termines" : "Mantené apretado para hablar"}</span>
+      </button>
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={dictar} title="Hablar" style={{ background: escuchando ? "#DC2626" : T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, color: escuchando ? "#fff" : T.accent, borderRadius: 12, padding: "0 15px", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>🎤</button>
+        <button onClick={dictar} title="Hablar" className="gbtn mic" style={{ flexShrink: 0 }}><span className="gem sm"><Icono n="mic" size={18} /></span></button>
         <textarea
           ref={inputRef}
           value={input}
@@ -1418,7 +1442,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
           rows={1}
           style={{ flex: 1, minWidth: 0, background: T.card, border: `1px solid ${escuchando ? "#DC2626" : T.border}`, borderRadius: 12, padding: "13px 15px", fontSize: 16, color: T.text, resize: "none", overflowY: "auto", maxHeight: 140, lineHeight: 1.4, fontFamily: T.sans }}
         />
-        <button onClick={() => enviar()} disabled={busy || (!input.trim() && adjPend.length === 0)} style={{ background: (busy || (!input.trim() && adjPend.length === 0)) ? T.border : T.accent, color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", fontSize: 14, fontWeight: 600, letterSpacing: "0.03em", cursor: (busy || (!input.trim() && adjPend.length === 0)) ? "default" : "pointer" }}>Enviar</button>
+        <button className="gbtn send" onClick={() => enviar()} disabled={busy || (!input.trim() && adjPend.length === 0)} style={{ padding: "0 16px 0 8px" }}><span className="gem sm"><Icono n="enviar" size={15} /></span>Enviar</button>
       </div>
     </div>
     </div>
@@ -1442,6 +1466,11 @@ function Icono({ n, size = 20 }) {
     resultados: <React.Fragment><line x1="6" y1="20" x2="6" y2="11" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="18" y1="20" x2="18" y2="14" /></React.Fragment>,
     proyectos: <React.Fragment><path d="M12 2l9 5-9 5-9-5z" /><path d="M3 12l9 5 9-5" /><path d="M3 17l9 5 9-5" /></React.Fragment>,
     reuniones: <React.Fragment><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" y1="18" x2="12" y2="22" /></React.Fragment>,
+    buscar: <React.Fragment><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /></React.Fragment>,
+    clip: <path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />,
+    altavoz: <React.Fragment><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" /></React.Fragment>,
+    mic: <React.Fragment><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" y1="18" x2="12" y2="22" /></React.Fragment>,
+    enviar: <React.Fragment><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></React.Fragment>,
     camaras: <React.Fragment><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></React.Fragment>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>{p[n] || null}</svg>;
