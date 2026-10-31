@@ -1,0 +1,18 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><title>Enlace del asistente</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box;font-family:"Playfair Display",Georgia,serif}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;color:#f2f2f2;background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.16),transparent 62%),radial-gradient(90% 40% at 0% 38%,rgba(70,110,190,.12),transparent 70%),#0d0e10}
+.c{width:100%;max-width:460px;padding:22px;border-radius:22px;background:linear-gradient(158deg,rgba(255,255,255,.17),rgba(255,255,255,.035) 50%,rgba(255,255,255,.075));box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 0 0 1px rgba(255,255,255,.26)}
+h1{margin:0 0 6px;font-size:24px}p{margin:0 0 14px;color:#b8b8b8;font-size:14px;line-height:1.45}input,textarea{width:100%;font-size:16px;color:#f2f2f2;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:13px;margin-bottom:12px}textarea{height:130px;word-break:break-all}
+button{width:100%;border:0;border-radius:14px;padding:14px;font-size:16px;font-weight:700;color:#2a1c05;background:linear-gradient(180deg,#e8c585,#c79c55);cursor:pointer;margin-bottom:8px}button.g{background:rgba(255,255,255,.1);color:#f2f2f2}#m{color:#ff8a80;font-size:14px;min-height:18px}</style></head><body><div class="c">
+<h1>Enlace del asistente</h1><p>Ingresá tu código de Dirección para ver el enlace privado que usa tu asistente. Es el mismo código de NEXO 2. El código no se guarda en ningún lado.</p>
+<input id="cod" type="password" placeholder="Código de Dirección" autocomplete="off"><button id="b">Mostrar enlace</button><div id="m"></div>
+<div id="r" hidden><textarea id="t" readonly></textarea><button id="cp" class="g">Copiar enlace</button><p style="font-size:12.5px">Es una clave: quien lo tenga puede leer tus datos. Pegalo solo en el chat de tu asistente.</p></div></div>
+<script>
+const $=i=>document.getElementById(i);
+async function go(){$('m').textContent='';$('r').hidden=true;
+ try{const r=await fetch('/api/auditoria',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({op:'link',cod:$('cod').value})});const j=await r.json();
+  if(!r.ok||!j.enlace){$('m').textContent=j.error||'Código incorrecto.';return}
+  $('t').value=j.enlace;$('r').hidden=false;$('cod').value=''}catch(e){$('m').textContent='No pude conectarme.'}}
+$('b').onclick=go;$('cod').onkeydown=e=>{if(e.key==='Enter')go()};
+$('cp').onclick=async()=>{try{await navigator.clipboard.writeText($('t').value);$('cp').textContent='¡Copiado!'}catch{$('t').select();document.execCommand('copy');$('cp').textContent='¡Copiado!'}};
+</script></body></html>
