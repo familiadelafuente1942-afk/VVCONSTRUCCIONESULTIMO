@@ -180,6 +180,7 @@ async function callAI(msgs, sys, apiKey, useSearch) {
 const T = { navy: "#1B1A16", accent: "#22463A", al: "#ECF0EC", bg: "#F4F2EC", card: "#FFFFFF", border: "#E5E1D6", text: "#1A1813", sub: "#6E695E", muted: "#A49D8D", rsm: 10, serif: "'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif", sans: "'Inter',-apple-system,'SF Pro Text',system-ui,sans-serif" };
 let BRASS = "#A17C3E";
 const GLASS_CSS = `
+*,*::before,*::after{font-family:"Playfair Display",Georgia,"Times New Roman",serif!important}
 html,body{background:#000;color-scheme:dark}
 input,select,textarea{border-radius:14px!important;color-scheme:dark}
 input[type=date],input[type=time]{min-height:44px}
@@ -204,6 +205,12 @@ input[type=date],input[type=time]{min-height:44px}
 .ptt.rec .gem.big{background:linear-gradient(160deg,#f87171,#b91c1c);animation:pul 1.1s ease-in-out infinite}
 @keyframes pul{50%{transform:scale(1.08)}}
 .tabg.on{background:rgba(255,255,255,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 .5px rgba(255,255,255,.08)}
+.tabg .gem,.tabg.on .gem{width:34px;height:30px;border-radius:0;background:none;box-shadow:none;overflow:visible;color:inherit}
+.tabg .gem::before,.gem.sm::before{display:none}
+.tabg.on .gem{color:#D8B06A}
+.tabg.on{background:rgba(255,255,255,.08);border-radius:999px;box-shadow:inset 0 1px 0 rgba(255,255,255,.32),inset 0 0 0 .5px rgba(255,255,255,.1)}
+.gem.sm,.pill.on .gem.sm,.gbtn.send .gem.sm{width:24px;height:24px;border-radius:0;background:none;box-shadow:none;color:#D8B06A;overflow:visible}
+
 `;
 
 // Montos: se escriben con separador de miles (1.500.000) y se leen tanto así como en formato simple.
@@ -1407,7 +1414,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
           {m.pdfUrl && <a href={m.pdfUrl} download={m.pdfNombre || "documento.pdf"} style={{ display: "inline-block", marginTop: 8, background: "#B0894F", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>📄 Ver / descargar PDF</a>}
           {m.mapUrl && <a href={m.mapUrl} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, background: "#1A73E8", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>🗺 {m.mapLabel || "Ver en Google Maps"}</a>}
           {m.mailUrl && <a href={m.mailUrl} style={{ display: "inline-block", marginTop: 8, background: "#EA4335", color: "#fff", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}>✉️ {m.mailLabel || "Enviar mail"}</a>}
-          {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8 }}>{m.docs.map((d, j) => <a key={j} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.navy, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: BRASS, fontWeight: 700, fontSize: 11.5 }}>Abrir ↗</span></a>)}</div>}
+          {m.docs && m.docs.length > 0 && <div style={{ marginTop: 8 }}>{m.docs.map((d, j) => <a key={j} href={d.url} target="_blank" rel="noreferrer" download={d.nombre} style={{ display: "flex", alignItems: "center", gap: 9, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 6, textDecoration: "none" }}><span style={{ width: 30, height: 30, borderRadius: 7, background: T.al, color: T.text, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📐</span><span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{d.nombre}</span><span style={{ color: BRASS, fontWeight: 700, fontSize: 11.5 }}>Abrir ↗</span></a>)}</div>}
           {m.media && m.media.length > 0 && <div style={{ marginTop: 8 }}>{m.mediaTipo === "videos" ? m.media.map((u, j) => <video key={j} src={u} controls playsInline style={{ width: "100%", borderRadius: 10, marginBottom: 8, background: "#000" }} />) : <div style={{ display: "grid", gridTemplateColumns: m.media.length === 1 ? "1fr" : "1fr 1fr", gap: 6 }}>{m.media.map((u, j) => <a key={j} href={u} target="_blank" rel="noreferrer" download><img src={u} alt="" onLoad={scrollBottom} style={{ width: "100%", borderRadius: 10, border: `1px solid ${T.border}`, display: "block" }} /></a>)}</div>}</div>}
         </div>
       </div>))}
@@ -1458,13 +1465,13 @@ function Icono({ n, size = 20 }) {
     agenda: <React.Fragment><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></React.Fragment>,
     archivos: <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />,
     modelos: <React.Fragment><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></React.Fragment>,
-    obras: <React.Fragment><line x1="3" y1="21" x2="21" y2="21" /><path d="M6 21V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v16" /><path d="M14 21V10h3a1 1 0 0 1 1 1v10" /><line x1="9" y1="8" x2="10.5" y2="8" /><line x1="9" y1="12" x2="10.5" y2="12" /></React.Fragment>,
+    obras: <path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6" />,
     ajustes: <React.Fragment><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></React.Fragment>,
     contactos: <React.Fragment><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></React.Fragment>,
     cobros: <React.Fragment><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 10v.01M18 14v.01" /></React.Fragment>,
     caja: <React.Fragment><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M16 3H8l-1 4h10z" /><path d="M12 11v5M10 13h4" /></React.Fragment>,
-    resultados: <React.Fragment><line x1="6" y1="20" x2="6" y2="11" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="18" y1="20" x2="18" y2="14" /></React.Fragment>,
-    proyectos: <React.Fragment><path d="M12 2l9 5-9 5-9-5z" /><path d="M3 12l9 5 9-5" /><path d="M3 17l9 5 9-5" /></React.Fragment>,
+    resultados: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
+    proyectos: <React.Fragment><rect x="3" y="4" width="8" height="7" rx="1.5" /><rect x="13" y="4" width="8" height="7" rx="1.5" /><rect x="3" y="13" width="8" height="7" rx="1.5" /><rect x="13" y="13" width="8" height="7" rx="1.5" /></React.Fragment>,
     reuniones: <React.Fragment><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" y1="18" x2="12" y2="22" /></React.Fragment>,
     buscar: <React.Fragment><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /></React.Fragment>,
     clip: <path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />,
@@ -1473,7 +1480,7 @@ function Icono({ n, size = 20 }) {
     enviar: <React.Fragment><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></React.Fragment>,
     camaras: <React.Fragment><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></React.Fragment>,
   };
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>{p[n] || null}</svg>;
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>{p[n] || null}</svg>;
 }
 
 function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, onAdd, renombrarObra, quitarObra }) {
@@ -1533,7 +1540,7 @@ function PagosBody({ pagos, obras, filtroObra, setFiltroObra, exportar, borrar, 
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Nombres de obra usados en Pagos</div>
       {obrasUnicas.map(o => (<div key={o} style={{ display: "flex", gap: 6, marginBottom: 7 }}>
         <input defaultValue={o} onChange={e => setNombresEdit(prev => ({ ...prev, [o]: e.target.value }))} style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 10px", fontSize: 14, color: T.text, minWidth: 0 }} />
-        <button onClick={() => { renombrarObra(o, nombresEdit[o] != null ? nombresEdit[o] : o); }} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "0 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar</button>
+        <button onClick={() => { renombrarObra(o, nombresEdit[o] != null ? nombresEdit[o] : o); }} style={{ background: T.al, color: T.text, border: "none", borderRadius: 8, padding: "0 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Guardar</button>
         <button onClick={() => quitarObra(o)} style={{ background: "none", color: "#B03A3A", border: "1px solid #B03A3A", borderRadius: 8, padding: "0 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Borrar</button>
       </div>))}
       <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.5 }}>"Guardar" cambia el nombre en todos los pagos que lo usan (sirve para corregir errores de tipeo o unificar duplicados). "Borrar" saca ese nombre; los pagos quedan sin obra, no se borran.</div>
@@ -1742,7 +1749,7 @@ function ArchivosBody({ archivos, cat, setCat, archRef, subir, subiendo, borrar 
     {porCat.map(g => (<div key={g.c} style={{ marginBottom: 16 }}>
       <div style={{ fontSize: 11, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>{g.c} ({g.items.length})</div>
       {g.items.map(a => (<div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 7 }}>
-        <span style={{ width: 34, height: 34, borderRadius: 8, background: T.al, color: T.navy, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{a.ext || "•"}</span>
+        <span style={{ width: 34, height: 34, borderRadius: 8, background: T.al, color: T.text, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{a.ext || "•"}</span>
         <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: T.text, wordBreak: "break-word" }}>{a.nombre}</div><div style={{ fontSize: 10.5, color: T.muted }}>{a.fecha}</div></div>
         <a href={a.url} target="_blank" rel="noreferrer" download={a.nombre} style={{ color: BRASS, fontWeight: 700, fontSize: 12, textDecoration: "none", flexShrink: 0 }}>Abrir ↗</a>
         <button onClick={() => borrar(a.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>✕</button>
@@ -1788,8 +1795,8 @@ function ObrasBody({ obras, obraEdit, setObraEdit, guardar, onNueva, borrar, onU
           <div style={{ fontSize: 10.5, color: T.muted, marginTop: 3 }}>{(o.fotos || []).length} fotos · {(o.planos || []).length} planos · {(o.informes || []).length} informes</div>
         </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "" })} style={{ background: T.al, color: T.navy, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Editar</button>
-          {(obras || []).length > 1 && <button onClick={() => setUnif(unif && unif.id === o.id ? null : { id: o.id, destino: "" })} style={{ background: "none", color: T.navy, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Unificar</button>}
+          <button onClick={() => setObraEdit({ id: o.id, nombre: o.nombre, estado: o.estado || "", avance: o.avance != null ? o.avance : "", direccion: o.direccion || "" })} style={{ background: T.al, color: T.text, border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Editar</button>
+          {(obras || []).length > 1 && <button onClick={() => setUnif(unif && unif.id === o.id ? null : { id: o.id, destino: "" })} style={{ background: "none", color: T.text, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Unificar</button>}
           <button onClick={() => borrar(o.id)} style={{ background: "none", color: "#B03A3A", border: "1px solid #B03A3A", borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Borrar</button>
         </div>
       </div>)}
