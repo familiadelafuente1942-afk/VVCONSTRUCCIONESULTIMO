@@ -214,6 +214,21 @@ input[type=date],input[type=time]{min-height:44px}
 .tema-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .tema-seg .tb{display:flex;flex-direction:column;align-items:center;gap:6px;border:0;border-radius:16px;padding:14px 4px;background:rgba(128,128,128,.12);color:#ddd;font-size:13px;font-weight:600;cursor:pointer;box-shadow:inset 0 0 0 .5px rgba(128,128,128,.25)}
 .tema-seg .tb.on{background:rgba(216,176,106,.2);color:#D8B06A;box-shadow:inset 0 0 0 1px #D8B06A,inset 0 1px 0 rgba(255,255,255,.3)}
+html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.16),transparent 62%),radial-gradient(90% 40% at 0% 38%,rgba(70,110,190,.12),transparent 70%),#0d0e10!important;background-attachment:fixed!important}
+.rootapp{background:transparent!important;box-shadow:none!important}
+[style*="background: rgba(255, 255, 255, 0.07)"]{background:linear-gradient(158deg,rgba(255,255,255,.17),rgba(255,255,255,.035) 50%,rgba(255,255,255,.075))!important;-webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 0 0 1px rgba(255,255,255,.26)!important;border:0!important}
+.gbar{border-bottom:1px solid rgba(255,255,255,.08)!important;padding-bottom:12px!important}
+.bnav{padding:6px 12px calc(12px + env(safe-area-inset-bottom,0px));flex:none}
+.bnav .in{display:flex;gap:2px;padding:6px;border-radius:999px;background:linear-gradient(158deg,rgba(255,255,255,.17),rgba(255,255,255,.035));-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 0 0 1px rgba(255,255,255,.26),0 14px 30px -10px rgba(0,0,0,.5)}
+.bnav .tabg{flex:1;min-width:0;font-size:10.5px;padding:7px 2px 6px;border-radius:999px;color:#8f8b84;position:relative}
+.bnav .tabg.on{color:#ece8e1}
+.bnav .tabg .gem{width:30px;height:26px}
+.bdg{position:absolute;top:2px;right:10px;background:#EF4444;color:#fff;border-radius:9px;min-width:15px;height:15px;font-size:8.5px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.masov{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;padding:0 12px 100px}
+.massheet{width:100%;max-width:640px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:14px;border-radius:24px;background:linear-gradient(158deg,rgba(255,255,255,.2),rgba(255,255,255,.06));-webkit-backdrop-filter:blur(26px) saturate(1.8);backdrop-filter:blur(26px) saturate(1.8);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 0 0 1px rgba(255,255,255,.26)}
+.masit{display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;color:#cfcfcf;font-size:11px;font-weight:600;padding:10px 2px;border-radius:16px;cursor:pointer}
+.masit .gem{display:flex;color:inherit}
+.masit.on{background:rgba(255,255,255,.1);color:#D8B06A}
 `;
 
 const GLASS_CLARO = `
@@ -230,6 +245,10 @@ input,select,textarea{color-scheme:light}
 .gbtn{background:rgba(255,255,255,.7);color:#222;box-shadow:inset 0 1px 0 #fff,inset 0 0 0 .5px rgba(0,0,0,.1)}
 .ptt{color:#1a1a1a;background:linear-gradient(160deg,rgba(185,138,65,.2),rgba(255,255,255,.7))}
 .tema-seg .tb{color:#333}
+html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.2),transparent 62%),radial-gradient(90% 40% at 0% 38%,rgba(110,150,225,.2),transparent 70%),#eceef3!important}
+[style*="background: rgba(255, 255, 255, 0.7)"]{background:linear-gradient(158deg,rgba(255,255,255,.95),rgba(255,255,255,.55))!important;-webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6);box-shadow:inset 0 1.5px 1px #fff,inset 0 0 0 1px rgba(0,0,0,.08)!important;border:0!important}
+.bnav .in,.massheet{background:linear-gradient(158deg,rgba(255,255,255,.95),rgba(255,255,255,.6));box-shadow:inset 0 1.5px 1px #fff,inset 0 0 0 1px rgba(0,0,0,.08),0 14px 30px -10px rgba(40,40,70,.25)}
+.bnav .tabg{color:#5a5d66}.bnav .tabg.on{color:#111}.masit{color:#333}
 `;
 
 // Montos: se escriben con separador de miles (1.500.000) y se leen tanto así como en formato simple.
@@ -411,6 +430,10 @@ export default function MiAsistente() {
   { const F = FONTS[cfg.fontId] || FONTS.inter; T.sans = F.sans; T.serif = F.serif; }
   const [sysClaro, setSysClaro] = useState(() => { try { return window.matchMedia("(prefers-color-scheme: light)").matches; } catch { return false; } });
   useEffect(() => { let mq; try { mq = window.matchMedia("(prefers-color-scheme: light)"); const f = () => setSysClaro(mq.matches); mq.addEventListener("change", f); return () => mq.removeEventListener("change", f); } catch { } }, []);
+  const [masAbierto, setMasAbierto] = useState(false);
+  const NAV_PRINC = [["chat", "Chat"], ["pagos", "Pagos"], ["agenda", "Agenda"], ["caja", "Caja"]];
+  const NAV_MAS = [["cobros", "Cobros"], ["gastos", "Gastos"], ["resultados", "Resultados"], ["obras", "Obras"], ["proyectos", "Proyectos"], ["reuniones", "Reuniones"], ["ajustes", "Ajustes"]];
+  const cntDe = (id) => { const mk = hoyStr().slice(3); return id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mk).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mk).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mk).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; };
   const claro = cfg.tema === "claro" || (cfg.tema === "auto" && sysClaro);
   if (claro) { Object.assign(T, { accent: "#B98A41", navy: "#2A2A2E", bg: "#EEEEEE", card: "rgba(255,255,255,.7)", text: "#1A1A1A", sub: "#4A4A4A", muted: "#7a7a7a", border: "rgba(0,0,0,.12)", al: "rgba(185,138,65,.18)" }); BRASS = "#A8782F"; }
   else { Object.assign(T, { accent: "#B98A41", navy: "#17171A", bg: "#000000", card: "rgba(255,255,255,.07)", text: "#F2F2F2", sub: "#B8B8B8", muted: "#8c8c8c", border: "rgba(255,255,255,.12)", al: "rgba(216,176,106,.16)" }); BRASS = "#D8B06A"; }
@@ -1410,16 +1433,14 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     </div>);
   }
 
-  return (<div style={{ height: "100dvh", maxHeight: "100vh", background: false ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
+  return (<div className="rootapp" style={{ height: "100dvh", maxHeight: "100vh", background: false ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
     <style>{GLASS_CSS + (claro ? GLASS_CLARO : "")}</style>
     <div className="gbar" style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v27 · agenda-orden</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
         {vista === "chat" && <button onClick={() => setMsgs(msgs.slice(0, 1))} style={{ background: "transparent", border: "1px solid rgba(255,255,255,.22)", color: "rgba(255,255,255,.85)", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.03em", cursor: "pointer" }}>Limpiar</button>}
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 2px", marginTop: 12, justifyContent: "center" }}>
-        {[["chat", "Chat"], ["pagos", "Pagos"], ["cobros", "Cobros"], ["gastos", "Gastos"], ["caja", "Caja"], ["resultados", "Resultados"], ["obras", "Obras"], ["proyectos", "Proyectos"], ["reuniones", "Reuniones"], ["agenda", "Agenda"], ["ajustes", "Ajustes"]].map(([id, lb]) => { const mesActualNav = hoyStr().slice(3); const cnt = id === "pagos" ? (pagos || []).filter(p => mesKeyDe(p.fecha) === mesActualNav).length : id === "cobros" ? (cobros || []).filter(c => mesKeyDe(c.fecha) === mesActualNav).length : id === "gastos" ? (gastos || []).filter(g => mesKeyDe(g.fecha) === mesActualNav).length : id === "agenda" ? (agenda || []).length : id === "contactos" ? (contactos || []).length : 0; return <button key={id} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} className={"tabg" + (vista === id ? " on" : "")} style={{ color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : (vista === id ? "#fff" : "rgba(255,255,255,.62)"), fontWeight: (id === "chat" && chatUnread > 0) ? 800 : 600 }}><span className="gem"><Icono n={id} size={19} /></span>{id === "chat" && chatUnread > 0 && <span style={{ position: "absolute", top: 0, right: 2, background: "#EF4444", color: "#fff", borderRadius: 9, minWidth: 15, height: 15, fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>{chatUnread > 99 ? "99+" : chatUnread}</span>}<span className="tl">{lb}{cnt ? ` ${cnt}` : ""}</span></button>; })}
-      </div>
+
     </div>
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowX: "hidden", zoom: (cfg.escala || 100) / 100 }}>
     {vista === "pagos" && <PagosBody pagos={pagos} obras={db.obras} filtroObra={filtroObra} setFiltroObra={setFiltroObra} exportar={exportarExcel} borrar={(id) => persistPagos((pagos || []).filter(p => p.id !== id))} onAdd={cargarPago} renombrarObra={renombrarObraPago} quitarObra={quitarObraPago} />}
@@ -1486,6 +1507,13 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     </div>
     </div>
     </div>
+    {masAbierto && <div className="masov" onClick={() => setMasAbierto(false)}><div className="massheet" onClick={e => e.stopPropagation()}>
+      {NAV_MAS.map(([id, lb]) => { const c = cntDe(id); return <button key={id} className={"masit" + (vista === id ? " on" : "")} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); setMasAbierto(false); }}><span className="gem"><Icono n={id} size={22} /></span><span className="tl">{lb}{c ? ` ${c}` : ""}</span></button>; })}
+    </div></div>}
+    <nav className="bnav"><div className="in">
+      {NAV_PRINC.map(([id, lb]) => { const c = cntDe(id); return <button key={id} className={"tabg" + (vista === id ? " on" : "")} aria-current={vista === id ? "page" : "false"} onClick={() => { setVista(id); if (id === "proyectos") setProySel(null); }} style={{ color: (id === "chat" && chatUnread > 0) ? "#FF6B6B" : undefined }}>{id === "chat" && chatUnread > 0 && <span className="bdg">{chatUnread > 99 ? "99+" : chatUnread}</span>}<span className="gem"><Icono n={id} size={22} /></span><span className="tl">{lb}{c ? ` ${c}` : ""}</span></button>; })}
+      <button className={"tabg" + (NAV_MAS.some(x => x[0] === vista) ? " on" : "")} onClick={() => setMasAbierto(v => !v)}><span className="gem"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg></span><span className="tl">Más</span></button>
+    </div></nav>
   </div>);
 }
 
