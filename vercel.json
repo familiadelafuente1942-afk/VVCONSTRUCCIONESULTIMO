@@ -29,5 +29,11 @@
     "api/auditoria.js": {
       "maxDuration": 30
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/agenda-diaria",
+      "schedule": "0 11 * * *"
+    }
+  ]
 }
