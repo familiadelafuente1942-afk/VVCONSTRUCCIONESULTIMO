@@ -211,6 +211,25 @@ input[type=date],input[type=time]{min-height:44px}
 .tabg.on{background:rgba(255,255,255,.08);border-radius:999px;box-shadow:inset 0 1px 0 rgba(255,255,255,.32),inset 0 0 0 .5px rgba(255,255,255,.1)}
 .gem.sm,.pill.on .gem.sm,.gbtn.send .gem.sm{width:24px;height:24px;border-radius:0;background:none;box-shadow:none;color:#D8B06A;overflow:visible}
 
+.tema-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tema-seg .tb{display:flex;flex-direction:column;align-items:center;gap:6px;border:0;border-radius:16px;padding:14px 4px;background:rgba(128,128,128,.12);color:#ddd;font-size:13px;font-weight:600;cursor:pointer;box-shadow:inset 0 0 0 .5px rgba(128,128,128,.25)}
+.tema-seg .tb.on{background:rgba(216,176,106,.2);color:#D8B06A;box-shadow:inset 0 0 0 1px #D8B06A,inset 0 1px 0 rgba(255,255,255,.3)}
+`;
+
+const GLASS_CLARO = `
+html,body{background:#eee!important;color-scheme:light}
+input,select,textarea{color-scheme:light}
+.gbar{background:rgba(244,245,250,.72)!important;color:#1a1a1a!important;box-shadow:inset 0 -1px 0 rgba(0,0,0,.08)}
+.gbar button.tabg{color:#4a4a4a!important}
+.gbar button:not(.tabg){color:#333!important;border-color:rgba(0,0,0,.3)!important}
+.gbar button.tabg.on{color:#1a1a1a!important;background:rgba(255,255,255,.7);box-shadow:inset 0 1px 0 #fff,inset 0 0 0 .5px rgba(0,0,0,.1)}
+.gbar button.tabg.on .gem{color:#A8782F}
+.pill{background:rgba(255,255,255,.7);color:#333;box-shadow:inset 0 1px 0 #fff,inset 0 0 0 .5px rgba(0,0,0,.1)}
+.pill.on{color:#111}
+.gem.sm,.pill.on .gem.sm,.gbtn.send .gem.sm{color:#A8782F}
+.gbtn{background:rgba(255,255,255,.7);color:#222;box-shadow:inset 0 1px 0 #fff,inset 0 0 0 .5px rgba(0,0,0,.1)}
+.ptt{color:#1a1a1a;background:linear-gradient(160deg,rgba(185,138,65,.2),rgba(255,255,255,.7))}
+.tema-seg .tb{color:#333}
 `;
 
 // Montos: se escriben con separador de miles (1.500.000) y se leen tanto así como en formato simple.
@@ -390,6 +409,11 @@ export default function MiAsistente() {
   T.al = "rgba(216,176,106,.16)"; T.muted = "#8c8c8c"; T.accent = cfg.accent || "#22463A"; T.navy = cfg.navy || "#1B1A16"; T.bg = cfg.bg || "#F4F2EC"; T.card = cfg.card || "#FFFFFF"; T.text = cfg.text || "#1A1813";
   T.border = cfg.borde || "#E5E1D6"; T.sub = cfg.sub || "#6E695E"; T.rsm = (cfg.rsm != null ? cfg.rsm : 10); BRASS = cfg.brass || "#A17C3E";
   { const F = FONTS[cfg.fontId] || FONTS.inter; T.sans = F.sans; T.serif = F.serif; }
+  const [sysClaro, setSysClaro] = useState(() => { try { return window.matchMedia("(prefers-color-scheme: light)").matches; } catch { return false; } });
+  useEffect(() => { let mq; try { mq = window.matchMedia("(prefers-color-scheme: light)"); const f = () => setSysClaro(mq.matches); mq.addEventListener("change", f); return () => mq.removeEventListener("change", f); } catch { } }, []);
+  const claro = cfg.tema === "claro" || (cfg.tema === "auto" && sysClaro);
+  if (claro) { Object.assign(T, { accent: "#B98A41", navy: "#2A2A2E", bg: "#EEEEEE", card: "rgba(255,255,255,.7)", text: "#1A1A1A", sub: "#4A4A4A", muted: "#7a7a7a", border: "rgba(0,0,0,.12)", al: "rgba(185,138,65,.18)" }); BRASS = "#A8782F"; }
+  else { Object.assign(T, { accent: "#B98A41", navy: "#17171A", bg: "#000000", card: "rgba(255,255,255,.07)", text: "#F2F2F2", sub: "#B8B8B8", muted: "#8c8c8c", border: "rgba(255,255,255,.12)", al: "rgba(216,176,106,.16)" }); BRASS = "#D8B06A"; }
   function saveCfg(next) { setCfg(next); try { localStorage.setItem("sebastian_cfg", JSON.stringify(next)); } catch { } storage.set("sebastian_cfg", JSON.stringify(next)).catch(() => { }); }
   function setC(k, v) { saveCfg({ ...cfg, [k]: v }); }
   useEffect(() => {
@@ -1378,8 +1402,8 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     </div>);
   }
 
-  return (<div style={{ height: "100dvh", maxHeight: "100vh", background: cfg.fondoUrl ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
-    <style>{GLASS_CSS}</style>
+  return (<div style={{ height: "100dvh", maxHeight: "100vh", background: false ? `linear-gradient(${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}, ${hexA(cfg.bg, 1 - (cfg.fondoOp || 14) / 100)}), url(${cfg.fondoUrl}) center/cover fixed` : T.bg, display: "flex", flexDirection: "column", fontFamily: T.sans, color: T.text, maxWidth: 900, margin: "0 auto", overflowX: "hidden", width: "100%", boxShadow: "0 0 60px -30px rgba(27,26,22,.2)" }}>
+    <style>{GLASS_CSS + (claro ? GLASS_CLARO : "")}</style>
     <div className="gbar" style={{ background: T.navy, color: "#fff", padding: "16px 18px 0", paddingTop: "max(16px, env(safe-area-inset-top))", borderBottom: `1px solid ${BRASS}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div><div style={{ fontSize: 9.5, fontWeight: 700, color: BRASS, letterSpacing: "0.22em", textTransform: "uppercase" }}>{cfg.eyebrow || "Privado"} · v27 · agenda-orden</div><div style={{ fontFamily: cfg.serif ? T.serif : T.sans, fontSize: 22, fontWeight: 600, letterSpacing: "0.01em", marginTop: 2 }}>{cfg.titulo || "Mi Asistente"}</div></div>
@@ -1402,7 +1426,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "agenda" && <AgendaBody agenda={agenda} onAdd={agendarEvento} onDel={(id) => persistAgenda((agenda || []).filter(e => e.id !== id))} />}
     {vista === "entrenamiento" && <EntrenamientoBody inicio={entrenoInicio} hechas={entrenoHechas} onSetInicio={(f) => persistEntreno(f, entrenoHechas)} onToggle={toggleSesion} onToggleMultiple={toggleMultiple} />}
     {vista === "suplementos" && <SuplementosBody sel={suplSel} tomados={suplTomados} onToggleSel={toggleSuplSel} onToggleHoy={toggleSuplHoy} />}
-    {vista === "ajustes" && <AjustesBody cfg={cfg} setC={setC} saveCfg={saveCfg} CFG_DEF={CFG_DEF} iconRef={iconRef} fondoRef={fondoRef} subirIcono={subirIcono} subirFondo={subirFondo} googleConectado={googleConectado} />}
+    {vista === "ajustes" && <AjustesBody cfg={cfg} saveCfg={saveCfg} />}
 
     <div style={{ display: vista === "chat" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>
     <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "16px 16px 8px" }}>
@@ -1833,85 +1857,15 @@ function ModelosBody({ modelos, sel, setSel, subir, borrar }) {
   </div>);
 }
 
-function AjustesBody({ cfg, setC, saveCfg, CFG_DEF, iconRef, fondoRef, subirIcono, subirFondo, googleConectado }) {
-  const PRESETS = [
-    { n: "Oficina", accent: "#22463A", navy: "#1B1A16", bg: "#F4F2EC", card: "#FFFFFF", text: "#1A1813", brass: "#A17C3E", borde: "#E5E1D6", sub: "#6E695E" },
-    { n: "Grafito", accent: "#B08D57", navy: "#141414", bg: "#1B1B1D", card: "#232326", text: "#ECEAE4", brass: "#B08D57", borde: "#33343A", sub: "#A8A69E" },
-    { n: "Borgoña", accent: "#7A2E3A", navy: "#201314", bg: "#F5F0EE", card: "#FFFFFF", text: "#1E1517", brass: "#B08D57", borde: "#E6DAD8", sub: "#6E5B5D" },
-    { n: "Azul noche", accent: "#2E5A86", navy: "#0F1B2D", bg: "#EEF2F6", card: "#FFFFFF", text: "#14202E", brass: "#B0894F", borde: "#DAE1EA", sub: "#5B6B7F" },
-    { n: "Arena", accent: "#9A6B3F", navy: "#2A2118", bg: "#F7F2E9", card: "#FFFFFF", text: "#241C12", brass: "#B08D57", borde: "#E8DFCF", sub: "#6E655A" },
-    { n: "Bosque", accent: "#2F5D3A", navy: "#10241A", bg: "#EFF4EE", card: "#FFFFFF", text: "#15291C", brass: "#C79A3E", borde: "#DCE7DA", sub: "#5C6E5C" },
-    { n: "Medianoche", accent: "#5B7CC7", navy: "#0B1220", bg: "#12182A", card: "#1B2236", text: "#E6EAF2", brass: "#8FA6D6", borde: "#2A3350", sub: "#9AA6C0" },
-    { n: "Cobre", accent: "#B5623A", navy: "#241812", bg: "#F8F1EC", card: "#FFFFFF", text: "#231610", brass: "#C08A5A", borde: "#EBDDD3", sub: "#736258" },
-    { n: "Pizarra", accent: "#475569", navy: "#1E293B", bg: "#F1F5F9", card: "#FFFFFF", text: "#0F172A", brass: "#94A3B8", borde: "#DDE3EB", sub: "#5B6B7F" },
-    { n: "Violeta", accent: "#6D4AA0", navy: "#1E1330", bg: "#F4F0FA", card: "#FFFFFF", text: "#1E1330", brass: "#B08D57", borde: "#E5DDF0", sub: "#6A5E7C" },
-  ];
-  const Row = ({ label, hint, children }) => (<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
-    <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{label}</div>{hint && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{hint}</div>}</div>
-    <div style={{ flexShrink: 0 }}>{children}</div>
-  </div>);
-  const Color = ({ k }) => (<input type="color" value={cfg[k]} onChange={e => setC(k, e.target.value)} style={{ width: 40, height: 30, border: `1px solid ${T.border}`, borderRadius: 8, background: "none", cursor: "pointer", padding: 0 }} />);
-  const Sec = ({ t }) => (<div style={{ fontSize: 10.5, fontWeight: 800, color: BRASS, textTransform: "uppercase", letterSpacing: "0.12em", margin: "18px 0 2px" }}>{t}</div>);
-  return (<div style={{ flex: 1, overflowY: "auto", padding: "10px 16px 30px" }}>
-    <div style={{ background: T.card, border: `1px solid ${googleConectado ? T.border : BRASS}`, borderRadius: 12, padding: "14px", margin: "6px 0 6px" }}>
-      <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 3 }}>Google Calendar {googleConectado ? "✓ conectado" : ""}</div>
-      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.45 }}>{googleConectado ? "Ya te puedo agendar cosas directo en tu Google Calendar cuando me lo pidas por el chat." : "Conectalo una vez y después decime por el chat \"agendalo en mi Google Calendar\" para las cosas que quieras ver ahí (con recordatorio real de Google), además de la Agenda interna de la app."}</div>
-      <button onClick={() => window.open("/api/google-oauth-start", "_blank")} style={{ width: "100%", background: googleConectado ? "none" : T.accent, color: googleConectado ? T.accent : "#fff", border: googleConectado ? `1px solid ${T.accent}` : "none", borderRadius: 10, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{googleConectado ? "🔄 Reconectar Google Calendar" : "📅 Conectar Google Calendar"}</button>
+function AjustesBody({ cfg, saveCfg }) {
+  const t = cfg.tema || "oscuro";
+  const op = [["auto", "Automático", <React.Fragment><circle cx="12" cy="12" r="8" /><path d="M12 4v16" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" /></React.Fragment>], ["claro", "Claro", <React.Fragment><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" /></React.Fragment>], ["oscuro", "Oscuro", <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />]];
+  return (<div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 18, padding: 16 }}>
+      <div style={{ fontSize: 10.5, color: BRASS, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" }}>Aspecto</div>
+      <div style={{ fontSize: 13, color: T.sub, margin: "6px 0 12px", lineHeight: 1.4 }}>Elegí cómo se ve la app. Automático sigue el modo de tu teléfono.</div>
+      <div className="tema-seg">{op.map(([k, n, ic]) => (<button key={k} className={"tb" + (t === k ? " on" : "")} aria-pressed={t === k} onClick={() => saveCfg({ ...cfg, tema: k })}><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{ic}</svg>{n}</button>))}</div>
     </div>
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px", margin: "6px 0 6px" }}>
-      <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text, marginBottom: 3 }}>Actualizar la app</div>
-      <div style={{ fontSize: 11.5, color: T.muted, marginBottom: 11, lineHeight: 1.45 }}>Trae la última versión con los cambios nuevos, sin borrar ni reinstalar nada.</div>
-      <button onClick={async () => { try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch { } window.location.replace(window.location.pathname + "?v=" + Date.now()); }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>🔄 Actualizar a la última versión</button>
-    </div>
-    <Sec t="Estilos rápidos" />
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 4px" }}>
-      {PRESETS.map(p => <button key={p.n} onClick={() => saveCfg({ ...cfg, accent: p.accent, navy: p.navy, bg: p.bg, card: p.card, text: p.text, brass: p.brass || cfg.brass, borde: p.borde || cfg.borde, sub: p.sub || cfg.sub })} style={{ display: "flex", alignItems: "center", gap: 7, background: T.card, border: `1px solid ${T.border}`, borderRadius: 20, padding: "6px 12px 6px 8px", cursor: "pointer" }}>
-        <span style={{ display: "flex" }}><span style={{ width: 14, height: 14, borderRadius: "50%", background: p.navy, border: "1px solid rgba(0,0,0,.1)" }} /><span style={{ width: 14, height: 14, borderRadius: "50%", background: p.accent, marginLeft: -5, border: "1px solid rgba(0,0,0,.1)" }} /><span style={{ width: 14, height: 14, borderRadius: "50%", background: p.bg, marginLeft: -5, border: "1px solid rgba(0,0,0,.12)" }} /></span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.n}</span>
-      </button>)}
-    </div>
-
-    <Sec t="Identidad" />
-    <Row label="Título"><input value={cfg.titulo} onChange={e => setC("titulo", e.target.value)} style={{ width: 150, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 16, color: T.text }} /></Row>
-    <Row label="Subtítulo"><input value={cfg.eyebrow} onChange={e => setC("eyebrow", e.target.value)} style={{ width: 150, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 16, color: T.text }} /></Row>
-
-    <Sec t="Tipografía" />
-    <Row label="Títulos con serif" hint="Estilo clásico/gerencial en los títulos"><button onClick={() => setC("serif", !cfg.serif)} style={{ width: 44, height: 26, borderRadius: 13, background: cfg.serif ? T.accent : T.border, border: "none", position: "relative", cursor: "pointer" }}><span style={{ position: "absolute", top: 3, left: cfg.serif ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} /></button></Row>
-    <Row label={`Tamaño de letra · ${cfg.escala || 100}%`}><input type="range" min="85" max="130" value={cfg.escala || 100} onChange={e => setC("escala", Number(e.target.value))} style={{ width: 140 }} /></Row>
-    <Row label="Tipo de letra"><select value={cfg.fontId || "inter"} onChange={e => setC("fontId", e.target.value)} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 15, color: T.text }}>{Object.entries(FONTS).map(([id, f]) => <option key={id} value={id}>{f.n}</option>)}</select></Row>
-    <Row label="Estilo de esquinas"><div style={{ display: "flex", gap: 6 }}>{ESQUINAS.map(e => <button key={e.n} onClick={() => setC("rsm", e.v)} style={{ background: (cfg.rsm != null ? cfg.rsm : 10) === e.v ? T.accent : T.bg, color: (cfg.rsm != null ? cfg.rsm : 10) === e.v ? "#fff" : T.sub, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{e.n}</button>)}</div></Row>
-
-    <Sec t="Colores" />
-    <Row label="Acento (botones)"><Color k="accent" /></Row>
-    <Row label="Encabezado"><Color k="navy" /></Row>
-    <Row label="Fondo"><Color k="bg" /></Row>
-    <Row label="Tarjetas"><Color k="card" /></Row>
-    <Row label="Texto"><Color k="text" /></Row>
-    <Row label="Detalle dorado" hint="La línea fina y los rótulos"><Color k="brass" /></Row>
-    <Row label="Bordes"><Color k="borde" /></Row>
-    <Row label="Texto suave" hint="Subtítulos y notas"><Color k="sub" /></Row>
-
-    <Sec t="Foto de fondo" />
-    <input ref={fondoRef} type="file" accept="image/*" onChange={subirFondo} style={{ display: "none" }} />
-    <Row label="Imagen de fondo" hint={cfg.fondoUrl ? "Cargada" : "Ninguna"}>
-      <div style={{ display: "flex", gap: 6 }}>
-        <button onClick={() => fondoRef.current && fondoRef.current.click()} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{cfg.fondoUrl ? "Cambiar" : "Subir"}</button>
-        {cfg.fondoUrl && <button onClick={() => setC("fondoUrl", "")} style={{ background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Quitar</button>}
-      </div>
-    </Row>
-    {cfg.fondoUrl && <Row label={`Intensidad de la foto · ${cfg.fondoOp || 14}%`}><input type="range" min="4" max="60" value={cfg.fondoOp || 14} onChange={e => setC("fondoOp", Number(e.target.value))} style={{ width: 140 }} /></Row>}
-
-    <Sec t="Ícono en el celular" />
-    <input ref={iconRef} type="file" accept="image/*" onChange={subirIcono} style={{ display: "none" }} />
-    <Row label="Ícono de la app" hint="El que queda al 'Agregar a pantalla de inicio'">
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {cfg.iconoUrl ? <img src={cfg.iconoUrl} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: "cover", border: `1px solid ${T.border}` }} /> : <div style={{ width: 34, height: 34, borderRadius: 8, background: T.navy, color: BRASS, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: T.serif, fontWeight: 700 }}>S</div>}
-        <button onClick={() => iconRef.current && iconRef.current.click()} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{cfg.iconoUrl ? "Cambiar" : "Subir"}</button>
-      </div>
-    </Row>
-    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 8, lineHeight: 1.5 }}>Para que tome el ícono nuevo en iPhone/iPad: subilo acá, después en Safari tocá Compartir → “Agregar a pantalla de inicio”. Usá una imagen cuadrada (ideal 512×512).</div>
-
-    <button onClick={() => { if (confirm("¿Volver al estilo original?")) saveCfg({ ...CFG_DEF, iconoUrl: cfg.iconoUrl }); }} style={{ width: "100%", marginTop: 22, background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Restablecer estilo original</button>
   </div>);
 }
 
