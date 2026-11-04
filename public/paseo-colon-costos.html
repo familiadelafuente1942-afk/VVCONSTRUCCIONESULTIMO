@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Belfast · Control de costos</title>
+<link rel="icon" href="/belfast-icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f2ea;--card:#fffdf8;--line:#e2d9c8;--tx:#1d1a15;--mu:#7a705e;--gold:#b8915a;--gold2:#8f6d3a;--ok:#2f7d4f}
+*{box-sizing:border-box;font-family:'Playfair Display',Georgia,serif!important}
+body{margin:0;background:var(--bg);color:var(--tx)}
+header{padding:22px 18px 8px;max-width:1000px;margin:auto}
+.eb{font-size:11px;letter-spacing:.18em;color:var(--gold2);text-transform:uppercase}
+h1{margin:4px 0 2px;font-size:26px}
+.sub{color:var(--mu);font-size:13px}
+main{max-width:1000px;margin:auto;padding:0 14px 60px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
+select,input,button{font-size:15px;color:var(--tx)}
+select,input{background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 10px;width:100%}
+button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 13px;cursor:pointer}
+button.gold{background:var(--gold);border-color:var(--gold);color:#fff}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin:14px 0}
+.tabs button{border:none;background:none;border-bottom:3px solid transparent;border-radius:0;padding:10px 14px;color:var(--mu)}
+.tabs button.on{color:var(--tx);border-color:var(--gold);font-weight:700}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
+table{width:100%;border-collapse:collapse}th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);text-align:left;padding:6px 4px}
+td{padding:4px;border-top:1px solid var(--line);vertical-align:middle}td.r,th.r{text-align:right}
+td input{padding:7px 8px;text-align:right}td input.t{text-align:left}
+.num{white-space:nowrap}
+.row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:none}.row b{white-space:nowrap}
+.big{font-size:22px;color:var(--gold2)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:560px){.g2{grid-template-columns:1fr}}
+label.f{display:block;font-size:12px;color:var(--mu)}label.f input{margin-top:4px}
+details{margin:6px 0}summary{cursor:pointer;font-weight:700;padding:8px 0}
+.x{padding:4px 9px;color:#b3261e}
+.hide{display:none}
+@media print{.noprint,.tabs{display:none}.hide{display:block!important}body{background:#fff}}
+</style></head><body>
+<header><div class="eb">Belfast / Control de costos</div><h1 id="tit"></h1><div class="sub">Presupuesto y análisis de obra · montos en $ (ARS) y U$s</div></header>
+<main>
+<div class="bar noprint"><select id="obra" style="max-width:320px"></select><button class="gold" id="nueva">+ Nueva obra</button><button id="csv">CSV</button><button id="xl">Exportar copia</button><button id="imp">Imprimir / PDF</button><span class="sub" id="guard"></span></div>
+<div class="tabs"><button data-t="p" class="on">Presupuesto</button><button data-t="i">Interiorismo</button><button data-t="d">Documentación</button></div>
+<section id="p"></section><section id="i" class="hide"></section><section id="d" class="hide"></section>
+</main>
+<script>
+const SEED={"rub": [{"n": "Trabajos preliminares", "m": 1211097, "e": 184482254}, {"n": "Movimiento de tierra", "m": 0, "e": 27176108}, {"n": "Estructuras", "m": 442082330, "e": 433875582}, {"n": "Mamposterías", "m": 155014218, "e": 195323315}, {"n": "Capas aisladoras", "m": 836613, "e": 532328}, {"n": "Cubiertas", "m": 16475522, "e": 12591474}, {"n": "Revoques", "m": 22616646, "e": 192537012}, {"n": "Contrapisos", "m": 19520992, "e": 63739837}, {"n": "Cielorrasos", "m": 7912696, "e": 67057568}, {"n": "Revestimientos", "m": 170177234, "e": 42110396}, {"n": "Pisos", "m": 65645672, "e": 85987245}, {"n": "Zócalos", "m": 11404702, "e": 12601774}, {"n": "Carpinterías", "m": 435057805, "e": 38206683}, {"n": "Vidrios", "m": 104146310, "e": 135870084}, {"n": "Pinturas", "m": 335339258, "e": 118196508}, {"n": "Instalaciones eléctricas", "m": 264325444, "e": 47733884}, {"n": "Instalaciones sanitarias", "m": 12418998, "e": 20231427}, {"n": "Instalaciones de gas", "m": 41263570, "e": 10760940}, {"n": "Equipamiento", "m": 60358293, "e": 200851728}], "int": [{"g": "Proyecto y servicios de interiorismo", "u": "gl", "items": [{"n": "Proyecto de interiorismo y especificaciones", "q": 0, "m": 0, "e": 0}, {"n": "Diseño de mobiliario a medida", "q": 0, "m": 0, "e": 0}, {"n": "Proyecto de iluminación decorativa", "q": 0, "m": 0, "e": 0}, {"n": "Selección de materiales, textiles y equipamiento", "q": 0, "m": 0, "e": 0}, {"n": "Coordinación de compras y montaje", "q": 0, "m": 0, "e": 0}]}, {"g": "Mobiliario de habitación", "u": "un", "items": [{"n": "Sommier / base de cama", "q": 0, "m": 0, "e": 0}, {"n": "Colchón hotelero", "q": 0, "m": 0, "e": 0}, {"n": "Cabecera de cama", "q": 0, "m": 0, "e": 0}, {"n": "Mesas de luz", "q": 0, "m": 0, "e": 0}, {"n": "Placard / guardarropa", "q": 0, "m": 0, "e": 0}, {"n": "Perchas", "q": 0, "m": 0, "e": 0}, {"n": "Escritorio / mesa de trabajo", "q": 0, "m": 0, "e": 0}, {"n": "Silla de escritorio", "q": 0, "m": 0, "e": 0}, {"n": "Butaca / sillón", "q": 0, "m": 0, "e": 0}, {"n": "Sofá cama si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Mesa auxiliar", "q": 0, "m": 0, "e": 0}, {"n": "Portaequipaje", "q": 0, "m": 0, "e": 0}, {"n": "Espejo de cuerpo entero", "q": 0, "m": 0, "e": 0}, {"n": "Caja de seguridad", "q": 0, "m": 0, "e": 0}]}, {"g": "Blanquería y textiles", "u": "un", "items": [{"n": "Sábanas y fundas · juego", "q": 0, "m": 0, "e": 0}, {"n": "Almohadas", "q": 0, "m": 0, "e": 0}, {"n": "Protectores de colchón", "q": 0, "m": 0, "e": 0}, {"n": "Protectores de almohada", "q": 0, "m": 0, "e": 0}, {"n": "Acolchado / duvet", "q": 0, "m": 0, "e": 0}, {"n": "Funda de duvet", "q": 0, "m": 0, "e": 0}, {"n": "Manta / pie de cama", "q": 0, "m": 0, "e": 0}, {"n": "Cortinas blackout", "q": 0, "m": 0, "e": 0}, {"n": "Cortinas translúcidas", "q": 0, "m": 0, "e": 0}, {"n": "Rieles y mecanismos de cortinas", "q": 0, "m": 0, "e": 0}, {"n": "Almohadones decorativos", "q": 0, "m": 0, "e": 0}]}, {"g": "Electrodomésticos e iluminación", "u": "un", "items": [{"n": "Televisor", "q": 0, "m": 0, "e": 0}, {"n": "Soporte de TV", "q": 0, "m": 0, "e": 0}, {"n": "Minibar", "q": 0, "m": 0, "e": 0}, {"n": "Pava eléctrica", "q": 0, "m": 0, "e": 0}, {"n": "Cafetera", "q": 0, "m": 0, "e": 0}, {"n": "Teléfono de habitación", "q": 0, "m": 0, "e": 0}, {"n": "Secador de pelo", "q": 0, "m": 0, "e": 0}, {"n": "Plancha y tabla si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Lámparas de mesa / lectura", "q": 0, "m": 0, "e": 0}, {"n": "Lámparas decorativas", "q": 0, "m": 0, "e": 0}, {"n": "Control de climatización si corresponde", "q": 0, "m": 0, "e": 0}]}, {"g": "Baño", "u": "un", "items": [{"n": "Toallas de baño", "q": 0, "m": 0, "e": 0}, {"n": "Toallas de mano", "q": 0, "m": 0, "e": 0}, {"n": "Alfombra de baño", "q": 0, "m": 0, "e": 0}, {"n": "Batas si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Cesto de residuos", "q": 0, "m": 0, "e": 0}, {"n": "Espejo de aumento", "q": 0, "m": 0, "e": 0}, {"n": "Portarrollos, toalleros y ganchos", "q": 0, "m": 0, "e": 0}, {"n": "Dispensadores de jabón / shampoo", "q": 0, "m": 0, "e": 0}, {"n": "Vasos y bandejas", "q": 0, "m": 0, "e": 0}, {"n": "Amenities de apertura · lote", "q": 0, "m": 0, "e": 0}, {"n": "Accesorios de baño accesible si corresponde", "q": 0, "m": 0, "e": 0}]}, {"g": "Cocina y kitchenette", "u": "un", "items": [{"n": "Heladera si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Anafe si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Microondas", "q": 0, "m": 0, "e": 0}, {"n": "Extractor / campana si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Mesa y sillas", "q": 0, "m": 0, "e": 0}, {"n": "Vajilla · juego", "q": 0, "m": 0, "e": 0}, {"n": "Cubiertos · juego", "q": 0, "m": 0, "e": 0}, {"n": "Vasos y copas · juego", "q": 0, "m": 0, "e": 0}, {"n": "Ollas y sartenes · juego", "q": 0, "m": 0, "e": 0}, {"n": "Utensilios de cocina · juego", "q": 0, "m": 0, "e": 0}, {"n": "Escurridor y accesorios", "q": 0, "m": 0, "e": 0}, {"n": "Cesto de cocina", "q": 0, "m": 0, "e": 0}]}, {"g": "Decoración", "u": "un", "items": [{"n": "Cuadros / láminas / arte", "q": 0, "m": 0, "e": 0}, {"n": "Objetos decorativos", "q": 0, "m": 0, "e": 0}, {"n": "Alfombras", "q": 0, "m": 0, "e": 0}, {"n": "Plantas y macetas", "q": 0, "m": 0, "e": 0}, {"n": "Revestimientos decorativos especiales", "q": 0, "m": 0, "e": 0}, {"n": "Papeles murales", "q": 0, "m": 0, "e": 0}, {"n": "Numeración de habitaciones", "q": 0, "m": 0, "e": 0}, {"n": "Señalética interior y gráfica", "q": 0, "m": 0, "e": 0}]}, {"g": "Recepción y áreas comunes", "u": "un", "items": [{"n": "Mostrador de recepción", "q": 0, "m": 0, "e": 0}, {"n": "Sillas de recepción", "q": 0, "m": 0, "e": 0}, {"n": "Sillones y mesas de lobby", "q": 0, "m": 0, "e": 0}, {"n": "Equipamiento informático de recepción", "q": 0, "m": 0, "e": 0}, {"n": "Muebles de guardado", "q": 0, "m": 0, "e": 0}, {"n": "Iluminación decorativa de áreas comunes", "q": 0, "m": 0, "e": 0}, {"n": "Cortinas / textiles de áreas comunes", "q": 0, "m": 0, "e": 0}, {"n": "Equipamiento de desayuno si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Mobiliario de terraza / amenities si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Accesorios y equipamiento de áreas comunes accesibles", "q": 0, "m": 0, "e": 0}]}, {"g": "Operación y housekeeping", "u": "un", "items": [{"n": "Carros de housekeeping", "q": 0, "m": 0, "e": 0}, {"n": "Aspiradoras", "q": 0, "m": 0, "e": 0}, {"n": "Elementos de limpieza · lote inicial", "q": 0, "m": 0, "e": 0}, {"n": "Ropa blanca de reposición / stock de apertura", "q": 0, "m": 0, "e": 0}, {"n": "Estanterías de depósito", "q": 0, "m": 0, "e": 0}, {"n": "Equipamiento de lavandería si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Cestos y clasificación de residuos", "q": 0, "m": 0, "e": 0}, {"n": "Cerraduras electrónicas y tarjetas si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Equipamiento de red Wi-Fi si corresponde", "q": 0, "m": 0, "e": 0}, {"n": "Kit de mantenimiento de apertura", "q": 0, "m": 0, "e": 0}, {"n": "Equipamiento de seguridad según proyecto habilitado", "q": 0, "m": 0, "e": 0}]}, {"g": "Montaje y entrega", "u": "gl", "items": [{"n": "Fletes y entregas", "q": 0, "m": 0, "e": 0}, {"n": "Acopio y protección de equipamiento", "q": 0, "m": 0, "e": 0}, {"n": "Armado de muebles", "q": 0, "m": 0, "e": 0}, {"n": "Instalación de cortinas", "q": 0, "m": 0, "e": 0}, {"n": "Montaje de decoración y accesorios", "q": 0, "m": 0, "e": 0}, {"n": "Puesta en marcha de equipos", "q": 0, "m": 0, "e": 0}, {"n": "Inventario por habitación", "q": 0, "m": 0, "e": 0}, {"n": "Limpieza final y preparación de habitaciones", "q": 0, "m": 0, "e": 0}, {"n": "Reposición / contingencia de roturas", "q": 0, "m": 0, "e": 0}, {"n": "Entrega e inspección final llave en mano", "q": 0, "m": 0, "e": 0}]}], "cot": 1540, "m2c": 2751, "m2v": 2035, "gg": 15, "ut": 20, "imp": 15, "lote": 0, "plus": 0, "zona": 2550};
+const KEY='belfast_costos_v1';
+const clone=o=>JSON.parse(JSON.stringify(o));
+const blank=n=>{const s=clone(SEED);s.nombre=n;s.rub.forEach(r=>{r.m=0;r.e=0});s.m2c=0;s.m2v=0;s.lote=0;s.plus=0;s.zona=0;return s};
+let DB;try{DB=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
+if(!DB||!DB.obras){const a=clone(SEED);a.nombre='Paseo Colón 735 · San Telmo';DB={act:0,obras:[a,blank('Villa Crespo'),blank('Conesa 2881')]}}
+const O=()=>DB.obras[DB.act];
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(DB));document.getElementById('guard').textContent='Guardado '+new Date().toLocaleTimeString('es-AR')}catch(e){}};
+const f0=n=>Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+const f2=n=>{const [a,b]=(Math.round(n*100)/100).toFixed(2).split('.');return a.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+b};
+const ars=n=>'$ '+f2(n),usd=n=>'U$s '+f2(n);
+const parse=s=>{s=String(s).replace(/[^\d,]/g,'').replace(',','.');return parseFloat(s)||0};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function inp(v,path,dec){return `<input inputmode="decimal" data-p="${path}" value="${v?(dec?f2(v):f0(v)):''}" placeholder="0">`}
+function calc(o){const c=o.rub.reduce((a,r)=>a+r.m+r.e,0),it=o.int.reduce((a,g)=>a+g.items.reduce((b,i)=>b+i.q*(i.m+i.e),0),0),d=c+it,gg=d*o.gg/100,ut=d*o.ut/100,im=(d+gg+ut)*o.imp/100;
+ const lotePl=(o.lote+o.plus)*o.cot,tot=d+gg+ut+im+lotePl,totU=o.cot?tot/o.cot:0,mv=o.m2v;
+ return{c,it,d,gg,ut,im,tot,totU,pm:mv?totU/mv:0,ing:o.zona*mv,util:o.zona-(mv?totU/mv:0),loteI:mv?o.lote/mv:0,plusI:mv?o.plus/mv:0}}
+function setPath(p,v){const k=p.split('.');let t=O();for(let i=0;i<k.length-1;i++)t=t[k[i]];t[k[k.length-1]]=v}
+function render(){const o=O();document.getElementById('tit').textContent=o.nombre;
+ const sel=document.getElementById('obra');sel.innerHTML=DB.obras.map((x,i)=>`<option value="${i}" ${i==DB.act?'selected':''}>${esc(x.nombre)}</option>`).join('');
+ const r=calc(o);
+ let h=`<div class="card"><b>Presupuesto por rubros · ARS</b><div class="sub">Cargá materiales y ejecución en pesos. La cotización convierte solo los totales a U$s.</div>
+ <label class="f" style="margin:10px 0;max-width:280px">Cotización · $ por 1 U$s${inp(o.cot,'cot',1)}</label>
+ <div style="overflow:auto"><table><tr><th>N.º</th><th>Rubro</th><th class="r">Materiales</th><th class="r">Ejecución</th><th class="r">Total</th><th></th></tr>`;
+ o.rub.forEach((x,i)=>{h+=`<tr><td>${i+1}</td><td><input class="t" data-p="rub.${i}.n" data-s value="${esc(x.n)}"></td><td>${inp(x.m,`rub.${i}.m`,1)}</td><td>${inp(x.e,`rub.${i}.e`,1)}</td><td class="r num">${ars(x.m+x.e)}</td><td class="noprint"><button class="x" data-del="${i}">✕</button></td></tr>`});
+ h+=`</table></div><div class="row"><span>Total construcción</span><b>${ars(r.c)}</b></div><button class="noprint" id="addr">+ Agregar rubro</button></div>
+ <div class="card"><div class="g2"><label class="f">m² a construir${inp(o.m2c,'m2c')}</label><label class="f">m² vendibles${inp(o.m2v,'m2v')}</label>
+ <label class="f">Gastos generales · %${inp(o.gg,'gg',1)}</label><label class="f">Utilidad empresarial · %${inp(o.ut,'ut',1)}</label><label class="f">Impuestos · %${inp(o.imp,'imp',1)}</label>
+ <label class="f">Costo del lote · U$s${inp(o.lote,'lote',1)}</label><label class="f">Plusvalía a pagar · U$s${inp(o.plus,'plus',1)}</label><label class="f">Precio de venta de la zona · U$s/m²${inp(o.zona,'zona',1)}</label></div></div>
+ <div class="card">
+ <div class="row"><span>Total interiorismo</span><b>${ars(r.it)}</b></div>
+ <div class="row"><span>Costo directo · construcción + interiorismo</span><b>${ars(r.d)}</b></div>
+ <div class="row"><span>Gastos generales (${o.gg}%)</span><b>${ars(r.gg)}</b></div>
+ <div class="row"><span>Utilidad empresarial (${o.ut}%)</span><b>${ars(r.ut)}</b></div>
+ <div class="row"><span>Impuestos (${o.imp}%)</span><b>${ars(r.im)}</b></div>
+ <div class="row"><span>Incidencia del lote · U$s/m² vendible</span><b>${usd(r.loteI)} / m²</b></div>
+ <div class="row"><span>Incidencia de plusvalía · U$s/m² vendible</span><b>${usd(r.plusI)} / m²</b></div>
+ <div class="sub">Lote y plusvalía se convierten a pesos con la cotización y se suman al costo final.</div></div>
+ <div class="card"><div class="row"><span>Precio final total · ARS</span><b class="big">${ars(r.tot)}</b></div>
+ <div class="row"><span>Precio final total · U$s</span><b class="big">${usd(r.totU)}</b></div>
+ <div class="row"><span>Costo final por m² vendible · U$s</span><b>${usd(r.pm)} / m²</b></div>
+ <div class="row"><span>Ingresos totales por venta · U$s</span><b>${usd(r.ing)}</b></div>
+ <div class="sub">${usd(o.zona)} / m² × ${f0(o.m2v)} m² vendibles.</div>
+ <div class="row"><span>Utilidad general del proyecto · U$s/m² vendible</span><b class="big" style="color:${r.util>=0?'var(--ok)':'#b3261e'}">${usd(r.util)} / m²</b></div>
+ <div class="sub">Precio de venta de la zona − costo final por m² vendible.</div></div>`;
+ document.getElementById('p').innerHTML=h;
+ let g='<div class="card"><b>Interiorismo y equipamiento</b><div class="sub">Cantidad × (materiales + ejecución unitarios), en pesos.</div>';
+ o.int.forEach((gr,gi)=>{const t=gr.items.reduce((a,i)=>a+i.q*(i.m+i.e),0);g+=`<details ${t?'open':''}><summary>${esc(gr.g)} · ${ars(t)}</summary><div style="overflow:auto"><table><tr><th>Ítem</th><th>Un.</th><th class="r">Cant.</th><th class="r">Mat. unit.</th><th class="r">MO unit.</th><th class="r">Total</th></tr>`;
+  gr.items.forEach((it,ii)=>{const p=`int.${gi}.items.${ii}`;g+=`<tr><td>${esc(it.n)}</td><td>${gr.u}</td><td>${inp(it.q,p+'.q',1)}</td><td>${inp(it.m,p+'.m',1)}</td><td>${inp(it.e,p+'.e',1)}</td><td class="r num">${ars(it.q*(it.m+it.e))}</td></tr>`});g+='</table></div></details>'});
+ document.getElementById('i').innerHTML=g+`<div class="row"><span>Total interiorismo</span><b>${ars(r.it)}</b></div></div>`;
+ document.getElementById('d').innerHTML=`<div class="card"><b>Documentación de la obra</b><p class="sub">Documentos de Paseo Colón 735 (alojados en el sitio original).</p>
+ ${[['Planos de arquitectura','planos-paseo-colon-735'],['Presentación comercial','presentacion-comercial'],['Presentación comercial · copia 2','presentacion-comercial-2']].map(([n,f])=>`<div class="row"><span>${n}</span><a href="https://paseo-colon-735-costos.sebas937873.chatgpt.site/docs/${f}.pdf" target="_blank" rel="noopener">Ver / descargar PDF</a></div>`).join('')}</div>`}
+document.addEventListener('input',e=>{const t=e.target,p=t.dataset&&t.dataset.p;if(!p)return;
+ if(t.dataset.s!==undefined){setPath(p,t.value);save();return}
+ const pos=t.selectionStart,len=t.value.length;let raw=t.value.replace(/[^\d,]/g,'');const parts=raw.split(',');let ent=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');t.value=parts.length>1?ent+','+parts[1].slice(0,2):ent;
+ setPath(p,parse(t.value));save();clearTimeout(window._r);window._r=setTimeout(()=>{const a=document.activeElement,k=a&&a.dataset&&a.dataset.p,s=a&&a.selectionStart;render();if(k){const n=document.querySelector(`[data-p="${k}"]`);if(n){n.focus();try{n.setSelectionRange(n.value.length,n.value.length)}catch(e){}}}},600)});
+document.addEventListener('click',e=>{const t=e.target;
+ if(t.dataset.t){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b===t));['p','i','d'].forEach(k=>document.getElementById(k).classList.toggle('hide',k!==t.dataset.t))}
+ if(t.dataset.del!==undefined){if(confirm('¿Eliminar este rubro?')){O().rub.splice(+t.dataset.del,1);save();render()}}
+ if(t.id==='addr'){O().rub.push({n:'Nuevo rubro',m:0,e:0});save();render()}});
+document.getElementById('obra').onchange=e=>{DB.act=+e.target.value;save();render()};
+document.getElementById('nueva').onclick=()=>{const n=prompt('Nombre de la obra');if(n){DB.obras.push(blank(n));DB.act=DB.obras.length-1;save();render()}};
+document.getElementById('imp').onclick=()=>{document.querySelectorAll('section').forEach(s=>s.classList.remove('hide'));window.print();document.querySelectorAll('.tabs button.on').forEach(b=>b.click())};
+function dl(name,txt,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;a.click()}
+document.getElementById('xl').onclick=()=>dl('belfast-costos-copia.json',JSON.stringify(DB),'application/json');
+document.getElementById('csv').onclick=()=>{const o=O(),r=calc(o);let c='N;Rubro;Materiales;Ejecucion;Total\n';o.rub.forEach((x,i)=>c+=`${i+1};"${x.n}";${x.m};${x.e};${x.m+x.e}\n`);c+=`;Total construccion;;;${r.c}\n;Precio final ARS;;;${r.tot.toFixed(2)}\n;Precio final USD;;;${r.totU.toFixed(2)}\n`;dl(o.nombre+'.csv','﻿'+c,'text/csv')};
+render();
+</script></body></html>
