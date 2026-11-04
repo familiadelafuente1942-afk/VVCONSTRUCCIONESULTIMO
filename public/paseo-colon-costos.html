@@ -48,7 +48,8 @@ const KEY='belfast_costos_v1';
 const clone=o=>JSON.parse(JSON.stringify(o));
 const blank=n=>{const s=clone(SEED);s.nombre=n;s.rub.forEach(r=>{r.m=0;r.e=0});s.m2c=0;s.m2v=0;s.lote=0;s.plus=0;s.zona=0;return s};
 let DB;try{DB=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
-if(!DB||!DB.obras){const a=clone(SEED);a.nombre='Paseo Colón 735 · San Telmo';DB={act:0,obras:[a,blank('Villa Crespo'),blank('Conesa 2881')]}}
+if(!DB||!DB.obras){const a=clone(SEED);a.nombre='Paseo Colón 735 · San Telmo';DB={act:0,obras:[a]}}
+DB.obras=DB.obras.filter(x=>!['Villa Crespo','Conesa 2881'].includes(x.nombre)||x.rub.some(r=>r.m||r.e));if(DB.act>=DB.obras.length)DB.act=0;
 const O=()=>DB.obras[DB.act];
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(DB));document.getElementById('guard').textContent='Guardado '+new Date().toLocaleTimeString('es-AR')}catch(e){}};
 const f0=n=>Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
