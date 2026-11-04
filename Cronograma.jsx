@@ -2466,7 +2466,7 @@ export default function Cronograma() {
   todasAlertas.sort((a, b) => (a.faltan ?? 9999) - (b.faltan ?? 9999));
 
   return (<div style={{ minHeight: "100vh", background: fondoDe(cfgUI), fontFamily: fuenteDe(cfgUI), color: T.text }}>
-    <style>{`*{-webkit-font-smoothing:antialiased}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}input,select,textarea{color:${T.text};background:${T.inpBg}}select{color-scheme:light}select option,select optgroup{color:#111!important;background-color:#fff!important;-webkit-text-fill-color:#111!important}input::placeholder,textarea::placeholder{color:${T.muted}}`}</style>
+    <style>{`*{-webkit-font-smoothing:antialiased}*:focus{outline:none}input:focus,select:focus{border-color:${BRASS}!important;box-shadow:0 0 0 3px rgba(176,137,79,.12)}button{-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .05s}button:active{transform:scale(.985)}body{margin:0}input,select,textarea{color:${T.text};background:${T.inpBg}}input,select,textarea,button{font-family:inherit}select{color-scheme:light}select option,select optgroup{color:#111!important;background-color:#fff!important;-webkit-text-fill-color:#111!important}input::placeholder,textarea::placeholder{color:${T.muted}}`}</style>
 
     {/* cabecera: logo, nombre, actualizar y personalización — igual que el resto de la suite */}
     <div style={{ background: `linear-gradient(180deg, #0E1B2B 0%, ${T.dark ? "#05070B" : "#0B1622"} 100%)`, color: "#fff", padding: "20px 24px 18px", textAlign: "center", position: "relative" }}>
