@@ -713,7 +713,7 @@ function AgendaTab({ obras, certs, certsDe, indices, data, save }) {
       </div>
       <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre" style={inp} />
       <input value={telefono} onChange={e => setTelefono(e.target.value)} inputMode="tel" placeholder="WhatsApp con código país (ej: 5491122334455)" style={inp} />
-      {tipo === "cliente" && obras.length > 0 && <select value={obraId} onChange={e => setObraId(e.target.value)} style={inp}><option value="">Obra vinculada (opcional)</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>}
+      {tipo === "cliente" && obras.length > 0 && <Sel value={obraId} onChange={e => setObraId(e.target.value)} style={inp}><option value="">Obra vinculada (opcional)</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel>}
       <button onClick={agregar} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 11, padding: "13px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 10 }}>Agregar contacto</button>
     </div>
     {contactos.length === 0 && <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: "20px 0" }}>Todavía no hay contactos cargados.</div>}
@@ -725,7 +725,7 @@ function AgendaTab({ obras, certs, certsDe, indices, data, save }) {
           <span style={{ fontSize: 10.5, fontWeight: 700, color: esCli ? T.accent : BRASS, background: esCli ? T.al : "rgba(176,137,79,.14)", borderRadius: 6, padding: "3px 8px", flexShrink: 0 }}>{esCli ? "CLIENTE" : "SOCIO"}</span>
         </div>
         {esCli ? <div style={{ marginTop: 10 }}>
-          {obras.length > 0 && <select value={c.obraId || ""} onChange={e => setObraDe(c.id, e.target.value)} style={{ ...inp, marginTop: 0 }}><option value="">Elegí la obra del certificado…</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>}
+          {obras.length > 0 && <Sel value={c.obraId || ""} onChange={e => setObraDe(c.id, e.target.value)} style={{ ...inp, marginTop: 0 }}><option value="">Elegí la obra del certificado…</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel>}
           {obra ? <a href={waLink(c.telefono, mensajeCertificadoTexto(obra, data, certsDe, indices))} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginTop: 8 }}>Enviar certificado por WhatsApp</a> : <div style={{ fontSize: 11, color: T.muted, marginTop: 6 }}>Elegí una obra para mandar su último certificado.</div>}
         </div> : <a href={waLink(c.telefono, resumenSocioTexto(data))} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", background: "#25D366", color: "#fff", borderRadius: 10, padding: "12px", fontSize: 13.5, fontWeight: 700, textDecoration: "none", marginTop: 10 }}>Enviar resumen por WhatsApp</a>}
         <button onClick={() => borrar(c.id)} style={{ background: "none", border: "none", color: T.muted, fontSize: 11.5, cursor: "pointer", marginTop: 8, padding: 0 }}>Eliminar</button>
@@ -1062,6 +1062,43 @@ function detalleRubros(cert, obra, certsDeObra) {
 }
 
 function Money({ v, c }) { return <span style={{ fontWeight: 700, color: c || T.text, fontVariantNumeric: "tabular-nums" }}>{money(v)}</span>; }
+// Desplegable propio: en PC el selector nativo del navegador mostraba la lista en blanco; iPhone/iPad siguen con el nativo.
+const _esIOS = () => typeof navigator !== "undefined" && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+function Sel({ value, onChange, style, children, disabled }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h); document.addEventListener("touchstart", h);
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
+  }, [open]);
+  if (_esIOS()) return <select value={value} onChange={onChange} style={style} disabled={disabled}>{children}</select>;
+  const items = [];
+  const txt = (c) => React.Children.toArray(c).map(x => (typeof x === "string" || typeof x === "number") ? String(x) : "").join("");
+  const walk = (ch, g) => React.Children.forEach(ch, c => {
+    if (!c || !c.props) return;
+    if (c.type === "optgroup") walk(c.props.children, c.props.label);
+    else if (c.type === "option") items.push({ v: String(c.props.value ?? txt(c.props.children)), l: txt(c.props.children), g, d: c.props.disabled });
+    else if (c.props.children) walk(c.props.children, g);
+  });
+  walk(children, null);
+  const cur = items.find(i => i.v === String(value ?? ""));
+  let lastG = null;
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button type="button" disabled={disabled} onClick={() => setOpen(o => !o)} style={{ ...style, textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontFamily: "inherit" }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cur ? cur.l : ""}</span>
+        <span style={{ fontSize: 11, opacity: 0.6 }}>▾</span>
+      </button>
+      {open && <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 1000, maxHeight: 300, overflowY: "auto", background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, boxShadow: "0 12px 30px rgba(0,0,0,.25)" }}>
+        {items.map((it, k) => { const head = it.g && it.g !== lastG ? (lastG = it.g, <div key={"g" + k} style={{ padding: "8px 12px 4px", fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{it.g}</div>) : null; return (<React.Fragment key={k}>{head}
+          <div onClick={() => { if (it.d) return; onChange({ target: { value: it.v } }); setOpen(false); }} style={{ padding: "11px 14px", fontSize: 14, color: it.d ? T.muted : T.text, cursor: it.d ? "default" : "pointer", background: it.v === String(value ?? "") ? T.al : "transparent", fontWeight: it.v === String(value ?? "") ? 700 : 500 }}>{it.l}</div></React.Fragment>); })}
+      </div>}
+    </div>
+  );
+}
+
 function Field({ label, children, hint }) { return <div style={{ marginBottom: 13 }}><label style={{ fontSize: 11, fontWeight: 600, color: T.sub, letterSpacing: "0.02em" }}>{label}</label>{children}{hint && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>{hint}</div>}</div>; }
 const inpLabelStyle = { fontSize: 12.5, fontWeight: 600, color: T.sub };
 function Box({ t, v, c }) { return <div style={{ background: T.bg, borderRadius: 11, padding: "10px 12px" }}><div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.05em" }}>{t}</div><div style={{ fontSize: 14, fontWeight: 700, color: c || T.text, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{v}</div></div>; }
@@ -1865,10 +1902,10 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
       <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>{esCosto ? "Todas las obras juntas: cuánto te costó el período. El total es la suma del costo de cada obra." : "Todas las obras juntas en un período. El total es la suma de los certificados de cada obra."}</div>
 
       <Field label="Período">
-        <select value={mesSel} onChange={e => setMes(e.target.value)} style={inp}>
+        <Sel value={mesSel} onChange={e => setMes(e.target.value)} style={inp}>
           <option value="">Todos los períodos</option>
           {meses.map(m => <option key={m} value={m}>{mesLabel(m)}</option>)}
-        </select>
+        </Sel>
       </Field>
 
       <div style={{ marginTop: 6 }}>
@@ -1910,10 +1947,10 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
             <span style={{ fontSize: 20, fontWeight: 800, color: esCosto ? T.warn : T.accent, fontVariantNumeric: "tabular-nums" }}>{money(total - totAdelantos)}</span>
           </div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <select value={nuevoAdelObra} onChange={e => setNuevoAdelObra(e.target.value)} style={{ ...inp, flex: 1.3 }}>
+            <Sel value={nuevoAdelObra} onChange={e => setNuevoAdelObra(e.target.value)} style={{ ...inp, flex: 1.3 }}>
               <option value="">Obra…</option>
               {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
-            </select>
+            </Sel>
             <input value={nuevoAdelMonto} onChange={e => setNuevoAdelMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Monto" style={{ ...inp, flex: 1 }} />
             <button onClick={agregarAdelanto} style={{ background: T.navy, color: "#fff", border: "none", borderRadius: 9, padding: "0 16px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
           </div>
@@ -1939,10 +1976,10 @@ function CertGeneral({ obras, data, save, certsDe, indices, modo }) {
             <span style={{ fontSize: 20, fontWeight: 800, color: T.accent, fontVariantNumeric: "tabular-nums" }}>{money(totCobrosSinCertManual + totCobrosSinCertAuto)}</span>
           </div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <select value={nuevoCobroObra} onChange={e => setNuevoCobroObra(e.target.value)} style={{ ...inp, flex: 1.3 }}>
+            <Sel value={nuevoCobroObra} onChange={e => setNuevoCobroObra(e.target.value)} style={{ ...inp, flex: 1.3 }}>
               <option value="">Obra…</option>
               {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
-            </select>
+            </Sel>
             <input value={nuevoCobroMonto} onChange={e => setNuevoCobroMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Monto" style={{ ...inp, flex: 1 }} />
             <button onClick={agregarCobroSinCert} style={{ background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "0 16px", fontSize: 18, fontWeight: 700, cursor: "pointer" }}>＋</button>
           </div>
@@ -2013,7 +2050,7 @@ function CertTab({ modo, obras, data, save, certsDe, indices }) {
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, boxShadow: SHDsm, marginBottom: 16 }}>
       <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 3 }}>Certificar {esCosto ? "· costo interno" : "· al cliente"}</div>
       <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>Cargás una vez el % de avance por rubro; sirve para los dos certificados.</div>
-      <Field label="Obra"><select value={obraId} onChange={e => setObraId(e.target.value)} style={inp}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select></Field>
+      <Field label="Obra"><Sel value={obraId} onChange={e => setObraId(e.target.value)} style={inp}>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
       {(obra?.rubros || []).length > 0 && <div style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Avance por rubro</div>
@@ -2348,8 +2385,8 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {[["cobro", "＋ Cobro"], ["pago", "− Pago"], ["gasto", "Gasto obra"]].map(([k, l]) => <button key={k} onClick={() => setTipo(k)} style={{ flex: 1, background: tipo === k ? T.navy : T.bg, color: tipo === k ? "#fff" : T.sub, border: "none", borderRadius: 8, padding: "9px 4px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{l}</button>)}
       </div>
-      <Field label="Obra"><select value={obraId} onChange={e => setObraId(e.target.value)} style={inp}><option value="">General (sin obra)</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select></Field>
-      {tipo === "gasto" && <Field label="Tipo de gasto"><select value={cat} onChange={e => setCat(e.target.value)} style={inp}><optgroup label="Gasto de obra">{CAT_GASTO.map(c => <option key={c} value={c}>{c}</option>)}</optgroup><optgroup label="Imprevisto (fondo)">{IMPREV_CATS.map(c => <option key={c} value={c}>{c}</option>)}</optgroup></select></Field>}
+      <Field label="Obra"><Sel value={obraId} onChange={e => setObraId(e.target.value)} style={inp}><option value="">General (sin obra)</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel></Field>
+      {tipo === "gasto" && <Field label="Tipo de gasto"><Sel value={cat} onChange={e => setCat(e.target.value)} style={inp}><optgroup label="Gasto de obra">{CAT_GASTO.map(c => <option key={c} value={c}>{c}</option>)}</optgroup><optgroup label="Imprevisto (fondo)">{IMPREV_CATS.map(c => <option key={c} value={c}>{c}</option>)}</optgroup></Sel></Field>}
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}><Field label="Monto"><input value={monto} onChange={e => setMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="0" style={inp} /></Field></div>
         <div style={{ flex: 1 }}><Field label="Fecha"><input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={inp} /></Field></div>
@@ -2359,11 +2396,11 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
     </div>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 10 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase" }}>Últimos movimientos</div>
-      {obras.length > 0 && <select value={filtroObraCaja} onChange={e => setFiltroObraCaja(e.target.value)} style={{ ...inpSm, width: "auto", maxWidth: 180 }}>
+      {obras.length > 0 && <Sel value={filtroObraCaja} onChange={e => setFiltroObraCaja(e.target.value)} style={{ ...inpSm, width: "auto", maxWidth: 180 }}>
         <option value="">Todas las obras</option>
         {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
         <option value="__general__">General (sin obra)</option>
-      </select>}
+      </Sel>}
     </div>
     {filtroObraCaja && <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 13, padding: "12px 14px", marginBottom: 12, boxShadow: SHDsm }}>
       <div style={{ display: "flex", gap: 14 }}>
@@ -2378,7 +2415,7 @@ function CajaTab({ obras, data, save, certs, certsDe, indices }) {
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.kind === "cobro" ? "Cobro" : it.kind === "pago" ? "Pago" : it.cat}{it.kind !== "gasto" && <span style={{ fontSize: 11, fontWeight: 500, color: T.sub }}> · {nombreObra(it.obraId)}</span>}</div>
         <div style={{ fontSize: 11, color: T.muted }}>{fmtISO(it.fecha)}{it.nota ? ` · ${it.nota}` : ""}</div>
-        {it.kind === "gasto" && obras.length > 0 && <select value={it.obraId || ""} onChange={e => setObraGasto(it.id, e.target.value)} style={{ ...inpSm, marginTop: 6, width: "100%", boxSizing: "border-box", fontWeight: 700, color: it.obraId ? T.accent : T.warn, borderColor: it.obraId ? T.border : "rgba(180,83,9,.5)" }}><option value="">⚠ Asignar obra…</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</select>}
+        {it.kind === "gasto" && obras.length > 0 && <Sel value={it.obraId || ""} onChange={e => setObraGasto(it.id, e.target.value)} style={{ ...inpSm, marginTop: 6, width: "100%", boxSizing: "border-box", fontWeight: 700, color: it.obraId ? T.accent : T.warn, borderColor: it.obraId ? T.border : "rgba(180,83,9,.5)" }}><option value="">⚠ Asignar obra…</option>{obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}</Sel>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}><span style={{ fontSize: 13, fontWeight: 800, color: colorDe(it.kind) }}>{signo(it.kind)}{money(num(it.monto))}</span><button onClick={() => it.kind === "gasto" ? borrarGasto(it.id) : borrarMov(it.id)} style={{ background: "none", border: "1px solid #FECACA", color: "#EF4444", borderRadius: 6, padding: "4px 7px", fontSize: 10, cursor: "pointer" }}>✕</button></div>
     </div>))}
@@ -2470,7 +2507,7 @@ function RetiroAdder({ socios, onAdd }) {
   const [socioId, setSocioId] = useState(""); const [monto, setMonto] = useState(""); const [fecha, setFecha] = useState(hoyISO());
   return <div style={{ background: T.bg, borderRadius: 9, padding: 10, marginTop: 8 }}>
     <div style={{ fontSize: 10.5, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 6 }}>Nuevo retiro de utilidad</div>
-    {socios.length > 0 ? <select value={socioId} onChange={e => setSocioId(e.target.value)} style={{ ...inpSm, width: "100%", boxSizing: "border-box" }}><option value="">Elegí socio…</option>{socios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}</select> : <div style={{ fontSize: 11, color: T.muted }}>Cargá los socios primero para asignar el retiro.</div>}
+    {socios.length > 0 ? <Sel value={socioId} onChange={e => setSocioId(e.target.value)} style={{ ...inpSm, width: "100%", boxSizing: "border-box" }}><option value="">Elegí socio…</option>{socios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}</Sel> : <div style={{ fontSize: 11, color: T.muted }}>Cargá los socios primero para asignar el retiro.</div>}
     <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
       <input value={monto} onChange={e => setMonto(fmtMiles(e.target.value))} inputMode="numeric" placeholder="Monto $" style={{ ...inpSm, flex: 1, textAlign: "right" }} />
       <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inpSm, width: 138 }} />
@@ -2774,7 +2811,7 @@ function PresupuestosPanel({ data, save }) {
       <input value={f.cliente} onChange={e => setF({ ...f, cliente: e.target.value })} placeholder="Cliente (opcional)" style={inp} />
       <div style={{ display: "flex", gap: 8 }}>
         <input value={f.monto} onChange={e => setF({ ...f, monto: fmtMiles(e.target.value) })} inputMode="numeric" placeholder="Monto $" style={{ ...inp, flex: 1 }} />
-        <select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} style={{ ...inp, flex: 1 }}>{EST_PRES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+        <Sel value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} style={{ ...inp, flex: 1 }}>{EST_PRES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel>
       </div>
       <div style={{ fontSize: 10.5, color: T.muted, margin: "6px 0 2px" }}>Fecha límite (para presentar) o de presentación</div>
       <input type="date" value={f.fechaLimite} onChange={e => setF({ ...f, fechaLimite: e.target.value })} style={{ ...inp, marginTop: 0 }} />
