@@ -1300,7 +1300,7 @@ function renderCF(o){const R=cfCalc(o),c=R.c,n=R.n,cot=o.cot||0;const peak=Math.
  h+=`</tbody></table></div></div><div class="card"><b>Etapas de obra del modelo</b><div class="sub">Secuencia típica de un edificio de hormigón armado, de la demolición a la entrega.</div>${CF_HITOS.map((t,i)=>`<div class="row"><span>${i+1}. ${t}</span></div>`).join('')}</div>`;
  document.getElementById('c').innerHTML=h}
 
-function hotInit(o){if(!o.hot)o.hot={modo:'a',un:39,ocup:68,adr:80,otros:8,opex:48,base:3,inc:8,res:4,alq:32,cap:8.5,gf:1.5,inf:3};return o.hot}
+function hotInit(o){if(!o.hot)o.hot={modo:'a',un:39,ocup:69,adr:60,otros:8,opex:48,base:3,inc:8,res:4,alq:32,cap:8.5,gf:1.5,inf:3};return o.hot}
 function hotCalc(o,oc,ad,r){const h=hotInit(o),inv=r.totU,ing=h.un*365*(oc/100)*ad*(1+h.otros/100);const opx=ing*h.opex/100,gop=ing-opx,fb=ing*h.base/100,fi=Math.max(0,gop-fb)*h.inc/100,res=ing*h.res/100;
  const noiG=gop-fb-fi-res,noiA=ing*h.alq/100-res*0.5,noi=h.modo==='a'?noiA:noiG,gest=inv*h.gf/100,gasto=inv*0.0035,neto=noi-gest-gasto;
  return{inv,ing,opx,gop,fb,fi,res,noi,noiG,noiA,gest,gasto,neto,cap:inv?noi/inv:0,yld:inv?neto/inv:0,val:h.cap?noi/(h.cap/100):0}}
@@ -1317,7 +1317,7 @@ function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*
  <div class="row"><span>Ganancia del desarrollador vs. costo · U$s</span><b class="${k.val-k.inv>=0?'ut-pos':'ut-neg'}">${usd(k.val-k.inv)}</b></div>
  <div class="row"><span>Alternativa: ventas por m² (precio de la zona × m² vendibles)</span><b>${usd(vent)}</b></div>
  <div class="row"><span>Repago de la inversión con la renta</span><b>${k.noi>0?(k.inv/k.noi).toFixed(1).replace('.',',')+' años':'—'}</b></div></div>`;
- const oc=[55,65,75,85],ad=[60,80,100,120];
+ const oc=[55,65,75,85],ad=[45,60,80,100];
  t+=`<div class="card"><b>Sensibilidad · rendimiento s/ inversión</b><div class="sub">Ocupación (filas) contra tarifa por noche (columnas).</div><div class="cfw"><table class="cft"><thead><tr><th>Ocupación</th>${ad.map(a=>`<th>U$s ${a}</th>`).join('')}</tr></thead><tbody>${oc.map(c=>`<tr><td>${c}%</td>${ad.map(a=>`<td>${pc(hotCalc(o,c,a,r).cap)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
  t+=`<div class="card"><b>Proyección a 5 años</b><div class="cfw"><table class="cft"><thead><tr><th>Concepto</th>${[1,2,3,4,5].map(n=>`<th>Año ${n}</th>`).join('')}</tr></thead><tbody>`;
  const pr=[1,2,3,4,5].map(n=>hotCalc(o,h.ocup,h.adr*Math.pow(1+h.inf/100,n-1),r));
