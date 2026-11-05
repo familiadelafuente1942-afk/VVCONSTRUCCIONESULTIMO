@@ -2208,6 +2208,15 @@ function calcularResultadoMes(mesKey, cobros, pagos, gastos) {
   const sebastianReparto = sebastian - terralagos;
   return { cobrado, cobradoPend, pagado, pagadoPend, pagosPersonal, gastos: gastosTot, valeria, valentina, terralagos, sebastian, sebastianReparto, resultado: sebastian, totalEmpresa: sebastian + valeria + valentina };
 }
+// Remanente de Sebastián: lo que le quedó (si quedó plata) de los meses anteriores y arrastra al mes
+// siguiente, para que al cargar gastos del mes en curso no le dé negativo antes de que entren los cobros.
+function remanenteHasta(mesKey, cobros, pagos, gastos, cierres) {
+  const [mm0, yy0] = mesKey.split("/").map(Number); const tope = yy0 * 100 + mm0;
+  const previos = mesesResultados(cobros, pagos, gastos).filter(mk => { const [m, y] = mk.split("/").map(Number); return y * 100 + m < tope; }).reverse();
+  let carry = 0;
+  previos.forEach(mk => { const en = (cierres || {})[mk] || calcularResultadoMes(mk, cobros, pagos, gastos); carry = Math.max(0, carry + (en.sebastianReparto || 0)); });
+  return carry;
+}
 function pct(valor, total) { if (!total) return "0"; return ((valor || 0) / total * 100).toLocaleString("es-AR", { maximumFractionDigits: 1 }); }
 function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, exportarPDF }) {
   const mesActual = hoyStr().slice(3);
@@ -2217,7 +2226,9 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
   const en = cerrado ? cerrado : calcularResultadoMes(mesVer, cobros, pagos, gastos);
   const [mm, yy] = mesVer.split("/").map(Number);
   const nombreMes = `${MESES_LARGOS[(mm || 1) - 1]} '${String(yy || 0).padStart(2, "0")}`;
-  const colorRes = (en.sebastianReparto || 0) >= 0 ? T.accent : "#C0392B";
+  const remanente = remanenteHasta(mesVer, cobros, pagos, gastos, cierres);
+  const disponibleSeb = remanente + (en.sebastianReparto || 0);
+  const colorRes = disponibleSeb >= 0 ? T.accent : "#C0392B";
   const colorEmpresa = (en.totalEmpresa || 0) >= 0 ? T.accent : "#C0392B";
   return (<div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 24px" }}>
     <div style={{ fontSize: 11, fontWeight: 700, color: T.sub, textTransform: "uppercase", marginBottom: 8 }}>Resultado del mes</div>
@@ -2241,8 +2252,9 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
         </div>
         <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Sebastián</div>
-          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: colorRes, marginTop: 3 }}>${(en.sebastianReparto || 0).toLocaleString("es-AR")}</div>
+          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: (en.sebastianReparto || 0) >= 0 ? T.accent : "#C0392B", marginTop: 3 }}>${(en.sebastianReparto || 0).toLocaleString("es-AR")}</div>
           <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.sebastianReparto, en.totalEmpresa)}%</div>
+          {remanente > 0 && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 5, lineHeight: 1.35 }}>+ ${remanente.toLocaleString("es-AR")} que le quedó del mes anterior<br /><b style={{ color: colorRes }}>Disponible ${disponibleSeb.toLocaleString("es-AR")}</b></div>}
         </div>
         <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Valentina</div>
@@ -2268,7 +2280,7 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
         {cerrado ? (
           <button onClick={() => { if (window.confirm("¿Reabrir este mes? El resultado va a volver a calcularse en vivo con los datos actuales.")) onReabrir(mesVer); }} style={{ width: "100%", background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Reabrir mes</button>
         ) : (
-          <button onClick={() => { if (window.confirm(`¿Cerrar ${nombreMes} con este resultado? Vas a poder reabrirlo después si necesitás corregir algo.`)) { onCerrar(mesVer, en); if (exportarPDF) exportarPDF(mesVer, en, true); } }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cerrar mes</button>
+          <button onClick={() => { if (window.confirm(`¿Cerrar ${nombreMes} con este resultado? Vas a poder reabrirlo después si necesitás corregir algo.`)) { onCerrar(mesVer, { ...en, remanente, disponibleSeb }); if (exportarPDF) exportarPDF(mesVer, en, true); } }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cerrar mes</button>
         )}
       </div>
     </div>
