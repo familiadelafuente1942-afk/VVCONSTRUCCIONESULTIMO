@@ -2725,10 +2725,10 @@ async function audPDF(a){
     const per=vis.length>1?2:1,g=12,tw2=(CW-g*(per-1))/per;
     const rows=[];for(let i=0;i<vis.length;i+=per)rows.push(vis.slice(i,i+per).map(v=>{const mh=per===1?360:280;let w=tw2,h=w*v.im.h/v.im.w;if(h>mh){h=mh;w=h*v.im.w/v.im.h}return{...v,w,h,cl:wrapTxt(v.cap,9,false,tw2)}}));
     const rowH=r=>Math.max(...r.map(q=>q.h+q.cl.length*11+8))+6;
-    head('Archivos adjuntos',otros.length?LH+2:rows.length?rowH(rows[0]):0);
+    head('Archivos adjuntos',otros.length?LH+2:rows.length?Math.min(rowH(rows[0]),200):0);
     otros.forEach(({f,x})=>{ensure(LH+2);const tipo=((f.name.split('.').pop()||'archivo')+'').toUpperCase();P.text(L+8,P.y,'•',FS,false,GREY);P.text(L+20,P.y,`${f.name} · ${tipo}${x.desc?' · '+x.desc:''}`,FS);P.y+=LH+2});
     if(otros.length&&rows.length)P.y+=4;
-    rows.forEach(row=>{const rh=rowH(row);ensure(rh);row.forEach((r,j)=>{const x=L+j*(tw2+g)+(tw2-r.w)/2;P.image(r.im,x,P.y,r.w,r.h);r.cl.forEach((ln,n)=>P.text(L+j*(tw2+g),P.y+r.h+5+n*11,ln,9,false,GREY))});P.y+=rh})}
+    rows.forEach(row=>{let rh=rowH(row);const free=BOT-P.y;if(rh>free&&free>=170){const mh=Math.max(...row.map(q=>q.h)),k=Math.max(.3,(free-14-(rh-mh-6))/mh);row.forEach(r=>{r.w*=k;r.h*=k});rh=rowH(row)}ensure(rh);row.forEach((r,j)=>{const x=L+j*(tw2+g)+(tw2-r.w)/2;P.image(r.im,x,P.y,r.w,r.h);r.cl.forEach((ln,n)=>P.text(L+j*(tw2+g),P.y+r.h+5+n*11,ln,9,false,GREY))});P.y+=rh})}
   /* resultado + conclusión + firma: siempre juntos */
   const cl=S.conclusion?audParas(S.conclusion).flatMap((pp,i)=>[...(i?['\u0001']:[]),...wrapTxt(pp,FS,false,CW)]):[],rl=wrapTxt(S.resp||'Responsable técnico',10,true,330);
   const hRes=26,hCon=S.conclusion?30+cl.reduce((q,l)=>q+(l==='\u0001'?4:LH),0):0,hFir=24+71+10+rl.length*13+16;
@@ -2813,8 +2813,8 @@ async function audCommit(firma){
   notify('jefe',o,`${AUD_TIPO[a.tipo].corto} ${a.num}: ${a.resultado.toLowerCase()}`,{t:'aud',id:a.id});
   try{localStorage.setItem(firmaClave(),JSON.stringify({strokes:firma.strokes,w:firma.w,h:firma.h}))}catch(e){}
   AF=null;FIRMA=null;closeSheet();draw();
-  await audGuardar(a);
-  toast(`${a.num} firmado y guardado`);sheetAudVer(a.id);pdfAud(a.id);
+  const okG=await audGuardar(a);
+  toast(okG?`${a.num} firmado y guardado`:`${a.num} firmado. Quedó guardado en este equipo y se sube a la nube apenas haya código válido y conexión`);sheetAudVer(a.id);pdfAud(a.id);
 }
 /* datos locales → formato de la nube (para el historial) */
 function audDatosANube(D){const x={...D};x.fotos=(D.fotos||[]).map(id=>FILES[id]?(FILES[id].cloud||(/^https:/.test(FILES[id].url)?FILES[id].url:'')):'').filter(Boolean);x.adjuntos=(D.adjuntos||[]).filter(id=>FILES[id]).map(id=>({u:FILES[id].cloud||(/^https:/.test(FILES[id].url)?FILES[id].url:''),n:FILES[id].name,t:FILES[id].type,d:(D.adjDesc||{})[id]||''}));delete x.adjDesc;if(x.firma)x.firma={png:x.firma.png&&/^https:/.test(x.firma.png)?x.firma.png:'',strokes:x.firma.strokes,w:x.firma.w,h:x.firma.h,at:x.firma.at,nombre:x.firma.nombre};return x}
@@ -3149,7 +3149,7 @@ async function audSubirArchivo(f,pref){/* devuelve la URL en la nube (o '' si no
   let data=f.url;
   if(/^image\//.test(f.type||'')&&!/png/.test(f.type)){data=await new Promise(r=>{const im=new Image();im.onload=()=>{try{const k=Math.min(1,2400/Math.max(im.naturalWidth,im.naturalHeight)),c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);r(c.toDataURL('image/jpeg',.9))}catch(e){r(f.url)}};im.onerror=()=>r(f.url);im.src=f.url})}
   return data}
-async function audGuardar(a,reint){try{const o=a.obra,cr=credAud(o);if(!cr||!cr.codigo){toast('Para guardar el acta en la nube volvé a ingresar tu código (Salir y entrar de nuevo).');return}
+async function audGuardar(a,reint,quiet){try{const o=a.obra,cr=credAud(o);if(!cr||!cr.codigo){audPendSave(a);if(!quiet)toast('Para guardar el acta en la nube volvé a ingresar tu código (Salir y entrar de nuevo).');return false}
   const D=a.data,fu=[],fid=[];for(const id of (D.fotos||[]).slice(0,12)){const f=FILES[id];if(!f)continue;const u=f.cloud||await audFotoSub(f.url);if(u){fu.push(u);fid.push(id)}}
   const adj=[];const adjId=[];for(const id of (D.adjuntos||[])){const f=FILES[id];if(!f)continue;let u='';
     if(f.cloud||/^https:/.test(f.url))u=f.cloud||f.url;else if(/^(image\/|application\/pdf)/.test(f.type||'')||/\.(jpe?g|png|pdf)$/i.test(f.name)){const data=await audSubirArchivo(f);if(data&&data.length<5.2e6){try{const r=await codApi({op:'aud_foto',obra:o.id,cred:cr,data,pref:'adj'});u=r.url||''}catch(e){}}}
@@ -3160,10 +3160,16 @@ async function audGuardar(a,reint){try{const o=a.obra,cr=credAud(o);if(!cr||!cr.
   (r.rec.data.fotos||[]).forEach((u,k)=>{const id=fid[k];if(id&&FILES[id])FILES[id].cloud=u});
   (r.rec.data.adjuntos||[]).forEach((x,k)=>{const id=adjId[k];if(id&&FILES[id]&&x.u)FILES[id].cloud=x.u});
   if(r.rec.data.firma){a.data.firma={...r.rec.data.firma}}
-  a.ver=r.rec.ver;a.hist=r.rec.hist||[];a.log=r.rec.log||[];a.cloud=true;_audSig[o.id]=''}
- catch(e){if(!reint)setTimeout(()=>audGuardar(a,true),4000);else toast('No se pudo guardar el acta en la nube: '+(e.message||''))}}
+  a.ver=r.rec.ver;a.hist=r.rec.hist||[];a.log=r.rec.log||[];a.cloud=true;_audSig[o.id]='';audPendDel(a.id);return true}
+ catch(e){audPendSave(a);if(!reint)setTimeout(()=>audGuardar(a,true),4000);else if(!quiet)toast('No se pudo guardar el acta en la nube: '+(e.message||''));return false}}
+const PEND_K='nexo2_aud_pend';
+function audPendLoad(){try{return JSON.parse(localStorage.getItem(PEND_K)||'[]')}catch(e){return[]}}
+function audPendSave(a){try{const D=a.data||{},L=audPendLoad().filter(x=>x.id!==a.id);L.push({id:a.id,tipo:a.tipo,obra:a.obra.id,num:a.num,fecha:a.fecha,resultado:a.resultado,data:{...D,fotos:[],adjuntos:[],adjDesc:{},firma:D.firma?{strokes:D.firma.strokes,w:D.firma.w,h:D.firma.h,at:D.firma.at,nombre:D.firma.nombre}:null}});localStorage.setItem(PEND_K,JSON.stringify(L.slice(-30)))}catch(e){}}
+function audPendDel(id){try{localStorage.setItem(PEND_K,JSON.stringify(audPendLoad().filter(x=>x.id!==id)))}catch(e){}}
+function audPendRestore(){audPendLoad().forEach(x=>{if(AUD.some(a=>a.id===x.id))return;const o=findO(x.obra);if(!o)return;const a=addAud(x.tipo,o,x.fecha,{...x.data,fotos:[],adjuntos:[]});a.id=x.id;a.num=x.num;a.resultado=x.resultado;a.real=true;a.auto=false;a.cloud=false;a.ver=1})}
+
 let _audT=0,_audSig={};
-async function audSync(fuerza){if(!S.u||(!fuerza&&Date.now()-_audT<60000))return;_audT=Date.now();let cambio=false;
+async function audSync(fuerza){if(!S.u||(!fuerza&&Date.now()-_audT<60000))return;_audT=Date.now();let cambio=false;try{audPendRestore()}catch(e){}
   const vis=ROLE()==='direccion'?OBRAS:misObras();
   await Promise.all(vis.map(async o=>{try{const d=await codApi({op:'aud_list',obra:o.id});if(!d.ok)return;const items=d.items||[],sig=items.map(x=>x.id+':'+x.editado).join('|')+'#'+(d.trash||[]).length;if(sig===_audSig[o.id])return;_audSig[o.id]=sig;
     AUDT=AUDT.filter(x=>x.obra!==o.id).concat((d.trash||[]).map(x=>({...x,obra:o.id})));
@@ -3171,6 +3177,7 @@ async function audSync(fuerza){if(!S.u||(!fuerza&&Date.now()-_audT<60000))return
     items.forEach(x=>{const dat=audDatosDeNube(x.data);let a=AUD.find(y=>y.id===x.id);if(a){a.data=dat;a.resultado=x.resultado;a.fecha=x.fecha;a.num=x.num}else{a={id:x.id,tipo:x.tipo,num:x.num,obra:o,fecha:x.fecha,resultado:x.resultado,data:dat,nuevo:false,real:true,cloud:true};AUD.push(a)}a.cloud=true;a.auto=false;a.ver=x.ver||1;a.hist=x.hist||[];a.log=x.log||[];
       if(x.tipo==='sup'&&dat.supId){const s=o.sup.find(z=>z.id===dat.supId);if(s&&s.estado!=='realizada'){s.estado='realizada';s.acta=a.id;s.resultado=a.resultado}}
       if(x.tipo==='cert'&&dat.certId){const c=o.cert.find(z=>z.id===dat.certId);if(c&&c.estado!=='certificada'){c.estado='certificada';c.doc=a.id}}});cambio=true}catch(e){}}));
+  try{const pe=new Set(audPendLoad().map(x=>x.id));AUD.filter(a=>a.real&&!a.cloud&&pe.has(a.id)).forEach(a=>audGuardar(a,true,true))}catch(e){}
   if(cambio&&!document.querySelector('.sheet'))draw()}
 const audPub=o=>{const pc=o.cert.filter(c=>certEstado(c)==='pendiente'),pr=o.sup.find(x=>x.estado==='programada');return{k:{prox:pr?pr.fecha:0,rev:DOCS.filter(x=>x.obra===o&&x.estado==='en revisión').length,cert:pc.length?certFecha(pc[0]):0},l:AUD.filter(a=>a.obra===o&&!a.auto).sort((a,b)=>b.fecha-a.fecha).slice(0,60).map(a=>{let d;try{d=audDoc(a)}catch(e){return null}return{id:a.id,tipo:a.tipo,num:a.num,fecha:a.fecha,doc:{titulo:d.titulo,sub:d.sub,obra:d.obra,num:d.num,fecha:d.fecha,resultado:d.resultado,conclusion:d.conclusion||'',intro:d.intro||'',campos:d.campos,fotos:((d.secciones.find(x=>x.fotos)||{fotos:[]}).fotos).map(id=>FILES[id]&&FILES[id].url).filter(u=>/^https:/.test(u||'')).slice(0,8),secciones:d.secciones.filter(x=>!x.fotos).map(x=>({h:x.h,texto:x.texto,lista:x.lista,tabla:x.tabla?{cols:x.tabla.cols,rows:x.tabla.rows}:undefined})),firmas:d.firmas}}}).filter(Boolean)}};
 const _audFH={};
