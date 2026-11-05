@@ -1499,8 +1499,8 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  <div class="sub" style="font-size:15px;margin-top:10px">${usd(o.zona)} / m² × ${f0(o.m2v)} m² vendibles = ${usd(r.ing)}</div></div>`;
  document.getElementById('p').innerHTML=h;
 
- const fotos=['estado-actual','fachada','living','dormitorio'],ep=['Estado actual · Paseo Colón y San Lorenzo','Fachada · Av. Paseo Colón','Living comedor','Dormitorio'];
- document.getElementById('h').innerHTML=`<div class="hero"><div class="slides">${fotos.map((n,i)=>`<img src="/docs/paseo-colon/img/${n}.jpg" alt="${ep[i]}" class="${i?'':'on'}"${n==='estado-actual'?' style="object-position:50% 75%"':''}>`).join('')}</div><div class="hshade"></div><div class="hcap"><span class="eyebrow" id="cap">${ep[0]}</span><h1>${esc(o.nombre)}</h1></div><div class="dots">${fotos.map((n,i)=>`<button data-sl="${i}" class="${i?'':'on'}" aria-label="Foto ${i+1}"></button>`).join('')}</div></div>
+ const fotos=['estado-actual','living','fachada','dormitorio'],ep=['Estado actual · Paseo Colón y San Lorenzo','Living comedor','Fachada · Av. Paseo Colón','Dormitorio'];
+ document.getElementById('h').innerHTML=`<div class="hero"><div class="slides">${fotos.map((n,i)=>`<img src="/docs/paseo-colon/img/${n}.jpg?v=2" alt="${ep[i]}" class="${i?'':'on'}"${n==='estado-actual'?' style="object-position:50% 75%"':''}>`).join('')}</div><div class="hshade"></div><div class="hcap"><span class="eyebrow" id="cap">${ep[0]}</span><h1>${esc(o.nombre)}</h1></div><div class="dots">${fotos.map((n,i)=>`<button data-sl="${i}" class="${i?'':'on'}" aria-label="Foto ${i+1}"></button>`).join('')}</div></div>
  <div class="card"><b>El proyecto</b><p class="sub" style="margin:6px 0 10px">Edificio de 2 ambientes en San Telmo, esquina Av. Paseo Colón y San Lorenzo.</p>
  <div class="row"><span>Unidades</span><b>39 funcionales de 2 ambientes</b></div>
  <div class="row"><span>m² a construir</span><b>${f0(o.m2c)} m²</b></div>
