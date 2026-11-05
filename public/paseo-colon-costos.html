@@ -1153,6 +1153,13 @@ header.top .btn.ghost.sm{-webkit-backdrop-filter:blur(14px) saturate(1.8);backdr
 .pm{display:block;font-size:11px;color:var(--muted);font-weight:400;white-space:normal}
 .ut-pos{color:#0a8f3c!important;font-weight:800;font-size:26px}.ut-neg{color:#d0281c!important;font-weight:800;font-size:26px}
 :root[data-tema="oscuro"] .ut-pos{color:#4ae38d!important;text-shadow:0 0 14px rgba(74,227,141,.45)}
+/* barra lateral */
+body{padding-left:84px}
+nav.bottom{top:0!important;bottom:0!important;left:0!important;right:auto!important;width:84px;height:100%;align-items:center;justify-content:flex-start;padding:0 0 0 8px!important}
+nav.bottom .in{flex-direction:column!important;width:68px!important;max-width:68px!important;padding:10px 4px!important;gap:10px!important;border-radius:34px!important;margin-top:50%;margin-top:max(120px,18vh)}
+nav.bottom button{flex:none!important;width:100%;border-radius:22px!important;padding:8px 2px 7px!important;font-size:9.5px!important;gap:4px!important;text-align:center;line-height:1.1}
+@media(max-width:620px){body{padding-left:74px}nav.bottom{width:74px}nav.bottom .in{width:60px!important;max-width:60px!important}nav.bottom button{font-size:8.5px!important}nav.bottom button svg{width:32px!important;height:32px!important;padding:7px}}
+@media print{body{padding-left:0}}
 .hide{display:none}
 section.sec>.card{margin-bottom:12px}
 @media(max-width:620px){table{min-width:0}table tr:first-child{display:none}tr.rb{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 0;border-top:1px solid var(--line);position:relative}tr.rb td{border:0;padding:0}tr.rb td.nn{display:none}tr.rb td.nm{grid-column:1/-1;font-weight:600;padding-right:46px}tr.rb td[data-l]::before{content:attr(data-l);display:block;font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;text-align:left}tr.rb td.tt{grid-column:1/-1;text-align:right}tr.rbi td.nm{order:0}tr.rbi td:nth-child(3){order:1}tr.rbi td.tt{grid-column:auto;order:2;align-self:end}tr.rbi td:nth-child(4){order:3}tr.rbi td:nth-child(5){order:4}tr.rb td.tt::before{text-align:right}tr.rb td:last-child:not([data-l]){position:absolute;right:0;top:10px}}
