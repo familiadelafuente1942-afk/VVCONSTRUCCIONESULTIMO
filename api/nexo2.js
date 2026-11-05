@@ -426,14 +426,29 @@ export default async function handler(req, res) {
         if (!r.ok) { await fetch(`${URL_BASE}/storage/v1/bucket`, { method: "POST", headers: H, body: JSON.stringify({ id: "nexo2-fotos", name: "nexo2-fotos", public: true }) }); r = await subir(); }
         return r.ok ? `${NEW_PUB}${path}` : "";
       };
+      if (b.op === "aud_up_url") {
+        // URL firmada de subida directa al almacenamiento (evita el límite de 4,5 MB del pedido)
+        const nm = S(b.name, 120), sz = Number(b.size) || 0;
+        if (sz <= 0 || sz > 40e6) { res.status(400).json({ error: "El archivo debe pesar entre 1 byte y 40 MB" }); return; }
+        const ext = ((/\.([A-Za-z0-9]{1,5})$/.exec(nm) || [])[1] || "bin").toLowerCase();
+        const path = `${obra}/${S(b.pref, 8).replace(/[^a-z]/g, "") || "adj"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const firmar = () => fetch(`${URL_BASE}/storage/v1/object/upload/sign/nexo2-fotos/${path}`, { method: "POST", headers: H, body: "{}" });
+        let r = await firmar();
+        if (!r.ok) { await fetch(`${URL_BASE}/storage/v1/bucket`, { method: "POST", headers: H, body: JSON.stringify({ id: "nexo2-fotos", name: "nexo2-fotos", public: true }) }); r = await firmar(); }
+        if (!r.ok) { res.status(502).json({ error: "No se pudo preparar la subida" }); return; }
+        const j = await r.json(); const rel = String(j.url || "");
+        const up = rel.startsWith("http") ? rel : rel ? `${URL_BASE}/storage/v1${rel.startsWith("/") ? "" : "/"}${rel}` : j.token ? `${URL_BASE}/storage/v1/object/upload/sign/nexo2-fotos/${path}?token=${j.token}` : "";
+        if (!up) { res.status(502).json({ error: "No se pudo preparar la subida" }); return; }
+        res.status(200).json({ ok: true, up, pub: NEW_PUB + path }); return;
+      }
       if (b.op === "aud_foto") { const u = await subirB64(b.data, S(b.pref, 8).replace(/[^a-z]/g, "") || "aud"); if (!u) { res.status(400).json({ error: "No se pudo subir el archivo" }); return; } res.status(200).json({ ok: true, url: u }); return; }
       if (b.op === "aud_save") {
         const q = b.rec || {}; const D = q.data || {};
         const id = String(q.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 30);
         if (!id || !["sup", "rev", "cert"].includes(q.tipo)) { res.status(400).json({ error: "Acta inválida" }); return; }
         const pub = (u) => String(u || "").startsWith(NEW_PUB) ? String(u).slice(0, 600) : "";
-        const fotos = []; for (const u of (Array.isArray(D.fotos) ? D.fotos : []).slice(0, 12)) { const s = String(u || ""); const r = s.startsWith(NEW_PUB) ? s : await subirB64(s, "aud"); if (r) fotos.push(r); }
-        const adjuntos = []; for (const x of (Array.isArray(D.adjuntos) ? D.adjuntos : []).slice(0, 20)) { let u = pub(x && x.u); if (!u && x && x.data) u = await subirB64(x.data, "adj"); adjuntos.push({ u, n: S(x && x.n, 120), t: S(x && x.t, 60), d: S(x && x.d, 300) }); }
+        const fotos = []; for (const u of (Array.isArray(D.fotos) ? D.fotos : []).slice(0, 40)) { const s = String(u || ""); const r = s.startsWith(NEW_PUB) ? s : await subirB64(s, "aud"); if (!r) { res.status(400).json({ error: "Una foto no está subida: reintentá la subida antes de guardar" }); return; } fotos.push(r); }
+        const adjuntos = []; for (const x of (Array.isArray(D.adjuntos) ? D.adjuntos : []).slice(0, 30)) { let u = pub(x && x.u); if (!u && x && x.data) u = await subirB64(x.data, "adj"); if (!u) { res.status(400).json({ error: "Un archivo adjunto no está subido: reintentá la subida antes de guardar" }); return; } adjuntos.push({ u, n: S(x && x.n, 120), t: S(x && x.t, 60), d: S(x && x.d, 300) }); }
         let firma = null; const Fm = D.firma;
         if (Fm && typeof Fm === "object") {
           let fu = pub(Fm.png); if (!fu && Fm.data) fu = await subirB64(Fm.data, "firma");

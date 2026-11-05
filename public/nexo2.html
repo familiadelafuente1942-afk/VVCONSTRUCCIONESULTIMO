@@ -511,6 +511,7 @@ div.glabel{cursor:default}
 .paper .pm{color:#7a756d}
 .paper .pres b.ok{color:#2f7d50}.paper .pres b.obs{color:#a0611f}.paper .pres b.no{color:#b5372d}
 .btn.warn{background:#fbeceb;color:#b5372d;border:1px solid #e3b4af}.btn.warn:hover{background:#f6d9d6}
+.thumbs2 span,.adjth{position:relative}.upb{position:absolute;left:0;right:0;bottom:0;font-style:normal;font-size:9px;line-height:1.5;text-align:center;color:#fff;background:rgba(0,0,0,.7);padding:1px 2px;white-space:nowrap}.upb a{color:#fff;text-decoration:underline;cursor:pointer}.up-ok .upb{background:rgba(31,138,87,.9)}.up-err .upb{background:rgba(200,55,45,.95)}.thumbs2 span.up-err,.adjth.up-err{outline:2px solid #e0554a}
 .adjbox{display:flex;flex-direction:column;gap:8px}.adjit{display:flex;gap:10px;align-items:flex-end}.adjit .f{flex:1;margin:0}.adjth{position:relative;flex:0 0 72px;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}.adjth img{width:100%;height:100%;object-fit:cover}.adjth button{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:0;background:rgba(0,0,0,.7);color:#fff;font-size:11px;padding:0}
 .paper .pobs{border:1px solid #d9d4ca;border-radius:8px;overflow:hidden;background:#fff}.paper .pob-h{display:flex;gap:10px;align-items:center;background:#f1ece2;padding:6px 10px;font-size:11.5px}.paper .pob-h b{letter-spacing:.06em}.paper .pob-h span{color:#7a756d;flex:1}.paper .pob-h em{font-style:normal;font-weight:700}.paper .pob-t{padding:8px 10px}.paper .pob-t p,.paper .pob-s p{margin:0 0 5px}.paper .pob-s{margin:0 10px 10px;padding:8px 10px;background:#f6f0e3;border-left:3px solid #a8834e;border-radius:4px}.paper .pob-s b{display:block;font-size:10.5px;letter-spacing:.08em;color:#8a6a37;margin-bottom:3px}
 .paper .padj{margin:0 0 10px}.paper .padj img{width:100%;border-radius:6px;border:1px solid #d9d4ca;background:#fff}.paper .padj figcaption{font-size:11px;color:#7a756d;margin-top:3px}
@@ -2613,8 +2614,8 @@ function nuevoAF(tipo,oid,ex={}){const o=findO(oid)||misObras()[0];const f=TODAY
   if(tipo==='sup'&&ex.s)AF.supId=ex.s;}
 function readAF(){if(!AF||!$('#af-fecha'))return;['fecha','periodo','presentes','resultado','conclusion','responsable','etapa','plano','rev','directiva','ejecutado'].forEach(k=>{const e=$('#af-'+k);if(e)AF[k]=e.value});
   AF.obs.forEach((x,i)=>{x.desc=val('af-od'+i);x.sol=val('af-os'+i);x.sector=val('af-oz'+i);x.crit=val('af-oc'+i)||x.crit});AF.interf=AF.interf.map((x,i)=>val('af-in'+i));AF.docs.forEach((x,i)=>{if($('#af-dn'+i)){x.nombre=val('af-dn'+i);x.rev=val('af-dr'+i)}});AF.adjDesc=AF.adjDesc||{};AF.adjuntos.forEach((f,i)=>{const e=$('#af-ad'+i);if(e)AF.adjDesc[f]=e.value})}
-const thumbs=(arr,act,inputId,chg,accept,label)=>`<div class="thumbs2">${arr.map((f,i)=>FILES[f]?`<span title="${esc(FILES[f].name)}">${/^image/.test(FILES[f].type)?`<img src="${FILES[f].url}" alt="">`:`<em class="fname">${esc(FILES[f].name.slice(0,22))}</em>`}<button type="button" data-act="${act}" data-i="${i}" aria-label="Quitar">✕</button></span>`:'').join('')}<label class="addph" for="${inputId}" title="${label}">+</label><input id="${inputId}" type="file" ${accept?`accept="${accept}"`:''} multiple data-chg="${chg}" hidden></div>`;
-function adjBox(){return `<div class="adjbox">${AF.adjuntos.map((f,i)=>FILES[f]?`<div class="adjit"><span class="adjth">${/^image/.test(FILES[f].type)?`<img src="${FILES[f].url}" alt="">`:`<em class="fname">${esc(FILES[f].name.slice(0,22))}</em>`}<button type="button" data-act="afQuitarAdj" data-i="${i}" aria-label="Quitar">✕</button></span><label class="f">Descripción (opcional)<input id="af-ad${i}" value="${esc((AF.adjDesc||{})[f]||'')}" placeholder="Ej: croquis de armadura, platea sector norte"></label></div>`:'').join('')}<div class="thumbs2"><label class="addph" for="af-adj" title="Adjuntar archivos">+</label><input id="af-adj" type="file" multiple data-chg="afAdj" hidden></div></div>`}
+const thumbs=(arr,act,inputId,chg,accept,label)=>`<div class="thumbs2">${arr.map((f,i)=>FILES[f]?`<span data-fid="${f}" class="${audUpCls(f)}" title="${esc(FILES[f].name)}">${/^image/.test(FILES[f].type)?`<img src="${FILES[f].url}" alt="">`:`<em class="fname">${esc(FILES[f].name.slice(0,22))}</em>`}<i class="upb">${audUpTxt(f)}</i><button type="button" data-act="${act}" data-i="${i}" aria-label="Quitar">✕</button></span>`:'').join('')}<label class="addph" for="${inputId}" title="${label}">+</label><input id="${inputId}" type="file" ${accept?`accept="${accept}"`:''} multiple data-chg="${chg}" hidden></div>`;
+function adjBox(){return `<div class="adjbox">${AF.adjuntos.map((f,i)=>FILES[f]?`<div class="adjit"><span class="adjth ${audUpCls(f)}" data-fid="${f}">${/^image/.test(FILES[f].type)?`<img src="${FILES[f].url}" alt="">`:`<em class="fname">${esc(FILES[f].name.slice(0,22))}</em>`}<i class="upb">${audUpTxt(f)}</i><button type="button" data-act="afQuitarAdj" data-i="${i}" aria-label="Quitar">✕</button></span><label class="f">Descripción (opcional)<input id="af-ad${i}" value="${esc((AF.adjDesc||{})[f]||'')}" placeholder="Ej: croquis de armadura, platea sector norte"></label></div>`:'').join('')}<div class="thumbs2"><label class="addph" for="af-adj" title="Adjuntar archivos">+</label><input id="af-adj" type="file" multiple data-chg="afAdj" hidden></div></div>`}
 function sheetAudForm(){
   const o=findO(AF.obra),T=AUD_TIPO[AF.tipo],obras=misObras();
   const enRev=DOCS.filter(x=>x.obra===o&&x.estado==='en revisión'&&!AF.docs.some(d=>d.doc===x.id));const certs=o.cert.filter(c=>c.estado!=='certificada');
@@ -2765,7 +2766,10 @@ async function pdfAud(id,ver){const a0=AUD.find(x=>x.id===id);if(!a0)return;if(a
   try{let b=null;if(!ver&&a0.pdf){try{const r=await fetch(a0.pdf);if(r.ok)b=await r.blob()}catch(e){}}
    if(!b){b=await audPDF(a);if(!ver&&a0.real&&a0.cloud)audPdfNube(a0,b)}
    bajar(b,nom)}catch(e){toast('No se pudo generar el PDF')}}
-async function audPdfNube(a,blob){try{const cr=credAud(a.obra);if(!cr||!cr.codigo)return;const data=await new Promise((res,rej)=>{const f=new FileReader();f.onload=()=>res(f.result);f.onerror=rej;f.readAsDataURL(blob)});if(!data||data.length>3.9e6)return;const u=await codApi({op:'aud_foto',obra:a.obra.id,cred:cr,data,pref:'pdf'});if(!u.url)return;const r=await codApi({op:'aud_pdf',obra:a.obra.id,cred:cr,id:a.id,url:u.url,ver:a.ver||1});if(r.ok)a.pdf=u.url}catch(e){}}
+async function audPdfNube(a,blob){try{const cr=credAud(a.obra);if(!cr||!cr.codigo)return;let url='';
+  try{const r=await codApi({op:'aud_up_url',obra:a.obra.id,cred:cr,name:'acta.pdf',type:'application/pdf',size:blob.size,pref:'pdf'});if(r.ok&&r.up){const x=await fetch(r.up,{method:'PUT',headers:{'Content-Type':'application/pdf'},body:blob});if(x.ok)url=r.pub}}catch(e){}
+  if(!url){const data=await new Promise((res,rej)=>{const f=new FileReader();f.onload=()=>res(f.result);f.onerror=rej;f.readAsDataURL(blob)});if(!data||data.length>3.9e6)return;const u=await codApi({op:'aud_foto',obra:a.obra.id,cred:cr,data,pref:'pdf'});url=u.url||''}
+  if(!url)return;const r=await codApi({op:'aud_pdf',obra:a.obra.id,cred:cr,id:a.id,url,ver:a.ver||1});if(r.ok)a.pdf=url}catch(e){}}
 
 /* versión anterior de un acta (solo lectura) */
 function audVersion(a,v){const h=(a.hist||[]).find(x=>x.ver===+v);if(!h)return a;return{...a,ver:h.ver,fecha:h.fecha||a.fecha,resultado:h.resultado||a.resultado,data:audDatosDeNube(h.data),hist:[]}}
@@ -2787,7 +2791,7 @@ function audHTML(a){
   <p class="pfoot">Documento emitido con Nexo · ${esc(S.titulo)} · ${esc(S.num)}</p></div>`;
 }
 /* datos del acta tal como vienen de la nube → datos locales (FILES) */
-function audDatosDeNube(d){const D={...d};D.fotos=(d.fotos||[]).map(u=>addFile('foto.jpg','image/jpeg',u).id);D.adjDesc={};D.adjuntos=(d.adjuntos||[]).filter(x=>x&&(x.u||x.n)).map(x=>{const f=addFile(x.n||'archivo',x.t||'',x.u||'');D.adjDesc[f.id]=x.d||'';return f.id});return D}
+function audDatosDeNube(d){const D={...d};D.fotos=(d.fotos||[]).map(u=>{const f=addFile('foto.jpg','image/jpeg',u);if(/^https:/.test(u))f.cloud=u;return f.id});D.adjDesc={};D.adjuntos=(d.adjuntos||[]).filter(x=>x&&(x.u||x.n)).map(x=>{const f=addFile(x.n||'archivo',x.t||'',x.u||'');if(/^https:/.test(x.u||''))f.cloud=x.u;D.adjDesc[f.id]=x.d||'';return f.id});return D}
 /* ===== firma a mano ===== */
 let FIRMA=null;
 function sheetFirma(){
@@ -2817,7 +2821,7 @@ function firmaExportar(){const all=FIRMA.strokes.flat();if(!all.length)return nu
   return{data:c.toDataURL('image/png'),png:'',strokes:st,w,h,at:Date.now(),nombre:(AF.responsable||'').trim()}}
 /* ===== guardar = validar → firmar → guardar y generar ===== */
 async function audCommit(firma){
-  readAF();if(!AF.editId){const keep=AF;try{await audSync(true)}catch(e){}AF=keep}const o=findO(AF.obra),F=d(AF.fecha||iso(TODAY));
+  readAF();{const pend=audPendUp();if(pend.length){toast('Hay archivos sin subir: no se puede firmar todavía');return}}if(!AF.editId){const keep=AF;try{await audSync(true)}catch(e){}AF=keep}const o=findO(AF.obra),F=d(AF.fecha||iso(TODAY));
   AF.docs.filter(x=>!x.doc&&x.file).forEach(x=>{const nd=addDoc(o,'otros',x.nombre||FILES[x.file].name,x.rev||'A','en revisión','Recibido por fuera de la app',F,{file:x.file});x.doc=nd.id});
   const data={periodo:AF.periodo,presentes:AF.presentes,obs:AF.obs.filter(x=>x.desc),interf:AF.interf.filter(Boolean),fotos:AF.fotos.slice(),adjuntos:AF.adjuntos.filter(id=>!AF.fotos.includes(id)),adjDesc:{...(AF.adjDesc||{})},resultado:AF.resultado,conclusion:AF.conclusion,responsable:AF.responsable,etapa:AF.etapa,docs:AF.docs.filter(x=>x.nombre),plano:AF.plano,rev:AF.rev,directiva:AF.directiva,ejecutado:AF.ejecutado,certId:AF.certId,supId:AF.supId,firma};
   let a;
@@ -3023,6 +3027,7 @@ const A={
   afAdd:ds=>{readAF();if(ds.k==='obs')AF.obs.push({desc:'',sol:'',sector:'',crit:'Media'});if(ds.k==='interf')AF.interf.push('');sheetAudForm()},
   afDel:ds=>{readAF();AF[ds.k].splice(+ds.i,1);sheetAudForm()},
   afDoc:ds=>{readAF();const x=DOCS.find(y=>y.id===ds.id);AF.docs.push({nombre:x.nombre,rev:x.ver,doc:x.id});sheetAudForm()},
+  audReint:ds=>{audUp(ds.f,AF&&AF.obra)},
   afQuitarFoto:ds=>{readAF();AF.fotos.splice(+ds.i,1);sheetAudForm()},
   afQuitarAdj:ds=>{readAF();AF.adjuntos.splice(+ds.i,1);sheetAudForm()},
   verAud:ds=>sheetAudVer(ds.id),
@@ -3090,6 +3095,7 @@ const SUBMIT={
     if(AF.tipo==='cert'&&!AF.etapa){toast('Indicá la etapa certificada');return}
     if(AF.resultado!=='Conforme'&&!AF.obs.filter(x=>x.desc).length){toast('Con observaciones: cargá al menos una');return}
     if(!(AF.responsable||'').trim()){toast('Completá el Responsable técnico (nombre, título y matrícula)');const e=$('#af-responsable');if(e)e.focus();return}
+    const pend=audPendUp();if(pend.length){toast(`Faltan subir ${pend.length} archivo${pend.length>1?'s':''}: esperá el ✓ subido en cada miniatura o tocá Reintentar`);pend.forEach(id=>{const u=FILES[id].up;if(!(u&&u.st==='sub'))audUp(id,AF.obra)});return}
     sheetFirma()},
   modelo:f=>{readMO();const o=findO(f.dataset.o);cambiarModelo(o,MO);MO=null;closeSheet();notify('jefe',o,`La Dirección actualizó el modelo de ${o.nombre}: ${modeloTxt(o)}`,null);toast(`Modelo aplicado: ${modeloTxt(o)}`);draw()},
   editarObra:f=>{const o=findO(f.dataset.o);if(!o||!esDir())return;const n=val('eo-nom').trim();if(!n){toast('Poné el nombre de la obra');return}
@@ -3139,8 +3145,8 @@ const CHG={
   infFoto:async(v,el)=>{readInf();for(const f of [...(el.files||[])]){const r=await readFile(f);if(r)INFD.fotos.push(r.id)}sheetInformeForm()},
   afObra:v=>{readAF();AF.obra=v;AF.docs=AF.docs.filter(x=>!x.doc);AF.certId=null;sheetAudForm()},
   afCert:v=>{readAF();const o=findO(AF.obra);const c=o.cert.find(x=>x.id===v);AF.certId=c?c.id:null;if(c){AF.etapa=c.etapa;const pl=DOCS.find(x=>x.obra===o&&x.estado==='vigente'&&docItems(x).some(i=>i.card.task===c.task));if(pl){AF.plano=pl.nombre;AF.rev=pl.ver}}sheetAudForm()},
-  afFoto:async(v,el)=>{readAF();for(const f0 of [...(el.files||[])]){const f=await heicAJpg(f0);const r=await readFile(f);if(r)AF.fotos.push(r.id)}sheetAudForm()},
-  afAdj:async(v,el)=>{readAF();for(const f0 of [...(el.files||[])]){const f=await heicAJpg(f0);const r=await readFile(f);if(r)AF.adjuntos.push(r.id)}sheetAudForm()},
+  afFoto:async(v,el)=>{readAF();const nu=[];for(const f0 of [...(el.files||[])]){const f=await heicAJpg(f0);const r=await readFile(f);if(r){AF.fotos.push(r.id);nu.push(r.id)}}sheetAudForm();audUpVarios(nu,AF.obra)},
+  afAdj:async(v,el)=>{readAF();const nu=[];for(const f0 of [...(el.files||[])]){const f=await heicAJpg(f0);const r=await readFile(f);if(r){AF.adjuntos.push(r.id);nu.push(r.id)}}sheetAudForm();audUpVarios(nu,AF.obra)},
   afExt:async(v,el)=>{readAF();for(const f of [...(el.files||[])]){const r=await readFile(f);if(r)AF.docs.push({nombre:f.name.replace(/\.[^.]+$/,''),rev:'',doc:null,file:r.id})}sheetAudForm()},
   ecasc:(v,el)=>{ECASC=el.checked},
   eStart:(v,el)=>{const o=findO(EOID),L=EMODO==='base'?o.base:o.tasks,t=L.find(x=>x.id===el.dataset.id);if(!v)return;moverTarea(L,t,nextWork(d(v)),EMODO!=='base');draw();sheetEditor()},
@@ -3166,11 +3172,33 @@ async function audSubirArchivo(f,pref){/* devuelve la URL en la nube (o '' si no
   let data=f.url;
   if(/^image\//.test(f.type||'')&&!/png/.test(f.type)){data=await new Promise(r=>{const im=new Image();im.onload=()=>{try{const k=Math.min(1,2400/Math.max(im.naturalWidth,im.naturalHeight)),c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);r(c.toDataURL('image/jpeg',.9))}catch(e){r(f.url)}};im.onerror=()=>r(f.url);im.src=f.url})}
   return data}
+/* ===== CER-03 · cada foto/adjunto se sube a la nube apenas se agrega ===== */
+const AUD_MAXB=40e6,_upP={};
+const audUpOk=id=>{const f=FILES[id];return !!f&&!!(f.cloud||/^https:/.test(f.url||''))};
+const audUpCls=id=>audUpOk(id)?'up-ok':(FILES[id]&&FILES[id].up&&FILES[id].up.st==='err')?'up-err':'up-sub';
+const audUpTxt=id=>{const f=FILES[id];if(audUpOk(id))return'✓ subido';const u=f&&f.up;if(u&&u.st==='err')return`<a data-act="audReint" data-f="${id}" title="${esc(u.m||'')}">Reintentar</a>`;return u?'Subiendo '+(u.p||0)+'%':'En cola'};
+function audUpUI(id){document.querySelectorAll('[data-fid="'+id+'"]').forEach(el=>{el.classList.remove('up-ok','up-err','up-sub');el.classList.add(audUpCls(id));const b=el.querySelector('.upb');if(b)b.innerHTML=audUpTxt(id)})}
+const audPendUp=()=>AF?[...(AF.fotos||[]),...(AF.adjuntos||[])].filter(id=>FILES[id]&&!audUpOk(id)):[];
+async function audBlob(f){
+  if(/^image\//.test(f.type||'')&&!/png|gif|svg/.test(f.type||'')){const im=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=f.url});
+    if(im){const k=Math.min(1,2000/Math.max(im.naturalWidth,im.naturalHeight));if(k<1||(f.size||0)>1.6e6){const c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);const bl=await new Promise(r=>c.toBlob(r,'image/jpeg',.88));if(bl)return bl}}}
+  return f.blob||await (await fetch(f.url)).blob()}
+function audUp(id,obraId){const f=FILES[id];if(!f)return Promise.resolve(false);if(audUpOk(id))return Promise.resolve(true);if(_upP[id])return _upP[id];
+  return _upP[id]=(async()=>{try{
+    f.up={st:'sub',p:0};audUpUI(id);
+    const o=findO(obraId),cr=o&&credAud(o);if(!cr||!cr.codigo)throw new Error('Volvé a ingresar tu código (Salir y entrar de nuevo)');
+    const bl=await audBlob(f);if(!bl||!bl.size)throw new Error('archivo vacío');if(bl.size>AUD_MAXB)throw new Error('El archivo supera 40 MB');
+    const tp=bl.type||f.type||'application/octet-stream',pref=/^image/.test(tp)?'foto':'adj';let url='';
+    try{const r=await codApi({op:'aud_up_url',obra:o.id,cred:cr,name:f.name,type:tp,size:bl.size,pref});if(!r.ok||!r.up)throw new Error('sin URL de subida');
+      await new Promise((ok,ko)=>{const x=new XMLHttpRequest();x.open('PUT',r.up);x.setRequestHeader('Content-Type',tp);x.upload.onprogress=e=>{if(e.lengthComputable){f.up.p=Math.round(e.loaded*100/e.total);audUpUI(id)}};x.onload=()=>x.status>=200&&x.status<300?ok():ko(new Error('HTTP '+x.status));x.onerror=()=>ko(new Error('sin conexión'));x.send(bl)});url=r.pub}
+    catch(e1){if(bl.size<2.8e6&&/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(tp)){const data=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.onerror=()=>r('');fr.readAsDataURL(bl)});try{const r2=await codApi({op:'aud_foto',obra:o.id,cred:cr,data,pref});url=r2.url||''}catch(e2){}}if(!url)throw e1}
+    f.cloud=url;f.size=bl.size;f.up={st:'ok'};audUpUI(id);return true
+  }catch(e){f.up={st:'err',m:(e&&e.message)||''};audUpUI(id);return false}finally{delete _upP[id]}})()}
+async function audUpVarios(ids,obraId){const q=[...ids];await Promise.all([0,1,2].map(async()=>{while(q.length)await audUp(q.shift(),obraId)}))}
 async function audGuardar(a,reint,quiet){try{const o=a.obra,cr=credAud(o);if(!cr||!cr.codigo){audPendSave(a);if(!quiet)toast('Para guardar el acta en la nube volvé a ingresar tu código (Salir y entrar de nuevo).');return false}
-  const D=a.data,fu=[],fid=[];for(const id of (D.fotos||[]).slice(0,12)){const f=FILES[id];if(!f)continue;const u=f.cloud||await audFotoSub(f.url);if(u){fu.push(u);fid.push(id)}}
-  const adj=[];const adjId=[];for(const id of (D.adjuntos||[])){const f=FILES[id];if(!f)continue;let u='';
-    if(f.cloud||/^https:/.test(f.url))u=f.cloud||f.url;else if(/^(image\/|application\/pdf)/.test(f.type||'')||/\.(jpe?g|png|pdf)$/i.test(f.name)){const data=await audSubirArchivo(f);if(data&&data.length<5.2e6){try{const r=await codApi({op:'aud_foto',obra:o.id,cred:cr,data,pref:'adj'});u=r.url||''}catch(e){}}}
-    adj.push({u,n:f.name,t:f.type||'',d:(D.adjDesc||{})[id]||''});adjId.push(id);if(!u&&(/^(image\/|application\/pdf)/.test(f.type||'')))toast('El adjunto "'+f.name+'" pesa demasiado y quedó solo con su nombre')}
+  const D=a.data,fu=[],fid=[];for(const id of (D.fotos||[])){const f=FILES[id];if(!f)continue;if(!(f.cloud||/^https:/.test(f.url||''))){if(!await audUp(id,o.id))throw new Error('hay una foto sin subir')}fu.push(f.cloud||f.url);fid.push(id)}
+  const adj=[];const adjId=[];for(const id of (D.adjuntos||[])){const f=FILES[id];if(!f)continue;if(!(f.cloud||/^https:/.test(f.url||''))){if(!await audUp(id,o.id))throw new Error('hay un adjunto sin subir ('+f.name+')')}
+    adj.push({u:f.cloud||f.url,n:f.name,t:f.type||'',d:(D.adjDesc||{})[id]||''});adjId.push(id)}
   let fm=null;if(D.firma){fm={...D.firma};if(!fm.png||!/^https:/.test(fm.png)){if(D.firma.data){try{const r=await codApi({op:'aud_foto',obra:o.id,cred:cr,data:D.firma.data,pref:'firma'});fm.png=r.url||''}catch(e){}}}delete fm.data}
   const rec={id:a.id,tipo:a.tipo,num:a.num,fecha:a.fecha,resultado:a.resultado,data:{...D,fotos:fu,adjuntos:adj,firma:fm}};delete rec.data.adjDesc;
   const r=await codApi({op:'aud_save',obra:o.id,cred:cr,rec});if(!r.ok)throw new Error(r.error||'guardar');
@@ -3181,9 +3209,9 @@ async function audGuardar(a,reint,quiet){try{const o=a.obra,cr=credAud(o);if(!cr
  catch(e){audPendSave(a);if(!reint)setTimeout(()=>audGuardar(a,true),4000);else if(!quiet)toast('No se pudo guardar el acta en la nube: '+(e.message||''));return false}}
 const PEND_K='nexo2_aud_pend';
 function audPendLoad(){try{return JSON.parse(localStorage.getItem(PEND_K)||'[]')}catch(e){return[]}}
-function audPendSave(a){try{const D=a.data||{},L=audPendLoad().filter(x=>x.id!==a.id);L.push({id:a.id,tipo:a.tipo,obra:a.obra.id,num:a.num,fecha:a.fecha,resultado:a.resultado,data:{...D,fotos:[],adjuntos:[],adjDesc:{},firma:D.firma?{strokes:D.firma.strokes,w:D.firma.w,h:D.firma.h,at:D.firma.at,nombre:D.firma.nombre}:null}});localStorage.setItem(PEND_K,JSON.stringify(L.slice(-30)))}catch(e){}}
+function audPendSave(a){try{const D=a.data||{},L=audPendLoad().filter(x=>x.id!==a.id);L.push({id:a.id,tipo:a.tipo,obra:a.obra.id,num:a.num,fecha:a.fecha,resultado:a.resultado,data:{...audDatosANube(D),firma:D.firma?{strokes:D.firma.strokes,w:D.firma.w,h:D.firma.h,at:D.firma.at,nombre:D.firma.nombre}:null}});localStorage.setItem(PEND_K,JSON.stringify(L.slice(-30)))}catch(e){}}
 function audPendDel(id){try{localStorage.setItem(PEND_K,JSON.stringify(audPendLoad().filter(x=>x.id!==id)))}catch(e){}}
-function audPendRestore(){audPendLoad().forEach(x=>{if(AUD.some(a=>a.id===x.id))return;const o=findO(x.obra);if(!o)return;const a=addAud(x.tipo,o,x.fecha,{...x.data,fotos:[],adjuntos:[]});a.id=x.id;a.num=x.num;a.resultado=x.resultado;a.real=true;a.auto=false;a.cloud=false;a.ver=1})}
+function audPendRestore(){audPendLoad().forEach(x=>{if(AUD.some(a=>a.id===x.id))return;const o=findO(x.obra);if(!o)return;const a=addAud(x.tipo,o,x.fecha,audDatosDeNube(x.data));a.id=x.id;a.num=x.num;a.resultado=x.resultado;a.real=true;a.auto=false;a.cloud=false;a.ver=1})}
 
 let _audT=0,_audSig={};
 async function audSync(fuerza){if(!S.u||(!fuerza&&Date.now()-_audT<60000))return;_audT=Date.now();let cambio=false;try{audPendRestore()}catch(e){}
@@ -3191,7 +3219,7 @@ async function audSync(fuerza){if(!S.u||(!fuerza&&Date.now()-_audT<60000))return
   await Promise.all(vis.map(async o=>{try{const d=await codApi({op:'aud_list',obra:o.id});if(!d.ok)return;const items=d.items||[],sig=items.map(x=>x.id+':'+x.editado).join('|')+'#'+(d.trash||[]).length;if(sig===_audSig[o.id])return;_audSig[o.id]=sig;
     AUDT=AUDT.filter(x=>x.obra!==o.id).concat((d.trash||[]).map(x=>({...x,obra:o.id})));
     const ids=new Set(items.map(x=>x.id)),tids=new Set((d.trash||[]).map(x=>x.id));for(let i=AUD.length-1;i>=0;i--)if(AUD[i].real&&AUD[i].obra===o&&AUD[i].cloud&&!ids.has(AUD[i].id)){if(tids.has(AUD[i].id)){audRevertPend(AUD[i]);AUD.splice(i,1)}else{AUD[i].cloud=false;audPendSave(AUD[i])}}
-    items.forEach(x=>{const dat=audDatosDeNube(x.data);let a=AUD.find(y=>y.id===x.id);if(a){a.data=dat;a.resultado=x.resultado;a.fecha=x.fecha;a.num=x.num}else{a={id:x.id,tipo:x.tipo,num:x.num,obra:o,fecha:x.fecha,resultado:x.resultado,data:dat,nuevo:false,real:true,cloud:true};AUD.push(a)}a.cloud=true;a.auto=false;a.ver=x.ver||1;a.hist=x.hist||[];a.log=x.log||[];a.pdf=(x.pdf&&x.pdfVer===(x.ver||1))?x.pdf:'';audPendDel(a.id);
+    const pendIds=new Set(audPendLoad().map(z=>z.id));items.forEach(x=>{let a=AUD.find(y=>y.id===x.id);if(a&&!a.cloud&&pendIds.has(a.id))return;const dat=audDatosDeNube(x.data);if(a){a.data=dat;a.resultado=x.resultado;a.fecha=x.fecha;a.num=x.num}else{a={id:x.id,tipo:x.tipo,num:x.num,obra:o,fecha:x.fecha,resultado:x.resultado,data:dat,nuevo:false,real:true,cloud:true};AUD.push(a)}a.cloud=true;a.auto=false;a.ver=x.ver||1;a.hist=x.hist||[];a.log=x.log||[];a.pdf=(x.pdf&&x.pdfVer===(x.ver||1))?x.pdf:'';audPendDel(a.id);
       if(x.tipo==='sup'&&dat.supId){const s=o.sup.find(z=>z.id===dat.supId);if(s&&s.estado!=='realizada'){s.estado='realizada';s.acta=a.id;s.resultado=a.resultado}}
       if(x.tipo==='cert'&&dat.certId){const c=o.cert.find(z=>z.id===dat.certId);if(c&&c.estado!=='certificada'){c.estado='certificada';c.doc=a.id}}});cambio=true}catch(e){}}));
   try{const pe=new Set(audPendLoad().map(x=>x.id));AUD.filter(a=>a.real&&!a.cloud&&pe.has(a.id)).forEach(a=>audGuardar(a,true,true))}catch(e){}
