@@ -387,7 +387,9 @@ export default async function handler(req, res) {
           firma = { png: fu, strokes, w: Math.min(2000, Number(Fm.w) || 0), h: Math.min(2000, Number(Fm.h) || 0), at: Math.min(4e12, Number(Fm.at) || Date.now()), nombre: S(Fm.nombre, 200) };
         }
         const v = await leer(H, clave); const prev = ((v && v.items) || []).find((x) => x.id === id);
-        const rec = { id, tipo: q.tipo, num: S(prev ? prev.num : q.num, 30), fecha: Math.min(4e12, Math.max(0, Number(q.fecha) || 0)), resultado: S(q.resultado, 40), editado: Date.now(), por: prev ? prev.por : quien, ver: prev ? (prev.ver || 1) + 1 : 1,
+        let numFinal = S(prev ? prev.num : q.num, 30);
+        if (!prev) { const pre = numFinal.replace(/\d+$/, ""); if (numFinal && ((v && v.items) || []).some((x) => x.num === numFinal && x.id !== id)) { const mx = ((v && v.items) || []).reduce((m, x) => (String(x.num).startsWith(pre) ? Math.max(m, parseInt(String(x.num).split("-").pop(), 10) || 0) : m), 0); numFinal = pre + String(mx + 1).padStart(3, "0"); } }
+        const rec = { id, tipo: q.tipo, num: numFinal, fecha: Math.min(4e12, Math.max(0, Number(q.fecha) || 0)), resultado: S(q.resultado, 40), editado: Date.now(), por: prev ? prev.por : quien, ver: prev ? (prev.ver || 1) + 1 : 1,
           hist: prev ? [...(prev.hist || []), { ver: prev.ver || 1, editado: prev.editado || 0, fecha: prev.fecha, resultado: prev.resultado, data: prev.data }].slice(-12) : [], log: prev ? prev.log || [] : [],
           data: { periodo: S(D.periodo, 200), presentes: S(D.presentes, 200), resultado: S(D.resultado, 40), conclusion: S(D.conclusion, 1500), responsable: S(D.responsable, 200), etapa: S(D.etapa, 160), plano: S(D.plano, 80), rev: S(D.rev, 20), directiva: S(D.directiva, 1500), ejecutado: S(D.ejecutado, 80), certId: S(D.certId, 40), supId: S(D.supId, 40),
             obs: (Array.isArray(D.obs) ? D.obs : []).slice(0, 40).map((x) => ({ desc: S(x.desc, 1200), sol: S(x.sol, 1200), sector: S(x.sector, 100), crit: S(x.crit, 20) })),
@@ -396,6 +398,15 @@ export default async function handler(req, res) {
         const items = ((v && v.items) || []).filter((x) => x.id !== id); items.push(rec);
         await escribir(H, clave, { items: items.slice(-400) });
         res.status(200).json({ ok: true, rec }); return;
+      }
+      if (b.op === "aud_pdf") {
+        const id = String(b.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 30), u = String(b.url || "");
+        if (!id || !u.startsWith(NEW_PUB)) { res.status(400).json({ error: "PDF inválido" }); return; }
+        const v = await leer(H, clave); const items = (v && v.items) || []; const it = items.find((x) => x.id === id);
+        if (!it) { res.status(404).json({ error: "Acta inexistente" }); return; }
+        it.pdf = u.slice(0, 600); it.pdfVer = it.ver || 1;
+        await escribir(H, clave, { items });
+        res.status(200).json({ ok: true }); return;
       }
       if (b.op === "aud_del") {
         const id = String(b.id || ""); const [v, tv] = await Promise.all([leer(H, clave), leer(H, claveT)]);

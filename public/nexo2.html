@@ -2105,7 +2105,8 @@ function tabAdic(o){const ad=ADIC.filter(x=>x.obra===o);return `${acEdita(o)?`<b
 /* --- auditoría: resumen para jefatura, dirección y estudio --- */
 const CAMPO=['Frente de trabajo liberado','Replanteo ejecutado y verificado','Niveles de referencia materializados','Estructura receptora finalizada'];
 const CAMPOVAL={};
-function audRow(a){return `<div class="docrow ${a.nuevo&&ROLE()==='jefe'?'nuevo':''}"><span class="dl"><span class="dn"><i class="adot ${ATIPO[a.tipo][1]}"></i>${esc(AUD_TIPO[a.tipo].corto)} · ${a.num}</span><span class="dm">${fmt(a.fecha)} · ${esc(a.tipo==='sup'?a.data.periodo:a.tipo==='rev'?a.data.docs.map(x=>x.nombre).join(', ')||'Archivos':a.data.etapa)}${a.data.obs?.length?' · '+plural(a.data.obs.length,'observación','observaciones'):''}</span><span class="fbtns"><button class="btn sm" data-act="verAud" data-id="${a.id}">Ver</button><button class="btn sm ghost" data-act="pdfAud" data-id="${a.id}">PDF</button>${ROLE()==='auditor'?`<button class="btn sm ghost" data-act="editAud" data-id="${a.id}">Editar</button>`:''}${canDelAud(a)?`<button class="btn sm warn" data-act="delAud" data-id="${a.id}">Eliminar</button>`:''}</span></span><span class="status ${a.resultado==='Conforme'?'t-verde':a.resultado==='No conforme'?'t-rojo':'t-amarillo'}">${a.resultado==='Conforme con observaciones'?'con obs.':a.resultado}</span></div>`}
+function audCloudTag(a){return a.real?`<div class="muted small" style="margin:2px 0 6px;font-weight:600;color:${a.cloud?'#2f7d50':'#a0611f'}">${a.cloud?'Guardado en la nube ✓':'Pendiente de sincronizar'}</div>`:''}
+function audRow(a){return `<div class="docrow ${a.nuevo&&ROLE()==='jefe'?'nuevo':''}"><span class="dl"><span class="dn"><i class="adot ${ATIPO[a.tipo][1]}"></i>${esc(AUD_TIPO[a.tipo].corto)} · ${a.num}${a.real?` <em style="font-size:11px;font-style:normal;color:${a.cloud?'#2f7d50':'#a0611f'}">${a.cloud?'✓ en la nube':'pendiente de sincronizar'}</em>`:''}</span><span class="dm">${fmt(a.fecha)} · ${esc(a.tipo==='sup'?a.data.periodo:a.tipo==='rev'?a.data.docs.map(x=>x.nombre).join(', ')||'Archivos':a.data.etapa)}${a.data.obs?.length?' · '+plural(a.data.obs.length,'observación','observaciones'):''}</span><span class="fbtns"><button class="btn sm" data-act="verAud" data-id="${a.id}">Ver</button><button class="btn sm ghost" data-act="pdfAud" data-id="${a.id}">PDF</button>${ROLE()==='auditor'?`<button class="btn sm ghost" data-act="editAud" data-id="${a.id}">Editar</button>`:''}${canDelAud(a)?`<button class="btn sm warn" data-act="delAud" data-id="${a.id}">Eliminar</button>`:''}</span></span><span class="status ${a.resultado==='Conforme'?'t-verde':a.resultado==='No conforme'?'t-rojo':'t-amarillo'}">${a.resultado==='Conforme con observaciones'?'con obs.':a.resultado}</span></div>`}
 function tabAudit(o){
   const prox=o.sup.find(s=>s.estado==='programada'),as=AUD.filter(a=>a.obra===o&&!a.auto).sort((a,b)=>b.fecha-a.fecha);
   const pc=o.cert.filter(c=>certEstado(c)==='pendiente'),rv=DOCS.filter(x=>x.obra===o&&x.estado==='en revisión');
@@ -2632,7 +2633,7 @@ function sheetAudForm(){
 }
 function sheetAudVer(id,ver){const a0=AUD.find(x=>x.id===id);if(!a0)return;if(a0.nuevo&&ROLE()==='jefe')a0.nuevo=false;const a=ver?audVersion(a0,ver):a0;
   const hist=(a0.hist||[]).length&&!ver?`<span class="eyebrow">Versiones anteriores</span>${a0.hist.slice().reverse().map(h=>`<div class="irow"><span>Versión ${h.ver} · ${esc(fmtN(h.fecha||a0.fecha))}<br><span class="muted small">reemplazada por la versión ${h.ver+1}</span></span><button class="btn sm" data-act="verAudV" data-id="${a0.id}" data-v="${h.ver}">Ver</button></div>`).join('')}`:'';
-  openSheet(`<span class="eyebrow">${esc(a.obra.nombre)}${a.ver>1?' · versión '+a.ver:''}${ver?' · anterior (solo lectura)':''}</span><h2>${AUD_TIPO[a.tipo].t} · ${a.num}</h2>${audHTML(a)}<div class="row2"><button class="btn gold" data-act="pdfAud" data-id="${a0.id}" ${ver?`data-v="${ver}"`:''}>Descargar PDF</button>${!ver&&ROLE()==='auditor'?`<button class="btn" data-act="editAud" data-id="${a0.id}">Editar (nueva versión)</button>`:''}</div>${canDelAud(a0)&&!ver?`<button class="btn warn full" data-act="delAud" data-id="${a0.id}">Eliminar</button>`:''}${hist}`,AUD_TIPO[a.tipo].t)}
+  openSheet(`<span class="eyebrow">${esc(a.obra.nombre)}${a.ver>1?' · versión '+a.ver:''}${ver?' · anterior (solo lectura)':''}</span><h2>${AUD_TIPO[a.tipo].t} · ${a.num}</h2>${audCloudTag(a0)}${audHTML(a)}<div class="row2">${a0.real&&!a0.cloud&&!ver?`<button class="btn gold" data-act="audReintentar" data-id="${a0.id}">Guardar en la nube ahora</button>`:`<button class="btn gold" data-act="pdfAud" data-id="${a0.id}" ${ver?`data-v="${ver}"`:''}>Descargar PDF</button>`}${!ver&&ROLE()==='auditor'?`<button class="btn" data-act="editAud" data-id="${a0.id}">Editar (nueva versión)</button>`:''}</div>${canDelAud(a0)&&!ver?`<button class="btn warn full" data-act="delAud" data-id="${a0.id}">Eliminar</button>`:''}${hist}`,AUD_TIPO[a.tipo].t)}
 /* ===== Auditoría: PDF nuevo (ancho completo, paginado, firma a mano), adjuntos, eliminar con papelera ===== */
 const AUD_M=51; /* 18 mm */
 /* párrafos reales: se respetan solo los saltos que abren un punto nuevo (número, guion) o vienen después de un punto final; el resto se une (no cambia el texto guardado) */
@@ -2644,10 +2645,10 @@ async function heicAJpg(file){try{if(!(/image\/hei[cf]/i.test(file.type||'')||/\
 function audSpec(a){
   const T=AUD_TIPO[a.tipo],D=a.data,ob=D.obs||[];
   const campos=a.tipo==='sup'?[['Período',D.periodo],['Presentes',D.presentes]]:a.tipo==='rev'?[['Etapa a ejecutar',D.etapa],['Documentos revisados',String((D.docs||[]).length)]]:[['Etapa certificada',D.etapa],['Ejecutado por',D.ejecutado||ORG],['Plano de referencia',D.plano],['Versión / revisión',D.rev]];
-  const intro=a.tipo==='cert'?`Se deja constancia de que la etapa ${D.etapa} de la obra ${a.obra.nombre} fue ejecutada conforme al plano de referencia indicado y a la directiva impartida por la Jefatura de Obra que se transcribe a continuación.`:'';
+  const hayDir=!!String(D.directiva||'').replace(/[\s\-–—•.]+/g,'');const intro=a.tipo==='cert'?`Se deja constancia de que la etapa ${D.etapa} de la obra ${a.obra.nombre} fue ejecutada conforme al plano de referencia indicado${hayDir?' y a la directiva impartida por la Jefatura de Obra que se transcribe a continuación':''}.`:'';
   const pre=[];
   if(a.tipo==='rev')pre.push({h:'Documentos revisados',tabla:{cols:['Plano / documento','Revisión','Origen'],w:[.62,.14,.24],rows:(D.docs||[]).map(x=>{const dd=x.doc&&DOCS.find(y=>y.id===x.doc);return[x.nombre,x.rev||'—',dd&&dd.por==='Recibido por fuera de la app'||x.file?'Recibido por fuera de la app':'Panel del estudio']})}});
-  if(a.tipo==='cert')pre.push({h:'Directiva de la Jefatura de Obra',texto:D.directiva||'—'});
+  if(a.tipo==='cert'&&hayDir)pre.push({h:'Directiva de la Jefatura de Obra',texto:D.directiva});
   const adjR=(D.adjuntos||[]).filter(id=>FILES[id]&&!(D.fotos||[]).includes(id));
   return{tipo:a.tipo,titulo:T.t,sub:'Auditoría de obra · '+ORG,obra:a.obra.nombre,num:a.num,fecha:fmtN(a.fecha),campos,intro,pre,obs:ob,obsH:a.tipo==='sup'?'Observaciones de la supervisión':'Observaciones',interf:D.interf||[],fotos:(D.fotos||[]).filter(id=>FILES[id]),adj:adjR.map(id=>({id,desc:(D.adjDesc||{})[id]||''})),resultado:a.resultado,conclusion:D.conclusion||'',resp:D.responsable||'',firma:D.firma||null,ver:a.ver||1};
 }
@@ -2690,29 +2691,37 @@ async function audPDF(a){
     else{head(s.h,30);(audParas(s.texto||'—').length?audParas(s.texto||'—'):['—']).forEach(pp=>{wrapTxt(pp,FS,false,CW).forEach(ln=>{ensure(LH);P.text(L,P.y,ln,FS);P.y+=LH});P.y+=4});P.y+=2}
   }
   /* observaciones: texto a todo el ancho */
-  head(S.obsH,60);
+  head(S.obsH,24+LH*3+8);
   if(!S.obs.length){P.text(L,P.y,'Sin observaciones.',FS,false,GREY);P.y+=LH+4}
   S.obs.forEach((o,k)=>{
     const paras=audParas(o.desc);
-    const dl=[];paras.forEach(p=>{const m=/^(\d+[.)]|[-•*])\s+(.*)$/.exec(p);if(m){const ls=wrapTxt(m[2],FS,false,CW-26-8);ls.forEach((ln,n)=>dl.push({t:ln,b:n?'':m[1],x:L+8+(n?0:0)+0,i:26}))}else wrapTxt(p,FS,false,CW-16).forEach(ln=>dl.push({t:ln,b:'',i:8}));dl.push({gap:4})});
+    const dl=[];paras.forEach(p=>{const m=/^(\d+[.)]|[-•*])\s+(.*)$/.exec(p);if(m){const ls=wrapTxt(m[2],FS,false,CW-26-8);ls.forEach((ln,n)=>dl.push({t:ln,b:n?'':m[1],x:L+8+(n?0:0)+0,i:26,gh:n?0:ls.length*LH}))}else wrapTxt(p,FS,false,CW-16).forEach(ln=>dl.push({t:ln,b:'',i:8}));dl.push({gap:4})});
     const sl=[];audParas(o.sol).forEach(p=>{const m=/^(\d+[.)]|[-•*])\s+(.*)$/.exec(p);if(m)wrapTxt(m[2],FS,false,CW-16-26).forEach((ln,n)=>sl.push({t:ln,b:n?'':m[1],i:26}));else wrapTxt(p,FS,false,CW-16-10).forEach(ln=>sl.push({t:ln,b:'',i:10}))});
     const hD=dl.reduce((s,l)=>s+(l.gap||LH),0),hS=sl.length?18+sl.length*LH+10:0,total=22+hD+hS+8;
-    const band=()=>{P.rect(L,P.y,CW,20,'#f1ece2');P.text(L+8,P.y+5.5,'OBSERVACIÓN '+(k+1),9,true,INK);const cr=o.crit?'Criticidad: '+o.crit:'';const crw=cr?tw(cr,9,true):0;if(cr)P.text(R-8-crw,P.y+5.5,cr,9,true,AUD_CR[o.crit]||INK);let sec='Sector / ítem: '+(o.sector||'—');while(tw(sec,9)>CW-16-crw-100-12&&sec.length>12)sec=sec.slice(0,-2);P.text(L+110,P.y+5.5,sec,9,false,GREY);P.y+=24};
-    if(total<=BOT-TOP-30)ensure(total);else ensure(22+LH*3);
+    const band=(cont)=>{P.rect(L,P.y,CW,20,'#f1ece2');P.text(L+8,P.y+5.5,'OBSERVACIÓN '+(k+1)+(cont?' (continuación)':''),9,true,INK);const cr=o.crit?'Criticidad: '+o.crit:'';const crw=cr?tw(cr,9,true):0;if(cr)P.text(R-8-crw,P.y+5.5,cr,9,true,AUD_CR[o.crit]||INK);let sec='Sector / ítem: '+(o.sector||'—');while(tw(sec,9)>CW-16-crw-100-12-(cont?75:0)&&sec.length>12)sec=sec.slice(0,-2);P.text(L+(cont?185:110),P.y+5.5,sec,9,false,GREY);P.y+=24};
+    ensure(24+LH*3+4);
     band();
-    const drawLine=l=>{if(l.gap){P.y+=l.gap;return}if(P.y+LH>BOT){P.newPage()}if(l.b)P.text(L+8,P.y,l.b,FS,false,GREY);P.text(L+l.i,P.y,l.t,FS);P.y+=LH};
+    const drawLine=l=>{if(l.gap){P.y+=l.gap;return}if((l.gh&&P.y+l.gh>BOT&&l.gh<BOT-TOP-60)||P.y+LH>BOT){P.newPage();band(true)}if(l.b)P.text(L+8,P.y,l.b,FS,false,GREY);P.text(L+l.i,P.y,l.t,FS);P.y+=LH};
     dl.forEach(drawLine);
-    if(sl.length){P.y+=2;const startPg=P.pages.length;if(18+sl.length*LH+10<=BOT-TOP-10)ensure(18+sl.length*LH+10);
-      const y0=P.y,hh=18+sl.length*LH+10;
-      if(y0+hh<=BOT){P.rect(L,y0,CW,hh,'#f6f0e3');P.rect(L,y0,3,hh,GOLD);P.text(L+10,y0+6,'POSIBLE SOLUCIÓN',8.5,true,'#8a6a37');P.y=y0+18;sl.forEach(l=>{if(l.b)P.text(L+10,P.y,l.b,FS,false,GREY);P.text(L+10+(l.i===26?16:0)+(l.i===26?0:0),P.y,l.t,FS);P.y+=LH});P.y=y0+hh}
-      else{P.text(L+10,P.y,'POSIBLE SOLUCIÓN',8.5,true,'#8a6a37');P.y+=16;sl.forEach(l=>{if(P.y+LH>BOT)P.newPage();P.text(L+10,P.y,l.t,FS);P.y+=LH})}}
+    if(sl.length){P.y+=2;let idx=0,first=true;
+      while(idx<sl.length){
+        let avail=BOT-P.y-18-8;
+        if(avail<LH*3){P.newPage();avail=BOT-P.y-18-8}
+        let n=0,hs=0;while(idx+n<sl.length&&hs+LH<=avail){hs+=LH;n++}
+        if(idx+n<sl.length){let k2=n;while(k2>1&&!sl[idx+k2].b&&sl[idx+k2].i===26)k2--;n=k2}
+        const hh=18+n*LH+10,y0=P.y;
+        P.rect(L,y0,CW,hh,'#f6f0e3');P.rect(L,y0,3,hh,GOLD);P.text(L+10,y0+6,first?'POSIBLE SOLUCIÓN':'POSIBLE SOLUCIÓN (continuación)',8.5,true,'#8a6a37');P.y=y0+18;
+        for(let q=0;q<n;q++){const l=sl[idx+q];if(l.b)P.text(L+10,P.y,l.b,FS,false,GREY);P.text(L+10+(l.i===26?16:0),P.y,l.t,FS);P.y+=LH}
+        P.y=y0+hh;idx+=n;first=false;
+        if(idx<sl.length)P.newPage();
+      }}
     P.y+=6;P.line(L,P.y,R,P.y,LINE);P.y+=8;
   });
   /* interferencias */
   if(S.interf.length){head('Interferencias detectadas',30);S.interf.forEach((t,n)=>{const ls=wrapTxt(audParas(t).join(' '),FS,false,CW-26);ensure(ls.length*LH+4);P.text(L+8,P.y,(n+1)+'.',FS,false,GREY);ls.forEach(ln=>{P.text(L+26,P.y,ln,FS);P.y+=LH});P.y+=3})}
   /* fotos de obra: grilla pareja */
-  head('Fotos',70);
   const fi=await Promise.all(S.fotos.map(id=>toJpeg(FILES[id].url)));const ims=fi.filter(Boolean);
+  {const N0=ims.length,cc0=N0<=2?2:N0===3?3:N0===4?4:N0<=6?3:4,pw0=(CW-8*(cc0-1))/cc0;head('Fotos',N0?pw0*.75+8:30)}
   if(!ims.length){P.text(L,P.y,'Sin fotos adjuntas.',FS,false,GREY);P.y+=LH+4}
   else{const N=ims.length,cc=N<=2?2:N===3?3:N===4?4:N<=6?3:4,g=8,pw=(CW-g*(cc-1))/cc,ph=pw*.75;ims.forEach((im,n)=>{const c=n%cc;if(c===0)ensure(ph+g);P.imageCover(im,L+c*(pw+g),P.y,pw,ph);if(c===cc-1||n===N-1)P.y+=ph+g});P.y+=2}
   /* archivos adjuntos: material técnico, grandes */
@@ -2750,7 +2759,12 @@ async function audPDF(a){
   P.pages.forEach((c,i)=>{P.c=c;P.text(L,P.H-34,foot,7.5,false,GREY);const pg=`página ${i+1} de ${P.pages.length}`;P.text(R-tw(pg,7.5),P.H-34,pg,7.5,false,GREY)});
   return P.build();
 }
-async function pdfAud(id,ver){const a0=AUD.find(x=>x.id===id);if(!a0)return;const a=ver?audVersion(a0,ver):a0;toast('Generando PDF…');try{const b=await audPDF(a);bajar(b,`${a.num}${a.ver>1?'_v'+a.ver:''}_${slug(a.obra.nombre)}.pdf`)}catch(e){toast('No se pudo generar el PDF')}}
+async function pdfAud(id,ver){const a0=AUD.find(x=>x.id===id);if(!a0)return;if(a0.real&&!a0.cloud&&!ver){toast('Pendiente de sincronizar: el PDF se habilita cuando el documento quede guardado en la nube');return}const a=ver?audVersion(a0,ver):a0,nom=`${a.num}${a.ver>1?'_v'+a.ver:''}_${slug(a.obra.nombre)}.pdf`;toast('Preparando PDF…');
+  try{let b=null;if(!ver&&a0.pdf){try{const r=await fetch(a0.pdf);if(r.ok)b=await r.blob()}catch(e){}}
+   if(!b){b=await audPDF(a);if(!ver&&a0.real&&a0.cloud)audPdfNube(a0,b)}
+   bajar(b,nom)}catch(e){toast('No se pudo generar el PDF')}}
+async function audPdfNube(a,blob){try{const cr=credAud(a.obra);if(!cr||!cr.codigo)return;const data=await new Promise((res,rej)=>{const f=new FileReader();f.onload=()=>res(f.result);f.onerror=rej;f.readAsDataURL(blob)});if(!data||data.length>3.9e6)return;const u=await codApi({op:'aud_foto',obra:a.obra.id,cred:cr,data,pref:'pdf'});if(!u.url)return;const r=await codApi({op:'aud_pdf',obra:a.obra.id,cred:cr,id:a.id,url:u.url,ver:a.ver||1});if(r.ok)a.pdf=u.url}catch(e){}}
+
 /* versión anterior de un acta (solo lectura) */
 function audVersion(a,v){const h=(a.hist||[]).find(x=>x.ver===+v);if(!h)return a;return{...a,ver:h.ver,fecha:h.fecha||a.fecha,resultado:h.resultado||a.resultado,data:audDatosDeNube(h.data),hist:[]}}
 function audHTML(a){
@@ -2814,7 +2828,7 @@ async function audCommit(firma){
   try{localStorage.setItem(firmaClave(),JSON.stringify({strokes:firma.strokes,w:firma.w,h:firma.h}))}catch(e){}
   AF=null;FIRMA=null;closeSheet();draw();
   const okG=await audGuardar(a);
-  toast(okG?`${a.num} firmado y guardado`:`${a.num} firmado. Quedó guardado en este equipo y se sube a la nube apenas haya código válido y conexión`);sheetAudVer(a.id);pdfAud(a.id);
+  toast(okG?`${a.num} firmado y guardado en la nube`:`${a.num} firmado. Pendiente de sincronizar: queda en este equipo y se sube solo`);sheetAudVer(a.id);if(okG)pdfAud(a.id);
 }
 /* datos locales → formato de la nube (para el historial) */
 function audDatosANube(D){const x={...D};x.fotos=(D.fotos||[]).map(id=>FILES[id]?(FILES[id].cloud||(/^https:/.test(FILES[id].url)?FILES[id].url:'')):'').filter(Boolean);x.adjuntos=(D.adjuntos||[]).filter(id=>FILES[id]).map(id=>({u:FILES[id].cloud||(/^https:/.test(FILES[id].url)?FILES[id].url:''),n:FILES[id].name,t:FILES[id].type,d:(D.adjDesc||{})[id]||''}));delete x.adjDesc;if(x.firma)x.firma={png:x.firma.png&&/^https:/.test(x.firma.png)?x.firma.png:'',strokes:x.firma.strokes,w:x.firma.w,h:x.firma.h,at:x.firma.at,nombre:x.firma.nombre};return x}
@@ -3012,6 +3026,7 @@ const A={
   verAud:ds=>sheetAudVer(ds.id),
   verAudV:ds=>sheetAudVer(ds.id,ds.v),
   pdfAud:ds=>pdfAud(ds.id,ds.v),
+  audReintentar:async ds=>{const a=AUD.find(x=>x.id===ds.id);if(!a)return;toast('Guardando en la nube…');const ok=await audGuardar(a,true);toast(ok?'Guardado en la nube ✓':'Todavía no se pudo guardar: revisá tu conexión o volvé a ingresar tu código');sheetAudVer(a.id)},
   firmaBorrar:()=>{if(FIRMA){FIRMA.strokes=[];FIRMA.cur=null;firmaPintar()}},
   firmaGuardada:()=>{const g=firmaGuardada();if(g&&FIRMA){FIRMA.strokes=g.strokes.map(s=>s.map(p=>[p[0]+20,p[1]+20]));firmaPintar();toast('Firma guardada cargada: revisala y tocá Firmar y generar')}},
   firmaCancelar:()=>{FIRMA=null;sheetAudForm()},
@@ -3160,7 +3175,7 @@ async function audGuardar(a,reint,quiet){try{const o=a.obra,cr=credAud(o);if(!cr
   (r.rec.data.fotos||[]).forEach((u,k)=>{const id=fid[k];if(id&&FILES[id])FILES[id].cloud=u});
   (r.rec.data.adjuntos||[]).forEach((x,k)=>{const id=adjId[k];if(id&&FILES[id]&&x.u)FILES[id].cloud=x.u});
   if(r.rec.data.firma){a.data.firma={...r.rec.data.firma}}
-  a.ver=r.rec.ver;a.hist=r.rec.hist||[];a.log=r.rec.log||[];a.cloud=true;_audSig[o.id]='';audPendDel(a.id);return true}
+  a.ver=r.rec.ver;a.hist=r.rec.hist||[];a.log=r.rec.log||[];if(r.rec.num)a.num=r.rec.num;a.pdf='';a.cloud=true;_audSig[o.id]='';audPendDel(a.id);return true}
  catch(e){audPendSave(a);if(!reint)setTimeout(()=>audGuardar(a,true),4000);else if(!quiet)toast('No se pudo guardar el acta en la nube: '+(e.message||''));return false}}
 const PEND_K='nexo2_aud_pend';
 function audPendLoad(){try{return JSON.parse(localStorage.getItem(PEND_K)||'[]')}catch(e){return[]}}
@@ -3173,8 +3188,8 @@ async function audSync(fuerza){if(!S.u||(!fuerza&&Date.now()-_audT<60000))return
   const vis=ROLE()==='direccion'?OBRAS:misObras();
   await Promise.all(vis.map(async o=>{try{const d=await codApi({op:'aud_list',obra:o.id});if(!d.ok)return;const items=d.items||[],sig=items.map(x=>x.id+':'+x.editado).join('|')+'#'+(d.trash||[]).length;if(sig===_audSig[o.id])return;_audSig[o.id]=sig;
     AUDT=AUDT.filter(x=>x.obra!==o.id).concat((d.trash||[]).map(x=>({...x,obra:o.id})));
-    const ids=new Set(items.map(x=>x.id));for(let i=AUD.length-1;i>=0;i--)if(AUD[i].real&&AUD[i].obra===o&&AUD[i].cloud&&!ids.has(AUD[i].id)){audRevertPend(AUD[i]);AUD.splice(i,1)}
-    items.forEach(x=>{const dat=audDatosDeNube(x.data);let a=AUD.find(y=>y.id===x.id);if(a){a.data=dat;a.resultado=x.resultado;a.fecha=x.fecha;a.num=x.num}else{a={id:x.id,tipo:x.tipo,num:x.num,obra:o,fecha:x.fecha,resultado:x.resultado,data:dat,nuevo:false,real:true,cloud:true};AUD.push(a)}a.cloud=true;a.auto=false;a.ver=x.ver||1;a.hist=x.hist||[];a.log=x.log||[];
+    const ids=new Set(items.map(x=>x.id)),tids=new Set((d.trash||[]).map(x=>x.id));for(let i=AUD.length-1;i>=0;i--)if(AUD[i].real&&AUD[i].obra===o&&AUD[i].cloud&&!ids.has(AUD[i].id)){if(tids.has(AUD[i].id)){audRevertPend(AUD[i]);AUD.splice(i,1)}else{AUD[i].cloud=false;audPendSave(AUD[i])}}
+    items.forEach(x=>{const dat=audDatosDeNube(x.data);let a=AUD.find(y=>y.id===x.id);if(a){a.data=dat;a.resultado=x.resultado;a.fecha=x.fecha;a.num=x.num}else{a={id:x.id,tipo:x.tipo,num:x.num,obra:o,fecha:x.fecha,resultado:x.resultado,data:dat,nuevo:false,real:true,cloud:true};AUD.push(a)}a.cloud=true;a.auto=false;a.ver=x.ver||1;a.hist=x.hist||[];a.log=x.log||[];a.pdf=(x.pdf&&x.pdfVer===(x.ver||1))?x.pdf:'';audPendDel(a.id);
       if(x.tipo==='sup'&&dat.supId){const s=o.sup.find(z=>z.id===dat.supId);if(s&&s.estado!=='realizada'){s.estado='realizada';s.acta=a.id;s.resultado=a.resultado}}
       if(x.tipo==='cert'&&dat.certId){const c=o.cert.find(z=>z.id===dat.certId);if(c&&c.estado!=='certificada'){c.estado='certificada';c.doc=a.id}}});cambio=true}catch(e){}}));
   try{const pe=new Set(audPendLoad().map(x=>x.id));AUD.filter(a=>a.real&&!a.cloud&&pe.has(a.id)).forEach(a=>audGuardar(a,true,true))}catch(e){}
