@@ -1242,8 +1242,9 @@ section.sec>.card{margin-bottom:12px}
 .pr.done select{background:#2fa86b;color:#fff;border-color:#2fa86b}
 .gt tr.done td:first-child{color:#2fa86b;font-weight:600;box-shadow:inset 3px 0 0 #2fa86b}
 
-/* fotos de portada completas, sin recorte */
+/* renders completos; la foto del cerco grande */
 .hero .slides img{object-fit:contain!important;background:#000}
+.hero .slides img.cerco{object-fit:cover!important;object-position:50% 75%}
 </style><script>/* tema claro/oscuro: se aplica antes de dibujar para que no parpadee */
 (function(){var K='nexo2_tema',mq=window.matchMedia?matchMedia('(prefers-color-scheme: light)'):null;
 function pref(){try{return localStorage.getItem(K)||'auto'}catch(e){return'auto'}}
