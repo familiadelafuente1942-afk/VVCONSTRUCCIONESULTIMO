@@ -1242,9 +1242,16 @@ section.sec>.card{margin-bottom:12px}
 .pr.done select{background:#2fa86b;color:#fff;border-color:#2fa86b}
 .gt tr.done td:first-child{color:#2fa86b;font-weight:600;box-shadow:inset 3px 0 0 #2fa86b}
 
-/* renders completos; la foto del cerco grande */
-.hero .slides img{object-fit:contain!important;background:#000}
-.hero .slides img.cerco{object-fit:cover!important;object-position:50% 75%}
+/* portada: de a dos fotos por tipo; el cerco solo y grande */
+.hero .slides .sl{position:absolute;inset:0;opacity:0;transition:opacity 1s ease;display:flex;gap:6px;background:#000;pointer-events:none}
+.hero .slides .sl.on{opacity:1;pointer-events:auto}
+.hero .slides .sl figure{flex:1;margin:0;position:relative;min-width:0;min-height:0}
+.hero .slides .sl img{position:absolute!important;inset:0;width:100%!important;height:100%!important;object-fit:contain!important;opacity:1!important;background:#000}
+.hero .slides .sl.solo:not(.sing) img{object-fit:cover!important;object-position:50% 75%}
+.hero .slides .sl figcaption{position:absolute;left:8px;top:8px;z-index:2;background:rgba(0,0,0,.62);color:#e6c88f;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:4px 8px;border-radius:6px;font-weight:600}
+.hero .slides .sl.solo:not(.sing) figcaption{display:none}
+.hero.pair .hshade,.hero.pair .hcap{display:none}
+@media(max-width:620px){.hero{aspect-ratio:3/4!important}.hero .slides .sl.pair{flex-direction:column}}
 </style><script>/* tema claro/oscuro: se aplica antes de dibujar para que no parpadee */
 (function(){var K='nexo2_tema',mq=window.matchMedia?matchMedia('(prefers-color-scheme: light)'):null;
 function pref(){try{return localStorage.getItem(K)||'auto'}catch(e){return'auto'}}
@@ -1503,8 +1510,17 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  <div class="sub" style="font-size:15px;margin-top:10px">${usd(o.zona)} / m² × ${f0(o.m2v)} m² vendibles = ${usd(r.ing)}</div></div>`;
  document.getElementById('p').innerHTML=h;
 
- const fotos=['estado-actual','living','fachada','dormitorio'],ep=['Estado actual · Paseo Colón y San Lorenzo','Living comedor','Fachada · Av. Paseo Colón','Dormitorio'];
- document.getElementById('h').innerHTML=`<div class="hero"><div class="slides">${fotos.map((n,i)=>`<img src="/docs/paseo-colon/img/${n}.jpg?v=2" alt="${ep[i]}" class="${(i?'':'on ')+(n==='estado-actual'?'cerco':'')}">`).join('')}</div><div class="hshade"></div><div class="hcap"><span class="eyebrow" id="cap">${ep[0]}</span><h1>${esc(o.nombre)}</h1></div><div class="dots">${fotos.map((n,i)=>`<button data-sl="${i}" class="${i?'':'on'}" aria-label="Foto ${i+1}"></button>`).join('')}</div></div>
+ const SL=[{f:['estado-actual'],l:['Estado actual · Paseo Colón y San Lorenzo']},
+ {f:['fachada','ext-calle'],l:['Exterior · Fachada','Exterior · Vista desde la calle']},
+ {f:['ext-axonometria','ext-implantacion'],l:['Exterior · Axonometría','Exterior · Implantación y entorno']},
+ {f:['living','living-2'],l:['Living comedor','Living comedor']},
+ {f:['vista-living','balcon'],l:['Vista desde el living','Balcón terraza']},
+ {f:['cocina','ingreso'],l:['Cocina','Ingreso y kitchenette']},
+ {f:['dormitorio','dormitorio-2'],l:['Dormitorio','Dormitorio']},
+ {f:['bano'],l:['Baño'],p:1},
+ {f:['planta-a','planta-b'],l:['Planta 3D · Tipo A','Planta 3D · Tipo B']}];
+ const fotos=SL;
+ document.getElementById('h').innerHTML=`<div class="hero"><div class="slides">${SL.map((x,i)=>`<div class="sl ${i?'':'on'} ${x.f.length>1?'pair':'solo'}${x.p?' sing':''}">${x.f.map((n,j)=>`<figure><img src="/docs/paseo-colon/img/${n}.jpg?v=3" alt="${x.l[j]}"><figcaption>${x.l[j]}</figcaption></figure>`).join('')}</div>`).join('')}</div><div class="hshade"></div><div class="hcap"><span class="eyebrow" id="cap">${SL[0].l[0]}</span><h1>${esc(o.nombre)}</h1></div><div class="dots">${SL.map((n,i)=>`<button data-sl="${i}" class="${i?'':'on'}" aria-label="Foto ${i+1}"></button>`).join('')}</div></div>
  <div class="card"><b>El proyecto</b><p class="sub" style="margin:6px 0 10px">Edificio de 2 ambientes en San Telmo, esquina Av. Paseo Colón y San Lorenzo.</p>
  <div class="row"><span>Unidades</span><b>39 funcionales de 2 ambientes</b></div>
  <div class="row"><span>m² a construir</span><b>${f0(o.m2c)} m²</b></div>
@@ -1550,7 +1566,7 @@ document.getElementById('xl').onclick=()=>dl('belfast-costos-copia.json',JSON.st
 document.getElementById('csv').onclick=()=>{const o=O(),r=calc(o);let c='N;Rubro;Materiales;Ejecucion;Total\n';o.rub.forEach((x,i)=>c+=`${i+1};"${x.n}";${x.m};${x.e};${x.m+x.e}\n`);c+=`;Total construccion;;;${r.c}\n;Precio final ARS;;;${r.tot.toFixed(2)}\n;Precio final USD;;;${r.totU.toFixed(2)}\n`;dl(o.nombre+'.csv','﻿'+c,'text/csv')};
 
 let _sl=0,_st=null;
-function showSlide(n){const im=document.querySelectorAll('.slides img'),ds=document.querySelectorAll('.dots button');if(!im.length)return;_sl=(n+im.length)%im.length;im.forEach((x,i)=>x.classList.toggle('on',i===_sl));ds.forEach((x,i)=>x.classList.toggle('on',i===_sl));const c=document.getElementById('cap');if(c)c.textContent=im[_sl].alt}
+function showSlide(n){const sl=document.querySelectorAll('.slides .sl'),ds=document.querySelectorAll('.dots button');if(!sl.length)return;_sl=(n+sl.length)%sl.length;sl.forEach((x,i)=>x.classList.toggle('on',i===_sl));ds.forEach((x,i)=>x.classList.toggle('on',i===_sl));const h=document.querySelector('.hero');if(h)h.classList.toggle('pair',sl[_sl].classList.contains('pair')||sl[_sl].classList.contains('sing'));const c=document.getElementById('cap'),im=sl[_sl].querySelector('img');if(c&&im)c.textContent=im.alt}
 function startSlides(){clearInterval(_st);_st=setInterval(()=>showSlide(_sl+1),4500);showSlide(0)}
 document.addEventListener('click',e=>{const d=e.target.closest('[data-sl]');if(d){showSlide(+d.dataset.sl);startSlides();showSlide(+d.dataset.sl)}});
 document.getElementById('refr').onclick=()=>location.reload();
