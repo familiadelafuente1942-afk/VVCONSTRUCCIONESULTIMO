@@ -9,6 +9,7 @@ input,select,textarea{font-size:16px!important;max-width:100%}
 .ia-form input{min-width:0;flex:1 1 0}
 .msg{overflow-wrap:anywhere;word-break:break-word}
 img,svg,video,canvas{max-width:100%}
+.kp-in{text-align:center;font-size:24px!important;letter-spacing:.18em!important;text-transform:uppercase;padding:16px 12px!important;min-height:58px}.kp-in[aria-invalid="true"]{border-color:#e0554a!important}.cod-err{color:#e0554a;font-weight:600;font-size:15px;margin:6px 0 0;text-align:center}
 </style><script>/* tema claro/oscuro: se aplica antes de dibujar para que no parpadee */
 (function(){var K='nexo2_tema',mq=window.matchMedia?matchMedia('(prefers-color-scheme: light)'):null;
 function pref(){try{return localStorage.getItem(K)||'auto'}catch(e){return'auto'}}
@@ -1122,32 +1123,16 @@ input::placeholder,textarea::placeholder{color:var(--muted)!important;opacity:.8
 .iafab{right:10px!important;width:54px;height:54px;padding:0!important;justify-content:center;border-radius:50%!important;background:var(--glint),linear-gradient(158deg,rgba(232,197,133,.40),rgba(232,197,133,.08) 50%,var(--g-c))!important;-webkit-backdrop-filter:var(--g-fx);backdrop-filter:var(--g-fx);box-shadow:inset 0 2px 1px var(--g-rim),inset 0 0 0 1px var(--gold),0 8px 20px -6px var(--gl-sh)!important}
 .iafab span{display:none}
 .iafab img{width:30px;height:30px}
-/* teclado de vidrio para códigos */
-.kp{position:relative;isolation:isolate;display:flex;flex-wrap:wrap;gap:22px 30px;justify-content:center;align-items:flex-start;margin:10px auto 2px;max-width:760px;padding:18px 8px}
-.kp::before{content:"";position:absolute;inset:-6px 8%;z-index:-1;border-radius:40px;background:radial-gradient(60% 55% at 28% 30%,rgba(201,162,75,.55),transparent 70%),radial-gradient(55% 60% at 78% 70%,rgba(91,128,200,.40),transparent 70%);filter:blur(26px);opacity:.9}
-.kp-d{display:grid;grid-template-columns:repeat(3,76px);gap:14px}
-.kp-l{display:grid;grid-template-columns:repeat(7,46px);gap:9px;align-content:start}
-.kp button{appearance:none;-webkit-appearance:none;font:inherit;cursor:pointer;color:#fff;border-radius:50%;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;position:relative;overflow:hidden;
  background:linear-gradient(160deg,rgba(255,255,255,.20) 0%,rgba(255,255,255,.04) 38%,rgba(10,12,18,.32) 100%);
  -webkit-backdrop-filter:blur(14px) saturate(1.9) brightness(.9);backdrop-filter:blur(14px) saturate(1.9) brightness(.9);
  border:1px solid rgba(255,255,255,.34);
  box-shadow:inset 0 1.5px 1px rgba(255,255,255,.65),inset 0 -2px 6px rgba(255,255,255,.12),inset 0 -10px 18px rgba(0,0,0,.28),0 8px 22px rgba(0,0,0,.28);
  text-shadow:0 1px 3px rgba(0,0,0,.45);transition:transform .08s,box-shadow .12s;-webkit-tap-highlight-color:transparent}
-.kp button::after{content:"";position:absolute;left:12%;right:12%;top:4%;height:42%;border-radius:50%;background:linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,0));pointer-events:none}
-.kp-d button{font-size:32px;font-weight:300;line-height:1}
-.kp-d button small{font-size:9px;letter-spacing:.18em;margin-top:2px;opacity:.9;font-weight:600}
-.kp-l button{font-size:16px;font-weight:500}
-.kp button:active{transform:scale(.92);background:linear-gradient(160deg,rgba(255,255,255,.42),rgba(255,255,255,.14) 50%,rgba(10,12,18,.2))}
-.kp-d .kp-x{font-size:20px}
-.kp-t{display:block;margin:6px auto 0;background:none;border:0;color:var(--muted,#9a9a9a);font-size:12px;text-decoration:underline;cursor:pointer}
 .kp-in{text-align:center;font-size:22px!important;letter-spacing:.18em!important;border-radius:999px!important;background:var(--gl)!important;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:.5px solid var(--gl-hi)!important}
-:root[data-tema="claro"] .kp button{color:#1c1d22;text-shadow:0 1px 0 rgba(255,255,255,.7);
  background:linear-gradient(160deg,rgba(255,255,255,.85) 0%,rgba(255,255,255,.18) 45%,rgba(255,255,255,.38) 100%);
  -webkit-backdrop-filter:blur(10px) saturate(1.6) brightness(1.04);backdrop-filter:blur(10px) saturate(1.6) brightness(1.04);
  border:1px solid rgba(255,255,255,.95);
  box-shadow:inset 0 1.5px 1px #fff,inset 0 -8px 14px rgba(90,100,150,.16),0 8px 22px rgba(60,70,120,.20)}
-:root[data-tema="claro"] .kp button::after{background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,0))}
-:root[data-tema="claro"] .kp::before{opacity:.55}
 /* ===== v14 · vidrio que brilla ===== */
 :root{--glint:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.17) 41%,rgba(255,255,255,.04) 50%,transparent 58%)}
 :root[data-tema="claro"]{--glint:linear-gradient(115deg,transparent 28%,rgba(255,255,255,.95) 41%,rgba(255,255,255,.25) 50%,transparent 60%)}
@@ -1157,15 +1142,9 @@ input::placeholder,textarea::placeholder{color:var(--muted)!important;opacity:.8
 .ia,.kpi.k-gold,.invite,.respbox,.cd,.modelbox,.rcard.top1,.selobra[aria-pressed=true],.aviso.nuevo{background:var(--glint),linear-gradient(158deg,rgba(232,197,133,.40) 0%,rgba(232,197,133,.07) 45%,var(--g-c) 100%)!important}
 .btn.gold{background:var(--glint),linear-gradient(180deg,rgba(244,218,160,.95),rgba(199,156,85,.75))!important}
 .av-ico{background:var(--glint),linear-gradient(158deg,rgba(255,226,160,.66) 0%,rgba(200,150,70,.18) 55%,rgba(255,226,160,.2) 100%)!important}
-/* teclado: más transparente y con destello */
-.kp button{background:var(--glint),linear-gradient(160deg,rgba(255,255,255,.26) 0%,rgba(255,255,255,.03) 40%,rgba(10,12,18,.14) 100%);
  border:1px solid rgba(255,255,255,.55);
  box-shadow:inset 0 2px 1px rgba(255,255,255,.85),inset 0 0 14px rgba(255,255,255,.14),inset 0 -8px 14px rgba(0,0,0,.16),0 0 16px rgba(255,255,255,.18),0 8px 22px rgba(0,0,0,.22)}
-.kp button::after{background:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,0))}
-:root[data-tema="claro"] .kp button{background:var(--glint),linear-gradient(160deg,rgba(255,255,255,.75) 0%,rgba(255,255,255,.08) 45%,rgba(255,255,255,.28) 100%);box-shadow:inset 0 2px 1px #fff,inset 0 0 16px rgba(255,255,255,.7),inset 0 -8px 14px rgba(90,100,150,.14),0 0 18px rgba(255,255,255,.9),0 8px 22px rgba(60,70,120,.18)}
 @keyframes kpShine{0%{background-position:-160% 0,0 0}100%{background-position:260% 0,0 0}}
-.kp button{background-size:220% 100%,100% 100%;background-repeat:no-repeat}
-.kp button:active{animation:kpShine .5s ease-out;background:var(--glint),linear-gradient(160deg,rgba(255,255,255,.5),rgba(255,255,255,.12))}
 @media (max-width:520px){.kp-d{grid-template-columns:repeat(3,68px);gap:12px}.kp-l{grid-template-columns:repeat(9,32px);gap:6px}.kp-l button{font-size:13px}}
 </style>
 <div class="app">
@@ -3100,34 +3079,34 @@ const SUBMIT={
   modelo:f=>{readMO();const o=findO(f.dataset.o);cambiarModelo(o,MO);MO=null;closeSheet();notify('jefe',o,`La Dirección actualizó el modelo de ${o.nombre}: ${modeloTxt(o)}`,null);toast(`Modelo aplicado: ${modeloTxt(o)}`);draw()},
   editarObra:f=>{const o=findO(f.dataset.o);if(!o||!esDir())return;const n=val('eo-nom').trim();if(!n){toast('Poné el nombre de la obra');return}
     o.nombre=n;o.ubic=val('eo-ubi').trim();o.jefe=val('eo-jefe');o.estudio=val('eo-est').trim()||o.estudio;closeSheet();toast('Obra actualizada');draw()},
-  salirCod:async f=>{const txt=val('sa-cod');if(!normClave(txt)){toast('Escribí el código de Dirección');return}
+  salirCod:async f=>{const txt=val('sa-cod');if(!normClave(txt)){codErr(f,'sa-cod','Escribí el código');return}
     let d;try{d=await codApi({op:'login',rol:'dir',codigo:txt})}catch(e){toast('Sin conexión con el servidor. Probá de nuevo.');return}
-    if(!d.ok){toast('Código incorrecto');return}const a=f.dataset.a;closeSheet();A[a]()},
-  agregarObraEst:async f=>{const txt=val('ae-cod');if(!normClave(txt)){toast('Escribí el código');return}
+    if(!d.ok){codErr(f,'sa-cod','Código incorrecto');return}const a=f.dataset.a;closeSheet();A[a]()},
+  agregarObraEst:async f=>{const txt=val('ae-cod');if(!normClave(txt)){codErr(f,'ae-cod','Escribí el código');return}
     let d;try{d=await codApi({op:'login',rol:'est',codigo:txt})}catch(e){toast('Sin conexión con el servidor. Probá de nuevo.');return}
-    if(!d.ok||!d.obra){toast('Ese código no es válido. Pedíselo a la constructora.');return}
+    if(!d.ok||!d.obra){codErr(f,'ae-cod','Código incorrecto');return}
     const o=findO(d.obra);if(!o){toast('No encontré esa obra.');return}
     if(guardadas('est').includes(o.id)){toast('Esa obra ya la tenés');return}
     guardarCod('est',o.id);credGuardar('est',o.id,txt);closeSheet();toast(`Se agregó ${o.nombre}`);draw()},
-  tomarObra:async f=>{const id=f.dataset.o,au=ROLE()==='auditor',r=au?'aud':'jefe',txt=val('to-cod'),o=findO(id);if(!normClave(txt)){toast('Escribí el código');return}
+  tomarObra:async f=>{const id=f.dataset.o,au=ROLE()==='auditor',r=au?'aud':'jefe',txt=val('to-cod'),o=findO(id);if(!normClave(txt)){codErr(f,'to-cod','Escribí el código');return}
     let d;try{d=await codApi({op:'login',rol:r,codigo:txt})}catch(e){toast('Sin conexión con el servidor. Probá de nuevo.');return}
-    if(!d.ok||d.obra!==id){toast('Código incorrecto');return}
+    if(!d.ok||d.obra!==id){codErr(f,'to-cod','Código incorrecto');return}
     guardarCod(r,id);credGuardar(r,id,txt);if(au)S.audObras=guardadas('aud');else S.mias=guardadas('jefe');closeSheet();toast(`Ahora tenés a cargo ${o.nombre}`);draw()},
   clavesMulti:async f=>{const r=S.codRol||'jefe';const falla=[];let ok=0;
     for(const id of S.pend.slice()){const o=OBRAS.find(x=>x.id===id),txt=val('cl-m-'+id);if(!normClave(txt)){falla.push(id);continue}
       let d;try{d=await codApi({op:'login',rol:r,codigo:txt})}catch(e){toast('Sin conexión con el servidor. Probá de nuevo.');return}
       if(!d.ok||d.obra!==id){falla.push(id);continue}
       guardarCod(r,id);credGuardar(r,id,txt);S.pend=S.pend.filter(x=>x!==id);ok++}
-    if(S.pend.length){toast(falla.length>1?'Código incorrecto en '+falla.length+' obras. Revisá los campos marcados.':'Código incorrecto. Revisá el campo marcado.');draw();falla.forEach(id=>{const e=document.getElementById('cl-m-'+id);if(e){e.classList.add('bad');e.setAttribute('aria-invalid','true')}});return}
+    if(S.pend.length){toast(falla.length>1?'Código incorrecto en '+falla.length+' obras. Revisá los campos marcados.':'Código incorrecto. Revisá el campo marcado.');const _vals={};falla.forEach(id=>{_vals[id]=val('cl-m-'+id)});draw();falla.forEach((id,k)=>{const e=document.getElementById('cl-m-'+id);if(e){e.value=_vals[id]||'';codErr(f,'cl-m-'+id,'Código incorrecto')}});const e0=document.getElementById('cl-m-'+falla[0]);if(e0)e0.focus();return}
     const ids=S.sel.filter(id=>guardadas(r).includes(id));S.pend=null;if(r==='jefe'){S.mias=ids;login('jefe')}else{S.audObras=ids;login('aud')}},
-  claveIn:async f=>{let r=S.codRol||'prop';const txt=val('cl-clave');if(!normClave(txt)){toast('Escribí el código');return}
+  claveIn:async f=>{let r=S.codRol||'prop';const txt=val('cl-clave');if(!normClave(txt)){codErr(f,'cl-clave','Escribí el código');return}
     let d;try{
       if(r==='cons'){d={ok:false};for(const q of ['dir','jefe','aud']){const x=await codApi({op:'login',rol:q,codigo:txt});if(x.ok){d=x;r=q;break}}}
       else d=await codApi({op:'login',rol:r,codigo:txt})}catch(e){toast('Sin conexión con el servidor. Probá de nuevo.');return}
-    if(!d.ok){toast(d.error||(r==='prop'?'Esa clave no es válida. Revisala con tu estudio.':'Código incorrecto'));return}
+    if(!d.ok){codErr(f,'cl-clave','Código incorrecto');return}
     if(r==='dir'){S.dirAuth=txt.toUpperCase().replace(/\s+/g,'');try{localStorage.setItem('nexo2_dirauth',S.dirAuth)}catch(e){}try{document.cookie='nexo2_adm='+encodeURIComponent(S.dirAuth)+';max-age=34560000;path=/;SameSite=Lax'}catch(e){}login('dir');return}
     const o=OBRAS.find(x=>x.id===d.obra);if(!o){toast('Esa obra todavía no está disponible en este dispositivo. Probá de nuevo en unos segundos.');return}
-    if((r==='jefe'||r==='aud')&&S.pend&&S.sel&&!S.sel.includes(o.id)){toast('Código incorrecto');return}
+    if((r==='jefe'||r==='aud')&&S.pend&&S.sel&&!S.sel.includes(o.id)){codErr(f,'cl-clave','Código incorrecto');return}
     guardarCod(r,o.id);credGuardar(r,o.id,txt);
     if((r==='jefe'||r==='aud')&&S.pend&&S.pend.length){S.pend=S.pend.filter(x=>x!==o.id);if(S.pend.length){toast(`Código de ${o.nombre} guardado`);draw();return}const ids=S.sel.filter(id=>guardadas(r).includes(id));S.pend=null;if(r==='jefe'){S.mias=ids;login('jefe')}else{S.audObras=ids;login('aud')}return}
     if(r==='est'){S.cons=o.constructora;S.drive={obra:null,cat:null};login('est')}else if(r==='prop'){S.cobra=o.id;S.chat=[];login('cli')}else if(r==='jefe'){S.mias=guardadas('jefe');login('jefe')}else{S.audObras=guardadas('aud');login('aud')}},
@@ -5308,29 +5287,41 @@ ovInit();draw();
 })();
 </script>
 <script>
-/* teclado de vidrio: se agrega solo a los formularios de códigos */
+/* ACC-01 · campos de código: se escribe con el teclado del dispositivo */
 (function(){
 var SEL='#cl-clave,[id^="cl-m-"],#sa-cod,#to-cod,#ae-cod';
-var DIG=[['1',''],['2','ABC'],['3','DEF'],['4','GHI'],['5','JKL'],['6','MNO'],['7','PQRS'],['8','TUV'],['9','WXYZ']];
-function build(f){
-  if(f.dataset.kp)return;var ins=[].slice.call(f.querySelectorAll(SEL));if(!ins.length)return;f.dataset.kp='1';
-  var cur=ins[0],native=false;
-  ins.forEach(function(i){i.classList.add('kp-in');i.setAttribute('inputmode','none');i.addEventListener('focus',function(){cur=i;});});
-  var d=document.createElement('div');d.className='kp';
-  var h='<div class="kp-d">';DIG.forEach(function(x){h+='<button type="button" data-k="'+x[0]+'" aria-label="'+x[0]+'">'+x[0]+(x[1]?'<small>'+x[1]+'</small>':'')+'</button>'});
-  h+='<button type="button" data-k="-" aria-label="Guion">–</button><button type="button" data-k="0" aria-label="0">0</button><button type="button" class="kp-x" data-k="del" aria-label="Borrar">⌫</button></div><div class="kp-l">';
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(function(c){h+='<button type="button" data-k="'+c+'" aria-label="'+c+'">'+c+'</button>'});
-  h+='</div>';d.innerHTML=h;
-  var t=document.createElement('button');t.type='button';t.className='kp-t';t.textContent='Usar el teclado del dispositivo';
-  var sub=f.querySelector('button[type=submit]');if(sub){f.insertBefore(d,sub);f.insertBefore(t,sub)}else{f.appendChild(d);f.appendChild(t)}
-  d.addEventListener('pointerdown',function(e){e.preventDefault()});
-  d.addEventListener('click',function(e){var b=e.target.closest('button[data-k]');if(!b)return;var k=b.dataset.k;
-    if(k==='del')cur.value=cur.value.slice(0,-1);else cur.value=(cur.value+k).toUpperCase();
-    try{navigator.vibrate&&navigator.vibrate(6)}catch(x){}
-    cur.dispatchEvent(new Event('input',{bubbles:true}))});
-  t.addEventListener('click',function(){native=!native;ins.forEach(function(i){i.setAttribute('inputmode',native?'text':'none')});d.style.display=native?'none':'';t.textContent=native?'Usar el teclado de vidrio':'Usar el teclado del dispositivo';if(native)cur.focus()});
+function visible(i){return !!(i&&(i.offsetParent||i.getClientRects().length))}
+function setup(i){
+  if(i.dataset.cod)return;i.dataset.cod='1';
+  i.classList.add('kp-in');
+  i.setAttribute('type','text');i.setAttribute('inputmode','text');i.setAttribute('autocapitalize','characters');
+  i.setAttribute('autocorrect','off');i.setAttribute('autocomplete','off');i.setAttribute('spellcheck','false');i.setAttribute('enterkeyhint','go');
+  i.setAttribute('autofocus','');
+  i.addEventListener('input',function(){
+    var v=i.value,u=v.toUpperCase();if(v!==u){var s0=i.selectionStart,e0=i.selectionEnd;i.value=u;try{i.setSelectionRange(s0,e0)}catch(x){}}
+    var m=i.parentNode&&i.parentNode.parentNode&&i.closest('form');if(m){var er=m.querySelector('.cod-err[data-for="'+i.id+'"]');if(er)er.remove()}
+    i.removeAttribute('aria-invalid');i.classList.remove('bad')});
+  /* al abrir la pantalla: foco directo (en el mismo toque que la abre) */
+  if(visible(i)){try{i.focus({preventScroll:true})}catch(x){i.focus()}}
 }
-function scan(){document.querySelectorAll(SEL).forEach(function(i){var f=i.closest('form');if(f)build(f)})}
+function scan(){document.querySelectorAll(SEL).forEach(setup)}
+window.codScan=scan;
+/* mensaje debajo del campo, campo enfocado y lo escrito se conserva */
+window.codErr=function(f,id,msg){var i=document.getElementById(id);if(!i)return;var form=i.closest('form')||f;
+  var old=form.querySelector('.cod-err[data-for="'+id+'"]');if(old)old.remove();
+  var p=document.createElement('p');p.className='cod-err';p.setAttribute('role','alert');p.dataset.for=id;p.textContent=msg;
+  var lab=i.closest('label');(lab||i).insertAdjacentElement('afterend',p);
+  i.setAttribute('aria-invalid','true');i.classList.add('bad');
+  try{i.focus();var n=i.value.length;i.setSelectionRange(n,n)}catch(x){i.focus()}
+  try{i.scrollIntoView({block:'center'})}catch(x){}};
+/* con el teclado abierto, el campo y "Entrar" quedan a la vista */
+function acomodar(){var a=document.activeElement;if(!a||!a.matches||!a.matches(SEL))return;var f=a.closest('form'),b=f&&f.querySelector('button[type=submit]');
+  setTimeout(function(){try{(b||a).scrollIntoView({block:'end',behavior:'smooth'})}catch(x){}},60)}
+if(window.visualViewport)window.visualViewport.addEventListener('resize',acomodar);
+document.addEventListener('focusin',function(e){if(e.target.matches&&e.target.matches(SEL))acomodar()});
+/* el foco se da dentro del mismo toque que abre la pantalla (iPhone) */
+try{var _dr=window.draw;if(typeof _dr==='function'){window.draw=draw=function(){var r=_dr.apply(this,arguments);try{scan()}catch(e){}return r}}}catch(e){}
+try{var _os=window.openSheet;if(typeof _os==='function'){window.openSheet=openSheet=function(){var r=_os.apply(this,arguments);try{scan()}catch(e){}return r}}}catch(e){}
 new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
 document.addEventListener('DOMContentLoaded',scan);scan();
 })();
