@@ -1223,6 +1223,11 @@ main{padding-left:6px!important;padding-right:14px!important}
 .gl{display:grid;grid-template-columns:minmax(0,1fr) 120px 70px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
 .gl select,.gl input{width:100%}.gl .nm{font-weight:600}.gl small{display:block;opacity:.7;font-weight:400}
 .est-c{color:#4a86d8}.est-t{color:#2fa86b}.est-p{opacity:.75}
+.pr{display:grid;grid-template-columns:minmax(0,1.7fr) 112px 132px 132px minmax(0,1fr);gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.pr input,.pr select{width:100%}.pr .nm{font-weight:600}.pr small{display:block;opacity:.7;font-weight:400}.pr.late .nm{color:#e0554a}
+.prg{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin:14px 0 2px;font-weight:700}
+@media(max-width:620px){.pr{grid-template-columns:1fr 1fr}.pr>span:first-child{grid-column:1/-1}.pr>:nth-child(5){grid-column:1/-1}}
+.gt td.b.o i{background:#e0554a}.gt .arr{box-shadow:inset 2px 0 0 #e0554a}
 .hide{display:none}
 section.sec>.card{margin-bottom:12px}
 @media(max-width:620px){table{min-width:0}table tr:first-child{display:none}tr.rb{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 0;border-top:1px solid var(--line);position:relative}tr.rb td{border:0;padding:0}tr.rb td.nn{display:none}tr.rb td.nm{grid-column:1/-1;font-weight:600;padding-right:46px}tr.rb td[data-l]::before{content:attr(data-l);display:block;font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;text-align:left}tr.rb td.tt{grid-column:1/-1;text-align:right}tr.rbi td.nm{order:0}tr.rbi td:nth-child(3){order:1}tr.rbi td.tt{grid-column:auto;order:2;align-self:end}tr.rbi td:nth-child(4){order:3}tr.rbi td:nth-child(5){order:4}tr.rb td.tt::before{text-align:right}tr.rb td:last-child:not([data-l]){position:absolute;right:0;top:10px}}
@@ -1366,6 +1371,53 @@ function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*
  <div class="sub" style="margin-top:8px">Etapas: 1) este edificio como apart-hotel con operador. 2) Más edificios en el mismo fondo con nuevas series. 3) Fondos por categoría: urbano, vacacional, corporativo. 4) Desarrollo propio, con la obra a cargo de Belfast.</div></div>`;
  document.getElementById('f').innerHTML=t}
 
+
+const PRE_T=[
+['Lote y propietarios','Primera reunión con los propietarios del lote',0,.05,'Sebastián'],
+['Lote y propietarios','Estudio de títulos y dominio del lote (escribano)',0,.2,'Escribano'],
+['Lote y propietarios','Informes de dominio, inhibiciones y deudas (Registro de la Propiedad, ABL, servicios)',.05,.2,'Escribano'],
+['Lote y propietarios','Negociar condiciones con los propietarios: precio, canje por unidades o pago',.05,.3,'Sebastián'],
+['Lote y propietarios','Firmar carta de intención o boleto de reserva del lote',.25,.35,'Sebastián / propietarios'],
+['Lote y propietarios','Firmar el acuerdo definitivo con los propietarios (convenio de aporte o permuta)',.3,.5,'Abogado'],
+['Fideicomiso y estructura legal','Definir la estructura: fideicomiso inmobiliario, al costo o de administración',.1,.25,'Sebastián / abogado'],
+['Fideicomiso y estructura legal','Redactar el contrato de fideicomiso',.2,.45,'Abogado'],
+['Fideicomiso y estructura legal','Firmar el contrato de fideicomiso, tramitar CUIT y abrir cuenta bancaria',.45,.6,'Abogado'],
+['Fideicomiso y estructura legal','Escritura del lote al fideicomiso',.5,.65,'Escribano'],
+['Fideicomiso y estructura legal','Contratos con Belfast (obra), estudio y gerenciamiento',.4,.6,'Sebastián / Belfast'],
+['Proyecto y permisos','Consulta de factibilidad y certificado de uso del lote',0,.15,'Arquitecto'],
+['Proyecto y permisos','Verificar si el lote está en Área de Protección Histórica (APH) y sus requisitos',.05,.25,'Arquitecto'],
+['Proyecto y permisos','Estudio de suelos',.2,.35,'Belfast'],
+['Proyecto y permisos','Proyecto ejecutivo de arquitectura, estructura e instalaciones',.15,.6,'Estudio'],
+['Proyecto y permisos','Permiso de demolición',.3,.6,'Arquitecto / gestor'],
+['Proyecto y permisos','Permiso de obra nueva',.35,.8,'Arquitecto / gestor'],
+['Proyecto y permisos','Cálculo y pago de la plusvalía urbana',.7,.85,'Arquitecto / contador'],
+['Proyecto y permisos','Seguros de obra, ART y cartel de obra',.7,.9,'Belfast'],
+['Ventas y financiamiento','Reglamento de copropiedad y planos de propiedad horizontal',.4,.75,'Escribano / arquitecto'],
+['Ventas y financiamiento','Lista de precios, boleto de compraventa y material de venta',.35,.6,'Sebastián'],
+['Ventas y financiamiento','Lanzamiento de ventas en pozo y primeras reservas',.6,.8,'Sebastián'],
+['Preparación de obra','Cerrar el contrato de obra con Belfast',.5,.7,'Sebastián / Belfast'],
+['Preparación de obra','Cerrar proveedores clave: hormigón y acero',.7,.9,'Belfast'],
+['Preparación de obra','Instalar obrador, cercado y servicios provisorios',.9,1,'Belfast'],
+['Preparación de obra','Primer día de obra',1,1,'Belfast']];
+const isoD=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const dP=s=>{const [y,m,d]=String(s||'').split('-').map(Number);return new Date(y||2026,(m||1)-1,d||1,12)};
+function preSeed(h,arr){const a=dP(h).getTime(),b=dP(arr).getTime(),W=Math.max(7*864e5,b-a);return PRE_T.map(([g,n,fs,fe,r])=>({g,n,s:isoD(new Date(a+W*fs)),e:isoD(new Date(a+W*fe)),r,es:'p'}))}
+function preInit(o){if(!o.pre){const t0=new Date();t0.setHours(12,0,0,0);let a=new Date(t0.getTime()+180*864e5);while(a.getDay()!==1)a=new Date(a.getTime()+864e5);const arr=isoD(a);o.pre={arr,t:preSeed(isoD(t0),arr)}}return o.pre}
+function renderPre(o){const P=preInit(o),T=P.t,hoy=new Date();hoy.setHours(12,0,0,0);const H=hoy.getTime(),A=dP(P.arr).getTime(),dias=Math.round((A-H)/864e5);
+ const hechas=T.filter(t=>t.es==='t').length,tarde=T.filter(t=>t.es!=='t'&&dP(t.e).getTime()<H),cur=T.filter(t=>t.es==='c'),prox=T.filter(t=>t.es==='p'&&dP(t.s).getTime()>=H).sort((a,b)=>dP(a.s)-dP(b.s)).slice(0,3);
+ const fe=d=>dP(d).toLocaleDateString('es-AR',{day:'numeric',month:'short'}).replace('.','');
+ const wk=864e5*7,w0=H-((new Date(H).getDay()+6)%7)*864e5,nw=Math.max(4,Math.min(60,Math.ceil((A-w0)/wk)+1));
+ const late=t=>t.es!=='t'&&dP(t.e).getTime()<H;
+ let h=`<div class="card"><b>Etapa previa · de hoy al primer día de obra</b><div class="sub">Todo lo que hay que hacer antes de empezar: propietarios del lote, acuerdos, fideicomiso, permisos y ventas. Las fechas son un modelo inicial: editá cada una según cómo avance.</div>
+ <div class="cfg" style="margin:10px 0"><label class="fld">Fecha de arranque de obra<input type="date" id="parr" value="${esc(P.arr)}"></label></div>
+ <div class="cfk"><div><span>Faltan para el arranque</span><b>${dias>0?dias+' días':'Llegó la fecha'}</b></div><div><span>Tareas terminadas</span><b class="ut-pos">${hechas} de ${T.length}</b></div><div><span>En curso</span><b>${cur.length}</b></div><div><span>Atrasadas</span><b class="${tarde.length?'ut-neg':'ut-pos'}">${tarde.length}</b></div></div>
+ <div class="sub" style="margin-top:8px">Al cambiar la fecha de arranque, el Cash Flow y el cronograma de obra empiezan en ese mes. <button class="btn ghost sm" id="prereset" style="margin-left:6px">Recalcular fechas</button></div></div>
+ ${(cur.length||tarde.length||prox.length)?`<div class="card"><b>Para tener en cuenta ahora</b>${tarde.map(t=>`<div class="row"><span class="ut-neg">${esc(t.n)}</span><b class="ut-neg">venció el ${fe(t.e)}</b></div>`).join('')}${cur.filter(t=>!late(t)).map(t=>`<div class="row"><span>${esc(t.n)}</span><b class="est-c">en curso · hasta ${fe(t.e)}</b></div>`).join('')}${prox.map(t=>`<div class="row"><span>${esc(t.n)}</span><b>arranca el ${fe(t.s)}</b></div>`).join('')}</div>`:''}
+ <div class="card"><b>Diagrama semanal hasta el arranque</b><div class="sub">Naranja pendiente, azul en curso, verde terminada, rojo atrasada. La línea roja marca el arranque de obra.</div><div class="cfw" style="max-height:70vh"><table class="gt"><thead><tr><th>Tarea</th>${Array.from({length:nw},(_,k)=>{const d=new Date(w0+k*wk);return `<th class="${A>=w0+k*wk&&A<w0+(k+1)*wk?'arr':''}">${d.getDate()}<br><span style="font-weight:400;opacity:.7;font-size:10px">${d.toLocaleDateString('es-AR',{month:'short'}).replace('.','')}</span></th>`}).join('')}</tr></thead><tbody>${T.map(t=>{const s=dP(t.s).getTime(),e=dP(t.e).getTime(),cl=late(t)?'o':t.es;return `<tr><td title="${esc(t.n)}">${esc(t.n)}</td>${Array.from({length:nw},(_,k)=>{const a0=w0+k*wk,a1=a0+wk,on=e>=a0&&s<a1;const st=on&&s>=a0,en=on&&e<a1;return `<td class="${on?'b '+cl+(st?' s':'')+(en?' e':''):''} ${A>=a0&&A<a1?'arr':''}">${on?'<i></i>':''}</td>`}).join('')}</tr>`}).join('')}</tbody></table></div></div>`;
+ let g0='';h+=`<div class="card"><b>Tareas, fechas y responsables</b>`;
+ T.forEach((t,i)=>{if(t.g!==g0){g0=t.g;h+=`<div class="prg">${esc(g0)}</div><div class="pr cfh"><span>Tarea</span><span>Estado</span><span>Desde</span><span>Hasta</span><span>Responsable</span></div>`}
+  h+=`<div class="pr ${late(t)?'late':''}"><span class="nm">${esc(t.n)}</span><select data-pes="${i}"><option value="p" ${t.es==='p'?'selected':''}>Pendiente</option><option value="c" ${t.es==='c'?'selected':''}>En curso</option><option value="t" ${t.es==='t'?'selected':''}>Terminada</option></select><input type="date" data-pd="${i}.s" value="${esc(t.s)}"><input type="date" data-pd="${i}.e" value="${esc(t.e)}"><input class="t" data-p="pre.t.${i}.r" data-s value="${esc(t.r||'')}" placeholder="Responsable"></div>`});
+ h+=`<div class="sub" style="margin-top:10px">Los pasos legales, de permisos y de impuestos conviene validarlos con tu abogado, escribano y arquitecto antes de fijar las fechas.</div></div>`;return h}
 function renderCG(o){const c=cfInit(o),n=c.n,now=new Date(),[y,m]=c.ini.split('-').map(Number),mi=(now.getFullYear()*12+now.getMonth())-(y*12+m-1);
  const items=o.rub.map((x,i)=>({n:x.n,s:c.v[i][0],e:c.v[i][1],es:c.es[i]||'p',av:c.av[i]||0,k:'r'+i}));items.push({n:'Interiorismo y equipamiento',s:c.it[0],e:c.it[1],es:c.esI||'p',av:c.avI||0,k:'I'});
  const nm={p:'Pendiente',c:'En curso',t:'Terminada'};
@@ -1378,7 +1430,7 @@ function renderCG(o){const c=cfInit(o),n=c.n,now=new Date(),[y,m]=c.ini.split('-
  ${prox.length?`<div class="sub" style="margin-top:10px"><b>Próximos 3 meses</b></div>`+prox.map(t=>`<div class="row"><span>${esc(t.n)}</span><b>arranca mes ${t.s} · ${cfMes(c,t.s-1)}</b></div>`).join(''):''}</div>
  <div class="card"><b>Diagrama de barras</b><div class="sub">Naranja pendiente, azul en curso, verde terminada. La línea roja marca el mes actual.</div><div class="cfw" style="max-height:70vh"><table class="gt"><thead><tr><th>Tarea</th>${Array.from({length:n},(_,k)=>`<th class="${k===mi?'hoy':''}">${k+1}<br><span style="font-weight:400;opacity:.7;font-size:10px">${cfMes(c,k)}</span></th>`).join('')}</tr></thead><tbody>${items.map(t=>`<tr><td title="${esc(t.n)}">${esc(t.n)}</td>${Array.from({length:n},(_,k)=>{const on=k+1>=t.s&&k+1<=t.e;return `<td class="${on?'b '+t.es+(k+1===t.s?' s':'')+(k+1===t.e?' e':''):''} ${k===mi?'hoy':''}">${on?'<i></i>':''}</td>`}).join('')}</tr>`).join('')}</tbody></table></div></div>
  <div class="card"><b>Estado y avance de cada tarea</b><div class="gl cfh"><span>Tarea</span><span>Estado</span><span>Avance %</span></div>${items.map(t=>`<div class="gl"><span class="nm">${esc(t.n)}<small>mes ${t.s} a ${t.e}</small></span><select data-es="${t.k}"><option value="p" ${t.es==='p'?'selected':''}>Pendiente</option><option value="c" ${t.es==='c'?'selected':''}>En curso</option><option value="t" ${t.es==='t'?'selected':''}>Terminada</option></select>${t.k==='I'?inp(t.av,'cf.avI',0):inp(t.av,'cf.av.'+t.k.slice(1),0)}</div>`).join('')}</div>`;
- document.getElementById('g').innerHTML=h}
+ document.getElementById('g').innerHTML=renderPre(o)+`<div class="card"><b style="font-size:18px">Etapa de obra</b><div class="sub">Desde el primer día de obra hasta la entrega.</div></div>`+h}
 function setPath(p,v){const k=p.split('.');let t=O();for(let i=0;i<k.length-1;i++)t=t[k[i]];t[k[k.length-1]]=v}
 function render(){const o=O();document.getElementById('tit').textContent=o.nombre;document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}).replace(/[.,]/g,'');
  const sel=document.getElementById('obra');sel.innerHTML=DB.obras.map((x,i)=>`<option value="${i}" ${i==DB.act?'selected':''}>${esc(x.nombre)}</option>`).join('');
@@ -1437,8 +1489,12 @@ document.addEventListener('input',e=>{const t=e.target,p=t.dataset&&t.dataset.p;
 document.addEventListener('click',e=>{const t=e.target.closest('button')||e.target;
  if(t.dataset.t){document.querySelectorAll('.bottom button').forEach(b=>b===t?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));['h','p','i','d','c','f','g'].forEach(k=>document.getElementById(k).classList.toggle('hide',k!==t.dataset.t));document.getElementById('tools0').classList.toggle('hide',!['p','i'].includes(t.dataset.t));window.scrollTo(0,0)}
  if(t.dataset.del!==undefined){if(confirm('¿Eliminar este rubro?')){O().rub.splice(+t.dataset.del,1);save();render()}}
+ if(t.id==='prereset'){if(confirm('¿Recalcular todas las fechas de la etapa previa desde hoy hasta el arranque? Se pierden las fechas que cambiaste.')){const P=preInit(O());const t0=new Date();t0.setHours(12,0,0,0);P.t=preSeed(isoD(t0),P.arr).map((n,i)=>({...n,es:(P.t[i]||{}).es||'p',r:(P.t[i]||{}).r||n.r}));save();render()}}
  if(t.id==='addr'){O().rub.push({n:'Nuevo rubro',m:0,e:0});save();render()}});
-document.addEventListener('change',e=>{const t=e.target;if(t.id==='cfini'&&t.value){cfInit(O()).ini=t.value;save();render()}if(t.dataset&&t.dataset.es){const c=cfInit(O()),k=t.dataset.es;if(k==='I'){c.esI=t.value;if(t.value==='t')c.avI=100}else{const i=+k.slice(1);c.es[i]=t.value;if(t.value==='t')c.av[i]=100}save();render()}if(t.id==='hmodo'){hotInit(O()).modo=t.value;save();render()}if(t.id==='cfcurva'){cfInit(O()).curva=t.value;save();render()}});
+document.addEventListener('change',e=>{const t=e.target;if(t.id==='cfini'&&t.value){cfInit(O()).ini=t.value;save();render()}if(t.id==='parr'&&t.value){const O2=O(),P=preInit(O2);P.arr=t.value;cfInit(O2).ini=t.value.slice(0,7);save();render()}
+ if(t.dataset&&t.dataset.pes!==undefined){preInit(O()).t[+t.dataset.pes].es=t.value;save();render()}
+ if(t.dataset&&t.dataset.pd){const [i,k]=t.dataset.pd.split('.'),x=preInit(O()).t[+i];if(t.value){x[k]=t.value;if(x.e<x.s){if(k==='s')x.e=x.s;else x.s=x.e}}save();render()}
+ if(t.dataset&&t.dataset.es){const c=cfInit(O()),k=t.dataset.es;if(k==='I'){c.esI=t.value;if(t.value==='t')c.avI=100}else{const i=+k.slice(1);c.es[i]=t.value;if(t.value==='t')c.av[i]=100}save();render()}if(t.id==='hmodo'){hotInit(O()).modo=t.value;save();render()}if(t.id==='cfcurva'){cfInit(O()).curva=t.value;save();render()}});
 document.getElementById('obra').onchange=e=>{DB.act=+e.target.value;save();render()};
 
 document.getElementById('imp').onclick=()=>{document.querySelectorAll('section').forEach(s=>s.classList.remove('hide'));window.print();document.querySelectorAll('.bottom button[data-t=h]').forEach(b=>b.click())};
