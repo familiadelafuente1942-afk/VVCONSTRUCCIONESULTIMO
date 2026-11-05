@@ -2241,11 +2241,27 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
       <div style={{ fontFamily: T.serif, fontSize: 38, fontWeight: 700, color: colorEmpresa, marginTop: 2 }}>${(en.totalEmpresa || 0).toLocaleString("es-AR")}</div>
       <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Cobrado − Pagos al personal − Gastos{cerrado ? " (cerrado el " + new Date(cerrado.ts || Date.now()).toLocaleDateString("es-AR") + ")" : ""}</div>
 
-      <div style={{ marginTop: 12, background: T.bg, border: `1px solid ${colorRes}`, borderRadius: 10, padding: "10px 12px" }}>
-        <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Total a hoy de la empresa</div>
-        <div style={{ fontFamily: T.serif, fontSize: 26, fontWeight: 700, color: colorRes, marginTop: 2 }}>{disponibleSeb < 0 ? "−" : ""}${Math.abs(disponibleSeb).toLocaleString("es-AR")}</div>
-        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{remanente > 0 ? `Lo que quedó del mes anterior ($${remanente.toLocaleString("es-AR")}) + cobrado − pagos − gastos de ${nombreMes}` : `Cobrado − pagos − gastos de ${nombreMes}`}</div>
-      </div>
+      {(() => {
+        const money = n => "$" + Math.abs(n || 0).toLocaleString("es-AR");
+        const subtotal = remanente + (en.cobrado || 0);
+        const menos = (en.gastos || 0) + (en.pagado || 0);
+        const fila = (txt, val, neg, bold) => (<div style={{ display: "flex", justifyContent: "space-between", fontSize: bold ? 13 : 12, fontWeight: bold ? 700 : 500, color: bold ? T.text : T.sub, padding: "2px 0" }}><span>{txt}</span><span>{neg ? "− " : ""}{money(val)}</span></div>);
+        return (<div style={{ marginTop: 12, background: T.bg, border: `1px solid ${colorRes}`, borderRadius: 10, padding: "10px 12px" }}>
+          <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Total a hoy de la empresa</div>
+          {fila("Saldo anterior", remanente)}
+          {fila("Cobrado", en.cobrado)}
+          {fila("Total", subtotal, false, true)}
+          <div style={{ fontSize: 10.5, color: T.muted, fontWeight: 700, textTransform: "uppercase", margin: "6px 0 2px" }}>Menos</div>
+          {fila("Gastos", en.gastos, true)}
+          {(en.valentina || 0) > 0 && fila("Valentina", en.valentina, true)}
+          {(en.valeria || 0) > 0 && fila("Valeria", en.valeria, true)}
+          {(en.pagosPersonal || 0) > 0 && fila("Pagos al personal", en.pagosPersonal, true)}
+          {(en.terralagos || 0) > 0 && fila("Invertido en Terralagos", en.terralagos, true)}
+          {fila("Total", menos, true, true)}
+          <div style={{ height: 1, background: T.border, margin: "6px 0" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 700 }}>{money(subtotal)} − {money(menos)}</span><span style={{ fontFamily: T.serif, fontSize: 26, fontWeight: 700, color: colorRes }}>{disponibleSeb < 0 ? "−" : ""}{money(disponibleSeb)}</span></div>
+        </div>);
+      })()}
 
       <div style={{ height: 1, background: T.border, margin: "14px 0" }} />
 
