@@ -1274,7 +1274,7 @@ let DB;try{DB=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
 if(!DB||!DB.obras){const a=clone(SEED);a.nombre='Paseo Colón 735 · San Telmo';DB={act:0,obras:[a]}}
 DB.obras=DB.obras.filter(x=>!['Villa Crespo','Conesa 2881'].includes(x.nombre)||x.rub.some(r=>r.m||r.e));if(DB.act>=DB.obras.length)DB.act=0;
 const O=()=>DB.obras[DB.act];
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(DB));document.getElementById('guard').textContent='Guardado '+new Date().toLocaleTimeString('es-AR')}catch(e){}};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(DB));document.getElementById('guard').textContent='Guardado '+new Date().toLocaleTimeString('es-AR')}catch(e){try{document.getElementById('guard').textContent='No se pudo guardar en este navegador: salí del modo privado'}catch(x){}}};
 const f0=n=>Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
 const f2=n=>{const [a,b]=(Math.round(n*100)/100).toFixed(2).split('.');return a.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+b};
 const ars=n=>'$ '+f2(n),usd=n=>'U$s '+f2(n);
@@ -1503,8 +1503,13 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  ${[['Planos de arquitectura','planos-paseo-colon-735'],['Presentación comercial','presentacion-comercial']].map(([n,f])=>`<div class="row"><span>${n}</span><span style="display:flex;gap:8px"><a class="btn sm" href="/docs/paseo-colon/${f}.pdf" target="_blank" rel="noopener">Ver</a><a class="btn sm" href="/docs/paseo-colon/${f}.pdf" download>Descargar PDF</a></span></div>`).join('')}</div>`}
 document.addEventListener('input',e=>{const t=e.target,p=t.dataset&&t.dataset.p;if(!p)return;
  if(t.dataset.s!==undefined){setPath(p,t.value);save();return}
- const pos=t.selectionStart,len=t.value.length;let raw=t.value.replace(/[^\d,]/g,'');const parts=raw.split(',');let ent=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');t.value=parts.length>1?ent+','+parts[1].slice(0,2):ent;
- setPath(p,parse(t.value));save();clearTimeout(window._r);window._r=setTimeout(()=>{const a=document.activeElement,k=a&&a.dataset&&a.dataset.p,s=a&&a.selectionStart;render();if(k){const n=document.querySelector(`[data-p="${k}"]`);if(n){n.focus();try{n.setSelectionRange(n.value.length,n.value.length)}catch(e){}}}},600)});
+ const pos=t.selectionStart==null?t.value.length:t.selectionStart,antes=t.value.slice(0,pos).replace(/[^\d,]/g,'').length;
+ let raw=t.value.replace(/[^\d,]/g,'');const parts=raw.split(',');let ent=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');t.value=parts.length>1?ent+','+parts.slice(1).join('').slice(0,2):ent;
+ let np=t.value.length;if(antes===0)np=0;else{let n=0;for(let i=0;i<t.value.length;i++){if(/[\d,]/.test(t.value[i]))n++;if(n===antes){np=i+1;break}}}
+ try{t.setSelectionRange(np,np)}catch(x){}
+ setPath(p,parse(t.value));save();window._dirty=1});
+/* los totales se recalculan al salir del campo: reconstruir la pantalla mientras se escribe borraba lo tipeado y cerraba el teclado */
+document.addEventListener('focusout',e=>{if(!window._dirty)return;setTimeout(()=>{const a=document.activeElement;if(window._dirty&&!(a&&a.dataset&&a.dataset.p)){window._dirty=0;render()}},250)});
 document.addEventListener('click',e=>{const t=e.target.closest('button')||e.target;
  if(t.dataset.t){document.querySelectorAll('.bottom button').forEach(b=>b===t?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));['h','p','i','d','c','f','g'].forEach(k=>document.getElementById(k).classList.toggle('hide',k!==t.dataset.t));document.getElementById('tools0').classList.toggle('hide',!['p','i'].includes(t.dataset.t));window.scrollTo(0,0)}
  if(t.dataset.del!==undefined){if(confirm('¿Eliminar este rubro?')){O().rub.splice(+t.dataset.del,1);save();render()}}
