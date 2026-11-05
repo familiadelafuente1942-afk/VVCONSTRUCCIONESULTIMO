@@ -1243,18 +1243,20 @@ section.sec>.card{margin-bottom:12px}
 .gt tr.done td:first-child{color:#2fa86b;font-weight:600;box-shadow:inset 3px 0 0 #2fa86b}
 
 /* portada: de a dos fotos por tipo; el cerco solo y grande */
-.hero .slides .sl figure{overflow:hidden;background:#111}
-.hero .slides .sl.pair figure::before,.hero .slides .sl.sing figure::before{content:'';position:absolute;inset:-30px;background:var(--bg) center/cover;filter:blur(26px) brightness(.45);z-index:0}
-.hero .slides .sl figure img{z-index:1}
-.hero .slides .sl{position:absolute;inset:0;opacity:0;transition:opacity 1s ease;display:flex;gap:6px;background:#000;pointer-events:none}
+.hero .slides .sl{position:absolute;inset:0;opacity:0;transition:opacity 1s ease;display:flex;align-items:center;justify-content:center;gap:6px;background:#000;pointer-events:none}
 .hero .slides .sl.on{opacity:1;pointer-events:auto}
-.hero .slides .sl figure{flex:1;margin:0;position:relative;min-width:0;min-height:0}
-.hero .slides .sl img{position:absolute!important;inset:0;width:100%!important;height:100%!important;object-fit:contain!important;opacity:1!important;background:transparent!important}
-.hero .slides .sl.solo:not(.sing) img{object-fit:cover!important;object-position:50% 75%}
+.hero .slides .sl figure{margin:0;position:relative;min-width:0;min-height:0;overflow:hidden;background:#111;flex:1;height:100%}
+.hero .slides .sl.pair figure{flex:0 0 calc(50% - 3px);height:auto;aspect-ratio:16/10;max-height:100%}
+.hero .slides .sl img{position:absolute!important;inset:0;width:100%!important;height:100%!important;object-fit:cover!important;object-position:50% 40%;opacity:1!important;background:transparent!important;z-index:1}
+.hero .slides .sl figure.ctn img{object-fit:contain!important}
+.hero .slides .sl figure.ctn::before{content:'';position:absolute;inset:-30px;background:var(--bg) center/cover;filter:blur(26px) brightness(.45)}
+.hero .slides .sl.solo:not(.sing) img{object-position:50% 75%}
 .hero .slides .sl figcaption{position:absolute;left:8px;top:8px;z-index:2;background:rgba(0,0,0,.62);color:#e6c88f;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:4px 8px;border-radius:6px;font-weight:600}
 .hero .slides .sl.solo:not(.sing) figcaption{display:none}
 .hero.pair .hshade,.hero.pair .hcap{display:none}
-@media(max-width:620px){.hero{aspect-ratio:3/4!important}.hero .slides .sl.pair{flex-direction:column}}
+.hero .dots{z-index:6}.hero .dots button{width:11px;height:11px;cursor:pointer;box-shadow:0 0 0 6px transparent}.hero .dots button.on{width:26px}
+.hero .nv{position:absolute;top:50%;transform:translateY(-50%);z-index:6;width:40px;height:40px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:26px;line-height:1;cursor:pointer}.hero .prv{left:10px}.hero .nxt{right:10px}
+@media(max-width:620px){.hero{aspect-ratio:3/4!important}.hero .slides .sl.pair{flex-direction:column}.hero .slides .sl.pair figure{flex:0 0 auto;width:100%;max-height:none}}
 </style><script>/* tema claro/oscuro: se aplica antes de dibujar para que no parpadee */
 (function(){var K='nexo2_tema',mq=window.matchMedia?matchMedia('(prefers-color-scheme: light)'):null;
 function pref(){try{return localStorage.getItem(K)||'auto'}catch(e){return'auto'}}
@@ -1523,7 +1525,7 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  {f:['bano'],l:['Baño'],p:1},
  {f:['planta-a','planta-b'],l:['Planta 3D · Tipo A','Planta 3D · Tipo B']}];
  const fotos=SL;
- document.getElementById('h').innerHTML=`<div class="hero"><div class="slides">${SL.map((x,i)=>`<div class="sl ${i?'':'on'} ${x.f.length>1?'pair':'solo'}${x.p?' sing':''}">${x.f.map((n,j)=>`<figure style="--bg:url(/docs/paseo-colon/img/${n}.jpg?v=3)"><img src="/docs/paseo-colon/img/${n}.jpg?v=3" alt="${x.l[j]}"><figcaption>${x.l[j]}</figcaption></figure>`).join('')}</div>`).join('')}</div><div class="hshade"></div><div class="hcap"><span class="eyebrow" id="cap">${SL[0].l[0]}</span><h1>${esc(o.nombre)}</h1></div><div class="dots">${SL.map((n,i)=>`<button data-sl="${i}" class="${i?'':'on'}" aria-label="Foto ${i+1}"></button>`).join('')}</div></div>
+ document.getElementById('h').innerHTML=`<div class="hero"><div class="slides">${SL.map((x,i)=>`<div class="sl ${i?'':'on'} ${x.f.length>1?'pair':'solo'}${x.p?' sing':''}">${x.f.map((n,j)=>`<figure class="${n==='ext-calle'||x.p?'ctn':''}" style="--bg:url(/docs/paseo-colon/img/${n}.jpg?v=3)"><img src="/docs/paseo-colon/img/${n}.jpg?v=3" alt="${x.l[j]}"><figcaption>${x.l[j]}</figcaption></figure>`).join('')}</div>`).join('')}</div><div class="hshade"></div><div class="hcap"><span class="eyebrow" id="cap">${SL[0].l[0]}</span><h1>${esc(o.nombre)}</h1></div><button class="nv prv" data-nav="-1" aria-label="Anterior">‹</button><button class="nv nxt" data-nav="1" aria-label="Siguiente">›</button><div class="dots">${SL.map((n,i)=>`<button data-sl="${i}" class="${i?'':'on'}" aria-label="Foto ${i+1}"></button>`).join('')}</div></div>
  <div class="card"><b>El proyecto</b><p class="sub" style="margin:6px 0 10px">Edificio de 2 ambientes en San Telmo, esquina Av. Paseo Colón y San Lorenzo.</p>
  <div class="row"><span>Unidades</span><b>39 funcionales de 2 ambientes</b></div>
  <div class="row"><span>m² a construir</span><b>${f0(o.m2c)} m²</b></div>
@@ -1571,7 +1573,7 @@ document.getElementById('csv').onclick=()=>{const o=O(),r=calc(o);let c='N;Rubro
 let _sl=0,_st=null;
 function showSlide(n){const sl=document.querySelectorAll('.slides .sl'),ds=document.querySelectorAll('.dots button');if(!sl.length)return;_sl=(n+sl.length)%sl.length;sl.forEach((x,i)=>x.classList.toggle('on',i===_sl));ds.forEach((x,i)=>x.classList.toggle('on',i===_sl));const h=document.querySelector('.hero');if(h)h.classList.toggle('pair',sl[_sl].classList.contains('pair')||sl[_sl].classList.contains('sing'));const c=document.getElementById('cap'),im=sl[_sl].querySelector('img');if(c&&im)c.textContent=im.alt}
 function startSlides(){clearInterval(_st);_st=setInterval(()=>showSlide(_sl+1),4500);showSlide(0)}
-document.addEventListener('click',e=>{const d=e.target.closest('[data-sl]');if(d){showSlide(+d.dataset.sl);startSlides();showSlide(+d.dataset.sl)}});
+document.addEventListener('click',e=>{const nv=e.target.closest('[data-nav]');if(nv){const t=_sl+ +nv.dataset.nav;startSlides();showSlide(t);return}const d=e.target.closest('[data-sl]');if(d){showSlide(+d.dataset.sl);startSlides();showSlide(+d.dataset.sl)}});
 document.getElementById('refr').onclick=()=>location.reload();
 document.getElementById('tema').onclick=()=>{const c=window.__temaPref?window.__temaPref():'auto',n=document.documentElement.getAttribute('data-tema')==='claro'?'oscuro':'claro';window.__tema(n)};
 function setHH(){const h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px')}
