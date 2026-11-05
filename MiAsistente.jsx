@@ -2253,7 +2253,12 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
         <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Sebastián</div>
           <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: colorRes, marginTop: 3 }}>{disponibleSeb < 0 ? "−" : ""}${Math.abs(disponibleSeb).toLocaleString("es-AR")}</div>
-          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>{remanente > 0 ? <>Quedó del mes anterior ${remanente.toLocaleString("es-AR")}<br /></> : null}{(en.sebastianReparto || 0) < 0 ? "Menos" : "Más"} lo de este mes ${Math.abs(en.sebastianReparto || 0).toLocaleString("es-AR")}</div>
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.55, textAlign: "left", display: "inline-block" }}>
+            {remanente > 0 && <div>Quedó del mes anterior: ${remanente.toLocaleString("es-AR")}</div>}
+            <div>+ Cobrado este mes: ${(en.cobrado || 0).toLocaleString("es-AR")}</div>
+            <div>− Pagos (incluye Valeria y Valentina): ${(en.pagado || 0).toLocaleString("es-AR")}</div>
+            <div>− Gastos: ${(en.gastos || 0).toLocaleString("es-AR")}</div>
+          </div>
         </div>
         <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Valentina</div>
