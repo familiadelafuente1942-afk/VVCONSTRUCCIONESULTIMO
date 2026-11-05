@@ -226,6 +226,7 @@ input,select,textarea{background:var(--bg);color:var(--fg);border:1px solid var(
 .req div{display:flex;gap:8px;align-items:flex-start;font-size:13.5px}
 .req .y{color:var(--verde);font-weight:700;width:16px;flex:none}
 .req .n{color:var(--rojo);font-weight:700;width:16px;flex:none}
+.rubsum{display:flex;align-items:center;gap:10px;cursor:pointer;list-style:none;flex-wrap:wrap}.rubsum::-webkit-details-marker{display:none}.rubsum b{font-size:17px}.rubtot{margin-left:auto;color:var(--muted);font-size:14px}.rubab::after{content:'Abrir ▾';color:var(--gold);font-weight:600;font-size:14px}details[open]>.rubsum .rubab::after{content:'Cerrar ▴'}
 .tri{display:flex;gap:4px;flex:none}
 .tri button{border:1px solid var(--line);background:var(--raise);border-radius:6px;padding:4px 8px;font-size:12px}
 .tri button[aria-pressed=true]{border-color:var(--gold);background:var(--gold-soft);font-weight:600}
@@ -1456,11 +1457,11 @@ function setPath(p,v){const k=p.split('.');let t=O();for(let i=0;i<k.length-1;i+
 function render(){const o=O();document.getElementById('tit').textContent=o.nombre;document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}).replace(/[.,]/g,'');
  const sel=document.getElementById('obra');sel.innerHTML=DB.obras.map((x,i)=>`<option value="${i}" ${i==DB.act?'selected':''}>${esc(x.nombre)}</option>`).join('');
  const r=calc(o);
- let h=`<div class="card"><b>Presupuesto por rubros · ARS</b><div class="sub">Cargá materiales y ejecución en pesos. La cotización convierte solo los totales a U$s.</div>
+ let h=`<div class="card"><details id="rubdet" ${window._rubOpen?'open':''}><summary class="rubsum"><b>Presupuesto por rubros</b><span class="rubtot">${ars(r.c)} · ${usd(o.cot?r.c/o.cot:0)}</span><span class="rubab"></span></summary><div class="sub">Cargá materiales y ejecución en pesos. La cotización convierte solo los totales a U$s.</div>
  <label class="fld" style="margin:10px 0;max-width:280px">Cotización · $ por 1 U$s${inp(o.cot,'cot',1)}</label>
  <div style="overflow:auto"><table><tr><th>N.º</th><th>Rubro</th><th class="r">Materiales</th><th class="r">Ejecución</th><th class="r">Total</th><th></th></tr>`;
  o.rub.forEach((x,i)=>{h+=`<tr class="rb"><td class="nn">${i+1}</td><td class="nm"><input class="t" data-p="rub.${i}.n" data-s value="${esc(x.n)}"></td><td data-l="Materiales">${inp(x.m,`rub.${i}.m`,1,'$')}</td><td data-l="Ejecución">${inp(x.e,`rub.${i}.e`,1,'$')}</td><td class="r num tt" data-l="Total">${ars(x.m+x.e)}${pm(x.m+x.e,o)}</td><td class="noprint"><button class="btn ghost sm x" data-del="${i}">✕</button></td></tr>`});
- h+=`</table></div><div class="row"><span>Total construcción</span><b>${ars(r.c)}${pm(r.c,o)}</b></div><button class="btn sm noprint" id="addr">+ Agregar rubro</button></div>
+ h+=`</table></div><div class="row"><span>Total construcción</span><b>${ars(r.c)}${pm(r.c,o)}</b></div><button class="btn sm noprint" id="addr">+ Agregar rubro</button></details></div>
  <div class="card"><div class="g2"><label class="fld">m² a construir${inp(o.m2c,'m2c')}</label><label class="fld">m² vendibles${inp(o.m2v,'m2v')}</label>
  <label class="fld">Gastos generales · %${inp(o.gg,'gg',1)}</label><label class="fld">Utilidad empresarial · %${inp(o.ut,'ut',1)}</label><label class="fld">Impuestos · %${inp(o.imp,'imp',1)}</label>
  <label class="fld">Costo del lote · U$s${inp(o.lote,'lote',1)}</label><label class="fld">Plusvalía a pagar · U$s${inp(o.plus,'plus',1)}</label><label class="fld">Precio de venta de la zona · U$s/m²${inp(o.zona,'zona',1)}</label></div></div>
@@ -1512,6 +1513,7 @@ document.addEventListener('input',e=>{const t=e.target,p=t.dataset&&t.dataset.p;
  try{t.setSelectionRange(np,np)}catch(x){}
  setPath(p,parse(t.value));save();window._dirty=1});
 /* los totales se recalculan al salir del campo: reconstruir la pantalla mientras se escribe borraba lo tipeado y cerraba el teclado */
+document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='rubdet')window._rubOpen=e.target.open},true);
 document.addEventListener('focusout',e=>{if(!window._dirty)return;setTimeout(()=>{const a=document.activeElement;if(window._dirty&&!(a&&a.dataset&&a.dataset.p)){window._dirty=0;render()}},250)});
 document.addEventListener('click',e=>{const t=e.target.closest('button')||e.target;
  if(t.dataset.t){document.querySelectorAll('.bottom button').forEach(b=>b===t?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));['h','p','i','d','c','f','g'].forEach(k=>document.getElementById(k).classList.toggle('hide',k!==t.dataset.t));document.getElementById('tools0').classList.toggle('hide',!['p','i'].includes(t.dataset.t));window.scrollTo(0,0)}
