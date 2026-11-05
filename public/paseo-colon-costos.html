@@ -1495,7 +1495,7 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  document.getElementById('p').innerHTML=h;
 
  const fotos=['fachada','living','dormitorio','estado-actual'],ep=['Fachada · Av. Paseo Colón','Living comedor','Dormitorio','Estado actual · Paseo Colón y San Lorenzo'];
- document.getElementById('h').innerHTML=`<div class="hero"><div class="slides">${fotos.map((n,i)=>`<img src="/docs/paseo-colon/img/${n}.jpg" alt="${ep[i]}" class="${i?'':'on'}">`).join('')}</div><div class="hshade"></div><div class="hcap"><span class="eyebrow" id="cap">${ep[0]}</span><h1>${esc(o.nombre)}</h1></div><div class="dots">${fotos.map((n,i)=>`<button data-sl="${i}" class="${i?'':'on'}" aria-label="Foto ${i+1}"></button>`).join('')}</div></div>
+ document.getElementById('h').innerHTML=`<div class="hero"><div class="slides">${fotos.map((n,i)=>`<img src="/docs/paseo-colon/img/${n}.jpg" alt="${ep[i]}" class="${i?'':'on'}"${n==='estado-actual'?' style="object-position:42% 25%;transform:scale(1.35);transform-origin:42% 30%"':''}>`).join('')}</div><div class="hshade"></div><div class="hcap"><span class="eyebrow" id="cap">${ep[0]}</span><h1>${esc(o.nombre)}</h1></div><div class="dots">${fotos.map((n,i)=>`<button data-sl="${i}" class="${i?'':'on'}" aria-label="Foto ${i+1}"></button>`).join('')}</div></div>
  <div class="card"><b>El proyecto</b><p class="sub" style="margin:6px 0 10px">Edificio de 2 ambientes en San Telmo, esquina Av. Paseo Colón y San Lorenzo.</p>
  <div class="row"><span>Unidades</span><b>39 funcionales de 2 ambientes</b></div>
  <div class="row"><span>m² a construir</span><b>${f0(o.m2c)} m²</b></div>
