@@ -1466,8 +1466,7 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  <label class="fld">Gastos generales · %${inp(o.gg,'gg',1)}</label><label class="fld">Utilidad empresarial · %${inp(o.ut,'ut',1)}</label><label class="fld">Impuestos · %${inp(o.imp,'imp',1)}</label>
  <label class="fld">Costo del lote · U$s${inp(o.lote,'lote',1)}</label><label class="fld">Plusvalía a pagar · U$s${inp(o.plus,'plus',1)}</label><label class="fld">Precio de venta de la zona · U$s/m²${inp(o.zona,'zona',1)}</label></div></div>
  <div class="card">
- <div class="row big2"><span>Total interiorismo</span>${tri(r.it,o)}</div>
- <div class="row big2"><span>Costo directo · construcción + interiorismo</span>${tri(r.d,o)}</div>
+ <div class="row big2"><span>Costo directo · construcción</span>${tri(r.c,o)}</div>
  <div class="row big2"><span>Gastos generales (${o.gg}%)</span>${tri(r.gg,o)}</div>
  <div class="row big2"><span>Utilidad empresarial (${o.ut}%)</span>${tri(r.ut,o)}</div>
  <div class="row big2"><span>Impuestos (${o.imp}%)</span>${tri(r.im,o)}</div>
@@ -1475,6 +1474,9 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  <div class="row big2"><span>Plusvalía a pagar</span>${tri(o.plus*o.cot,o)}</div>
  <div class="row"><span>Incidencia del lote · U$s/m² vendible</span><b>${usd(r.loteI)} / m²</b></div>
  <div class="row"><span>Incidencia de plusvalía · U$s/m² vendible</span><b>${usd(r.plusI)} / m²</b></div>
+ <div class="row big2"><span>Total interiorismo</span>${tri(r.it,o)}</div>
+ <div class="row big2"><span>Costo directo total · construcción + interiorismo</span>${tri(r.d,o)}</div>
+ <div class="sub">Gastos generales, utilidad e impuestos se calculan sobre el costo directo total (construcción + interiorismo).</div>
  <div class="sub">Lote y plusvalía se convierten a pesos con la cotización y se suman al costo final.</div></div>
  <div class="card"><div class="row big2"><span>Precio final total</span><b class="tri big"><span>${ars(r.tot)}</span><span>${usd(r.totU)}</span><span>${o.m2c?usd(r.totU/o.m2c):'—'} /m² construido</span></b></div>
  <div class="row big2"><span>Costo final por m² vendible</span><b class="tri"><span>${usd(r.pm)} /m² vendible</span><span>${ars(r.pm*o.cot)} /m² vendible</span></b></div>
