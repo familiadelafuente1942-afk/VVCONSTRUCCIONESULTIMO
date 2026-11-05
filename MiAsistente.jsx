@@ -1473,7 +1473,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     {vista === "cobros" && <CobrosBody cobros={cobros} obras={db.obras} filtroObra={filtroObraCobro} setFiltroObra={setFiltroObraCobro} exportar={exportarCobrosExcel} borrar={(id) => persistCobros((cobros || []).filter(c => c.id !== id))} onAdd={cargarCobro} onEditarFecha={(id, fecha) => persistCobros((cobros || []).map(c => c.id === id ? { ...c, fecha } : c))} />}
     {vista === "gastos" && <GastosBody gastos={gastos} onAdd={cargarGasto} exportar={exportarGastosExcel} borrar={(id) => persistGastos((gastos || []).filter(g => g.id !== id))} onFotoTicket={analizarTicket} leyendo={leyendoTicket} />}
     {vista === "caja" && <CajaBody caja={caja} gastos={gastos} pagos={pagos} cobros={cobros} onAdd={cargarCaja} borrar={(id) => persistCaja((caja || []).filter(c => c.id !== id))} marcar={marcarNoCaja} />}
-    {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} exportarPDF={exportarResultadosPDF} />}
+    {vista === "resultados" && <ResultadosBody cobros={cobros} pagos={pagos} gastos={gastos} cierres={cierres} onCerrar={cerrarMes} onReabrir={reabrirMes} exportarPDF={exportarResultadosPDF} onSaldo={(mk, v) => { const n = { ...cierres }; if (v == null) delete n["saldo_" + mk]; else n["saldo_" + mk] = { valor: v, ts: Date.now() }; persistCierres(n); }} />}
     {vista === "proyectos" && <ProyectosBody proyectos={proyectos} sel={proySel} setSel={setProySel} guardar={persistProyectos} hablar={(n) => { setVista("chat"); setInput(`Sobre ${n}: `); }} pasarAObra={(p, obs) => { crearObra({ nombre: p.nombre, estado: "En curso", obs }); persistProyectos(proyRef.current.filter(x => x.id !== p.id)); setProySel(null); setVista("obras"); }} />}
     {vista === "reuniones" && <ReunionesBody proyectos={proyectos} guardarProyectos={persistProyectos} cargarJsPDF={cargarJsPDF} />}
     {vista === "obras" && <ObrasBody obras={db.obras} obraEdit={obraEdit} setObraEdit={setObraEdit} guardar={guardarObra} onNueva={() => setObraEdit({ _new: true, nombre: "", estado: "En curso", avance: 0, direccion: "" })} borrar={borrarObra} onUnificar={unificarObras} />}
@@ -2215,11 +2215,13 @@ function remanenteHasta(mesKey, cobros, pagos, gastos, cierres) {
   const [mm0, yy0] = mesKey.split("/").map(Number); const tope = yy0 * 100 + mm0;
   const previos = mesesResultados(cobros, pagos, gastos).filter(mk => { const [m, y] = mk.split("/").map(Number); return y * 100 + m < tope; }).reverse();
   let carry = 0;
-  previos.forEach(mk => { const en = (cierres || {})[mk] || calcularResultadoMes(mk, cobros, pagos, gastos); carry = Math.max(0, carry + (en.sebastianReparto || 0)); });
+  const ov = (k) => { const o = (cierres || {})["saldo_" + k]; return o && o.valor != null && !isNaN(o.valor) ? Number(o.valor) : null; };
+  if (ov(mesKey) != null) return ov(mesKey);
+  previos.forEach(mk => { if (ov(mk) != null) carry = ov(mk); const en = (cierres || {})[mk] || calcularResultadoMes(mk, cobros, pagos, gastos); carry = Math.max(0, carry + (en.sebastianReparto || 0)); });
   return carry;
 }
 function pct(valor, total) { if (!total) return "0"; return ((valor || 0) / total * 100).toLocaleString("es-AR", { maximumFractionDigits: 1 }); }
-function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, exportarPDF }) {
+function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, exportarPDF, onSaldo }) {
   const mesActual = hoyStr().slice(3);
   const [mesVer, setMesVer] = useState(mesActual);
   const meses = mesesResultados(cobros, pagos, gastos);
@@ -2246,7 +2248,7 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
         const fila = (txt, val, neg, bold) => (<div style={{ display: "flex", justifyContent: "space-between", fontSize: bold ? 13 : 12, fontWeight: bold ? 700 : 500, color: bold ? T.text : T.sub, padding: "2px 0" }}><span>{txt}</span><span>{neg ? "− " : ""}{money(val)}</span></div>);
         return (<div style={{ marginTop: 12, background: T.bg, border: `1px solid ${colorRes}`, borderRadius: 10, padding: "10px 12px" }}>
           <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Total a hoy de la empresa</div>
-          {fila("Saldo anterior", remanente)}
+          <div onClick={() => { if (!onSaldo) return; const t = window.prompt(`Saldo anterior de ${nombreMes} (solo números; 0 si ya se gastó; vacío = volver al cálculo automático)`, String(remanente)); if (t === null) return; const lim = t.replace(/[^\d-]/g, ""); onSaldo(mesVer, lim === "" ? null : parseInt(lim, 10)); }} style={{ cursor: "pointer" }}>{fila("Saldo anterior ✎" + ((cierres || {})["saldo_" + mesVer] ? " (ajustado)" : ""), remanente)}</div>
           {fila("Cobrado", en.cobrado)}
           {fila("Total", subtotal, false, true)}
           <div style={{ fontSize: 10.5, color: T.muted, fontWeight: 700, textTransform: "uppercase", margin: "6px 0 2px" }}>Menos</div>
