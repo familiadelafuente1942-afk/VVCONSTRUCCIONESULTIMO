@@ -2249,17 +2249,11 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
         return (<div style={{ marginTop: 12, background: T.bg, border: `1px solid ${colorRes}`, borderRadius: 10, padding: "10px 12px" }}>
           <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Total a hoy de la empresa</div>
           <div onClick={() => { if (!onSaldo) return; const t = window.prompt(`Saldo anterior de ${nombreMes} (solo números; 0 si ya se gastó; vacío = volver al cálculo automático)`, String(remanente)); if (t === null) return; const lim = t.replace(/[^\d-]/g, ""); onSaldo(mesVer, lim === "" ? null : parseInt(lim, 10)); }} style={{ cursor: "pointer" }}>{fila("Saldo anterior ✎" + ((cierres || {})["saldo_" + mesVer] ? " (ajustado)" : ""), remanente)}</div>
-          {fila("Cobrado", en.cobrado)}
-          {fila("Total", subtotal, false, true)}
-          <div style={{ fontSize: 10.5, color: T.muted, fontWeight: 700, textTransform: "uppercase", margin: "6px 0 2px" }}>Menos</div>
-          {fila("Gastos", en.gastos, true)}
-          {(en.valentina || 0) > 0 && fila("Valentina", en.valentina, true)}
-          {(en.valeria || 0) > 0 && fila("Valeria", en.valeria, true)}
-          {(en.pagosPersonal || 0) > 0 && fila("Pagos al personal", en.pagosPersonal, true)}
-          {(en.terralagos || 0) > 0 && fila("Invertido en Terralagos", en.terralagos, true)}
-          {fila("Total", menos, true, true)}
+          {fila("Más lo cobrado", en.cobrado)}
+          {fila("Menos lo pagado", en.pagado, true)}
+          {fila("Menos los gastos", en.gastos, true)}
           <div style={{ height: 1, background: T.border, margin: "6px 0" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 700 }}>{money(subtotal)} − {money(menos)}</span><span style={{ fontFamily: T.serif, fontSize: 26, fontWeight: 700, color: colorRes }}>{disponibleSeb < 0 ? "−" : ""}{money(disponibleSeb)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><span style={{ fontSize: 12, color: T.sub, fontWeight: 700 }}>Total resultado</span><span style={{ fontFamily: T.serif, fontSize: 26, fontWeight: 700, color: colorRes }}>{disponibleSeb < 0 ? "−" : ""}{money(disponibleSeb)}</span></div>
         </div>);
       })()}
 
