@@ -1283,7 +1283,12 @@ let DB;try{DB=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
 if(!DB||!DB.obras){const a=clone(SEED);a.nombre='Paseo Colón 735 · San Telmo';DB={act:0,obras:[a]}}
 DB.obras=DB.obras.filter(x=>!['Villa Crespo','Conesa 2881'].includes(x.nombre)||x.rub.some(r=>r.m||r.e));if(DB.act>=DB.obras.length)DB.act=0;
 const O=()=>DB.obras[DB.act];
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(DB));document.getElementById('guard').textContent='Guardado '+new Date().toLocaleTimeString('es-AR')}catch(e){try{document.getElementById('guard').textContent='No se pudo guardar en este navegador: salí del modo privado'}catch(x){}}};
+const PCAPI='/api/nexo2';let _pcT=0,_pcBusy=0;
+const pcPost=b=>fetch(PCAPI,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json().then(j=>({s:r.status,j})));
+const pcPush=()=>{clearTimeout(_pcT);_pcT=setTimeout(()=>{const g=document.getElementById('guard');pcPost({op:'pc_put',v:JSON.stringify(DB),t:DB._t}).then(({s,j})=>{if(s===200&&g)g.textContent='Guardado y sincronizado '+new Date().toLocaleTimeString('es-AR');else if(s===409&&j.doc)pcAdopt(j.doc);else if(g)g.textContent='Guardado en este equipo (sin conexión para sincronizar)'}).catch(()=>{const g=document.getElementById('guard');if(g)g.textContent='Guardado en este equipo (sin conexión para sincronizar)'})},700)};
+const save=()=>{try{DB._t=Date.now();localStorage.setItem(KEY,JSON.stringify(DB));document.getElementById('guard').textContent='Guardado '+new Date().toLocaleTimeString('es-AR');pcPush()}catch(e){try{document.getElementById('guard').textContent='No se pudo guardar en este navegador: salí del modo privado'}catch(x){}}};
+function pcAdopt(doc){try{const n=JSON.parse(doc.v);if(!n||!n.obras)return;n._t=doc.t;n.act=Math.min(DB.act||0,n.obras.length-1);DB=n;localStorage.setItem(KEY,JSON.stringify(DB));render();const g=document.getElementById('guard');if(g)g.textContent='Actualizado con los últimos cambios '+new Date().toLocaleTimeString('es-AR')}catch(e){}}
+function pcSync(first){if(_pcBusy)return;const a=document.activeElement;if(!first&&((a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))||window._dirty))return;_pcBusy=1;pcPost({op:'pc_get'}).then(({j})=>{const d=j&&j.doc;if(d&&Number(d.t)>(DB._t||0))pcAdopt(d);else if(!d){DB._t=Date.now();try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}pcPush()}else if(Number(d.t)<(DB._t||0))pcPush()}).catch(()=>{}).finally(()=>{_pcBusy=0})}
 const f0=n=>Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
 const f2=n=>{const [a,b]=(Math.round(n*100)/100).toFixed(2).split('.');return a.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+b};
 const ars=n=>'$ '+f2(n),usd=n=>'U$s '+f2(n);
@@ -1548,5 +1553,5 @@ document.getElementById('refr').onclick=()=>location.reload();
 document.getElementById('tema').onclick=()=>{const c=window.__temaPref?window.__temaPref():'auto',n=document.documentElement.getAttribute('data-tema')==='claro'?'oscuro':'claro';window.__tema(n)};
 function setHH(){const h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px')}
 addEventListener('resize',setHH);addEventListener('load',setHH);setHH();
-render();setHH();
+render();setHH();pcSync(true);setInterval(()=>pcSync(false),15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pcSync(false)});
 </script></body></html>

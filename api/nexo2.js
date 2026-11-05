@@ -130,6 +130,17 @@ export default async function handler(req, res) {
     if (req.method !== "POST") { res.status(405).json({ error: "Método no permitido" }); return; }
     const b = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
 
+    // ===== Paseo Colón · presupuesto y cronograma sincronizados entre dispositivos (último cambio gana) =====
+    if (b.op === "pc_get") { const v = await leer(H, "paseocolon_db"); res.status(200).json({ ok: true, doc: v || null }); return; }
+    if (b.op === "pc_put") {
+      if (typeof b.v !== "string" || b.v.length > 1_500_000 || typeof b.t !== "number") { res.status(400).json({ error: "Datos inválidos" }); return; }
+      const cur = await leer(H, "paseocolon_db");
+      if (cur && Number(cur.t) > b.t) { res.status(409).json({ error: "Hay una versión más nueva", doc: cur }); return; }
+      if (cur && cur.v && cur.v !== b.v) await escribir(H, "paseocolon_db_prev", cur);
+      await escribir(H, "paseocolon_db", { t: b.t, v: b.v });
+      res.status(200).json({ ok: true }); return;
+    }
+
     // configuración de obras (no secreta)
     if (!b.op) {
       if (b.key !== "cfg" || typeof b.v !== "string" || b.v.length > 2_000_000 || typeof b.t !== "number") {
