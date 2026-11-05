@@ -1150,6 +1150,7 @@ nav.bottom button[aria-current=page] svg{box-shadow:inset 0 1.5px 1px var(--g-ri
 header.top .btn.ghost.sm{-webkit-backdrop-filter:blur(14px) saturate(1.8);backdrop-filter:blur(14px) saturate(1.8);box-shadow:inset 0 1.5px 1px var(--g-rim,rgba(255,255,255,.5)),inset 0 0 0 1px var(--g-edge,rgba(255,255,255,.16))}
 *,h1,h2,h3,.mono,.brand b,.big{font-family:'Playfair Display',Georgia,serif!important}
 .mon{position:relative;display:block}.mon i{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-style:normal;color:var(--muted);pointer-events:none}.mon input{padding-left:24px}
+.tri{display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right;white-space:normal!important}.tri span{display:block;font-size:17px;font-weight:600;color:inherit}.tri span:nth-child(n+3){font-size:15px;font-weight:500;opacity:.85}.tri.big span{font-size:22px}.tri.big span:nth-child(n+2){font-size:17px}.row.big2{padding:12px 0;font-size:16px;align-items:flex-start}
 .pm{display:block;font-size:11px;color:var(--muted);font-weight:400;white-space:normal}
 .ut-pos{color:#0a8f3c!important;font-weight:800;font-size:26px}.ut-neg{color:#d0281c!important;font-weight:800;font-size:26px}
 :root[data-tema="oscuro"] .ut-pos{color:#4ae38d!important;text-shadow:0 0 14px rgba(74,227,141,.45)}
@@ -1281,6 +1282,7 @@ const ars=n=>'$ '+f2(n),usd=n=>'U$s '+f2(n);
 const parse=s=>{s=String(s).replace(/[^\d,]/g,'').replace(',','.');return parseFloat(s)||0};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function inp(v,path,dec,pre){const i=`<input inputmode="decimal" data-p="${path}" value="${v?(dec?f2(v):f0(v)):''}" placeholder="0">`;return pre?`<span class="mon"><i>${pre}</i>${i}</span>`:i}
+const tri=(t,o)=>`<b class="tri"><span>${ars(t)}</span><span>${usd(o.cot?t/o.cot:0)}</span><span>${o.m2c&&o.cot?usd(t/o.cot/o.m2c):'—'} /m² construido</span></b>`;
 const pm=(t,o)=>o.m2c?`<span class="pm">${ars(t/o.m2c)} /m² · ${usd(o.cot?t/o.m2c/o.cot:0)} /m²</span>`:'';
 function calc(o){const c=o.rub.reduce((a,r)=>a+r.m+r.e,0),it=o.int.reduce((a,g)=>a+g.items.reduce((b,i)=>b+i.q*(i.m+i.e),0),0),d=c+it,gg=d*o.gg/100,ut=d*o.ut/100,im=(d+gg+ut)*o.imp/100;
  const lotePl=(o.lote+o.plus)*o.cot,tot=d+gg+ut+im+lotePl,totU=o.cot?tot/o.cot:0,mv=o.m2v;
@@ -1463,21 +1465,22 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  <label class="fld">Gastos generales · %${inp(o.gg,'gg',1)}</label><label class="fld">Utilidad empresarial · %${inp(o.ut,'ut',1)}</label><label class="fld">Impuestos · %${inp(o.imp,'imp',1)}</label>
  <label class="fld">Costo del lote · U$s${inp(o.lote,'lote',1)}</label><label class="fld">Plusvalía a pagar · U$s${inp(o.plus,'plus',1)}</label><label class="fld">Precio de venta de la zona · U$s/m²${inp(o.zona,'zona',1)}</label></div></div>
  <div class="card">
- <div class="row"><span>Total interiorismo</span><b>${ars(r.it)}</b></div>
- <div class="row"><span>Costo directo · construcción + interiorismo</span><b>${ars(r.d)}${pm(r.d,o)}</b></div>
- <div class="row"><span>Gastos generales (${o.gg}%)</span><b>${ars(r.gg)}</b></div>
- <div class="row"><span>Utilidad empresarial (${o.ut}%)</span><b>${ars(r.ut)}</b></div>
- <div class="row"><span>Impuestos (${o.imp}%)</span><b>${ars(r.im)}</b></div>
+ <div class="row big2"><span>Total interiorismo</span>${tri(r.it,o)}</div>
+ <div class="row big2"><span>Costo directo · construcción + interiorismo</span>${tri(r.d,o)}</div>
+ <div class="row big2"><span>Gastos generales (${o.gg}%)</span>${tri(r.gg,o)}</div>
+ <div class="row big2"><span>Utilidad empresarial (${o.ut}%)</span>${tri(r.ut,o)}</div>
+ <div class="row big2"><span>Impuestos (${o.imp}%)</span>${tri(r.im,o)}</div>
+ <div class="row big2"><span>Lote</span>${tri(o.lote*o.cot,o)}</div>
+ <div class="row big2"><span>Plusvalía a pagar</span>${tri(o.plus*o.cot,o)}</div>
  <div class="row"><span>Incidencia del lote · U$s/m² vendible</span><b>${usd(r.loteI)} / m²</b></div>
  <div class="row"><span>Incidencia de plusvalía · U$s/m² vendible</span><b>${usd(r.plusI)} / m²</b></div>
  <div class="sub">Lote y plusvalía se convierten a pesos con la cotización y se suman al costo final.</div></div>
- <div class="card"><div class="row"><span>Precio final total · ARS</span><b class="big">${ars(r.tot)}</b></div>
- <div class="row"><span>Precio final total · U$s</span><b class="big">${usd(r.totU)}</b></div>
- <div class="row"><span>Precio final por m² construido</span><b>${o.m2c?ars(r.tot/o.m2c)+' /m²':'—'}<span class="pm">${o.m2c?usd(r.totU/o.m2c)+' /m²':''}</span></b></div>
- <div class="row"><span>Costo final por m² vendible · U$s</span><b>${usd(r.pm)} / m²</b></div>
- <div class="row"><span>Ingresos totales por venta · U$s</span><b>${usd(r.ing)}</b></div>
+ <div class="card"><div class="row big2"><span>Precio final total</span><b class="tri big"><span>${ars(r.tot)}</span><span>${usd(r.totU)}</span><span>${o.m2c?usd(r.totU/o.m2c):'—'} /m² construido</span></b></div>
+ <div class="row big2"><span>Costo final por m² vendible</span><b class="tri"><span>${usd(r.pm)} /m² vendible</span><span>${ars(r.pm*o.cot)} /m² vendible</span></b></div>
+ <div class="row big2"><span>Precio de venta de la zona</span><b class="tri"><span>${usd(o.zona)} /m²</span><span>${ars(o.zona*o.cot)} /m²</span></b></div>
+ <div class="row big2"><span>Ingresos totales por venta</span><b class="tri"><span>${usd(r.ing)}</span><span>${ars(r.ing*o.cot)}</span><span>${o.m2c?usd(r.ing/o.m2c):'—'} /m² construido</span></b></div>
  <div class="sub">${usd(o.zona)} / m² × ${f0(o.m2v)} m² vendibles.</div>
- <div class="row"><span>Utilidad general del proyecto · U$s/m² vendible</span><b class="big ${r.util>=0?'ut-pos':'ut-neg'}">${usd(r.util)} / m²</b></div>
+ <div class="row big2"><span>Utilidad general del proyecto</span><b class="tri big ${r.util>=0?'ut-pos':'ut-neg'}"><span>${usd(r.util)} /m² vendible</span><span>${usd(r.util*o.m2v)} total</span><span>${ars(r.util*o.m2v*o.cot)} total</span></b></div>
  <div class="sub">Precio de venta de la zona − costo final por m² vendible.</div></div>`;
  document.getElementById('p').innerHTML=h;
 
@@ -1498,7 +1501,7 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  let g='<div class="card"><b>Interiorismo y equipamiento · ARS</b><div class="sub">Cantidad × (materiales + ejecución unitarios), en pesos. Los costos por m² se calculan sobre los m² a construir.</div></div>';
  o.int.forEach((gr,gi)=>{const t=gr.items.reduce((a,i)=>a+i.q*(i.m+i.e),0);g+=`<div class="card"><b>${gi+1}. ${esc(gr.g)}</b><div style="overflow:auto"><table><tr><th>N.º</th><th>Ítem</th><th class="r">Cant. (${gr.u})</th><th class="r">Materiales</th><th class="r">Ejecución</th><th class="r">Total</th></tr>`;
   gr.items.forEach((it,ii)=>{const p=`int.${gi}.items.${ii}`,tt=it.q*(it.m+it.e);g+=`<tr class="rb rbi"><td class="nn">${ii+1}</td><td class="nm">${esc(it.n)}</td><td data-l="Cantidad (${gr.u})">${inp(it.q,p+'.q',1)}</td><td data-l="Materiales">${inp(it.m,p+'.m',1,'$')}</td><td data-l="Ejecución">${inp(it.e,p+'.e',1,'$')}</td><td class="r num tt" data-l="Total">${ars(tt)}${tt?pm(tt,o):''}</td></tr>`});g+=`</table></div><div class="row"><span>Total ${esc(gr.g)}</span><b>${ars(t)}${pm(t,o)}</b></div></div>`});
- document.getElementById('i').innerHTML=g+`<div class="card"><div class="row"><span>Total interiorismo</span><b class="big">${ars(r.it)}${pm(r.it,o)}</b></div></div>`;
+ document.getElementById('i').innerHTML=g+`<div class="card"><div class="row big2"><span>Total interiorismo</span><b class="tri big"><span>${ars(r.it)}</span><span>${usd(o.cot?r.it/o.cot:0)}</span><span>${o.m2c&&o.cot?usd(r.it/o.cot/o.m2c):'—'} /m² construido</span></b></div></div>`;
  document.getElementById('d').innerHTML=`<div class="card"><b>Documentación de la obra</b><p class="sub">Documentos de Paseo Colón 735.</p>
  ${[['Planos de arquitectura','planos-paseo-colon-735'],['Presentación comercial','presentacion-comercial']].map(([n,f])=>`<div class="row"><span>${n}</span><span style="display:flex;gap:8px"><a class="btn sm" href="/docs/paseo-colon/${f}.pdf" target="_blank" rel="noopener">Ver</a><a class="btn sm" href="/docs/paseo-colon/${f}.pdf" download>Descargar PDF</a></span></div>`).join('')}</div>`}
 document.addEventListener('input',e=>{const t=e.target,p=t.dataset&&t.dataset.p;if(!p)return;
