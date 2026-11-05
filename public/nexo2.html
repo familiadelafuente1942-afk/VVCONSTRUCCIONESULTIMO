@@ -702,6 +702,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.9;
 .rb-t .prog{height:4px;border-radius:2px;background:var(--line);overflow:hidden}.rb-t .prog i{display:block;height:100%}
 .rubro .go{color:var(--gold);display:flex;gap:6px;align-items:center}
 .slots{display:flex;flex-direction:column;gap:8px}
+.rw{position:relative}.rw .fmn{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:16px;line-height:1;padding:0;cursor:pointer;z-index:2}.rw .fmn:hover{border-color:var(--gold);color:var(--gold)}.rw .rubro .go{margin-right:30px}
 .slot{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--bg)}
 .slot.st-falta{border-style:dashed}
 .slot.st-subido{border-color:#6e5d3d}
@@ -1205,6 +1206,7 @@ const E='Estudio',P='Propietario',PL='Plano',DF='Definición';
 /* carpetas de planos: las mismas en la jefatura, la auditoría y el drive del estudio */
 const FOLDERS=[['gen','Generales y gestión'],['prel','Preliminares y suelos'],['est','Estructura'],['arq','Arquitectura'],['mamp','Mampostería'],['aisl','Aislaciones y cubiertas'],['revo','Revoques y contrapisos'],['san','Sanitaria y gas'],['ele','Eléctrica y corrientes débiles'],['cli','Climatización'],['carp','Carpinterías'],['term','Terminaciones'],['mes','Mesadas y amoblamiento'],['pil','Pileta'],['ext','Exteriores y paisajismo'],['otros','Otros']];
 const FNAME=Object.fromEntries(FOLDERS);
+const FN=(o,k)=>(o&&o.fold&&o.fold.ren&&o.fold.ren[k])||(o&&o.fold&&(o.fold.ext||[]).find(e=>e[0]===k)||[])[1]||FNAME[k]||k;
 const LIB={
   prelim:{n:'Tareas preliminares',f:'prel',w:2,sc:'fijo',a:4,
     doc:[['Plano municipal aprobado y aprobación de la Comisión de Arquitectura del barrio',PL,E,'gen'],['Plano de mensura y amojonamiento del lote',PL,E,'gen'],['Relevamiento planialtimétrico: niveles, cotas de terreno y vereda, árboles existentes',PL,E,'gen'],['Estudio de suelos con ubicación de sondeos',PL,P,'gen'],['Plano de implantación general: FOS, FOT, retiros y ejes',PL,E,'gen'],['Planilla general de locales con superficies y terminaciones',PL,E,'gen'],
@@ -1431,7 +1433,7 @@ function buildPlanos(o){o.planos=[];const rs=[...new Set(o.tasks.map(t=>t.rubro)
 const docSlot=x=>x.slot?x.obra.planos.find(s=>s.id===x.slot):null;
 const docItems=x=>{const s=docSlot(x);return s?slotItems(s):[]};
 const docTask=x=>{const s=docSlot(x);return s?slotTareas(s)[0]:null};
-const catName=x=>FNAME[x.cat]||x.cat;
+const catName=x=>FN(x.obra,x.cat)||x.cat;
 const slotDocs=s=>DOCS.filter(x=>x.slot===s.id);
 const slotCur=s=>slotDocs(s).filter(x=>x.estado!=='reemplazado').sort((a,b)=>b.fecha-a.fecha)[0]||null;
 function slotEstado(s){const c=slotCur(s);return c?(c.estado==='en revisión'?'subido':c.estado):'falta'}
@@ -1441,7 +1443,7 @@ const slotTareas=s=>[...new Set(slotItems(s).map(i=>i.card.task))].sort((a,b)=>a
 /* se sube una versión nueva de un plano: le llega a la jefatura y a la auditoría y actualiza las tarjetas */
 function subirPlano(s,fileId,por,txt){const o=s.obra;const prev=slotDocs(s).filter(x=>x.estado!=='reemplazado');const ver=prev.length?String.fromCharCode(Math.max(...prev.map(x=>x.ver.charCodeAt(0)))+1):'A';prev.forEach(x=>x.estado='reemplazado');
   const x=addDoc(o,s.folder,s.nombre,ver,'en revisión',por,TODAY,{file:fileId,slot:s.id,nuevo:true});
-  slotItems(s).filter(i=>!iDone(i)).forEach(i=>{i.estado='recibido';i.obs='';i.respuesta={txt:txt||`Subido a la carpeta ${FNAME[s.folder]}, rev ${ver}.`,fecha:TODAY,file:fileId,doc:x.id,nuevo:true,por}});
+  slotItems(s).filter(i=>!iDone(i)).forEach(i=>{i.estado='recibido';i.obs='';i.respuesta={txt:txt||`Subido a la carpeta ${FN(o,s.folder)}, rev ${ver}.`,fecha:TODAY,file:fileId,doc:x.id,nuevo:true,por}});
   notify('auditor',o,`Plano nuevo para revisar: ${s.nombre} rev ${ver}`,{t:'doc',id:x.id});
   if(ROLE()!=='jefe')notify('jefe',o,`${ver==='A'?'Se subió':'Nueva versión de'} ${s.nombre} (rev ${ver})`,{t:'doc',id:x.id});
   if(ROLE()==='jefe')notify('estudio',o,`La jefatura cargó ${s.nombre} rev ${ver} recibido por fuera de la app`,{t:'doc',id:x.id});
@@ -2165,7 +2167,7 @@ function vPedidos(){
 
 /* ================= documentos del estudio: carpetas como un drive ================= */
 function vDocs(){
-  const obras=misObras(),D=S.drive,o=obras.find(x=>x.id===D.obra),cat=D.cat;
+  const obras=misObras(),D=S.drive,o=obras.find(x=>x.id===D.obra),cat=D.cat;setTimeout(()=>obras.forEach(x=>plLoad(x)),50);
   const crumbs=`<div class="crumbs"><button data-act="drive" data-o="" data-c="">Documentos</button>${o?`<span>›</span><button data-act="drive" data-o="${o.id}" data-c="">${esc(o.nombre)}</button>`:''}${o&&cat?`<span>›</span><b>${esc(cat)}</b>`:''}</div>`;
   const folder=(l,n,act,sub)=>`<button class="folder" ${act}><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h6l2 2h10v10H3z"/></svg><span><b>${esc(l)}</b><span class="muted small">${sub}</span></span><span class="go">›</span></button>`;
   let body='';
@@ -3343,14 +3345,14 @@ function slotRow(s){const r=ROLE(),cur=slotCur(s),st=slotEstado(s),[lab,cls]=SLO
 function folderBody(o,f){const ss=o.planos.filter(s=>s.folder===f),ex=DOCS.filter(x=>x.obra===o&&x.cat===f&&!x.slot&&x.estado!=='reemplazado');const can=ROLE()==='estudio'||puedePedir(o);
   return `<div class="slots">${ss.map(slotRow).join('')}</div>${ex.length?`<div class="card"><div class="top"><h3>Otros archivos de la carpeta</h3><span class="muted small">${ex.length}</span></div>${ex.map(docRow).join('')}</div>`:''}
   ${can?`<div class="row2"><label class="btn ghost" for="fx-${f}" style="cursor:pointer">+ Agregar PDF o archivo a esta carpeta</label><input id="fx-${f}" type="file" multiple data-chg="folderFile" data-o="${o.id}" data-f="${f}" hidden><button class="btn ghost" data-act="nuevoSlot" data-o="${o.id}" data-f="${f}">+ Sumar un plano a la lista</button></div>`:''}`}
-function sheetRubro(oid,f){const o=findO(oid);const s=folderStats(o,f);
-  openSheet(`<span class="eyebrow">${esc(o.nombre)} · planos</span><h2>${esc(FNAME[f])}</h2><p class="muted small">${s.n?`${s.vig} de ${s.n} vigentes${s.sub?` · ${plural(s.sub,"subido","subidos")} esperando revisión`:''}${s.falta?` · ${s.falta} sin subir`:''}.`:''} Cada plano nuevo le llega a la vez a la jefatura y a la auditoría.</p>${folderBody(o,f)}`,FNAME[f])}
+function sheetRubro(oid,f){const o=findO(oid);const s=folderStats(o,f);setTimeout(()=>plLoad(o),50);
+  openSheet(`<span class="eyebrow">${esc(o.nombre)} · planos</span><h2>${esc(FN(o,f))}${esDir()?` <button class="ib" data-act="folderMenu" data-o="${o.id}" data-f="${f}" aria-label="Opciones de la carpeta" style="vertical-align:middle">⋯</button>`:''}</h2><p class="muted small">${s.n?`${s.vig} de ${s.n} vigentes${s.sub?` · ${plural(s.sub,"subido","subidos")} esperando revisión`:''}${s.falta?` · ${s.falta} sin subir`:''}.`:''} Cada plano nuevo le llega a la vez a la jefatura y a la auditoría.</p>${folderBody(o,f)}`,FN(o,f))}
 
 /* --- documentos del estudio: carpetas por rubro con la lista de planos que necesita la obra --- */
 function vDocs(){
-  const obras=misObras(),D=S.drive,o=obras.find(x=>x.id===D.obra),cat=D.cat;
+  const obras=misObras(),D=S.drive,o=obras.find(x=>x.id===D.obra),cat=D.cat;setTimeout(()=>obras.forEach(x=>plLoad(x)),50);
   const back=o?`<button class="back2" data-act="drive" data-o="${cat?o.id:''}" data-c="">${BACKSVG} ${cat?esc(o.nombre):'Todas las obras'}</button>`:'';
-  const crumbs=`<div class="crumbs"><button data-act="drive" data-o="" data-c="">Documentos</button>${o?`<span>›</span><button data-act="drive" data-o="${o.id}" data-c="">${esc(o.nombre)}</button>`:''}${o&&cat?`<span>›</span><b>${esc(cat==='aud'?'Certificados de auditoría':FNAME[cat])}</b>`:''}</div>`;
+  const crumbs=`<div class="crumbs"><button data-act="drive" data-o="" data-c="">Documentos</button>${o?`<span>›</span><button data-act="drive" data-o="${o.id}" data-c="">${esc(o.nombre)}</button>`:''}${o&&cat?`<span>›</span><b>${esc(cat==='aud'?'Certificados de auditoría':FN(o,cat))}</b>`:''}</div>`;
   const folder=(l,act,sub)=>`<button class="folder" ${act}>${FOLDSVG(28)}<span><b>${esc(l)}</b><span class="muted small">${sub}</span></span><span class="go">›</span></button>`;
   let body='';
   if(!o)body=`<div class="folders">${obras.map(x=>{const T=foldersDe(x).reduce((a,[k])=>{const q=folderStats(x,k);a.n+=q.n;a.v+=q.vig;a.f+=q.falta;return a},{n:0,v:0,f:0}),n=T.n,v=T.v,f=T.f;return folder(x.nombre,`data-act="drive" data-o="${x.id}" data-c=""`,`${v} de ${n} planos vigentes${f?` · <span class="t-naranja">${f} por subir</span>`:''}`)}).join('')}</div>`;
@@ -3382,11 +3384,11 @@ function itemRow(c,i,own,est,cli){
   const st=ISTATES[c.tipo],r=i.respuesta,f=r&&r.file&&FILES[r.file]?FILES[r.file]:r&&r.doc?{docId:r.doc}:null;const nv=nuevoResp(i)&&own;
   const mine=(est&&i.resp===E);const open=mine&&RESPI===i.id;
   const sl=i.slot?c.obra.planos.find(p=>p.id===i.slot):null;
-  return `<div class="irow2 ${nv?'nuevo':''} ${open?'abierto':''} st-${i.estado}" id="it-${i.id}"><div class="ihead"><span class="itxt">${esc(i.txt)}${c.tipo==='doc'?` <span class="rtag w-${i.resp===P?'p':'e'}">${i.resp===P?'Propietario':'Estudio'}</span>`:''}${sl?` <span class="rtag w-f">${esc(FNAME[sl.folder])}</span>`:''}${i.origen==='manual'?' <span class="origen">agregado</span>':''}</span>${own?`<span class="iacts"><button class="ib" data-act="editItem" data-c="${c.id}" data-i="${i.id}" aria-label="Editar ítem">✎</button><button class="ib" data-act="delItem" data-c="${c.id}" data-i="${i.id}" aria-label="Eliminar ítem">✕</button></span>`:''}</div>
+  return `<div class="irow2 ${nv?'nuevo':''} ${open?'abierto':''} st-${i.estado}" id="it-${i.id}"><div class="ihead"><span class="itxt">${esc(i.txt)}${c.tipo==='doc'?` <span class="rtag w-${i.resp===P?'p':'e'}">${i.resp===P?'Propietario':'Estudio'}</span>`:''}${sl?` <span class="rtag w-f">${esc(FN(c.obra,sl.folder))}</span>`:''}${i.origen==='manual'?' <span class="origen">agregado</span>':''}</span>${own?`<span class="iacts"><button class="ib" data-act="editItem" data-c="${c.id}" data-i="${i.id}" aria-label="Editar ítem">✎</button><button class="ib" data-act="delItem" data-c="${c.id}" data-i="${i.id}" aria-label="Eliminar ítem">✕</button></span>`:''}</div>
   <div class="istates">${st.map(([v,l])=>`<button class="is is-${v}" data-act="istate" data-c="${c.id}" data-i="${i.id}" data-v="${v}" aria-pressed="${i.estado===v}" ${own?'':'disabled'}>${l}</button>`).join('')}${i.fecha&&i.estado==='ok'?`<span class="muted small">${fmt(i.fecha)}</span>`:''}</div>
   ${r&&(r.txt||f)&&c.tipo==='doc'&&r.txt!=='Enviado.'?`<div class="iresp"><span class="small"><b class="t-gold">${esc(r.por)} · ${fmt(r.fecha)}:</b> ${esc(r.txt)}</span>${f?fileBtns(f):''}${own&&i.estado==='recibido'?`<span class="fbtns"><button class="btn sm gold" data-act="istate" data-c="${c.id}" data-i="${i.id}" data-v="ok">Verificado: definido</button><button class="btn sm red" data-act="obsItem" data-c="${c.id}" data-i="${i.id}">Observar</button></span>`:''}</div>`:''}
   ${i.obs&&!iDone(i)?`<span class="small t-rojo">Observado: ${esc(i.obs)}</span>`:''}
-  ${open?`<form class="inresp" data-submit="respItem" data-c="${c.id}" data-i="${i.id}"><span class="small muted">La obra lo necesita antes del ${fmtLargo(timing(c).limit)}. ${sl?`Se guarda también en la carpeta ${esc(FNAME[sl.folder])} y le llega a la jefatura y a la auditoría.`:'Le llega a la jefatura de obra.'}</span>${i.obs?`<span class="small t-rojo">La obra observó: ${esc(i.obs)}</span>`:''}<textarea id="resp-txt" rows="2" placeholder="Comentario para la obra"></textarea><label class="drop" for="resp-file" style="cursor:pointer">${RESPF&&FILES[RESPF]?'Archivo: '+esc(FILES[RESPF].name):'Adjuntar plano, foto o archivo'}</label><input id="resp-file" type="file" data-chg="respFile" data-c="${c.id}" data-i="${i.id}" hidden><div class="row2"><button class="btn" type="button" data-act="respCancel" data-c="${c.id}">Cancelar</button><button class="btn gold" type="submit">Enviar</button></div></form>`
+  ${open?`<form class="inresp" data-submit="respItem" data-c="${c.id}" data-i="${i.id}"><span class="small muted">La obra lo necesita antes del ${fmtLargo(timing(c).limit)}. ${sl?`Se guarda también en la carpeta ${esc(FN(c.obra,sl.folder))} y le llega a la jefatura y a la auditoría.`:'Le llega a la jefatura de obra.'}</span>${i.obs?`<span class="small t-rojo">La obra observó: ${esc(i.obs)}</span>`:''}<textarea id="resp-txt" rows="2" placeholder="Comentario para la obra"></textarea><label class="drop" for="resp-file" style="cursor:pointer">${RESPF&&FILES[RESPF]?'Archivo: '+esc(FILES[RESPF].name):'Adjuntar plano, foto o archivo'}</label><input id="resp-file" type="file" data-chg="respFile" data-c="${c.id}" data-i="${i.id}" hidden><div class="row2"><button class="btn" type="button" data-act="respCancel" data-c="${c.id}">Cancelar</button><button class="btn gold" type="submit">Enviar</button></div></form>`
    :mine&&!iDone(i)?`<button class="btn sm ${i.estado==='recibido'?'ghost':'gold'}" data-act="responderItem" data-c="${c.id}" data-i="${i.id}" style="align-self:flex-start">${i.estado==='recibido'?'Enviar otra respuesta':'Responder'}</button>`:''}</div>`;
 }
 
@@ -3613,13 +3615,14 @@ const tkey=(o,t)=>(t.cod||!/^t\d+$/.test(t.id))?t.id:'r:'+t.rubro+'#'+o.tasks.fi
 const ckey=(o,c)=>tkey(o,c.task)+'|'+(c.ckey||c.rcod||c.tipo);
 const ikey=i=>{if(!i.k)i.k=i.txt;return i.k};
 const skey=s=>{if(!s.sk)s.sk=s.manual?'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,5):s.rubro+'|'+s.folder+'|'+s.nombre;return s.sk};
-const dkey=(o,x)=>{const s=x.slot?(o.planos||[]).find(p=>p.id===x.slot):null;return(s?skey(s):'c:'+x.cat)+'|'+x.nombre+'|'+x.ver};
+const dkey=(o,x)=>{const s=x.slot?[...(o.planos||[]),...(o.pTrash||[]).map(t=>t.s)].find(p=>p.id===x.slot):null;return(s?skey(s):'c:'+x.cat)+'|'+x.nombre+'|'+x.ver};
 function ovMapa(o){const m={r:{},c:{},p:{},dc:{},t:{}};
   o.tasks.forEach(t=>{const k=tkey(o,t),der=t.real&&t.real.src==='inf';if(t.real&&!der)m.r[k]=JSON.stringify(t.real);const b=o.base.find(x=>x.id===t.id);if(!der&&b&&(b.start!==t.start||b.end!==t.end))m.t[k]=JSON.stringify([t.start,t.end,t.weeks])});
-  o.cards.forEach(cd=>{const its={};cd.items.forEach(i=>{its[ikey(i)]=[i.estado,i.fecha||0,i.obs||'',i.resp,i.respuesta?[i.respuesta.txt||'',i.respuesta.fecha||0,i.respuesta.por||'',i.respuesta.nuevo?1:0]:0,i.txt,i.tipo,i.g||'',i.origen||'']});
+  const _tr=o.pTrash||[],_cs=[...o.cards];_tr.forEach(t=>t.its.forEach(r=>{if(!_cs.includes(r.c))_cs.push(r.c)}));
+  _cs.forEach(cd=>{const its={};[...cd.items,..._tr.flatMap(t=>t.its.filter(r=>r.c===cd&&!cd.items.includes(r.i)).map(r=>r.i))].forEach(i=>{its[ikey(i)]=[i.estado,i.fecha||0,i.obs||'',i.resp,i.respuesta?[i.respuesta.txt||'',i.respuesta.fecha||0,i.respuesta.por||'',i.respuesta.nuevo?1:0]:0,i.txt,i.tipo,i.g||'',i.origen||'']});
     m.c[ckey(o,cd)]=JSON.stringify({e:cd.enviada||0,im:cd.impacto||'',it:cd.impactoTxt||'',tp:cd.tipo,d:cd.rdesc||'',a:cd.apert==null?null:cd.apert,p:cd.plazo==null?null:cd.plazo,rt:cd.rtipo||'',cu:cd.custom?1:0,ky:cd.ckey||'',tk:tkey(o,cd.task),i:its})});
-  (o.planos||[]).forEach(s=>{m.p[skey(s)]=JSON.stringify({r:s.rubro,f:s.folder,n:s.nombre,m:s.manual?1:0})});
-  DOCS.filter(x=>x.obra===o).forEach(x=>{const s=x.slot?(o.planos||[]).find(p=>p.id===x.slot):null;m.dc[dkey(o,x)]=JSON.stringify({sk:s?skey(s):'',cat:x.cat,n:x.nombre,v:x.ver,e:x.estado,p:x.por,f:x.fecha,o:x.obs||'',nw:x.nuevo?1:0})});
+  [...(o.planos||[]),..._tr.map(t=>t.s)].forEach(s=>{m.p[skey(s)]=JSON.stringify({r:s.rubro,f:s.folder,n:s.nombre,m:s.manual?1:0})});
+  [...DOCS.filter(x=>x.obra===o),..._tr.flatMap(t=>t.docs)].forEach(x=>{const s=x.slot?[...(o.planos||[]),..._tr.map(t=>t.s)].find(p=>p.id===x.slot):null;m.dc[dkey(o,x)]=JSON.stringify({sk:s?skey(s):'',cat:x.cat,n:x.nombre,v:x.ver,e:x.estado,p:x.por,f:x.fecha,o:x.obs||'',nw:x.nuevo?1:0})});
   return m}
 function ovDiff(o){const cur=ovMapa(o),b=OV_B[o.id]||{r:{},c:{},p:{},dc:{},t:{}},out={};
   ['r','c','p','dc','t'].forEach(g=>{const ch={},de=[];Object.keys(cur[g]).forEach(k=>{if(cur[g][k]!==(b[g]||{})[k])ch[k]=JSON.parse(cur[g][k])});Object.keys(b[g]||{}).forEach(k=>{if(!(k in cur[g]))de.push(k)});if(Object.keys(ch).length)out[g]=ch;if(de.length)out['x'+g]=de});
@@ -3854,7 +3857,7 @@ SUBMIT.avance=f=>{const o=findO(f.dataset.o),t=o.tasks.find(x=>x.id===f.dataset.
 Object.assign(A,{
   aviso:()=>{const a=avisoData();openSheet(`<span class="eyebrow">Aviso · ${fmtLargo(TODAY)}</span><h2>${esc(a.h)}</h2><p class="soft">${esc(a.p)}</p>${a.list}`,'Aviso')},
   rubroPlanos:ds=>sheetRubro(ds.o,ds.f),
-  nuevoSlot:ds=>{const o=findO(ds.o);openSheet(`<span class="eyebrow">${esc(o.nombre)} · ${esc(FNAME[ds.f])}</span><h2>Sumar un plano a la lista</h2><form class="sec" data-submit="nuevoSlot" data-o="${o.id}" data-f="${ds.f}"><label class="f">Nombre del plano<input id="ns-n" placeholder="Ej: Detalle de canteros de PA"></label><label class="f">Tarea que lo necesita<select id="ns-t">${o.tasks.filter(t=>!(t.real&&t.real.av>=100)).map(t=>`<option value="${t.id}">${esc(t.name)} · ${fmt(t.start)}</option>`).join('')}</select></label><p class="muted small">Queda en la carpeta del estudio y se suma a la tarjeta de planos de esa tarea.</p><button class="btn gold" type="submit">Sumar</button></form>`,'Sumar plano')},
+  nuevoSlot:ds=>{const o=findO(ds.o);openSheet(`<span class="eyebrow">${esc(o.nombre)} · ${esc(FN(o,ds.f))}</span><h2>Sumar un plano a la lista</h2><form class="sec" data-submit="nuevoSlot" data-o="${o.id}" data-f="${ds.f}"><label class="f">Nombre del plano<input id="ns-n" placeholder="Ej: Detalle de canteros de PA"></label><label class="f">Tarea que lo necesita<select id="ns-t">${o.tasks.filter(t=>!(t.real&&t.real.av>=100)).map(t=>`<option value="${t.id}">${esc(t.name)} · ${fmt(t.start)}</option>`).join('')}</select></label><p class="muted small">Queda en la carpeta del estudio y se suma a la tarjeta de planos de esa tarea.</p><button class="btn gold" type="submit">Sumar</button></form>`,'Sumar plano')},
   regEdit:ds=>sheetRegEdit(ds.id),
   regDel:ds=>{const r=REGISTRO.find(x=>x.id===ds.id);openSheet(`<h2>¿Eliminar este hecho?</h2><p>${esc(r.obra.nombre)} · ${fmt(r.fecha)} ${r.hora||''}</p><p class="soft">"${esc(r.txt)}"</p><div class="row2"><button class="btn" data-act="close">Cancelar</button><button class="btn red" data-act="regDelOk" data-id="${r.id}">Eliminar</button></div>`,'Eliminar')},
   regDelOk:ds=>{const i=REGISTRO.findIndex(x=>x.id===ds.id);if(i>=0)REGISTRO.splice(i,1);closeSheet();toast('Hecho eliminado');draw()},
@@ -3872,7 +3875,7 @@ Object.assign(A,{
 });
 Object.assign(SUBMIT,{
   regEdit:f=>{const r=REGISTRO.find(x=>x.id===f.dataset.id);const t=val('re-txt');if(!t){toast('Escribí qué pasó');return}r.txt=t;r.tipo=val('re-tipo');const h=new Date();r.editado=fmt(TODAY)+' '+String(h.getHours()).padStart(2,'0')+':'+String(h.getMinutes()).padStart(2,'0');closeSheet();toast('Hecho actualizado');draw()},
-  nuevoSlot:f=>{const o=findO(f.dataset.o),n=val('ns-n');if(!n){toast('Poné el nombre del plano');return}const t=o.tasks.find(x=>x.id===val('ns-t'));const s=nuevoSlotM(o,t.rubro,f.dataset.f,n);let c=o.cards.find(x=>x.task===t&&x.tipo==='doc');if(!c)c=addCard(o,t,'doc',[],{origen:'manual',created:TODAY,enviada:TODAY});const it=addItem(c,{txt:n,tipo:PL,resp:E,origen:'manual'});it.slot=s.id;notify(ROLE()==='estudio'?'jefe':'estudio',o,`Nuevo plano en la lista de ${FNAME[s.folder]}: ${n}`,{t:'card',id:c.id});toast('Plano sumado a la lista y a la tarjeta');draw();sheetRubro(o.id,f.dataset.f)}
+  nuevoSlot:f=>{const o=findO(f.dataset.o),n=val('ns-n');if(!n){toast('Poné el nombre del plano');return}const t=o.tasks.find(x=>x.id===val('ns-t'));const s=nuevoSlotM(o,t.rubro,f.dataset.f,n);let c=o.cards.find(x=>x.task===t&&x.tipo==='doc');if(!c)c=addCard(o,t,'doc',[],{origen:'manual',created:TODAY,enviada:TODAY});const it=addItem(c,{txt:n,tipo:PL,resp:E,origen:'manual'});it.slot=s.id;notify(ROLE()==='estudio'?'jefe':'estudio',o,`Nuevo plano en la lista de ${FN(o,s.folder)}: ${n}`,{t:'card',id:c.id});toast('Plano sumado a la lista y a la tarjeta');draw();sheetRubro(o.id,f.dataset.f)}
 });
 const _respItem=SUBMIT.respItem;SUBMIT.respItem=f=>keepScroll(()=>_respItem(f));
 const _editItem=SUBMIT.editItem;SUBMIT.editItem=f=>_editItem(f);
@@ -3880,8 +3883,8 @@ Object.assign(CHG,{
   respFile:async(v,el)=>{const f=el.files?.[0];if(!f)return;const t=$('#resp-txt')?.value;const r=await readFile(f);RESPF=r?.id||null;keepScroll(()=>sheetCard(el.dataset.c));if(t&&$('#resp-txt'))$('#resp-txt').value=t},
   slotFile:async(v,el)=>{const f=el.files?.[0];if(!f)return;const o=findO(el.dataset.o),s=o.planos.find(p=>p.id===el.dataset.s);const r=await readFile(f);if(!r)return;const est=ROLE()==='estudio';
     const x=subirPlano(s,r.id,est?S.u.name:'Jefatura · recibido por fuera de la app');toast(`${s.nombre}: subido rev ${x.ver}. Le llega a ${est?'la jefatura y a la auditoría':'la auditoría y al estudio'}`);draw();if(document.querySelector('.sheet'))keepScroll(()=>sheetRubro(o.id,s.folder))},
-  folderFile:async(v,el)=>{const o=findO(el.dataset.o),fd=el.dataset.f;let n=0;for(const f of [...(el.files||[])]){const r=await readFile(f);if(!r)continue;const dx=addDoc(o,fd,f.name.replace(/\.[^.]+$/,''),'A','en revisión',ROLE()==='estudio'?S.u.name:'Jefatura',TODAY,{file:r.id,nuevo:true});notify('auditor',o,`Archivo nuevo para revisar: ${dx.nombre} (${FNAME[fd]})`,{t:'doc',id:dx.id});n++}
-    if(n){notify(ROLE()==='estudio'?'jefe':'estudio',o,`${plural(n,'archivo nuevo','archivos nuevos')} en ${FNAME[fd]}`,null);toast(`${plural(n,'archivo agregado','archivos agregados')} a ${FNAME[fd]}`)}draw();if(document.querySelector('.sheet'))keepScroll(()=>sheetRubro(o.id,fd))},
+  folderFile:async(v,el)=>{const o=findO(el.dataset.o),fd=el.dataset.f;let n=0;for(const f of [...(el.files||[])]){const r=await readFile(f);if(!r)continue;const dx=addDoc(o,fd,f.name.replace(/\.[^.]+$/,''),'A','en revisión',ROLE()==='estudio'?S.u.name:'Jefatura',TODAY,{file:r.id,nuevo:true});notify('auditor',o,`Archivo nuevo para revisar: ${dx.nombre} (${FN(o,fd)})`,{t:'doc',id:dx.id});n++}
+    if(n){notify(ROLE()==='estudio'?'jefe':'estudio',o,`${plural(n,'archivo nuevo','archivos nuevos')} en ${FN(o,fd)}`,null);toast(`${plural(n,'archivo agregado','archivos agregados')} a ${FN(o,fd)}`)}draw();if(document.querySelector('.sheet'))keepScroll(()=>sheetRubro(o.id,fd))},
   clFoto:async(v,el)=>{S.misFotos=S.misFotos||[];for(const f of [...(el.files||[])]){const r=await readFile(f);if(r)S.misFotos.unshift(r.id)}toast('Fotos guardadas');draw()}
 });
 
@@ -3889,11 +3892,11 @@ Object.assign(CHG,{
 function volverCarpeta(o,f){closeSheet();draw();if(ROLE()!=='estudio'&&f)sheetRubro(o.id,f)}
 function sheetNombre(titulo,eb,nombre,submit,attrs,conArchivo){openSheet(`<span class="eyebrow">${eb}</span><h2>${titulo}</h2><form class="sec" data-submit="${submit}" ${attrs}><label class="f">Nombre de la tarjeta<input id="rn-n" value="${esc(nombre)}"></label>${conArchivo?'<label class="f">Reemplazar el archivo (opcional)<input id="rn-f" type="file"></label><p class="muted small">Si cambiás el archivo, vuelve a quedar en revisión para la auditoría.</p>':''}<button class="btn gold" type="submit">Guardar</button></form>`,titulo)}
 Object.assign(A,{
-  docEdit:ds=>{const x=DOCS.find(d=>d.id===ds.id);if(!x)return;sheetNombre('Editar archivo',`${esc(x.obra.nombre)} · ${esc(FNAME[x.cat]||x.cat)}`,x.nombre,'docEdit',`data-id="${x.id}"`,true)},
-  docRen:ds=>{const x=DOCS.find(d=>d.id===ds.id);if(!x)return;sheetNombre('Renombrar tarjeta',`${esc(x.obra.nombre)} · ${esc(FNAME[x.cat]||x.cat)}`,x.nombre,'docEdit',`data-id="${x.id}"`,false)},
+  docEdit:ds=>{const x=DOCS.find(d=>d.id===ds.id);if(!x)return;sheetNombre('Editar archivo',`${esc(x.obra.nombre)} · ${esc(FN(x.obra,x.cat)||x.cat)}`,x.nombre,'docEdit',`data-id="${x.id}"`,true)},
+  docRen:ds=>{const x=DOCS.find(d=>d.id===ds.id);if(!x)return;sheetNombre('Renombrar tarjeta',`${esc(x.obra.nombre)} · ${esc(FN(x.obra,x.cat)||x.cat)}`,x.nombre,'docEdit',`data-id="${x.id}"`,false)},
   docDel:ds=>{const x=DOCS.find(d=>d.id===ds.id);if(!x)return;if(!confirm('¿Eliminar este archivo de la carpeta?'))return;const k=DOCS.indexOf(x);if(k>=0)DOCS.splice(k,1);toast('Archivo eliminado');volverCarpeta(x.obra,x.cat)},
-  slotEdit:ds=>{const o=findO(ds.o),sl=o.planos.find(p=>p.id===ds.s);if(!sl)return;sheetNombre('Editar plano',`${esc(o.nombre)} · ${esc(FNAME[sl.folder]||sl.folder)}`,sl.nombre,'slotEdit',`data-o="${o.id}" data-s="${sl.id}"`,true)},
-  slotRen:ds=>{const o=findO(ds.o),sl=o.planos.find(p=>p.id===ds.s);if(!sl)return;sheetNombre('Renombrar tarjeta',`${esc(o.nombre)} · ${esc(FNAME[sl.folder]||sl.folder)}`,sl.nombre,'slotEdit',`data-o="${o.id}" data-s="${sl.id}"`,false)},
+  slotEdit:ds=>{const o=findO(ds.o),sl=o.planos.find(p=>p.id===ds.s);if(!sl)return;sheetNombre('Editar plano',`${esc(o.nombre)} · ${esc(FN(o,sl.folder)||sl.folder)}`,sl.nombre,'slotEdit',`data-o="${o.id}" data-s="${sl.id}"`,true)},
+  slotRen:ds=>{const o=findO(ds.o),sl=o.planos.find(p=>p.id===ds.s);if(!sl)return;sheetNombre('Renombrar tarjeta',`${esc(o.nombre)} · ${esc(FN(o,sl.folder)||sl.folder)}`,sl.nombre,'slotEdit',`data-o="${o.id}" data-s="${sl.id}"`,false)},
   slotDel:ds=>{const o=findO(ds.o),sl=o.planos.find(p=>p.id===ds.s);if(!sl)return;if(!confirm('¿Eliminar este plano de la carpeta?'))return;
     slotItems(sl).forEach(i=>{const c=i.card;if(i.origen==='manual'){c.items=c.items.filter(z=>z!==i);if(!c.items.length)o.cards=o.cards.filter(z=>z!==c)}else delete i.slot});
     for(let k=DOCS.length-1;k>=0;k--)if(DOCS[k].slot===sl.id)DOCS.splice(k,1);
@@ -3901,7 +3904,7 @@ Object.assign(A,{
 });
 SUBMIT.docEdit=async f=>{const x=DOCS.find(d=>d.id===f.dataset.id);if(!x)return;const n=val('rn-n').trim();if(!n){toast('Poné el nombre');return}
   const fl=$('#rn-f')?.files?.[0];let r=null;if(fl){r=await readFile(fl);if(!r){toast('No se pudo leer el archivo');return}}
-  x.nombre=n;if(r){x.file=r.id;x.ver=String.fromCharCode((x.ver||'A').charCodeAt(0)+1);x.estado='en revisión';x.nuevo=true;x.fecha=TODAY;notify('auditor',x.obra,`Archivo actualizado para revisar: ${n} (${FNAME[x.cat]||x.cat})`,{t:'doc',id:x.id})}
+  x.nombre=n;if(r){x.file=r.id;x.ver=String.fromCharCode((x.ver||'A').charCodeAt(0)+1);x.estado='en revisión';x.nuevo=true;x.fecha=TODAY;notify('auditor',x.obra,`Archivo actualizado para revisar: ${n} (${FN(x.obra,x.cat)||x.cat})`,{t:'doc',id:x.id})}
   toast('Cambios guardados');volverCarpeta(x.obra,x.cat)};
 SUBMIT.slotEdit=async f=>{const o=findO(f.dataset.o),sl=o.planos.find(p=>p.id===f.dataset.s);if(!sl)return;const n=val('rn-n').trim();if(!n){toast('Poné el nombre');return}
   const fl=$('#rn-f')?.files?.[0];let r=null;if(fl){r=await readFile(fl);if(!r){toast('No se pudo leer el archivo');return}}
@@ -4081,8 +4084,8 @@ function slotRow(s){const r=ROLE(),cur=slotCur(s),st=slotEstado(s),[lab,cls]=SLO
   const up=puedePlanos(s.obra)?`<label class="btn sm ${st==='falta'?'gold':''}" for="sf-${s.id}" style="cursor:pointer">${st==='falta'?(r==='estudio'?'Subir plano':'Cargar recibido por fuera'):(r==='estudio'?'Subir nueva versión':'Cargar nueva versión')}</label><input id="sf-${s.id}" type="file" data-chg="slotFile" data-s="${s.id}" data-o="${s.obra.id}" hidden>`:'';
   const rec=st==='falta'&&(puedePedir(s.obra)||esDir())?`<button class="btn sm red" data-act="reclamar" data-o="${s.obra.id}" data-s="${s.id}">Reclamar al estudio</button>`:'';
   return `<div class="slot st-${st.replace(' ','-')} ${nv?'nuevo':''}"><div class="sl-h"><span class="sl-n">${nv?'<span class="tag t-gold">Nuevo</span> ':''}${esc(s.nombre)}</span><span class="status ${cls}">${lab}</span></div>
-  <span class="dm">${cur?`rev ${cur.ver} · ${esc(cur.por)} · ${fmt(cur.fecha)}${hist?` · ${plural(hist,'versión anterior','versiones anteriores')}`:''}`:'Todavía no se subió'}${ts.length?` · para ${esc(ts[0].name)} (${fmt(ts[0].start)})`:''}</span>${cur&&cur.obs?`<span class="small t-rojo">${esc(cur.obs)}</span>`:''}${s.reclamos?`<span class="small t-naranja">Reclamado ${plural(s.reclamos,'vez','veces')} · último ${fmt(s.ultReclamo)}</span>`:''}
-  <span class="fbtns">${cur?fileBtns({docId:cur.id}):''}${r==='auditor'&&st==='subido'?`<button class="btn sm gold" data-act="nuevoAud" data-t="rev" data-o="${s.obra.id}" data-doc="${cur.id}">Revisar</button>`:''}${s.manual&&puedePlanos(s.obra)?`<button class="btn sm ghost" data-act="slotEdit" data-o="${s.obra.id}" data-s="${s.id}">Editar</button><button class="btn sm ghost" data-act="slotRen" data-o="${s.obra.id}" data-s="${s.id}">Renombrar</button><button class="btn sm red" data-act="slotDel" data-o="${s.obra.id}" data-s="${s.id}">Eliminar</button>`:''}${rec}${up}</span></div>`}
+  <span class="dm">${cur?`rev ${cur.ver} · ${esc(cur.por)} · ${fmt(cur.fecha)}${hist?` · ${plural(hist,'versión anterior','versiones anteriores')}`:''}`:'Todavía no se subió'}${ts.length?` · para ${esc(ts[0].name)} (${fmt(ts[0].start)})`:''}</span>${cur&&cur.obs?`<span class="small t-rojo">${esc(cur.obs)}</span>`:''}${s.reclamos?`<span class="small t-naranja">Reclamado ${plural(s.reclamos,'vez','veces')} · último ${fmt(s.ultReclamo)}</span>`:''}${s.desc?`<span class="small muted">${esc(s.desc)}</span>`:''}${s.resp||s.opc?`<span class="small muted">${s.resp?'Responsable: '+esc(s.resp):''}${s.resp&&s.opc?' · ':''}${s.opc?'Opcional':''}</span>`:''}
+  <span class="fbtns">${cur?fileBtns({docId:cur.id}):''}${r==='auditor'&&st==='subido'?`<button class="btn sm gold" data-act="nuevoAud" data-t="rev" data-o="${s.obra.id}" data-doc="${cur.id}">Revisar</button>`:''}${plBtns(s)}${rec}${up}</span></div>`}
 function folderBody(o,f){const ss=o.planos.filter(s=>s.folder===f),ex=DOCS.filter(x=>x.obra===o&&x.cat===f&&!x.slot&&x.estado!=='reemplazado');const can=puedePlanos(o);const falt=ss.filter(s=>slotEstado(s)==='falta').length;const rec=(puedePedir(o)||esDir())&&falt>1;
   return `${rec?`<button class="btn red full" data-act="reclamarTodos" data-o="${o.id}" data-f="${f}">Reclamar los ${falt} planos que faltan</button>`:''}<div class="slots">${ss.map(slotRow).join('')||'<p class="muted small">Esta carpeta todavía no tiene planos en la lista.</p>'}</div>${ex.length?`<div class="card"><div class="top"><h3>Otros archivos de la carpeta</h3><span class="muted small">${ex.length}</span></div>${ex.map(docRow).join('')}</div>`:''}
   ${can?`<div class="fold-acts">${ROLE()==='estudio'?'':`<label class="btn ghost" for="fp-${f}" style="cursor:pointer">+ Cargar plano recibido por fuera de la app</label><input id="fp-${f}" type="file" multiple data-chg="folderPlano" data-o="${o.id}" data-f="${f}" hidden>`}<label class="btn ghost" for="fx-${f}" style="cursor:pointer">+ Agregar PDF o archivo</label><input id="fx-${f}" type="file" multiple data-chg="folderFile" data-o="${o.id}" data-f="${f}" hidden><button class="btn ghost" data-act="nuevoSlot" data-o="${o.id}" data-f="${f}">+ Sumar un plano a la lista</button></div>`:''}`}
@@ -4090,7 +4093,7 @@ const _foldersDe=foldersDe;
 foldersDe=function(o){return [..._foldersDe(o),...(o.carpetas||[]).filter(([k])=>!_foldersDe(o).some(x=>x[0]===k))]};
 const _tabDocs=tabDocs;
 tabDocs=function(o){return _tabDocs(o)+((puedePedir(o)||esDir())?`<button class="btn ghost full" data-act="nuevaCarpeta" data-o="${o.id}">+ Agregar una carpeta de rubro</button>`:'')};
-function reclamarSlot(s){s.reclamos=(s.reclamos||0)+1;s.ultReclamo=TODAY;const it=slotItems(s).find(i=>!iDone(i));notify('estudio',s.obra,`La obra reclama el plano ${s.nombre} (${FNAME[s.folder]})`,it?{t:'card',id:it.card.id}:null,{reclamo:true})}
+function reclamarSlot(s){s.reclamos=(s.reclamos||0)+1;s.ultReclamo=TODAY;const it=slotItems(s).find(i=>!iDone(i));notify('estudio',s.obra,`La obra reclama el plano ${s.nombre} (${FN(s.obra,s.folder)})`,it?{t:'card',id:it.card.id}:null,{reclamo:true,slotKey:plKey(s)})}
 Object.assign(A,{
   reclamar:ds=>{const o=findO(ds.o),s=o.planos.find(p=>p.id===ds.s);reclamarSlot(s);toast(`Reclamo enviado al estudio: ${s.nombre}`);draw();if(document.querySelector('.sheet')&&CURS&&CURS.fn==='sheetRubro')keepScroll(()=>sheetRubro(o.id,s.folder))},
   reclamarTodos:ds=>{const o=findO(ds.o);const ss=o.planos.filter(s=>s.folder===ds.f&&slotEstado(s)==='falta');ss.forEach(reclamarSlot);toast(`${plural(ss.length,'plano reclamado','planos reclamados')} al estudio`);draw();keepScroll(()=>sheetRubro(o.id,ds.f))},
@@ -4101,7 +4104,7 @@ Object.assign(CHG,{
   slotFile:async(v,el)=>{const f=el.files?.[0];if(!f)return;const o=findO(el.dataset.o),s=o.planos.find(p=>p.id===el.dataset.s);const r=await readFile(f);if(!r)return;const est=ROLE()==='estudio';
     const x=subirPlano(s,r.id,est?S.u.name:porFuera());toast(`${s.nombre}: subido rev ${x.ver}. Le llega a ${est?'la jefatura y a la auditoría':'la auditoría y al estudio'}`);draw();if(document.querySelector('.sheet'))keepScroll(()=>sheetRubro(o.id,s.folder))},
   folderPlano:async(v,el)=>{const o=findO(el.dataset.o),fd=el.dataset.f;let n=0;for(const f of [...(el.files||[])]){const r=await readFile(f);if(!r)continue;const nombre=f.name.replace(/\.[^.]+$/,'');const s=o.planos.find(p=>p.folder===fd&&p.nombre===nombre)||nuevoSlotM(o,null,fd,nombre);subirPlano(s,r.id,porFuera());n++}
-    if(n)toast(`${plural(n,'plano cargado','planos cargados')} en ${FNAME[fd]}: le llega a la auditoría y al estudio`);draw();if(document.querySelector('.sheet'))keepScroll(()=>sheetRubro(o.id,fd))},
+    if(n)toast(`${plural(n,'plano cargado','planos cargados')} en ${FN(o,fd)}: le llega a la auditoría y al estudio`);draw();if(document.querySelector('.sheet'))keepScroll(()=>sheetRubro(o.id,fd))},
   itemCant:(v,el)=>{const c=findC(el.dataset.c),i=c&&c.items.find(x=>x.id===el.dataset.i);if(!i)return;i.cant=v.trim();toast(i.cant?`Cantidad guardada: ${i.cant}`:'Cantidad borrada')}
 });
 /* slots sin rubro (cargados por fuera) no rompen la búsqueda de la tarea */
@@ -4154,7 +4157,7 @@ function snapRol(){const r=ROLE(),os=misObras();
   if(r==='cliente')return null;
   const base=o=>({obra:o.nombre,etapa:etapaDe(o),avance:avance(o)+'%'});
   const audInfo=o=>({proximas_supervisiones:o.sup.filter(s=>s.estado==='programada').slice(0,3).map(s=>iso(s.fecha)),certificados_pendientes:o.cert.filter(c=>certEstado(c)!=='certificada').map(c=>({etapa:c.etapa,fecha:iso(certFecha(c))})),actas_recientes:AUD.filter(a=>a.obra===o).sort((a,b)=>b.fecha-a.fecha).slice(0,5).map(a=>({tipo:AUD_TIPO[a.tipo].corto,numero:a.num,fecha:iso(a.fecha),resultado:a.resultado,observaciones:(a.data.obs||[]).map(x=>x.desc)}))});
-  const planos=o=>({faltan:o.planos.filter(s=>slotEstado(s)==='falta').map(s=>FNAME[s.folder]+': '+s.nombre).slice(0,40),subidos_en_revision:o.planos.filter(s=>slotEstado(s)==='subido').map(s=>s.nombre),observados:o.planos.filter(s=>slotEstado(s)==='con observaciones').map(s=>s.nombre),vigentes:o.planos.filter(s=>slotEstado(s)==='vigente').length,total:o.planos.length,renders:DOCS.filter(x=>x.obra===o&&x.cat==='ren').length});
+  const planos=o=>({faltan:o.planos.filter(s=>slotEstado(s)==='falta').map(s=>FN(o,s.folder)+': '+s.nombre).slice(0,40),subidos_en_revision:o.planos.filter(s=>slotEstado(s)==='subido').map(s=>s.nombre),observados:o.planos.filter(s=>slotEstado(s)==='con observaciones').map(s=>s.nombre),vigentes:o.planos.filter(s=>slotEstado(s)==='vigente').length,total:o.planos.length,renders:DOCS.filter(x=>x.obra===o&&x.cat==='ren').length});
   if(r==='auditor')return{agenda_30_dias:agendaAud(os,30).map(a=>({fecha:iso(a.f),tipo:ATIPO[a.tipo][0],obra:a.o.nombre,motivo:a.motivo})),obras:os.map(o=>({...base(o),entrega_prevista:iso(finObra(o)),tarea_actual:actual(o).name,planos_para_revisar:DOCS.filter(x=>x.obra===o&&x.estado==='en revisión').map(x=>x.nombre+' rev '+x.ver),...audInfo(o)}))};
   if(r==='estudio')return{constructora:CONSTRUCTORAS.find(c=>c.id===S.cons).n,obras:os.map(o=>({...base(o),entrega_contractual:iso(finContractual(o)),entregas_pendientes:o.cards.filter(c=>c.tipo==='doc'&&color(c)!=='futuro').map(c=>({tarea:c.task.name,semaforo:NOMBRE[color(c)],fecha_limite:iso(timing(c).limit),pendientes:itemsEstudio(c).filter(i=>!iDone(i)).map(i=>i.txt+(i.estado==='recibido'?' (enviado, la obra lo está verificando)':''))})).filter(x=>x.pendientes.length),planos:planos(o),adicionales_para_autorizar:ADIC.filter(a=>a.obra===o&&adicEstado(a)[0]==='Espera autorización').map(a=>({numero:a.n,detalle:a.txt}))}))};
   const full=r==='direccion';
@@ -4180,7 +4183,7 @@ iaLocal=function(q){const r=ROLE(),n=norm(q),os=misObras();
     if(n.includes('observ')){const ob=AUD.filter(a=>os.includes(a.obra)&&a.resultado!=='Conforme').sort((a,b)=>b.fecha-a.fecha).slice(0,5);return ob.length?'Últimas actas con observaciones:\n'+ob.map(a=>`- ${a.num} · ${a.obra.nombre} (${fmt(a.fecha)}): ${(a.data.obs||[])[0]?.desc||a.resultado}`).join('\n'):'No hay actas con observaciones.'}
     const ag=agendaAud(os,14);return ag.length?`En los próximos 14 días tenés ${plural(ag.length,'compromiso','compromisos')}:\n`+ag.slice(0,8).map(a=>`- ${fmt(a.f)} · ${ATIPO[a.tipo][0]} · ${a.o.nombre}`).join('\n'):'No tenés compromisos en los próximos 14 días.'}
   if(r==='estudio'){
-    if(n.includes('plano')||n.includes('subir')||n.includes('carpeta')){return os.map(o=>{const f=o.planos.filter(s=>slotEstado(s)==='falta');return `**${o.nombre}**: ${f.length?plural(f.length,'plano por subir','planos por subir'):'sin planos pendientes'}`+(f.length?'\n'+f.slice(0,4).map(s=>`- ${FNAME[s.folder]}: ${s.nombre}`).join('\n'):'')}).join('\n')}
+    if(n.includes('plano')||n.includes('subir')||n.includes('carpeta')){return os.map(o=>{const f=o.planos.filter(s=>slotEstado(s)==='falta');return `**${o.nombre}**: ${f.length?plural(f.length,'plano por subir','planos por subir'):'sin planos pendientes'}`+(f.length?'\n'+f.slice(0,4).map(s=>`- ${FN(o,s.folder)}: ${s.nombre}`).join('\n'):'')}).join('\n')}
     if(n.includes('adicional')){const ad=ADIC.filter(a=>os.includes(a.obra)&&adicEstado(a)[0]==='Espera autorización');return ad.length?ad.map(a=>`- ${a.obra.nombre} · Adicional N° ${a.n}: ${a.txt}`).join('\n'):'No hay adicionales esperando su autorización.'}
     const o=os.find(x=>n.includes(norm(x.nombre))||(x.nombre.match(/\d+/)&&n.includes(x.nombre.match(/\d+/)[0])));const cs=estPend().filter(c=>(!o||c.obra===o)&&color(c)!=='futuro').sort((a,b)=>timing(a).limit-timing(b).limit);
     return cs.length?`${o?o.nombre+': t':'T'}iene ${plural(cs.length,'entrega pendiente','entregas pendientes')}.\n`+cs.slice(0,6).map(c=>`- ${o?'':c.obra.nombre+' · '}${c.task.name}: ${itemsEstudio(c).filter(i=>!iDone(i)&&!nuevoResp(i)).length} ítems, límite ${fmt(timing(c).limit)} (${NOMBRE[color(c)].toLowerCase()})`).join('\n'):'No tiene entregas pendientes.'}
@@ -5096,6 +5099,163 @@ A.gesCsv=ds=>{const o=findO(ds.o),L=gesElegidos(o);if(!L.length){toast('Marcá a
   const csv='﻿'+[cab,...L.map(f)].map(r=>r.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(';')).join('\r\n');bajar(new Blob([csv],{type:'text/csv'}),`Registros_${slug(o.nombre)}.csv`)};
 
 try{document.querySelectorAll('.brand .mono').forEach(e=>{if(/20\d\d$/.test(e.textContent.trim()))e.textContent=new Date(TODAY).toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).replace(/[.,]/g,'')})}catch(e){}
+/* ================= PLA-01/02/03 · planos y carpetas editables por obra (se guardan en la nube y se ven en todos los paneles) ================= */
+const PLD={};
+const plH=t=>{let h=5381;for(const c of String(t))h=((h<<5)+h+c.charCodeAt(0))>>>0;return h.toString(36)};
+const plKey=s=>{const k=skey(s);if(!s.o0){if(s.manual)s.o0={nombre:s.nombre,folder:s.folder};else{const q=k.split('|');s.o0={nombre:q.slice(2).join('|')||s.nombre,folder:q[1]||s.folder}}}return k};
+function plEnsure(o){o.fold=o.fold||{ord:null,ren:{},ext:[],fdel:{}};o.pTrash=o.pTrash||[];o.plLog=o.plLog||[];(o.planos||[]).forEach(plKey);return o}
+const plDir=()=>esDir();
+const plQuien=()=>(S.u&&S.u.name)||(ROLE()==='direccion'?'Dirección':'Jefatura de obra');
+const plHoy=t=>{const x=new Date((t||Date.now())-108e5);return String(x.getUTCDate()).padStart(2,'0')+'/'+String(x.getUTCMonth()+1).padStart(2,'0')+' '+String(x.getUTCHours()).padStart(2,'0')+':'+String(x.getUTCMinutes()).padStart(2,'0')};
+const plDias=t=>Math.max(0,Math.ceil((t+30*864e5-Date.now())/864e5));
+/* --- carpetas visibles de una obra, en su orden --- */
+const plBase=o=>FOLDERS.map(f=>f[0]).filter(k=>o.planos.some(s=>s.folder===k)||DOCS.some(x=>x.obra===o&&x.cat===k&&!x.slot&&x.estado!=='reemplazado'));
+foldersDe=function(o){plEnsure(o);const F=o.fold;const ks=[...new Set([...(F.ord||[]),...plBase(o),...F.ext.map(e=>e[0]),...o.planos.map(s=>s.folder)])].filter(k=>!F.fdel[k]);return ks.map(k=>[k,FN(o,k)])};
+const plFolderKeys=o=>foldersDe(o).map(x=>x[0]);
+/* --- sincronización con la base compartida --- */
+const plCred=o=>{try{return credAv(o)}catch(e){return null}};
+async function plPost(b){const r=await fetch('/api/nexo2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});let j={};try{j=await r.json()}catch(e){}return{st:r.status,j}}
+function plSnap(o){plEnsure(o);const F=o.fold,sl={},so={};
+  const put=(s,x)=>{const k=plKey(s),e={};
+    if(s.manual){e.m=1;e.n=s.nombre;e.f=s.folder;if(s.rubro)e.ru=s.rubro;if(s.tarea)e.ta=s.tarea}else{if(s.nombre!==s.o0.nombre)e.n=s.nombre;if(s.folder!==s.o0.folder)e.f=s.folder}
+    if(s.desc)e.d=s.desc;if(s.resp)e.r=s.resp;if(s.opc)e.ob=0;
+    if(x){e.x=x.delAt;e.xb=x.by;if(x.xf)e.xf=x.xf}
+    if(Object.keys(e).length)sl[k]=e};
+  o.planos.forEach(s=>put(s));
+  const ahora=Date.now();o.pTrash=o.pTrash.filter(t=>ahora-t.delAt<30*864e5);o.pTrash.forEach(t=>put(t.s,t));
+  o.planos.forEach(s=>{(so[s.folder]=so[s.folder]||[]).push(plKey(s))});
+  Object.keys(F.fdel).forEach(k=>{if(ahora-F.fdel[k]>=30*864e5)delete F.fdel[k]});
+  return{ord:F.ord,ren:F.ren,ext:F.ext,fdel:F.fdel,sl,so,log:o.plLog.slice(-150)}}
+async function plPush(o,silencio){const P=PLD[o.id]=PLD[o.id]||{rev:0,t:0};const cr=plCred(o);if(!cr||!cr.codigo){P.dirty=false;if(!silencio)toast('Volvé a ingresar tu código (Salir y entrar de nuevo) para guardar los cambios de Planos.');return false}
+  try{const doc=plSnap(o);const r=await plPost({op:'pla_save',obra:o.id,cred:cr,rev:P.rev,doc});
+    if(r.st===200&&r.j.ok){P.rev=r.j.rev;P.dirty=false;o.planos.forEach(s=>{if(s.manual)s.sync=true});return true}
+    if(r.st===409&&r.j.doc){plApply(o,r.j.doc);P.rev=r.j.doc.rev;P.dirty=false;toast('Otra persona cambió Planos mientras tanto. Ya se actualizó: repetí tu cambio.');plRefresh(true);return false}
+    throw new Error(r.j.error||r.st)}
+  catch(e){P.dirty=true;if(!silencio)toast('No se pudo guardar en la nube. Queda pendiente y se reintenta solo.');return false}}
+function plTouch(o,txt){if(!o)return;plEnsure(o);if(txt)o.plLog.push({t:Date.now(),por:plQuien(),txt});const P=PLD[o.id]=PLD[o.id]||{rev:0,t:0};P.dirty=true;return plPush(o)}
+async function plLoad(o,fuerza){if(!o||!S.u)return;const P=PLD[o.id]=PLD[o.id]||{rev:0,t:0};if(P.busy||(!fuerza&&Date.now()-P.t<15000))return;P.busy=true;let cambio=false;
+  try{if(P.dirty)await plPush(o,true);
+    const r=await plPost({op:'pla_list',obra:o.id});P.t=Date.now();const d=r.j&&r.j.doc;
+    if(d&&d.rev!==P.rev&&!P.dirty){plApply(o,d);P.rev=d.rev;cambio=true}P.loaded=true}catch(e){}
+  P.busy=false;if(cambio)plRefresh()}
+function plRefresh(fuerza){if(document.querySelector('.sheet')){if(CURS&&CURS.fn==='sheetRubro'&&!document.querySelector('.sheet form')){const a=CURS.args;keepScroll(()=>window.sheetRubro(...a))}else if(!fuerza)return}
+  const a=document.activeElement;if(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)&&!fuerza)return;draw()}
+/* --- aplicar la estructura guardada sobre la que genera la app --- */
+function plSetNombre(o,s,n){s.nombre=n;slotItems(s).forEach(i=>{i.txt=n});slotDocs(s).forEach(x=>{x.nombre=n});const k=plKey(s);NOTIF.forEach(z=>{if(z.reclamo&&z.slotKey===k)z.txt=`La obra reclama el plano ${n} (${FN(o,s.folder)})`})}
+function plSetFolder(o,s,f){s.folder=f;slotDocs(s).forEach(x=>{x.cat=f})}
+function plToTrash(o,s,meta){plEnsure(o);const k=plKey(s);const docs=DOCS.filter(x=>x.slot===s.id);docs.forEach(x=>{const i=DOCS.indexOf(x);if(i>=0)DOCS.splice(i,1)});
+  const its=slotItems(s).map(i=>{const c=i.card;c.items=c.items.filter(z=>z!==i);const cr=!c.items.length;if(cr)o.cards=o.cards.filter(z=>z!==c);return{i,c,man:1,cr}});
+  for(let q=NOTIF.length-1;q>=0;q--)if(NOTIF[q].reclamo&&NOTIF[q].slotKey===k)NOTIF.splice(q,1);
+  s.reclamos=0;s.ultReclamo=null;
+  o.planos=o.planos.filter(p=>p!==s);o.pTrash=o.pTrash.filter(t=>t.s!==s);o.pTrash.push({s,docs,its,delAt:meta.delAt,by:meta.by||'',xf:meta.xf||''})}
+function plFromTrash(o,t){o.pTrash=o.pTrash.filter(z=>z!==t);t.docs.forEach(x=>{if(!DOCS.includes(x))DOCS.push(x)});
+  t.its.forEach(r=>{if(r.cr&&!o.cards.includes(r.c))o.cards.push(r.c);if(!r.c.items.includes(r.i))r.c.items.push(r.i);r.i.slot=t.s.id;r.i.txt=t.s.nombre});t.docs.forEach(x=>{x.nombre=t.s.nombre;x.cat=t.s.folder});
+  if(!o.planos.includes(t.s))o.planos.push(t.s);if(o.fold.fdel[t.s.folder])delete o.fold.fdel[t.s.folder]}
+function plQuitar(o,s){const t=o.pTrash.find(z=>z.s===s);if(t)o.pTrash=o.pTrash.filter(z=>z!==t);else{plToTrash(o,s,{delAt:Date.now()});o.pTrash=o.pTrash.filter(z=>z.s!==s)}}
+function plCrearManual(o,k,e){const s=nuevoSlotM(o,e.ru||null,e.f,e.n);s.sk=k;s.o0={nombre:e.n,folder:e.f};s.sync=true;s.tarea=e.ta||null;
+  const t=e.ta&&o.tasks.find(x=>x.id===e.ta);if(t){let c=o.cards.find(x=>x.task===t&&x.tipo==='doc');if(!c)c=addCard(o,t,'doc',[],{origen:'manual',created:TODAY,enviada:TODAY});const it=addItem(c,{txt:e.n,tipo:PL,resp:E,origen:'manual'});it.slot=s.id}return s}
+function plApply(o,doc){plEnsure(o);const F=o.fold;F.ord=doc.ord||null;F.ren=doc.ren||{};F.ext=doc.ext||[];F.fdel=doc.fdel||{};o.plLog=doc.log||[];
+  const SL=doc.sl||{},ahora=Date.now();
+  Object.entries(SL).forEach(([k,e])=>{if(e.m&&![...o.planos,...o.pTrash.map(t=>t.s)].some(s=>plKey(s)===k)&&!(e.x&&ahora-e.x>=30*864e5))plCrearManual(o,k,e)});
+  [...o.planos,...o.pTrash.map(t=>t.s)].forEach(s=>{const k=plKey(s),e=SL[k];if(!e&&s.manual&&s.sync){plQuitar(o,s);return}
+    const E2=e||{};const nom=E2.n||(s.manual?s.nombre:s.o0.nombre),fol=E2.f||(s.manual?s.folder:s.o0.folder);
+    if(s.nombre!==nom)plSetNombre(o,s,nom);if(s.folder!==fol)plSetFolder(o,s,fol);
+    s.desc=E2.d||'';s.resp=E2.r||'';s.opc=E2.ob===0;
+    const enT=o.pTrash.find(t=>t.s===s);
+    if(E2.x&&ahora-E2.x>=30*864e5){if(!enT)plToTrash(o,s,{delAt:E2.x});o.pTrash=o.pTrash.filter(z=>z.s!==s);return}
+    if(E2.x&&!enT)plToTrash(o,s,{delAt:E2.x,by:E2.xb,xf:E2.xf});
+    else if(E2.x&&enT){enT.delAt=E2.x;enT.by=E2.xb||'';enT.xf=E2.xf||''}
+    else if(!E2.x&&enT)plFromTrash(o,enT)});
+  Object.entries(doc.so||{}).forEach(([f,ks])=>{const idx=[],arr=[];o.planos.forEach((s,i)=>{if(s.folder===f){idx.push(i);arr.push(s)}});if(!arr.length)return;const rank=s=>{const q=ks.indexOf(plKey(s));return q<0?1e6:q};const ord=arr.map((s,i)=>[s,i]).sort((a,b)=>rank(a[0])-rank(b[0])||a[1]-b[1]).map(x=>x[0]);idx.forEach((p,i)=>{o.planos[p]=ord[i]})})}
+/* --- acciones sobre planos --- */
+const plSlot=ds=>{const o=findO(ds.o);plEnsure(o);return[o,o.planos.find(p=>p.id===ds.s)]};
+const plResumen=s=>{const d=slotDocs(s),v=d.length,c=slotItems(s).length,r=s.reclamos||0;const p=[];if(v)p.push(plural(v,'versión','versiones')+' subida'+(v>1?'s':''));if(r)p.push(plural(r,'reclamo enviado','reclamos enviados'));if(c)p.push(plural(c,'tarjeta del semáforo vinculada','tarjetas del semáforo vinculadas'));return p};
+function plMover(o,arr,s,dir){const f=s.folder,idx=[],xs=[];o.planos.forEach((p,i)=>{if(p.folder===f){idx.push(i);xs.push(p)}});const a=xs.indexOf(s),b=a+dir;if(a<0||b<0||b>=xs.length)return false;[xs[a],xs[b]]=[xs[b],xs[a]];idx.forEach((p,i)=>{o.planos[p]=xs[i]});return true}
+const plOpcionesResp=['Estudio','Ingeniero','Proveedor','Propietario','Jefatura de obra'];
+Object.assign(A,{
+  slotMenu:ds=>{const[o,s]=plSlot(ds);if(!s)return;const up=o.planos.filter(p=>p.folder===s.folder);const i=up.indexOf(s);
+    openSheet(`<span class="eyebrow">${esc(o.nombre)} · ${esc(FN(o,s.folder))}</span><h2>${esc(s.nombre)}</h2><div class="sec"><button class="btn full" data-act="slotEd2" data-o="${o.id}" data-s="${s.id}">Editar</button><button class="btn full" data-act="slotMov" data-o="${o.id}" data-s="${s.id}">Mover a otra carpeta</button><div class="row2"><button class="btn ghost" ${i<=0?'disabled':''} data-act="slotSube" data-o="${o.id}" data-s="${s.id}">▲ Subir en la lista</button><button class="btn ghost" ${i>=up.length-1?'disabled':''} data-act="slotBaja" data-o="${o.id}" data-s="${s.id}">▼ Bajar en la lista</button></div><button class="btn red full" data-act="slotEli" data-o="${o.id}" data-s="${s.id}">Eliminar</button></div>`,'Opciones del plano')},
+  slotEd2:ds=>{const[o,s]=plSlot(ds);if(!s)return;
+    openSheet(`<span class="eyebrow">${esc(o.nombre)} · ${esc(FN(o,s.folder))}</span><h2>Editar plano</h2><form class="sec" data-submit="slotEd2" data-o="${o.id}" data-s="${s.id}"><label class="f">Nombre del plano<input id="pe-n" value="${esc(s.nombre)}"></label><label class="f">Descripción (opcional)<textarea id="pe-d" rows="2">${esc(s.desc||'')}</textarea></label><label class="f">Responsable de entregarlo<input id="pe-r" list="pe-rl" value="${esc(s.resp||'')}" placeholder="Estudio, ingeniero, proveedor…"><datalist id="pe-rl">${plOpcionesResp.map(x=>`<option value="${x}">`).join('')}</datalist></label><label class="chk"><input type="checkbox" id="pe-o" ${s.opc?'':'checked'}> Es obligatorio</label><button class="btn gold" type="submit">Guardar</button></form>`,'Editar plano')},
+  slotMov:ds=>{const[o,s]=plSlot(ds);if(!s)return;
+    openSheet(`<span class="eyebrow">${esc(o.nombre)}</span><h2>Mover "${esc(s.nombre)}"</h2><form class="sec" data-submit="slotMov" data-o="${o.id}" data-s="${s.id}"><p class="muted small">Está en <b>${esc(FN(o,s.folder))}</b>. Conserva su estado, archivos, versiones y reclamos.</p><label class="f">Pasar a la carpeta<select id="pm-f">${foldersDe(o).filter(x=>x[0]!==s.folder).map(([k,n])=>`<option value="${k}">${esc(n)}</option>`).join('')}</select></label><button class="btn gold" type="submit">Mover</button></form>`,'Mover plano')},
+  slotSube:ds=>{const[o,s]=plSlot(ds);if(s&&plMover(o,0,s,-1)){plTouch(o,`Subió "${s.nombre}" en ${FN(o,s.folder)}`);draw();A.slotMenu(ds)}},
+  slotBaja:ds=>{const[o,s]=plSlot(ds);if(s&&plMover(o,0,s,1)){plTouch(o,`Bajó "${s.nombre}" en ${FN(o,s.folder)}`);draw();A.slotMenu(ds)}},
+  slotEli:ds=>{const[o,s]=plSlot(ds);if(!s)return;const r=plResumen(s);
+    openSheet(`<span class="eyebrow">${esc(o.nombre)} · ${esc(FN(o,s.folder))}</span><h2>¿Eliminar "${esc(s.nombre)}"?</h2><div class="sec">${r.length?`<div class="infobox t-naranja">Este plano tiene ${r.join(' y ')}.</div>`:''}<p class="muted small">Va a la papelera de Planos de la obra durante 30 días. Desde ahí se puede restaurar con todos sus archivos.${s.reclamos?' El reclamo pendiente al estudio se cancela.':''}</p><div class="row2"><button class="btn" data-act="back">Cancelar</button><button class="btn red" data-act="slotEli2" data-o="${o.id}" data-s="${s.id}">Sí, eliminar</button></div></div>`,'Eliminar plano')},
+  slotEli2:ds=>{const[o,s]=plSlot(ds);if(!s)return;const f=s.folder,n=s.nombre;plToTrash(o,s,{delAt:Date.now(),by:plQuien()});plTouch(o,`Eliminó el plano "${n}" de ${FN(o,f)}`);toast('Plano enviado a la papelera');closeSheet();draw();sheetRubro(o.id,f)},
+  papelera:ds=>sheetPapelera(ds.o),
+  plRestaurar:ds=>{const o=findO(ds.o);plEnsure(o);const t=o.pTrash.find(z=>plKey(z.s)===ds.k);if(!t)return;const n=t.s.nombre,f=t.s.folder;plFromTrash(o,t);plTouch(o,`Restauró el plano "${n}" en ${FN(o,f)}`);toast('Plano restaurado');draw();sheetPapelera(o.id)},
+  plRestCarp:ds=>{const o=findO(ds.o);plEnsure(o);const k=ds.f,F=o.fold;delete F.fdel[k];o.pTrash.filter(t=>t.xf===k).forEach(t=>plFromTrash(o,t));plTouch(o,`Restauró la carpeta "${FN(o,k)}"`);toast('Carpeta restaurada');draw();sheetPapelera(o.id)},
+  folderMenu:ds=>{const o=findO(ds.o);plEnsure(o);const ks=plFolderKeys(o),i=ks.indexOf(ds.f);
+    openSheet(`<span class="eyebrow">${esc(o.nombre)} · carpeta</span><h2>${esc(FN(o,ds.f))}</h2><div class="sec"><button class="btn full" data-act="carpRen" data-o="${o.id}" data-f="${ds.f}">Renombrar</button><div class="row2"><button class="btn ghost" ${i<=0?'disabled':''} data-act="carpSube" data-o="${o.id}" data-f="${ds.f}">◀ Antes</button><button class="btn ghost" ${i>=ks.length-1?'disabled':''} data-act="carpBaja" data-o="${o.id}" data-f="${ds.f}">Después ▶</button></div><button class="btn red full" data-act="carpEli" data-o="${o.id}" data-f="${ds.f}">Eliminar</button></div>`,'Opciones de la carpeta')},
+  carpRen:ds=>{const o=findO(ds.o);openSheet(`<span class="eyebrow">${esc(o.nombre)} · planos</span><h2>Renombrar carpeta</h2><form class="sec" data-submit="carpRen" data-o="${o.id}" data-f="${ds.f}"><label class="f">Nombre<input id="cr-n" value="${esc(FN(o,ds.f))}"></label><p class="muted small">Cambia en todos los paneles. Los planos, archivos y reclamos de adentro no cambian.</p><button class="btn gold" type="submit">Guardar</button></form>`,'Renombrar carpeta')},
+  carpSube:ds=>plCarpMover(ds,-1),carpBaja:ds=>plCarpMover(ds,1),
+  carpEli:ds=>{const o=findO(ds.o);plEnsure(o);const ss=o.planos.filter(s=>s.folder===ds.f),conArch=ss.filter(s=>slotDocs(s).length).length,ex=DOCS.filter(x=>x.obra===o&&x.cat===ds.f&&!x.slot&&x.estado!=='reemplazado').length;const otras=foldersDe(o).filter(x=>x[0]!==ds.f);
+    if(!ss.length&&!ex){openSheet(`<span class="eyebrow">${esc(o.nombre)} · carpeta</span><h2>¿Eliminar "${esc(FN(o,ds.f))}"?</h2><div class="sec"><p class="muted small">Está vacía. Va a la papelera 30 días y se puede restaurar.</p><div class="row2"><button class="btn" data-act="back">Cancelar</button><button class="btn red" data-act="carpEli2" data-o="${o.id}" data-f="${ds.f}" data-m="">Sí, eliminar</button></div></div>`,'Eliminar carpeta');return}
+    openSheet(`<span class="eyebrow">${esc(o.nombre)} · carpeta</span><h2>¿Eliminar "${esc(FN(o,ds.f))}"?</h2><form class="sec" data-submit="carpEli" data-o="${o.id}" data-f="${ds.f}"><p class="muted small">La carpeta tiene ${plural(ss.length,'plano','planos')}${ex?` y ${plural(ex,'archivo suelto','archivos sueltos')}`:''}. ¿Qué hacemos con ${ss.length+ex>1?'ellos':'él'}?</p><label class="chk"><input type="radio" name="ce-m" value="mover" checked> Mover los planos a otra carpeta</label><label class="f">Carpeta de destino<select id="ce-f">${otras.map(([k,n])=>`<option value="${k}">${esc(n)}</option>`).join('')}</select></label><label class="chk"><input type="radio" name="ce-m" value="todo"> Eliminar la carpeta con todos sus planos${conArch?` (${plural(conArch,'tiene archivos subidos','tienen archivos subidos')})`:''}</label><p class="muted small">Todo lo eliminado va a la papelera 30 días y se puede restaurar.</p><div class="row2"><button class="btn" type="button" data-act="back">Cancelar</button><button class="btn red" type="submit">Eliminar</button></div></form>`,'Eliminar carpeta')},
+  carpEli2:ds=>plCarpBorrar(findO(ds.o),ds.f,ds.m||'',''),
+  nuevaCarpeta:ds=>{const o=findO(ds.o);openSheet(`<span class="eyebrow">${esc(o.nombre)} · planos</span><h2>Nueva carpeta</h2><form class="sec" data-submit="nuevaCarpeta" data-o="${o.id}"><label class="f">Nombre de la carpeta<input id="nc-n" placeholder="Ej: Paisajismo, Ascensor, Quincho"></label><p class="muted small">Aparece en la jefatura, la auditoría y el drive del estudio. Después podés sumarle planos a su lista.</p><button class="btn gold" type="submit">Crear carpeta</button></form>`,'Nueva carpeta')},
+  plPlantilla:ds=>{const o=findO(ds.o);openSheet(`<span class="eyebrow">${esc(o.nombre)} · planos</span><h2>Guardar como plantilla</h2><form class="sec" data-submit="plPlantilla" data-o="${o.id}"><label class="f">Nombre de la plantilla<input id="pt-n" placeholder="Ej: Vivienda Nordelta"></label><p class="muted small">Guarda las carpetas y la lista de planos tal como están ahora. Las obras nuevas pueden arrancar con ella. Las obras ya creadas y la plantilla por defecto no cambian.</p><button class="btn gold" type="submit">Guardar plantilla</button></form>`,'Guardar plantilla')},
+  plUsarPlantilla:ds=>{const o=findO(ds.o);plTplList().then(L=>{openSheet(`<span class="eyebrow">${esc(o.nombre)} · planos</span><h2>Aplicar una plantilla</h2><div class="sec">${L.length?L.map(t=>`<div class="card"><div class="top"><h3>${esc(t.nombre)}</h3><span class="muted small">${(t.carp||[]).length} carpetas · ${(t.slots||[]).length} planos</span></div><button class="btn gold sm" data-act="plAplicarTpl" data-o="${o.id}" data-t="${esc(t.id)}">Aplicar a esta obra</button></div>`).join(''):'<p class="muted small">Todavía no guardaste ninguna plantilla.</p>'}<p class="muted small">Se suman las carpetas y planos de la plantilla que esta obra todavía no tiene. No se borra nada.</p></div>`,'Plantillas')})},
+  plAplicarTpl:ds=>{const o=findO(ds.o);plTplList().then(L=>{const t=L.find(x=>x.id===ds.t);if(!t)return;const n=plAplicarTpl(o,t);plTouch(o,`Aplicó la plantilla "${t.nombre}" (${n} planos nuevos)`);toast(`Plantilla aplicada: ${plural(n,'plano nuevo','planos nuevos')}`);closeSheet();draw()})}
+});
+function plCarpMover(ds,dir){const o=findO(ds.o);plEnsure(o);const F=o.fold,ks=plFolderKeys(o),i=ks.indexOf(ds.f),j=i+dir;if(i<0||j<0||j>=ks.length)return;[ks[i],ks[j]]=[ks[j],ks[i]];F.ord=ks;plTouch(o,`Movió la carpeta "${FN(o,ds.f)}"`);draw();A.folderMenu(ds)}
+function plCarpBorrar(o,f,modo,dest){plEnsure(o);const F=o.fold,n=FN(o,f),ss=o.planos.filter(s=>s.folder===f);
+  if(!F.ord)F.ord=plFolderKeys(o);
+  if(modo==='mover'){if(!dest||dest===f)return;ss.forEach(s=>plSetFolder(o,s,dest));DOCS.forEach(x=>{if(x.obra===o&&x.cat===f&&!x.slot)x.cat=dest})}
+  else if(modo==='todo'){ss.forEach(s=>plToTrash(o,s,{delAt:Date.now(),by:plQuien(),xf:f}))}
+  F.fdel[f]=Date.now();F.ord=F.ord.filter(k=>k!==f);
+  plTouch(o,modo==='mover'?`Eliminó la carpeta "${n}" y movió sus planos a "${FN(o,dest)}"`:`Eliminó la carpeta "${n}"${ss.length?` con ${plural(ss.length,'plano','planos')}`:''}`);
+  toast('Carpeta enviada a la papelera');closeSheet();draw()}
+Object.assign(SUBMIT,{
+  slotEd2:f=>{const[o,s]=plSlot({o:f.dataset.o,s:f.dataset.s});if(!s)return;const n=val('pe-n');if(!n){toast('Poné el nombre del plano');return}
+    const ant=s.nombre;if(n!==ant)plSetNombre(o,s,n);s.desc=val('pe-d');s.resp=val('pe-r');s.opc=!$('#pe-o').checked;
+    plTouch(o,n!==ant?`Renombró el plano "${ant}" a "${n}"`:`Editó el plano "${n}"`);toast('Cambios guardados');closeSheet();draw();sheetRubro(o.id,s.folder)},
+  slotMov:f=>{const[o,s]=plSlot({o:f.dataset.o,s:f.dataset.s});if(!s)return;const d=val('pm-f');if(!d)return;const de=s.folder;plSetFolder(o,s,d);
+    plTouch(o,`Movió "${s.nombre}" de "${FN(o,de)}" a "${FN(o,d)}"`);toast(`Movido a ${FN(o,d)}`);closeSheet();draw();sheetRubro(o.id,de)},
+  carpRen:f=>{const o=findO(f.dataset.o);plEnsure(o);const n=val('cr-n'),k=f.dataset.f;if(!n){toast('Poné el nombre');return}const ant=FN(o,k);
+    const ex=o.fold.ext.find(e=>e[0]===k);if(ex)ex[1]=n;else o.fold.ren[k]=n;
+    o.pTrash.forEach(()=>{});NOTIF.forEach(z=>{if(z.reclamo&&z.obra===o){const s=[...o.planos].find(p=>plKey(p)===z.slotKey);if(s)z.txt=`La obra reclama el plano ${s.nombre} (${FN(o,s.folder)})`}});
+    plTouch(o,`Renombró la carpeta "${ant}" a "${n}"`);toast('Carpeta renombrada');closeSheet();draw();if(!document.querySelector('.sheet'))sheetRubro(o.id,k)},
+  carpEli:f=>{const o=findO(f.dataset.o);const m=(document.querySelector('input[name="ce-m"]:checked')||{}).value||'mover';plCarpBorrar(o,f.dataset.f,m,val('ce-f'))},
+  nuevaCarpeta:f=>{const o=findO(f.dataset.o),n=val('nc-n');if(!n){toast('Poné el nombre de la carpeta');return}plEnsure(o);const k='x'+Math.random().toString(36).slice(2,8);o.fold.ext.push([k,n]);
+    if(o.fold.ord)o.fold.ord.push(k);plTouch(o,`Creó la carpeta "${n}"`);notify('estudio',o,`Nueva carpeta de planos en ${o.nombre}: ${n}`,null);toast(`Carpeta "${n}" creada`);draw();sheetRubro(o.id,k)},
+  plPlantilla:async f=>{const o=findO(f.dataset.o),nm=val('pt-n');if(!nm){toast('Poné el nombre de la plantilla');return}plEnsure(o);const cr=plCred(o);
+    const keys=plFolderKeys(o);const tpl={id:'t'+Date.now().toString(36),nombre:nm,carp:keys.map(k=>[k,FN(o,k)]),slots:o.planos.map(s=>({n:s.nombre,f:s.folder,ru:s.rubro||null,d:s.desc||'',r:s.resp||'',ob:s.opc?0:1}))};
+    try{const r=await plPost({op:'pla_tpl_save',cred:cr,id:tpl.id,tpl});if(!(r.st===200&&r.j.ok))throw new Error(r.j.error)}catch(e){toast('No se pudo guardar la plantilla. Probá de nuevo.');return}
+    plLogSolo(o,`Guardó la estructura como plantilla "${nm}"`);toast(`Plantilla "${nm}" guardada`);closeSheet()}
+});
+function plLogSolo(o,txt){plEnsure(o);o.plLog.push({t:Date.now(),por:plQuien(),txt});plTouch(o)}
+async function plTplList(){try{const r=await plPost({op:'pla_tpl_list'});return(r.j&&r.j.items)||[]}catch(e){return[]}}
+function plAplicarTpl(o,t){plEnsure(o);const F=o.fold;let n=0;const have=new Set(plFolderKeys(o));
+  (t.carp||[]).forEach(([k,nom])=>{const dup=plFolderKeys(o).find(x=>FN(o,x)===nom);if(dup)return;if(FNAME[k])return;F.ext.push([k,nom])});
+  (t.slots||[]).forEach(e=>{if(o.planos.some(s=>s.nombre===e.n))return;const kf=plFolderKeys(o).includes(e.f)?e.f:(plFolderKeys(o).find(x=>FN(o,x)===((t.carp||[]).find(c=>c[0]===e.f)||[])[1])||e.f);const s=nuevoSlotM(o,e.ru,kf,e.n);s.sync=true;s.desc=e.d||'';s.resp=e.r||'';s.opc=e.ob===0;n++});
+  if(F.ord)(t.carp||[]).forEach(([k])=>{if(!F.ord.includes(k))F.ord.push(k)});return n}
+/* --- pantallas: lista de carpetas, papelera y registro de cambios --- */
+function sheetPapelera(oid){const o=findO(oid);plEnsure(o);const F=o.fold,ahora=Date.now();
+  const cs=Object.entries(F.fdel).filter(([k,t])=>ahora-t<30*864e5);
+  const h=`<span class="eyebrow">${esc(o.nombre)} · planos</span><h2>Papelera de Planos</h2><p class="muted small">Lo eliminado se guarda 30 días. Pasado ese plazo se borra definitivamente.</p>
+  ${cs.length?`<div class="card"><div class="top"><h3>Carpetas</h3></div>${cs.map(([k,t])=>`<div class="irow"><span><b>${esc(FN(o,k))}</b><br><span class="muted small">Eliminada ${plHoy(t)} · quedan ${plDias(t)} días</span></span><button class="btn sm gold" data-act="plRestCarp" data-o="${o.id}" data-f="${k}">Restaurar</button></div>`).join('')}</div>`:''}
+  <div class="card"><div class="top"><h3>Planos</h3><span class="muted small">${o.pTrash.length}</span></div>${o.pTrash.length?o.pTrash.map(t=>`<div class="irow"><span><b>${esc(t.s.nombre)}</b><br><span class="muted small">${esc(FN(o,t.s.folder))} · eliminado ${plHoy(t.delAt)}${t.by?' por '+esc(t.by):''} · quedan ${plDias(t.delAt)} días${t.docs.length?` · ${plural(t.docs.length,'archivo','archivos')}`:''}</span></span><button class="btn sm gold" data-act="plRestaurar" data-o="${o.id}" data-k="${plKey(t.s)}">Restaurar</button></div>`).join(''):'<span class="muted small">La papelera está vacía.</span>'}</div>`;
+  openSheet(h,'Papelera de Planos')}
+const plBtns=s=>plDir()?`<button class="btn sm ghost" data-act="slotMenu" data-o="${s.obra.id}" data-s="${s.id}" aria-label="Opciones del plano">⋯ Opciones</button>`:(s.manual&&puedePlanos(s.obra)?`<button class="btn sm ghost" data-act="slotEdit" data-o="${s.obra.id}" data-s="${s.id}">Editar</button><button class="btn sm ghost" data-act="slotRen" data-o="${s.obra.id}" data-s="${s.id}">Renombrar</button><button class="btn sm red" data-act="slotDel" data-o="${s.obra.id}" data-s="${s.id}">Eliminar</button>`:'');
+tabDocs=function(o){plEnsure(o);setTimeout(()=>plLoad(o),50);const r=ROLE();
+  const txt=r==='jefe'?'Un rubro por tarjeta, con todos los planos que necesita. Si un plano te llegó por WhatsApp o mail, cargalo vos: queda subido, le llega a la auditoría y actualiza la tarjeta de esa tarea.':r==='auditor'?'Los mismos rubros que ve la jefatura. Los planos subidos esperan tu revisión: al aprobarlos pasan a vigentes.':r==='estudio'?'Las mismas carpetas que en Documentos. Subí cada plano en su lugar de la lista.':'Planos de la obra por rubro, con su estado.';
+  const grid=foldersDe(o).map(([k,n])=>{const b=rubroBtn(o,k,n,`data-act="rubroPlanos" data-o="${o.id}" data-f="${k}"`);return plDir()?`<div class="rw">${b}<button class="fmn" data-act="folderMenu" data-o="${o.id}" data-f="${k}" aria-label="Opciones de la carpeta ${esc(n)}">⋯</button></div>`:b}).join('');
+  const nuevo=(puedePedir(o)||esDir())?`<button class="btn ghost full" data-act="nuevaCarpeta" data-o="${o.id}">+ Nueva carpeta</button>`:'';
+  const dirx=plDir()?`<div class="fold-acts"><button class="btn ghost" data-act="papelera" data-o="${o.id}">Papelera${o.pTrash.length||Object.keys(o.fold.fdel).length?` (${o.pTrash.length+Object.keys(o.fold.fdel).length})`:''}</button><button class="btn ghost" data-act="plPlantilla" data-o="${o.id}">Guardar esta estructura como plantilla</button><button class="btn ghost" data-act="plUsarPlantilla" data-o="${o.id}">Aplicar una plantilla</button></div>`:'';
+  const reg=plDir()&&o.plLog.length?`<details class="card"><summary><b>Cambios en Planos</b> <span class="muted small">${o.plLog.length}</span></summary>${o.plLog.slice(-20).reverse().map(l=>`<div class="irow"><span class="small">${esc(l.txt)}<br><span class="muted">${plHoy(l.t)} · ${esc(l.por||'')}</span></span></div>`).join('')}</details>`:'';
+  return `<div class="infobox">${txt}</div><div class="rubros">${grid}</div>${nuevo}${dirx}${reg}`};
+
+/* --- ganchos: carga desde la nube en cada panel, planos sumados a mano y reclamos con nombre actualizable --- */
+{const _ns=SUBMIT.nuevoSlot;SUBMIT.nuevoSlot=function(f){const o=findO(f.dataset.o),antes=o?o.planos.length:0,t=val('ns-t'),n=val('ns-n');const r=_ns.apply(this,arguments);if(o&&o.planos.length>antes){const s=o.planos[o.planos.length-1];s.tarea=t||null;if(puedePedir(o)||esDir())plTouch(o,`Sumó el plano "${n}" a ${FN(o,s.folder)}`)}return r}}
+{const _se=SUBMIT.slotEdit;SUBMIT.slotEdit=async function(f){const r=await _se.apply(this,arguments);const o=findO(f.dataset.o);if(o&&(puedePedir(o)||esDir()))plTouch(o,'Editó un plano agregado a mano');return r}}
+{const _sd=A.slotDel;A.slotDel=function(ds){const o=findO(ds.o);const r=_sd.apply(this,arguments);if(o&&(puedePedir(o)||esDir()))plTouch(o,'Eliminó un plano agregado a mano');return r}}
+{const _fp=CHG.folderPlano;CHG.folderPlano=async function(v,el){const o=findO(el.dataset.o),antes=o?o.planos.length:0;const r=await _fp.apply(this,arguments);if(o&&o.planos.length>antes&&(puedePedir(o)||esDir()))plTouch(o,`Cargó planos recibidos por fuera en ${FN(o,el.dataset.f)}`);return r}}
+{const _dr=draw;draw=function(){_dr.apply(this,arguments);if(S.u)setTimeout(()=>{try{misObras().forEach(o=>plLoad(o))}catch(e){}},2600)}}
+setInterval(()=>{if(S.u&&!document.hidden){try{misObras().forEach(o=>{if(PLD[o.id]&&PLD[o.id].loaded)plLoad(o)})}catch(e){}}},20000);
+
 ovInit();draw();
 
 </script>

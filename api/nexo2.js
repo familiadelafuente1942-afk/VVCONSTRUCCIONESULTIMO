@@ -277,6 +277,49 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ===== Planos de la obra: carpetas y planos editables (estructura compartida por obra), papelera de 30 días y plantillas =====
+    if (typeof b.op === "string" && b.op.startsWith("pla_")) {
+      const DIAS30 = 30 * 864e5;
+      if (b.op === "pla_tpl_list") { const v = await leer(H, "planos_plantillas"); res.status(200).json({ ok: true, items: (v && v.items) || [] }); return; }
+      if (b.op === "pla_tpl_save" || b.op === "pla_tpl_del") {
+        const cr = b.cred || {};
+        if (!(cr.rol === "dir" && dirOk(cr.codigo))) { await pausa(600); res.status(403).json({ error: "Solo Dirección puede guardar plantillas." }); return; }
+        const v = await leer(H, "planos_plantillas"); let items = (v && v.items) || [];
+        const id = String(b.id || (b.tpl && b.tpl.id) || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+        if (!id) { res.status(400).json({ error: "Plantilla inválida" }); return; }
+        items = items.filter((x) => x.id !== id);
+        if (b.op === "pla_tpl_save") {
+          const raw = JSON.stringify(b.tpl || {});
+          if (raw.length > 200000) { res.status(400).json({ error: "La plantilla es demasiado grande" }); return; }
+          items.push({ ...JSON.parse(raw), id, nombre: String((b.tpl || {}).nombre || "Plantilla").slice(0, 60), editado: Date.now() });
+        }
+        await escribir(H, "planos_plantillas", { items: items.slice(-30) });
+        res.status(200).json({ ok: true, items }); return;
+      }
+      const obra = String(b.obra || "");
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const clave = "planos_" + obra;
+      if (b.op === "pla_list") { const v = await leer(H, clave); res.status(200).json({ ok: true, doc: v || null }); return; }
+      if (b.op === "pla_save") {
+        const cr = b.cred || {};
+        const quien = cr.rol === "dir" && dirOk(cr.codigo) ? "Dirección" : cr.rol === "jefe" && norm(cr.codigo) && norm((cods.obras[obra] || {}).j) === norm(cr.codigo) ? "Jefatura de obra" : "";
+        if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código para guardar los cambios de Planos." }); return; }
+        const raw = JSON.stringify(b.doc || {});
+        if (raw.length > 400000) { res.status(400).json({ error: "La estructura de planos es demasiado grande" }); return; }
+        const cur = await leer(H, clave);
+        const rev = cur && Number(cur.rev) || 0;
+        if (Number(b.rev) !== rev) { res.status(409).json({ error: "Alguien cambió Planos mientras tanto", doc: cur }); return; }
+        const d = JSON.parse(raw);
+        const sl = {}; const ahora = Date.now();
+        Object.entries(d.sl || {}).forEach(([k, v]) => { if (v && v.x && ahora - Number(v.x) > DIAS30) return; sl[String(k).slice(0, 200)] = v; });
+        const fdel = {}; Object.entries(d.fdel || {}).forEach(([k, t]) => { if (ahora - Number(t) <= DIAS30) fdel[k] = t; });
+        const doc = { ...d, sl, fdel, log: (Array.isArray(d.log) ? d.log : []).slice(-150), rev: rev + 1, t: ahora, por: quien };
+        await escribir(H, clave, doc);
+        res.status(200).json({ ok: true, rev: doc.rev }); return;
+      }
+      res.status(400).json({ error: "Operación desconocida" }); return;
+    }
+
     // ===== Certificados de tareas adicionales (los carga la jefatura de obra o Dirección; incluyen cotización) =====
     if (typeof b.op === "string" && b.op.startsWith("adic_")) {
       const obra = String(b.obra || "");
