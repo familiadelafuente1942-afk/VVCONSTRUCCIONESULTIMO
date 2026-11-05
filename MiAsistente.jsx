@@ -2237,7 +2237,7 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
         <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{nombreMes}</div>
         {cerrado && <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: BRASS, border: `1px solid ${BRASS}`, borderRadius: 5, padding: "2px 7px" }}>Cerrado</span>}
       </div>
-      <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 4 }}>Total Empresa</div>
+      <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 4 }}>Resultado del mes (solo este mes, sin saldo anterior)</div>
       <div style={{ fontFamily: T.serif, fontSize: 38, fontWeight: 700, color: colorEmpresa, marginTop: 2 }}>${(en.totalEmpresa || 0).toLocaleString("es-AR")}</div>
       <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Cobrado − Pagos al personal − Gastos{cerrado ? " (cerrado el " + new Date(cerrado.ts || Date.now()).toLocaleDateString("es-AR") + ")" : ""}</div>
 
