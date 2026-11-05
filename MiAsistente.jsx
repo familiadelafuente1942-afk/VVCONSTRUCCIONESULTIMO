@@ -1218,7 +1218,7 @@ Poné el bloque de acción solo cuando corresponda; si no, respondé normal.`;
     doc.setFillColor(27, 58, 91); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(9);
     doc.rect(M, y, W - 2 * M, 8, "F"); doc.text("Socio", M + 2, y + 5.5); doc.text("Monto", 120, y + 5.5); doc.text("%", W - M - 2, y + 5.5, { align: "right" }); y += 8;
     doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "normal");
-    [["Valeria", en.valeria], ["Sebastián", en.sebastianReparto], ["Valentina", en.valentina]].forEach(([nombre, monto], i) => {
+    [["Valeria", en.valeria], ["Sebastián", en.disponibleSeb != null ? en.disponibleSeb : en.sebastianReparto], ["Valentina", en.valentina]].forEach(([nombre, monto], i) => {
       if (i % 2) { doc.setFillColor(244, 247, 250); doc.rect(M, y, W - 2 * M, 7, "F"); }
       doc.text(nombre, M + 2, y + 5); doc.text(money(monto), 120, y + 5); doc.text(pct(monto, en.totalEmpresa) + "%", W - M - 2, y + 5, { align: "right" }); y += 7;
     });
@@ -2252,9 +2252,8 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
         </div>
         <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Sebastián</div>
-          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: (en.sebastianReparto || 0) >= 0 ? T.accent : "#C0392B", marginTop: 3 }}>${(en.sebastianReparto || 0).toLocaleString("es-AR")}</div>
-          <div style={{ fontSize: 11, color: T.sub, fontWeight: 700, marginTop: 2 }}>{pct(en.sebastianReparto, en.totalEmpresa)}%</div>
-          {remanente > 0 && <div style={{ fontSize: 10.5, color: T.muted, marginTop: 5, lineHeight: 1.35 }}>+ ${remanente.toLocaleString("es-AR")} que le quedó del mes anterior<br /><b style={{ color: colorRes }}>Disponible ${disponibleSeb.toLocaleString("es-AR")}</b></div>}
+          <div style={{ fontFamily: T.serif, fontSize: 16.5, fontWeight: 700, color: colorRes, marginTop: 3 }}>{disponibleSeb < 0 ? "−" : ""}${Math.abs(disponibleSeb).toLocaleString("es-AR")}</div>
+          <div style={{ fontSize: 10.5, color: T.muted, marginTop: 4, lineHeight: 1.4 }}>{remanente > 0 ? <>Quedó del mes anterior ${remanente.toLocaleString("es-AR")}<br /></> : null}{(en.sebastianReparto || 0) < 0 ? "Menos" : "Más"} lo de este mes ${Math.abs(en.sebastianReparto || 0).toLocaleString("es-AR")}</div>
         </div>
         <div style={{ flex: "1 1 40%", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Valentina</div>
@@ -2274,13 +2273,13 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
         <div style={{ flex: 1 }}><div style={{ fontSize: 9.5, color: T.muted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.08em" }}>Gastos</div><div style={{ fontSize: 15, fontWeight: 700, color: T.text, marginTop: 2 }}>${(en.gastos || 0).toLocaleString("es-AR")}</div></div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-        <button onClick={() => exportarPDF && exportarPDF(mesVer, en, !!cerrado)} style={{ flex: 1, background: "none", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>📄 Exportar PDF{cerrado ? " (cierre)" : " parcial"}</button>
+        <button onClick={() => exportarPDF && exportarPDF(mesVer, { ...en, remanente, disponibleSeb: cerrado && cerrado.disponibleSeb != null ? cerrado.disponibleSeb : disponibleSeb }, !!cerrado)} style={{ flex: 1, background: "none", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>📄 Exportar PDF{cerrado ? " (cierre)" : " parcial"}</button>
       </div>
       <div style={{ marginTop: 8 }}>
         {cerrado ? (
           <button onClick={() => { if (window.confirm("¿Reabrir este mes? El resultado va a volver a calcularse en vivo con los datos actuales.")) onReabrir(mesVer); }} style={{ width: "100%", background: "none", color: T.sub, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Reabrir mes</button>
         ) : (
-          <button onClick={() => { if (window.confirm(`¿Cerrar ${nombreMes} con este resultado? Vas a poder reabrirlo después si necesitás corregir algo.`)) { onCerrar(mesVer, { ...en, remanente, disponibleSeb }); if (exportarPDF) exportarPDF(mesVer, en, true); } }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cerrar mes</button>
+          <button onClick={() => { if (window.confirm(`¿Cerrar ${nombreMes} con este resultado? Vas a poder reabrirlo después si necesitás corregir algo.`)) { onCerrar(mesVer, { ...en, remanente, disponibleSeb }); if (exportarPDF) exportarPDF(mesVer, { ...en, remanente, disponibleSeb }, true); } }} style={{ width: "100%", background: T.accent, color: "#fff", border: "none", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cerrar mes</button>
         )}
       </div>
     </div>
