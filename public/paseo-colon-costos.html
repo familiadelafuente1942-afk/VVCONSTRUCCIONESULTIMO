@@ -1145,6 +1145,9 @@ td input{padding:7px 8px;text-align:right}td input.t{text-align:left}
 details{margin:6px 0}summary{cursor:pointer;font-weight:600;padding:8px 0}
 .x{color:var(--rojo)}
 .tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+nav.bottom button svg{box-sizing:border-box;width:36px!important;height:36px!important;padding:8px;border-radius:13px;background:linear-gradient(158deg,var(--g-a,rgba(255,255,255,.18)),var(--g-b,rgba(255,255,255,.04)))!important;-webkit-backdrop-filter:blur(14px) saturate(1.8);backdrop-filter:blur(14px) saturate(1.8);box-shadow:inset 0 1.5px 1px var(--g-rim,rgba(255,255,255,.55)),inset 0 0 0 1px var(--g-edge,rgba(255,255,255,.18)),inset 0 -6px 10px rgba(0,0,0,.12),0 6px 12px -6px var(--gl-sh,rgba(0,0,0,.5))}
+nav.bottom button[aria-current=page] svg{box-shadow:inset 0 1.5px 1px var(--g-rim,rgba(255,255,255,.7)),inset 0 0 0 1px rgba(226,189,120,.7),inset 0 -6px 10px rgba(184,145,90,.25),0 6px 14px -6px rgba(199,156,85,.8)}
+header.top .btn.ghost.sm{-webkit-backdrop-filter:blur(14px) saturate(1.8);backdrop-filter:blur(14px) saturate(1.8);box-shadow:inset 0 1.5px 1px var(--g-rim,rgba(255,255,255,.5)),inset 0 0 0 1px var(--g-edge,rgba(255,255,255,.16))}
 .hide{display:none}
 section.sec>.card{margin-bottom:12px}
 @media(max-width:620px){table{min-width:0}table tr:first-child{display:none}tr.rb{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 0;border-top:1px solid var(--line);position:relative}tr.rb td{border:0;padding:0}tr.rb td.nn{display:none}tr.rb td.nm{grid-column:1/-1;font-weight:600;padding-right:46px}tr.rb td[data-l]::before{content:attr(data-l);display:block;font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;text-align:left}tr.rb td.tt{grid-column:1/-1;text-align:right}tr.rb td.tt::before{text-align:right}tr.rb td:last-child:not([data-l]){position:absolute;right:0;top:10px}}
@@ -1177,7 +1180,7 @@ ap();})();</script></head><body>
 <header class="top"><div class="brand"><span style="display:flex;align-items:center;gap:8px"><img src="/nexo2/logo-192.png" alt="" style="width:22px;height:22px;border-radius:5px"><b>Nexo</b></span><span class="mono" id="fecha"></span></div>
 <div class="who"><span><b id="tit"></b><span class="rol">Belfast</span></span><button class="btn ghost sm" id="refr" aria-label="Actualizar" title="Actualizar">↻</button><button class="btn ghost sm" id="tema" aria-label="Del blanco al negro" title="Aspecto"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button></div></header>
 <main>
-<section class="sec noprint"><div class="sec-head"><h1>Control de costos</h1><button class="btn gold sm" id="nueva">+ Nueva obra</button></div><p class="muted small">Presupuesto y análisis de obra. Los montos van en $ (ARS) y en U$s.</p>
+<section class="sec noprint"><div class="sec-head"><h1>Control de costos</h1></div><p class="muted small">Presupuesto y análisis de obra. Los montos van en $ (ARS) y en U$s.</p>
 <div class="tools"><select id="obra" style="max-width:320px"></select><button class="btn sm" id="csv">CSV</button><button class="btn sm" id="xl">Exportar copia</button><button class="btn sm" id="imp">Imprimir / PDF</button><span class="muted small" id="guard"></span></div></section>
 <section id="p" class="sec"></section><section id="i" class="sec hide"></section><section id="d" class="sec hide"></section>
 </main></div>
@@ -1245,7 +1248,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('button')||e.targ
  if(t.dataset.del!==undefined){if(confirm('¿Eliminar este rubro?')){O().rub.splice(+t.dataset.del,1);save();render()}}
  if(t.id==='addr'){O().rub.push({n:'Nuevo rubro',m:0,e:0});save();render()}});
 document.getElementById('obra').onchange=e=>{DB.act=+e.target.value;save();render()};
-document.getElementById('nueva').onclick=()=>{const n=prompt('Nombre de la obra');if(n){DB.obras.push(blank(n));DB.act=DB.obras.length-1;save();render()}};
+
 document.getElementById('imp').onclick=()=>{document.querySelectorAll('section').forEach(s=>s.classList.remove('hide'));window.print();document.querySelectorAll('.bottom button[data-t=p]').forEach(b=>b.click())};
 function dl(name,txt,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;a.click()}
 document.getElementById('xl').onclick=()=>dl('belfast-costos-copia.json',JSON.stringify(DB),'application/json');
