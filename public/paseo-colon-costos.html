@@ -1372,43 +1372,62 @@ function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*
  document.getElementById('f').innerHTML=t}
 
 
+const PRE_V=2;
 const PRE_T=[
-['Lote y propietarios','Primera reunión con los propietarios del lote',0,.05,'Sebastián'],
-['Lote y propietarios','Estudio de títulos y dominio del lote (escribano)',0,.2,'Escribano'],
-['Lote y propietarios','Informes de dominio, inhibiciones y deudas (Registro de la Propiedad, ABL, servicios)',.05,.2,'Escribano'],
-['Lote y propietarios','Negociar condiciones con los propietarios: precio, canje por unidades o pago',.05,.3,'Sebastián'],
-['Lote y propietarios','Firmar carta de intención o boleto de reserva del lote',.25,.35,'Sebastián / propietarios'],
-['Lote y propietarios','Firmar el acuerdo definitivo con los propietarios (convenio de aporte o permuta)',.3,.5,'Abogado'],
-['Fideicomiso y estructura legal','Definir la estructura: fideicomiso inmobiliario, al costo o de administración',.1,.25,'Sebastián / abogado'],
-['Fideicomiso y estructura legal','Redactar el contrato de fideicomiso',.2,.45,'Abogado'],
-['Fideicomiso y estructura legal','Firmar el contrato de fideicomiso, tramitar CUIT y abrir cuenta bancaria',.45,.6,'Abogado'],
-['Fideicomiso y estructura legal','Escritura del lote al fideicomiso',.5,.65,'Escribano'],
-['Fideicomiso y estructura legal','Contratos con Belfast (obra), estudio y gerenciamiento',.4,.6,'Sebastián / Belfast'],
-['Proyecto y permisos','Consulta de factibilidad y certificado de uso del lote',0,.15,'Arquitecto'],
-['Proyecto y permisos','Verificar si el lote está en Área de Protección Histórica (APH) y sus requisitos',.05,.25,'Arquitecto'],
-['Proyecto y permisos','Estudio de suelos',.2,.35,'Belfast'],
-['Proyecto y permisos','Proyecto ejecutivo de arquitectura, estructura e instalaciones',.15,.6,'Estudio'],
-['Proyecto y permisos','Permiso de demolición',.3,.6,'Arquitecto / gestor'],
-['Proyecto y permisos','Permiso de obra nueva',.35,.8,'Arquitecto / gestor'],
-['Proyecto y permisos','Cálculo y pago de la plusvalía urbana',.7,.85,'Arquitecto / contador'],
-['Proyecto y permisos','Seguros de obra, ART y cartel de obra',.7,.9,'Belfast'],
-['Ventas y financiamiento','Reglamento de copropiedad y planos de propiedad horizontal',.4,.75,'Escribano / arquitecto'],
-['Ventas y financiamiento','Lista de precios, boleto de compraventa y material de venta',.35,.6,'Sebastián'],
-['Ventas y financiamiento','Lanzamiento de ventas en pozo y primeras reservas',.6,.8,'Sebastián'],
-['Preparación de obra','Cerrar el contrato de obra con Belfast',.5,.7,'Sebastián / Belfast'],
-['Preparación de obra','Cerrar proveedores clave: hormigón y acero',.7,.9,'Belfast'],
-['Preparación de obra','Instalar obrador, cercado y servicios provisorios',.9,1,'Belfast'],
+['Definición del proyecto','Definir el producto: cantidad de unidades, mix y categoría',0,0.08,'Sebastián'],
+['Definición del proyecto','Estudio de mercado y precios de la zona',0,0.1,'Sebastián'],
+['Definición del proyecto','Cerrar el modelo de negocio y el flujo con los socios',0.05,0.15,'Sebastián'],
+['Definición del proyecto','Definir nombre, marca e imagen del edificio',0.1,0.3,'Sebastián'],
+['Definición del proyecto','Elegir operador hotelero o administrador de alquileres y pedir cotizaciones',0.1,0.35,'Sebastián'],
+['Lote y propietarios','Primera reunión con los propietarios del lote',0,0.05,'Sebastián'],
+['Lote y propietarios','Estudio de títulos y dominio del lote (escribano)',0,0.2,'Escribano'],
+['Lote y propietarios','Informes de dominio, inhibiciones y deudas (Registro de la Propiedad, ABL, servicios)',0.05,0.2,'Escribano'],
+['Lote y propietarios','Tasación y relevamiento topográfico (mensura) del lote',0.05,0.2,'Arquitecto'],
+['Lote y propietarios','Negociar condiciones con los propietarios: precio, canje por unidades o pago',0.05,0.3,'Sebastián'],
+['Lote y propietarios','Firmar carta de intención o boleto de reserva del lote',0.25,0.35,'Sebastián / propietarios'],
+['Lote y propietarios','Firmar el acuerdo definitivo con los propietarios (convenio de aporte o permuta)',0.3,0.5,'Abogado'],
+['Lote y propietarios','Acordar la entrega del lote libre de ocupantes y con servicios dados de baja',0.35,0.5,'Abogado / propietarios'],
+['Fideicomiso y estructura legal','Elegir fiduciario y abogado del fideicomiso',0,0.1,'Sebastián'],
+['Fideicomiso y estructura legal','Definir la estructura: fideicomiso inmobiliario, al costo o de administración',0.1,0.25,'Sebastián / abogado'],
+['Fideicomiso y estructura legal','Redactar el contrato de fideicomiso',0.2,0.45,'Abogado'],
+['Fideicomiso y estructura legal','Firmar el contrato de fideicomiso, tramitar CUIT y abrir cuenta bancaria',0.45,0.6,'Abogado'],
+['Fideicomiso y estructura legal','Escritura del lote al fideicomiso',0.5,0.65,'Escribano'],
+['Fideicomiso y estructura legal','Contratos con Belfast (obra), estudio y gerenciamiento',0.4,0.6,'Sebastián / Belfast'],
+['Proyecto y permisos','Consulta de factibilidad y certificado de uso del lote',0,0.15,'Arquitecto'],
+['Proyecto y permisos','Verificar si el lote está en Área de Protección Histórica (APH) y sus requisitos',0.05,0.25,'Arquitecto'],
+['Proyecto y permisos','Contratar el estudio de arquitectura y estructuras',0.05,0.2,'Sebastián'],
+['Proyecto y permisos','Aprobar el anteproyecto',0.15,0.3,'Sebastián / estudio'],
+['Proyecto y permisos','Relevamiento de linderos y medianeras, con acta de constatación',0.2,0.35,'Arquitecto / escribano'],
+['Proyecto y permisos','Factibilidades de servicios: agua, cloacas, luz y gas',0.2,0.4,'Arquitecto'],
+['Proyecto y permisos','Estudio de suelos',0.2,0.35,'Belfast'],
+['Proyecto y permisos','Proyecto ejecutivo de arquitectura, estructura e instalaciones',0.15,0.6,'Estudio'],
+['Proyecto y permisos','Baja de servicios y libre deuda para demoler',0.4,0.6,'Gestor'],
+['Proyecto y permisos','Permiso de demolición',0.3,0.6,'Arquitecto / gestor'],
+['Proyecto y permisos','Permiso de obra nueva',0.35,0.8,'Arquitecto / gestor'],
+['Proyecto y permisos','Cálculo y pago de la plusvalía urbana',0.7,0.85,'Arquitecto / contador'],
+['Proyecto y permisos','Seguros de obra, ART y cartel de obra',0.7,0.9,'Belfast'],
+['Ventas y financiamiento','Reglamento de copropiedad y planos de propiedad horizontal',0.4,0.75,'Escribano / arquitecto'],
+['Ventas y financiamiento','Lista de precios, boleto de compraventa y material de venta',0.35,0.6,'Sebastián'],
+['Ventas y financiamiento','Definir forma de pago y financiación para los compradores',0.35,0.55,'Sebastián'],
+['Ventas y financiamiento','Escribano y cuenta del fideicomiso para cobrar las cuotas',0.4,0.6,'Escribano'],
+['Ventas y financiamiento','Lanzamiento de ventas en pozo y primeras reservas',0.6,0.8,'Sebastián'],
+['Preparación de obra','Cerrar el presupuesto final y el flujo con Belfast',0.5,0.65,'Sebastián / Belfast'],
+['Preparación de obra','Cerrar el contrato de obra con Belfast',0.5,0.7,'Sebastián / Belfast'],
+['Preparación de obra','Cerrar proveedores clave: hormigón y acero',0.7,0.9,'Belfast'],
+['Preparación de obra','Plan de seguridad e higiene y cercado',0.8,0.95,'Belfast'],
+['Preparación de obra','Instalar obrador y servicios provisorios',0.9,1,'Belfast'],
+['Preparación de obra','Reunión de arranque con Belfast, estudio y auditoría',0.95,1,'Sebastián'],
 ['Preparación de obra','Primer día de obra',1,1,'Belfast']];
 const isoD=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const dP=s=>{const [y,m,d]=String(s||'').split('-').map(Number);return new Date(y||2026,(m||1)-1,d||1,12)};
 function preSeed(h,arr){const a=dP(h).getTime(),b=dP(arr).getTime(),W=Math.max(7*864e5,b-a);return PRE_T.map(([g,n,fs,fe,r])=>({g,n,s:isoD(new Date(a+W*fs)),e:isoD(new Date(a+W*fe)),r,es:'p'}))}
-function preInit(o){if(!o.pre){const t0=new Date();t0.setHours(12,0,0,0);let a=new Date(t0.getTime()+180*864e5);while(a.getDay()!==1)a=new Date(a.getTime()+864e5);const arr=isoD(a);o.pre={arr,t:preSeed(isoD(t0),arr)}}return o.pre}
+function preInit(o){if(o.pre&&o.pre.v!==PRE_V){const t0=new Date();t0.setHours(12,0,0,0);const old=o.pre.t||[];o.pre.t=preSeed(isoD(t0),o.pre.arr).map(n=>{const q=old.find(x=>x.n===n.n);return q?{...n,es:q.es,s:q.s,e:q.e,r:q.r}:n});o.pre.v=PRE_V}if(!o.pre){const t0=new Date();t0.setHours(12,0,0,0);let a=new Date(t0.getTime()+180*864e5);while(a.getDay()!==1)a=new Date(a.getTime()+864e5);const arr=isoD(a);o.pre={arr,v:PRE_V,t:preSeed(isoD(t0),arr)}}return o.pre}
 function renderPre(o){const P=preInit(o),T=P.t,hoy=new Date();hoy.setHours(12,0,0,0);const H=hoy.getTime(),A=dP(P.arr).getTime(),dias=Math.round((A-H)/864e5);
  const hechas=T.filter(t=>t.es==='t').length,tarde=T.filter(t=>t.es!=='t'&&dP(t.e).getTime()<H),cur=T.filter(t=>t.es==='c'),prox=T.filter(t=>t.es==='p'&&dP(t.s).getTime()>=H).sort((a,b)=>dP(a.s)-dP(b.s)).slice(0,3);
  const fe=d=>dP(d).toLocaleDateString('es-AR',{day:'numeric',month:'short'}).replace('.','');
  const wk=864e5*7,w0=H-((new Date(H).getDay()+6)%7)*864e5,nw=Math.max(4,Math.min(60,Math.ceil((A-w0)/wk)+1));
  const late=t=>t.es!=='t'&&dP(t.e).getTime()<H;
- let h=`<div class="card"><b>Etapa previa · de hoy al primer día de obra</b><div class="sub">Todo lo que hay que hacer antes de empezar: propietarios del lote, acuerdos, fideicomiso, permisos y ventas. Las fechas son un modelo inicial: editá cada una según cómo avance.</div>
+ let h=`<div class="card"><b style="font-size:18px">Comienzo de proyecto</b><div class="sub">Todas las tareas que tenemos que hacer antes de meter un pie en la obra, de hoy al primer día: definición del proyecto, propietarios del lote, acuerdos, fideicomiso, permisos, ventas y preparación. Las fechas son un modelo inicial: editá cada una según cómo avance.</div>
  <div class="cfg" style="margin:10px 0"><label class="fld">Fecha de arranque de obra<input type="date" id="parr" value="${esc(P.arr)}"></label></div>
  <div class="cfk"><div><span>Faltan para el arranque</span><b>${dias>0?dias+' días':'Llegó la fecha'}</b></div><div><span>Tareas terminadas</span><b class="ut-pos">${hechas} de ${T.length}</b></div><div><span>En curso</span><b>${cur.length}</b></div><div><span>Atrasadas</span><b class="${tarde.length?'ut-neg':'ut-pos'}">${tarde.length}</b></div></div>
  <div class="sub" style="margin-top:8px">Al cambiar la fecha de arranque, el Cash Flow y el cronograma de obra empiezan en ese mes. <button class="btn ghost sm" id="prereset" style="margin-left:6px">Recalcular fechas</button></div></div>
@@ -1424,13 +1443,13 @@ function renderCG(o){const c=cfInit(o),n=c.n,now=new Date(),[y,m]=c.ini.split('-
  const hoy=mi<0?'La obra todavía no empezó':mi>=n?'Pasó el plazo previsto de la obra':'Estamos en el mes '+(mi+1)+' de '+n+' · '+cfMes(c,mi);
  const ahora=items.filter(t=>t.es==='c'||(t.es!=='t'&&mi>=0&&mi+1>=t.s&&mi+1<=t.e)),prox=items.filter(t=>t.es==='p'&&mi>=0&&t.s>mi+1&&t.s<=mi+3);
  const tot=items.length,hechas=items.filter(t=>t.es==='t').length,curso=items.filter(t=>t.es==='c').length;
- let h=`<div class="card"><b>Cronograma de tareas · Paseo Colón 735</b><div class="sub">En qué estamos trabajando y qué viene. Las fechas son las mismas del Cash Flow: si cambiás el desde/hasta de un rubro allá, se actualiza acá. Marcá el estado y el avance de cada tarea.</div>
+ let h=`<div class="card"><b style="font-size:18px">Comienzo de obra</b><div class="sub">Desde el primer día de obra hasta la entrega: en qué estamos trabajando y qué viene. Las fechas son las mismas del Cash Flow: si cambiás el desde/hasta de un rubro allá, se actualiza acá. Marcá el estado y el avance de cada tarea.</div>
  <div class="cfk"><div><span>Hoy</span><b>${hoy}</b></div><div><span>Tareas terminadas</span><b class="ut-pos">${hechas} de ${tot}</b></div><div><span>Tareas en curso</span><b>${curso}</b></div></div></div>
- <div class="card"><b>Trabajando ahora</b>${ahora.length?ahora.map(t=>`<div class="row"><span>${esc(t.n)}<span class="pm">mes ${t.s} a ${t.e} · ${cfMes(c,t.s-1)} a ${cfMes(c,t.e-1)}</span></span><b class="est-${t.es}">${nm[t.es]} · ${f0(t.av)}%</b></div>`).join(''):'<div class="sub">No hay tareas en curso para este mes.</div>'}
+ <div class="card"><b>Tareas de obra en curso</b>${ahora.length?ahora.map(t=>`<div class="row"><span>${esc(t.n)}<span class="pm">mes ${t.s} a ${t.e} · ${cfMes(c,t.s-1)} a ${cfMes(c,t.e-1)}</span></span><b class="est-${t.es}">${nm[t.es]} · ${f0(t.av)}%</b></div>`).join(''):'<div class="sub">No hay tareas en curso para este mes.</div>'}
  ${prox.length?`<div class="sub" style="margin-top:10px"><b>Próximos 3 meses</b></div>`+prox.map(t=>`<div class="row"><span>${esc(t.n)}</span><b>arranca mes ${t.s} · ${cfMes(c,t.s-1)}</b></div>`).join(''):''}</div>
  <div class="card"><b>Diagrama de barras</b><div class="sub">Naranja pendiente, azul en curso, verde terminada. La línea roja marca el mes actual.</div><div class="cfw" style="max-height:70vh"><table class="gt"><thead><tr><th>Tarea</th>${Array.from({length:n},(_,k)=>`<th class="${k===mi?'hoy':''}">${k+1}<br><span style="font-weight:400;opacity:.7;font-size:10px">${cfMes(c,k)}</span></th>`).join('')}</tr></thead><tbody>${items.map(t=>`<tr><td title="${esc(t.n)}">${esc(t.n)}</td>${Array.from({length:n},(_,k)=>{const on=k+1>=t.s&&k+1<=t.e;return `<td class="${on?'b '+t.es+(k+1===t.s?' s':'')+(k+1===t.e?' e':''):''} ${k===mi?'hoy':''}">${on?'<i></i>':''}</td>`}).join('')}</tr>`).join('')}</tbody></table></div></div>
  <div class="card"><b>Estado y avance de cada tarea</b><div class="gl cfh"><span>Tarea</span><span>Estado</span><span>Avance %</span></div>${items.map(t=>`<div class="gl"><span class="nm">${esc(t.n)}<small>mes ${t.s} a ${t.e}</small></span><select data-es="${t.k}"><option value="p" ${t.es==='p'?'selected':''}>Pendiente</option><option value="c" ${t.es==='c'?'selected':''}>En curso</option><option value="t" ${t.es==='t'?'selected':''}>Terminada</option></select>${t.k==='I'?inp(t.av,'cf.avI',0):inp(t.av,'cf.av.'+t.k.slice(1),0)}</div>`).join('')}</div>`;
- document.getElementById('g').innerHTML=renderPre(o)+`<div class="card"><b style="font-size:18px">Etapa de obra</b><div class="sub">Desde el primer día de obra hasta la entrega.</div></div>`+h}
+ document.getElementById('g').innerHTML=renderPre(o)+h}
 function setPath(p,v){const k=p.split('.');let t=O();for(let i=0;i<k.length-1;i++)t=t[k[i]];t[k[k.length-1]]=v}
 function render(){const o=O();document.getElementById('tit').textContent=o.nombre;document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}).replace(/[.,]/g,'');
  const sel=document.getElementById('obra');sel.innerHTML=DB.obras.map((x,i)=>`<option value="${i}" ${i==DB.act?'selected':''}>${esc(x.nombre)}</option>`).join('');
