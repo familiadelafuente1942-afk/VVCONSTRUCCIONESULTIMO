@@ -2241,6 +2241,12 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
       <div style={{ fontFamily: T.serif, fontSize: 38, fontWeight: 700, color: colorEmpresa, marginTop: 2 }}>${(en.totalEmpresa || 0).toLocaleString("es-AR")}</div>
       <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>Cobrado − Pagos al personal − Gastos{cerrado ? " (cerrado el " + new Date(cerrado.ts || Date.now()).toLocaleDateString("es-AR") + ")" : ""}</div>
 
+      <div style={{ marginTop: 12, background: T.bg, border: `1px solid ${colorRes}`, borderRadius: 10, padding: "10px 12px" }}>
+        <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Total a hoy de la empresa</div>
+        <div style={{ fontFamily: T.serif, fontSize: 26, fontWeight: 700, color: colorRes, marginTop: 2 }}>{disponibleSeb < 0 ? "−" : ""}${Math.abs(disponibleSeb).toLocaleString("es-AR")}</div>
+        <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2 }}>{remanente > 0 ? `Lo que quedó del mes anterior ($${remanente.toLocaleString("es-AR")}) + cobrado − pagos − gastos de ${nombreMes}` : `Cobrado − pagos − gastos de ${nombreMes}`}</div>
+      </div>
+
       <div style={{ height: 1, background: T.border, margin: "14px 0" }} />
 
       <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Cómo se dividió este mes</div>
