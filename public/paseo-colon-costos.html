@@ -1160,6 +1160,20 @@ nav.bottom .in{flex-direction:column!important;width:68px!important;max-width:68
 nav.bottom button{flex:none!important;width:100%;border-radius:22px!important;padding:8px 2px 7px!important;font-size:9.5px!important;gap:4px!important;text-align:center;line-height:1.1}
 @media(max-width:620px){body{padding-left:74px}nav.bottom{width:74px}nav.bottom .in{width:60px!important;max-width:60px!important}nav.bottom button{font-size:8.5px!important}nav.bottom button svg{width:32px!important;height:32px!important;padding:7px}}
 @media print{body{padding-left:0}}
+/* ajustes: inputs planos, tabla que entra en pantalla, barra lateral más ancha */
+input,select{background:var(--gl)!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;border:1px solid var(--gl-line)!important;border-radius:9px!important;background-image:none!important}
+td input.t{background:transparent!important;border-color:transparent!important;padding-left:2px;font-weight:600}
+td input.t:focus{background:var(--gl)!important;border-color:var(--gold)!important}
+@media(min-width:621px){table{table-layout:fixed;min-width:0}th:nth-child(1),td:nth-child(1){width:30px}td:nth-child(2){width:26%}td:last-child{width:46px}}
+td input{font-size:15px;padding:7px 6px 7px 20px}
+.mon i{left:7px;font-size:13px}
+td.tt{white-space:normal;line-height:1.25}
+.pm{font-size:10.5px;line-height:1.25}
+body{padding-left:104px}
+nav.bottom{width:104px!important}
+nav.bottom .in{width:88px!important;max-width:88px!important}
+nav.bottom button{font-size:10px!important;overflow:visible;letter-spacing:-.2px}
+@media(max-width:620px){body{padding-left:78px}nav.bottom{width:78px!important}nav.bottom .in{width:66px!important;max-width:66px!important}nav.bottom button{font-size:8.5px!important}}
 .hide{display:none}
 section.sec>.card{margin-bottom:12px}
 @media(max-width:620px){table{min-width:0}table tr:first-child{display:none}tr.rb{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 0;border-top:1px solid var(--line);position:relative}tr.rb td{border:0;padding:0}tr.rb td.nn{display:none}tr.rb td.nm{grid-column:1/-1;font-weight:600;padding-right:46px}tr.rb td[data-l]::before{content:attr(data-l);display:block;font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;text-align:left}tr.rb td.tt{grid-column:1/-1;text-align:right}tr.rbi td.nm{order:0}tr.rbi td:nth-child(3){order:1}tr.rbi td.tt{grid-column:auto;order:2;align-self:end}tr.rbi td:nth-child(4){order:3}tr.rbi td:nth-child(5){order:4}tr.rb td.tt::before{text-align:right}tr.rb td:last-child:not([data-l]){position:absolute;right:0;top:10px}}
