@@ -1479,8 +1479,8 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  <div class="card"><div class="row big2"><span>Precio final total</span><b class="tri big"><span>${ars(r.tot)}</span><span>${usd(r.totU)}</span><span>${o.m2c?usd(r.totU/o.m2c):'—'} /m² construido</span></b></div>
  <div class="row big2"><span>Costo final por m² vendible</span><b class="tri"><span>${usd(r.pm)} /m² vendible</span><span>${ars(r.pm*o.cot)} /m² vendible</span></b></div>
  <div class="row big2"><span>Precio de venta de la zona</span><b class="tri"><span>${usd(o.zona)} /m²</span><span>${ars(o.zona*o.cot)} /m²</span></b></div>
+ <div class="sub" style="margin:-4px 0 6px">${usd(o.zona)} / m² × ${f0(o.m2v)} m² vendibles = ${usd(r.ing)}</div>
  <div class="row big2"><span>Ingresos totales por venta</span><b class="tri"><span>${usd(r.ing)}</span><span>${ars(r.ing*o.cot)}</span><span>${o.m2c?usd(r.ing/o.m2c):'—'} /m² construido</span></b></div>
- <div class="sub">${usd(o.zona)} / m² × ${f0(o.m2v)} m² vendibles.</div>
  <div class="row big2"><span>Utilidad general del proyecto</span><b class="tri big ${r.util>=0?'ut-pos':'ut-neg'}"><span>${usd(r.util)} /m² vendible</span><span>${usd(r.util*o.m2v)} total</span><span>${ars(r.util*o.m2v*o.cot)} total</span></b></div>
  <div class="sub">Precio de venta de la zona − costo final por m² vendible.</div></div>`;
  document.getElementById('p').innerHTML=h;
