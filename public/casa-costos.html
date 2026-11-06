@@ -1296,7 +1296,7 @@ const KEY='bb_casa_costos_v1';
 const clone=o=>JSON.parse(JSON.stringify(o));
 const blank=n=>{const s=clone(SEED);s.nombre=n;s.rub.forEach(r=>{r.m=0;r.e=0});s.m2c=0;s.m2v=0;s.lote=0;s.plus=0;s.zona=0;return s};
 let DB;try{DB=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
-if(!DB||!DB.obras){const a=blank('Casa');a.rub=[{"n": "Cerco", "m": 1008000, "e": 0}, {"n": "Movimiento de suelo y tosca", "m": 1960000, "e": 3500000}, {"n": "Obra gruesa", "m": 40600000, "e": 35689920}, {"n": "Pisos y colocaciones", "m": 2800000, "e": 5600000}, {"n": "Plomería", "m": 13378400, "e": 3613960}, {"n": "Electricidad", "m": 3234000, "e": 3388000}, {"n": "Durlock", "m": 1960000, "e": 2100000}, {"n": "Pintura", "m": 0, "e": 5866000}, {"n": "Piscina", "m": 297500, "e": 6160000}, {"n": "Aberturas", "m": 29567580, "e": 0}, {"n": "Puertas", "m": 2946000, "e": 0}, {"n": "Revestimientos", "m": 1250000, "e": 0}, {"n": "Miksa", "m": 2553040, "e": 0}, {"n": "Venecitas", "m": 420000, "e": 0}, {"n": "Herrería", "m": 880000, "e": 0}, {"n": "Muebles de cocina y placares", "m": 4500000, "e": 0}, {"n": "Electrodomésticos", "m": 1356853, "e": 0}, {"n": "Entrada vehicular", "m": 1500000, "e": 0}, {"n": "Parrilla", "m": 1500000, "e": 0}, {"n": "Preinstalación de aires", "m": 1500000, "e": 0}, {"n": "Proyecto y dirección", "m": 0, "e": 21000000}];a.cot=1546;a.m2c=140;a.lote=33920;a.gg=5;a.ut=0;a.imp=0;DB={act:0,obras:[a]}}
+if(!DB||!DB.obras){const a=blank('Casa');a.rub=[{"n": "Cerco", "m": 1008000, "e": 0}, {"n": "Movimiento de suelo y tosca", "m": 1960000, "e": 3500000}, {"n": "Obra gruesa", "m": 40600000, "e": 35689920}, {"n": "Pisos y colocaciones", "m": 2800000, "e": 5600000}, {"n": "Plomería", "m": 13378400, "e": 3613960}, {"n": "Electricidad", "m": 3234000, "e": 3388000}, {"n": "Durlock", "m": 1960000, "e": 2100000}, {"n": "Pintura", "m": 0, "e": 5866000}, {"n": "Piscina", "m": 297500, "e": 6160000}, {"n": "Aberturas", "m": 29567580, "e": 0}, {"n": "Puertas", "m": 2946000, "e": 0}, {"n": "Revestimientos", "m": 1250000, "e": 0}, {"n": "Miksa", "m": 2553040, "e": 0}, {"n": "Venecitas", "m": 420000, "e": 0}, {"n": "Herrería", "m": 880000, "e": 0}, {"n": "Muebles de cocina y placares", "m": 4500000, "e": 0}, {"n": "Electrodomésticos", "m": 1356853, "e": 0}, {"n": "Entrada vehicular", "m": 1500000, "e": 0}, {"n": "Parrilla", "m": 1500000, "e": 0}, {"n": "Preinstalación de aires", "m": 1500000, "e": 0}, {"n": "Proyecto y dirección", "m": 0, "e": 21000000}];a.cot=1546;a.m2c=140;a.lote=33920;a.plus=0;a.gg=5;a.ut=0;a.imp=0;DB={act:0,obras:[a]}}
 DB.obras=DB.obras.filter(x=>!['Villa Crespo','Conesa 2881'].includes(x.nombre)||x.rub.some(r=>r.m||r.e));if(DB.act>=DB.obras.length)DB.act=0;
 const O=()=>DB.obras[DB.act];
 const PCAPI='/api/nexo2';let _pcT=0,_pcBusy=0;
@@ -1337,14 +1337,14 @@ function cfChartNeto(R){const W=Math.max(640,R.n*34+60),H=230,pl=10,pb=34,pt=14,
  R.acn.forEach((v,k)=>{const h=Math.abs(v)*sc,x=pl+k*bw+bw*.18,y=v>=0?z-h:z;b+=`<rect x="${x}" y="${y}" width="${bw*.64}" height="${h}" rx="3" fill="${v>=0?'#2fa86b':'#c0392b'}" opacity=".85"/><text x="${pl+k*bw+bw/2}" y="${H-pb+14}" font-size="9" text-anchor="middle" fill="currentColor" opacity=".7">${k+1}</text>`});
  return `<div class="cfw"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:${W}px;height:auto" role="img" aria-label="Flujo neto acumulado"><line x1="${pl}" x2="${W-pl}" y1="${z}" y2="${z}" stroke="currentColor" opacity=".4"/>${b}<text x="${W/2}" y="${H-4}" font-size="10" text-anchor="middle" fill="currentColor" opacity=".7">Mes de obra · barras: caja acumulada (ventas cobradas − egresos). Rojo = hay que poner capital.</text></svg></div>`}
 function renderCF(o){const R=cfCalc(o),c=R.c,n=R.n,cot=o.cot||0;const peak=Math.max(...R.tot),pk=R.tot.indexOf(peak);
- let h=`<div class="card"><b>Cash Flow del modelo · ARS</b><div class="sub">Cronograma mensual de egresos desde demolición y movimiento de suelo hasta la entrega, con todos los rubros, interiorismo, gastos generales, utilidad, impuestos, lote y plusvalía. Cada rubro se reparte entre su mes de inicio y de fin según el avance esperado de una obra de este tipo.</div>
+ let h=`<div class="card"><b>Cash Flow del modelo · ARS</b><div class="sub">Cronograma mensual de egresos desde demolición y movimiento de suelo hasta la entrega, con todos los rubros, interiorismo, gastos generales, utilidad, impuestos, lote. Cada rubro se reparte entre su mes de inicio y de fin según el avance esperado de una obra de este tipo.</div>
  <div class="cfg" style="margin-top:10px"><label class="fld">Plazo de obra · meses${inp(c.n,'cf.n')}</label><label class="fld">Mes de inicio<input type="month" id="cfini" value="${esc(c.ini)}"></label><label class="fld">Curva de avance<select id="cfcurva"><option value="c" ${c.curva==='c'?'selected':''}>Campana (arranca, pico, cierra)</option><option value="l" ${c.curva==='l'?'selected':''}>Lineal</option></select></label></div></div>
  <div class="card"><b>Resumen</b><div class="cfk"><div><span>Inversión total (con lote)</span><b>${ars(R.T)}</b></div><div><span>Total en U$s</span><b>${usd(cot?R.T/cot:0)}</b></div><div><span>Mes de mayor egreso</span><b>Mes ${pk+1} · ${cfMes(c,pk)}</b></div><div><span>Egreso de ese mes</span><b>${ars(peak)}</b></div><div><span>Promedio mensual de obra</span><b>${ars((R.T-R.lote[0])/n)}</b></div></div></div>
  <div class="card"><b>Egreso mensual y acumulado</b>${cfChart(R)}</div>
  <div class="card"><b>Cronograma por rubro · mes de obra (desde – hasta)</b><div class="sub">Editá cuándo empieza y termina cada rubro. El cash flow se recalcula solo.</div>
  <div class="cfr cfh"><span>Rubro</span><span>Desde</span><span>Hasta</span></div>`;
  R.rows.forEach((r,i)=>{const pre=r.it?'cf.it':`cf.v.${i}`,A=r.it?c.it:c.v[i];h+=`<div class="cfr"><span>${esc(r.n)}</span>${r.it?`<input inputmode="numeric" data-p="cf.it.0" value="${A[0]}">`:`<input inputmode="numeric" data-p="cf.v.${i}.0" value="${A[0]}">`}${r.it?`<input inputmode="numeric" data-p="cf.it.1" value="${A[1]}">`:`<input inputmode="numeric" data-p="cf.v.${i}.1" value="${A[1]}">`}</div>`});
- h+=`<div class="sub" style="margin-top:8px">Lote y plusvalía se pagan en el mes 1. Gastos generales se reparten parejo; utilidad e impuestos acompañan el avance de cada mes.</div></div>
+ h+=`<div class="sub" style="margin-top:8px">Lote se pagan en el mes 1. Gastos generales se reparten parejo; utilidad e impuestos acompañan el avance de cada mes.</div></div>
  <div class="card"><b>Ingresos por ventas durante la obra</b><div class="sub">Las unidades se venden en pozo y se cobran en tres partes: anticipo al comprar, cuotas durante la obra y saldo a la entrega. El total sale del precio de la zona × m² construidos.</div>
  <div class="cfg" style="margin:10px 0"><label class="fld">Vendido al lanzamiento · %${inp(c.pre,'cf.pre',1)}</label><label class="fld">Anticipo · %${inp(c.ant,'cf.ant',1)}</label><label class="fld">Cuotas en obra · %${inp(c.cuo,'cf.cuo',1)}</label><label class="fld">Dejar de vender · meses antes del fin${inp(c.stop,'cf.stop')}</label></div>
  <div class="row"><span>Saldo a la entrega · %</span><b>${Math.max(0,100-c.ant-c.cuo).toFixed(1).replace('.',',')}%</b></div>
@@ -1354,7 +1354,7 @@ function renderCF(o){const R=cfCalc(o),c=R.c,n=R.n,cot=o.cot||0;const peak=Math.
  const cell=v=>v>0.5?`<td>${f0(v)}</td>`:'<td class="z">·</td>';
  R.rows.forEach(r=>{h+=`<tr><td title="${esc(r.n)}">${esc(r.n)}</td>${r.a.map(cell).join('')}<td><b>${f0(r.a.reduce((a,b)=>a+b,0))}</b></td></tr>`});
  const sm=a=>a.reduce((x,y)=>x+y,0),line=(cl,t,a)=>`<tr class="${cl}"><td>${t}</td>${a.map(cell).join('')}<td>${f0(sm(a))}</td></tr>`;
- h+=line('sub','Costo directo',R.dir)+line('','Gastos generales',R.gg)+line('','Utilidad empresarial',R.ut)+line('','Impuestos',R.im)+line('','Lote y plusvalía',R.lote)+line('tot','EGRESO DEL MES',R.tot)+`<tr class="acu"><td>Acumulado</td>${R.acu.map(v=>`<td>${f0(v)}</td>`).join('')}<td></td></tr><tr><td>% acumulado</td>${R.acu.map(v=>`<td>${R.T?(v/R.T*100).toFixed(1).replace('.',','):0}%</td>`).join('')}<td></td></tr><tr><td>Egreso del mes · U$s</td>${R.tot.map(v=>`<td>${cot?f0(v/cot):0}</td>`).join('')}<td><b>${cot?f0(R.T/cot):0}</b></td></tr>`;
+ h+=line('sub','Costo directo',R.dir)+line('','Gastos generales',R.gg)+line('','Utilidad empresarial',R.ut)+line('','Impuestos',R.im)+line('','Lote',R.lote)+line('tot','EGRESO DEL MES',R.tot)+`<tr class="acu"><td>Acumulado</td>${R.acu.map(v=>`<td>${f0(v)}</td>`).join('')}<td></td></tr><tr><td>% acumulado</td>${R.acu.map(v=>`<td>${R.T?(v/R.T*100).toFixed(1).replace('.',','):0}%</td>`).join('')}<td></td></tr><tr><td>Egreso del mes · U$s</td>${R.tot.map(v=>`<td>${cot?f0(v/cot):0}</td>`).join('')}<td><b>${cot?f0(R.T/cot):0}</b></td></tr>`;
  h+=line('','Cobro de anticipos',R.ant)+line('','Cobro de cuotas en obra',R.cu)+line('','Cobro de saldo a la entrega',R.ent)+line('sub','INGRESOS POR VENTAS',R.ing)+line('tot','FLUJO NETO DEL MES',R.neto)+`<tr class="acu"><td>Caja acumulada</td>${R.acn.map(v=>`<td style="color:${v>=0?'#2fa86b':'#c0392b'}">${f0(v)}</td>`).join('')}<td></td></tr>`;
  h+=`</tbody></table></div></div><div class="card"><b>Etapas de obra del modelo</b><div class="sub">Secuencia típica de un edificio de hormigón armado, de la demolición a la entrega.</div>${CF_HITOS.map((t,i)=>`<div class="row"><span>${i+1}. ${t}</span></div>`).join('')}</div>`;
  document.getElementById('c').innerHTML=h}
@@ -1403,7 +1403,7 @@ function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*
  document.getElementById('f').innerHTML=t}
 
 
-const PRE_V=2;
+const PRE_V=3;
 const PRE_T=[
 ['Definición del proyecto','Definir el producto: cantidad de unidades, mix y categoría',0,0.08,'Sebastián'],
 ['Definición del proyecto','Estudio de mercado y precios de la zona',0,0.1,'Sebastián'],
@@ -1435,7 +1435,6 @@ const PRE_T=[
 ['Proyecto y permisos','Baja de servicios y libre deuda para demoler',0.4,0.6,'Gestor'],
 ['Proyecto y permisos','Permiso de demolición',0.3,0.6,'Arquitecto / gestor'],
 ['Proyecto y permisos','Permiso de obra nueva',0.35,0.8,'Arquitecto / gestor'],
-['Proyecto y permisos','Cálculo y pago de la plusvalía urbana',0.7,0.85,'Arquitecto / contador'],
 ['Proyecto y permisos','Seguros de obra, ART y cartel de obra',0.7,0.9,'V+V'],
 ['Ventas y financiamiento','Reglamento de copropiedad y planos de propiedad horizontal',0.4,0.75,'Escribano / arquitecto'],
 ['Ventas y financiamiento','Lista de precios, boleto de compraventa y material de venta',0.35,0.6,'Sebastián'],
@@ -1492,20 +1491,18 @@ function render(){const o=O();o.m2v=o.m2c;document.getElementById('tit').textCon
  h+=`</table></div><div class="row"><span>Total construcción</span><b>${ars(r.c)}${pm(r.c,o)}</b></div><button class="btn sm noprint" id="addr">+ Agregar rubro</button></details></div>
  <div class="card"><div class="g2"><label class="fld">m² a construir${inp(o.m2c,'m2c')}</label>
  <label class="fld">Gastos generales · %${inp(o.gg,'gg',1)}</label><label class="fld">Utilidad empresarial · %${inp(o.ut,'ut',1)}</label><label class="fld">Impuestos · %${inp(o.imp,'imp',1)}</label>
- <label class="fld">Costo del lote · U$s${inp(o.lote,'lote',1)}</label><label class="fld">Plusvalía a pagar · U$s${inp(o.plus,'plus',1)}</label><label class="fld">Precio de venta de la zona · U$s/m²${inp(o.zona,'zona',1)}</label></div></div>
+ <label class="fld">Costo del lote · U$s${inp(o.lote,'lote',1)}</label><label class="fld">Precio de venta de la zona · U$s/m²${inp(o.zona,'zona',1)}</label></div></div>
  <div class="card">
  <div class="row big2"><span>Costo directo · construcción</span>${tri(r.c,o)}</div>
  <div class="row big2"><span>Gastos generales (${o.gg}%)</span>${tri(r.gg,o)}</div>
  <div class="row big2"><span>Utilidad empresarial (${o.ut}%)</span>${tri(r.ut,o)}</div>
  <div class="row big2"><span>Impuestos (${o.imp}%)</span>${tri(r.im,o)}</div>
  <div class="row big2"><span>Lote</span>${tri(o.lote*o.cot,o)}</div>
- <div class="row big2"><span>Plusvalía a pagar</span>${tri(o.plus*o.cot,o)}</div>
  <div class="row"><span>Incidencia del lote · U$s/m² construido</span><b>${usd(r.loteI)} / m²</b></div>
- <div class="row"><span>Incidencia de plusvalía · U$s/m² construido</span><b>${usd(r.plusI)} / m²</b></div>
  <div class="row big2"><span>Total interiorismo</span>${tri(r.it,o)}</div>
  <div class="row big2"><span>Costo directo total · construcción + interiorismo</span>${tri(r.d,o)}</div>
  <div class="sub">Gastos generales, utilidad e impuestos se calculan sobre el costo directo total (construcción + interiorismo).</div>
- <div class="sub">Lote y plusvalía se convierten a pesos con la cotización y se suman al costo final.</div></div>
+ <div class="sub">Lote se convierten a pesos con la cotización y se suman al costo final.</div></div>
  <div class="card"><div class="row big2"><span>Precio final total</span><b class="tri big"><span>${ars(r.tot)}</span><span>${usd(r.totU)}</span><span>${o.m2c?usd(r.totU/o.m2c):'—'} /m² construido</span></b></div>
  <div class="row big2"><span>Precio de venta de la zona</span><b class="tri"><span>${usd(o.zona)} /m²</span><span>${ars(o.zona*o.cot)} /m²</span></b></div>
  <div class="row big2"><span>Ingresos totales por venta</span><b class="tri"><span>${usd(r.ing)}</span><span>${ars(r.ing*o.cot)}</span><span>${o.m2c?usd(r.ing/o.m2c):'—'} /m² construido</span></b></div>
