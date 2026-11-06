@@ -2272,7 +2272,7 @@ function ResultadosBody({ cobros, pagos, gastos, cierres, onCerrar, onReabrir, e
           <div style={{ fontSize: 10.5, color: T.muted, marginTop: 6, lineHeight: 1.55, textAlign: "left", display: "inline-block" }}>
             {remanente > 0 && <div>Quedó del mes anterior: ${remanente.toLocaleString("es-AR")}</div>}
             <div>+ Cobrado este mes: ${(en.cobrado || 0).toLocaleString("es-AR")}</div>
-            <div>− Pagos (incluye Valeria y Valentina): ${(en.pagado || 0).toLocaleString("es-AR")}</div>
+            <div>− Pagos (personal + Valeria + Valentina + Terralagos): ${(en.pagado || 0).toLocaleString("es-AR")}</div>
             <div>− Gastos: ${(en.gastos || 0).toLocaleString("es-AR")}</div>
           </div>
         </div>
