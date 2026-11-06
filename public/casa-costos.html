@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0d0e10"><title>B+B Construcciones · Casa Canning San Felipe</title>
+<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0d0e10"><title>B+B Construcciones · Casa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root{--bg:#0d0e10;--surface:#16171a;--raise:#1d1f23;--line:#2a2c31;--fg:#ece8e1;--muted:#8f8b84;--gold:#b8915a;--gold-soft:rgba(184,145,90,.14);--verde:#3fa66b;--amarillo:#e0b43a;--rojo:#e2493e;--azul:#5b8fd6;--serif:"Playfair Display",Georgia,serif;--body:"Barlow",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;color-scheme:dark}
@@ -41,15 +41,15 @@ nav.bottom div{max-width:720px;margin:0 auto;display:flex}nav.bottom button{flex
 @media print{header,nav.bottom,.noprint{display:none!important}body,.app{background:#fff;color:#000}.card,.kpi,.rub{background:#fff;border-color:#bbb}.kpi .v,.kpi.gold .v{color:#000}.hideprint{display:none}.pv{display:block!important}}
 .pv{display:none}
 </style></head><body>
-<div class="app"><header><div class="brand">B+B Construcciones</div><h1 id="tit">Casa Canning San Felipe</h1><div class="guard" id="guard"></div></header><main id="m"></main></div>
+<div class="app"><header><div class="brand">B+B Construcciones</div><h1 id="tit">Casa</h1><div class="guard" id="guard"></div></header><main id="m"></main></div>
 <nav class="bottom"><div id="nav"></div></nav>
 <script>
-const KEY='bb_canning_db_v1',APP='canning',API='/api/nexo2';
+const KEY='bb_casa_db_v1',APP="casa",API='/api/nexo2';
 const TABS=[['r','Resumen'],['p','Presupuesto'],['g','Gastos'],['c','Cronograma'],['t','Tareas'],['a','Avances']];
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
 const MO=[['Mano de obra Gruesa','m²',254928],['Movimiento de Suelo','m²',25000],['Plomería','m²',25814],['Electricidad','m²',24200],['Pintura','m²',41900],['Durlock','m²',15000],['Piscina','m²',44000],['Colocaciones','m²',40000],['Proyecto y Dirección','m²',150000]];
 const MA=[['Cerco','m²',7200,140],['Tosca','m²',14000,140],['Materiales gruesos','m²',290000,140],['Pisos','m²',20000,140],['Plomería','m²',95560,140],['Electricidad','m²',23100,140],['Durlock','m²',14000,140],['Aberturas','m²',211197,140],['Revestimientos','m²',25000,50],['Miksa','m²',18236,140],['Puertas','u',278000,7],['Puerta principal','u',1000000,1],['Bomba de piscina','u',297500,1],['Herrería','u',880000,1],['Muebles de cocina y placares','u',4500000,1],['Venecitas','m²',15000,28],['Electrodomésticos','u',1356853,1],['Entrada vehicular','u',1500000,1],['Parrilla','u',1500000,1],['Preinstalación de aires','u',1500000,1]];
-function nuevo(){return{_t:0,P:{nombre:'Casa Canning San Felipe',m2:140,dolar:1546,lote:33920,cont:5},
+function nuevo(){return{_t:0,P:{nombre:'Casa',m2:140,dolar:1546,lote:33920,cont:5},
  mo:MO.map(([n,u,p])=>({id:uid(),n,u,q:140,x:1,mon:'ARS',p})),
  ma:MA.map(([n,u,p,q])=>({id:uid(),n,u,q,x:q===140?1:0,mon:'ARS',p})),
  gastos:[],etapas:['Movimiento de suelo y cerco','Estructura (obra gruesa)','Instalaciones (plomería y electricidad)','Aberturas','Durlock y revestimientos','Piscina','Pisos y colocaciones','Pintura y terminaciones','Entrega'].map(n=>({id:uid(),n,ini:'',fin:'',est:'pendiente'})),
