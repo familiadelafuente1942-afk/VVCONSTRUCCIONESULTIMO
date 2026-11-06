@@ -1485,6 +1485,24 @@ function invHtml(o,r){const k=invCalc(o,r),v=k.v;return `<div class="card"><b>In
  <div class="row"><span>Caída de precio que soporta</span><b>${f2(k.caida)}%</b></div>
  <div class="row"><span>Retorno del inversor en el plazo</span><b>${f2(k.ret)}%</b></div>
  <div class="sub">No incluye impuestos. Cada mes de atraso suma ${usd(k.monto*v.tasa/100/12)} de interés.</div></div>`}
+function finCalc(o,r){const k=invCalc(o,r),f=o.fin||(o.fin={ent:40,n:60,tasa:12});if(f.ent==null)f.ent=40;if(f.n==null)f.n=60;if(f.tasa==null)f.tasa=12;
+ const P=r.ing,ent=P*f.ent/100,fin=P-ent,i=f.tasa/1200,cuota=fin?(i?fin*i/(1-Math.pow(1+i,-f.n)):fin/f.n):0,tot=ent+cuota*f.n,intC=cuota*f.n-fin,gap=k.cost+k.cvU-ent,i2=k.v.tasa/1200;
+ let n2=0,intF=0;if(gap>0&&cuota){const x=1-gap*i2/cuota;n2=x>0&&i2?-Math.log(x)/Math.log(1+i2):gap/cuota;intF=Math.max(0,cuota*n2-gap)}
+ const gan=tot-k.cost-k.cvU-intF;return{f,P,ent,fin,cuota,tot,intC,gap,n2,intF,gan,cont:r.ing-k.cost-k.cvU}}
+function finHtml(o,r){const k=finCalc(o,r),f=k.f;return `<div class="card"><b>Financiación a compradores</b><div class="sub">La empresa vende la casa llave en mano con entrada y cuotas en U$s.</div>
+ <div class="g2"><label class="fld">Entrada · %${inp(f.ent,'fin.ent',1)}</label><label class="fld">Plazo · cuotas${inp(f.n,'fin.n')}</label><label class="fld">Interés anual · %${inp(f.tasa,'fin.tasa',1)}</label></div>
+ <div class="row"><span>Precio de venta</span><b>${usd(k.P)}</b></div>
+ <div class="row"><span>Entrada (${f2(f.ent)}%)</span><b>${usd(k.ent)}</b></div>
+ <div class="row"><span>Monto financiado</span><b>${usd(k.fin)}</b></div>
+ <div class="row big2"><span>Cuota mensual</span><b class="big">${usd(k.cuota)}</b></div>
+ <div class="row"><span>Interés total que se cobra</span><b>${usd(k.intC)}</b></div>
+ <div class="row"><span>Total que paga el comprador</span><b>${usd(k.tot)}</b></div>
+ <div class="row"><span>Capital a financiar por casa</span><b>${usd(Math.max(0,k.gap))}</b></div>
+ <div class="row"><span>Meses en que las cuotas lo devuelven</span><b>${f2(k.n2)}</b></div>
+ <div class="row"><span>Interés a pagar a inversores</span><b>${usd(k.intF)}</b></div>
+ <div class="row big2"><span>Ganancia total por casa (${f.n} meses)</span><b class="big ${k.gan>=0?'ut-pos':'ut-neg'}">${usd(k.gan)}</b></div>
+ <div class="row"><span>Ganancia vendiendo al contado</span><b>${usd(k.cont)}</b></div>
+ <div class="sub">No incluye impuestos ni morosidad.</div></div>`}
 function render(){const o=O();o.m2v=o.m2c;document.getElementById('tit').textContent=o.nombre;document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}).replace(/[.,]/g,'');
  const sel=document.getElementById('obra');sel.innerHTML=DB.obras.map((x,i)=>`<option value="${i}" ${i==DB.act?'selected':''}>${esc(x.nombre)}</option>`).join('');
  const r=calc(o);
@@ -1525,6 +1543,7 @@ function render(){const o=O();o.m2v=o.m2c;document.getElementById('tit').textCon
  <div class="row"><span>m² a construir</span><b>${f0(o.m2c)} m²</b></div>
  <div class="row"><span>Precio de venta de la zona</span><b>${usd(o.zona)} / m²</b></div></div>
  ${invHtml(o,r)}
+ ${finHtml(o,r)}
  <div class="card"><b>Costos del proyecto</b>
  <div class="row"><span>Precio final total</span><b class="big">${usd(r.totU)}</b></div>
  <div class="row"><span>Utilidad general · U$s/m² construido</span><b class="${r.util>=0?'ut-pos':'ut-neg'}" style="font-size:20px">${usd(r.util)} / m²</b></div>
