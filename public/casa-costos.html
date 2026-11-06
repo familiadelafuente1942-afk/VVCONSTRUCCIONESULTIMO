@@ -55,7 +55,7 @@ function nuevo(){return{_t:0,P:{nombre:'Casa',m2:140,dolar:1546,lote:33920,cont:
  gastos:[],etapas:['Movimiento de suelo y cerco','Estructura (obra gruesa)','Instalaciones (plomería y electricidad)','Aberturas','Durlock y revestimientos','Piscina','Pisos y colocaciones','Pintura y terminaciones','Entrega'].map(n=>({id:uid(),n,ini:'',fin:'',est:'pendiente'})),
  tareas:[{id:uid(),t:'Cerrar anteproyecto y superficies',f:'2026-09-30',pr:'Alta',ok:1},{id:uid(),t:'Comparar tres presupuestos de estructura',f:'2026-10-08',pr:'Alta',ok:0},{id:uid(),t:'Definir aberturas y nivel de terminación',f:'2026-10-15',pr:'Media',ok:0}],
  avances:[],tab:'r'}}
-let DB;try{DB=JSON.parse(localStorage.getItem(KEY))||nuevo()}catch(e){DB=nuevo()}
+let DB;try{DB=JSON.parse(localStorage.getItem(KEY))||nuevo();if(/canning|felipe/i.test(DB.P.nombre))DB.P.nombre='Casa'}catch(e){DB=nuevo()}
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const N=n=>Math.round(n||0).toLocaleString('es-AR'),ARS=n=>'$ '+N(n),USD=n=>'U$s '+N(n),pc=n=>(n*100).toLocaleString('es-AR',{maximumFractionDigits:1})+'%';
 const dig=s=>parseInt(String(s).replace(/\D/g,''),10)||0;
@@ -74,7 +74,7 @@ const post=b=>fetch(API,{method:'POST',headers:{'Content-Type':'application/json
 function save(){DB._t=Date.now();try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}clearTimeout(_t);_t=setTimeout(push,700);gu('Guardado en este equipo…')}
 const gu=t=>{const g=$('#guard');if(g)g.textContent=t};
 function push(){post({op:'pc_put',v:JSON.stringify(DB),t:DB._t}).then(({s,j})=>{if(s===200)gu('Guardado y sincronizado '+new Date().toLocaleTimeString('es-AR'));else if(s===409&&j.doc)adopt(j.doc);else gu('Guardado en este equipo (sin conexión para sincronizar)')}).catch(()=>gu('Guardado en este equipo (sin conexión para sincronizar)'))}
-function adopt(d){try{const n=JSON.parse(d.v);if(!n||!n.mo)return;n._t=d.t;DB=n;localStorage.setItem(KEY,JSON.stringify(DB));render();gu('Actualizado con los últimos cambios '+new Date().toLocaleTimeString('es-AR'))}catch(e){}}
+function adopt(d){try{const n=JSON.parse(d.v);if(!n||!n.mo)return;if(/canning|felipe/i.test(n.P.nombre))n.P.nombre='Casa';n._t=d.t;DB=n;localStorage.setItem(KEY,JSON.stringify(DB));render();gu('Actualizado con los últimos cambios '+new Date().toLocaleTimeString('es-AR'))}catch(e){}}
 function sync(first){if(_busy)return;const a=document.activeElement;if(!first&&a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))return;_busy=1;post({op:'pc_get'}).then(({j})=>{const d=j&&j.doc;if(d&&Number(d.t)>(DB._t||0))adopt(d);else if(!d){DB._t=Date.now();push()}else if(Number(d.t)<(DB._t||0))push();else gu('Sincronizado '+new Date().toLocaleTimeString('es-AR'))}).catch(()=>gu('Sin conexión: los cambios quedan en este equipo')).finally(()=>_busy=0)}
 /* ---- vistas ---- */
 const T={
