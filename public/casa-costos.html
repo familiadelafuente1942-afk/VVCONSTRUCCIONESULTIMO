@@ -1345,7 +1345,7 @@ function renderCF(o){const R=cfCalc(o),c=R.c,n=R.n,cot=o.cot||0;const peak=Math.
  <div class="cfr cfh"><span>Rubro</span><span>Desde</span><span>Hasta</span></div>`;
  R.rows.forEach((r,i)=>{const pre=r.it?'cf.it':`cf.v.${i}`,A=r.it?c.it:c.v[i];h+=`<div class="cfr"><span>${esc(r.n)}</span>${r.it?`<input inputmode="numeric" data-p="cf.it.0" value="${A[0]}">`:`<input inputmode="numeric" data-p="cf.v.${i}.0" value="${A[0]}">`}${r.it?`<input inputmode="numeric" data-p="cf.it.1" value="${A[1]}">`:`<input inputmode="numeric" data-p="cf.v.${i}.1" value="${A[1]}">`}</div>`});
  h+=`<div class="sub" style="margin-top:8px">Lote y plusvalía se pagan en el mes 1. Gastos generales se reparten parejo; utilidad e impuestos acompañan el avance de cada mes.</div></div>
- <div class="card"><b>Ingresos por ventas durante la obra</b><div class="sub">Las unidades se venden en pozo y se cobran en tres partes: anticipo al comprar, cuotas durante la obra y saldo a la entrega. El total sale del precio de la zona × m² vendibles.</div>
+ <div class="card"><b>Ingresos por ventas durante la obra</b><div class="sub">Las unidades se venden en pozo y se cobran en tres partes: anticipo al comprar, cuotas durante la obra y saldo a la entrega. El total sale del precio de la zona × m² construidos.</div>
  <div class="cfg" style="margin:10px 0"><label class="fld">Vendido al lanzamiento · %${inp(c.pre,'cf.pre',1)}</label><label class="fld">Anticipo · %${inp(c.ant,'cf.ant',1)}</label><label class="fld">Cuotas en obra · %${inp(c.cuo,'cf.cuo',1)}</label><label class="fld">Dejar de vender · meses antes del fin${inp(c.stop,'cf.stop')}</label></div>
  <div class="row"><span>Saldo a la entrega · %</span><b>${Math.max(0,100-c.ant-c.cuo).toFixed(1).replace('.',',')}%</b></div>
  <div class="cfk"><div><span>Ventas totales</span><b>${ars(R.vTot)}</b></div><div><span>Ventas totales · U$s</span><b>${usd(cot?R.vTot/cot:0)}</b></div><div><span>Capital propio máximo necesario</span><b class="${R.capMax>0?'ut-neg':'ut-pos'}">${ars(R.capMax)}</b></div><div><span>Mes del pico de capital</span><b>Mes ${R.capMes+1} · ${cfMes(c,R.capMes)}</b></div><div><span>Capital propio máximo · U$s</span><b>${usd(cot?R.capMax/cot:0)}</b></div><div><span>Resultado de caja al final</span><b class="${R.fin>=0?'ut-pos':'ut-neg'}">${ars(R.fin)}</b></div></div></div>
@@ -1374,7 +1374,7 @@ function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*
  <div class="row"><span>Ingresos por unidad · U$s/año</span><b>${usd(h.un?k.ing/h.un:0)}</b></div>
  <div class="row"><span>Valor del activo operando · ${h.cap}% de cap rate</span><b>${usd(k.val)}</b></div>
  <div class="row"><span>Ganancia del desarrollador vs. costo · U$s</span><b class="${k.val-k.inv>=0?'ut-pos':'ut-neg'}">${usd(k.val-k.inv)}</b></div>
- <div class="row"><span>Alternativa: ventas por m² (precio de la zona × m² vendibles)</span><b>${usd(vent)}</b></div>
+ <div class="row"><span>Alternativa: ventas por m² (precio de la zona × m² construidos)</span><b>${usd(vent)}</b></div>
  <div class="row"><span>Repago de la inversión con la renta</span><b>${k.noi>0?(k.inv/k.noi).toFixed(1).replace('.',',')+' años':'—'}</b></div></div>`;
 
  const vn=o.zona*o.m2v,kg=hotCalc(o,h.ocup,h.adr,r),yv=vn?kg.noiG/vn:0,pu=h.un?vn/h.un:0;
@@ -1389,7 +1389,7 @@ function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*
  const pal=[['Escenario actual',yl(()=>{})],['Tarifa +U$s 20 por producto y servicios',yl(x=>x.adr+=20)],['Costos operativos −5 puntos',yl(x=>x.opex-=5)],['Ocupación +5 puntos',yl(x=>x.ocup+=5)],['Reserva de reposición 3 % en vez de 4 %',yl(x=>x.res=3)],['Las cuatro mejoras juntas',yl(x=>{x.adr+=20;x.opex-=5;x.ocup+=5;x.res=3})]];
  t+=`<div class="card"><b>Qué mejora el rendimiento del inversor</b><div class="sub">Efecto de cada palanca sobre el rendimiento neto, con el precio de venta actual.</div>${pal.map(([n,v])=>`<div class="row"><span>${n}</span><b class="${v*100>=h.obj?'ut-pos':''}">${pc(v)}</b></div>`).join('')}<div class="sub" style="margin-top:8px">En verde, lo que alcanza el rendimiento buscado (${h.obj}%).</div></div>`;
  const m2u=h.un?o.m2v/h.un:0;
- t+=`<div class="card"><b>Mix de unidades</b><div class="sub">En un hotel el ingreso depende de la cantidad de unidades, no de los m². Unidades más chicas rinden más por m².</div><div class="row"><span>m² vendibles por unidad</span><b>${f0(m2u)} m²</b></div><div class="row"><span>Ingresos del hotel por m² vendible · U$s/año</span><b>${usd(o.m2v?kg.ing/o.m2v:0)}</b></div><div class="row"><span>Renta neta del inversor por m² · U$s/año</span><b>${usd(o.m2v?kg.noiG/o.m2v:0)}</b></div><div class="row"><span>Precio de venta por m² · U$s</span><b>${usd(o.zona)}</b></div></div>`;
+ t+=`<div class="card"><b>Mix de unidades</b><div class="sub">En un hotel el ingreso depende de la cantidad de unidades, no de los m². Unidades más chicas rinden más por m².</div><div class="row"><span>m² construidos por unidad</span><b>${f0(m2u)} m²</b></div><div class="row"><span>Ingresos del hotel por m² construido · U$s/año</span><b>${usd(o.m2v?kg.ing/o.m2v:0)}</b></div><div class="row"><span>Renta neta del inversor por m² · U$s/año</span><b>${usd(o.m2v?kg.noiG/o.m2v:0)}</b></div><div class="row"><span>Precio de venta por m² · U$s</span><b>${usd(o.zona)}</b></div></div>`;
  if(!h.ops)h.ops=[{n:'Operador 1',adr:0,ocup:0,fee:0},{n:'Operador 2',adr:0,ocup:0,fee:0},{n:'Operador 3',adr:0,ocup:0,fee:0}];
  t+=`<div class="card"><b>Cotizaciones de operadores</b><div class="sub">Cargá la propuesta de cada operador: tarifa, ocupación y su fee sobre ingresos. Se calcula el rendimiento que le queda al inversor con cada uno.</div><div style="overflow:auto"><table class="cft"><thead><tr><th>Operador</th><th>Tarifa U$s</th><th>Ocupación %</th><th>Fee %</th><th>Rendimiento inversor</th></tr></thead><tbody>${h.ops.map((x,i)=>{const y=(x.adr&&x.ocup)?yl(z=>{z.adr=x.adr;z.ocup=x.ocup;z.base=x.fee;z.inc=0}):null;return `<tr><td><input class="t" data-p="hot.ops.${i}.n" data-s value="${esc(x.n)}"></td><td>${inp(x.adr,`hot.ops.${i}.adr`,1)}</td><td>${inp(x.ocup,`hot.ops.${i}.ocup`,1)}</td><td>${inp(x.fee,`hot.ops.${i}.fee`,1)}</td><td>${y==null?'—':`<b class="${y*100>=h.obj?'ut-pos':''}">${pc(y)}</b>`}</td></tr>`}).join('')}</tbody></table></div></div>
  <div class="card"><b>Para validar con abogado y contador</b><div class="sub">Puntos a confirmar antes de vender.</div>${['Registro de alquiler temporario turístico en CABA y habilitación del edificio como apart-hotel','Contrato de pool o administración: reparto del resultado entre propietarios y operador','Reglamento de copropiedad compatible con uso hotelero','Impuestos del inversor: Ganancias, Ingresos Brutos y facturación del operador','Respaldo para el comprador: fideicomiso al costo o contrato de reserva claro'].map(x=>`<div class="row"><span>${x}</span></div>`).join('')}</div>`;
@@ -1482,7 +1482,7 @@ function renderCG(o){const c=cfInit(o),n=c.n,now=new Date(),[y,m]=c.ini.split('-
  <div class="card"><b>Estado y avance de cada tarea</b><div class="gl cfh"><span>Tarea</span><span>Estado</span><span>Avance %</span></div>${items.map(t=>`<div class="gl"><span class="nm">${esc(t.n)}<small>mes ${t.s} a ${t.e}</small></span><select data-es="${t.k}"><option value="p" ${t.es==='p'?'selected':''}>Pendiente</option><option value="c" ${t.es==='c'?'selected':''}>En curso</option><option value="t" ${t.es==='t'?'selected':''}>Terminada</option></select>${t.k==='I'?inp(t.av,'cf.avI',0):inp(t.av,'cf.av.'+t.k.slice(1),0)}</div>`).join('')}</div>`;
  document.getElementById('g').innerHTML=renderPre(o)+h}
 function setPath(p,v){const k=p.split('.');let t=O();for(let i=0;i<k.length-1;i++)t=t[k[i]];t[k[k.length-1]]=v}
-function render(){const o=O();document.getElementById('tit').textContent=o.nombre;document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}).replace(/[.,]/g,'');
+function render(){const o=O();o.m2v=o.m2c;document.getElementById('tit').textContent=o.nombre;document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}).replace(/[.,]/g,'');
  const sel=document.getElementById('obra');sel.innerHTML=DB.obras.map((x,i)=>`<option value="${i}" ${i==DB.act?'selected':''}>${esc(x.nombre)}</option>`).join('');
  const r=calc(o);
  let h=`<div class="card"><details id="rubdet" ${window._rubOpen?'open':''}><summary class="rubsum"><b>Presupuesto por rubros</b><span class="rubtot">${ars(r.c)} · ${usd(o.cot?r.c/o.cot:0)}</span><span class="rubab"></span></summary><div class="sub">Cargá materiales y ejecución en pesos. La cotización convierte solo los totales a U$s.</div>
@@ -1490,7 +1490,7 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  <div style="overflow:auto"><table><tr><th>N.º</th><th>Rubro</th><th class="r">Materiales</th><th class="r">Ejecución</th><th class="r">Total</th><th></th></tr>`;
  o.rub.forEach((x,i)=>{h+=`<tr class="rb"><td class="nn">${i+1}</td><td class="nm"><input class="t" data-p="rub.${i}.n" data-s value="${esc(x.n)}"></td><td data-l="Materiales">${inp(x.m,`rub.${i}.m`,1,'$')}</td><td data-l="Ejecución">${inp(x.e,`rub.${i}.e`,1,'$')}</td><td class="r num tt" data-l="Total">${ars(x.m+x.e)}${pm(x.m+x.e,o)}</td><td class="noprint"><button class="btn ghost sm x" data-del="${i}">✕</button></td></tr>`});
  h+=`</table></div><div class="row"><span>Total construcción</span><b>${ars(r.c)}${pm(r.c,o)}</b></div><button class="btn sm noprint" id="addr">+ Agregar rubro</button></details></div>
- <div class="card"><div class="g2"><label class="fld">m² a construir${inp(o.m2c,'m2c')}</label><label class="fld">m² vendibles${inp(o.m2v,'m2v')}</label>
+ <div class="card"><div class="g2"><label class="fld">m² a construir${inp(o.m2c,'m2c')}</label>
  <label class="fld">Gastos generales · %${inp(o.gg,'gg',1)}</label><label class="fld">Utilidad empresarial · %${inp(o.ut,'ut',1)}</label><label class="fld">Impuestos · %${inp(o.imp,'imp',1)}</label>
  <label class="fld">Costo del lote · U$s${inp(o.lote,'lote',1)}</label><label class="fld">Plusvalía a pagar · U$s${inp(o.plus,'plus',1)}</label><label class="fld">Precio de venta de la zona · U$s/m²${inp(o.zona,'zona',1)}</label></div></div>
  <div class="card">
@@ -1500,19 +1500,18 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  <div class="row big2"><span>Impuestos (${o.imp}%)</span>${tri(r.im,o)}</div>
  <div class="row big2"><span>Lote</span>${tri(o.lote*o.cot,o)}</div>
  <div class="row big2"><span>Plusvalía a pagar</span>${tri(o.plus*o.cot,o)}</div>
- <div class="row"><span>Incidencia del lote · U$s/m² vendible</span><b>${usd(r.loteI)} / m²</b></div>
- <div class="row"><span>Incidencia de plusvalía · U$s/m² vendible</span><b>${usd(r.plusI)} / m²</b></div>
+ <div class="row"><span>Incidencia del lote · U$s/m² construido</span><b>${usd(r.loteI)} / m²</b></div>
+ <div class="row"><span>Incidencia de plusvalía · U$s/m² construido</span><b>${usd(r.plusI)} / m²</b></div>
  <div class="row big2"><span>Total interiorismo</span>${tri(r.it,o)}</div>
  <div class="row big2"><span>Costo directo total · construcción + interiorismo</span>${tri(r.d,o)}</div>
  <div class="sub">Gastos generales, utilidad e impuestos se calculan sobre el costo directo total (construcción + interiorismo).</div>
  <div class="sub">Lote y plusvalía se convierten a pesos con la cotización y se suman al costo final.</div></div>
  <div class="card"><div class="row big2"><span>Precio final total</span><b class="tri big"><span>${ars(r.tot)}</span><span>${usd(r.totU)}</span><span>${o.m2c?usd(r.totU/o.m2c):'—'} /m² construido</span></b></div>
- <div class="row big2"><span>Costo final por m² vendible</span><b class="tri"><span>${usd(r.pm)} /m² vendible</span><span>${ars(r.pm*o.cot)} /m² vendible</span></b></div>
  <div class="row big2"><span>Precio de venta de la zona</span><b class="tri"><span>${usd(o.zona)} /m²</span><span>${ars(o.zona*o.cot)} /m²</span></b></div>
  <div class="row big2"><span>Ingresos totales por venta</span><b class="tri"><span>${usd(r.ing)}</span><span>${ars(r.ing*o.cot)}</span><span>${o.m2c?usd(r.ing/o.m2c):'—'} /m² construido</span></b></div>
- <div class="row big2"><span>Utilidad general del proyecto</span><b class="tri big ${r.util>=0?'ut-pos':'ut-neg'}"><span>${usd(r.util)} /m² vendible</span><span>${usd(r.util*o.m2v)} total</span><span>${ars(r.util*o.m2v*o.cot)} total</span></b></div>
- <div class="sub">Precio de venta de la zona − costo final por m² vendible.</div>
- <div class="sub" style="font-size:15px;margin-top:10px">${usd(o.zona)} / m² × ${f0(o.m2v)} m² vendibles = ${usd(r.ing)}</div></div>`;
+ <div class="row big2"><span>Utilidad general del proyecto</span><b class="tri big ${r.util>=0?'ut-pos':'ut-neg'}"><span>${usd(r.util)} /m² construido</span><span>${usd(r.util*o.m2v)} total</span><span>${ars(r.util*o.m2v*o.cot)} total</span></b></div>
+ <div class="sub">Precio de venta de la zona − costo final por m² construido.</div>
+ <div class="sub" style="font-size:15px;margin-top:10px">${usd(o.zona)} / m² × ${f0(o.m2v)} m² construidos = ${usd(r.ing)}</div></div>`;
  document.getElementById('p').innerHTML=h;
 
  const SL=[{f:['c01'],l:['Planta con medidas'],p:1},{f:['c18'],l:['Planta'],p:1},
@@ -1523,12 +1522,10 @@ function render(){const o=O();document.getElementById('tit').textContent=o.nombr
  <div class="card"><b>El proyecto</b><p class="sub" style="margin:6px 0 10px">Vivienda de una planta con galería, patio interior, cochera para dos autos y piscina.</p>
  <div class="row"><span>Según plano</span><b>Cubierta 146 m² · cochera 30 m² · galería 14 m² · total 190 m²</b></div>
  <div class="row"><span>m² a construir</span><b>${f0(o.m2c)} m²</b></div>
- <div class="row"><span>m² vendibles</span><b>${f0(o.m2v)} m²</b></div>
  <div class="row"><span>Precio de venta de la zona</span><b>${usd(o.zona)} / m²</b></div></div>
  <div class="card"><b>Costos del proyecto</b>
  <div class="row"><span>Precio final total</span><b class="big">${usd(r.totU)}</b></div>
- <div class="row"><span>Costo final por m² vendible</span><b>${usd(r.pm)} / m²</b></div>
- <div class="row"><span>Utilidad general · U$s/m² vendible</span><b class="${r.util>=0?'ut-pos':'ut-neg'}" style="font-size:20px">${usd(r.util)} / m²</b></div>
+ <div class="row"><span>Utilidad general · U$s/m² construido</span><b class="${r.util>=0?'ut-pos':'ut-neg'}" style="font-size:20px">${usd(r.util)} / m²</b></div>
  <div class="tools" style="margin-top:10px"><button class="btn gold sm" data-t="p">Ver presupuesto</button><button class="btn sm" data-t="i">Interiorismo</button><button class="btn sm" data-t="d">Documentación</button></div></div>`;
  startSlides();
  renderCF(o);renderHot(o,r);renderCG(o);
@@ -1544,7 +1541,7 @@ document.addEventListener('input',e=>{const t=e.target,p=t.dataset&&t.dataset.p;
  let raw=t.value.replace(/[^\d,]/g,'');const parts=raw.split(',');let ent=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');t.value=parts.length>1?ent+','+parts.slice(1).join('').slice(0,2):ent;
  let np=t.value.length;if(antes===0)np=0;else{let n=0;for(let i=0;i<t.value.length;i++){if(/[\d,]/.test(t.value[i]))n++;if(n===antes){np=i+1;break}}}
  try{t.setSelectionRange(np,np)}catch(x){}
- setPath(p,parse(t.value));save();window._dirty=1});
+ setPath(p,parse(t.value));if(O().m2c!=null)O().m2v=O().m2c;save();window._dirty=1});
 /* los totales se recalculan al salir del campo: reconstruir la pantalla mientras se escribe borraba lo tipeado y cerraba el teclado */
 document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='rubdet')window._rubOpen=e.target.open},true);
 document.addEventListener('focusout',e=>{if(!window._dirty)return;setTimeout(()=>{const a=document.activeElement;if(window._dirty&&!(a&&a.dataset&&a.dataset.p)){window._dirty=0;render()}},250)});
