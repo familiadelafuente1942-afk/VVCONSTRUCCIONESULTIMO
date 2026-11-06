@@ -38,14 +38,27 @@ nav.bottom{position:fixed;bottom:0;left:0;right:0;background:var(--bg);border-to
 nav.bottom div{max-width:720px;margin:0 auto;display:flex}nav.bottom button{flex:1;background:none;border:0;padding:10px 2px;font-size:11.5px;color:var(--muted);font-weight:600}nav.bottom button[aria-current=page]{color:var(--gold);box-shadow:inset 0 2px 0 var(--gold)}
 .guard{font-size:11.5px;color:var(--muted)}
 .ok{color:var(--verde)}.bad{color:var(--rojo)}
+
+.hero{position:relative;border-radius:14px;overflow:hidden;background:#000;border:1px solid var(--line)}
+.sl{display:none;grid-template-columns:1fr;gap:3px}.sl.on{display:grid}
+.sl figure{margin:0;position:relative;background:#000}.sl img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;cursor:zoom-in}
+.sl.plano img{aspect-ratio:3/4;object-fit:contain;max-height:78vh;background:#0d0e10}
+.sl figcaption{position:absolute;left:0;right:0;bottom:0;padding:18px 12px 8px;background:linear-gradient(transparent,rgba(0,0,0,.72));font-size:12.5px;font-weight:600;letter-spacing:.04em}
+@media(min-width:560px){.sl.pair{grid-template-columns:1fr 1fr}.sl.pair img{aspect-ratio:4/3}}
+.hnav{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.5);color:#fff;font-size:20px;z-index:2}
+.hnav.l{left:8px}.hnav.r{right:8px}
+.dots{display:flex;justify-content:center;gap:7px;padding:9px 0;flex-wrap:wrap;background:var(--surface)}.dots button{width:11px;height:11px;border-radius:50%;border:0;padding:0;background:var(--line)}.dots button.on{background:var(--gold)}
+.gal{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gal img{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:10px;cursor:zoom-in;border:1px solid var(--line)}.gal img.pl{object-fit:contain;background:#0d0e10}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:20;display:none;align-items:center;justify-content:center}#lb.on{display:flex}#lb img{max-width:100%;max-height:100%}#lb button{position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;width:42px;height:42px;border-radius:50%;border:1px solid #666;background:#000;color:#fff;font-size:20px}
+nav.bottom div{overflow-x:auto}nav.bottom button{flex:1 0 auto;padding:10px 12px}
 @media print{header,nav.bottom,.noprint{display:none!important}body,.app{background:#fff;color:#000}.card,.kpi,.rub{background:#fff;border-color:#bbb}.kpi .v,.kpi.gold .v{color:#000}.hideprint{display:none}.pv{display:block!important}}
 .pv{display:none}
 </style></head><body>
 <div class="app"><header><div class="brand">B+B Construcciones</div><h1 id="tit">Casa</h1><div class="guard" id="guard"></div></header><main id="m"></main></div>
-<nav class="bottom"><div id="nav"></div></nav>
+<div id="lb"><button aria-label="Cerrar">✕</button><img alt=""></div><nav class="bottom"><div id="nav"></div></nav>
 <script>
 const KEY='bb_casa_db_v1',APP="casa",API='/api/nexo2';
-const TABS=[['r','Resumen'],['p','Presupuesto'],['g','Gastos'],['c','Cronograma'],['t','Tareas'],['a','Avances']];
+const TABS=[['r','Resumen'],['p','Presupuesto'],['g','Gastos'],['c','Cronograma'],['t','Tareas'],['a','Avances'],['i','Imágenes']];
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
 const MO=[['Mano de obra Gruesa','m²',254928],['Movimiento de Suelo','m²',25000],['Plomería','m²',25814],['Electricidad','m²',24200],['Pintura','m²',41900],['Durlock','m²',15000],['Piscina','m²',44000],['Colocaciones','m²',40000],['Proyecto y Dirección','m²',150000]];
 const MA=[['Cerco','m²',7200,140],['Tosca','m²',14000,140],['Materiales gruesos','m²',290000,140],['Pisos','m²',20000,140],['Plomería','m²',95560,140],['Electricidad','m²',23100,140],['Durlock','m²',14000,140],['Aberturas','m²',211197,140],['Revestimientos','m²',25000,50],['Miksa','m²',18236,140],['Puertas','u',278000,7],['Puerta principal','u',1000000,1],['Bomba de piscina','u',297500,1],['Herrería','u',880000,1],['Muebles de cocina y placares','u',4500000,1],['Venecitas','m²',15000,28],['Electrodomésticos','u',1356853,1],['Entrada vehicular','u',1500000,1],['Parrilla','u',1500000,1],['Preinstalación de aires','u',1500000,1]];
@@ -76,10 +89,21 @@ const gu=t=>{const g=$('#guard');if(g)g.textContent=t};
 function push(){post({op:'pc_put',v:JSON.stringify(DB),t:DB._t}).then(({s,j})=>{if(s===200)gu('Guardado y sincronizado '+new Date().toLocaleTimeString('es-AR'));else if(s===409&&j.doc)adopt(j.doc);else gu('Guardado en este equipo (sin conexión para sincronizar)')}).catch(()=>gu('Guardado en este equipo (sin conexión para sincronizar)'))}
 function adopt(d){try{const n=JSON.parse(d.v);if(!n||!n.mo)return;if(/canning|felipe/i.test(n.P.nombre))n.P.nombre='Casa';n._t=d.t;DB=n;localStorage.setItem(KEY,JSON.stringify(DB));render();gu('Actualizado con los últimos cambios '+new Date().toLocaleTimeString('es-AR'))}catch(e){}}
 function sync(first){if(_busy)return;const a=document.activeElement;if(!first&&a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))return;_busy=1;post({op:'pc_get'}).then(({j})=>{const d=j&&j.doc;if(d&&Number(d.t)>(DB._t||0))adopt(d);else if(!d){DB._t=Date.now();push()}else if(Number(d.t)<(DB._t||0))push();else gu('Sincronizado '+new Date().toLocaleTimeString('es-AR'))}).catch(()=>gu('Sin conexión: los cambios quedan en este equipo')).finally(()=>_busy=0)}
+
+const IMG=n=>`docs/casa/c${String(n).padStart(2,'0')}.jpg?v=1`;
+const FR=[3,9,10,12,13,14,15,16,17,20],CO=[2,4,5,6,7,8,11,19];
+const SL=[{t:'plano',f:[1],l:['Planta con medidas']},{t:'plano',f:[18],l:['Planta']}];
+for(let i=0;i<FR.length;i+=2)SL.push({t:'pair',f:FR.slice(i,i+2),l:FR.slice(i,i+2).map((_,j)=>'Frente · opción '+(i+j+1))});
+for(let i=0;i<CO.length;i+=2)SL.push({t:'pair',f:CO.slice(i,i+2),l:CO.slice(i,i+2).map((_,j)=>'Contrafrente y piscina · opción '+(i+j+1))});
+let SLI=0;
+const hero=()=>`<div><div class="hero" id="hero">${SL.map((x,i)=>`<div class="sl ${x.t} ${i===SLI?'on':''}">${x.f.map((n,j)=>`<figure><img src="${IMG(n)}" alt="${esc(x.l[j])}" data-z="${n}" loading="${i<2?'eager':'lazy'}"><figcaption>${esc(x.l[j])}</figcaption></figure>`).join('')}</div>`).join('')}<button class="hnav l" data-sl="-1" aria-label="Anterior">‹</button><button class="hnav r" data-sl="1" aria-label="Siguiente">›</button></div><div class="dots">${SL.map((_,i)=>`<button data-go="${i}" class="${i===SLI?'on':''}" aria-label="Imagen ${i+1}"></button>`).join('')}</div></div>`;
+function showSl(n){SLI=(n+SL.length)%SL.length;document.querySelectorAll('.sl').forEach((e,i)=>e.classList.toggle('on',i===SLI));document.querySelectorAll('.dots button').forEach((e,i)=>e.classList.toggle('on',i===SLI))}
+function zoom(n){const l=$('#lb');l.querySelector('img').src=IMG(n);l.classList.add('on')}
 /* ---- vistas ---- */
 const T={
+i(){return `<h2>Imágenes y planos</h2><p class="muted small">Tocá una imagen para verla grande.</p><div class="gal">${[1,18,...FR,...CO].map(n=>`<img src="${IMG(n)}" data-z="${n}" class="${n===1||n===18?'pl':''}" loading="lazy" alt="Imagen ${n}">`).join('')}</div>`},
 r(){const c=calc(),P=DB.P,pend=DB.tareas.filter(t=>!t.ok),term=DB.etapas.filter(e=>e.est==='terminada').length;
- return `<div class="kpis"><div class="kpi gold"><div class="l">Inversión total</div><div class="v">${USD(c.total/P.dolar)}</div><div class="s">${ARS(c.total)} · incluye contingencia ${P.cont}%</div></div>
+ return hero()+`<div class="kpis"><div class="kpi gold"><div class="l">Inversión total</div><div class="v">${USD(c.total/P.dolar)}</div><div class="s">${ARS(c.total)} · incluye contingencia ${P.cont}%</div></div>
  <div class="kpi"><div class="l">Superficie</div><div class="v">${N(P.m2)} m²</div><div class="s">Dólar $ ${N(P.dolar)}</div></div>
  <div class="kpi"><div class="l">Lote + adquisición</div><div class="v">${USD(P.lote)}</div></div>
  <div class="kpi"><div class="l">Obra directa</div><div class="v">${USD(c.obra/P.dolar)}</div><div class="s">${ARS(c.obra)}</div></div></div>
@@ -113,7 +137,7 @@ a(){return `<div class="row sp"><h2>Últimos avances</h2></div><div class="card 
  (DB.avances.length?[...DB.avances].sort((a,b)=>b.f.localeCompare(a.f)).map(v=>`<div class="rub"><div class="row sp"><b>${esc(v.t)}</b><span class="small muted">${fd(v.f)}</span></div><p class="small" style="margin-top:6px;white-space:pre-wrap">${esc(v.d)}</p><button class="btn sm red noprint" style="margin-top:8px" data-a="dela" data-id="${v.id}">Borrar</button></div>`).join(''):'<p class="muted small">Todavía no hay avances registrados.</p>')}};
 function render(){const y=window.scrollY;$('#tit').textContent=DB.P.nombre;$('#m').innerHTML=T[DB.tab]();$('#nav').innerHTML=TABS.map(([k,l])=>`<button data-tab="${k}" ${DB.tab===k?'aria-current="page"':''}>${l}</button>`).join('');window.scrollTo(0,y)}
 /* ---- eventos ---- */
-document.addEventListener('click',e=>{const b=e.target.closest('[data-tab],[data-a]');if(!b)return;if(b.dataset.tab){DB.tab=b.dataset.tab;render();window.scrollTo(0,0);return}
+document.addEventListener('click',e=>{if(e.target.closest('#lb')){$('#lb').classList.remove('on');return}const z=e.target.closest('[data-z]');if(z){zoom(z.dataset.z);return}const sl=e.target.closest('[data-sl],[data-go]');if(sl){showSl(sl.dataset.go!=null?+sl.dataset.go:SLI+ +sl.dataset.sl);return}const b=e.target.closest('[data-tab],[data-a]');if(!b)return;if(b.dataset.tab){DB.tab=b.dataset.tab;render();window.scrollTo(0,0);return}
  const a=b.dataset.a,id=b.dataset.id,k=b.dataset.k;
  if(a==='print')return window.print();if(a==='sync')return sync(1);
  if(a==='delr'){if(!confirm('¿Borrar este rubro?'))return;DB[k]=DB[k].filter(r=>r.id!==id)}
@@ -135,5 +159,6 @@ document.addEventListener('change',e=>{const t=e.target;let ch=0;
  else if(t.dataset.r){const[k,id,f]=t.dataset.r.split(':'),r=DB[k].find(x=>x.id===id);r[f]=f==='mon'?t.value:dig(t.value);ch=1}
  else if(t.dataset.e){const[id,f]=t.dataset.e.split(':'),r=DB.etapas.find(x=>x.id===id);r[f]=t.value;ch=1}
  if(ch){save();render()}});
+let _x=0;document.addEventListener('touchstart',e=>{_x=e.touches[0].clientX},{passive:true});document.addEventListener('touchend',e=>{if(!e.target.closest('#hero'))return;const d=e.changedTouches[0].clientX-_x;if(Math.abs(d)>50)showSl(SLI+(d<0?1:-1))},{passive:true});
 render();sync(1);setInterval(()=>sync(0),15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync(0)});
 </script></body></html>
