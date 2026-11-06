@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0d0e10"><title>B+B · Control de costos</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Michroma&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}.infph{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}.infph .ph1{width:92px}.infph .ph1 span{position:relative;display:block;width:92px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}.infph .ph1 img{width:100%;height:100%;object-fit:cover}.infph .ph1 button{position:absolute;top:2px;right:2px}.infph .fdi{width:92px;font-size:11px;padding:3px;margin-top:3px;min-width:0}.infph .addph{width:72px;height:72px}
+<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0d0e10"><title>V+V · Control de costos</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Michroma&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}.infph{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}.infph .ph1{width:92px}.infph .ph1 span{position:relative;display:block;width:92px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}.infph .ph1 img{width:100%;height:100%;object-fit:cover}.infph .ph1 button{position:absolute;top:2px;right:2px}.infph .fdi{width:92px;font-size:11px;padding:3px;margin-top:3px;min-width:0}.infph .addph{width:72px;height:72px}
 .enm{width:100%;font:inherit;font-weight:600;padding:6px 8px;border:1px solid var(--line,#ddd);border-radius:8px;background:transparent;color:inherit;min-width:0}.ghdr .glabel{background:var(--surface2,rgba(127,127,127,.12));font-weight:700}.gb-agg{position:absolute;top:50%;transform:translateY(-50%);height:10px;border-radius:5px;background:#6b6f7a;overflow:hidden}.gb-agg i{display:block;height:100%;background:var(--gold,#b8915a)}.gavi{color:#e08a00}.pe-row{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;display:flex;flex-direction:column;gap:8px}.pe-et summary{cursor:pointer;padding:8px 0}.gman{opacity:.6;font-size:11px}.gnota{font-style:normal;font-size:10px;color:var(--gold)}.gpct{position:absolute;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700;color:var(--tx,#334);white-space:nowrap;pointer-events:none;line-height:1}.grow.tall .gpct{top:15px;transform:none;line-height:14px}.gpct.done{color:#1f9d55}
 .acrow{display:grid;gap:4px;margin:2px 0 8px}.acrow>div{display:flex;gap:6px}.acrow input{flex:1;min-width:0}.acrow input:nth-child(2){max-width:80px}.acrow input:nth-child(3){max-width:130px}</style><style>
 /* Layout: app de una columna tipo celular; barra inferior distinta por rol; hojas deslizantes para detalle y formularios */
@@ -1282,7 +1282,7 @@ window.__tema=function(p){try{if(p)localStorage.setItem(K,p)}catch(e){}ap(p||pre
 if(mq){var f=function(){if(pref()==='auto')ap('auto')};mq.addEventListener?mq.addEventListener('change',f):mq.addListener&&mq.addListener(f)}
 ap();})();</script></head><body>
 <div class="app">
-<header class="top"><div class="brand"><span style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 76 76" width="76" height="76" role="img" aria-label="B+B" style="flex:none"><circle cx="38" cy="38" r="37" fill="#111"/><circle cx="38" cy="38" r="33" fill="none" stroke="#b8915a" stroke-width="1.5"/><text x="38" y="46" text-anchor="middle" font-family="Playfair Display,Georgia,serif" font-weight="700" font-size="24" fill="#d9b678">B+B</text></svg><b class="bname">B+B</b></span><span class="mono" id="fecha"></span></div>
+<header class="top"><div class="brand"><span style="display:flex;align-items:center;gap:8px"><img src="/vv-logo-casa.png" alt="V+V Construcciones" style="width:76px;height:76px;border-radius:50%"><b class="bname">V+V</b></span><span class="mono" id="fecha"></span></div>
 <div class="who"><span><b id="tit"></b><span class="rol">Costos</span></span><button class="btn ghost sm" id="refr" aria-label="Actualizar" title="Actualizar">↻</button><button class="btn ghost sm" id="tema" aria-label="Del blanco al negro" title="Aspecto"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button></div></header>
 <main>
 <section class="sec noprint hide" id="tools0"><div class="sec-head"><h1>Control de costos</h1></div><p class="muted small">Presupuesto y análisis de obra. Los montos van en $ (ARS) y en U$s.</p>
@@ -1399,7 +1399,7 @@ function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*
  const pr=[1,2,3,4,5].map(n=>hotCalc(o,h.ocup,h.adr*Math.pow(1+h.inf/100,n-1),r));
  t+=`<tr><td>Ingresos</td>${pr.map(x=>`<td>${f0(x.ing)}</td>`).join('')}</tr><tr><td>Renta neta (NOI)</td>${pr.map(x=>`<td>${f0(x.noi)}</td>`).join('')}</tr><tr><td>Neto al inversor</td>${pr.map(x=>`<td>${f0(x.neto)}</td>`).join('')}</tr><tr class="acu"><td>Yield neto</td>${pr.map(x=>`<td>${pc(x.yld)}</td>`).join('')}</tr></tbody></table></div></div>`;
  t+=`<div class="card"><b>Cómo escala</b><div class="sub">Replicando el mismo edificio con el mismo equipo. Comisión de gestión del fondo sobre la inversión.</div><div class="cfw"><table class="cft"><thead><tr><th>Edificios</th><th>Unidades</th><th>Activos U$s</th><th>Renta neta U$s</th><th>Comisión gestor U$s</th></tr></thead><tbody>${[1,3,5,10].map(n=>`<tr><td>${n}</td><td>${f0(n*h.un)}</td><td>${f0(n*k.inv)}</td><td>${f0(n*k.noi)}</td><td>${f0(n*k.gest)}</td></tr>`).join('')}</tbody></table></div>
- <div class="sub" style="margin-top:8px">Etapas: 1) este edificio como apart-hotel con operador. 2) Más edificios en el mismo fondo con nuevas series. 3) Fondos por categoría: urbano, vacacional, corporativo. 4) Desarrollo propio, con la obra a cargo de B+B.</div></div>`;
+ <div class="sub" style="margin-top:8px">Etapas: 1) este edificio como apart-hotel con operador. 2) Más edificios en el mismo fondo con nuevas series. 3) Fondos por categoría: urbano, vacacional, corporativo. 4) Desarrollo propio, con la obra a cargo de V+V.</div></div>`;
  document.getElementById('f').innerHTML=t}
 
 
@@ -1423,32 +1423,32 @@ const PRE_T=[
 ['Fideicomiso y estructura legal','Redactar el contrato de fideicomiso',0.2,0.45,'Abogado'],
 ['Fideicomiso y estructura legal','Firmar el contrato de fideicomiso, tramitar CUIT y abrir cuenta bancaria',0.45,0.6,'Abogado'],
 ['Fideicomiso y estructura legal','Escritura del lote al fideicomiso',0.5,0.65,'Escribano'],
-['Fideicomiso y estructura legal','Contratos con B+B (obra), estudio y gerenciamiento',0.4,0.6,'Sebastián / B+B'],
+['Fideicomiso y estructura legal','Contratos con V+V (obra), estudio y gerenciamiento',0.4,0.6,'Sebastián / V+V'],
 ['Proyecto y permisos','Consulta de factibilidad y certificado de uso del lote',0,0.15,'Arquitecto'],
 ['Proyecto y permisos','Verificar si el lote está en Área de Protección Histórica (APH) y sus requisitos',0.05,0.25,'Arquitecto'],
 ['Proyecto y permisos','Contratar el estudio de arquitectura y estructuras',0.05,0.2,'Sebastián'],
 ['Proyecto y permisos','Aprobar el anteproyecto',0.15,0.3,'Sebastián / estudio'],
 ['Proyecto y permisos','Relevamiento de linderos y medianeras, con acta de constatación',0.2,0.35,'Arquitecto / escribano'],
 ['Proyecto y permisos','Factibilidades de servicios: agua, cloacas, luz y gas',0.2,0.4,'Arquitecto'],
-['Proyecto y permisos','Estudio de suelos',0.2,0.35,'B+B'],
+['Proyecto y permisos','Estudio de suelos',0.2,0.35,'V+V'],
 ['Proyecto y permisos','Proyecto ejecutivo de arquitectura, estructura e instalaciones',0.15,0.6,'Estudio'],
 ['Proyecto y permisos','Baja de servicios y libre deuda para demoler',0.4,0.6,'Gestor'],
 ['Proyecto y permisos','Permiso de demolición',0.3,0.6,'Arquitecto / gestor'],
 ['Proyecto y permisos','Permiso de obra nueva',0.35,0.8,'Arquitecto / gestor'],
 ['Proyecto y permisos','Cálculo y pago de la plusvalía urbana',0.7,0.85,'Arquitecto / contador'],
-['Proyecto y permisos','Seguros de obra, ART y cartel de obra',0.7,0.9,'B+B'],
+['Proyecto y permisos','Seguros de obra, ART y cartel de obra',0.7,0.9,'V+V'],
 ['Ventas y financiamiento','Reglamento de copropiedad y planos de propiedad horizontal',0.4,0.75,'Escribano / arquitecto'],
 ['Ventas y financiamiento','Lista de precios, boleto de compraventa y material de venta',0.35,0.6,'Sebastián'],
 ['Ventas y financiamiento','Definir forma de pago y financiación para los compradores',0.35,0.55,'Sebastián'],
 ['Ventas y financiamiento','Escribano y cuenta del fideicomiso para cobrar las cuotas',0.4,0.6,'Escribano'],
 ['Ventas y financiamiento','Lanzamiento de ventas en pozo y primeras reservas',0.6,0.8,'Sebastián'],
-['Preparación de obra','Cerrar el presupuesto final y el flujo con B+B',0.5,0.65,'Sebastián / B+B'],
-['Preparación de obra','Cerrar el contrato de obra con B+B',0.5,0.7,'Sebastián / B+B'],
-['Preparación de obra','Cerrar proveedores clave: hormigón y acero',0.7,0.9,'B+B'],
-['Preparación de obra','Plan de seguridad e higiene y cercado',0.8,0.95,'B+B'],
-['Preparación de obra','Instalar obrador y servicios provisorios',0.9,1,'B+B'],
-['Preparación de obra','Reunión de arranque con B+B, estudio y auditoría',0.95,1,'Sebastián'],
-['Preparación de obra','Primer día de obra',1,1,'B+B']];
+['Preparación de obra','Cerrar el presupuesto final y el flujo con V+V',0.5,0.65,'Sebastián / V+V'],
+['Preparación de obra','Cerrar el contrato de obra con V+V',0.5,0.7,'Sebastián / V+V'],
+['Preparación de obra','Cerrar proveedores clave: hormigón y acero',0.7,0.9,'V+V'],
+['Preparación de obra','Plan de seguridad e higiene y cercado',0.8,0.95,'V+V'],
+['Preparación de obra','Instalar obrador y servicios provisorios',0.9,1,'V+V'],
+['Preparación de obra','Reunión de arranque con V+V, estudio y auditoría',0.95,1,'Sebastián'],
+['Preparación de obra','Primer día de obra',1,1,'V+V']];
 const isoD=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const dP=s=>{const [y,m,d]=String(s||'').split('-').map(Number);return new Date(y||2026,(m||1)-1,d||1,12)};
 function preSeed(h,arr){const a=dP(h).getTime(),b=dP(arr).getTime(),W=Math.max(7*864e5,b-a);return PRE_T.map(([g,n,fs,fe,r])=>({g,n,s:isoD(new Date(a+W*fs)),e:isoD(new Date(a+W*fe)),r,es:'p'}))}
