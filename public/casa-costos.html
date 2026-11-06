@@ -1466,6 +1466,25 @@ function renderCG(o){const c=cfInit(o),n=c.n,now=new Date(),[y,m]=c.ini.split('-
  <div class="card"><b>Estado y avance de cada tarea</b><div class="gl cfh"><span>Tarea</span><span>Estado</span><span>Avance %</span></div>${items.map(t=>`<div class="gl"><span class="nm">${esc(t.n)}<small>mes ${t.s} a ${t.e}</small></span><select data-es="${t.k}"><option value="p" ${t.es==='p'?'selected':''}>Pendiente</option><option value="c" ${t.es==='c'?'selected':''}>En curso</option><option value="t" ${t.es==='t'?'selected':''}>Terminada</option></select>${t.k==='I'?inp(t.av,'cf.avI',0):inp(t.av,'cf.av.'+t.k.slice(1),0)}</div>`).join('')}</div>`;
  document.getElementById('g').innerHTML=renderPre(o)+h}
 function setPath(p,v){const k=p.split('.');let t=O();for(let i=0;i<k.length-1;i++)t=t[k[i]];t[k[k.length-1]]=v}
+function invCalc(o,r){const v=o.inv||(o.inv={tasa:12,meses:12,modo:'d',cv:6,pct:100});if(v.tasa==null)v.tasa=12;if(v.meses==null)v.meses=12;if(!v.modo)v.modo='d';if(v.cv==null)v.cv=6;if(v.pct==null)v.pct=100;
+ const cost=r.totU,monto=cost*v.pct/100,lo=o.lote||0,base=v.modo==='t'?monto:(lo+(cost-lo)*0.5)*v.pct/100,int=base*v.tasa/100*v.meses/12,cvU=r.ing*v.cv/100,ut=r.ing-cost-int-cvU,be=o.m2v?(cost+int)/(1-v.cv/100)/o.m2v:0;
+ return{v,cost,monto,int,cvU,ut,mg:r.ing?ut/r.ing:0,be,cob:int?ut/int:0,ret:v.tasa*v.meses/12,caida:o.zona?(1-be/o.zona)*100:0}}
+function invHtml(o,r){const k=invCalc(o,r),v=k.v;return `<div class="card"><b>Inversores · análisis del negocio</b><div class="sub">Fondos que prestan los inversores, con interés anual y devolución al final del plazo.</div>
+ <div class="g2"><label class="fld">Fondos a pedir · % del costo${inp(v.pct,'inv.pct',1)}</label><label class="fld">Interés anual · %${inp(v.tasa,'inv.tasa',1)}</label>
+ <label class="fld">Plazo · meses${inp(v.meses,'inv.meses')}</label><label class="fld">Costos de venta · %${inp(v.cv,'inv.cv',1)}</label></div>
+ <div class="tools" style="margin:10px 0"><button class="btn sm ${v.modo==='d'?'gold':''}" data-invm="d">Interés sobre lo desembolsado</button><button class="btn sm ${v.modo==='t'?'gold':''}" data-invm="t">Interés sobre el 100% desde el día 1</button></div>
+ <div class="row"><span>Ingresos por venta</span><b>${usd(r.ing)}</b></div>
+ <div class="row"><span>Costo total del proyecto</span><b>${usd(k.cost)}</b></div>
+ <div class="row"><span>Fondos de inversores</span><b>${usd(k.monto)}</b></div>
+ <div class="row"><span>Interés a pagar (${f2(v.tasa)}% anual · ${v.meses} meses)</span><b>${usd(k.int)}</b></div>
+ <div class="row"><span>Costos de venta (${f2(v.cv)}%)</span><b>${usd(k.cvU)}</b></div>
+ <div class="row big2"><span>Utilidad antes de impuestos</span><b class="big ${k.ut>=0?'ut-pos':'ut-neg'}">${usd(k.ut)}</b></div>
+ <div class="row"><span>Margen sobre la venta</span><b>${f2(k.mg*100)}%</b></div>
+ <div class="row"><span>La utilidad cubre el interés</span><b>${f2(k.cob)} veces</b></div>
+ <div class="row"><span>Precio mínimo para no perder</span><b>${usd(k.be)} / m²</b></div>
+ <div class="row"><span>Caída de precio que soporta</span><b>${f2(k.caida)}%</b></div>
+ <div class="row"><span>Retorno del inversor en el plazo</span><b>${f2(k.ret)}%</b></div>
+ <div class="sub">No incluye impuestos. Cada mes de atraso suma ${usd(k.monto*v.tasa/100/12)} de interés.</div></div>`}
 function render(){const o=O();o.m2v=o.m2c;document.getElementById('tit').textContent=o.nombre;document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}).replace(/[.,]/g,'');
  const sel=document.getElementById('obra');sel.innerHTML=DB.obras.map((x,i)=>`<option value="${i}" ${i==DB.act?'selected':''}>${esc(x.nombre)}</option>`).join('');
  const r=calc(o);
@@ -1505,6 +1524,7 @@ function render(){const o=O();o.m2v=o.m2c;document.getElementById('tit').textCon
  <div class="row"><span>Según plano</span><b>Cubierta 146 m² · cochera 30 m² · galería 14 m² · total 190 m²</b></div>
  <div class="row"><span>m² a construir</span><b>${f0(o.m2c)} m²</b></div>
  <div class="row"><span>Precio de venta de la zona</span><b>${usd(o.zona)} / m²</b></div></div>
+ ${invHtml(o,r)}
  <div class="card"><b>Costos del proyecto</b>
  <div class="row"><span>Precio final total</span><b class="big">${usd(r.totU)}</b></div>
  <div class="row"><span>Utilidad general · U$s/m² construido</span><b class="${r.util>=0?'ut-pos':'ut-neg'}" style="font-size:20px">${usd(r.util)} / m²</b></div>
@@ -1525,6 +1545,7 @@ document.addEventListener('input',e=>{const t=e.target,p=t.dataset&&t.dataset.p;
  try{t.setSelectionRange(np,np)}catch(x){}
  setPath(p,parse(t.value));if(O().m2c!=null)O().m2v=O().m2c;save();window._dirty=1});
 /* los totales se recalculan al salir del campo: reconstruir la pantalla mientras se escribe borraba lo tipeado y cerraba el teclado */
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-invm]');if(b){const o=O();(o.inv=o.inv||{}).modo=b.dataset.invm;save();render()}});
 document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='rubdet')window._rubOpen=e.target.open},true);
 document.addEventListener('focusout',e=>{if(!window._dirty)return;setTimeout(()=>{const a=document.activeElement;if(window._dirty&&!(a&&a.dataset&&a.dataset.p)){window._dirty=0;render()}},250)});
 document.addEventListener('click',e=>{const t=e.target.closest('button')||e.target;
