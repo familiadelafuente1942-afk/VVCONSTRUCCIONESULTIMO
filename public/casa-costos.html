@@ -1317,9 +1317,9 @@ function calc(o){const c=o.rub.reduce((a,r)=>a+r.m+r.e,0),it=o.int.reduce((a,g)=
  const lotePl=(o.lote+o.plus)*o.cot,tot=d+gg+ut+im+lotePl,totU=o.cot?tot/o.cot:0,mv=o.m2v;
  return{c,it,d,gg,ut,im,tot,totU,pm:mv?totU/mv:0,ing:o.zona*mv,util:o.zona-(mv?totU/mv:0),loteI:mv?o.lote/mv:0,plusI:mv?o.plus/mv:0}}
 
-const CF_DEF={'Trabajos preliminares':[1,3],'Movimiento de tierra':[2,4],'Estructuras':[4,12],'Mamposterías':[8,14],'Capas aisladoras':[9,15],'Cubiertas':[12,15],'Revoques':[11,17],'Contrapisos':[13,17],'Cielorrasos':[15,18],'Revestimientos':[15,19],'Pisos':[16,20],'Zócalos':[18,20],'Carpinterías':[14,19],'Vidrios':[15,19],'Pinturas':[17,21],'Instalaciones eléctricas':[6,20],'Instalaciones sanitarias':[6,20],'Instalaciones de gas':[8,20],'Equipamiento':[19,22]};
-const CF_HITOS=['Demolición, obrador y movimiento de suelo','Fundaciones y estructura de hormigón','Mampostería, cubiertas e instalaciones embutidas','Revoques, contrapisos y cielorrasos','Carpinterías, vidrios, revestimientos y pisos','Pintura, zócalos y terminaciones','Equipamiento, interiorismo y entrega'];
-function cfInit(o){if(!o.cf)o.cf={ini:new Date().toISOString().slice(0,7),n:22,curva:'c',v:[],it:[19,22]};const c=o.cf;if(!c.n)c.n=22;if(!c.v)c.v=[];if(!c.it)c.it=[19,22];if(c.pre==null){c.pre=40;c.ant=30;c.cuo=40;c.stop=3}if(!c.es)c.es=[];if(!c.av)c.av=[];if(c.esI==null){c.esI='p';c.avI=0}
+const CF_DEF={'Cerco':[1,1],'Movimiento de suelo y tosca':[1,2],'Obra gruesa':[2,6],'Plomería':[4,10],'Electricidad':[4,10],'Durlock':[8,10],'Pisos y colocaciones':[8,11],'Pintura':[10,12],'Piscina':[5,9],'Aberturas':[6,8],'Puertas':[9,11],'Revestimientos':[8,11],'Miksa':[7,9],'Venecitas':[9,11],'Herrería':[8,10],'Muebles de cocina y placares':[10,12],'Electrodomésticos':[11,12],'Entrada vehicular':[11,12],'Parrilla':[10,12],'Preinstalación de aires':[6,8],'Proyecto y dirección':[1,12]};
+const CF_HITOS=['Cerco, obrador y movimiento de suelo','Fundaciones y estructura','Mampostería e instalaciones embutidas','Aberturas, durlock y revestimientos','Pisos, colocaciones y piscina','Pintura y terminaciones','Equipamiento y entrega'];
+function cfInit(o){if(!o.cf)o.cf={ini:new Date().toISOString().slice(0,7),n:12,curva:'c',v:[],it:[10,12],casa:1};const c=o.cf;if(!c.casa){c.n=12;c.it=[10,12];c.v=[];c.casa=1}if(!c.n)c.n=22;if(!c.v)c.v=[];if(!c.it)c.it=[19,22];if(c.pre==null){c.pre=40;c.ant=30;c.cuo=40;c.stop=3}if(!c.es)c.es=[];if(!c.av)c.av=[];if(c.esI==null){c.esI='p';c.avI=0}
  o.rub.forEach((x,i)=>{if(!c.v[i]||!c.v[i].length){const d=CF_DEF[x.n];c.v[i]=d?[d[0],d[1]]:[1,c.n]}});c.v.length=o.rub.length;return c}
 function cfW(s,e,n,curva){const w=Array(n).fill(0);s=Math.max(1,Math.min(n,Math.round(s)||1));e=Math.max(s,Math.min(n,Math.round(e)||n));const L=e-s+1;let t=0;for(let k=s;k<=e;k++){const v=curva==='l'?1:Math.sin(Math.PI*(k-s+.5)/L);w[k-1]=v;t+=v}return w.map(v=>t?v/t:0)}
 function cfCalc(o){const c=cfInit(o),n=c.n,Z=()=>Array(n).fill(0);const rows=o.rub.map((x,i)=>{const t=x.m+x.e,w=cfW(c.v[i][0],c.v[i][1],n,c.curva);return{n:x.n,s:c.v[i][0],e:c.v[i][1],a:w.map(v=>v*t)}});
@@ -1337,7 +1337,7 @@ function cfChartNeto(R){const W=Math.max(640,R.n*34+60),H=230,pl=10,pb=34,pt=14,
  R.acn.forEach((v,k)=>{const h=Math.abs(v)*sc,x=pl+k*bw+bw*.18,y=v>=0?z-h:z;b+=`<rect x="${x}" y="${y}" width="${bw*.64}" height="${h}" rx="3" fill="${v>=0?'#2fa86b':'#c0392b'}" opacity=".85"/><text x="${pl+k*bw+bw/2}" y="${H-pb+14}" font-size="9" text-anchor="middle" fill="currentColor" opacity=".7">${k+1}</text>`});
  return `<div class="cfw"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:${W}px;height:auto" role="img" aria-label="Flujo neto acumulado"><line x1="${pl}" x2="${W-pl}" y1="${z}" y2="${z}" stroke="currentColor" opacity=".4"/>${b}<text x="${W/2}" y="${H-4}" font-size="10" text-anchor="middle" fill="currentColor" opacity=".7">Mes de obra · barras: caja acumulada (ventas cobradas − egresos). Rojo = hay que poner capital.</text></svg></div>`}
 function renderCF(o){const R=cfCalc(o),c=R.c,n=R.n,cot=o.cot||0;const peak=Math.max(...R.tot),pk=R.tot.indexOf(peak);
- let h=`<div class="card"><b>Cash Flow del modelo · ARS</b><div class="sub">Cronograma mensual de egresos desde demolición y movimiento de suelo hasta la entrega, con todos los rubros, interiorismo, gastos generales, utilidad, impuestos, lote. Cada rubro se reparte entre su mes de inicio y de fin según el avance esperado de una obra de este tipo.</div>
+ let h=`<div class="card"><b>Cash Flow del modelo · ARS</b><div class="sub">Cronograma mensual de egresos desde el movimiento de suelo hasta la entrega, con todos los rubros, interiorismo, gastos generales, utilidad, impuestos, lote. Cada rubro se reparte entre su mes de inicio y de fin según el avance esperado de una obra de este tipo.</div>
  <div class="cfg" style="margin-top:10px"><label class="fld">Plazo de obra · meses${inp(c.n,'cf.n')}</label><label class="fld">Mes de inicio<input type="month" id="cfini" value="${esc(c.ini)}"></label><label class="fld">Curva de avance<select id="cfcurva"><option value="c" ${c.curva==='c'?'selected':''}>Campana (arranca, pico, cierra)</option><option value="l" ${c.curva==='l'?'selected':''}>Lineal</option></select></label></div></div>
  <div class="card"><b>Resumen</b><div class="cfk"><div><span>Inversión total (con lote)</span><b>${ars(R.T)}</b></div><div><span>Total en U$s</span><b>${usd(cot?R.T/cot:0)}</b></div><div><span>Mes de mayor egreso</span><b>Mes ${pk+1} · ${cfMes(c,pk)}</b></div><div><span>Egreso de ese mes</span><b>${ars(peak)}</b></div><div><span>Promedio mensual de obra</span><b>${ars((R.T-R.lote[0])/n)}</b></div></div></div>
  <div class="card"><b>Egreso mensual y acumulado</b>${cfChart(R)}</div>
@@ -1345,7 +1345,7 @@ function renderCF(o){const R=cfCalc(o),c=R.c,n=R.n,cot=o.cot||0;const peak=Math.
  <div class="cfr cfh"><span>Rubro</span><span>Desde</span><span>Hasta</span></div>`;
  R.rows.forEach((r,i)=>{const pre=r.it?'cf.it':`cf.v.${i}`,A=r.it?c.it:c.v[i];h+=`<div class="cfr"><span>${esc(r.n)}</span>${r.it?`<input inputmode="numeric" data-p="cf.it.0" value="${A[0]}">`:`<input inputmode="numeric" data-p="cf.v.${i}.0" value="${A[0]}">`}${r.it?`<input inputmode="numeric" data-p="cf.it.1" value="${A[1]}">`:`<input inputmode="numeric" data-p="cf.v.${i}.1" value="${A[1]}">`}</div>`});
  h+=`<div class="sub" style="margin-top:8px">Lote se pagan en el mes 1. Gastos generales se reparten parejo; utilidad e impuestos acompañan el avance de cada mes.</div></div>
- <div class="card"><b>Ingresos por ventas durante la obra</b><div class="sub">Las unidades se venden en pozo y se cobran en tres partes: anticipo al comprar, cuotas durante la obra y saldo a la entrega. El total sale del precio de la zona × m² construidos.</div>
+ <div class="card"><b>Ingresos por ventas durante la obra</b><div class="sub">La casa se vende y se cobra en tres partes: anticipo al comprar, cuotas durante la obra y saldo a la entrega. El total sale del precio de la zona × m² construidos.</div>
  <div class="cfg" style="margin:10px 0"><label class="fld">Vendido al lanzamiento · %${inp(c.pre,'cf.pre',1)}</label><label class="fld">Anticipo · %${inp(c.ant,'cf.ant',1)}</label><label class="fld">Cuotas en obra · %${inp(c.cuo,'cf.cuo',1)}</label><label class="fld">Dejar de vender · meses antes del fin${inp(c.stop,'cf.stop')}</label></div>
  <div class="row"><span>Saldo a la entrega · %</span><b>${Math.max(0,100-c.ant-c.cuo).toFixed(1).replace('.',',')}%</b></div>
  <div class="cfk"><div><span>Ventas totales</span><b>${ars(R.vTot)}</b></div><div><span>Ventas totales · U$s</span><b>${usd(cot?R.vTot/cot:0)}</b></div><div><span>Capital propio máximo necesario</span><b class="${R.capMax>0?'ut-neg':'ut-pos'}">${ars(R.capMax)}</b></div><div><span>Mes del pico de capital</span><b>Mes ${R.capMes+1} · ${cfMes(c,R.capMes)}</b></div><div><span>Capital propio máximo · U$s</span><b>${usd(cot?R.capMax/cot:0)}</b></div><div><span>Resultado de caja al final</span><b class="${R.fin>=0?'ut-pos':'ut-neg'}">${ars(R.fin)}</b></div></div></div>
@@ -1356,7 +1356,7 @@ function renderCF(o){const R=cfCalc(o),c=R.c,n=R.n,cot=o.cot||0;const peak=Math.
  const sm=a=>a.reduce((x,y)=>x+y,0),line=(cl,t,a)=>`<tr class="${cl}"><td>${t}</td>${a.map(cell).join('')}<td>${f0(sm(a))}</td></tr>`;
  h+=line('sub','Costo directo',R.dir)+line('','Gastos generales',R.gg)+line('','Utilidad empresarial',R.ut)+line('','Impuestos',R.im)+line('','Lote',R.lote)+line('tot','EGRESO DEL MES',R.tot)+`<tr class="acu"><td>Acumulado</td>${R.acu.map(v=>`<td>${f0(v)}</td>`).join('')}<td></td></tr><tr><td>% acumulado</td>${R.acu.map(v=>`<td>${R.T?(v/R.T*100).toFixed(1).replace('.',','):0}%</td>`).join('')}<td></td></tr><tr><td>Egreso del mes · U$s</td>${R.tot.map(v=>`<td>${cot?f0(v/cot):0}</td>`).join('')}<td><b>${cot?f0(R.T/cot):0}</b></td></tr>`;
  h+=line('','Cobro de anticipos',R.ant)+line('','Cobro de cuotas en obra',R.cu)+line('','Cobro de saldo a la entrega',R.ent)+line('sub','INGRESOS POR VENTAS',R.ing)+line('tot','FLUJO NETO DEL MES',R.neto)+`<tr class="acu"><td>Caja acumulada</td>${R.acn.map(v=>`<td style="color:${v>=0?'#2fa86b':'#c0392b'}">${f0(v)}</td>`).join('')}<td></td></tr>`;
- h+=`</tbody></table></div></div><div class="card"><b>Etapas de obra del modelo</b><div class="sub">Secuencia típica de un edificio de hormigón armado, de la demolición a la entrega.</div>${CF_HITOS.map((t,i)=>`<div class="row"><span>${i+1}. ${t}</span></div>`).join('')}</div>`;
+ h+=`</tbody></table></div></div><div class="card"><b>Etapas de obra del modelo</b><div class="sub">Secuencia típica de una casa, del movimiento de suelo a la entrega.</div>${CF_HITOS.map((t,i)=>`<div class="row"><span>${i+1}. ${t}</span></div>`).join('')}</div>`;
  document.getElementById('c').innerHTML=h}
 
 function hotInit(o){if(!o.hot)o.hot={modo:'a',un:39,ocup:69,adr:60,otros:8,opex:48,base:3,inc:8,res:4,alq:32,cap:8.5,gf:1.5,inf:3,obj:7,gar:6,gan:3};if(o.hot.obj==null)o.hot.obj=7;if(o.hot.gar==null){o.hot.gar=6;o.hot.gan=3}return o.hot}
@@ -1403,50 +1403,35 @@ function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*
  document.getElementById('f').innerHTML=t}
 
 
-const PRE_V=3;
+const PRE_V=4;
 const PRE_T=[
-['Definición del proyecto','Definir el producto: cantidad de unidades, mix y categoría',0,0.08,'Sebastián'],
-['Definición del proyecto','Estudio de mercado y precios de la zona',0,0.1,'Sebastián'],
-['Definición del proyecto','Cerrar el modelo de negocio y el flujo con los socios',0.05,0.15,'Sebastián'],
-['Definición del proyecto','Definir nombre, marca e imagen del edificio',0.1,0.3,'Sebastián'],
-['Definición del proyecto','Elegir operador hotelero o administrador de alquileres y pedir cotizaciones',0.1,0.35,'Sebastián'],
-['Lote y propietarios','Primera reunión con los propietarios del lote',0,0.05,'Sebastián'],
-['Lote y propietarios','Estudio de títulos y dominio del lote (escribano)',0,0.2,'Escribano'],
-['Lote y propietarios','Informes de dominio, inhibiciones y deudas (Registro de la Propiedad, ABL, servicios)',0.05,0.2,'Escribano'],
-['Lote y propietarios','Tasación y relevamiento topográfico (mensura) del lote',0.05,0.2,'Arquitecto'],
-['Lote y propietarios','Negociar condiciones con los propietarios: precio, canje por unidades o pago',0.05,0.3,'Sebastián'],
-['Lote y propietarios','Firmar carta de intención o boleto de reserva del lote',0.25,0.35,'Sebastián / propietarios'],
-['Lote y propietarios','Firmar el acuerdo definitivo con los propietarios (convenio de aporte o permuta)',0.3,0.5,'Abogado'],
-['Lote y propietarios','Acordar la entrega del lote libre de ocupantes y con servicios dados de baja',0.35,0.5,'Abogado / propietarios'],
-['Fideicomiso y estructura legal','Elegir fiduciario y abogado del fideicomiso',0,0.1,'Sebastián'],
-['Fideicomiso y estructura legal','Definir la estructura: fideicomiso inmobiliario, al costo o de administración',0.1,0.25,'Sebastián / abogado'],
-['Fideicomiso y estructura legal','Redactar el contrato de fideicomiso',0.2,0.45,'Abogado'],
-['Fideicomiso y estructura legal','Firmar el contrato de fideicomiso, tramitar CUIT y abrir cuenta bancaria',0.45,0.6,'Abogado'],
-['Fideicomiso y estructura legal','Escritura del lote al fideicomiso',0.5,0.65,'Escribano'],
-['Fideicomiso y estructura legal','Contratos con V+V (obra), estudio y gerenciamiento',0.4,0.6,'Sebastián / V+V'],
-['Proyecto y permisos','Consulta de factibilidad y certificado de uso del lote',0,0.15,'Arquitecto'],
-['Proyecto y permisos','Verificar si el lote está en Área de Protección Histórica (APH) y sus requisitos',0.05,0.25,'Arquitecto'],
+['Definición del proyecto','Definir el producto: superficie, ambientes y nivel de terminación',0,0.08,'Sebastián'],
+['Definición del proyecto','Estudio de mercado y precios de venta de la zona',0,0.12,'Sebastián'],
+['Definición del proyecto','Cerrar el modelo de negocio y el flujo con los socios',0.05,0.2,'Sebastián'],
+['Lote','Estudio de títulos y dominio del lote (escribano)',0,0.2,'Escribano'],
+['Lote','Informes de dominio, inhibiciones y deudas',0.05,0.2,'Escribano'],
+['Lote','Relevamiento topográfico y mensura del lote',0.05,0.2,'Arquitecto'],
+['Lote','Reglamento del barrio: retiros, FOS, altura y aprobación de planos',0.05,0.25,'Arquitecto'],
+['Lote','Boleto de compraventa del lote',0.2,0.4,'Sebastián / escribano'],
+['Lote','Escritura del lote',0.4,0.6,'Escribano'],
 ['Proyecto y permisos','Contratar el estudio de arquitectura y estructuras',0.05,0.2,'Sebastián'],
 ['Proyecto y permisos','Aprobar el anteproyecto',0.15,0.3,'Sebastián / estudio'],
-['Proyecto y permisos','Relevamiento de linderos y medianeras, con acta de constatación',0.2,0.35,'Arquitecto / escribano'],
-['Proyecto y permisos','Factibilidades de servicios: agua, cloacas, luz y gas',0.2,0.4,'Arquitecto'],
 ['Proyecto y permisos','Estudio de suelos',0.2,0.35,'V+V'],
+['Proyecto y permisos','Factibilidades de servicios: agua, cloacas, luz y gas',0.2,0.4,'Arquitecto'],
 ['Proyecto y permisos','Proyecto ejecutivo de arquitectura, estructura e instalaciones',0.15,0.6,'Estudio'],
-['Proyecto y permisos','Baja de servicios y libre deuda para demoler',0.4,0.6,'Gestor'],
-['Proyecto y permisos','Permiso de demolición',0.3,0.6,'Arquitecto / gestor'],
-['Proyecto y permisos','Permiso de obra nueva',0.35,0.8,'Arquitecto / gestor'],
+['Proyecto y permisos','Aprobación del proyecto por el barrio o el municipio',0.35,0.8,'Arquitecto / gestor'],
+['Proyecto y permisos','Permiso de obra',0.4,0.85,'Arquitecto / gestor'],
 ['Proyecto y permisos','Seguros de obra, ART y cartel de obra',0.7,0.9,'V+V'],
-['Ventas y financiamiento','Reglamento de copropiedad y planos de propiedad horizontal',0.4,0.75,'Escribano / arquitecto'],
-['Ventas y financiamiento','Lista de precios, boleto de compraventa y material de venta',0.35,0.6,'Sebastián'],
-['Ventas y financiamiento','Definir forma de pago y financiación para los compradores',0.35,0.55,'Sebastián'],
-['Ventas y financiamiento','Escribano y cuenta del fideicomiso para cobrar las cuotas',0.4,0.6,'Escribano'],
-['Ventas y financiamiento','Lanzamiento de ventas en pozo y primeras reservas',0.6,0.8,'Sebastián'],
-['Preparación de obra','Cerrar el presupuesto final y el flujo con V+V',0.5,0.65,'Sebastián / V+V'],
-['Preparación de obra','Cerrar el contrato de obra con V+V',0.5,0.7,'Sebastián / V+V'],
+['Venta','Lista de precios y material de venta',0.35,0.6,'Sebastián'],
+['Venta','Definir forma de pago y financiación para los compradores',0.35,0.55,'Sebastián'],
+['Venta','Boleto de compraventa de la casa',0.4,0.65,'Escribano'],
+['Venta','Lanzamiento de ventas y primeras reservas',0.6,0.8,'Sebastián'],
+['Preparación de obra','Cerrar el presupuesto final y el flujo',0.5,0.65,'Sebastián / V+V'],
+['Preparación de obra','Cerrar el contrato de obra',0.5,0.7,'Sebastián / V+V'],
 ['Preparación de obra','Cerrar proveedores clave: hormigón y acero',0.7,0.9,'V+V'],
 ['Preparación de obra','Plan de seguridad e higiene y cercado',0.8,0.95,'V+V'],
 ['Preparación de obra','Instalar obrador y servicios provisorios',0.9,1,'V+V'],
-['Preparación de obra','Reunión de arranque con V+V, estudio y auditoría',0.95,1,'Sebastián'],
+['Preparación de obra','Reunión de arranque con V+V y el estudio',0.95,1,'Sebastián'],
 ['Preparación de obra','Primer día de obra',1,1,'V+V']];
 const isoD=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const dP=s=>{const [y,m,d]=String(s||'').split('-').map(Number);return new Date(y||2026,(m||1)-1,d||1,12)};
@@ -1457,7 +1442,7 @@ function renderPre(o){const P=preInit(o),T=P.t,hoy=new Date();hoy.setHours(12,0,
  const fe=d=>dP(d).toLocaleDateString('es-AR',{day:'numeric',month:'short'}).replace('.','');
  const wk=864e5*7,w0=H-((new Date(H).getDay()+6)%7)*864e5,nw=Math.max(4,Math.min(60,Math.ceil((A-w0)/wk)+1));
  const late=t=>t.es!=='t'&&dP(t.e).getTime()<H;
- let h=`<div class="card"><b style="font-size:18px">Comienzo de proyecto</b><div class="sub">Todas las tareas que tenemos que hacer antes de meter un pie en la obra, de hoy al primer día: definición del proyecto, propietarios del lote, acuerdos, fideicomiso, permisos, ventas y preparación. Las fechas son un modelo inicial: editá cada una según cómo avance.</div>
+ let h=`<div class="card"><b style="font-size:18px">Comienzo de proyecto</b><div class="sub">Todas las tareas que tenemos que hacer antes de meter un pie en la obra, de hoy al primer día: definición del proyecto, lote, permisos, venta y preparación. Las fechas son un modelo inicial: editá cada una según cómo avance.</div>
  <div class="cfg" style="margin:10px 0"><label class="fld">Fecha de arranque de obra<input type="date" id="parr" value="${esc(P.arr)}"></label></div>
  <div class="cfk"><div><span>Faltan para el arranque</span><b>${dias>0?dias+' días':'Llegó la fecha'}</b></div><div><span>Tareas terminadas</span><b class="ut-pos">${hechas} de ${T.length}</b></div><div><span>En curso</span><b>${cur.length}</b></div><div><span>Atrasadas</span><b class="${tarde.length?'ut-neg':'ut-pos'}">${tarde.length}</b></div></div>
  <div class="sub" style="margin-top:8px">Al cambiar la fecha de arranque, el Cash Flow y el cronograma de obra empiezan en ese mes. <button class="btn ghost sm" id="prereset" style="margin-left:6px">Recalcular fechas</button></div></div>
