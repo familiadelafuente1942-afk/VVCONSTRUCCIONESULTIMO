@@ -131,13 +131,14 @@ export default async function handler(req, res) {
     const b = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
 
     // ===== Paseo Colón · presupuesto y cronograma sincronizados entre dispositivos (último cambio gana) =====
-    if (b.op === "pc_get") { const v = await leer(H, "paseocolon_db"); res.status(200).json({ ok: true, doc: v || null }); return; }
+    const pcKey = b.app === "canning" ? "canning_db" : "paseocolon_db";
+    if (b.op === "pc_get") { const v = await leer(H, pcKey); res.status(200).json({ ok: true, doc: v || null }); return; }
     if (b.op === "pc_put") {
       if (typeof b.v !== "string" || b.v.length > 1_500_000 || typeof b.t !== "number") { res.status(400).json({ error: "Datos inválidos" }); return; }
-      const cur = await leer(H, "paseocolon_db");
+      const cur = await leer(H, pcKey);
       if (cur && Number(cur.t) > b.t) { res.status(409).json({ error: "Hay una versión más nueva", doc: cur }); return; }
-      if (cur && cur.v && cur.v !== b.v) await escribir(H, "paseocolon_db_prev", cur);
-      await escribir(H, "paseocolon_db", { t: b.t, v: b.v });
+      if (cur && cur.v && cur.v !== b.v) await escribir(H, pcKey + "_prev", cur);
+      await escribir(H, pcKey, { t: b.t, v: b.v });
       res.status(200).json({ ok: true }); return;
     }
 
