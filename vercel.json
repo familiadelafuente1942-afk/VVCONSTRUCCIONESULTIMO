@@ -28,6 +28,9 @@
     },
     "api/auditoria.js": {
       "maxDuration": 30
+    },
+    "api/claude.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
