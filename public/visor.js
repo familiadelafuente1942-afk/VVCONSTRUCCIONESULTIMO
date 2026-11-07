@@ -22,7 +22,7 @@ function build(){if(box)return;box=document.createElement('div');box.id='vz';
  box.innerHTML='<div class="vb"><button data-v="x">← Volver</button><span class="vt"></span><button data-v="-" aria-label="Alejar">−</button><button data-v="+" aria-label="Acercar">+</button><button data-v="s">Guardar</button></div><div class="vbody"><div class="vin"></div></div>';
  document.body.appendChild(box);
  box.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const k=b.dataset.v;
-  if(k==='x')cerrar();else if(k==='+')z(1);else if(k==='-')z(-1);else if(k==='s')bajar(cur.url)})}
+  if(k==='x')cerrar();else if(k==='+')z(1);else if(k==='-')z(-1);else if(k==='s')bajar(cur.url,cur.name)})}
 function toast(t){const d=document.createElement('div');d.className='vtoast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2500)}
 const LV=[1,1.5,2,3];
 function z(d){const i=Math.max(0,Math.min(LV.length-1,LV.indexOf(zoom)+d));if(LV[i]===zoom)return;zoom=LV[i];const vin=box.querySelector('.vin');vin.style.width=(zoom*100)+'%';
@@ -32,18 +32,18 @@ function ocultar(){if(!box)return;open=false;box.classList.remove('on');document
 let prevOv='';
 window.addEventListener('popstate',()=>{if(open)ocultar()});
 function loadPdfjs(){return new Promise((ok,ko)=>{if(window.pdfjsLib)return ok();const s=document.createElement('script');s.src='/vendor/pdfjs/pdf.min.js';s.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='/vendor/pdfjs/pdf.worker.min.js';ok()};s.onerror=ko;document.head.appendChild(s)})}
-async function abrir(url,title){build();cur={url,title:title||decodeURIComponent(url.split('?')[0].split('/').pop())};zoom=1;
+async function abrir(url,title,fname){build();cur={url,name:fname,title:title||decodeURIComponent(url.split('?')[0].split('/').pop())};zoom=1;
  const vin=box.querySelector('.vin');vin.style.width='100%';vin.innerHTML='<div class="vmsg">Abriendo…</div>';box.querySelector('.vt').textContent=cur.title;
  prevOv=document.body.style.overflow;document.body.style.overflow='hidden';box.classList.add('on');box.querySelector('.vbody').scrollTop=0;
  if(!open){open=true;try{history.pushState({visor:1},'')}catch(e){}}
- if(/\.pdf(\?|$)/i.test(url)){
+ if(/\.pdf(\?|$)/i.test(url)||/\.pdf$/i.test(fname||'')){
   try{await loadPdfjs();const doc=await pdfjsLib.getDocument(url).promise;if(!open)return;pdf=doc;const p1=await doc.getPage(1),v=p1.getViewport({scale:1});vin.innerHTML='';
    obs=new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting&&!en.target.dataset.r)pintar(en.target)}),{root:box.querySelector('.vbody'),rootMargin:'800px 0px'});
    for(let n=1;n<=doc.numPages;n++){const d=document.createElement('div');d.className='vpg';d.dataset.n=n;d.style.aspectRatio=v.width+'/'+v.height;vin.appendChild(d);obs.observe(d)}
   }catch(e){vin.innerHTML='<div class="vmsg">No se pudo abrir el archivo acá.<br><br><a href="'+ESC(url)+'" target="_blank" rel="noopener" data-ext="1">Abrir en el navegador</a></div>'}
  }else{vin.innerHTML='<img class="vim" src="'+ESC(url)+'" alt="'+ESC(cur.title)+'">'}}
 async function pintar(d){d.dataset.r='1';const p=pdf;if(!p)return;try{const pg=await p.getPage(+d.dataset.n),v0=pg.getViewport({scale:1}),cw=d.clientWidth||320,sc=cw/v0.width*Math.min(window.devicePixelRatio||1,2),v=pg.getViewport({scale:sc}),c=document.createElement('canvas');c.width=Math.floor(v.width);c.height=Math.floor(v.height);d.style.aspectRatio=v0.width+'/'+v0.height;await pg.render({canvasContext:c.getContext('2d'),viewport:v}).promise;if(p!==pdf)return;d.innerHTML='';d.appendChild(c)}catch(e){d.dataset.r=''}}
-async function bajar(url){const name=decodeURIComponent(url.split('?')[0].split('/').pop());toast('Preparando '+name+'…');
+async function bajar(url,nm){const name=nm||decodeURIComponent(url.split('?')[0].split('/').pop());toast('Preparando '+name+'…');
  try{const r=await fetch(url);if(!r.ok)throw 0;const b=await r.blob(),f=new File([b],name,{type:b.type||'application/octet-stream'});
   if(matchMedia('(pointer:coarse)').matches&&navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});return}
   const a=document.createElement('a');a.dataset.ext='1';a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000)
