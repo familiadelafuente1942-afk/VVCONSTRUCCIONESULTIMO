@@ -131,7 +131,7 @@ export default async function handler(req, res) {
     const b = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
 
     // ===== Paseo Colón · presupuesto y cronograma sincronizados entre dispositivos (último cambio gana) =====
-    const pcKey = b.app === "casa" ? "casa_db" : b.app === "canning" ? "canning_db" : "paseocolon_db";
+    const pcKey = b.app === "barracas" ? "barracas_db" : b.app === "casa" ? "casa_db" : b.app === "canning" ? "canning_db" : "paseocolon_db";
     if (b.op === "pc_get") { const v = await leer(H, pcKey); res.status(200).json({ ok: true, doc: v || null }); return; }
     if (b.op === "pc_put") {
       if (typeof b.v !== "string" || b.v.length > 1_500_000 || typeof b.t !== "number") { res.status(400).json({ error: "Datos inválidos" }); return; }
