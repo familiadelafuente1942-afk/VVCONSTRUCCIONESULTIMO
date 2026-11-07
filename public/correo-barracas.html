@@ -1641,10 +1641,11 @@ async function guiaAsk(q){q=(q||'').trim();if(!q||window._gbusy)return;window._g
   const ok=new Set(gImgs(O()).map(x=>x.u));d.imagenes=(Array.isArray(d.imagenes)?d.imagenes:[]).filter(x=>x&&ok.has(x.u)).slice(0,8);const okA=new Map(GARCH.map(x=>[x[0],x]));d.archivos=(Array.isArray(d.archivos)?d.archivos:[]).filter(x=>x&&okA.has(x.u)).map(x=>({u:x.u,t:okA.get(x.u)[1],k:okA.get(x.u)[2]})).slice(0,8);
   ans.pend=0;ans.d=d}catch(e){ans.pend=0;ans.err=1;ans.t=e&&e.name==='AbortError'?'Detenido.':'No pude responder: '+e.message}
  window._gbusy=0;window._gctl=null;gSaveChat();renderGuia();if(window._gvoz&&ans.d)gHablar(ans.d.texto)}
-function gParar(){try{window._gau&&window._gau.pause();speechSynthesis.cancel()}catch(e){}}
-async function gHablar(t){gParar();let x=String(t||'').replace(/\*\*/g,'').replace(/\s+/g,' ').trim().slice(0,880);if(!x)return;
- const nav=()=>{try{const u=new SpeechSynthesisUtterance(x);u.lang='es-AR';const v=speechSynthesis.getVoices().find(v=>/^es/.test(v.lang));if(v)u.voice=v;speechSynthesis.speak(u)}catch(e){}};
- try{const r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:x,voz:GVOZ})});if(!r.ok)throw 0;const bl=await r.blob(),au=new Audio(URL.createObjectURL(bl));window._gau=au;await au.play()}catch(e){nav()}}
+function gParar(){window._gtok=(window._gtok||0)+1;try{if(window._gau){window._gau.pause();window._gau.src='';window._gau=null}}catch(e){}try{speechSynthesis.cancel()}catch(e){}}
+async function gHablar(t){const ahora=Date.now();if(window._gtl&&ahora-window._gtl<700)return;window._gtl=ahora;gParar();const tk=window._gtok;let x=String(t||'').replace(/\*\*/g,'').replace(/\s+/g,' ').trim().slice(0,880);if(!x)return;
+ const nav=()=>{if(tk!==window._gtok)return;try{const u=new SpeechSynthesisUtterance(x);u.lang='es-AR';const v=speechSynthesis.getVoices().find(v=>/^es/.test(v.lang));if(v)u.voice=v;speechSynthesis.speak(u)}catch(e){}};
+ let fallo=false;try{const r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:x,voz:GVOZ})});if(!r.ok)throw 0;const bl=await r.blob();if(tk!==window._gtok)return;const au=new Audio(URL.createObjectURL(bl));window._gau=au;au.onended=()=>{if(window._gau===au)window._gau=null};await au.play()}catch(e){fallo=true}
+ if(fallo&&tk===window._gtok)nav()}
 function gMic(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){alert('Este navegador no permite hablarle por voz. Probá desde Safari o Chrome.');return}
  if(window._grec){window._grec.stop();return}const R=window._grec=new SR();R.lang='es-AR';R.interimResults=true;R.continuous=false;window._gesc=1;renderGuia();
  R.onresult=e=>{const t=[...e.results].map(r=>r[0].transcript).join(' ');document.querySelectorAll('.gq').forEach(q=>q.value=t);if(e.results[e.results.length-1].isFinal){window._gvoz=true;R.stop();guiaAsk(t)}};
