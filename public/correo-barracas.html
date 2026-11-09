@@ -1827,4 +1827,18 @@ document.getElementById('tema').onclick=()=>{const c=window.__temaPref?window.__
 function setHH(){const h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px')}
 addEventListener('resize',setHH);addEventListener('load',setHH);setHH();
 render();setHH();pcSync(true);setInterval(()=>pcSync(false),15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pcSync(false)});
-</script><script src="/vendor/jspdf/jspdf.umd.min.js"></script><script src="/vendor/jspdf/jspdf.plugin.autotable.min.js"></script><script src="/visor.js"></script></body></html>
+</script><script>/* Video de la sucursal: se reproduce solo cuando la app queda abierta sin usar */
+(function(){const IDLE=90000;let t=null,ov=null,vd=null;
+function ocupado(){if(window._rec||window._grec||window._gbusy||window._gman||window._vinfb)return true;const z=document.getElementById('vz');if(z&&getComputedStyle(z).display!=='none'&&z.offsetHeight>0)return true;const a=document.activeElement;if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return true;if(window.speechSynthesis&&speechSynthesis.speaking)return true;return false}
+function cerrar(){if(!ov)return;try{vd.pause()}catch(e){}ov.remove();ov=null;vd=null;armar()}
+function abrir(){if(ov||document.visibilityState!=='visible')return;if(ocupado()){armar();return}
+ ov=document.createElement('div');ov.id='vidov';ov.setAttribute('style','position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;cursor:pointer');
+ ov.innerHTML='<video src="/video/barracas.mp4" poster="/video/barracas-poster.jpg" muted autoplay loop playsinline webkit-playsinline preload="auto" style="width:100%;height:100%;object-fit:contain"></video><div style="position:absolute;left:0;right:0;bottom:calc(18px + env(safe-area-inset-bottom));text-align:center;color:#fff;opacity:.75;font:13px/1.2 Playfair Display,serif;letter-spacing:.08em;text-shadow:0 1px 6px #000">Tocá la pantalla para volver a la app</div>';
+ document.body.appendChild(ov);vd=ov.querySelector('video');const pl=vd.play();if(pl&&pl.catch)pl.catch(()=>{});
+ ['click','touchstart','keydown'].forEach(e=>ov.addEventListener(e,ev=>{ev.preventDefault();ev.stopPropagation();cerrar()},{passive:false}))}
+function armar(){clearTimeout(t);t=setTimeout(abrir,IDLE)}
+['pointerdown','pointermove','keydown','scroll','touchstart','wheel','input'].forEach(e=>document.addEventListener(e,()=>{if(!ov)armar()},{passive:true,capture:true}));
+document.addEventListener('keydown',e=>{if(ov&&(e.key==='Escape'||true)){cerrar()}},true);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!ov)armar();else if(ov)cerrar()});
+armar();window.vidIdle=abrir})();</script>
+<script src="/vendor/jspdf/jspdf.umd.min.js"></script><script src="/vendor/jspdf/jspdf.plugin.autotable.min.js"></script><script src="/visor.js"></script></body></html>
