@@ -1412,7 +1412,7 @@ function comprasHtml(o){
  <div class="cfk"><div><span>Ítems</span><b>${cp.length}</b></div><div><span>Por comprar</span><b class="${pend?'ut-neg':'ut-pos'}">${pend}</b></div><div><span>Atrasados</span><b class="${atr.length?'ut-neg':'ut-pos'}">${atr.length}</b></div><div><span>Vencen en 7 días</span><b class="${sem.length?'ut-neg':''}">${sem.length}</b></div><div><span>Recibidos en obra</span><b class="ut-pos">${rec}</b></div><div><span>Sin encargado</span><b class="${sinResp?'ut-neg':'ut-pos'}">${sinResp}</b></div><div><span>Presupuesto total</span><b>${ars(tot)}</b></div><div><span>Comprado</span><b>${ars(cmp)}</b></div><div><span>Pagado</span><b>${ars(pag)}</b></div><div><span>Por pagar</span><b>${ars(tot-pag)}</b></div></div></div>`;
  if(atr.length)h+=`<div class="card katr"><b>⚠ Lo que está atrasando la obra</b><div class="sub">Ítems cuya fecha de necesidad en obra ya pasó y todavía no llegaron.</div>${atr.sort((a,b)=>a.fn<b.fn?-1:1).map(x=>`<div class="row"><span>${esc(x.n||'(sin nombre)')}<span class="pm">${esc((x.resp||'sin encargado'))} · ${KES[E(x)]}</span></span><b class="ut-neg">${dif(hoy,x.fn)} día${dif(hoy,x.fn)>1?'s':''} · ${kFec(x.fn)}</b></div>`).join('')}</div>`;
  h+=`<div class="card"><b>Responsables</b><div class="sub">Tocá un nombre para ver solo sus tareas.</div><div class="kpers">${person||'<span class="sub">Todavía no hay encargados cargados. Escribí un nombre en el campo “Encargado” de cada ítem.</span>'}${fr?'<button class="kper" data-kr="">Ver todos</button>':''}</div>
- <div class="tools" style="margin-top:10px"><button class="btn gold sm" id="addk">+ Agregar ítem</button><select id="kfil" class="btn sm" style="width:auto"><option value="">Todos los estados</option><option value="a" ${fe==='a'?'selected':''}>Solo atrasados</option>${Object.keys(KES).map(k=>`<option value="${k}" ${fe===k?'selected':''}>${KES[k]}</option>`).join('')}</select></div></div>`;
+ <div class="tools" style="margin-top:10px"><button class="btn gold sm" id="addk">+ Agregar ítem</button><button class="btn sm" id="kpdf">📄 Subir presupuesto (PDF)</button><input type="file" id="kpdff" accept="application/pdf,image/*" hidden><select id="kfil" class="btn sm" style="width:auto"><option value="">Todos los estados</option><option value="a" ${fe==='a'?'selected':''}>Solo atrasados</option>${Object.keys(KES).map(k=>`<option value="${k}" ${fe===k?'selected':''}>${KES[k]}</option>`).join('')}</select></div></div>`;
  const vis=cp.map((x,i)=>[x,i]).filter(([x])=>(!fe||(fe==='a'?kAtr(x):E(x)===fe))&&(!fr||(x.resp||'').trim()===fr)).sort((A,B)=>{const a=A[0],b=B[0];return (a.fn||'9999')<(b.fn||'9999')?-1:(a.fn||'9999')>(b.fn||'9999')?1:A[1]-B[1]});
  h+=`<datalist id="kdl">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;
  h+=vis.length?vis.map(([x,i])=>{const st=E(x),at=kAtr(x);const d=x.fn&&st!=='r'?dif(x.fn,hoy):null;
@@ -1949,6 +1949,43 @@ function numVoz(t){
 var F=window.fetch;window.fetch=function(u,o){try{if(typeof u==='string'&&u.indexOf('/api/tts')>-1&&o&&typeof o.body==='string'){var j=JSON.parse(o.body);if(j.texto){j.texto=numVoz(j.texto);o=Object.assign({},o,{body:JSON.stringify(j)})}}}catch(e){}return F.call(this,u,o)};
 var SU=window.SpeechSynthesisUtterance;if(SU){window.SpeechSynthesisUtterance=function(t){return new SU(numVoz(t))};window.SpeechSynthesisUtterance.prototype=SU.prototype}
 window.numVoz=numVoz;
+})();
+</script>
+<script id="kpdfjs">
+/* Compras: leer un presupuesto de proveedor (PDF o foto) con IA y cargarlo como ítems */
+(function(){
+function ov(html){let d=document.getElementById('kpdfov');if(!d){d=document.createElement('div');d.id='kpdfov';d.style.cssText='position:fixed;inset:0;z-index:2147482500;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:14px';document.body.appendChild(d)}
+ d.innerHTML='<div class="card" style="width:min(680px,100%);max-height:88vh;overflow:auto;margin:0">'+html+'</div>';return d}
+function cerrar(){const d=document.getElementById('kpdfov');if(d)d.remove()}
+function b64(f){return new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=no;r.readAsDataURL(f)})}
+async function leer(f){
+ if(f.size>3.2*1024*1024){ov('<b>El archivo es muy pesado</b><div class="sub" style="margin:8px 0">Pesa '+f0(f.size/1048576*10)/10+' MB y el máximo es 3 MB. Probá con un PDF más liviano o una foto del presupuesto.</div><button class="btn gold sm" data-kx>Cerrar</button>');return}
+ ov('<b>Leyendo el presupuesto…</b><div class="sub" style="margin-top:8px">'+esc(f.name)+' · puede tardar hasta un minuto.</div>');
+ try{const o=O(),data=await b64(f),pdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);
+  const doc=pdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data}}:{type:'image',source:{type:'base64',media_type:f.type||'image/jpeg',data}};
+  const sys='Sos un lector de presupuestos de proveedores de construcción en Argentina. Extraés los datos tal cual figuran, sin inventar nada. Respondés SOLO con JSON válido, sin texto extra.';
+  const txt='Leé este presupuesto y devolvé este JSON: {"proveedor":"","fecha":"AAAA-MM-DD o vacío","moneda":"ARS o USD","iva_incluido":true/false/null,"total":numero o null,"items":[{"descripcion":"","cantidad":numero,"unidad":"","precio_unitario":numero,"rubro":""}]}. Reglas: un item por renglón del presupuesto; precio_unitario es el precio por unidad tal como figura (número sin separadores de miles, punto decimal); si un renglón solo trae el importe total, poné cantidad 1 y ese importe como precio_unitario; "rubro" tiene que ser exactamente uno de esta lista o vacío si ninguno aplica: '+JSON.stringify(o.rub.map(x=>x.n))+'. No incluyas subtotales, IVA ni totales como items.';
+  const j=await vInfCall(sys,[doc,{type:'text',text:txt}],6000);
+  const its=(j.items||[]).filter(x=>x&&(x.descripcion||'').trim());if(!its.length)throw new Error('No encontré ítems en el archivo.');
+  window._kpdf={j,its,f:f.name};mostrar()}
+ catch(e){ov('<b>No se pudo leer el presupuesto</b><div class="sub" style="margin:8px 0">'+esc(e.message||'Error')+'</div><button class="btn gold sm" data-kx>Cerrar</button>')}}
+function mostrar(){const {j,its}=window._kpdf,o=O(),usdq=String(j.moneda||'').toUpperCase()==='USD',k=usdq?(o.cot||0):1;
+ const tot=its.reduce((a,x)=>a+(+x.cantidad||0)*(+x.precio_unitario||0)*k,0);
+ ov('<b style="font-size:18px">Presupuesto leído</b><div class="sub" style="margin:6px 0 10px">Revisá lo que encontré y elegí qué cargar en Compras.</div>'+
+ '<label class="fld">Proveedor<input class="t" id="kpprov" value="'+esc(j.proveedor||'')+'"></label>'+
+ '<div class="sub" style="margin:8px 0">'+(j.fecha?'Fecha: '+esc(j.fecha)+' · ':'')+'Moneda: '+(usdq?'U$s (lo paso a pesos a $ '+f0(o.cot||0)+')':'pesos')+(j.iva_incluido===true?' · precios con IVA':j.iva_incluido===false?' · precios sin IVA':'')+'</div>'+
+ its.map((x,i)=>'<label class="row" style="gap:8px;align-items:flex-start;cursor:pointer"><span style="display:flex;gap:8px;align-items:flex-start;flex:1;min-width:0"><input type="checkbox" data-kpi="'+i+'" checked style="margin:4px 0 0;width:18px;height:18px;min-width:18px;flex:none;padding:0"><span style="flex:1;min-width:0">'+esc(x.descripcion)+'<span class="pm">'+f0(+x.cantidad||0)+' '+esc(x.unidad||'')+' × '+ars((+x.precio_unitario||0)*k)+(o.rub.some(z=>z.n===x.rubro)?' · '+esc(x.rubro):'')+'</span></span></span><b>'+ars((+x.cantidad||0)*(+x.precio_unitario||0)*k)+'</b></label>').join('')+
+ '<div class="row"><span><b>Total de los ítems</b></span><b>'+ars(tot)+'</b></div>'+(j.total?'<div class="sub">Total que figura en el presupuesto: '+ars(j.total*k)+'</div>':'')+
+ '<div class="tools" style="margin-top:12px"><button class="btn gold sm" data-kok>Cargar en Compras</button><button class="btn sm" data-kx>Cancelar</button></div>')}
+function cargar(){const {j,its}=window._kpdf,o=O(),usdq=String(j.moneda||'').toUpperCase()==='USD',k=usdq?(o.cot||0):1,pv=(document.getElementById('kpprov')||{}).value||j.proveedor||'';
+ const rn=o.rub.map(x=>x.n);let n=0;
+ document.querySelectorAll('#kpdfov [data-kpi]').forEach(c=>{if(!c.checked)return;const x=its[+c.dataset.kpi];
+  o.compras.push({n:String(x.descripcion).trim(),q:+x.cantidad||1,u:x.unidad||'',r:rn.includes(x.rubro)?x.rubro:'',pu:Math.round((+x.precio_unitario||0)*k),es:'z',resp:'',prov:pv,fn:'',fp:'',pg:''});n++});
+ save();render();ov('<b>Listo</b><div class="sub" style="margin:8px 0">Cargué '+n+' ítem'+(n===1?'':'s')+' en Compras con el proveedor y el precio del presupuesto, en estado “Cotizando”.</div><button class="btn gold sm" data-kx>Cerrar</button>')}
+document.addEventListener('click',e=>{const t=e.target;if(!t.closest)return;
+ if(t.closest('#kpdf')){const i=document.getElementById('kpdff');if(i){i.value='';i.click()}}
+ if(t.closest('[data-kx]'))cerrar();if(t.closest('[data-kok]'))cargar()});
+document.addEventListener('change',e=>{if(e.target&&e.target.id==='kpdff'&&e.target.files[0])leer(e.target.files[0])});
 })();
 </script>
 <script id="gfabmove">
