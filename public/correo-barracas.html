@@ -1490,7 +1490,7 @@ function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*
  document.getElementById('f').innerHTML=t}
 
 
-const PRE_V=2;
+const PRE_V=3;
 const PRE_T=[
 ['Proyecto y aprobación','Relevamiento de la sucursal',0,0.04,'Correo Argentino'],
 ['Proyecto y aprobación','Anteproyecto de arquitectura',0.02,0.15,'Leone Loray'],
@@ -1511,7 +1511,7 @@ const PRE_DONE=['Relevamiento de la sucursal','Anteproyecto de arquitectura'];
 const isoD=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const dP=s=>{const [y,m,d]=String(s||'').split('-').map(Number);return new Date(y||2026,(m||1)-1,d||1,12)};
 function preSeed(h,arr){const a=dP(h).getTime(),b=dP(arr).getTime(),W=Math.max(7*864e5,b-a);return PRE_T.map(([g,n,fs,fe,r])=>({g,n,s:isoD(new Date(a+W*fs)),e:isoD(new Date(a+W*fe)),r,es:PRE_DONE.includes(n)?'t':'p'}))}
-function preInit(o){if(o.pre&&o.pre.v!==PRE_V){const t0=new Date();t0.setHours(12,0,0,0);const old=o.pre.t||[];o.pre.t=preSeed(isoD(t0),o.pre.arr).map(n=>{const q=old.find(x=>x.n===n.n);return q?{...n,es:q.es,s:q.s,e:q.e,r:q.r}:n});o.pre.v=PRE_V}if(!o.pre){const t0=new Date();t0.setHours(12,0,0,0);let a=new Date(t0.getTime()+45*864e5);while(a.getDay()!==1)a=new Date(a.getTime()+864e5);const arr=isoD(a);o.pre={arr,v:PRE_V,t:preSeed(isoD(t0),arr)}}return o.pre}
+function preInit(o){if(o.pre&&o.pre.v!==PRE_V){const t0=new Date();t0.setHours(12,0,0,0);const old=o.pre.t||[];o.pre.t=preSeed(isoD(t0),o.pre.arr).map(n=>{const q=old.find(x=>x.n===n.n||(n.n==='Compras de materiales'&&/^Compras de materiales/.test(x.n)));return q?{...n,es:q.es,s:q.s,e:q.e,r:q.r}:n});o.pre.v=PRE_V}if(!o.pre){const t0=new Date();t0.setHours(12,0,0,0);let a=new Date(t0.getTime()+45*864e5);while(a.getDay()!==1)a=new Date(a.getTime()+864e5);const arr=isoD(a);o.pre={arr,v:PRE_V,t:preSeed(isoD(t0),arr)}}return o.pre}
 function renderPre(o){const P=preInit(o),T=P.t,hoy=new Date();hoy.setHours(12,0,0,0);const H=hoy.getTime(),A=dP(P.arr).getTime(),dias=Math.round((A-H)/864e5);
  const hechas=T.filter(t=>t.es==='t').length,tarde=T.filter(t=>t.es!=='t'&&dP(t.e).getTime()<H),cur=T.filter(t=>t.es==='c'),prox=T.filter(t=>t.es==='p'&&dP(t.s).getTime()>=H).sort((a,b)=>dP(a.s)-dP(b.s)).slice(0,3);
  const fe=d=>dP(d).toLocaleDateString('es-AR',{day:'numeric',month:'short'}).replace('.','');
