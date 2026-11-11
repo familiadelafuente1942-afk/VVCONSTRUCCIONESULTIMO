@@ -1846,17 +1846,21 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 armar();window.vidIdle=()=>abrir(true);document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-gvid]');if(b){e.preventDefault();e.stopPropagation();abrir(true)}},true)})();</script>
 <script src="/vendor/jspdf/jspdf.umd.min.js"></script><script src="/vendor/jspdf/jspdf.plugin.autotable.min.js"></script><script src="/visor.js"></script><script id="clavedet">
 (function(){
-var H='1d15d754bd6fe1657e5b718e12b0b80fb0919a22fcd70811edcae6cb2730d3da';
-function ok(){try{return sessionStorage.getItem('presok')==='1'}catch(e){return false}}
+var H='1d15d754bd6fe1657e5b718e12b0b80fb0919a22fcd70811edcae6cb2730d3da',OK=false;
 async function hash(t){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0')}).join('')}
-function pedir(det){
- var d=document.createElement('div');d.style.cssText='position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:20px';
- d.innerHTML='<form style="background:#14161a;color:#f4e9d3;border:1px solid #b8915a;border-radius:16px;padding:22px;max-width:320px;width:100%;font-family:inherit"><b style="font-size:18px">Presupuesto</b><p style="margin:8px 0 14px;opacity:.8;font-size:14px">Ingresá la clave para abrirlo.</p><input type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Clave" style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #555;background:#0d0e10;color:#fff;font-size:16px"><div id="cperr2" style="color:#e57373;font-size:13px;min-height:18px;margin-top:6px"></div><div style="display:flex;gap:8px;margin-top:8px"><button type="button" id="cpx2" style="flex:1;padding:12px;border-radius:10px;border:1px solid #555;background:transparent;color:#ccc">Cancelar</button><button type="submit" style="flex:1;padding:12px;border-radius:10px;border:0;background:#b8915a;color:#111;font-weight:700">Abrir</button></div></form>';
+function pedir(then){
+ var d=document.createElement('div');d.style.cssText='position:fixed;inset:0;z-index:2147483600;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:20px';
+ d.innerHTML='<form style="background:#14161a;color:#f4e9d3;border:1px solid #b8915a;border-radius:16px;padding:22px;max-width:320px;width:100%;font-family:inherit"><b style="font-size:18px">Información interna</b><p style="margin:8px 0 14px;opacity:.8;font-size:14px">Ingresá la clave para continuar.</p><input type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Clave" style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #555;background:#0d0e10;color:#fff;font-size:16px"><div class="cperr" style="color:#e57373;font-size:13px;min-height:18px;margin-top:6px"></div><div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="cpx" style="flex:1;padding:12px;border-radius:10px;border:1px solid #555;background:transparent;color:#ccc">Cancelar</button><button type="submit" style="flex:1;padding:12px;border-radius:10px;border:0;background:#b8915a;color:#111;font-weight:700">Entrar</button></div></form>';
  document.body.appendChild(d);var f=d.querySelector('form'),i=d.querySelector('input');setTimeout(function(){i.focus()},50);
- d.querySelector('#cpx2').onclick=function(){d.remove()};
- f.onsubmit=async function(e){e.preventDefault();var h=await hash(i.value.trim());if(h===H){try{sessionStorage.setItem('presok','1')}catch(x){}d.remove();var cur=document.getElementById('rubdet');if(cur){cur.open=true;window._rubOpen=true}}else{d.querySelector('#cperr2').textContent='Clave incorrecta';i.value='';i.focus()}};
+ d.querySelector('.cpx').onclick=function(){d.remove()};
+ f.onsubmit=async function(e){e.preventDefault();var h=await hash(i.value.trim());if(h===H){OK=true;d.remove();document.querySelectorAll('div[style*="2147482000"]').forEach(function(x){x.remove()});then()}else{d.querySelector('.cperr').textContent='Clave incorrecta';i.value='';i.focus()}};
 }
-window.addEventListener('click',function(e){var s=e.target.closest&&e.target.closest('#rubdet > summary');if(!s||ok())return;var det=s.parentNode;if(det.open)return;e.preventDefault();e.stopImmediatePropagation();pedir(det)},true);
+window.addEventListener('click',function(e){
+ if(OK)return;var el=e.target.closest&&e.target.closest('button[data-t="p"],button[data-t="k"],#rubdet > summary');if(!el)return;
+ if(el.tagName==='SUMMARY'&&el.parentNode.open)return;
+ e.preventDefault();e.stopImmediatePropagation();
+ pedir(function(){if(el.tagName==='SUMMARY'){el.parentNode.open=true;window._rubOpen=true}else el.click()});
+},true);
 })();
 </script>
 <script id="navpk">
