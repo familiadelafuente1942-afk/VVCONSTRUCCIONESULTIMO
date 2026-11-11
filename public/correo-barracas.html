@@ -2042,9 +2042,9 @@ function npRead(){const S=window._np;if(!S||!document.getElementById('npent'))re
 function npShow(){const S=window._np,o=O(),cp=o.compras.map((x,i)=>[x,i]).filter(([x])=>(x.n||'').trim()&&(x.es||'p')!=='r');
  ov('<b style="font-size:18px">Pedir cotización por link</b><div class="sub" style="margin:6px 0 10px">Armá el pedido una sola vez y mandale el mismo link a cada proveedor. Todos cotizan los mismos ítems y cantidades, así quedan comparables.</div>'+
  '<b>Ítems a cotizar</b>'+
- S.rows.map((r,i)=>'<div style="border:1px solid var(--line);border-radius:14px;padding:10px;margin-top:8px"><div style="display:flex;gap:6px;align-items:center"><input class="t" data-npn="'+i+'" value="'+esc(r.n)+'" placeholder="Qué hay que cotizar: descripción, marca, modelo" style="flex:1;min-width:0;font-size:16px"><button class="btn sm" data-npdel="'+i+'" title="Quitar">✕</button></div>'+
+ S.rows.map((r,i)=>'<div style="border:1px solid var(--line);border-radius:14px;padding:10px;margin-top:8px"><div style="display:flex;gap:6px;align-items:center">'+((cp.length&&!r.man&&(!r.n||cp.some(([x])=>x.n===r.n)))?'<select data-npn="'+i+'" data-npsel="'+i+'" style="flex:1;min-width:0;font-size:16px"><option value="">Elegí de Compras…</option>'+cp.map(([x])=>'<option value="'+esc(x.n)+'"'+(x.n===r.n?' selected':'')+'>'+esc(x.n)+'</option>').join('')+'<option value="__man">✎ Otro (escribirlo a mano)</option></select>':'<input class="t" data-npn="'+i+'" value="'+esc(r.n)+'" placeholder="Qué hay que cotizar: descripción, marca, modelo" style="flex:1;min-width:0;font-size:16px">')+'<button class="btn sm" data-npdel="'+i+'" title="Quitar">✕</button></div>'+
   '<div style="display:grid;grid-template-columns:1fr 1fr 1.6fr;gap:8px;margin-top:8px"><label class="fld">Cantidad<input class="t" data-npq="'+i+'" inputmode="decimal" value="'+(r.q?f0(r.q):'')+'" placeholder="0" style="font-size:16px"></label><label class="fld">Unidad<input class="t" data-npu="'+i+'" value="'+esc(r.u)+'" placeholder="u, m², ml" style="font-size:16px"></label><label class="fld">Medidas (si hace falta)<input class="t" data-npm="'+i+'" value="'+esc(r.m||'')+'" placeholder="Alto × ancho" style="font-size:16px"></label></div></div>').join('')+
- '<div class="tools" style="margin-top:8px"><button class="btn sm" data-nprow>+ Más ítems</button>'+(cp.length?'<select id="npadd" class="btn sm" style="width:auto;max-width:220px"><option value="">Traer de Compras…</option>'+cp.map(([x,i])=>'<option value="'+i+'">'+esc(x.n)+'</option>').join('')+'</select>':'')+'</div>'+
+ '<div class="tools" style="margin-top:8px"><button class="btn sm" data-nprow>+ Más ítems</button>'+'</div>'+
  '<div style="margin-top:14px"><b>Documentación para el proveedor</b><div class="sub">Planos, planillas de carpintería, fotos: todo lo que necesiten para cotizar. Lo van a poder ver y descargar desde el link.</div></div>'+
  (S.docs.length?S.docs.map((d,i)=>'<div class="row" style="gap:8px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 '+esc(d.n)+'</span><button class="btn sm" data-npdocdel="'+i+'">✕</button></div>').join(''):'')+
  '<div class="tools" style="margin-top:8px"><button class="btn sm" data-npdoc>'+(S.sub?'Subiendo '+S.sub+'…':'+ Subir planos, planillas o fotos')+'</button><input type="file" id="npfile" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xls,.xlsx,.csv,.doc,.docx,.dwg,.dxf,.zip,image/*,application/pdf" hidden></div>'+
@@ -2060,7 +2060,7 @@ function npNuevo(){const o=O();window._np={rows:[{n:'',q:0,u:'',m:''}],docs:[],s
 async function npSubir(files){const S=window._np;if(!S)return;npRead();S.err='';const L=[...files];S.sub=L.length;npShow();
  for(const f of L){try{if(f.size>40e6)throw new Error('“'+f.name+'” pesa más de 40 MB');const u=await vUp(f,'cotiz',f.name);S.docs.push({n:f.name.slice(0,120),u})}catch(e){S.err='No se pudo subir: '+((e&&e.message)||f.name)}
   if(window._np!==S)return;S.sub--;if(document.getElementById('npent')){npRead();npShow()}}}
-async function npCrear(){npRead();const S=window._np,o=O(),E=document.getElementById('nperr'),items=S.rows.filter(r=>(r.n||'').trim()&&r.q>0).map(r=>({n:r.n.trim().slice(0,200),q:r.q,u:(r.u||'').trim().slice(0,20),m:(r.m||'').trim().slice(0,80)}));
+async function npCrear(){npRead();const S=window._np,o=O(),E=document.getElementById('nperr'),items=S.rows.filter(r=>(r.n||'').trim()&&r.n!=='__man'&&r.q>0).map(r=>({n:r.n.trim().slice(0,200),q:r.q,u:(r.u||'').trim().slice(0,20),m:(r.m||'').trim().slice(0,80)}));
  if(S.sub){E.textContent='Esperá a que terminen de subir los archivos.';return}
  if(!items.length){E.textContent='Cargá al menos un ítem con descripción y cantidad.';return}
  let g=items[0].n.slice(0,60)+(items.length>1?' y '+(items.length-1)+' más':'');const us=new Set([...CP(o).map(p=>p.g),...CZ(o).map(q=>q.g)]);if(us.has(g)){let k=2;while(us.has(g+' ('+k+')'))k++;g=g+' ('+k+')'}
@@ -2136,7 +2136,8 @@ document.addEventListener('click',e=>{const t=e.target;if(!t.closest)return;let 
 });
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='kpdff'&&e.target.files[0])leer(e.target.files[0])});
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='npadd'&&e.target.value!==''){npRead();const x=O().compras[+e.target.value];if(x){const S=window._np;if(S.rows.length===1&&!S.rows[0].n&&!S.rows[0].q)S.rows.pop();S.rows.push({n:x.n,q:x.q||0,u:x.u||'',m:''})}npShow()}
- if(e.target&&e.target.id==='npfile'&&e.target.files.length)npSubir(e.target.files)});
+ if(e.target&&e.target.id==='npfile'&&e.target.files.length)npSubir(e.target.files)
+ if(e.target&&e.target.dataset&&e.target.dataset.npsel!==undefined){const i=+e.target.dataset.npsel,v=e.target.value;npRead();const r=window._np.rows[i];if(v==='__man'){r.man=1;r.n=''}else{const x=O().compras.find(z=>z.n===v);r.n=v;if(x){if(x.q)r.q=x.q;if(x.u)r.u=x.u}}npShow();if(v==='__man'){const el=document.querySelector('#kpdfov [data-npn="'+i+'"]');if(el)el.focus()}}});
 try{render()}catch(e){}
 })();
 </script>
