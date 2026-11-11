@@ -1204,6 +1204,7 @@ header.top .who>span:first-child{display:none!important}header.top #who,header.t
 #gfab.hz{flex-direction:row!important;width:auto!important;padding:10px 16px!important;gap:6px!important;border-radius:999px!important}
 #gfab.hz span{writing-mode:horizontal-tb!important;text-orientation:mixed!important;font-size:14px!important;font-weight:600!important;line-height:1.1!important;margin:0!important}
 #gfab.hz img{width:28px!important;height:28px!important}
+.kcz .ut-pos,.kcz .ut-neg{font-size:inherit!important}.kcz .cft td{vertical-align:top}
 #giaH,.gmount{scroll-margin-top:calc(var(--hh,150px) + 12px)}
 /* foto grande y a 2 mm de los iconos */
 body{padding-left:98px!important}
@@ -1410,6 +1411,7 @@ function comprasHtml(o){
  const person=names.map(n=>{const L=cp.filter(x=>(x.resp||'').trim()===n),al=L.filter(kAtr).length,pe=L.filter(x=>E(x)!=='r').length;return `<button class="kper ${fr===n?'on':''} ${al?'bad':''}" data-kr="${esc(n)}"><b>${esc(n)}</b><span>${pe} en curso · ${L.length-pe} listos</span>${al?`<em>${al} atrasado${al>1?'s':''}</em>`:''}</button>`}).join('');
  let h=`<div class="card"><b style="font-size:20px">Panel de Compras</b><div class="sub">Lo que se compra a tiempo es lo que mantiene la obra en fecha. Cargá cada ítem con su encargado, la fecha en que se necesita en obra y la fecha de pago, y seguí el estado hasta que llega.</div>
  <div class="cfk"><div><span>Ítems</span><b>${cp.length}</b></div><div><span>Por comprar</span><b class="${pend?'ut-neg':'ut-pos'}">${pend}</b></div><div><span>Atrasados</span><b class="${atr.length?'ut-neg':'ut-pos'}">${atr.length}</b></div><div><span>Vencen en 7 días</span><b class="${sem.length?'ut-neg':''}">${sem.length}</b></div><div><span>Recibidos en obra</span><b class="ut-pos">${rec}</b></div><div><span>Sin encargado</span><b class="${sinResp?'ut-neg':'ut-pos'}">${sinResp}</b></div><div><span>Presupuesto total</span><b>${ars(tot)}</b></div><div><span>Comprado</span><b>${ars(cmp)}</b></div><div><span>Pagado</span><b>${ars(pag)}</b></div><div><span>Por pagar</span><b>${ars(tot-pag)}</b></div></div></div>`;
+ h+=(window.kcmpHtml?window.kcmpHtml(o):'');
  if(atr.length)h+=`<div class="card katr"><b>⚠ Lo que está atrasando la obra</b><div class="sub">Ítems cuya fecha de necesidad en obra ya pasó y todavía no llegaron.</div>${atr.sort((a,b)=>a.fn<b.fn?-1:1).map(x=>`<div class="row"><span>${esc(x.n||'(sin nombre)')}<span class="pm">${esc((x.resp||'sin encargado'))} · ${KES[E(x)]}</span></span><b class="ut-neg">${dif(hoy,x.fn)} día${dif(hoy,x.fn)>1?'s':''} · ${kFec(x.fn)}</b></div>`).join('')}</div>`;
  h+=`<div class="card"><b>Responsables</b><div class="sub">Tocá un nombre para ver solo sus tareas.</div><div class="kpers">${person||'<span class="sub">Todavía no hay encargados cargados. Escribí un nombre en el campo “Encargado” de cada ítem.</span>'}${fr?'<button class="kper" data-kr="">Ver todos</button>':''}</div>
  <div class="tools" style="margin-top:10px"><button class="btn gold sm" id="addk">+ Agregar ítem</button><button class="btn sm" id="kpdf">📄 Subir presupuesto (PDF)</button><input type="file" id="kpdff" accept="application/pdf,image/*" hidden><select id="kfil" class="btn sm" style="width:auto"><option value="">Todos los estados</option><option value="a" ${fe==='a'?'selected':''}>Solo atrasados</option>${Object.keys(KES).map(k=>`<option value="${k}" ${fe===k?'selected':''}>${KES[k]}</option>`).join('')}</select></div></div>`;
@@ -1952,40 +1954,89 @@ window.numVoz=numVoz;
 })();
 </script>
 <script id="kpdfjs">
-/* Compras: leer un presupuesto de proveedor (PDF o foto) con IA y cargarlo como ítems */
+/* Compras: leer presupuestos de proveedores (PDF o foto) con IA, guardarlos por pedido y compararlos */
 (function(){
+const CZ=o=>(o.cotiz=o.cotiz||[]),CM=o=>(o.cotcmp=o.cotcmp||{});
+const tq=q=>(q.items||[]).reduce((a,x)=>a+(+x.q||0)*(+x.pu||0),0);
 function ov(html){let d=document.getElementById('kpdfov');if(!d){d=document.createElement('div');d.id='kpdfov';d.style.cssText='position:fixed;inset:0;z-index:2147482500;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:14px';document.body.appendChild(d)}
  d.innerHTML='<div class="card" style="width:min(680px,100%);max-height:88vh;overflow:auto;margin:0">'+html+'</div>';return d}
 function cerrar(){const d=document.getElementById('kpdfov');if(d)d.remove()}
 function b64(f){return new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=no;r.readAsDataURL(f)})}
+function err(t,e){ov('<b>'+t+'</b><div class="sub" style="margin:8px 0">'+esc((e&&e.message)||'Error')+'</div><button class="btn gold sm" data-kx>Cerrar</button>')}
 async function leer(f){
- if(f.size>3.2*1024*1024){ov('<b>El archivo es muy pesado</b><div class="sub" style="margin:8px 0">Pesa '+f0(f.size/1048576*10)/10+' MB y el máximo es 3 MB. Probá con un PDF más liviano o una foto del presupuesto.</div><button class="btn gold sm" data-kx>Cerrar</button>');return}
+ if(f.size>3.2*1024*1024){ov('<b>El archivo es muy pesado</b><div class="sub" style="margin:8px 0">Pesa '+f0(f.size/1048576)+' MB y el máximo es 3 MB. Probá con un PDF más liviano o una foto del presupuesto.</div><button class="btn gold sm" data-kx>Cerrar</button>');return}
  ov('<b>Leyendo el presupuesto…</b><div class="sub" style="margin-top:8px">'+esc(f.name)+' · puede tardar hasta un minuto.</div>');
  try{const o=O(),data=await b64(f),pdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);
   const doc=pdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data}}:{type:'image',source:{type:'base64',media_type:f.type||'image/jpeg',data}};
   const sys='Sos un lector de presupuestos de proveedores de construcción en Argentina. Extraés los datos tal cual figuran, sin inventar nada. Respondés SOLO con JSON válido, sin texto extra.';
-  const txt='Leé este presupuesto y devolvé este JSON: {"proveedor":"","fecha":"AAAA-MM-DD o vacío","moneda":"ARS o USD","iva_incluido":true/false/null,"total":numero o null,"items":[{"descripcion":"","cantidad":numero,"unidad":"","precio_unitario":numero,"rubro":""}]}. Reglas: un item por renglón del presupuesto; precio_unitario es el precio por unidad tal como figura (número sin separadores de miles, punto decimal); si un renglón solo trae el importe total, poné cantidad 1 y ese importe como precio_unitario; "rubro" tiene que ser exactamente uno de esta lista o vacío si ninguno aplica: '+JSON.stringify(o.rub.map(x=>x.n))+'. No incluyas subtotales, IVA ni totales como items.';
+  const txt='Leé este presupuesto y devolvé este JSON: {"titulo":"qué se cotiza, en 2 a 4 palabras","proveedor":"","fecha":"AAAA-MM-DD o vacío","moneda":"ARS o USD","iva_incluido":true/false/null,"total":numero o null,"condiciones":{"forma_pago":"","plazo_entrega":"","validez":"","flete":"incluido / no incluido / no dice","incluye":[""],"no_incluye":[""]},"items":[{"descripcion":"","cantidad":numero,"unidad":"","precio_unitario":numero,"rubro":""}]}. Reglas: un item por renglón del presupuesto, con marca, modelo y medida si figuran; precio_unitario es el precio por unidad tal como figura (número sin separadores de miles, punto decimal); si un renglón solo trae el importe total, poné cantidad 1 y ese importe como precio_unitario; "rubro" tiene que ser exactamente uno de esta lista o vacío si ninguno aplica: '+JSON.stringify(o.rub.map(x=>x.n))+'. No incluyas subtotales, IVA ni totales como items. En condiciones poné solo lo que el documento dice; si no lo dice, dejalo vacío.';
   const j=await vInfCall(sys,[doc,{type:'text',text:txt}],6000);
   const its=(j.items||[]).filter(x=>x&&(x.descripcion||'').trim());if(!its.length)throw new Error('No encontré ítems en el archivo.');
   window._kpdf={j,its,f:f.name};mostrar()}
- catch(e){ov('<b>No se pudo leer el presupuesto</b><div class="sub" style="margin:8px 0">'+esc(e.message||'Error')+'</div><button class="btn gold sm" data-kx>Cerrar</button>')}}
+ catch(e){err('No se pudo leer el presupuesto',e)}}
 function mostrar(){const {j,its}=window._kpdf,o=O(),usdq=String(j.moneda||'').toUpperCase()==='USD',k=usdq?(o.cot||0):1;
- const tot=its.reduce((a,x)=>a+(+x.cantidad||0)*(+x.precio_unitario||0)*k,0);
- ov('<b style="font-size:18px">Presupuesto leído</b><div class="sub" style="margin:6px 0 10px">Revisá lo que encontré y elegí qué cargar en Compras.</div>'+
+ const tot=its.reduce((a,x)=>a+(+x.cantidad||0)*(+x.precio_unitario||0)*k,0),gs=[...new Set(CZ(o).map(q=>q.g))];
+ ov('<b style="font-size:18px">Presupuesto leído</b><div class="sub" style="margin:6px 0 10px">Revisá lo que encontré. Guardalo en un pedido para compararlo con los de otros proveedores.</div>'+
  '<label class="fld">Proveedor<input class="t" id="kpprov" value="'+esc(j.proveedor||'')+'"></label>'+
- '<div class="sub" style="margin:8px 0">'+(j.fecha?'Fecha: '+esc(j.fecha)+' · ':'')+'Moneda: '+(usdq?'U$s (lo paso a pesos a $ '+f0(o.cot||0)+')':'pesos')+(j.iva_incluido===true?' · precios con IVA':j.iva_incluido===false?' · precios sin IVA':'')+'</div>'+
+ '<label class="fld" style="margin-top:8px">¿Qué se está cotizando? (los presupuestos del mismo pedido se comparan entre sí)<input class="t" id="kpgrp" list="kpgl" value="'+esc(j.titulo||'')+'" placeholder="Ej.: Aberturas de aluminio"></label><datalist id="kpgl">'+gs.map(g=>'<option value="'+esc(g)+'">').join('')+'</datalist>'+
+ (gs.length?'<div class="sub" style="margin-top:4px">Pedidos ya abiertos: '+gs.map(esc).join(' · ')+'. Para sumarlo a uno, escribí el mismo nombre.</div>':'')+
+ '<div class="sub" style="margin:8px 0">'+(j.fecha?'Fecha: '+esc(j.fecha)+' · ':'')+'Moneda: '+(usdq?'U$s (lo paso a pesos a $ '+f0(o.cot||0)+')':'pesos')+(j.iva_incluido===true?' · precios con IVA':j.iva_incluido===false?' · precios sin IVA':' · no aclara IVA')+'</div>'+
  its.map((x,i)=>'<label class="row" style="gap:8px;align-items:flex-start;cursor:pointer"><span style="display:flex;gap:8px;align-items:flex-start;flex:1;min-width:0"><input type="checkbox" data-kpi="'+i+'" checked style="margin:4px 0 0;width:18px;height:18px;min-width:18px;flex:none;padding:0"><span style="flex:1;min-width:0">'+esc(x.descripcion)+'<span class="pm">'+f0(+x.cantidad||0)+' '+esc(x.unidad||'')+' × '+ars((+x.precio_unitario||0)*k)+(o.rub.some(z=>z.n===x.rubro)?' · '+esc(x.rubro):'')+'</span></span></span><b>'+ars((+x.cantidad||0)*(+x.precio_unitario||0)*k)+'</b></label>').join('')+
  '<div class="row"><span><b>Total de los ítems</b></span><b>'+ars(tot)+'</b></div>'+(j.total?'<div class="sub">Total que figura en el presupuesto: '+ars(j.total*k)+'</div>':'')+
- '<div class="tools" style="margin-top:12px"><button class="btn gold sm" data-kok>Cargar en Compras</button><button class="btn sm" data-kx>Cancelar</button></div>')}
-function cargar(){const {j,its}=window._kpdf,o=O(),usdq=String(j.moneda||'').toUpperCase()==='USD',k=usdq?(o.cot||0):1,pv=(document.getElementById('kpprov')||{}).value||j.proveedor||'';
- const rn=o.rub.map(x=>x.n);let n=0;
- document.querySelectorAll('#kpdfov [data-kpi]').forEach(c=>{if(!c.checked)return;const x=its[+c.dataset.kpi];
-  o.compras.push({n:String(x.descripcion).trim(),q:+x.cantidad||1,u:x.unidad||'',r:rn.includes(x.rubro)?x.rubro:'',pu:Math.round((+x.precio_unitario||0)*k),es:'z',resp:'',prov:pv,fn:'',fp:'',pg:''});n++});
- save();render();ov('<b>Listo</b><div class="sub" style="margin:8px 0">Cargué '+n+' ítem'+(n===1?'':'s')+' en Compras con el proveedor y el precio del presupuesto, en estado “Cotizando”.</div><button class="btn gold sm" data-kx>Cerrar</button>')}
-document.addEventListener('click',e=>{const t=e.target;if(!t.closest)return;
+ '<div class="tools" style="margin-top:12px"><button class="btn gold sm" data-kguardar>Guardar para comparar</button><button class="btn sm" data-kok>Cargar directo en Compras</button><button class="btn sm" data-kx>Cancelar</button></div>')}
+function sel(){const {j,its}=window._kpdf,o=O(),usdq=String(j.moneda||'').toUpperCase()==='USD',k=usdq?(o.cot||0):1,rn=o.rub.map(x=>x.n),out=[];
+ document.querySelectorAll('#kpdfov [data-kpi]').forEach(c=>{if(!c.checked)return;const x=its[+c.dataset.kpi];out.push({n:String(x.descripcion).trim(),q:+x.cantidad||1,u:x.unidad||'',r:rn.includes(x.rubro)?x.rubro:'',pu:Math.round((+x.precio_unitario||0)*k)})});return out}
+function aCompras(o,items,prov){items.forEach(x=>o.compras.push({n:x.n,q:x.q,u:x.u,r:x.r,pu:x.pu,es:'z',resp:'',prov:prov,fn:'',fp:'',pg:''}))}
+function cargar(){const {j}=window._kpdf,o=O(),pv=(document.getElementById('kpprov')||{}).value||j.proveedor||'',it=sel();aCompras(o,it,pv);save();render();
+ ov('<b>Listo</b><div class="sub" style="margin:8px 0">Cargué '+it.length+' ítem'+(it.length===1?'':'s')+' en Compras con el proveedor y el precio del presupuesto, en estado “Cotizando”.</div><button class="btn gold sm" data-kx>Cerrar</button>')}
+function guardar(){const {j,f}=window._kpdf,o=O(),pv=((document.getElementById('kpprov')||{}).value||j.proveedor||'Proveedor').trim(),g=((document.getElementById('kpgrp')||{}).value||j.titulo||'Sin nombre').trim()||'Sin nombre',it=sel();
+ if(!it.length){return}
+ const usdq=String(j.moneda||'').toUpperCase()==='USD';
+ CZ(o).push({id:Date.now().toString(36),g,prov:pv,fecha:j.fecha||'',mon:usdq?'USD':'ARS',iva:j.iva_incluido===true?1:j.iva_incluido===false?0:null,tot:j.total?Math.round(j.total*(usdq?(o.cot||0):1)):0,cond:j.condiciones||{},items:it,arch:f});
+ delete CM(o)[g];save();render();const n=CZ(o).filter(q=>q.g===g).length;
+ ov('<b>Guardado en “'+esc(g)+'”</b><div class="sub" style="margin:8px 0">Ya hay '+n+' de 3 presupuestos para este pedido. '+(n>=2?'Ya podés tocar “Comparar” en Compras.':'Subí el de otro proveedor para poder compararlos.')+'</div><button class="btn gold sm" data-kx>Cerrar</button>')}
+async function comparar(g){const o=O(),qs=CZ(o).filter(q=>q.g===g);if(qs.length<2)return;
+ ov('<b>Comparando presupuestos…</b><div class="sub" style="margin-top:8px">'+esc(g)+' · '+qs.length+' proveedores · puede tardar hasta un minuto.</div>');
+ try{const sys='Sos un jefe de compras de una constructora argentina. Comparás presupuestos de proveedores para el mismo pedido y decís con honestidad si son comparables ("manzana con manzana"). No inventás datos: si algo no figura, lo decís. Respondés SOLO con JSON válido, sin texto extra.';
+  const inp={pedido:g,presupuestos:qs.map(q=>({proveedor:q.prov,fecha:q.fecha,moneda_original:q.mon,precios_con_iva:q.iva===1?true:q.iva===0?false:null,condiciones:q.cond,total_items_ars:tq(q),items:q.items.map(x=>({descripcion:x.n,cantidad:x.q,unidad:x.u,precio_unitario_ars:x.pu}))}))};
+  const txt='Compará estos presupuestos (los precios ya están en pesos):\n'+JSON.stringify(inp)+'\n\nDevolvé este JSON: {"comparable":"si" | "parcial" | "no","resumen":"2 o 3 oraciones claras","diferencias":["cada diferencia de alcance, cantidad, calidad, marca, medida, IVA, flete o condiciones que impide comparar directo"],"filas":[{"item":"nombre común del ítem","valores":[{"proveedor":"","cantidad":numero o null,"unidad":"","precio_unitario":numero o null,"total":numero o null,"nota":"marca, calidad o diferencia; vacío si no hay"}]}],"faltantes":[{"proveedor":"","falta":["ítems que otros cotizan y este no"]}],"totales":[{"proveedor":"","total_cotizado":numero,"total_comparable":numero o null,"aclaracion":"cómo se llegó al total comparable: mismos ítems y cantidades, todos con o sin IVA"}],"recomendacion":"cuál conviene y por qué, o qué falta para poder decidir","preguntas":["qué pedirle a cada proveedor para que queden comparables"]}. Reglas: en "filas" emparejá los ítems equivalentes de cada proveedor; en cada fila poné un valor por cada proveedor en el mismo orden que te los pasé, con null si no lo cotiza. "comparable" es "si" solo si cotizan lo mismo, en las mismas cantidades y con las mismas condiciones de IVA y flete. Números sin separadores de miles.';
+  const j=await vInfCall(sys,txt,8000);CM(o)[g]={f:new Date().toISOString().slice(0,10),n:qs.length,r:j};save();render();cerrar();
+  setTimeout(()=>{const el=document.querySelector('[data-kcres="'+CSS.escape(g)+'"]');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})},100)}
+ catch(e){err('No se pudo comparar',e)}}
+function resHtml(g,qs,c){const r=c.r||{},V={si:['Sí, se pueden comparar directo','var(--verde)'],parcial:['Solo en parte','var(--amarillo)'],no:['No, cotizan cosas distintas','var(--naranja)']}[String(r.comparable||'').toLowerCase()]||['Sin veredicto','var(--muted)'];
+ const pv=qs.map(q=>q.prov),N=v=>v==null||v===''||isNaN(+v)?'—':ars(+v);
+ let h='<div data-kcres="'+esc(g)+'" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;scroll-margin-top:calc(var(--hh,150px) + 12px)"><div class="sub">Comparativa del '+esc(c.f||'')+(c.n!==qs.length?' · <b class="ut-neg">cambiaron los presupuestos, volvé a comparar</b>':'')+'</div>';
+ h+='<div style="margin:8px 0;padding:10px 12px;border-radius:12px;border:1px solid '+V[1]+'"><span class="sub">¿Manzana con manzana?</span><div style="font-weight:700;font-size:16px;color:'+V[1]+'">'+V[0]+'</div>'+(r.resumen?'<div style="margin-top:6px">'+esc(r.resumen)+'</div>':'')+'</div>';
+ if((r.diferencias||[]).length)h+='<b>Diferencias que hay que mirar</b><ul style="margin:6px 0 10px;padding-left:18px">'+r.diferencias.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>';
+ if((r.filas||[]).length){h+='<b>Ítem por ítem</b><div class="cfw" style="margin:6px 0 10px"><table class="cft"><thead><tr><th style="text-align:left">Ítem</th>'+pv.map(p=>'<th>'+esc(p)+'</th>').join('')+'</tr></thead><tbody>'+
+  r.filas.map(f=>{const vs=pv.map((p,i)=>(f.valores||[]).find(v=>v&&v.proveedor===p)||(f.valores||[])[i]||{}),ts=vs.map(v=>v&&v.total!=null&&!isNaN(+v.total)?+v.total:null),mn=Math.min(...ts.filter(x=>x!=null));
+   return '<tr><td style="text-align:left">'+esc(f.item||'')+'</td>'+vs.map((v,i)=>'<td>'+(ts[i]==null?'<span class="ut-neg">No cotiza</span>':'<b'+(ts.filter(x=>x!=null).length>1&&ts[i]===mn?' class="ut-pos"':'')+'>'+ars(ts[i])+'</b><div class="sub" style="font-size:10.5px">'+(v.cantidad!=null?f0(+v.cantidad)+' '+esc(v.unidad||'')+' × '+N(v.precio_unitario):'')+(v.nota?'<br>'+esc(v.nota):'')+'</div>')+'</td>').join('')+'</tr>'}).join('')+
+  '<tr><td style="text-align:left"><b>Total cotizado</b></td>'+qs.map(q=>'<td><b>'+ars(tq(q))+'</b></td>').join('')+'</tr>'+
+  ((r.totales||[]).some(t=>t&&t.total_comparable!=null)?'<tr><td style="text-align:left"><b>Total comparable</b></td>'+pv.map((p,i)=>{const t=(r.totales||[]).find(x=>x&&x.proveedor===p)||(r.totales||[])[i]||{};return '<td><b>'+N(t.total_comparable)+'</b></td>'}).join('')+'</tr>':'')+'</tbody></table></div>';
+  const ac=(r.totales||[]).filter(t=>t&&t.aclaracion);if(ac.length)h+='<div class="sub" style="margin-bottom:10px">'+ac.map(t=>'<b>'+esc(t.proveedor||'')+':</b> '+esc(t.aclaracion)).join('<br>')+'</div>'}
+ const fa=(r.faltantes||[]).filter(x=>x&&(x.falta||[]).length);if(fa.length)h+='<b>Lo que le falta a cada uno</b><ul style="margin:6px 0 10px;padding-left:18px">'+fa.map(x=>'<li><b>'+esc(x.proveedor||'')+':</b> '+x.falta.map(esc).join(', ')+'</li>').join('')+'</ul>';
+ if(r.recomendacion)h+='<div style="margin:8px 0;padding:10px 12px;border-radius:12px;border:1px solid var(--gold)"><span class="sub">Recomendación</span><div style="margin-top:4px">'+esc(r.recomendacion)+'</div></div>';
+ if((r.preguntas||[]).length)h+='<b>Qué pedirles para emparejar</b><ul style="margin:6px 0 0;padding-left:18px">'+r.preguntas.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>';
+ return h+'</div>'}
+window.kcmpHtml=function(o){const cz=CZ(o),gs=[...new Set(cz.map(q=>q.g))];
+ let h='<div class="card kcz"><b>Comparativa de presupuestos</b><div class="sub">La idea es tener 3 presupuestos por cada pedido. Con 2 ya se pueden comparar: la IA revisa si cotizan lo mismo (manzana con manzana) y cuál conviene.</div>';
+ if(!gs.length)h+='<div class="sub" style="margin-top:8px">Todavía no hay presupuestos guardados. Subí uno con “Subir presupuesto (PDF)” y elegí “Guardar para comparar”.</div>';
+ gs.forEach(g=>{const qs=cz.filter(q=>q.g===g),mn=Math.min(...qs.map(tq)),c=CM(o)[g];
+  h+='<div style="margin-top:12px;border:1px solid var(--line);border-radius:14px;padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:16px">'+esc(g)+'</b><span class="'+(qs.length>=3?'ut-pos':'ut-neg')+'" style="font-weight:700">'+qs.length+' de 3 presupuestos</span></div>'+
+  qs.map(q=>'<div class="row" style="gap:8px"><span style="flex:1;min-width:0"><b>'+esc(q.prov)+'</b><span class="pm">'+(q.fecha?esc(q.fecha)+' · ':'')+q.items.length+' ítem'+(q.items.length===1?'':'s')+(q.iva===1?' · con IVA':q.iva===0?' · sin IVA':' · no aclara IVA')+(q.mon==='USD'?' · cotizó en U$s':'')+'</span></span><b'+(qs.length>1&&tq(q)===mn?' class="ut-pos"':'')+'>'+ars(tq(q))+'</b><button class="btn ghost sm" data-kcuse="'+q.id+'" title="Cargar sus ítems en Compras">Elegir</button><button class="btn ghost sm x" data-kcdel="'+q.id+'" title="Quitar">✕</button></div>').join('')+
+  '<div class="tools" style="margin-top:10px">'+(qs.length>=2?'<button class="btn gold sm" data-kcmp="'+esc(g)+'">'+(c?'Volver a comparar':'Comparar')+'</button>':'<span class="sub">Falta al menos un presupuesto más para comparar.</span>')+'</div>'+(c?resHtml(g,qs,c):'')+'</div>'});
+ return h+'</div>'};
+document.addEventListener('click',e=>{const t=e.target;if(!t.closest)return;let b;
  if(t.closest('#kpdf')){const i=document.getElementById('kpdff');if(i){i.value='';i.click()}}
- if(t.closest('[data-kx]'))cerrar();if(t.closest('[data-kok]'))cargar()});
+ if(t.closest('[data-kx]'))cerrar();if(t.closest('[data-kok]'))cargar();if(t.closest('[data-kguardar]'))guardar();
+ if((b=t.closest('[data-kcmp]')))comparar(b.dataset.kcmp);
+ if((b=t.closest('[data-kcdel]'))){const o=O(),q=CZ(o).find(x=>x.id===b.dataset.kcdel);if(q){window._kcd=q.id;ov('<b>¿Quitar este presupuesto?</b><div class="sub" style="margin:8px 0">'+esc(q.prov)+' · '+esc(q.g)+' · '+ars(tq(q))+'</div><div class="tools"><button class="btn gold sm" data-kcdelok>Quitar</button><button class="btn sm" data-kx>Cancelar</button></div>')}}
+ if(t.closest('[data-kcdelok]')){const o=O(),q=CZ(o).find(x=>x.id===window._kcd);if(q){o.cotiz=CZ(o).filter(x=>x!==q);if(!o.cotiz.some(x=>x.g===q.g))delete CM(o)[q.g];save();render()}cerrar()}
+ if((b=t.closest('[data-kcuse]'))){const o=O(),q=CZ(o).find(x=>x.id===b.dataset.kcuse);if(q){window._kcu=q.id;ov('<b>¿Elegir a '+esc(q.prov)+'?</b><div class="sub" style="margin:8px 0">Voy a cargar sus '+q.items.length+' ítems en Compras, con su precio, en estado “Cotizando”. Total '+ars(tq(q))+'.</div><div class="tools"><button class="btn gold sm" data-kcuseok>Cargar en Compras</button><button class="btn sm" data-kx>Cancelar</button></div>')}}
+ if(t.closest('[data-kcuseok]')){const o=O(),q=CZ(o).find(x=>x.id===window._kcu);if(q){aCompras(o,q.items,q.prov);save();render();ov('<b>Listo</b><div class="sub" style="margin:8px 0">Cargué los '+q.items.length+' ítems de '+esc(q.prov)+' en Compras.</div><button class="btn gold sm" data-kx>Cerrar</button>')}}
+});
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='kpdff'&&e.target.files[0])leer(e.target.files[0])});
+try{render()}catch(e){}
 })();
 </script>
 <script id="gfabmove">
