@@ -39,6 +39,7 @@ textarea{min-height:76px;resize:vertical}
 button{width:100%;padding:15px;border-radius:999px;border:0;background:linear-gradient(135deg,var(--gold2),var(--gold));color:#1a1408;font-size:17px;font-weight:700;cursor:pointer}
 button:disabled{opacity:.55}
 .err{color:var(--bad);font-size:14px;margin-top:10px;min-height:1em}
+.doc{display:block;margin-top:8px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;color:var(--ink);text-decoration:none;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .okb{text-align:center;padding:30px 16px}
 .okb .ic{width:64px;height:64px;border-radius:50%;background:var(--ok);color:#fff;font-size:34px;line-height:64px;margin:0 auto 14px}
 </style>
@@ -65,20 +66,21 @@ function pintar(){const it=P.items||[];
  A.innerHTML='<div class="card"><span class="sub">Pedido de cotización</span><h1>'+esc(P.g||'Pedido')+'</h1>'+(P.obra?'<div class="sub">Obra: '+esc(P.obra)+'</div>':'')+
  '<div class="kv">'+(P.entrega?'<span>Entrega requerida</span><b>'+esc(P.entrega)+'</b>':'')+(P.lugar?'<span>Lugar de entrega</span><b>'+esc(P.lugar)+'</b>':'')+(P.pago?'<span>Forma de pago propuesta</span><b>'+esc(P.pago)+'</b>':'')+
  '<span>Precios</span><b>'+(P.iva==='con'?'Finales, con IVA incluido':'Sin IVA (el IVA se informa aparte)')+'</b>'+(P.hasta?'<span>Cotizar hasta el</span><b>'+esc(fecha(P.hasta))+'</b>':'')+'</div>'+(P.notas?'<div class="sub" style="margin-top:12px;white-space:pre-wrap">'+esc(P.notas)+'</div>':'')+'</div>'+
+ ((P.docs||[]).length?'<div class="card"><h2>Documentación</h2><div class="sub">Planos, planillas y fotos para cotizar. Tocá para abrir o descargar.</div>'+P.docs.map(d=>/^https:\/\//.test(d.u||'')?'<a class="doc" href="'+esc(d.u)+'" target="_blank" rel="noopener">📎 '+esc(d.n||'Archivo')+'</a>':'').join('')+'</div>':'')+
  '<div class="card"><h2>Tu empresa</h2><label>Razón social o nombre *<input id="prov" autocomplete="organization"></label><div class="g2"><label>Persona de contacto<input id="cont" autocomplete="name"></label><label>Teléfono o WhatsApp<input id="tel" inputmode="tel" autocomplete="tel"></label></div></div>'+
  '<div class="card"><h2>Precios</h2><div class="g2"><label>Moneda<select id="mon"><option value="ARS">Pesos</option><option value="USD">Dólares (U$s)</option></select></label><label>IVA<select id="iva"><option value="sin"'+(P.iva==='con'?'':' selected')+'>Mis precios son sin IVA</option><option value="con"'+(P.iva==='con'?' selected':'')+'>Mis precios incluyen IVA</option></select></label></div><label>Alícuota de IVA<select id="ivap"><option value="21">21%</option><option value="10.5">10,5%</option><option value="0">Exento / no corresponde</option></select></label><div style="margin-top:14px">'+
- it.map((x,i)=>'<div class="it"><b>'+esc(x.n)+'</b><span class="q">'+f0(x.q)+' '+esc(x.u||'')+'</span><div class="r"><label>Precio unitario<input data-pu="'+i+'" inputmode="decimal" placeholder="Dejalo vacío si no lo cotizás"></label><label>Marca, modelo u observación<input data-ob="'+i+'"></label></div><div class="t" data-st="'+i+'"></div></div>').join('')+
+ it.map((x,i)=>'<div class="it"><b>'+esc(x.n)+'</b><span class="q">'+f0(x.q)+' '+esc(x.u||'')+(x.m?' · Medidas: '+esc(x.m):'')+'</span><div class="r"><label>Precio unitario<input data-pu="'+i+'" inputmode="decimal" placeholder="Dejalo vacío si no lo cotizás"></label><label>Marca, modelo u observación<input data-ob="'+i+'"></label></div><div class="t" data-st="'+i+'"></div></div>').join('')+
  '</div><div class="tot"><span>Total</span><span id="tot">—</span></div><div class="sub" id="totn" style="text-align:right"></div></div>'+
  '<div class="card"><h2>Condiciones</h2><div class="g2"><label>Plazo de entrega *<input id="ent" placeholder="Ej.: 15 días desde la orden"></label><label>Validez de la oferta<input id="val" placeholder="Ej.: 10 días"></label></div><div class="g2"><label>Anticipo que pedís (%)<input id="ant" inputmode="numeric" placeholder="0"></label><label>Flete hasta la obra<select id="fle"><option value="">Elegí</option><option value="incluido">Incluido en el precio</option><option value="no incluido">No incluido</option></select></label></div><label>Forma de pago<input id="pago" placeholder="Ej.: anticipo y saldo contra entrega"></label><label>Aclaraciones<textarea id="notas" placeholder="Lo que incluye, lo que no incluye, alternativas…"></textarea></label></div>'+
  '<button id="env">Enviar cotización</button><div class="err" id="err"></div>';
  A.addEventListener('input',e=>{const t=e.target;if(t.dataset&&t.dataset.pu!==undefined){const v=t.value.replace(/[^\d,]/g,''),p=v.split(','),e0=p[0].replace(/^0+(?=\d)/,'').replace(/\B(?=(\d{3})+(?!\d))/g,'.');t.value=p.length>1?e0+','+p[1].slice(0,2):e0}calc()});
- A.addEventListener('change',calc);document.getElementById('env').onclick=enviar}
+ A.addEventListener('change',calc);const eb=document.getElementById('env');let pd=0;eb.onclick=enviar;eb.addEventListener('pointerdown',()=>{pd=Date.now()});document.addEventListener('click',e=>{if(e.target!==eb&&Date.now()-pd<1500&&!(e.target.closest&&e.target.closest('input,select,textarea,a,label,button'))){pd=0;enviar()}})}
 function calc(){const it=P.items||[],m=document.getElementById('mon').value==='USD'?'U$s ':'$ ';let T=0,n=0;
  it.forEach((x,i)=>{const pu=num(A.querySelector('[data-pu="'+i+'"]').value),st=A.querySelector('[data-st="'+i+'"]');if(pu){T+=pu*x.q;n++;st.textContent='Subtotal: '+m+f0(pu*x.q)}else st.textContent=''});
  document.getElementById('tot').textContent=n?m+f0(T):'—';
  const iv=document.getElementById('iva').value,pc=+document.getElementById('ivap').value;
  document.getElementById('totn').textContent=n?(iv==='con'?'IVA incluido':pc?'Más IVA '+String(pc).replace('.',',')+'%: '+m+f0(T*pc/100)+' · Total con IVA '+m+f0(T*(1+pc/100)):'Sin IVA'):''}
-function enviar(){const E=document.getElementById('err'),v=i=>document.getElementById(i).value.trim(),it=P.items||[];E.textContent='';
+function enviar(){const b0=document.getElementById('env');if(!b0||b0.disabled)return;const E=document.getElementById('err'),v=i=>document.getElementById(i).value.trim(),it=P.items||[];E.textContent='';
  const items=it.map((x,i)=>({i,pu:num(A.querySelector('[data-pu="'+i+'"]').value),obs:A.querySelector('[data-ob="'+i+'"]').value.trim().slice(0,200)}));
  if(!v('prov')){E.textContent='Falta la razón social o el nombre de tu empresa.';document.getElementById('prov').focus();return}
  if(!items.some(x=>x.pu>0)){E.textContent='Cargá el precio de al menos un ítem.';return}

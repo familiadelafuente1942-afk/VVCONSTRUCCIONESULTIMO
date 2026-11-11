@@ -2035,37 +2035,45 @@ const CP=o=>(o.cotped=o.cotped||[]);
 const rnd=n=>{const a=new Uint8Array(n);crypto.getRandomValues(a);return [...a].map(x=>'abcdefghijklmnopqrstuvwxyz0123456789'[x%36]).join('')};
 const czApi=b=>fetch('/api/nexo2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json().then(j=>({s:r.status,j})));
 const plink=p=>location.origin+'/cotizar.html?p='+p.id;
-function npRead(){const S=window._np;if(!S||!document.getElementById('npg'))return;const v=i=>(document.getElementById(i)||{}).value||'';
- S.g=v('npg');S.entrega=v('npent');S.lugar=v('nplug');S.iva=v('npiva');S.pago=v('nppago');S.hasta=v('nphasta');S.notas=v('npnotas');
- S.rows.forEach((r,i)=>{const g=a=>(document.querySelector('#kpdfov ['+a+'="'+i+'"]')||{}).value||'';r.n=g('data-npn');r.q=parse(g('data-npq'));r.u=g('data-npu')})}
+function npRead(){const S=window._np;if(!S||!document.getElementById('npent'))return;const v=i=>(document.getElementById(i)||{}).value||'';
+ S.entrega=v('npent');S.lugar=v('nplug');S.iva=v('npiva');S.pago=v('nppago');S.hasta=v('nphasta');S.notas=v('npnotas');
+ S.rows.forEach((r,i)=>{const g=a=>(document.querySelector('#kpdfov ['+a+'="'+i+'"]')||{}).value||'';r.n=g('data-npn');r.q=parse(g('data-npq'));r.u=g('data-npu');r.m=g('data-npm')})}
 function npShow(){const S=window._np,o=O(),cp=o.compras.map((x,i)=>[x,i]).filter(([x])=>(x.n||'').trim()&&(x.es||'p')!=='r');
  ov('<b style="font-size:18px">Pedir cotización por link</b><div class="sub" style="margin:6px 0 10px">Armá el pedido una sola vez y mandale el mismo link a cada proveedor. Todos cotizan los mismos ítems y cantidades, así quedan comparables.</div>'+
- '<label class="fld">¿Qué se cotiza?<input class="t" id="npg" value="'+esc(S.g)+'" placeholder="Ej.: Aberturas de aluminio"></label>'+
- '<div style="margin-top:10px"><b>Ítems a cotizar</b></div>'+
- S.rows.map((r,i)=>'<div style="display:grid;grid-template-columns:minmax(0,1fr) 70px 64px 34px;gap:6px;margin-top:6px;align-items:center"><input class="t" data-npn="'+i+'" value="'+esc(r.n)+'" placeholder="Descripción, marca, medida"><input class="t" data-npq="'+i+'" inputmode="decimal" value="'+(r.q?f0(r.q):'')+'" placeholder="Cant."><input class="t" data-npu="'+i+'" value="'+esc(r.u)+'" placeholder="Unid."><button class="btn ghost sm x" data-npdel="'+i+'">✕</button></div>').join('')+
+ '<b>Ítems a cotizar</b>'+
+ S.rows.map((r,i)=>'<div style="border:1px solid var(--line);border-radius:14px;padding:10px;margin-top:8px"><div style="display:flex;gap:6px;align-items:center"><input class="t" data-npn="'+i+'" value="'+esc(r.n)+'" placeholder="Qué hay que cotizar: descripción, marca, modelo" style="flex:1;min-width:0;font-size:16px"><button class="btn sm" data-npdel="'+i+'" title="Quitar">✕</button></div>'+
+  '<div style="display:grid;grid-template-columns:1fr 1fr 1.6fr;gap:8px;margin-top:8px"><label class="fld">Cantidad<input class="t" data-npq="'+i+'" inputmode="decimal" value="'+(r.q?f0(r.q):'')+'" placeholder="0" style="font-size:16px"></label><label class="fld">Unidad<input class="t" data-npu="'+i+'" value="'+esc(r.u)+'" placeholder="u, m², ml" style="font-size:16px"></label><label class="fld">Medidas (si hace falta)<input class="t" data-npm="'+i+'" value="'+esc(r.m||'')+'" placeholder="Alto × ancho" style="font-size:16px"></label></div></div>').join('')+
  '<div class="tools" style="margin-top:8px"><button class="btn sm" data-nprow>+ Más ítems</button>'+(cp.length?'<select id="npadd" class="btn sm" style="width:auto;max-width:220px"><option value="">Traer de Compras…</option>'+cp.map(([x,i])=>'<option value="'+i+'">'+esc(x.n)+'</option>').join('')+'</select>':'')+'</div>'+
- '<label class="fld" style="margin-top:10px">Entrega requerida<input class="t" id="npent" value="'+esc(S.entrega)+'" placeholder="Ej.: antes del 15 de diciembre"></label>'+
+ '<div style="margin-top:14px"><b>Documentación para el proveedor</b><div class="sub">Planos, planillas de carpintería, fotos: todo lo que necesiten para cotizar. Lo van a poder ver y descargar desde el link.</div></div>'+
+ (S.docs.length?S.docs.map((d,i)=>'<div class="row" style="gap:8px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 '+esc(d.n)+'</span><button class="btn sm" data-npdocdel="'+i+'">✕</button></div>').join(''):'')+
+ '<div class="tools" style="margin-top:8px"><button class="btn sm" data-npdoc>'+(S.sub?'Subiendo '+S.sub+'…':'+ Subir planos, planillas o fotos')+'</button><input type="file" id="npfile" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xls,.xlsx,.csv,.doc,.docx,.dwg,.dxf,.zip,image/*,application/pdf" hidden></div>'+
+ '<label class="fld" style="margin-top:14px">Entrega requerida<input class="t" id="npent" value="'+esc(S.entrega)+'" placeholder="Ej.: antes del 15 de diciembre"></label>'+
  '<label class="fld" style="margin-top:8px">Lugar de entrega<input class="t" id="nplug" value="'+esc(S.lugar)+'"></label>'+
  '<label class="fld" style="margin-top:8px">Cómo queremos los precios<select id="npiva"><option value="sin"'+(S.iva==='con'?'':' selected')+'>Sin IVA (el IVA aparte)</option><option value="con"'+(S.iva==='con'?' selected':'')+'>Finales, con IVA incluido</option></select></label>'+
  '<label class="fld" style="margin-top:8px">Forma de pago y anticipo que proponemos<input class="t" id="nppago" value="'+esc(S.pago)+'" placeholder="Ej.: anticipo 30%, saldo contra entrega"></label>'+
  '<label class="fld" style="margin-top:8px">Cotizar hasta el<input type="date" id="nphasta" value="'+esc(S.hasta)+'"></label>'+
  '<label class="fld" style="margin-top:8px">Aclaraciones para el proveedor<input class="t" id="npnotas" value="'+esc(S.notas)+'"></label>'+
- '<div class="ut-neg" id="nperr" style="font-size:13px;margin-top:8px;min-height:1em"></div>'+
+ '<div class="ut-neg" id="nperr" style="font-size:13px;margin-top:8px;min-height:1em">'+esc(S.err||'')+'</div>'+
  '<div class="tools" style="margin-top:8px"><button class="btn gold sm" data-npok>Crear link</button><button class="btn sm" data-kx>Cancelar</button></div>')}
-function npNuevo(){const o=O();window._np={g:'',rows:[{n:'',q:0,u:''}],entrega:'',lugar:o.nombre||'',iva:'sin',pago:'',hasta:'',notas:''};npShow()}
-async function npCrear(){npRead();const S=window._np,o=O(),E=document.getElementById('nperr'),items=S.rows.filter(r=>(r.n||'').trim()&&r.q>0).map(r=>({n:r.n.trim().slice(0,200),q:r.q,u:(r.u||'').trim().slice(0,20)}));
- if(!S.g.trim()){E.textContent='Poné qué se cotiza.';return}if(!items.length){E.textContent='Cargá al menos un ítem con descripción y cantidad.';return}
- const id=rnd(14),k=rnd(24),g=S.g.trim(),ped={g,obra:o.nombre||'',items,entrega:S.entrega,lugar:S.lugar,iva:S.iva,pago:S.pago,hasta:S.hasta,notas:S.notas};
+function npNuevo(){const o=O();window._np={rows:[{n:'',q:0,u:'',m:''}],docs:[],sub:0,err:'',entrega:'',lugar:o.nombre||'',iva:'sin',pago:'',hasta:'',notas:''};npShow()}
+async function npSubir(files){const S=window._np;if(!S)return;npRead();S.err='';const L=[...files];S.sub=L.length;npShow();
+ for(const f of L){try{if(f.size>40e6)throw new Error('“'+f.name+'” pesa más de 40 MB');const u=await vUp(f,'cotiz',f.name);S.docs.push({n:f.name.slice(0,120),u})}catch(e){S.err='No se pudo subir: '+((e&&e.message)||f.name)}
+  if(window._np!==S)return;S.sub--;if(document.getElementById('npent')){npRead();npShow()}}}
+async function npCrear(){npRead();const S=window._np,o=O(),E=document.getElementById('nperr'),items=S.rows.filter(r=>(r.n||'').trim()&&r.q>0).map(r=>({n:r.n.trim().slice(0,200),q:r.q,u:(r.u||'').trim().slice(0,20),m:(r.m||'').trim().slice(0,80)}));
+ if(S.sub){E.textContent='Esperá a que terminen de subir los archivos.';return}
+ if(!items.length){E.textContent='Cargá al menos un ítem con descripción y cantidad.';return}
+ let g=items[0].n.slice(0,60)+(items.length>1?' y '+(items.length-1)+' más':'');const us=new Set([...CP(o).map(p=>p.g),...CZ(o).map(q=>q.g)]);if(us.has(g)){let k=2;while(us.has(g+' ('+k+')'))k++;g=g+' ('+k+')'}
+ const id=rnd(14),k=rnd(24),ped={g,obra:o.nombre||'',items,docs:S.docs,entrega:S.entrega,lugar:S.lugar,iva:S.iva,pago:S.pago,hasta:S.hasta,notas:S.notas};
  const b=document.querySelector('#kpdfov [data-npok]');if(b){b.disabled=true;b.textContent='Creando…'}
  try{const {s,j}=await czApi({op:'cz_crear',id,k,ped});if(s!==200||!j.ok)throw new Error((j&&j.error)||'No se pudo crear el link');
-  CP(o).push({id,k,g,items,iva:S.iva,f:new Date().toISOString().slice(0,10)});save();render();linkShow(CP(o)[CP(o).length-1],1)}
+  CP(o).push({id,k,g,items,docs:S.docs.length,iva:S.iva,f:new Date().toISOString().slice(0,10)});save();render();linkShow(CP(o)[CP(o).length-1],1)}
  catch(e){err('No se pudo crear el link',e)}}
 function linkShow(p,nuevo){ov('<b style="font-size:18px">'+(nuevo?'Link creado':'Link para proveedores')+'</b><div class="sub" style="margin:6px 0 10px">'+esc(p.g)+' · mandale este mismo link a cada proveedor. Cuando cotizan, las respuestas aparecen solas en la comparativa.</div><input class="t" id="kplk" readonly value="'+esc(plink(p))+'" onclick="this.select()"><div class="tools" style="margin-top:10px"><button class="btn gold sm" data-kpcopy="'+p.id+'">Copiar link</button><button class="btn sm" data-kpwa="'+p.id+'">Enviar por WhatsApp</button><button class="btn sm" data-kx>Cerrar</button></div>')}
 let _czT=0,_czB=0;
 async function czSync(force){const o=O(),ps=CP(o);if(!ps.length||_czB||(!force&&Date.now()-_czT<45000))return 0;_czB=1;_czT=Date.now();let n=0;
  try{for(const p of ps){const {s,j}=await czApi({op:'cz_leer',id:p.id,k:p.k});if(s!==200||!j.ok)continue;
   (j.resps||[]).forEach(r=>{const qid='L'+r.rid;if(CZ(o).some(q=>q.id===qid)||(p.ign||[]).includes(r.rid))return;const usdq=r.mon==='USD',k=usdq?(o.cot||0):1,nc=[];
-   const items=p.items.map((x,i)=>{const z=(r.items||[]).find(y=>y.i===i);if(!z||!(z.pu>0)){nc.push(x.n);return null}return {n:x.n+(z.obs?' · '+z.obs:''),q:x.q,u:x.u,r:'',pu:Math.round(z.pu*k)}}).filter(Boolean);
+   const items=p.items.map((x,i)=>{const z=(r.items||[]).find(y=>y.i===i);if(!z||!(z.pu>0)){nc.push(x.n);return null}return {n:x.n+(x.m?' · '+x.m:'')+(z.obs?' · '+z.obs:''),q:x.q,u:x.u,r:'',pu:Math.round(z.pu*k)}}).filter(Boolean);
    CZ(o).push({id:qid,g:p.g,prov:r.prov,fecha:new Date(r.t||Date.now()).toISOString().slice(0,10),mon:usdq?'USD':'ARS',iva:r.iva==='con'?1:0,tot:0,items,src:'link',
     cond:{plazo_entrega:r.ent||'',forma_pago:r.pago||'',anticipo:(r.ant||0)+'%',validez:r.val||'',flete:r.fle||'no dice',iva_alicuota:(r.ivap==null?'':r.ivap+'%'),aclaraciones:r.notas||'',no_cotiza:nc,contacto:r.cont||'',telefono:r.tel||''}});
    delete CM(o)[p.g];n++})}}catch(e){}
@@ -2076,7 +2084,7 @@ window.kcmpHtml=function(o){const cz=CZ(o),gs=[...new Set([...CP(o).map(p=>p.g),
  if(!gs.length)h+='<div class="sub" style="margin-top:8px">Todavía no hay pedidos ni presupuestos. Creá un link para que los proveedores coticen, o subí un presupuesto en PDF y elegí “Guardar para comparar”.</div>';
  gs.forEach(g=>{const qs=cz.filter(q=>q.g===g),mn=Math.min(...qs.map(tq)),c=CM(o)[g],pd=CP(o).find(p=>p.g===g);
   h+='<div style="margin-top:12px;border:1px solid var(--line);border-radius:14px;padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:16px">'+esc(g)+'</b><span class="'+(qs.length>=3?'ut-pos':'ut-neg')+'" style="font-weight:700">'+qs.length+' de 3 presupuestos</span></div>'+
-  (pd?'<div class="row" style="gap:8px;flex-wrap:wrap"><span style="flex:1;min-width:0">Link para proveedores<span class="pm">'+pd.items.length+' ítem'+(pd.items.length===1?'':'s')+' · creado el '+esc(pd.f||'')+'</span></span><button class="btn sm" data-kplink="'+pd.id+'">Ver link</button><button class="btn sm" data-kpsync>Buscar respuestas</button><button class="btn sm" data-kpdel="'+pd.id+'">✕ Borrar pedido</button></div>':'')+
+  (pd?'<div class="row" style="gap:8px;flex-wrap:wrap"><span style="flex:1;min-width:0">Link para proveedores<span class="pm">'+pd.items.length+' ítem'+(pd.items.length===1?'':'s')+(pd.docs?' · '+pd.docs+' archivo'+(pd.docs===1?'':'s'):'')+' · creado el '+esc(pd.f||'')+'</span></span><button class="btn sm" data-kplink="'+pd.id+'">Ver link</button><button class="btn sm" data-kpsync>Buscar respuestas</button><button class="btn sm" data-kpdel="'+pd.id+'">✕ Borrar pedido</button></div>':'')+
   qs.map(q=>'<div class="row" style="gap:8px"><span style="flex:1;min-width:0"><b>'+esc(q.prov)+'</b><span class="pm">'+(q.fecha?esc(q.fecha)+' · ':'')+q.items.length+' ítem'+(q.items.length===1?'':'s')+(q.iva===1?' · con IVA':q.iva===0?' · sin IVA':' · no aclara IVA')+(q.mon==='USD'?' · cotizó en U$s':'')+(q.src==='link'?' · por link'+(q.cond.plazo_entrega?' · entrega: '+esc(q.cond.plazo_entrega):'')+(q.cond.anticipo?' · anticipo '+esc(q.cond.anticipo):'')+((q.cond.no_cotiza||[]).length?' · no cotiza '+q.cond.no_cotiza.length:''):'')+'</span></span><b'+(qs.length>1&&tq(q)===mn?' class="ut-pos"':'')+'>'+ars(tq(q))+'</b><button class="btn sm" data-kcuse="'+q.id+'" title="Cargar sus ítems en Compras">Elegir</button><button class="btn sm" data-kcdel="'+q.id+'" title="Quitar">✕</button></div>').join('')+
   '<div class="tools" style="margin-top:10px">'+(qs.length>=2?'<button class="btn gold sm" data-kcmp="'+esc(g)+'">'+(c?'Volver a comparar':'Comparar')+'</button>':'<span class="sub">Falta al menos un presupuesto más para comparar.</span>')+'</div>'+(c?resHtml(g,qs,c):'')+'</div>'});
  return h+'</div>'};
@@ -2087,20 +2095,23 @@ document.addEventListener('click',e=>{const t=e.target;if(!t.closest)return;let 
  if(t.closest('[data-knp]'))npNuevo();
  if((b=t.closest('[data-kpdel]'))){const p=CP(O()).find(x=>x.id===b.dataset.kpdel);if(p){window._kpd=p.id;const n=CZ(O()).filter(q=>q.g===p.g).length;ov('<b>¿Borrar el pedido “'+esc(p.g)+'”?</b><div class="sub" style="margin:8px 0">El link deja de funcionar para los proveedores'+(n?' y se borran también los '+n+' presupuesto'+(n===1?'':'s')+' de este pedido':'')+'. No se puede deshacer.</div><div class="tools"><button class="btn gold sm" data-kpdelok>Borrar</button><button class="btn sm" data-kx>Cancelar</button></div>')}}
  if(t.closest('[data-kpdelok]')){const o=O(),p=CP(o).find(x=>x.id===window._kpd);if(p){czApi({op:'cz_crear',id:p.id,k:p.k,ped:{g:p.g},cerrado:true}).catch(()=>{});o.cotped=CP(o).filter(x=>x!==p);o.cotiz=CZ(o).filter(q=>q.g!==p.g);delete CM(o)[p.g];save();render()}cerrar()}
- if(t.closest('[data-nprow]')){npRead();window._np.rows.push({n:'',q:0,u:''});npShow()}
- if((b=t.closest('[data-npdel]'))){npRead();window._np.rows.splice(+b.dataset.npdel,1);if(!window._np.rows.length)window._np.rows.push({n:'',q:0,u:''});npShow()}
+ if(t.closest('[data-nprow]')){npRead();window._np.rows.push({n:'',q:0,u:'',m:''});npShow()}
+ if(t.closest('[data-npdoc]')){const i=document.getElementById('npfile');if(i&&!window._np.sub){i.value='';i.click()}}
+ if((b=t.closest('[data-npdocdel]'))){npRead();window._np.docs.splice(+b.dataset.npdocdel,1);npShow()}
+ if((b=t.closest('[data-npdel]'))){npRead();window._np.rows.splice(+b.dataset.npdel,1);if(!window._np.rows.length)window._np.rows.push({n:'',q:0,u:'',m:''});npShow()}
  if(t.closest('[data-npok]'))npCrear();
  if((b=t.closest('[data-kplink]'))){const p=CP(O()).find(x=>x.id===b.dataset.kplink);if(p)linkShow(p)}
  if((b=t.closest('[data-kpcopy]'))){const p=CP(O()).find(x=>x.id===b.dataset.kpcopy);if(p){const u=plink(p),ok=()=>{b.textContent='Copiado ✓'};if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(u).then(ok).catch(()=>{const i=document.getElementById('kplk');if(i){i.select();try{document.execCommand('copy');ok()}catch(x){}}});else{const i=document.getElementById('kplk');if(i){i.select();try{document.execCommand('copy');ok()}catch(x){}}}}}
  if((b=t.closest('[data-kpwa]'))){const p=CP(O()).find(x=>x.id===b.dataset.kpwa);if(p)window.open('https://wa.me/?text='+encodeURIComponent('Hola, te paso el pedido de cotización de Belfast ('+p.g+'). Podés cargar tus precios acá: '+plink(p)),'_blank')}
- if((b=t.closest('[data-kpsync]'))){b.textContent='Buscando…';czSync(1).then(n=>{if(!n){b.textContent='Sin respuestas nuevas'}})}
+ {const bs=t.closest('[data-kpsync]');if(bs){bs.textContent='Buscando…';czSync(1).then(n=>{if(!n)bs.textContent='Sin respuestas nuevas'})}}
  if((b=t.closest('[data-kcdel]'))){const o=O(),q=CZ(o).find(x=>x.id===b.dataset.kcdel);if(q){window._kcd=q.id;ov('<b>¿Quitar este presupuesto?</b><div class="sub" style="margin:8px 0">'+esc(q.prov)+' · '+esc(q.g)+' · '+ars(tq(q))+'</div><div class="tools"><button class="btn gold sm" data-kcdelok>Quitar</button><button class="btn sm" data-kx>Cancelar</button></div>')}}
  if(t.closest('[data-kcdelok]')){const o=O(),q=CZ(o).find(x=>x.id===window._kcd);if(q){if(q.src==='link'){const pd=CP(o).find(p=>p.g===q.g);if(pd)(pd.ign=pd.ign||[]).push(q.id.slice(1))}o.cotiz=CZ(o).filter(x=>x!==q);if(!o.cotiz.some(x=>x.g===q.g))delete CM(o)[q.g];save();render()}cerrar()}
  if((b=t.closest('[data-kcuse]'))){const o=O(),q=CZ(o).find(x=>x.id===b.dataset.kcuse);if(q){window._kcu=q.id;ov('<b>¿Elegir a '+esc(q.prov)+'?</b><div class="sub" style="margin:8px 0">Voy a cargar sus '+q.items.length+' ítems en Compras, con su precio, en estado “Cotizando”. Total '+ars(tq(q))+'.</div><div class="tools"><button class="btn gold sm" data-kcuseok>Cargar en Compras</button><button class="btn sm" data-kx>Cancelar</button></div>')}}
  if(t.closest('[data-kcuseok]')){const o=O(),q=CZ(o).find(x=>x.id===window._kcu);if(q){aCompras(o,q.items,q.prov);save();render();ov('<b>Listo</b><div class="sub" style="margin:8px 0">Cargué los '+q.items.length+' ítems de '+esc(q.prov)+' en Compras.</div><button class="btn gold sm" data-kx>Cerrar</button>')}}
 });
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='kpdff'&&e.target.files[0])leer(e.target.files[0])});
-document.addEventListener('change',e=>{if(e.target&&e.target.id==='npadd'&&e.target.value!==''){npRead();const x=O().compras[+e.target.value];if(x){const S=window._np;if(S.rows.length===1&&!S.rows[0].n&&!S.rows[0].q)S.rows.pop();S.rows.push({n:x.n,q:x.q||0,u:x.u||''});if(!S.g)S.g=x.r||''}npShow()}});
+document.addEventListener('change',e=>{if(e.target&&e.target.id==='npadd'&&e.target.value!==''){npRead();const x=O().compras[+e.target.value];if(x){const S=window._np;if(S.rows.length===1&&!S.rows[0].n&&!S.rows[0].q)S.rows.pop();S.rows.push({n:x.n,q:x.q||0,u:x.u||'',m:''})}npShow()}
+ if(e.target&&e.target.id==='npfile'&&e.target.files.length)npSubir(e.target.files)});
 try{render()}catch(e){}
 })();
 </script>
