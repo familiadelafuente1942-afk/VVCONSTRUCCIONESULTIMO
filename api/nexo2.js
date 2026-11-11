@@ -142,6 +142,37 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true }); return;
     }
 
+    // ===== Pedidos de cotización a proveedores (link público "Cotizador Belfast") =====
+    // El proveedor solo puede ver el pedido (cz_ver) y enviar su cotización (cz_resp). Leer las respuestas pide la clave k del pedido.
+    if (typeof b.op === "string" && b.op.startsWith("cz_")) {
+      const id = String(b.id || "");
+      if (!/^[a-z0-9]{10,24}$/.test(id)) { res.status(400).json({ error: "Pedido inválido" }); return; }
+      const K = "cotped_" + id;
+      const cur = await leer(H, K);
+      if (b.op === "cz_crear") {
+        if (typeof b.k !== "string" || b.k.length < 10 || b.k.length > 60 || JSON.stringify(b.ped || {}).length > 60000) { res.status(400).json({ error: "Datos inválidos" }); return; }
+        if (cur && cur.k !== b.k) { res.status(403).json({ error: "No autorizado" }); return; }
+        await escribir(H, K, { k: b.k, ped: b.ped || {}, resps: (cur && cur.resps) || [], cerrado: !!b.cerrado, t: Date.now() });
+        res.status(200).json({ ok: true }); return;
+      }
+      if (!cur) { res.status(404).json({ error: "El pedido no existe" }); return; }
+      if (b.op === "cz_ver") { res.status(200).json({ ok: true, ped: cur.ped || {}, cerrado: !!cur.cerrado }); return; }
+      if (b.op === "cz_resp") {
+        if (cur.cerrado) { res.status(403).json({ error: "Este pedido ya está cerrado" }); return; }
+        const r = b.resp || {};
+        if (typeof r !== "object" || JSON.stringify(r).length > 40000 || !String(r.prov || "").trim()) { res.status(400).json({ error: "Datos inválidos" }); return; }
+        if ((cur.resps || []).length >= 20) { res.status(429).json({ error: "El pedido ya recibió el máximo de cotizaciones" }); return; }
+        cur.resps = [...(cur.resps || []), { ...r, rid: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), t: Date.now() }];
+        await escribir(H, K, cur);
+        res.status(200).json({ ok: true }); return;
+      }
+      if (b.op === "cz_leer") {
+        if (cur.k !== b.k) { res.status(403).json({ error: "No autorizado" }); return; }
+        res.status(200).json({ ok: true, resps: cur.resps || [] }); return;
+      }
+      res.status(400).json({ error: "Operación inválida" }); return;
+    }
+
     if (b.op === "bar_up_url") {
       // Barracas · Visita: URL firmada de subida directa (fotos y audio de la visita)
       if (b.app !== "barracas" && b.app !== "paseo") { res.status(400).json({ error: "App inválida" }); return; }
