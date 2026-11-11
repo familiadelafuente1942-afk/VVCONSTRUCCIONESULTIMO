@@ -1200,7 +1200,7 @@ header.top .who>span:first-child{display:none!important}header.top #who,header.t
 @media(max-width:620px){.tcard b{font-size:14.5px}}
 #gfab span{font-weight:500!important}#gfab span.giaT{writing-mode:horizontal-tb!important;font-size:12px;margin-top:2px}
 #gfab span.nm{font-weight:500}
-#gfab{touch-action:none;-webkit-user-select:none;user-select:none;cursor:grab}
+#gfab{-webkit-user-select:none;user-select:none}
 #gfab.hz{flex-direction:row!important;width:auto!important;padding:10px 16px!important;gap:6px!important;border-radius:999px!important}
 #gfab.hz span{writing-mode:horizontal-tb!important;text-orientation:mixed!important;font-size:14px!important;font-weight:600!important;line-height:1.1!important;margin:0!important}
 #gfab.hz img{width:28px!important;height:28px!important}
@@ -1958,7 +1958,7 @@ function save(){try{var r=f.getBoundingClientRect();localStorage.setItem(K,JSON.
 try{var s=JSON.parse(localStorage.getItem(K)||'null');if(s){if(s.hz)f.classList.add('hz');put(s.x,s.y)}}catch(e){}
 addEventListener('resize',function(){var r=f.getBoundingClientRect();if(f.style.left)put(r.left,r.top)});
 var d=null,moved=false,lp=0,long=false;
-f.addEventListener('pointerdown',function(e){var r=f.getBoundingClientRect();d={sx:e.clientX,sy:e.clientY,ox:r.left,oy:r.top};moved=false;long=false;try{f.setPointerCapture(e.pointerId)}catch(x){}
+f.addEventListener('pointerdown',function(e){if(window.__gfabFijo!==false)return;var r=f.getBoundingClientRect();d={sx:e.clientX,sy:e.clientY,ox:r.left,oy:r.top};moved=false;long=false;try{f.setPointerCapture(e.pointerId)}catch(x){}
  clearTimeout(lp);lp=setTimeout(function(){if(d&&!moved){long=true;f.classList.toggle('hz');var r2=f.getBoundingClientRect();put(r2.left,r2.top);save();if(navigator.vibrate)navigator.vibrate(30)}},650)});
 f.addEventListener('pointermove',function(e){if(!d)return;var dx=e.clientX-d.sx,dy=e.clientY-d.sy;if(!moved&&Math.abs(dx)+Math.abs(dy)>8){moved=true;clearTimeout(lp)}if(moved){e.preventDefault();put(d.ox+dx,d.oy+dy)}});
 function fin(){clearTimeout(lp);if(d&&moved)save();d=null}
