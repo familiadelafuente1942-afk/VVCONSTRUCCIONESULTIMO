@@ -178,7 +178,7 @@ export default async function handler(req, res) {
           gg: 0, ut: 0, imp: 0, cot: 0, m2c: o.m2c || 0, m2v: o.m2v || 0, lote: 0, plus: 0, zona: 0,
           pre: rol === "estudio" ? o.pre : undefined,
           cf: { ini: cf.ini, n: cf.n, curva: cf.curva, v: cf.v, it: cf.it, bx: cf.bx, es: cf.es, av: cf.av, esI: cf.esI, avI: cf.avI, pre: 100, ant: 0, cuo: 0, stop: 0 },
-          seg: o.seg || { it: [] },
+          seg: { it: ((o.seg && o.seg.it) || []).filter((x) => rol === "estudio" || x.k !== "a") },
           pub: rol === "estudio" ? (o.pub || null) : null,
         };
       });
