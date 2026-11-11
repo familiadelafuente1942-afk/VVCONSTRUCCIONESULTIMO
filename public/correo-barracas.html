@@ -1191,6 +1191,7 @@ header.top{position:fixed!important;top:0;left:0;right:0;width:100%;max-width:no
 .app{padding-top:var(--hh,150px);border-inline:0!important}
 nav.bottom .in{margin-top:calc(var(--hh,150px) + 20px)!important}
 @media print{header.top{position:static!important}.app{padding-top:0}}
+#giaH,.gmount{scroll-margin-top:calc(var(--hh,150px) + 12px)}
 /* foto grande y a 2 mm de los iconos */
 body{padding-left:98px!important}
 .app{margin:0!important;max-width:none!important;width:100%}
@@ -1768,7 +1769,7 @@ function gSolo(on){const ov=document.getElementById('gsoloov');if(!ov)return;ov.
   if(d.gapp!==undefined){gSolo(false);return}
   if(d.guser!==undefined){try{localStorage.setItem(GUK,d.guser)}catch(e){}renderGuia();return}
   if(d.gcambiar!==undefined){try{localStorage.removeItem(GUK)}catch(e){}window._gm=[];window._gid=null;renderGuia();return}
-  if(t.id==='gfab'){const home=!document.getElementById('h').classList.contains('hide'),mt=document.getElementById('giaH');if(home&&mt){mt.scrollIntoView({behavior:'smooth',block:'start'});const q=mt.querySelector('.gq');if(q)q.focus()}else{p.hidden=false;renderGuia();setTimeout(()=>{const q=p.querySelector('.gq');q&&q.focus()},50)}}
+  if(t.id==='gfab'){const home=!document.getElementById('h').classList.contains('hide'),mt=document.getElementById('giaH');if(home&&mt){mt.scrollIntoView({behavior:'smooth',block:'start'});const q=mt.querySelector('.gq');if(q)q.focus({preventScroll:true})}else{p.hidden=false;renderGuia();setTimeout(()=>{const q=p.querySelector('.gq');q&&q.focus()},50)}}
   else if(t.id==='gx')p.hidden=true;
   else if(d.gsug!==undefined)guiaAsk(d.gsug);
   else if(d.gpdf!==undefined)guiaPdf(window._gm[+d.gpdf].d);
