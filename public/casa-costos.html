@@ -1698,7 +1698,7 @@ window.addEventListener('click',function(e){
  if(OK)return;var el=e.target.closest&&e.target.closest('button[data-t="p"],button[data-t="k"],#rubdet > summary');if(!el)return;
  if(el.tagName==='SUMMARY'&&el.parentNode.open)return;
  e.preventDefault();e.stopImmediatePropagation();
- pedir(function(){if(el.tagName==='SUMMARY'){el.parentNode.open=true;window._rubOpen=true}else el.click()});
+ pedir(function(){if(el.tagName==='SUMMARY'){el.parentNode.open=true;window._rubOpen=true;return}var t=el.dataset.t,b=document.createElement('button');b.dataset.t=t;b.style.display='none';document.body.appendChild(b);b.click();b.remove();if(t==='p'){window._rubOpen=true;var dd=document.getElementById('rubdet');if(dd)dd.open=true}});
 },true);
 })();
 </script>
