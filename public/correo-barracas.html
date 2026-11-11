@@ -1191,16 +1191,10 @@ header.top{position:fixed!important;top:0;left:0;right:0;width:100%;max-width:no
 .app{padding-top:var(--hh,150px);border-inline:0!important}
 nav.bottom .in{margin-top:calc(var(--hh,150px) + 20px)!important}
 @media print{header.top{position:static!important}.app{padding-top:0}}
-nav.bottom{flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;padding-top:calc(var(--hh,150px) + 14px)!important;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-nav.bottom::-webkit-scrollbar{display:none}
-nav.bottom .in{margin-top:0!important;flex:none}
-nav.bottom #gfab{position:static!important;flex:none!important;width:3.1em!important;margin:0 0 .75em!important;box-sizing:border-box;pointer-events:auto;flex-direction:column!important;align-items:center;justify-content:flex-start;gap:.5em!important;padding:.55em .25em .9em!important;border-radius:999px!important;font-size:13px!important}
-nav.bottom #gfab span{display:block!important;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:0;line-height:.95;font-weight:500;font-size:.85em;white-space:nowrap}
-nav.bottom #gfab span.giaT{writing-mode:horizontal-tb!important;font-size:.9em;margin-top:.1em}
-nav.bottom #gfab img{width:2.25em!important;height:2.25em!important}
-nav.bottom #gfab.hz{width:auto!important;flex-direction:row!important;padding:.6em .8em!important;gap:.4em!important}
-nav.bottom #gfab.hz span{writing-mode:horizontal-tb!important;font-size:.8em!important}
-nav.bottom #gfab.hz img{width:1.6em!important;height:1.6em!important}
+#gfab{position:fixed!important;left:calc(8px + 44px - 25px)!important;right:auto!important;bottom:auto!important;top:calc(var(--hh,150px) + 80px)!important;z-index:40;width:50px;box-sizing:border-box;flex-direction:column!important;align-items:center;justify-content:flex-start;gap:8px!important;padding:8px 4px 14px!important;border-radius:999px!important;font-size:13px!important}
+#gfab span{display:block!important;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:0;line-height:.95;font-weight:800;font-size:11px;white-space:nowrap}#gfab img{width:36px!important;height:36px!important}
+nav.bottom .in{margin-top:calc(var(--hh,150px) + 205px)!important}
+@media(max-width:620px){#gfab{left:calc(8px + 33px - 25px)!important}}
 header.top .who>span:first-child{display:none!important}header.top #who,header.top .who{justify-content:flex-end!important;gap:8px}
 .tcard{text-align:center;padding:9px 14px!important;margin:0 0 10px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}.tcard b{font-size:16px;font-weight:600}.tcard .rol{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:600}
 @media(max-width:620px){.tcard b{font-size:14.5px}}
@@ -1776,7 +1770,7 @@ const GMK='bb_barracas_modo_v1';const gModo=()=>{try{return localStorage.getItem
 function gSolo(on){const ov=document.getElementById('gsoloov');if(!ov)return;ov.hidden=!on;document.body.style.overflow=on?'hidden':'';try{localStorage.setItem(GMK,on?'guia':'app')}catch(e){}if(on){gParar&&0;renderGuia();window.scrollTo(0,0)}}
 (function(){const f=document.createElement('button');f.id='gfab';f.setAttribute('aria-label','Belfast IA');f.innerHTML='<img src="/belfast-logo-barracas.png" alt="" width="26" height="26" style="border-radius:50%"><span class="nm">Belfast</span><span class="giaT">IA</span>';
  const p=document.createElement('div');p.id='gpan';p.hidden=true;p.innerHTML='<div class="gin"><button class="btn ghost sm" id="gx" style="align-self:flex-end">✕ Cerrar</button><div class="gmount"></div></div>';
- const ov=document.createElement('div');ov.id='gsoloov';ov.hidden=true;ov.innerHTML='<div class="gsbar"><img src="/belfast-logo-barracas.png" alt="" width="40" height="40" style="border-radius:50%"><b>Sucursal N°10 Barracas · Correo Argentino</b></div><div class="gmount" data-solo="1"></div>';const add=()=>{{const nv=document.querySelector('nav.bottom');if(nv)nv.insertBefore(f,nv.firstChild);else document.body.appendChild(f)}document.body.appendChild(p);document.body.appendChild(ov);if(gModo()==='guia')gSolo(true)};if(document.body)add();else document.addEventListener('DOMContentLoaded',add);
+ const ov=document.createElement('div');ov.id='gsoloov';ov.hidden=true;ov.innerHTML='<div class="gsbar"><img src="/belfast-logo-barracas.png" alt="" width="40" height="40" style="border-radius:50%"><b>Sucursal N°10 Barracas · Correo Argentino</b></div><div class="gmount" data-solo="1"></div>';const add=()=>{document.body.appendChild(f);document.body.appendChild(p);document.body.appendChild(ov);if(gModo()==='guia')gSolo(true)};if(document.body)add();else document.addEventListener('DOMContentLoaded',add);
  document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('#gfab,#gx,[data-gsug],[data-gpdf],[data-gspk],[data-gcopy],[data-gvoz],[data-gman],[data-ghist],[data-gnew],[data-gopen],[data-gdelc],[data-gmic],[data-guser],[data-gcambiar],[data-gsolo],[data-gapp]');if(!t)return;const d=t.dataset;
   if(d.gsolo!==undefined){gSolo(true);return}
   if(d.gapp!==undefined){gSolo(false);return}
@@ -1961,8 +1955,8 @@ window.numVoz=numVoz;
 (function(){var K='bb_gfab_pos_v1',f=document.getElementById('gfab');if(!f)return;
 function put(x,y){var w=f.offsetWidth,h=f.offsetHeight;x=Math.max(4,Math.min(innerWidth-w-4,x));y=Math.max(4,Math.min(innerHeight-h-4,y));f.style.setProperty('left',x+'px','important');f.style.setProperty('top',y+'px','important');f.style.setProperty('right','auto','important');f.style.setProperty('bottom','auto','important');return[x,y]}
 function save(){try{var r=f.getBoundingClientRect();localStorage.setItem(K,JSON.stringify({x:r.left,y:r.top,hz:f.classList.contains('hz')?1:0}))}catch(e){}}
-try{var s=JSON.parse(localStorage.getItem(K)||'null');if(s){if(s.hz)f.classList.add('hz')}}catch(e){}
-
+try{var s=JSON.parse(localStorage.getItem(K)||'null');if(s){if(s.hz)f.classList.add('hz');put(s.x,s.y)}}catch(e){}
+addEventListener('resize',function(){var r=f.getBoundingClientRect();if(f.style.left)put(r.left,r.top)});
 var d=null,moved=false,lp=0,long=false;
 f.addEventListener('pointerdown',function(e){if(window.__gfabFijo!==false)return;var r=f.getBoundingClientRect();d={sx:e.clientX,sy:e.clientY,ox:r.left,oy:r.top};moved=false;long=false;try{f.setPointerCapture(e.pointerId)}catch(x){}
  clearTimeout(lp);lp=setTimeout(function(){if(d&&!moved){long=true;f.classList.toggle('hz');var r2=f.getBoundingClientRect();put(r2.left,r2.top);save();if(navigator.vibrate)navigator.vibrate(30)}},650)});
