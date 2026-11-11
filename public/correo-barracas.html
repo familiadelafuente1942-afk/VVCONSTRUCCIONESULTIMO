@@ -2067,7 +2067,7 @@ async function npCrear(){npRead();const S=window._np,o=O(),E=document.getElement
  const id=rnd(14),k=rnd(24),ped={g,obra:o.nombre||'',items,docs:S.docs,entrega:S.entrega,lugar:S.lugar,iva:S.iva,pago:S.pago,hasta:S.hasta,notas:S.notas};
  const b=document.querySelector('#kpdfov [data-npok]');if(b){b.disabled=true;b.textContent='Creando…'}
  try{const {s,j}=await czApi({op:'cz_crear',id,k,ped});if(s!==200||!j.ok)throw new Error((j&&j.error)||'No se pudo crear el link');
-  CP(o).push({id,k,g,items,docs:S.docs.length,iva:S.iva,f:new Date().toISOString().slice(0,10)});save();render();linkShow(CP(o)[CP(o).length-1],1)}
+  CP(o).push({id,k,g,items,docs:S.docs.length,iva:S.iva,f:new Date().toISOString().slice(0,10)});save();render();pushSync();linkShow(CP(o)[CP(o).length-1],1)}
  catch(e){err('No se pudo crear el link',e)}}
 function linkShow(p,nuevo){ov('<b style="font-size:18px">'+(nuevo?'Link creado':'Link para proveedores')+'</b><div class="sub" style="margin:6px 0 10px">'+esc(p.g)+' · mandale este mismo link a cada proveedor. Cuando cotizan, las respuestas aparecen solas en la comparativa.</div><input class="t" id="kplk" readonly value="'+esc(plink(p))+'" onclick="this.select()"><div class="tools" style="margin-top:10px"><button class="btn gold sm" data-kpcopy="'+p.id+'">Copiar link</button><button class="btn sm" data-kpwa="'+p.id+'">Enviar por WhatsApp</button><button class="btn sm" data-kx>Cerrar</button></div>')}
 let _czT=0,_czB=0;
@@ -2079,6 +2079,24 @@ async function czSync(force){const o=O(),ps=CP(o);if(!ps.length||_czB||(!force&&
     nv:1,cond:{plazo_entrega:r.ent||'',forma_pago:r.pago||'',anticipo:(r.ant||0)+'%',validez:r.val||'',flete:r.fle||'no dice',iva_alicuota:(r.ivap==null?'':r.ivap+'%'),aclaraciones:r.notas||'',no_cotiza:nc,contacto:r.cont||'',telefono:r.tel||''}});
    delete CM(o)[p.g];n++})}}catch(e){}
  _czB=0;if(n){save();const ae=document.activeElement;if(!(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)))render()}czBadge();return n}
+const PSW='/barracas-sw.js';
+const pushOk=()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+const b64u=s=>{const p='='.repeat((4-s.length%4)%4),r=atob((s+p).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from([...r].map(c=>c.charCodeAt(0)))};
+async function pushSub(crear){if(!pushOk())return null;const reg=await navigator.serviceWorker.register(PSW,{scope:'/correo-barracas.html'});await navigator.serviceWorker.ready.catch(()=>{});
+ let sub=await reg.pushManager.getSubscription();if(!sub&&crear){const {s,j}=await czApi({op:'push_key'});if(s!==200||!j.pub)throw new Error((j&&j.error)||'No se pudo preparar el aviso');sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(j.pub)})}
+ return sub?sub.toJSON():null}
+async function pushSync(){try{if(!pushOk()||Notification.permission!=='granted')return;const sub=await pushSub(false);if(!sub)return;let L={};try{L=JSON.parse(localStorage.getItem('bb_push_ped_v1')||'{}')}catch(e){}
+ for(const p of CP(O())){if(L[p.id]===sub.endpoint)continue;const {s}=await czApi({op:'cz_sub',id:p.id,k:p.k,sub});if(s===200)L[p.id]=sub.endpoint}
+ localStorage.setItem('bb_push_ped_v1',JSON.stringify(L))}catch(e){}}
+async function pushActivar(){
+ if(!pushOk()){const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  ov('<b>Este aparato todavía no puede recibir avisos</b><div class="sub" style="margin:8px 0">'+(ios?'En iPhone y iPad los avisos funcionan solo con la app agregada a la pantalla de inicio: abrila en Safari, tocá Compartir → “Agregar a inicio”, abrila desde ese ícono y volvé a tocar este botón.':'Este navegador no permite avisos. Probá con Chrome o Edge.')+'</div><button class="btn gold sm" data-kx>Cerrar</button>');return}
+ try{const pm=await Notification.requestPermission();if(pm!=='granted'){ov('<b>Los avisos quedaron bloqueados</b><div class="sub" style="margin:8px 0">Para recibirlos tenés que permitir las notificaciones de esta app en los ajustes del navegador o del teléfono.</div><button class="btn gold sm" data-kx>Cerrar</button>');return}
+  const sub=await pushSub(true);if(!sub)throw new Error('No se pudo activar');localStorage.removeItem('bb_push_ped_v1');await pushSync();localStorage.setItem('bb_push_on_v1','1');render();
+  ov('<b>Avisos activados en este aparato</b><div class="sub" style="margin:8px 0">Cuando un proveedor cargue su cotización te va a llegar una notificación, aunque la app esté cerrada.</div><button class="btn gold sm" data-kx>Cerrar</button>')}
+ catch(e){err('No se pudieron activar los avisos',e)}}
+const pushOn=()=>{try{return pushOk()&&Notification.permission==='granted'&&localStorage.getItem('bb_push_on_v1')==='1'}catch(e){return false}};
+setTimeout(pushSync,2500);
 function czBadge(){let n=0;try{n=CZ(O()).filter(q=>q.nv).length}catch(e){}const b=document.getElementById('navpk');if(!b)return;let s=b.querySelector('.kbadge');
  if(!n){if(s)s.remove();return}if(!s){s=document.createElement('i');s.className='kbadge';b.appendChild(s)}s.textContent=n;s.title=n+' cotización'+(n===1?'':'es')+' nueva'+(n===1?'':'s')+' de proveedores'}
 let _czV=0;setInterval(()=>{czSync();czBadge();const k=document.getElementById('k');
@@ -2086,7 +2104,7 @@ let _czV=0;setInterval(()=>{czSync();czBadge();const k=document.getElementById('
 setTimeout(()=>{czSync(1);czBadge()},1500);
 window.kcmpHtml=function(o){const cz=CZ(o),gs=[...new Set([...CP(o).map(p=>p.g),...cz.map(q=>q.g)])];setTimeout(()=>czSync(),50);
  let h='<div class="card kcz"><b>Comparativa de presupuestos</b><div class="sub">La idea es tener 3 presupuestos por cada pedido. Con 2 ya se pueden comparar: la IA revisa si cotizan lo mismo (manzana con manzana) y cuál conviene.</div>';
- h+='<div class="tools" style="margin-top:10px"><button class="btn gold sm" data-knp>🔗 Pedir cotización por link</button></div>';
+ h+='<div class="tools" style="margin-top:10px"><button class="btn gold sm" data-knp>🔗 Pedir cotización por link</button>'+(pushOn()?'<span class="sub">🔔 Avisos activados en este aparato</span>':'<button class="btn sm" data-kpush>🔔 Avisarme en este aparato</button>')+'</div>';
  if(!gs.length)h+='<div class="sub" style="margin-top:8px">Todavía no hay pedidos ni presupuestos. Creá un link para que los proveedores coticen, o subí un presupuesto en PDF y elegí “Guardar para comparar”.</div>';
  gs.forEach(g=>{const qs=cz.filter(q=>q.g===g),mn=Math.min(...qs.map(tq)),c=CM(o)[g],pd=CP(o).find(p=>p.g===g);
   h+='<div style="margin-top:12px;border:1px solid var(--line);border-radius:14px;padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:16px">'+esc(g)+'</b><span class="'+(qs.length>=3?'ut-pos':'ut-neg')+'" style="font-weight:700">'+qs.length+' de 3 presupuestos</span></div>'+
@@ -2099,6 +2117,7 @@ document.addEventListener('click',e=>{const t=e.target;if(!t.closest)return;let 
  if(t.closest('[data-kx]'))cerrar();if(t.closest('[data-kok]'))cargar();if(t.closest('[data-kguardar]'))guardar();
  if((b=t.closest('[data-kcmp]')))comparar(b.dataset.kcmp);
  if(t.closest('[data-knp]'))npNuevo();
+ if(t.closest('[data-kpush]'))pushActivar();
  if((b=t.closest('[data-kpdel]'))){const p=CP(O()).find(x=>x.id===b.dataset.kpdel);if(p){window._kpd=p.id;const n=CZ(O()).filter(q=>q.g===p.g).length;ov('<b>¿Borrar el pedido “'+esc(p.g)+'”?</b><div class="sub" style="margin:8px 0">El link deja de funcionar para los proveedores'+(n?' y se borran también los '+n+' presupuesto'+(n===1?'':'s')+' de este pedido':'')+'. No se puede deshacer.</div><div class="tools"><button class="btn gold sm" data-kpdelok>Borrar</button><button class="btn sm" data-kx>Cancelar</button></div>')}}
  if(t.closest('[data-kpdelok]')){const o=O(),p=CP(o).find(x=>x.id===window._kpd);if(p){czApi({op:'cz_crear',id:p.id,k:p.k,ped:{g:p.g},cerrado:true}).catch(()=>{});o.cotped=CP(o).filter(x=>x!==p);o.cotiz=CZ(o).filter(q=>q.g!==p.g);delete CM(o)[p.g];save();render()}cerrar()}
  if(t.closest('[data-nprow]')){npRead();window._np.rows.push({n:'',q:0,u:'',m:''});npShow()}

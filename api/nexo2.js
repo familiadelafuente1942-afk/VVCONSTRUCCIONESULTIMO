@@ -97,6 +97,25 @@ function audSan(A) {
   });
   return { k: { prox: Number(K.prox) || 0, rev: Number(K.rev) || 0, cert: Number(K.cert) || 0 }, l };
 }
+// ===== Avisos push (Web Push) para cotizaciones de proveedores =====
+async function pushLib(H) {
+  const wp = (await import("web-push")).default;
+  let v = await leer(H, "push_vapid");
+  if (!v || !v.pub || !v.priv) { const k = wp.generateVAPIDKeys(); v = { pub: k.publicKey, priv: k.privateKey }; await escribir(H, "push_vapid", v); }
+  wp.setVapidDetails("mailto:avisos@nexoentorno.vercel.app", v.pub, v.priv);
+  return { wp, pub: v.pub };
+}
+async function pushEnviar(H, subs, payload) {
+  if (!subs || !subs.length) return subs || [];
+  const { wp } = await pushLib(H);
+  const vivos = [];
+  await Promise.all(subs.map(async (s) => {
+    try { await wp.sendNotification(s, JSON.stringify(payload), { TTL: 86400 }); vivos.push(s); }
+    catch (e) { if (!(e && (e.statusCode === 404 || e.statusCode === 410))) vivos.push(s); }
+  }));
+  return vivos;
+}
+
 export default async function handler(req, res) {
   const sk = process.env.SUPABASE_SERVICE_KEY;
   if (!sk) { res.status(500).json({ error: "Falta SUPABASE_SERVICE_KEY en Vercel." }); return; }
@@ -144,6 +163,7 @@ export default async function handler(req, res) {
 
     // ===== Pedidos de cotización a proveedores (link público "Cotizador Belfast") =====
     // El proveedor solo puede ver el pedido (cz_ver) y enviar su cotización (cz_resp). Leer las respuestas pide la clave k del pedido.
+    if (b.op === "push_key") { const { pub } = await pushLib(H); res.status(200).json({ ok: true, pub }); return; }
     if (typeof b.op === "string" && b.op.startsWith("cz_")) {
       const id = String(b.id || "");
       if (!/^[a-z0-9]{10,24}$/.test(id)) { res.status(400).json({ error: "Pedido inválido" }); return; }
@@ -152,7 +172,7 @@ export default async function handler(req, res) {
       if (b.op === "cz_crear") {
         if (typeof b.k !== "string" || b.k.length < 10 || b.k.length > 60 || JSON.stringify(b.ped || {}).length > 60000) { res.status(400).json({ error: "Datos inválidos" }); return; }
         if (cur && cur.k !== b.k) { res.status(403).json({ error: "No autorizado" }); return; }
-        await escribir(H, K, { k: b.k, ped: b.ped || {}, resps: (cur && cur.resps) || [], cerrado: !!b.cerrado, t: Date.now() });
+        await escribir(H, K, { k: b.k, ped: b.ped || {}, resps: (cur && cur.resps) || [], subs: (cur && cur.subs) || [], cerrado: !!b.cerrado, t: Date.now() });
         res.status(200).json({ ok: true }); return;
       }
       if (!cur) { res.status(404).json({ error: "El pedido no existe" }); return; }
@@ -163,6 +183,22 @@ export default async function handler(req, res) {
         if (typeof r !== "object" || JSON.stringify(r).length > 40000 || !String(r.prov || "").trim()) { res.status(400).json({ error: "Datos inválidos" }); return; }
         if ((cur.resps || []).length >= 20) { res.status(429).json({ error: "El pedido ya recibió el máximo de cotizaciones" }); return; }
         cur.resps = [...(cur.resps || []), { ...r, rid: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), t: Date.now() }];
+        await escribir(H, K, cur);
+        try {
+          if ((cur.subs || []).length) {
+            const vivos = await pushEnviar(H, cur.subs, { title: "Nueva cotización", body: String(r.prov).trim().slice(0, 60) + " cotizó " + String((cur.ped && cur.ped.g) || "tu pedido").slice(0, 80), url: "/correo-barracas.html", tag: "cz-" + id });
+            if (vivos.length !== cur.subs.length) { const c2 = await leer(H, K); if (c2) { c2.subs = vivos; await escribir(H, K, c2); } }
+          }
+        } catch {}
+        res.status(200).json({ ok: true }); return;
+      }
+      if (b.op === "cz_sub") {
+        if (cur.k !== b.k) { res.status(403).json({ error: "No autorizado" }); return; }
+        const sb = b.sub || {};
+        if (typeof sb.endpoint !== "string" || !/^https:\/\//.test(sb.endpoint) || sb.endpoint.length > 1000 || !sb.keys || typeof sb.keys.p256dh !== "string" || typeof sb.keys.auth !== "string") { res.status(400).json({ error: "Suscripción inválida" }); return; }
+        const lim = { endpoint: sb.endpoint, keys: { p256dh: sb.keys.p256dh.slice(0, 200), auth: sb.keys.auth.slice(0, 100) } };
+        cur.subs = [...(cur.subs || []).filter((x) => x.endpoint !== lim.endpoint), lim].slice(-10);
+        if (b.quitar) cur.subs = cur.subs.filter((x) => x.endpoint !== lim.endpoint);
         await escribir(H, K, cur);
         res.status(200).json({ ok: true }); return;
       }
