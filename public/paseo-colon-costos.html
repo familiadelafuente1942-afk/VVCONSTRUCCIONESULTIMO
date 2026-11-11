@@ -1853,4 +1853,37 @@ document.getElementById('tema').onclick=()=>{const c=window.__temaPref?window.__
 function setHH(){const h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--hh',h.offsetHeight+'px')}
 addEventListener('resize',setHH);addEventListener('load',setHH);setHH();
 render();setHH();pcSync(true);setInterval(()=>pcSync(false),15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pcSync(false)});
-</script><script src="/vendor/jspdf/jspdf.umd.min.js"></script><script src="/vendor/jspdf/jspdf.plugin.autotable.min.js"></script><script src="/visor.js"></script></body></html>
+</script><script src="/vendor/jspdf/jspdf.umd.min.js"></script><script src="/vendor/jspdf/jspdf.plugin.autotable.min.js"></script><script src="/visor.js"></script><script id="numvoz">
+(function(){
+function numVoz(t){
+ const U=['cero','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','trece','catorce','quince','dieciséis','diecisiete','dieciocho','diecinueve','veinte','veintiuno','veintidós','veintitrés','veinticuatro','veinticinco','veintiséis','veintisiete','veintiocho','veintinueve'];
+ const D=['','','','treinta','cuarenta','cincuenta','sesenta','setenta','ochenta','noventa'];
+ const C=['','ciento','doscientos','trescientos','cuatrocientos','quinientos','seiscientos','setecientos','ochocientos','novecientos'];
+ function b1000(n){if(n===0)return'';if(n===100)return'cien';let s=[];const c=Math.floor(n/100),r=n%100;if(c)s.push(C[c]);if(r){if(r<30)s.push(U[r]);else{const d=Math.floor(r/10),u=r%10;s.push(u?D[d]+' y '+U[u]:D[d])}}return s.join(' ')}
+ function apoc(w){return w.replace(/veintiuno$/,'veintiún').replace(/\buno$/,'un')}
+ function ent(n){if(n===0)return'cero';if(n<1000)return b1000(n);
+  if(n<1e6){const k=Math.floor(n/1e3),r=n%1e3;return (k===1?'mil':apoc(b1000(k))+' mil')+(r?' '+b1000(r):'')}
+  const M=Math.floor(n/1e6),r=n%1e6;return (M===1?'un millón':apoc(ent(M))+' millones')+(r?' '+ent(r):'')}
+ const re=/(?<![\w.,\/:])(U\$s|US\$|u\$s|\$)?\s?(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?(?:\s?(%|m²|m2))?(?![\w\/:])/g;
+ return String(t).replace(re,(m,cur,num,dec,suf,off,all)=>{
+  const n=parseInt(num.replace(/\./g,''),10);if(!isFinite(n)||n>=1e12)return m;
+  let s=ent(n);const nxt=/^\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]/.test(all.slice(off+m.length));
+  const mult=n>=1e6&&n%1e6===0;
+  let unit='';
+  if(cur){unit=/\$s|US\$|u\$s/i.test(cur)?'dólares':'pesos';if(n===1)unit=unit==='pesos'?'peso':'dólar'}
+  else if(suf==='%')unit='por ciento';
+  else if(suf==='m²'||suf==='m2')unit=n===1?'metro cuadrado':'metros cuadrados';
+  if(dec){const dd=dec.length===1?parseInt(dec,10)*10:parseInt(dec,10);s+=' coma '+(dec.length===2&&dec[0]==='0'?'cero '+U[parseInt(dec[1],10)]:ent(parseInt(dec,10)))}
+  else if(unit&&unit!=='por ciento'&&!/metro/.test(unit)||false){}
+  if((unit||nxt)&&!dec)s=apoc(s);
+  if(unit){if(mult&&cur)s+=' de';s+=' '+unit}
+  return s});
+}
+
+
+var F=window.fetch;window.fetch=function(u,o){try{if(typeof u==='string'&&u.indexOf('/api/tts')>-1&&o&&typeof o.body==='string'){var j=JSON.parse(o.body);if(j.texto){j.texto=numVoz(j.texto);o=Object.assign({},o,{body:JSON.stringify(j)})}}}catch(e){}return F.call(this,u,o)};
+var SU=window.SpeechSynthesisUtterance;if(SU){window.SpeechSynthesisUtterance=function(t){return new SU(numVoz(t))};window.SpeechSynthesisUtterance.prototype=SU.prototype}
+window.numVoz=numVoz;
+})();
+</script>
+</body></html>

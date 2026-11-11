@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   // Opcional: una app puede pedir una voz propia (solo letras y números, es un ID público de ElevenLabs).
   if (typeof body?.voz === "string" && /^[A-Za-z0-9]{15,30}$/.test(body.voz)) voiceId = body.voz;
 
-  const texto = String(body?.texto || "").slice(0, 900);
+  const texto = String(body?.texto || "").slice(0, 2600);
   if (!texto) {
     res.status(400).json({ error: "Falta texto" });
     return;
