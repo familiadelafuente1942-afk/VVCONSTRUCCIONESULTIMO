@@ -1795,7 +1795,10 @@ document.addEventListener('input',e=>{const t=e.target,p=t.dataset&&t.dataset.p;
  let raw=t.value.replace(/[^\d,]/g,'');const parts=raw.split(',');let ent=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');t.value=parts.length>1?ent+','+parts.slice(1).join('').slice(0,2):ent;
  let np=t.value.length;if(antes===0)np=0;else{let n=0;for(let i=0;i<t.value.length;i++){if(/[\d,]/.test(t.value[i]))n++;if(n===antes){np=i+1;break}}}
  try{t.setSelectionRange(np,np)}catch(x){}
- setPath(p,parse(t.value));if(O().m2c!=null)O().m2v=O().m2c;save();window._dirty=1});
+ setPath(p,parse(t.value));if(O().m2c!=null)O().m2v=O().m2c;save();window._dirty=1;
+ if(/^rub\.\d+\.[me]$/.test(p)){try{const o=O(),r=calc(o),x=o.rub[+p.split('.')[1]],tr=t.closest('tr'),tt=tr&&tr.querySelector('td.tt');if(tt)tt.innerHTML=ars(x.m+x.e)+pm(x.m+x.e,o);const a=document.querySelector('#rubdet .rubtot');if(a)a.textContent=ars(r.c)+' · '+usd(o.cot?r.c/o.cot:0);const b=document.querySelector('#rubdet > .row b');if(b)b.innerHTML=ars(r.c)+pm(r.c,o)}catch(x){}}});
+/* en iPad tocar un lugar vacío no cierra el teclado ni dispara focusout: al tocar fuera de un campo, recalcular todo */
+document.addEventListener('pointerdown',e=>{if(!window._dirty)return;const t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA'))return;setTimeout(()=>{if(!window._dirty)return;const a=document.activeElement;if(a&&a.blur)a.blur();window._dirty=0;render()},60)},true);
 /* los totales se recalculan al salir del campo: reconstruir la pantalla mientras se escribe borraba lo tipeado y cerraba el teclado */
 document.addEventListener('click',e=>{const q=e.target.closest&&e.target.closest('[data-kr],[data-cft]');if(q){if(q.dataset.cft!==undefined)window._cft=q.dataset.cft;else window._kr=q.dataset.kr;render();return}const b=e.target.closest&&e.target.closest('[data-invm]');if(b){const o=O();(o.inv=o.inv||{}).modo=b.dataset.invm;save();render()}});
 document.addEventListener('toggle',e=>{if(e.target&&e.target.id==='rubdet')window._rubOpen=e.target.open},true);
