@@ -1200,7 +1200,7 @@ header.top .who>span:first-child{display:none!important}header.top #who,header.t
 @media(max-width:620px){.tcard b{font-size:14.5px}}
 #gfab span{font-weight:500!important}#gfab span.giaT{writing-mode:horizontal-tb!important;font-size:12px;margin-top:2px}
 #gfab span.nm{font-weight:500}
-#gfab{-webkit-user-select:none;user-select:none}
+#gfab{-webkit-user-select:none;user-select:none;touch-action:none;cursor:grab}#gfab span{color:#fff!important;text-shadow:0 1px 2px rgba(0,0,0,.55)}
 #gfab.hz{flex-direction:row!important;width:auto!important;padding:10px 16px!important;gap:6px!important;border-radius:999px!important}
 #gfab.hz span{writing-mode:horizontal-tb!important;text-orientation:mixed!important;font-size:14px!important;font-weight:600!important;line-height:1.1!important;margin:0!important}
 #gfab.hz img{width:28px!important;height:28px!important}
@@ -1952,17 +1952,28 @@ window.numVoz=numVoz;
 })();
 </script>
 <script id="gfabmove">
-(function(){var K='bb_gfab_pos_v1',f=document.getElementById('gfab');if(!f)return;
-function put(x,y){var w=f.offsetWidth,h=f.offsetHeight;x=Math.max(4,Math.min(innerWidth-w-4,x));y=Math.max(4,Math.min(innerHeight-h-4,y));f.style.setProperty('left',x+'px','important');f.style.setProperty('top',y+'px','important');f.style.setProperty('right','auto','important');f.style.setProperty('bottom','auto','important');return[x,y]}
+/* Modo reposicionar: arrastrá el botón Belfast IA (o mantené apretado la barra de iconos y arrastrala). Mantené apretado el botón sin mover para cambiar vertical/horizontal. Para fijar: window.__gfabFijo=true */
+(function(){var K='bb_gfab_pos_v1',KN='bb_nav_off_v1',f=document.getElementById('gfab'),nv=document.querySelector('nav.bottom .in');if(!f)return;
+function put(x,y){var w=f.offsetWidth,h=f.offsetHeight;x=Math.max(4,Math.min(innerWidth-w-4,x));y=Math.max(4,Math.min(innerHeight-h-4,y));f.style.setProperty('left',x+'px','important');f.style.setProperty('top',y+'px','important');f.style.setProperty('right','auto','important');f.style.setProperty('bottom','auto','important')}
 function save(){try{var r=f.getBoundingClientRect();localStorage.setItem(K,JSON.stringify({x:r.left,y:r.top,hz:f.classList.contains('hz')?1:0}))}catch(e){}}
-try{var s=JSON.parse(localStorage.getItem(K)||'null');if(s){if(s.hz)f.classList.add('hz');put(s.x,s.y)}}catch(e){}
+try{var s0=JSON.parse(localStorage.getItem(K)||'null');if(s0){if(s0.hz)f.classList.add('hz');put(s0.x,s0.y)}}catch(e){}
 addEventListener('resize',function(){var r=f.getBoundingClientRect();if(f.style.left)put(r.left,r.top)});
 var d=null,moved=false,lp=0,long=false;
-f.addEventListener('pointerdown',function(e){if(window.__gfabFijo!==false)return;var r=f.getBoundingClientRect();d={sx:e.clientX,sy:e.clientY,ox:r.left,oy:r.top};moved=false;long=false;try{f.setPointerCapture(e.pointerId)}catch(x){}
+f.addEventListener('pointerdown',function(e){if(window.__gfabFijo===true)return;var r=f.getBoundingClientRect();d={sx:e.clientX,sy:e.clientY,ox:r.left,oy:r.top};moved=false;long=false;try{f.setPointerCapture(e.pointerId)}catch(x){}
  clearTimeout(lp);lp=setTimeout(function(){if(d&&!moved){long=true;f.classList.toggle('hz');var r2=f.getBoundingClientRect();put(r2.left,r2.top);save();if(navigator.vibrate)navigator.vibrate(30)}},650)});
 f.addEventListener('pointermove',function(e){if(!d)return;var dx=e.clientX-d.sx,dy=e.clientY-d.sy;if(!moved&&Math.abs(dx)+Math.abs(dy)>8){moved=true;clearTimeout(lp)}if(moved){e.preventDefault();put(d.ox+dx,d.oy+dy)}});
 function fin(){clearTimeout(lp);if(d&&moved)save();d=null}
 f.addEventListener('pointerup',fin);f.addEventListener('pointercancel',fin);
+/* barra de iconos: mantener apretado y arrastrar */
+var off={x:0,y:0};try{var o0=JSON.parse(localStorage.getItem(KN)||'null');if(o0)off=o0}catch(e){}
+function applyN(){if(nv)nv.style.translate=off.x+'px '+off.y+'px'}applyN();
+var nd=null,nlp=0,ngrab=false,nmoved=false;
+if(nv){nv.addEventListener('pointerdown',function(e){if(window.__gfabFijo===true)return;nd={sx:e.clientX,sy:e.clientY,ox:off.x,oy:off.y};ngrab=false;nmoved=false;clearTimeout(nlp);nlp=setTimeout(function(){if(nd&&!nmoved){ngrab=true;nv.style.outline='2px dashed #b8915a';if(navigator.vibrate)navigator.vibrate(30)}},650)});
+ addEventListener('pointermove',function(e){if(!nd)return;var dx=e.clientX-nd.sx,dy=e.clientY-nd.sy;if(!ngrab){if(Math.abs(dx)+Math.abs(dy)>8)nmoved=true;return}e.preventDefault();off={x:nd.ox+dx,y:nd.oy+dy};applyN()},{passive:false});
+ function nfin(){clearTimeout(nlp);if(nd&&ngrab){try{localStorage.setItem(KN,JSON.stringify(off))}catch(e){}nv.style.outline='';nmoved=true;setTimeout(function(){ngrab=false},50)}nd=null}
+ addEventListener('pointerup',nfin);addEventListener('pointercancel',nfin);
+ nv.addEventListener('touchmove',function(e){if(ngrab)e.preventDefault()},{passive:false});
+ nv.addEventListener('click',function(e){if(ngrab){e.stopImmediatePropagation();e.preventDefault()}},true)}
 document.addEventListener('click',function(e){if(e.target.closest&&e.target.closest('#gfab')&&(moved||long)){e.stopImmediatePropagation();e.preventDefault();moved=false;long=false}},true);
 })();
 </script>
