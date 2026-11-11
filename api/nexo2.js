@@ -163,6 +163,27 @@ export default async function handler(req, res) {
 
     // ===== Pedidos de cotización a proveedores (link público "Cotizador Belfast") =====
     // El proveedor solo puede ver el pedido (cz_ver) y enviar su cotización (cz_resp). Leer las respuestas pide la clave k del pedido.
+    // ===== Barracas · paneles de solo lectura (Estudio y Cliente): devuelve una copia SIN datos internos =====
+    if (b.op === "bar_panel") {
+      const k = String(b.k || "");
+      const cur = await leer(H, "barracas_db");
+      let n = null; try { n = cur && cur.v ? JSON.parse(cur.v) : null; } catch { n = null; }
+      const pn = (n && n.panel) || {};
+      const rol = /^[a-z0-9]{16,40}$/.test(k) ? (k === pn.e ? "estudio" : k === pn.c ? "cliente" : "") : "";
+      if (!rol || !n || !Array.isArray(n.obras)) { await new Promise((r) => setTimeout(r, 500)); res.status(403).json({ error: "Link inválido" }); return; }
+      const obras = n.obras.map((o) => {
+        const cf = o.cf || {};
+        return {
+          nombre: o.nombre, rv: o.rv, rz: 99, rub: (o.rub || []).map((r) => ({ n: r.n, m: 0, e: 0 })), int: [], compras: [],
+          gg: 0, ut: 0, imp: 0, cot: 0, m2c: o.m2c || 0, m2v: o.m2v || 0, lote: 0, plus: 0, zona: 0,
+          pre: rol === "estudio" ? o.pre : undefined,
+          cf: { ini: cf.ini, n: cf.n, curva: cf.curva, v: cf.v, it: cf.it, bx: cf.bx, es: cf.es, av: cf.av, esI: cf.esI, avI: cf.avI, pre: 100, ant: 0, cuo: 0, stop: 0 },
+          seg: o.seg || { it: [] },
+          pub: rol === "estudio" ? (o.pub || null) : null,
+        };
+      });
+      res.status(200).json({ ok: true, rol, t: cur.t, db: { obras, act: Math.min(Number(n.act) || 0, obras.length - 1) } }); return;
+    }
     if (b.op === "push_key") { const { pub } = await pushLib(H); res.status(200).json({ ok: true, pub }); return; }
     if (typeof b.op === "string" && b.op.startsWith("cz_")) {
       const id = String(b.id || "");
