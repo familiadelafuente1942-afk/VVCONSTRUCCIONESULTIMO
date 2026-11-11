@@ -1324,7 +1324,7 @@ const save=()=>{try{DB._t=Date.now();localStorage.setItem(KEY,JSON.stringify(DB)
 function pcAdopt(doc){try{const n=JSON.parse(doc.v);if(!n||!n.obras)return;n._t=doc.t;n.act=Math.min(DB.act||0,n.obras.length-1);DB=n;localStorage.setItem(KEY,JSON.stringify(DB));render();const g=document.getElementById('guard');if(g)g.textContent='Actualizado con los últimos cambios '+new Date().toLocaleTimeString('es-AR')}catch(e){}}
 function pcSync(first){if(_pcBusy)return;const a=document.activeElement;if(!first&&((a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))||window._dirty))return;_pcBusy=1;pcPost({op:'pc_get'}).then(({j})=>{const d=j&&j.doc;if(d&&Number(d.t)>(DB._t||0))pcAdopt(d);else if(!d){DB._t=Date.now();try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}pcPush()}else if(Number(d.t)<(DB._t||0))pcPush()}).catch(()=>{}).finally(()=>{_pcBusy=0})}
 const f0=n=>Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
-const f2=n=>{const [a,b]=(Math.round(n*100)/100).toFixed(2).split('.');return a.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+b};
+const f2=n=>Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');
 const ars=n=>'$ '+f2(n),usd=n=>'U$s '+f2(n);
 const parse=s=>{s=String(s).replace(/[^\d,]/g,'').replace(',','.');return parseFloat(s)||0};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -1415,14 +1415,14 @@ function renderCF(o){const R=cfCalc(o),c=R.c,n=R.n,cot=o.cot||0;const peak=Math.
  h+=`<div class="sub" style="margin-top:8px">Gastos generales se reparten parejo; utilidad e impuestos acompañan el avance de cada mes.</div></div>
  <div class="card"><b>Cobros a Correo Argentino durante la obra</b><div class="sub">El monto del contrato es el total del Presupuesto. Se cobra un anticipo al comenzar, certificados mensuales durante la obra y el saldo a la recepción.</div>
  <div class="cfg" style="margin:10px 0"><label class="fld">Anticipo · %${inp(c.ant,'cf.ant',1)}</label><label class="fld">Certificados mensuales · %${inp(c.cuo,'cf.cuo',1)}</label></div>
- <div class="row"><span>Saldo a la recepción · %</span><b>${Math.max(0,100-c.ant-c.cuo).toFixed(1).replace('.',',')}%</b></div>
+ <div class="row"><span>Saldo a la recepción · %</span><b>${Math.max(0,100-c.ant-c.cuo).toFixed(0)}%</b></div>
  <div class="cfk"><div><span>Monto del contrato</span><b>${ars(R.vTot)}</b></div><div><span>Monto del contrato · U$s</span><b>${usd(cot?R.vTot/cot:0)}</b></div><div><span>Capital propio máximo necesario</span><b class="${R.capMax>0?'ut-neg':'ut-pos'}">${ars(R.capMax)}</b></div><div><span>Mes del pico de capital</span><b>Mes ${R.capMes+1} · ${cfMes(c,R.capMes)}</b></div><div><span>Capital propio máximo · U$s</span><b>${usd(cot?R.capMax/cot:0)}</b></div><div><span>Resultado de caja al final</span><b class="${R.fin>=0?'ut-pos':'ut-neg'}">${ars(R.fin)}</b></div></div></div>
  <div class="card"><b>Caja acumulada del proyecto</b>${cfChartNeto(R)}</div>
  <div class="card"><b>Flujo mensual de fondos · ARS</b><div class="cfw" style="max-height:70vh"><table class="cft"><thead><tr><th>Concepto</th>${Array.from({length:n},(_,k)=>`<th>M${k+1}<br><span style="font-weight:400;opacity:.7">${cfMes(c,k)}</span></th>`).join('')}<th>Total</th></tr></thead><tbody>`;
  const cell=v=>v>0.5?`<td>${f0(v)}</td>`:'<td class="z">·</td>';
  R.rows.forEach(r=>{h+=`<tr><td title="${esc(r.n)}">${esc(r.n)}</td>${r.a.map(cell).join('')}<td><b>${f0(r.a.reduce((a,b)=>a+b,0))}</b></td></tr>`});
  const sm=a=>a.reduce((x,y)=>x+y,0),line=(cl,t,a)=>`<tr class="${cl}"><td>${t}</td>${a.map(cell).join('')}<td>${f0(sm(a))}</td></tr>`;
- h+=line('sub','Costo directo',R.dir)+line('','Gastos generales',R.gg)+line('','Utilidad empresarial',R.ut)+line('','Impuestos',R.im)+line('tot','EGRESO DEL MES',R.tot)+`<tr class="acu"><td>Acumulado</td>${R.acu.map(v=>`<td>${f0(v)}</td>`).join('')}<td></td></tr><tr><td>% acumulado</td>${R.acu.map(v=>`<td>${R.T?(v/R.T*100).toFixed(1).replace('.',','):0}%</td>`).join('')}<td></td></tr><tr><td>Egreso del mes · U$s</td>${R.tot.map(v=>`<td>${cot?f0(v/cot):0}</td>`).join('')}<td><b>${cot?f0(R.T/cot):0}</b></td></tr>`;
+ h+=line('sub','Costo directo',R.dir)+line('','Gastos generales',R.gg)+line('','Utilidad empresarial',R.ut)+line('','Impuestos',R.im)+line('tot','EGRESO DEL MES',R.tot)+`<tr class="acu"><td>Acumulado</td>${R.acu.map(v=>`<td>${f0(v)}</td>`).join('')}<td></td></tr><tr><td>% acumulado</td>${R.acu.map(v=>`<td>${R.T?(v/R.T*100).toFixed(0):0}%</td>`).join('')}<td></td></tr><tr><td>Egreso del mes · U$s</td>${R.tot.map(v=>`<td>${cot?f0(v/cot):0}</td>`).join('')}<td><b>${cot?f0(R.T/cot):0}</b></td></tr>`;
  h+=line('','Cobro de anticipo',R.ant)+line('','Cobro de certificados mensuales',R.cu)+line('','Cobro de saldo a la recepción',R.ent)+line('sub','COBROS DEL CLIENTE',R.ing)+line('tot','FLUJO NETO DEL MES',R.neto)+`<tr class="acu"><td>Caja acumulada</td>${R.acn.map(v=>`<td style="color:${v>=0?'#2fa86b':'#c0392b'}">${f0(v)}</td>`).join('')}<td></td></tr>`;
  h+=`</tbody></table></div></div><div class="card"><b>Etapas de obra del modelo</b><div class="sub">Secuencia típica de la remodelación de una sucursal.</div>${CF_HITOS.map((t,i)=>`<div class="row"><span>${i+1}. ${t}</span></div>`).join('')}</div>`;
  {const cf=window._cft==='k';document.getElementById('c').innerHTML=`<div class="card"><div class="seg"><button class="btn ${cf?'':'gold'} sm" data-cft="o">Cash Flow de obra</button><button class="btn ${cf?'gold':''} sm" data-cft="k">Cash Flow de compras</button></div></div>`+(cf?cfkHtml(o):h)}}
@@ -1431,7 +1431,7 @@ function hotInit(o){if(!o.hot)o.hot={modo:'a',un:39,ocup:69,adr:60,otros:8,opex:
 function hotCalc(o,oc,ad,r){const h=hotInit(o),inv=r.totU,ing=h.un*365*(oc/100)*ad*(1+h.otros/100);const opx=ing*h.opex/100,gop=ing-opx,fb=ing*h.base/100,fi=Math.max(0,gop-fb)*h.inc/100,res=ing*h.res/100;
  const noiG=gop-fb-fi-res,noiA=ing*h.alq/100-res*0.5,noi=h.modo==='a'?noiA:noiG,gest=inv*h.gf/100,gasto=inv*0.0035,neto=noi-gest-gasto;
  return{inv,ing,opx,gop,fb,fi,res,noi,noiG,noiA,gest,gasto,neto,cap:inv?noi/inv:0,yld:inv?neto/inv:0,val:h.cap?noi/(h.cap/100):0}}
-function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*100).toFixed(1).replace('.',',')+'%';
+function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*100).toFixed(0)+'%';
  const vent=o.zona*o.m2v;
  let t=`<div class="card"><b>Modelo hotelero · fondo de renta</b><div class="sub">En lugar de vender las ${h.un} unidades, el edificio se opera como apart-hotel y sus cuotapartes se colocan en un fondo cerrado, al estilo del REIT de Briones. Todo en U$s. Los valores de ocupación, tarifa y costos son supuestos editables.</div>
  <div class="cfg" style="margin-top:10px"><label class="fld">Unidades${inp(h.un,'hot.un')}</label><label class="fld">Ocupación anual · %${inp(h.ocup,'hot.ocup',1)}</label><label class="fld">Tarifa promedio · U$s por noche${inp(h.adr,'hot.adr',1)}</label><label class="fld">Otros ingresos · % s/ hospedaje${inp(h.otros,'hot.otros',1)}</label><label class="fld">Costos operativos · % de ingresos${inp(h.opex,'hot.opex',1)}</label><label class="fld">Reserva de reposición · %${inp(h.res,'hot.res',1)}</label>
@@ -1443,7 +1443,7 @@ function renderHot(o,r){const h=hotInit(o),k=hotCalc(o,h.ocup,h.adr,r),pc=n=>(n*
  <div class="row"><span>Valor del activo operando · ${h.cap}% de cap rate</span><b>${usd(k.val)}</b></div>
  <div class="row"><span>Ganancia del desarrollador vs. costo · U$s</span><b class="${k.val-k.inv>=0?'ut-pos':'ut-neg'}">${usd(k.val-k.inv)}</b></div>
  <div class="row"><span>Alternativa: ventas por m² (precio de la zona × m² construidos)</span><b>${usd(vent)}</b></div>
- <div class="row"><span>Repago de la inversión con la renta</span><b>${k.noi>0?(k.inv/k.noi).toFixed(1).replace('.',',')+' años':'—'}</b></div></div>`;
+ <div class="row"><span>Repago de la inversión con la renta</span><b>${k.noi>0?(k.inv/k.noi).toFixed(0)+' años':'—'}</b></div></div>`;
 
  const vn=o.zona*o.m2v,kg=hotCalc(o,h.ocup,h.adr,r),yv=vn?kg.noiG/vn:0,pu=h.un?vn/h.un:0;
  let lo=1,hi=1000;for(let i=0;i<60;i++){const m=(lo+hi)/2;(vn&&hotCalc(o,h.ocup,m,r).noiG/vn>=h.obj/100)?hi=m:lo=m}const adEq=hi;
@@ -1792,7 +1792,7 @@ function render(){const o=O();o.m2v=o.m2c;if(!o.compras)o.compras=[];document.ge
 document.addEventListener('input',e=>{const t=e.target,p=t.dataset&&t.dataset.p;if(!p)return;
  if(t.dataset.s!==undefined){setPath(p,t.value);save();return}
  const pos=t.selectionStart==null?t.value.length:t.selectionStart,antes=t.value.slice(0,pos).replace(/[^\d,]/g,'').length;
- let raw=t.value.replace(/[^\d,]/g,'');const parts=raw.split(',');let ent=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');t.value=parts.length>1?ent+','+parts.slice(1).join('').slice(0,2):ent;
+ let raw=t.value.replace(/[^\d]/g,'');const parts=[raw];let ent=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');t.value=parts.length>1?ent+','+parts.slice(1).join('').slice(0,2):ent;
  let np=t.value.length;if(antes===0)np=0;else{let n=0;for(let i=0;i<t.value.length;i++){if(/[\d,]/.test(t.value[i]))n++;if(n===antes){np=i+1;break}}}
  try{t.setSelectionRange(np,np)}catch(x){}
  setPath(p,parse(t.value));if(O().m2c!=null)O().m2v=O().m2c;save();window._dirty=1;
