@@ -1887,6 +1887,7 @@ document.getElementById('csv').onclick=()=>{const o=O(),r=calc(o);let c='N;Rubro
 let _sl=0,_st=null;
 function showSlide(n){const sl=document.querySelectorAll('.slides .sl'),ds=document.querySelectorAll('.dots button');if(!sl.length)return;_sl=(n+sl.length)%sl.length;sl.forEach((x,i)=>x.classList.toggle('on',i===_sl));ds.forEach((x,i)=>x.classList.toggle('on',i===_sl));const h=document.querySelector('.hero');if(h)h.classList.toggle('pair',sl[_sl].classList.contains('pair')||sl[_sl].classList.contains('sing'));const c=document.getElementById('cap'),im=sl[_sl].querySelector('img');if(c&&im)c.textContent=im.alt}
 function startSlides(){clearInterval(_st);_st=setInterval(()=>showSlide(_sl+1),4500);showSlide(0)}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('button[data-t="h"]');if(b)setTimeout(startSlides,0)});
 document.addEventListener('click',e=>{const nv=e.target.closest('[data-nav]');if(nv){const t=_sl+ +nv.dataset.nav;startSlides();showSlide(t);return}const d=e.target.closest('[data-sl]');if(d){showSlide(+d.dataset.sl);startSlides();showSlide(+d.dataset.sl)}});
 document.getElementById('refr').onclick=()=>location.reload();
 document.getElementById('tema').onclick=()=>{const c=window.__temaPref?window.__temaPref():'auto',n=document.documentElement.getAttribute('data-tema')==='claro'?'oscuro':'claro';window.__tema(n)};
