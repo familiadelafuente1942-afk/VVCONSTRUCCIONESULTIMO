@@ -1193,7 +1193,7 @@ nav.bottom .in{margin-top:calc(var(--hh,150px) + 20px)!important}
 @media print{header.top{position:static!important}.app{padding-top:0}}
 #gfab{position:fixed!important;left:calc(8px + 44px - 25px)!important;right:auto!important;bottom:auto!important;top:calc(var(--hh,150px) + 80px)!important;z-index:40;width:50px;box-sizing:border-box;flex-direction:column!important;align-items:center;justify-content:flex-start;gap:8px!important;padding:8px 4px 14px!important;border-radius:999px!important;font-size:13px!important}
 #gfab span{display:block!important;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:0;line-height:.95;font-weight:800;font-size:11px;white-space:nowrap}#gfab img{width:36px!important;height:36px!important}
-nav.bottom .in{margin-top:calc(var(--hh,150px) + 205px)!important}
+nav.bottom .in{margin-top:calc(var(--hh,150px) + 80px + var(--gfh,125px) + 14px)!important}
 @media(max-width:620px){#gfab{left:calc(8px + 33px - 25px)!important}}
 header.top .who>span:first-child{display:none!important}header.top #who,header.top .who{justify-content:flex-end!important;gap:8px}
 .tcard{text-align:center;padding:9px 14px!important;margin:0 0 10px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}.tcard b{font-size:16px;font-weight:600}.tcard .rol{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:600}
@@ -1337,6 +1337,13 @@ html.panel #g .sub{display:none}
 .segf img{width:100%;height:100%;object-fit:cover;display:block}
 .segx{white-space:pre-wrap;margin-top:8px;line-height:1.5}
 .segav{height:8px;border-radius:99px;background:rgba(128,128,128,.25);overflow:hidden;margin-top:6px}.segav i{display:block;height:100%;background:var(--gold)}
+</style><style id="navfit">
+@media(min-width:601px){
+#gfab:not([style*="left"]){top:calc(var(--hh,150px) + 14px)!important}
+nav.bottom{align-items:flex-start!important}
+nav.bottom .in{margin-top:calc(var(--hh,150px) + 14px + var(--gfh,125px) + 10px)!important;gap:4px!important;padding-top:6px!important;padding-bottom:6px!important;max-height:calc(100vh - var(--hh,150px) - var(--gfh,125px) - 34px);max-height:calc(100dvh - var(--hh,150px) - var(--gfh,125px) - 34px);overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+nav.bottom .in::-webkit-scrollbar{display:none}
+}
 </style></head><body>
 <div class="app">
 <header class="top"><div class="brand trio"><img src="/belfast-logo-barracas.png" alt="Belfast Construction Management" class="lg1"><span class="lg2" role="img" aria-label="Leone Loray"></span><span class="lg3"><img src="/correo-argentino-logo.png?v=3" alt="Correo Argentino"></span></div>
@@ -2214,7 +2221,8 @@ try{render()}catch(e){}
 </script>
 <script id="gfabmove">
 /* Modo reposicionar: arrastrá el botón Belfast IA (o mantené apretado la barra de iconos y arrastrala). Mantené apretado el botón sin mover para cambiar vertical/horizontal. Para fijar: window.__gfabFijo=true */
-(function(){var K='bb_gfab_pos_v1',KN='bb_nav_off_v1',f=document.getElementById('gfab'),nv=document.querySelector('nav.bottom .in');if(!f)return;
+(function(){var K='bb_gfab_pos_v2',KN='bb_nav_off_v2',f=document.getElementById('gfab'),nv=document.querySelector('nav.bottom .in');if(!f)return;
+function gfh(){const h=f.offsetHeight;if(h)document.documentElement.style.setProperty('--gfh',h+'px')}gfh();addEventListener('resize',gfh);addEventListener('load',gfh);setTimeout(gfh,400);setTimeout(gfh,1500);if(window.ResizeObserver)new ResizeObserver(gfh).observe(f);
 if(matchMedia('(max-width:600px)').matches)return;
 function put(x,y){var w=f.offsetWidth,h=f.offsetHeight;x=Math.max(4,Math.min(innerWidth-w-4,x));y=Math.max(4,Math.min(innerHeight-h-4,y));f.style.setProperty('left',x+'px','important');f.style.setProperty('top',y+'px','important');f.style.setProperty('right','auto','important');f.style.setProperty('bottom','auto','important')}
 function save(){try{var r=f.getBoundingClientRect();localStorage.setItem(K,JSON.stringify({x:r.left,y:r.top,hz:f.classList.contains('hz')?1:0}))}catch(e){}}
