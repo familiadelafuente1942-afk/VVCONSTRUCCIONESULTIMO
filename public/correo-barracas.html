@@ -1921,7 +1921,9 @@ function setHH(){const h=document.querySelector('header.top');if(h)document.docu
 addEventListener('resize',setHH);addEventListener('load',setHH);setHH();
 render();setHH();pcSync(true);setInterval(()=>pcSync(false),PANEL?60000:15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pcSync(false)});
 </script><script>/* Video de la sucursal: se reproduce solo cuando la app queda abierta sin usar */
-(function(){const IDLE=60000;let t=null,ov=null,vd=null;
+(function(){const IDLE=20000;let t=null,ov=null,vd=null;
+/* se baja el video de fondo apenas abre la app, así arranca al instante cuando toca mostrarlo */
+setTimeout(()=>{try{const pv=document.createElement('video');pv.muted=true;pv.preload='auto';pv.setAttribute('playsinline','');pv.src='/video/barracas.mp4';pv.load()}catch(e){}},2500);
 function ocupado(){if(window._rec||window._grec||window._gbusy||window._gman||window._vinfb)return true;const z=document.getElementById('vz');if(z&&getComputedStyle(z).display!=='none'&&z.offsetHeight>0)return true;if(window.speechSynthesis&&speechSynthesis.speaking)return true;return false}
 function cerrar(){if(!ov)return;try{vd.pause()}catch(e){}ov.remove();ov=null;vd=null;armar()}
 function abrir(man){if(ov||document.visibilityState!=='visible')return;if(man!==true&&ocupado()){armar();return}
