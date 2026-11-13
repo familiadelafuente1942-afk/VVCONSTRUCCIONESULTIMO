@@ -4498,7 +4498,7 @@ function sesRestaurar(){
 try{if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('/nexo2-sw.js',{scope:'/nexo2.html'}).catch(()=>{})}catch(e){}
 $('#brand-icon').src=ICONO;
 /* Accesos: se borran solo al tocar Salir (o modo prueba). */
-const ACC_KEYS=['nexo2_dirauth','nexo2_cred','nexo2_sesion','nexo2_obras_prop','nexo2_obras_jefe','nexo2_obras_aud'];
+const ACC_KEYS=['nexo2_dirauth','nexo2_cred','nexo2_sesion','nexo2_obras_prop','nexo2_obras_jefe','nexo2_obras_aud','nexo2_obras_est'];
 function accesosCero(){try{ACC_KEYS.forEach(k=>localStorage.removeItem(k))}catch(e){}try{['nexo2_adm','nexo2_ses'].forEach(c=>{document.cookie=c+'=;max-age=0;path=/'})}catch(e){}S.dirAuth='';try{codApi({op:'sesion_borrar'}).catch(()=>{})}catch(e){}}
 let FRESH=false;/* el dispositivo queda reconocido: cerrar y abrir la app NO borra accesos; solo el botón Salir */
 try{if(!localStorage.getItem('nexo2_reset_v2')){['nexo2_obras_prop','nexo2_obras_jefe','nexo2_obras_aud','nexo2_sesion'].forEach(k=>localStorage.removeItem(k));localStorage.setItem('nexo2_reset_v2','1')}}catch(e){}
