@@ -141,6 +141,12 @@ export default async function handler(req, res) {
       res.status(200).json(out);
       return;
     }
+    if (req.method === "GET" && req.query && req.query.t) {
+      // consulta liviana: solo la versión (para enterarse de cambios en segundos sin bajar todo)
+      const v = await leer(H, "cfg");
+      res.status(200).json({ t: v ? Number(v.t) || 0 : 0 });
+      return;
+    }
     if (req.method === "GET") {
       const v = await leer(H, "cfg");
       res.status(200).json(v ? { cfg: v } : {});
