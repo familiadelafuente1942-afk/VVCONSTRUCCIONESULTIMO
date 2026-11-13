@@ -253,8 +253,11 @@ export default async function handler(req, res) {
       if (b.key !== "cfg" || typeof b.v !== "string" || b.v.length > 2_000_000 || typeof b.t !== "number") {
         res.status(400).json({ error: "Datos inválidos" }); return;
       }
-      await escribir(H, "cfg", { t: b.t, v: b.v });
-      res.status(200).json({ ok: true });
+      // la hora de versión la pone el servidor (siempre creciente): los relojes de cada aparato pueden estar desfasados
+      let prev = null; try { prev = await leer(H, "cfg"); } catch { prev = null; }
+      const t = Math.max(Date.now(), (prev && Number(prev.t) || 0) + 1);
+      await escribir(H, "cfg", { t, v: b.v });
+      res.status(200).json({ ok: true, t });
       return;
     }
 

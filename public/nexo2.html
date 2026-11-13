@@ -4666,6 +4666,32 @@ const PEND='nexo2_sync_pend_';
 const marcar=k=>{sucio.add(k);lset(PEND+k,'1')};
 const limpio=k=>{sucio.delete(k);try{localStorage.removeItem(PEND+k)}catch(e){}};
 Object.keys(MAP).forEach(k=>{if(lget(PEND+k))sucio.add(k)});
+/* fusión de 3 vías: lo último que este aparato vio de la nube (base), lo que tiene ahora (local) y lo que hay en la nube (remota).
+   Lo que cambió este aparato se conserva, lo que cambió otro usuario también; si tocaron lo mismo, gana el aparato que está guardando. */
+const BASE_K='nexo2_sync_base_';
+const jeq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const esObj=x=>x&&typeof x==='object'&&!Array.isArray(x);
+function m3(b,l,r,d){
+  if(jeq(l,b))return r;if(jeq(r,b)||jeq(l,r))return l;
+  if(d>0&&esObj(l)&&esObj(r)){const B=esObj(b)?b:{},out={};
+    new Set([...Object.keys(l),...Object.keys(r)]).forEach(k=>{
+      const inL=k in l,inR=k in r,inB=k in B;
+      if(!inL){if(!inB||!jeq(r[k],B[k]))out[k]=r[k]}
+      else if(!inR){if(!inB||!jeq(l[k],B[k]))out[k]=l[k]}
+      else out[k]=m3(B[k],l[k],r[k],d-1)});
+    return out}
+  return l}
+const porId=a=>Object.fromEntries((a||[]).filter(x=>x&&x.id).map(x=>[x.id,x]));
+function merge3(base,loc,rem){
+  try{const B=JSON.parse(base||'null'),L=JSON.parse(loc||'null'),R=JSON.parse(rem||'null');if(!B||!L||!R)return null;
+    const pre=O=>{const c=JSON.parse(JSON.stringify(O));c.nuevas=porId(c.nuevas);c.avisos=porId(c.avisos);return c};
+    const M=m3(pre(B),pre(L),pre(R),6);
+    M.nuevas=Object.values(M.nuevas||{});if(!M.nuevas.length)delete M.nuevas;
+    M.avisos=Object.values(M.avisos||{}).sort((x,y)=>x.t-y.t).slice(-30);if(!M.avisos.length)delete M.avisos;
+    if(!M.mod)M.mod={};if(!M.nuevas)M.nuevas=[];
+    return JSON.stringify(M)}catch(e){return null}}
+function recargarCuando(){const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
+  if(!ocupado())location.reload();else{const iv=setInterval(()=>{if(!ocupado()){clearInterval(iv);location.reload()}},2000)}}
 /* el cronograma generado más nuevo gana: un aparato con datos viejos no puede pisarlo */
 const CRONO=['tpl','mod2','ov','baseOv','edits','inicio','m2','plantas','subsuelo','pileta','nivel','resp','cg'];
 function fusion(viejo,nuevo){
@@ -4681,10 +4707,17 @@ function fusion(viejo,nuevo){
     if(A.fu&&A.fu.t&&(!B.fu||(+B.fu.t||0)<A.fu.t)){B.fu=A.fu;ch=true}
     return ch?JSON.stringify(B):nuevo}catch(e){return nuevo}}
 async function subir(k){
-  const v=lget(k);if(v==null||v===VACIO)return;
+  let v=lget(k);if(v==null||v===VACIO)return;
+  let recargar=false;
+  try{const g=await fetch(API,{cache:'no-store'});if(g.ok){const d=(await g.json())[MAP[k]];
+    if(d&&d.v&&(+d.t||0)>(+lget('nexo2_sync_t_'+k)||0)&&d.v!==v){
+      /* otro usuario guardó algo desde la última vez: se junta con lo mío en vez de pisarlo */
+      const m=merge3(lget(BASE_K+k),v,d.v)||fusion(v,d.v);
+      if(m&&m!==v){rawSet.call(localStorage,k,m);v=m;recargar=true}}}}catch(e){}
   const t=Date.now();
   try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:MAP[k],t,v})});
-    if(r.ok){lset('nexo2_sync_t_'+k,String(t));if(lget(k)===v)limpio(k);else marcar(k);falloAviso=false}else throw new Error('http')}catch(e){if(!falloAviso){falloAviso=true;try{toast('No se pudo guardar en la nube. El cambio quedó solo en este aparato; revisá la conexión.')}catch(x){}}}
+    if(r.ok){let j={};try{j=await r.json()}catch(e){}
+      lset('nexo2_sync_t_'+k,String(+j.t||t));lset(BASE_K+k,v);if(lget(k)===v)limpio(k);else marcar(k);falloAviso=false;if(recargar)recargarCuando()}else throw new Error('http')}catch(e){if(!falloAviso){falloAviso=true;try{toast('No se pudo guardar en la nube. El cambio quedó solo en este aparato; revisá la conexión.')}catch(x){}}}
 }
 let falloAviso=false;
 Storage.prototype.setItem=function(k,v){
@@ -4703,18 +4736,18 @@ async function bajar(){
         if(!d)continue;
         const lt=+lget('nexo2_sync_t_'+k)||0;
         if(d.t>lt){
-          const loc=lget(k),f=fusion(loc,d.v);
+          const loc=lget(k);let f=null;
+          if(sucio.has(k)&&lget(BASE_K+k))f=merge3(lget(BASE_K+k),loc,d.v);
+          if(!f)f=fusion(loc,d.v);
           if(f!==loc){rawSet.call(localStorage,k,f);cambio=true}
-          lset('nexo2_sync_t_'+k,String(d.t));if(f!==d.v)marcar(k);else limpio(k);
+          lset('nexo2_sync_t_'+k,String(d.t));lset(BASE_K+k,d.v);if(f!==d.v)marcar(k);else limpio(k);
         }
       }
     }
   }catch(e){}
   listo=true;
   if(cambio){
-    const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
-    if(!ocupado())location.reload();
-    else{const iv=setInterval(()=>{if(!ocupado()){clearInterval(iv);location.reload()}},2000)}
+    recargarCuando();
   }
   sucio.forEach(k=>subir(k));
 }
@@ -4725,7 +4758,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261113-151501';
+const NEXO_BUILD='20261113-153428';
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
