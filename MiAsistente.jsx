@@ -226,7 +226,7 @@ html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.16),tr
 .bdg.c{background:#B98A41}.bdg{position:absolute;top:2px;right:10px;background:#EF4444;color:#fff;border-radius:9px;min-width:15px;height:15px;font-size:8.5px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 3px}
 .masov{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;padding:0 12px 100px}
 .massheet{width:100%;max-width:640px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:14px;border-radius:24px;background:linear-gradient(158deg,rgba(255,255,255,.2),rgba(255,255,255,.06));-webkit-backdrop-filter:blur(26px) saturate(1.8);backdrop-filter:blur(26px) saturate(1.8);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 0 0 1px rgba(255,255,255,.26)}
-.masit{display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;color:#cfcfcf;font-size:11px;font-weight:600;padding:10px 2px;border-radius:16px;cursor:pointer}
+.masit{display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;color:#f6f3ec;font-size:11px;font-weight:600;padding:10px 2px;border-radius:16px;cursor:pointer}
 .masit .gem{display:flex;color:inherit}
 .masit.on{background:rgba(255,255,255,.1);color:#D8B06A}
 .rail{display:none}
@@ -234,8 +234,8 @@ html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.16),tr
   .bnav,.masov{display:none!important}
   .rail{display:flex;flex-direction:column;gap:4px;position:fixed;left:12px;top:50%;transform:translateY(-50%);z-index:20;padding:8px 6px;width:84px;max-height:calc(100vh - 24px);overflow-y:auto;border-radius:28px;background:linear-gradient(158deg,rgba(255,255,255,.17),rgba(255,255,255,.035));-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 0 0 1px rgba(255,255,255,.26),0 14px 30px -10px rgba(0,0,0,.5);scrollbar-width:none}
   .rail::-webkit-scrollbar{display:none}
-  .rail .tabg{width:100%;min-width:0;border-radius:18px;padding:8px 0 7px;font-size:10px;color:#8f8b84;position:relative}
-  .rail .tabg.on{color:#ece8e1}
+  .rail .tabg{width:100%;min-width:0;border-radius:18px;padding:8px 0 7px;font-size:10px;color:#f6f3ec;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.55);position:relative}
+  .rail .tabg.on{color:#ecc98a}
   .rail .bdg.c{background:#B98A41;right:6px}
   .rootapp{margin:0 auto 0 108px!important;max-width:1100px!important}
 }
@@ -265,8 +265,8 @@ input,select,textarea{color-scheme:light}
 html,body{background:radial-gradient(120% 46% at 92% -4%,rgba(184,145,90,.2),transparent 62%),radial-gradient(90% 40% at 0% 38%,rgba(110,150,225,.2),transparent 70%),#eceef3!important}
 [style*="background: rgba(255, 255, 255, 0.7)"]{background:linear-gradient(158deg,rgba(255,255,255,.95),rgba(255,255,255,.55))!important;-webkit-backdrop-filter:blur(20px) saturate(1.6);backdrop-filter:blur(20px) saturate(1.6);box-shadow:inset 0 1.5px 1px #fff,inset 0 0 0 1px rgba(0,0,0,.08)!important;border:0!important}
 .bnav .in,.massheet{background:linear-gradient(158deg,rgba(255,255,255,.95),rgba(255,255,255,.6));box-shadow:inset 0 1.5px 1px #fff,inset 0 0 0 1px rgba(0,0,0,.08),0 14px 30px -10px rgba(40,40,70,.25)}
-.bnav .tabg{color:#15171c;text-shadow:none}.bnav .tabg.on{color:#8a5f1e}.masit{color:#333}
-@media (min-width:900px){.rail{background:linear-gradient(158deg,rgba(255,255,255,.95),rgba(255,255,255,.6));box-shadow:inset 0 1.5px 1px #fff,inset 0 0 0 1px rgba(0,0,0,.08),0 14px 30px -10px rgba(40,40,70,.25)}.rail .tabg{color:#5a5d66}.rail .tabg.on{color:#111}}
+.bnav .tabg{color:#15171c;text-shadow:none}.bnav .tabg.on{color:#8a5f1e}.masit{color:#15171c}
+@media (min-width:900px){.rail{background:linear-gradient(158deg,rgba(255,255,255,.95),rgba(255,255,255,.6));box-shadow:inset 0 1.5px 1px #fff,inset 0 0 0 1px rgba(0,0,0,.08),0 14px 30px -10px rgba(40,40,70,.25)}.rail .tabg{color:#15171c;text-shadow:none}.rail .tabg.on{color:#8a5f1e}}
 `;
 
 // Montos: se escriben con separador de miles (1.500.000) y se leen tanto así como en formato simple.
