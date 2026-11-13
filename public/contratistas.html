@@ -64,7 +64,9 @@ function draw(){const a=$('#app');if(!CT){a.innerHTML=dibujaLogin();$('#go').onc
  if(VISTA==='det'){a.innerHTML=dibujaDet();ligaDet();return}
  a.innerHTML=dibujaLista();$('#sal').onclick=salir;const ab=tp=>()=>{NEW={tipo:tp,titulo:'',desc:'',tarea:'',dias:'',monto:'',fotos:[],archivos:[]};ERR='';VISTA='nuevo';draw();scrollTo(0,0)};$('#nuevo').onclick=ab('');$('#npres').onclick=ab('presupuesto');$('#nmat').onclick=ab('materiales');a.querySelectorAll('[data-id]').forEach(c=>c.onclick=()=>{SEL=c.dataset.id;ERR='';VISTA='det';draw();scrollTo(0,0)})}
 function leerNuevo(){const n=NEW;const g=i=>{const e=document.getElementById(i);return e?e.value:''};n.titulo=g('n-tit');n.desc=g('n-desc');n.tarea=g('n-tar');n.dias=g('n-dias');n.monto=g('n-monto')}
-function ligaNuevo(){$('#atras').onclick=()=>{VISTA='lista';ERR='';draw()};document.querySelectorAll('[data-tipo]').forEach(b=>b.onclick=()=>{leerNuevo();NEW.tipo=b.dataset.tipo;draw()});
+function miles(v){return String(v).replace(/\D/g,'').replace(/^0+(?=\d)/,'').replace(/\B(?=(\d{3})+(?!\d))/g,'.')}
+function ligaNuevo(){const m=document.getElementById('n-monto');if(m){m.value=miles(m.value);m.oninput=()=>{m.value=miles(m.value);try{m.setSelectionRange(m.value.length,m.value.length)}catch(e){}}}
+ $('#atras').onclick=()=>{VISTA='lista';ERR='';draw()};document.querySelectorAll('[data-tipo]').forEach(b=>b.onclick=()=>{leerNuevo();NEW.tipo=b.dataset.tipo;draw()});
  if($('#n-fot'))$('#n-fot').onchange=async e=>{leerNuevo();const fs=[...e.target.files];NEW.subiendo=true;ERR='';draw();try{for(const f of fs.slice(0,10-NEW.fotos.length))NEW.fotos.push(await subirFoto(f))}catch(x){ERR='No se pudo subir una foto. Probá de nuevo.'}NEW.subiendo=false;draw()};
  if($('#n-arc'))$('#n-arc').onchange=async e=>{leerNuevo();const fs=[...e.target.files];NEW.subiendo=true;ERR='';draw();try{for(const f of fs.slice(0,10-NEW.archivos.length))NEW.archivos.push(await subirArchivo(f))}catch(x){ERR='No se pudo subir un archivo (máximo 15 MB). Probá de nuevo.'}NEW.subiendo=false;draw()};
  $('#env').onclick=enviar}
