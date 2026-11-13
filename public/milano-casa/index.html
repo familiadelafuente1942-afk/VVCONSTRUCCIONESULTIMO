@@ -1370,4 +1370,24 @@ function stage(i){const s=ST[i];$('#stt').textContent=(i+1)+'. '+s[0];$('#std').
 ST.forEach((s,i)=>{const b=document.createElement('button');b.textContent=s[0];b.onclick=()=>stage(i);$('#stg').appendChild(b)});stage(0);
 /* contacto */
 if(C.whatsapp){const a=$('#wa');a.href='https://wa.me/'+C.whatsapp+'?text='+encodeURIComponent(C.mensaje);a.hidden=false}else{$('#ctxt').textContent='Pronto vas a poder consultarnos desde acá.'}
-</script></body></html>
+</script><script id="edfotos">
+/* Fotos ocultas: la lista se guarda en el servidor. Con ?editar=1 y la clave se pueden quitar o restaurar fotos y videos. */
+(function(){
+var API='/api/nexo2',OC={},T=0,ED=false,GR=['#ggal','#gobra','#gb'];
+function post(b){return fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(function(r){return r.json()})}
+function key(e){return e.getAttribute('src')||''}
+function pinta(){GR.forEach(function(g){var c=document.querySelector(g);if(!c)return;[].forEach.call(c.querySelectorAll('img'),function(i){var h=!!OC[key(i)];if(ED){i.style.display='';i.style.opacity=h?'.22':'1';i.style.outline=h?'3px solid #e2493e':'';i.style.outlineOffset='-3px'}else if(h)i.style.display='none'})});
+ [].forEach.call(document.querySelectorAll('video[poster]'),function(v){var h=!!OC[key(v)];if(!ED){if(h)v.style.display='none';return}if(v.style.display==='none')return;v.style.opacity=h?'.25':'1';var b=v.nextElementSibling;if(!b||!b.classList.contains('edv')){b=document.createElement('button');b.className='btn sm edv';b.style.cssText='margin:6px 0 12px';v.parentNode.insertBefore(b,v.nextSibling);b.onclick=function(){tog(key(v))}}b.textContent=h?'↩ Volver a poner este video':'✕ Quitar este video'})}
+function guarda(){T=Date.now();post({op:'pc_put',app:'milanocasa',t:T,v:JSON.stringify({ocultas:Object.keys(OC)})}).then(function(j){var e=document.getElementById('edst');if(e)e.textContent=j&&j.ok?'Guardado ✓ · '+Object.keys(OC).length+' quitadas':'No se pudo guardar, probá de nuevo'}).catch(function(){var e=document.getElementById('edst');if(e)e.textContent='Sin conexión: no se guardó'})}
+function tog(k){if(!k)return;if(OC[k])delete OC[k];else OC[k]=1;pinta();guarda()}
+post({op:'pc_get',app:'milanocasa'}).then(function(j){try{var d=j&&j.doc&&j.doc.v?JSON.parse(j.doc.v):{};(d.ocultas||[]).forEach(function(k){OC[k]=1});T=(j.doc&&j.doc.t)||0}catch(e){}pinta()}).catch(function(){});
+GR.forEach(function(g){var c=document.querySelector(g);if(c&&window.MutationObserver)new MutationObserver(pinta).observe(c,{childList:true})});
+document.addEventListener('click',function(e){if(!ED)return;var t=e.target;if(t&&t.tagName==='IMG'&&GR.some(function(g){var c=document.querySelector(g);return c&&c.contains(t)})){e.stopImmediatePropagation();e.preventDefault();tog(key(t))}},true);
+function sha(x){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(x)).then(function(b){return [].map.call(new Uint8Array(b),function(n){return n.toString(16).padStart(2,'0')}).join('')})}
+function entrar(){ED=true;var d=document.createElement('div');d.style.cssText='position:sticky;top:0;z-index:50;background:#b8915a;color:#16120b;padding:10px 14px;font-weight:600;font-size:14px;text-align:center';d.innerHTML='Modo edición · tocá una foto para quitarla o volver a ponerla. <span id="edst" style="font-weight:400">Los cambios se guardan solos.</span> <a href="'+location.pathname+'" style="color:#16120b;margin-left:8px">Salir</a>';document.body.insertBefore(d,document.body.firstChild);pinta()}
+if(/[?&]editar=1/.test(location.search)){var o=document.createElement('div');o.style.cssText='position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:20px';o.innerHTML='<div class="card" style="max-width:340px"><b>Modo edición</b><p class="sub" style="margin:4px 0 8px">Poné la clave para quitar fotos.</p><input id="edk" type="text" placeholder="Clave" autocomplete="off"><div id="ede" style="color:#ff8f86;font-size:13px;min-height:1em"></div><button class="btn gold full" id="edok">Entrar</button></div>';document.body.appendChild(o);
+ var ok=function(){sha(document.getElementById('edk').value.trim()).then(function(h){if(h==='1d15d754bd6fe1657e5b718e12b0b80fb0919a22fcd70811edcae6cb2730d3da'){o.remove();entrar()}else document.getElementById('ede').textContent='Clave incorrecta'})};
+ document.getElementById('edok').onclick=ok;document.getElementById('edk').addEventListener('keydown',function(e){if(e.key==='Enter')ok()})}
+})();
+</script>
+</body></html>
