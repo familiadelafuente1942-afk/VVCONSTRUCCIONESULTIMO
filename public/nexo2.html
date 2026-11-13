@@ -3660,7 +3660,7 @@ function ovRebase(o){if(!o.tpl)return;const sc={...o,tasks:[],cards:[],planos:[]
 
 /* ===== DIR-08 · respaldo antes de migrar o regenerar ===== */
 function respaldoObra(o,motivo){const r={t:Date.now(),m:motivo,tpl:!!o.tpl,mod2:o.mod2?JSON.parse(JSON.stringify(o.mod2)):null,f:{inicio:o.inicio,m2:o.m2,plantas:o.plantas,subsuelo:!!o.subsuelo,pileta:!!o.pileta,nivel:o.nivel},ed:JSON.parse(JSON.stringify(o.edits||[])),base:JSON.parse(JSON.stringify(o.base)),ov:ovDiff(o),nT:o.tasks.length,nC:o.cards.length};
-  o.resp=[r,...(o.resp||[])].slice(0,3);return r}
+  o.resp=[r,...(o.resp||[])].slice(0,10);return r}
 A.respRest=ds=>{const o=findO(ds.o),r=(o.resp||[])[+ds.i];if(!o||!r||!esDir())return;if(!confirm('¿Restaurar el respaldo del '+fmtLargo(r.t)+'? Vuelve el cronograma, el modelo y el avance de ese momento.'))return;
   Object.assign(o,r.f);o.edits=r.ed;if(r.tpl){o.tpl=true;o.mod2=r.mod2}else{delete o.tpl;delete o.mod2}o.cg=Date.now();o.base=JSON.parse(JSON.stringify(r.base));if(r.ov)o.ov=r.ov;else delete o.ov;o.resp=o.resp.filter((x,i)=>i!==+ds.i);
   cfgGuardar();toast('Respaldo restaurado. Recargando…');setTimeout(()=>location.reload(),700)};
@@ -3700,8 +3700,8 @@ function tm2Html(){const o=findO(TM.oid),M=TM.M,w=tm2Work(o),inl=!!TM.inline;
   <div class="row2"><label class="f">Ritmo de obra (0,8 a 1,3)<input id="tm-rit" type="number" min="0.8" max="1.3" step="0.05" value="${M.ritmo}" data-inp="tm2"></label><label class="f">Fecha de inicio (semana 0)<input id="tm-ini" type="date" value="${M.inicio}" data-inp="tm2"></label></div>
   <div class="row2"><label class="f">Margen para el propietario y el estudio (%)<input id="tm-mg" type="number" min="0" max="40" step="1" value="${TM.margen==null?(o.margen==null?10:o.margen):TM.margen}" data-inp="tm2"></label><span class="muted small" style="align-self:end">Solo Dirección lo ve. El estudio y el propietario ven el cronograma con las fechas estiradas este porcentaje desde el inicio.</span></div>
   <div id="tm-prev">${tm2Prev()}</div>
-  ${ofre?`<div class="infobox">${w.leg?`Esta obra tiene ${plural(w.av,'tarea con avance o pedidos respondidos','tareas con avance o pedidos respondidos')}: pasan a las tareas equivalentes de la plantilla o se conservan como tareas manuales. Antes se hace un respaldo.`:`Hay ${plural(w.man,'tarea editada a mano','tareas editadas a mano')} y ${plural(w.av,'tarea con avance','tareas con avance')}.`} ¿Qué hacemos?</div>`:''}
-  ${ofre&&!w.leg?`<button class="btn gold" type="submit" data-modo="mantener">Mantener las tareas editadas o con avance y regenerar el resto</button><button class="btn" type="submit" data-modo="todo">Regenerar todo</button>`:ofre&&w.leg?`<button class="btn gold" type="submit" data-modo="todo">Pasar a las tareas equivalentes y conservar el resto como manuales</button>`:`<button class="btn gold" type="submit" data-modo="todo">${TM.aplicar?'Generar cronograma':'Guardar modelo'}</button>`}
+  ${ofre?`<div class="infobox">${w.leg?`Esta obra ya tiene ${plural(w.av,'tarea con avance, fotos o pedidos cargados','tareas con avance, fotos o pedidos cargados')}. Al generar el cronograma, cada una se pasa a su tarea equivalente; las que no tienen equivalente quedan como tareas manuales. No se pierde nada (antes se hace un respaldo).`:`Hay ${plural(w.man,'tarea editada a mano','tareas editadas a mano')} y ${plural(w.av,'tarea con avance','tareas con avance')}.`} ¿Qué hacemos?</div>`:''}
+  ${ofre&&!w.leg?`<button class="btn gold" type="submit" data-modo="mantener">Mantener las tareas editadas o con avance y regenerar el resto</button><button class="btn" type="submit" data-modo="todo">Regenerar todo</button>`:ofre&&w.leg?`<button class="btn gold" type="submit" data-modo="todo">Generar y pasar las tareas</button><button class="btn ghost" type="button" data-act="tmCancelar">Cancelar</button>`:`<button class="btn gold" type="submit" data-modo="todo">${TM.aplicar?'Generar cronograma':'Guardar modelo'}</button>`}
   ${inl?'':'<button class="btn ghost" type="button" data-act="close">Cancelar</button>'}
   ${(o.resp||[]).length?`<details><summary class="small muted">Respaldos de esta obra (${o.resp.length})</summary>${o.resp.map((r,i)=>`<div class="irow"><span class="small">${fmtLargo(r.t)} · ${esc(r.m)} · ${r.nT} tareas</span><button type="button" class="btn sm" data-act="respRest" data-o="${o.id}" data-i="${i}">Restaurar</button></div>`).join('')}</details>`:''}</form>`}
 function tm2Draw(){const h=tm2Html();if(TM.inline)keepScroll(draw);else openSheet(h,'Modelo de la obra')}
@@ -3749,6 +3749,8 @@ function tplAplicar(o,M,modo){
   o.sup=tplSup(o,o.sup);
   return{n:o.base.length,mov:moved.length,kept:extraT.length,man:keep.size,cards:movedCards.length}}
 SUBMIT.modelo2=(f,ev)=>{const o=findO(f.dataset.o);if(!o||!esDir()||!TM)return;tm2Read();const modo=(ev&&ev.submitter&&ev.submitter.dataset.modo)||'todo',ap=TM.aplicar;
+  if(!ap&&!confirm(`Ya existe un cronograma generado${o.cg?' por Dirección el '+fAR(o.cg)+' '+hAR(o.cg):''}. ¿Regenerarlo?`))return;
+  if(ap)(window.__nuevoCron=window.__nuevoCron||[]).push(o.id);
   respaldoObra(o,ap?'Antes de generar el cronograma':'Antes de cambiar el modelo');
   let r;try{r=tplAplicar(o,TM.M,modo)}catch(e){console.error(e);toast('No se pudo aplicar el modelo y no se guardó nada. Recargando…');setTimeout(()=>location.reload(),1500);return}
   if(TM.margen!=null)o.margen=TM.margen;else if(o.margen==null)o.margen=10;
@@ -3761,13 +3763,20 @@ SUBMIT.modelo2=(f,ev)=>{const o=findO(f.dataset.o);if(!o||!esDir()||!TM)return;t
   (window.nexoSubirYa?window.nexoSubirYa():Promise.resolve(false)).then(ok=>{
     if(ok)toast(`${ap?'Cronograma guardado ✓':'Modelo guardado ✓'} · ${detalle}. Respaldo previo guardado.`);
     else toast('No se pudo guardar en la nube. El cronograma quedó en este aparato y el anterior está en "Respaldos"; tocá Reintentar abajo.')}).catch(()=>{})};
-A.modeloObra=ds=>{const o=findO(ds.o);MO=null;sheetModelo2(ds.o,!o.tpl)};
+A.tmCancelar=()=>{TM=null;closeSheet();draw()};
+A.syncReintentar=()=>{window.__sync.est='cargando';draw();document.dispatchEvent(new Event('visibilitychange'))};
+A.modeloObra=ds=>{const o=findO(ds.o);if(!o.tpl&&window.__sync&&window.__sync.est!=='ok'){toast('Todavía se está consultando la nube: esperá un momento.');return}MO=null;sheetModelo2(ds.o,!o.tpl)};
 A.aplicarPlantilla=ds=>sheetModelo2(ds.o,true);
 
-const cgSello=o=>{if(!o.tpl||!o.cgu)return'';const t=+o.cgu,hoy=fAR(t)===fAR(Date.now());return `<p class="small muted" style="margin:0 0 8px">Actualizado ${hoy?'hoy':fAR(t)} ${hAR(t)} por Dirección</p>`};
+const cgSello=o=>{if(!o.tpl)return'';let h='';if(o.cgu){const t=+o.cgu,hoy=fAR(t)===fAR(Date.now());h+=`<p class="small muted" style="margin:0 0 8px">Actualizado ${hoy?'hoy':fAR(t)} ${hAR(t)} por Dirección</p>`}
+  if(esDir()&&(o.resp||[]).length)h+=`<details style="margin:0 0 8px"><summary class="small muted">Historial de versiones del cronograma (${o.resp.length})</summary>${o.resp.map((r,i)=>`<div class="irow"><span class="small">${fAR(r.t)} ${hAR(r.t)} · ${esc(r.m)} · ${r.nT} tareas</span><button type="button" class="btn sm" data-act="respRest" data-o="${o.id}" data-i="${i}">Restaurar</button></div>`).join('')}</details>`;
+  return h};
 function tabCrono(o){
   const _h=tabCrono0(o);return cgSello(o)+_h}
 function tabCrono0(o){
+  if(!o.tpl&&window.__sync&&window.__sync.est!=='ok'){
+    /* todavía no se consultó la nube (o no se pudo): nunca se muestra la pantalla de armado */
+    return window.__sync.est==='error'?`<div class="infobox"><b>No se pudo cargar el cronograma.</b> Revisá la conexión.<br><button class="btn sm gold" data-act="syncReintentar" style="margin-top:8px">Reintentar</button></div>`:`<div class="infobox"><b>Cargando cronograma…</b></div>`}
   if(!o.tpl){if(esDir()){if(!TM||TM.oid!==o.id||!TM.inline)tm2Init(o,true,true);return `<div class="sec">${tm2Html()}</div>`}return `<div class="infobox"><b>Todavía no se cargó el modelo de obra.</b> Cuando la Dirección lo cargue se genera el cronograma de esta obra.</div>`}
   const r=ROLE(),est=r==='estudio',C=S.capas,dv=desvioSem(o),dir=esDir(),jefe=puedeEditar(o);
   if(est)return `<p class="small muted">Cronograma contractual de la obra, presentado por la constructora. Las fechas límite de cada tarjeta salen del cronograma interno de obra.</p><div class="legend"><span><i class="sw sw-plan"></i>tarea</span><span><i class="sw sw-hito"></i>hito</span></div>${gantt(o,{obra:false,base:false,contractual:true,hitos:true})}${modelBox(o)}`;
@@ -4664,6 +4673,7 @@ const rawSet=Storage.prototype.setItem,rawGet=Storage.prototype.getItem;
 const lget=k=>{try{return rawGet.call(localStorage,k)}catch(e){return null}};
 const lset=(k,v)=>{try{rawSet.call(localStorage,k,v)}catch(e){}};
 let listo=false;const sucio=new Set();const tim={};
+window.__sync={est:'cargando',ok:0,ocupado:0};
 /* cambios sin subir: quedan anotados en el aparato para subirlos al volver a abrir (si la app se cerró antes de llegar a la nube) */
 const PEND='nexo2_sync_pend_';
 const marcar=k=>{sucio.add(k);lset(PEND+k,'1')};
@@ -4718,6 +4728,12 @@ function estado(tipo){try{let e=document.getElementById('nx-sync');
   else if(tipo==='guardando'){e.style.background='#444';e.style.color='#fff';e.innerHTML='Guardando…';e.style.display='flex'}
   else if(tipo==='pend'){e.style.background='#b3542a';e.style.color='#fff';e.innerHTML='<span>Pendiente de sincronizar</span><button type="button" style="background:#fff;color:#b3542a;border:0;border-radius:999px;padding:4px 12px;font:700 13px var(--f-cond,sans-serif)">Reintentar</button>';e.style.display='flex';e.querySelector('button').onclick=()=>window.nexoSubirYa&&window.nexoSubirYa()}
   else e.style.display='none'}catch(x){}}
+function indSync(){try{const S=window.__sync,off=!navigator.onLine||S.est==='error',pend=sucio.size>0||S.ocupado>0;let tx,c;
+  if(off||(pend&&S.est!=='cargando'&&!S.ocupado)){tx='Sin conexión · pendiente de sincronizar';c='#e0894f'}
+  else if(S.ocupado>0||S.est==='cargando'){tx='Sincronizando…';c='#c9a24a'}
+  else{const s=Math.max(0,Math.round((Date.now()-(S.ok||Date.now()))/1000));tx='Sincronizado ✓ hace '+(s<60?s+' s':Math.floor(s/60)+' min');c='#4fa86f'}
+  document.querySelectorAll('.brand .mono').forEach(e=>{let i=e.querySelector('.nxi');if(!i){i=document.createElement('span');i.className='nxi';i.style.cssText='display:block;font-size:11px;font-weight:600';e.appendChild(i)}if(i.textContent!==tx)i.textContent=tx;i.style.color=c})}catch(x){}}
+setInterval(indSync,1000);window.addEventListener('online',indSync);window.addEventListener('offline',indSync);
 async function subir(k){
   let v=lget(k);if(v==null||v===VACIO)return true;
   estado('guardando');
@@ -4727,10 +4743,20 @@ async function subir(k){
       /* otro usuario guardó algo desde la última vez: se junta con lo mío en vez de pisarlo */
       const m=merge3(lget(BASE_K+k),v,d.v)||fusion(v,d.v);
       if(m&&m!==v){rawSet.call(localStorage,k,m);v=m;recargar=true}}}}catch(e){}
-  const t=Date.now();
-  try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:MAP[k],t,v})});
+  const t=Date.now();const nuevos=(window.__nuevoCron||[]).slice();
+  window.__sync.ocupado++;
+  try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:MAP[k],t,v,nuevos})});
+    window.__sync.ocupado--;
+    if(r.status===409){let j={};try{j=await r.json()}catch(e){}
+      /* la obra ya tiene un cronograma en la nube: gana el que ya existe y se avisa */
+      try{const g=await fetch(API,{cache:'no-store'}),d=(await g.json())[MAP[k]];const R=JSON.parse(d.v),M=JSON.parse(merge3(lget(BASE_K+k),v,d.v)||v);
+        (j.ids||[]).forEach(id=>{M.mod=M.mod||{};if(R.mod&&R.mod[id])M.mod[id]=R.mod[id];else delete M.mod[id]});
+        rawSet.call(localStorage,k,JSON.stringify(M));lset('nexo2_sync_t_'+k,String(d.t));lset(BASE_K+k,d.v);window.__nuevoCron=(window.__nuevoCron||[]).filter(x=>!nuevos.includes(x));marcar(k)}catch(e){/* no se pudo leer la nube: se conserva la marca de 'primer cronograma' y se reintenta (el servidor lo vuelve a rechazar) */}
+      estado('');try{toast('Esta obra ya tenía un cronograma generado: se cargó el existente y NO se guardó el tuyo. Nada se perdió.')}catch(e){}
+      setTimeout(()=>recargarCuando(),1500);return false}
     if(r.ok){let j={};try{j=await r.json()}catch(e){}
-      lset('nexo2_sync_t_'+k,String(+j.t||t));lset(BASE_K+k,v);if(lget(k)===v)limpio(k);else marcar(k);falloAviso=false;estado('ok');if(recargar)recargarCuando();return true}else throw new Error('http')}catch(e){estado('pend');if(!falloAviso){falloAviso=true;try{toast('No se pudo guardar en la nube. El cambio quedó en este aparato y se sube solo al volver la conexión.')}catch(x){}}return false}
+      window.__nuevoCron=(window.__nuevoCron||[]).filter(x=>!nuevos.includes(x));
+      lset('nexo2_sync_t_'+k,String(+j.t||t));lset(BASE_K+k,v);if(lget(k)===v)limpio(k);else marcar(k);falloAviso=false;window.__sync.ok=Date.now();estado('ok');if(recargar)recargarCuando();return true}else throw new Error('http')}catch(e){if(window.__sync.ocupado>0)window.__sync.ocupado--;estado('pend');if(!falloAviso){falloAviso=true;try{toast('No se pudo guardar en la nube. El cambio quedó en este aparato y se sube solo al volver la conexión.')}catch(x){}}return false}
 }
 let falloAviso=false;
 Storage.prototype.setItem=function(k,v){
@@ -4738,17 +4764,17 @@ Storage.prototype.setItem=function(k,v){
   return rawSet.call(this,k,v);
 };
 async function bajar(){
-  let cambio=false;
+  let cambio=false,okNube=false;const estAntes=window.__sync.est;window.__sync.ocupado++;
   try{
     const r=await fetch(API,{cache:'no-store'});
-    if(r.ok){
+    if(r.ok){okNube=true;
       const rows=await r.json();
       for(const k of Object.keys(MAP)){
         const d=rows[MAP[k]];
         try{const L=JSON.parse(lget(k)||'{}')||{},C=d?JSON.parse(d.v)||{}:{};if(((L.fu&&L.fu.t)||0)>((C.fu&&C.fu.t)||0))marcar(k)}catch(e){}
         if(!d)continue;
         const lt=+lget('nexo2_sync_t_'+k)||0;
-        if(d.t>lt){
+        if(d.t!==lt){/* cualquier diferencia con lo último que vio este aparato cuenta como cambio (no se compara por reloj) */
           const loc=lget(k);let f=null;
           if(sucio.has(k)&&lget(BASE_K+k))f=merge3(lget(BASE_K+k),loc,d.v);
           if(!f)f=fusion(loc,d.v);
@@ -4758,7 +4784,10 @@ async function bajar(){
       }
     }
   }catch(e){}
+  window.__sync.ocupado=Math.max(0,window.__sync.ocupado-1);
+  window.__sync.est=okNube?'ok':'error';if(okNube)window.__sync.ok=Date.now();
   listo=true;
+  if(estAntes!=='ok'&&okNube&&!cambio){try{if(S.u)draw()}catch(e){}}
   if(cambio){
     recargarCuando();
   }
@@ -4771,7 +4800,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261113-154807';
+const NEXO_BUILD='20261113-161553';
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -4781,13 +4810,13 @@ async function ver(){if(document.visibilityState!=='visible')return;try{const r=
 setTimeout(ver,4000);setInterval(ver,60000);
 setTimeout(()=>{try{const m=/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)/.exec(NEXO_BUILD);if(!m)return;const f=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5])-108e5),z=n=>String(n).padStart(2,'0'),tx=' · v'+z(f.getUTCDate())+'/'+z(f.getUTCMonth()+1)+' '+z(f.getUTCHours())+':'+z(f.getUTCMinutes());document.querySelectorAll('.brand .mono').forEach(e=>{if(!e.querySelector('.nxv'))e.insertAdjacentHTML('beforeend','<span class="nxv" style="opacity:.65">'+tx+'</span>')})}catch(e){}},1200);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')ver()})}
 window.nexoSubirYa=async()=>{let ok=true;for(const k of [...(sucio.size?sucio:Object.keys(MAP))]){clearTimeout(tim[k]);if(!(await subir(k)))ok=false}return ok};
-window.addEventListener('online',()=>{if(sucio.size)window.nexoSubirYa()});window.addEventListener('offline',()=>{if(sucio.size)estado('pend')});
+window.addEventListener('online',()=>{if(sucio.size)window.nexoSubirYa();bajar()});window.addEventListener('offline',()=>{if(sucio.size)estado('pend')});
 bajar();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')bajar();else sucio.forEach(k=>{clearTimeout(tim[k]);subir(k)})});
 /* tiempo real: cada 4 s se consulta solo la versión (liviano); si hay algo nuevo se baja enseguida */
 setInterval(async()=>{if(document.visibilityState!=='visible'||!listo)return;
-  try{const r=await fetch(API+'?t=1&_='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json(),lt=+lget('nexo2_sync_t_nexo2_obras_cfg')||0;if((+j.t||0)>lt)bajar()}catch(e){}},4000);
-setInterval(()=>{if(document.visibilityState==='visible'&&listo)bajar()},60000);
+  try{const r=await fetch(API+'?t=1&_='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json(),lt=+lget('nexo2_sync_t_nexo2_obras_cfg')||0;if((+j.t||0)!==lt)bajar()}catch(e){}},4000);
+setInterval(()=>{if(document.visibilityState==='visible'&&listo)bajar()},10000);
 setTimeout(()=>OBRAS.forEach(o=>infLoad(o,true)),800);setInterval(()=>{if(document.visibilityState==='visible')OBRAS.forEach(o=>infLoad(o))},40000);
 }
 

@@ -37,6 +37,10 @@
     {
       "path": "/api/agenda-diaria",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/nexo2?backup=1",
+      "schedule": "0 5 * * *"
     }
   ]
 }

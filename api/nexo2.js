@@ -141,6 +141,26 @@ export default async function handler(req, res) {
       res.status(200).json(out);
       return;
     }
+    if (req.method === "GET" && req.query && req.query.backup) {
+      // copia completa diaria de la base (todas las filas de nexo2_estado), guardada 30 días. La llama el cron de Vercel.
+      const cronOk = (process.env.CRON_SECRET && req.headers.authorization === "Bearer " + process.env.CRON_SECRET) || /vercel-cron/i.test(String(req.headers["user-agent"] || ""));
+      if (!cronOk) { res.status(403).json({ error: "No autorizado" }); return; }
+      const r = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave,valor&clave=not.like.bk_*&limit=5000`, { headers: H });
+      if (!r.ok) { res.status(502).json({ error: "No se pudo leer la base" }); return; }
+      const filas = await r.json();
+      const hoy = new Date(Date.now() - 108e5).toISOString().slice(0, 10).replace(/-/g, "");
+      await escribir(H, "bk_" + hoy, { t: Date.now(), n: filas.length, filas });
+      const l = await fetch(`${URL_BASE}/rest/v1/nexo2_estado?select=clave&clave=like.bk_*`, { headers: H });
+      let borradas = 0;
+      if (l.ok) {
+        const lim = new Date(Date.now() - 108e5 - 30 * 864e5).toISOString().slice(0, 10).replace(/-/g, "");
+        for (const x of await l.json()) {
+          if (/^bk_\d{8}$/.test(x.clave) && x.clave.slice(3) < lim) { await fetch(`${URL_BASE}/rest/v1/nexo2_estado?clave=eq.${x.clave}`, { method: "DELETE", headers: H }); borradas++; }
+        }
+      }
+      res.status(200).json({ ok: true, copia: "bk_" + hoy, filas: filas.length, borradas });
+      return;
+    }
     if (req.method === "GET" && req.query && req.query.t) {
       // consulta liviana: solo la versión (para enterarse de cambios en segundos sin bajar todo)
       const v = await leer(H, "cfg");
@@ -261,6 +281,15 @@ export default async function handler(req, res) {
       }
       // la hora de versión la pone el servidor (siempre creciente): los relojes de cada aparato pueden estar desfasados
       let prev = null; try { prev = await leer(H, "cfg"); } catch { prev = null; }
+      // protección: no se puede guardar un "primer cronograma" sobre una obra que ya tiene uno en la nube
+      if (Array.isArray(b.nuevos) && b.nuevos.length && prev && typeof prev.v === "string") {
+        try {
+          const P = JSON.parse(prev.v);
+          const tiene = (id) => !!((P.mod && P.mod[id] && P.mod[id].tpl) || (P.nuevas || []).some((x) => x && x.id === id && x.tpl));
+          const choca = b.nuevos.filter((id) => typeof id === "string" && tiene(id));
+          if (choca.length) { res.status(409).json({ error: "ya_existe", ids: choca, t: Number(prev.t) || 0 }); return; }
+        } catch { /* si no se puede leer, no bloquea */ }
+      }
       const t = Math.max(Date.now(), (prev && Number(prev.t) || 0) + 1);
       await escribir(H, "cfg", { t, v: b.v });
       res.status(200).json({ ok: true, t });
