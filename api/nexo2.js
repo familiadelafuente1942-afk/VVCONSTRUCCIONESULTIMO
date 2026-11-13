@@ -233,7 +233,7 @@ export default async function handler(req, res) {
         await escribir(H, K, cur);
         try {
           if ((cur.subs || []).length) {
-            const vivos = await pushEnviar(H, cur.subs, { title: "Nueva cotización", body: String(r.prov).trim().slice(0, 60) + " cotizó " + String((cur.ped && cur.ped.g) || "tu pedido").slice(0, 80), url: "/correo-barracas.html", tag: "cz-" + id });
+            const vivos = await pushEnviar(H, cur.subs, { title: "Nueva cotización", body: String(r.prov).trim().slice(0, 60) + " cotizó " + String((cur.ped && cur.ped.g) || "tu pedido").slice(0, 80), url: (typeof (cur.ped && cur.ped.url) === "string" && /^\/[a-z0-9._-]+\.html$/.test(cur.ped.url)) ? cur.ped.url : "/correo-barracas.html", tag: "cz-" + id });
             if (vivos.length !== cur.subs.length) { const c2 = await leer(H, K); if (c2) { c2.subs = vivos; await escribir(H, K, c2); } }
           }
         } catch {}
@@ -496,6 +496,30 @@ export default async function handler(req, res) {
         const items = ((v && v.items) || []).filter((x) => x.id !== id); items.push(rec);
         await escribir(H, clave, { items: items.slice(-300) });
         res.status(200).json({ ok: true, rec }); return;
+      }
+      res.status(400).json({ error: "Operación desconocida" }); return;
+    }
+
+    // ===== Compras (solo Dirección): ítems, pedidos de cotización y presupuestos de cada obra =====
+    if (typeof b.op === "string" && b.op.startsWith("cmpr_")) {
+      const cr = b.cred || {};
+      if (!(cr.rol === "dir" && dirOk(cr.codigo))) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código de Dirección." }); return; }
+      const OK = (x) => /^[A-Za-z0-9_-]{1,40}$/.test(String(x || ""));
+      if (b.op === "cmpr_all") {
+        const ids = (Array.isArray(b.obras) ? b.obras : []).map(String).filter(OK).slice(0, 60);
+        const docs = {};
+        await Promise.all(ids.map(async (id) => { const v = await leer(H, "compras_" + id); if (v && v.doc) docs[id] = { doc: v.doc, t: v.t || 0 }; }));
+        res.status(200).json({ ok: true, docs }); return;
+      }
+      if (!OK(b.obra)) { res.status(400).json({ error: "Obra inválida" }); return; }
+      const clave = "compras_" + b.obra;
+      if (b.op === "cmpr_get") { const v = await leer(H, clave); res.status(200).json({ ok: true, doc: (v && v.doc) || null, t: (v && v.t) || 0 }); return; }
+      if (b.op === "cmpr_set") {
+        const raw = JSON.stringify(b.doc || {});
+        if (raw.length > 900000) { res.status(400).json({ error: "Compras ocupa demasiado: borrá pedidos o presupuestos viejos." }); return; }
+        const t = Date.now();
+        await escribir(H, clave, { doc: JSON.parse(raw), t });
+        res.status(200).json({ ok: true, t }); return;
       }
       res.status(400).json({ error: "Operación desconocida" }); return;
     }

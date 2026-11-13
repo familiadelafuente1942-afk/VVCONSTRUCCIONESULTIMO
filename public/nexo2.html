@@ -2400,7 +2400,7 @@ let SAMPLE=null,IA_CTL=null,IA_BUSY=false;
 function estTarea(t){return t.real?(t.real.av>=100?'terminada':'en curso'):TODAY>=t.start?'en curso':'por empezar'}
 function snapshot(){
   const r=ROLE(),est=r==='estudio';
-  return misObras().map(o=>({obra:o.nombre,modelo:modeloFull(o),avance_real:avance(o)+'%',avance_segun_base:avancePlan(o)+'%',etapa_actual:actual(o).name,proxima_tarea:(proxima(o)||{}).name||'entrega',entrega_prevista:iso(finObra(o)),entrega_base:iso(finBase(o)),...(verCostos()?{jefe_de_obra:o.jefe}:{}),...(iaCtOk()?{contratistas:iaCt(o)}:{}),estudio:o.estudio,
+  return misObras().map(o=>({obra:o.nombre,modelo:modeloFull(o),avance_real:avance(o)+'%',avance_segun_base:avancePlan(o)+'%',etapa_actual:actual(o).name,proxima_tarea:(proxima(o)||{}).name||'entrega',entrega_prevista:iso(finObra(o)),entrega_base:iso(finBase(o)),...(verCostos()?{jefe_de_obra:o.jefe}:{}),...(iaCtOk()?{contratistas:iaCt(o)}:{}),...(ROLE()==='direccion'&&window.iaCm?{compras:iaCm(o)}:{}),estudio:o.estudio,
     tareas:o.tasks.map(t=>({tarea:t.name,inicio:iso(t.start),fin:iso(t.end),estado:estTarea(t),...(t.real?{avance:t.real.av+'%',...(t.real.causa?{causa_atraso:t.real.causa}:{})}:{}),...(desvioTarea(o,t)?{desvio_dias_vs_base:desvioTarea(o,t)}:{})})),
     tarjetas:o.cards.filter(c=>!est||c.tipo==='doc').filter(c=>color(c)!=='futuro').map(c=>{const k=timing(c),col=color(c);return{tarjeta:CARD[c.tipo].n,tarea:c.task.name,semaforo:NOMBRE[col],fecha_limite:iso(k.limit),completos:`${cProg(c).k}/${cProg(c).n}`,pendientes:c.items.filter(i=>!iDone(i)).map(i=>i.txt+(i.estado==='recibido'?' (recibido, falta verificar)':i.estado==='pedido'?' (pedido)':'')).slice(0,12),...(col==='rojo'?{dias_en_rojo:diasRojo(c),...(verCostos()?{costo_espera_estimado:Math.round(costoEst(c))}:{})}:{})}}),
     planos_en_revision:DOCS.filter(x=>x.obra===o&&x.estado==='en revisión').map(x=>x.nombre),
@@ -2422,6 +2422,7 @@ function iaLocal(q){
   const rb=(RUBROS.find(([k])=>n.includes(k))||[])[1];
   const line=c=>`- ${CARD[c.tipo].n}: ${NOMBRE[color(c)].toLowerCase()} · ${cProg(c).k}/${cProg(c).n} · límite ${fmt(timing(c).limit)}`;
   if(iaCtOk()&&/reclamo|contratista|presupuesto|listado de material|aviso|plomer|electricist|pintor|albanil/.test(n))return iaLocalCt(q,o);
+  if(ROLE()==='direccion'&&window.iaLocalCm&&/compra|cotizaci|proveedor/.test(n)){const rc=iaLocalCm(q,o);if(rc)return rc}
   if(o&&rb){const ts=o.tasks.filter(t=>t.rubro===rb);if(!ts.length)return `En ${o.nombre} no hay tareas de ese rubro.`;return ts.map(t=>{const e=estTarea(t);return `**${t.name}**: ${e==='terminada'?'terminada':e==='en curso'?'en curso, termina el '+fmt(t.end):'arranca el '+fmt(t.start)}.\n`+o.cards.filter(c=>c.task===t).map(line).join('\n')}).join('\n')}
   if(n.includes('vencid')||n.includes('rojo')||n.includes('atras')&&!n.includes('equipo')){const cs=cardsDe(o?[o]:obras).filter(c=>color(c)==='rojo');return cs.length?`Hay ${plural(cs.length,'tarjeta vencida','tarjetas vencidas')}${o?' en '+o.nombre:''}.\n`+cs.map(c=>`- ${o?'':c.obra.nombre+': '}${titulo(c)} · ${diasRojo(c)} días hábiles en rojo`).join('\n'):'No hay tarjetas vencidas.'}
   if(n.includes('equipo')){const e=equiposMet();return e.length?`El equipo más lento es ${e.at(-1).k} (${e.at(-1).rend}% de lo planificado) y el que mejor rinde es ${e[0].k} (${e[0].rend}%).`:'Todavía no hay tareas terminadas para comparar equipos.'}
@@ -3148,8 +3149,8 @@ document.addEventListener('input',e=>{const el=e.target.closest('[data-inp]');if
 document.addEventListener('submit',e=>{const f=e.target.closest('[data-submit]');if(!f)return;e.preventDefault();if(f.dataset.submit==='ia'){IA_SUBMIT();return}const fn=SUBMIT[f.dataset.submit];if(fn)fn(f,e)});
 
 /* ================= navegación ================= */
-const ICON={inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',obras:'<path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"/>',pedidos:'<rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/>',registro:'<path d="M5 4h11l3 3v13H5zM9 10h6M9 14h6"/>',mas:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',folder:'<path d="M3 7h6l2 2h10v10H3z"/>'};
-function navItems(){const r=ROLE();return{direccion:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['desempeno','Desempeño','chart'],['mas','Más','mas']],jefe:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['registro','Registro','registro'],['mas','Más','mas']],auditor:[['inicio','Inicio','inicio'],['obras','Obras','obras']],estudio:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['docs','Documentos','folder']],cliente:[['cliente','Mi obra','inicio']]}[r]||[]}
+const ICON={inicio:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',obras:'<path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6"/>',pedidos:'<rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/>',registro:'<path d="M5 4h11l3 3v13H5zM9 10h6M9 14h6"/>',mas:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',compras:'<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M3 4h2.5l2.2 11h10.6L21 8H6.3"/>',folder:'<path d="M3 7h6l2 2h10v10H3z"/>'};
+function navItems(){const r=ROLE();return{direccion:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['desempeno','Desempeño','chart'],['compras','Compras','compras'],['mas','Más','mas']],jefe:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Pedidos','pedidos'],['registro','Registro','registro'],['mas','Más','mas']],auditor:[['inicio','Inicio','inicio'],['obras','Obras','obras']],estudio:[['inicio','Inicio','inicio'],['obras','Obras','obras'],['pedidos','Tarjetas','pedidos'],['docs','Documentos','folder']],cliente:[['cliente','Mi obra','inicio']]}[r]||[]}
 let _snapH='',_snapT=0;
 function credAud(o){if(ROLE()==='direccion')return{rol:'dir',codigo:dirAuthGet()};if(ROLE()==='auditor'){try{return{rol:'aud',codigo:((JSON.parse(localStorage.getItem('nexo2_cred')||'{}').aud)||{})[o.id]||''}}catch(e){}}return null}
 function audReid(a){const old=a.id,nid='ar'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),o=a.obra;o.sup.forEach(s=>{if(s.acta===old)s.acta=nid});o.cert.forEach(c=>{if(c.doc===old)c.doc=nid});DOCS.forEach(x=>{if(x.rev===old)x.rev=nid});a.id=nid;a.real=true;a.auto=false}
@@ -3234,12 +3235,12 @@ function snapPublicar(){
 function draw(){
   const r=ROLE();
   setTimeout(snapPublicar,1500);setTimeout(audSync,1800);setTimeout(adicSync,2200);
-  const view=!S.u?(S.step==='roles'?vRoles():S.step==='obras'||S.step==='obrasAud'?vSelObras():S.step==='cons'?vCons():S.step==='clave'?vClave():vLogin()):({inicio:vInicio,obras:vObras,obra:vObra,pedidos:vPedidos,registro:vRegistro,mas:vMas,config:vConfig,claves:vClaves,ctadmin:vCtAdmin,desempeno:vDesempeno,docs:vDocs,cliente:vCliente}[S.tab]||vInicio)();
+  const view=!S.u?(S.step==='roles'?vRoles():S.step==='obras'||S.step==='obrasAud'?vSelObras():S.step==='cons'?vCons():S.step==='clave'?vClave():vLogin()):({inicio:vInicio,obras:vObras,obra:vObra,pedidos:vPedidos,registro:vRegistro,mas:vMas,config:vConfig,claves:vClaves,ctadmin:vCtAdmin,desempeno:vDesempeno,compras:(window.vCompras||vInicio),docs:vDocs,cliente:vCliente}[S.tab]||vInicio)();
   $('#view').innerHTML=view;
   $('#who').innerHTML=S.u?`<span><b>${esc(S.u.name)}</b>${r==='jefe'||r==='auditor'?`<span class="rol">${plural(misObras().length,'obra','obras')}</span>`:r==='estudio'?`<button class="rol rolbtn" data-act="cambiarCons">${esc(CONSTRUCTORAS.find(c=>c.id===S.cons).n)} ▾</button>`:r==='direccion'?`<span class="rol">${ORG}</span>`:''}</span><button class="btn ghost sm" data-act="actualizar" aria-label="Actualizar la app" title="Actualizar">↻</button><button class="btn ghost sm" data-act="brillo" aria-label="Del blanco al negro" title="Del blanco al negro"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button>${LOCK&&LOCK!=='constructora'?'':'<button class="btn ghost sm" data-act="salir">Salir</button>'}`:'<span class="muted">Ingresá con tu cuenta</span>';
   const nb=misNotifs().filter(n=>!n.leido).length;
   const badge=r==='estudio'?estPend().filter(c=>color(c)==='rojo').length:cardsDe(misObras()).filter(c=>color(c)==='rojo').length;
-  $('#nav').innerHTML=navItems().map(([k,l,ic])=>`<button data-act="tab" data-t="${k}" ${S.tab===k||(S.tab==='obra'&&k==='obras')||(S.tab==='config'&&k==='mas')||(S.tab==='claves'&&k==='mas')||(S.tab==='ctadmin'&&k==='mas')?'aria-current="page"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[ic]}</svg>${l}${k==='pedidos'&&badge?`<span class="badge">${badge}</span>`:''}${(k==='inicio'||k==='cliente')&&nb?`<span class="badge gold">${nb}</span>`:''}</button>`).join('');
+  $('#nav').innerHTML=navItems().map(([k,l,ic])=>`<button data-act="tab" data-t="${k}" ${S.tab===k||(S.tab==='obra'&&k==='obras')||(S.tab==='config'&&k==='mas')||(S.tab==='claves'&&k==='mas')||(S.tab==='ctadmin'&&k==='mas')?'aria-current="page"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[ic]}</svg>${l}${k==='pedidos'&&badge?`<span class="badge">${badge}</span>`:''}${k==='compras'&&window.cmBadge&&cmBadge()?`<span class="badge">${cmBadge()}</span>`:''}${(k==='inicio'||k==='cliente')&&nb?`<span class="badge gold">${nb}</span>`:''}</button>`).join('');
   $('#nav').parentElement.hidden=!S.u;
   const g=$('#gwrap');if(g)g.scrollLeft=+g.dataset.scroll||0;
 }
@@ -4220,6 +4221,7 @@ function snapRol(){const r=ROLE(),os=misObras();
     tareas:o.tasks.map(t=>({tarea:t.name,inicio:iso(t.start),fin:iso(t.end),estado:estTarea(t),...(t.real?{avance:t.real.av+'%',...(t.real.causa?{causa_atraso:t.real.causa}:{})}:{}),...(desvioTarea(o,t)?{desvio_dias_vs_base:desvioTarea(o,t)}:{})})),
     tarjetas_abiertas:o.cards.filter(c=>!['futuro','ok'].includes(color(c))).map(c=>({tarjeta:CARD[c.tipo].n,tarea:c.task.name,semaforo:NOMBRE[color(c)],fecha_limite:iso(timing(c).limit),pendientes:c.items.filter(i=>!iDone(i)).map(i=>i.txt+(i.cant?' ('+i.cant+')':'')+(i.estado==='recibido'?' (recibido, falta verificar)':i.estado==='pedido'?' (pedido)':'')).slice(0,12),...(full&&color(c)==='rojo'?{costo_espera:Math.round(costoEst(c))}:{})})),
     planos:planos(o),adicionales:ADIC.filter(a=>a.obra===o).map(a=>({numero:a.n,detalle:a.txt,estado:adicEstado(a)[0],...(full?{cotizacion:a.total}:{})})),
+    ...(full&&window.iaCm?{compras:iaCm(o)}:{}),
     registro_reciente:REGISTRO.filter(x=>x.obra===o).slice(0,8).map(x=>({fecha:iso(x.fecha),tipo:x.tipo,texto:x.txt})),informes:o.informes.slice(-3).map(i=>({semana:iso(i.desde),resumen:i.resumen})),auditoria:audInfo(o),
     ...(full?{dotacion_hoy:o.dotacion.hoy,jornal:o.jornal,impacto:(e=>({ahorro:Math.round(e.ahorro),perdida:Math.round(e.perdida),riesgo:Math.round(e.riesgo)}))(econ([o])[0])}:{})})),
     ...(full?{desempeno:metricas().map(m=>({obra:m.o.nombre,jefatura_a_tiempo:m.n?m.pct+'%':null,rendimiento:m.rend,desvio_semanas:m.dv,supervisiones_conformes:m.conf})),equipos:equiposMet().map(e=>({equipo:e.k,rendimiento:e.rend+'%',tareas:e.n})),otras_constructoras:'no aplica'}:{})}}
@@ -4392,7 +4394,7 @@ function iaDatosObra(o){
   const sn=snapRol();let d=null;
   if(sn&&sn.obras)d=sn.obras.find(x=>x.obra===o.nombre)||null;
   if(!d)d={obra:o.nombre,etapa:etapaDe(o),avance:avance(o)+'%'};
-  return{...d,ubicacion:o.ubic,estudio:o.estudio,fotos_de_obra_disponibles:iaFotosObra(o).length,renders_disponibles:iaRendersObra(o).length,hoy:iso(TODAY),...(iaCtOk()?{contratistas:iaCt(o)}:{})};
+  return{...d,ubicacion:o.ubic,estudio:o.estudio,fotos_de_obra_disponibles:iaFotosObra(o).length,renders_disponibles:iaRendersObra(o).length,hoy:iso(TODAY),...(iaCtOk()?{contratistas:iaCt(o)}:{}),...(ROLE()==='direccion'&&window.iaCm?{compras:iaCm(o)}:{})};
 }
 function iaDocEstado(o){
   const r=ROLE(),full=r==='direccion',hoy=fmtLargo(TODAY)+' de 2026';
@@ -4430,12 +4432,14 @@ function iaDocLibre(o,a){
   return{titulo:iaTxtCorto(a.titulo||'Informe',90),sub:`Nexo IA · ${ROL_TXT[ROLE()]||'Propietario'}`,obra:o.nombre,num:'IA-'+iso(TODAY).replace(/-/g,''),fecha:fmtLargo(TODAY)+' de 2026',campos:[],...(a.intro?{intro:iaTxtCorto(a.intro,900)}:{}),secciones:secs};
 }
 const IA_TOOLS=[
+  {name:'consultar_compras',description:'Trae el panel de Compras de la obra (solo Dirección): cada ítem a comprar con encargado, proveedor, estado, fecha en que se necesita en obra, fecha de pago, si está pagado, días de atraso y presupuesto; los pedidos de cotización enviados a proveedores y las cotizaciones recibidas (proveedor, total, IVA, entrega, anticipo, cuáles son nuevas); y las comparativas hechas. Sin obra trae todas. Usala para cualquier pregunta sobre compras, atrasos de compras, proveedores o cotizaciones.',input_schema:{type:'object',properties:{obra:{type:'string',description:'Opcional: nombre de la obra. Sin obra, trae todas.'}}}},
   {name:'consultar_contratistas',description:'Trae lo que cargaron los contratistas (plomeros, electricistas, pintores, albañiles, etc.) en el panel de Contratistas: avisos de problemas (falta de material, falta de definiciones o planos, retrasos, adicionales) con quién los cargó, de qué obra, cuándo, estado y respuestas; presupuestos y listados de materiales enviados; quiénes tienen acceso; y cuánto tarda la jefatura en responder. Sin obra trae todas las obras. Usala para cualquier pregunta sobre reclamos, contratistas, presupuestos o listados de materiales.',input_schema:{type:'object',properties:{obra:{type:'string',description:'Opcional: nombre de la obra. Sin obra, trae todas.'}}}},
  {name:'consultar_obra',description:'Trae los datos reales y actualizados de una obra de la app: etapa, avance, cronograma por tarea, tarjetas pendientes, planos, adicionales, registro diario, informes, auditorías, equipo y más según el rol. Usala siempre antes de responder sobre una obra.',input_schema:{type:'object',properties:{obra:{type:'string',description:'Nombre o número de la obra, por ejemplo "Castores 475"'}},required:['obra']}},
  {name:'mostrar_imagenes',description:'Muestra imágenes dentro del chat: renders del proyecto, fotos de obra cargadas en los informes, o cómo se ve la casa en la etapa actual.',input_schema:{type:'object',properties:{obra:{type:'string'},tipo:{type:'string',enum:['renders','fotos_obra','etapa_actual']}},required:['obra','tipo']}},
  {name:'generar_pdf',description:'Genera un PDF descargable. Para pedidos de "estado general" usá plantilla estado_general (arma el informe completo solo). Para cualquier otro informe o resumen, usá plantilla personalizado y armá las secciones con datos que ya consultaste. Cada sección tiene titulo y UNO de: texto, items (lista), columnas+filas (tabla) o fotos ("obra" o "renders").',input_schema:{type:'object',properties:{obra:{type:'string'},plantilla:{type:'string',enum:['estado_general','personalizado']},titulo:{type:'string'},intro:{type:'string'},secciones:{type:'array',items:{type:'object',properties:{titulo:{type:'string'},texto:{type:'string'},items:{type:'array',items:{type:'string'}},columnas:{type:'array',items:{type:'string'}},filas:{type:'array',items:{type:'array',items:{type:'string'}}},fotos:{type:'string',enum:['obra','renders']}},required:['titulo']}}},required:['obra','plantilla']}}
 ];
 async function iaEjecutar(name,a,adj){
+  if(name==='consultar_compras'){if(ROLE()!=='direccion')return{error:'El panel de Compras es solo para Dirección.'};const o1=a&&a.obra?iaObra(a.obra):null;if(a&&a.obra&&!o1)return{error:`No encontré esa obra entre las que podés ver (${misObras().map(x=>x.nombre).join(', ')||'ninguna'}).`};if(window.cmCargaTodo)await cmCargaTodo();return{obras:(o1?[o1]:misObras()).map(x=>({obra:x.nombre,...iaCm(x)}))}}
   if(name==='consultar_contratistas'){if(!iaCtOk())return{error:'Este panel no tiene acceso a los contratistas.'};const o1=a&&a.obra?iaObra(a.obra):null;if(a&&a.obra&&!o1)return{error:`No encontré esa obra entre las que podés ver (${misObras().map(x=>x.nombre).join(', ')||'ninguna'}).`};await ctAsegura(o1);return{obras:(o1?[o1]:misObras()).map(x=>({obra:x.nombre,...iaCt(x)}))}}
   const o=iaObra(a&&a.obra);
   if(!o)return{error:`No encontré esa obra entre las que podés ver (${misObras().map(x=>x.nombre).join(', ')||'ninguna'}).`};
@@ -4463,7 +4467,7 @@ function iaSistema(){
 ${alcance}
 Cómo respondés: conversá como lo haría una persona muy capaz y cercana, en español rioplatense. Contestá lo que te preguntan con tus palabras, de forma natural, sin plantillas ni respuestas armadas; podés explicar, comparar, opinar con fundamento, resumir y razonar sobre los datos. Breve y concreto, pero completo cuando la pregunta lo pide. Usá listas solo cuando ayudan a leer.
 Datos: tenés herramientas para consultar la información real de la app. Antes de contestar sobre una obra, usá consultar_obra. Nunca inventes datos, fechas ni números: si algo no está en la app, decilo. Si te preguntan algo que no tiene que ver con la obra, ayudá igual de forma breve y volvé a lo tuyo.
-Contratistas: la app tiene un panel de Contratistas (plomeros, electricistas, pintores, albañiles…) que avisan problemas (falta de material, definiciones o planos, retrasos, adicionales) y envían presupuestos y listados de materiales; ${iaCtOk()?'para cualquier pregunta sobre reclamos, contratistas, quién los hizo, de qué obra, presupuestos o listados usá consultar_contratistas (o mirá el campo contratistas de consultar_obra) y respondé con nombre, rubro, obra, fecha y estado.':'no tenés acceso a ese panel.'} Archivos: si piden un PDF, informe o resumen para bajar, usá generar_pdf (para "estado general" usá la plantilla estado_general). Si piden fotos, renders o cómo se ve la casa, usá mostrar_imagenes. Después de usarlas, contá en una frase qué generaste o mostraste. No menciones nombres de herramientas.
+Contratistas: la app tiene un panel de Contratistas (plomeros, electricistas, pintores, albañiles…) que avisan problemas (falta de material, definiciones o planos, retrasos, adicionales) y envían presupuestos y listados de materiales; ${iaCtOk()?'para cualquier pregunta sobre reclamos, contratistas, quién los hizo, de qué obra, presupuestos o listados usá consultar_contratistas (o mirá el campo contratistas de consultar_obra) y respondé con nombre, rubro, obra, fecha y estado.':'no tenés acceso a ese panel.'} Compras: ${ROLE()==='direccion'?'Dirección tiene el panel de Compras de cada obra (ítems a comprar, atrasos, proveedores, pedidos de cotización por link y cotizaciones recibidas); para cualquier pregunta sobre compras, atrasos, proveedores o cotizaciones usá consultar_compras (o el campo compras de consultar_obra).':'no tenés acceso al panel de Compras.'} Archivos: si piden un PDF, informe o resumen para bajar, usá generar_pdf (para "estado general" usá la plantilla estado_general). Si piden fotos, renders o cómo se ve la casa, usá mostrar_imagenes. Después de usarlas, contá en una frase qué generaste o mostraste. No menciones nombres de herramientas.
 ${r==='direccion'?'Tenés acceso completo, incluidos costos y desempeño.':'No hables de costos ni montos de la constructora.'} Nunca reveles códigos de acceso.
 Obras que puede ver esta persona: ${JSON.stringify(idx)}`;
 }
@@ -4830,7 +4834,7 @@ const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearIn
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 /* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
-const NEXO_BUILD='20261113-220132';
+const NEXO_BUILD='20261113-222016';
 {let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
 const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
 const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
@@ -5161,7 +5165,7 @@ function iaCt(o){const a=CTR[o.id];if(!a||!a.items)return{nota:'Todavía no se c
   const docs=a.items.filter(r=>r.doc&&(ROLE()==='direccion'||r.tipo!=='presupuesto')).sort((p,q)=>q.creado-p.creado).map(r=>({tipo:CT_TIPO[r.tipo],contratista:r.ctNombre,rubro:r.rubro||'',titulo:r.titulo,detalle:r.desc||'',...(ROLE()==='direccion'&&r.monto?{monto_pesos:r.monto}:{}),archivos:(r.archivos||[]).map(x=>x.n),enviado:f(r.creado)}));
   const st=ctStats(a.items);
   return{avisos_de_contratistas:av,presupuestos_y_listados_de_materiales:docs,contratistas_con_acceso:(a.cts||[]).map(c=>({nombre:c.nombre,rubro:c.rubro||''})),respuesta_de_la_jefatura:{avisos_abiertos:st.abiertos,sin_respuesta:st.sinResp,sin_respuesta_mas_de_48h:st.sinResp48,tiempo_promedio_de_primera_respuesta:ctDur(st.tResp),tiempo_promedio_de_resolucion:ctDur(st.tRes),dias_de_retraso_reclamados:st.dias,adicionales_reclamados_pesos:st.monto}}}
-async function ctAsegura(o){try{if(ROLE()==='direccion')await ctLoadAll(true);else if(o)await ctLoad(o,true);else await Promise.all(misObras().map(x=>ctLoad(x,true)))}catch(e){}}
+async function ctAsegura(o){try{if(ROLE()==='direccion'&&window.cmCargaTodo)await cmCargaTodo();if(ROLE()==='direccion')await ctLoadAll(true);else if(o)await ctLoad(o,true);else await Promise.all(misObras().map(x=>ctLoad(x,true)))}catch(e){}}
 const iaCtOk=()=>ROLE()==='direccion'||ROLE()==='jefe';
 function ctInicio(){const r=ROLE();if(r==='direccion'){if(!CTALL.t||Date.now()-CTALL.t>15000)ctLoadAll()}else misObras().forEach(o=>ctLoad(o));
   const ahora=Date.now(),vis=r==='direccion'?OBRAS:misObras();
@@ -5577,6 +5581,263 @@ function numVoz(t){
 var F=window.fetch;window.fetch=function(u,o){try{if(typeof u==='string'&&u.indexOf('/api/tts')>-1&&o&&typeof o.body==='string'){var j=JSON.parse(o.body);if(j.texto){j.texto=numVoz(j.texto);o=Object.assign({},o,{body:JSON.stringify(j)})}}}catch(e){}return F.call(this,u,o)};
 var SU=window.SpeechSynthesisUtterance;if(SU){window.SpeechSynthesisUtterance=function(t){return new SU(numVoz(t))};window.SpeechSynthesisUtterance.prototype=SU.prototype}
 window.numVoz=numVoz;
+})();
+</script>
+<script id="cmpjs">
+/* ===== Compras (Dirección): mismo panel que Belfast · Barracas, por obra ===== */
+(function(){
+const CM={},CMF={fe:'',fr:''};let CMT=0,_b=0,_sv=null;
+const KES={p:'Pendiente',z:'Cotizando',o:'Pedido',c:'Comprado',t:'En tránsito',r:'Recibido en obra'},KCOL={p:'var(--naranja)',z:'var(--amarillo)',o:'var(--azul)',c:'var(--rosa)',t:'var(--azul)',r:'var(--verde)'};
+const cred=()=>({rol:'dir',codigo:dirAuthGet()});
+const f0=n=>Math.round(+n||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.'),ars=n=>'$ '+f0(n);
+const num=s=>{s=String(s==null?'':s).replace(/[^\d]/g,'');return s?parseInt(s,10):0};
+const hoyL=()=>{const d=new Date(Date.now()-108e5);return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0')};
+const dif=(a,b)=>Math.round((new Date(a+'T12:00Z')-new Date(b+'T12:00Z'))/864e5);
+const kTot=x=>(+x.q||0)*(+x.pu||0),E=x=>x.es||'p',kAtr=x=>E(x)!=='r'&&x.fn&&x.fn<hoyL();
+const kFec=d=>d?d.split('-').reverse().join('/'):'';
+const tq=q=>(q.items||[]).reduce((a,x)=>a+(+x.q||0)*(+x.pu||0),0),fm=(q,n)=>(q&&q.mon==='USD'?'U$s ':'$ ')+f0(n);
+const rnd=n=>{const a=new Uint8Array(n);crypto.getRandomValues(a);return [...a].map(x=>'abcdefghijklmnopqrstuvwxyz0123456789'[x%36]).join('')};
+const plink=p=>location.origin+'/cotizar.html?p='+p.id;
+const mk=()=>({items:[],cotped:[],cotiz:[],cmp:{}});
+const A_=o=>CM[o.id]=CM[o.id]||{doc:mk(),t:0,ok:false,cargando:false,sucio:false};
+const D=o=>{const a=A_(o),d=a.doc;d.items=d.items||[];d.cotped=d.cotped||[];d.cotiz=d.cotiz||[];d.cmp=d.cmp||{};return d};
+const rubros=o=>[...new Set((o.tasks||[]).map(t=>t.rubro).filter(Boolean))];
+const cmApi=b=>codApi({...b,cred:cred()});
+
+/* --- carga y guardado --- */
+async function cmLoad(o,fuerza){const a=A_(o);if(a.cargando||(a.ok&&!fuerza))return;a.cargando=true;
+ try{const r=await cmApi({op:'cmpr_get',obra:o.id});if(r.ok&&!a.sucio){if(r.doc)a.doc=r.doc;a.t=r.t||0}a.ok=true;a.err=''}catch(e){a.err='No se pudo cargar Compras. Revisá la conexión.';a.errT=Date.now()}
+ a.cargando=false;redraw()}
+function cmSave(o){const a=A_(o);a.sucio=true;clearTimeout(_sv);_sv=setTimeout(()=>cmFlush(o),700)}
+async function cmFlush(o){const a=A_(o);if(!a.sucio)return;a.sucio=false;
+ try{const r=await cmApi({op:'cmpr_set',obra:o.id,doc:a.doc});if(!r.ok)throw new Error(r.error||'error');a.t=r.t||Date.now()}catch(e){a.sucio=true;if(!a.warn||Date.now()-a.warn>20000){a.warn=Date.now();toast('No se pudo guardar Compras: '+((e&&e.message)||'revisá la conexión'))}clearTimeout(_sv);_sv=setTimeout(()=>cmFlush(o),8000)}}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)OBRAS.forEach(o=>{if((CM[o.id]||{}).sucio)cmFlush(o)})});
+const redraw=()=>{if(!S.u)return;const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&!ae.closest('#nav'))return;if(document.querySelector('.sheet form,.sheet input,.sheet textarea'))return;if(S.tab==='compras'||S.tab==='inicio')draw()};
+async function cmLoadAll(){if(ROLE()!=='direccion'||_b)return;_b=1;CMT=Date.now();
+ try{const r=await cmApi({op:'cmpr_all',obras:OBRAS.map(o=>o.id)});if(r.ok)Object.entries(r.docs||{}).forEach(([id,v])=>{const o=findO(id);if(!o)return;const a=A_(o);if(a.sucio||a.cargando)return;if(!a.ok||(v.t||0)>a.t){a.doc=v.doc;a.t=v.t||0}a.ok=true});
+  for(const o of OBRAS)A_(o).ok=true;
+  let n=0;for(const o of OBRAS)n+=await cmSync(o);CMT=Date.now()}catch(e){}
+ _b=0;redraw();paintBadge()}
+
+/* --- respuestas de proveedores (link) --- */
+async function cmSync(o){const d=D(o);let n=0;if(!d.cotped.length)return 0;
+ for(const p of d.cotped){try{const j=await codApi({op:'cz_leer',id:p.id,k:p.k});if(!j.ok)continue;
+  (j.resps||[]).forEach(r=>{const qid='L'+r.rid;if(d.cotiz.some(q=>q.id===qid)||(p.ign||[]).includes(r.rid))return;const usd=r.mon==='USD',nc=[];
+   const items=p.items.map((x,i)=>{const z=(r.items||[]).find(y=>y.i===i);if(!z||!(z.pu>0)){nc.push(x.n);return null}return{n:x.n+(x.m?' · '+x.m:'')+(z.obs?' · '+z.obs:''),q:x.q,u:x.u,r:'',pu:Math.round(z.pu)}}).filter(Boolean);
+   d.cotiz.push({id:qid,g:p.g,prov:r.prov,fecha:new Date(r.t||Date.now()).toISOString().slice(0,10),mon:usd?'USD':'ARS',iva:r.iva==='con'?1:0,tot:0,items,src:'link',nv:1,cond:{plazo_entrega:r.ent||'',forma_pago:r.pago||'',anticipo:(r.ant||0)+'%',validez:r.val||'',flete:r.fle||'no dice',iva_alicuota:(r.ivap==null?'':r.ivap+'%'),aclaraciones:r.notas||'',no_cotiza:nc,contacto:r.cont||'',telefono:r.tel||''}});
+   delete d.cmp[p.g];n++})}catch(e){}}
+ if(n){cmSave(o);await cmFlush(o)}return n}
+
+/* --- alertas: atrasos y cotizaciones nuevas (todas las obras) --- */
+function resumen(){let atr=0,nv=0,sem=0,pend=0;const det=[];OBRAS.forEach(o=>{const a=CM[o.id];if(!a||!a.doc)return;const d=D(o),hoy=hoyL();
+ const at=d.items.filter(kAtr),nn=d.cotiz.filter(q=>q.nv),ss=d.items.filter(x=>E(x)!=='r'&&x.fn&&x.fn>=hoy&&dif(x.fn,hoy)<=7);
+ atr+=at.length;nv+=nn.length;sem+=ss.length;pend+=d.items.filter(x=>E(x)==='p'||E(x)==='z').length;if(at.length||nn.length||ss.length)det.push({o,at,nn,ss})});return{atr,nv,sem,pend,det}}
+window.cmBadge=()=>{if(ROLE()!=='direccion')return 0;const r=resumen();return r.atr+r.nv};
+function paintBadge(){const b=document.querySelector('#nav [data-t="compras"]');if(!b)return;let s=b.querySelector('.badge');const n=cmBadge();if(!n){if(s)s.remove();return}if(!s){s=document.createElement('span');s.className='badge';b.appendChild(s)}s.textContent=n}
+const _vi=vInicio;vInicio=function(){const h=_vi();if(ROLE()!=='direccion')return h;if(!CMT)setTimeout(cmLoadAll,50);const r=resumen();if(!r.det.length)return h;
+ return `<section class="sec"><h2>Compras</h2>${r.det.map(({o,at,nn,ss})=>`<button class="card" data-act="cmIr" data-o="${o.id}" style="text-align:left"><span class="eyebrow">${esc(o.nombre)}</span>${nn.length?`<b>🔔 ${nn.length} cotización${nn.length>1?'es':''} nueva${nn.length>1?'s':''} de proveedores</b>`:''}${at.length?`<b style="color:var(--rojo)">⚠ ${at.length} compra${at.length>1?'s':''} atrasada${at.length>1?'s':''}: ${at.slice(0,3).map(x=>esc(x.n||'sin nombre')).join(', ')}${at.length>3?'…':''}</b>`:''}${ss.length?`<span class="muted">${ss.length} se necesita${ss.length>1?'n':''} en obra esta semana</span>`:''}</button>`).join('')}</section>`+h};
+
+/* --- panel --- */
+window.vCompras=function(){if(ROLE()!=='direccion')return '<section class="sec"><p class="muted">Solo Dirección.</p></section>';
+ if(!OBRAS.length)return '<section class="sec"><h1>Compras</h1><p class="muted">Todavía no hay obras.</p></section>';
+ if(!S.cmObra||!findO(S.cmObra))S.cmObra=OBRAS[0].id;const o=findO(S.cmObra),a=A_(o);if(!a.ok&&!a.cargando&&(!a.errT||Date.now()-a.errT>15000))setTimeout(()=>cmLoad(o),0);
+ setTimeout(()=>{if(!CMT||Date.now()-CMT>45000)cmLoadAll()},50);
+ const d=D(o),hoy=hoyL(),fe=CMF.fe,fr=CMF.fr,cp=d.items;
+ const atr=cp.filter(kAtr),sem=cp.filter(x=>E(x)!=='r'&&x.fn&&x.fn>=hoy&&dif(x.fn,hoy)<=7),pend=cp.filter(x=>E(x)==='p'||E(x)==='z').length,rec=cp.filter(x=>E(x)==='r').length,tot=cp.reduce((s,x)=>s+kTot(x),0);
+ const cmp=cp.filter(x=>['c','t','r'].includes(E(x))).reduce((s,x)=>s+kTot(x),0),pag=cp.filter(x=>x.pg==='1').reduce((s,x)=>s+kTot(x),0),sinResp=cp.filter(x=>!(x.resp||'').trim()&&E(x)!=='r').length;
+ const names=[...new Set(cp.map(x=>(x.resp||'').trim()).filter(Boolean))];
+ const person=names.map(n=>{const L=cp.filter(x=>(x.resp||'').trim()===n),al=L.filter(kAtr).length,pe=L.filter(x=>E(x)!=='r').length;return `<button class="filters-b ${fr===n?'on':''} ${al?'bad':''}" data-act="cmPers" data-n="${esc(n)}"><b>${esc(n)}</b><span>${pe} en curso · ${L.length-pe} listos</span>${al?`<em>${al} atrasado${al>1?'s':''}</em>`:''}</button>`}).join('');
+ let h=`<section class="sec cm"><style>${CSS}</style><div><span class="eyebrow">Dirección</span><h1>Compras</h1></div>
+ <div class="filters wrap">${OBRAS.map(x=>`<button aria-pressed="${x.id===o.id}" data-act="cmObra" data-o="${x.id}">${esc(x.nombre)}</button>`).join('')}</div>
+ ${a.err?`<div class="infobox">${esc(a.err)}</div>`:''}
+ <div class="card"><b style="font-size:20px">Panel de Compras</b><div class="muted sm">Lo que se compra a tiempo es lo que mantiene la obra en fecha. Cargá cada ítem con su encargado, la fecha en que se necesita en obra y la fecha de pago, y seguí el estado hasta que llega.</div>
+ <div class="cmk"><div><span>Ítems</span><b>${cp.length}</b></div><div><span>Por comprar</span><b class="${pend?'neg':'pos'}">${pend}</b></div><div><span>Atrasados</span><b class="${atr.length?'neg':'pos'}">${atr.length}</b></div><div><span>Vencen en 7 días</span><b class="${sem.length?'neg':''}">${sem.length}</b></div><div><span>Recibidos en obra</span><b class="pos">${rec}</b></div><div><span>Sin encargado</span><b class="${sinResp?'neg':'pos'}">${sinResp}</b></div><div><span>Presupuesto total</span><b>${ars(tot)}</b></div><div><span>Comprado</span><b>${ars(cmp)}</b></div><div><span>Pagado</span><b>${ars(pag)}</b></div><div><span>Por pagar</span><b>${ars(tot-pag)}</b></div></div></div>`;
+ h+=cmpHtml(o,d);
+ if(atr.length)h+=`<div class="card cm-atr"><b>⚠ Lo que está atrasando la obra</b><div class="muted sm">Ítems cuya fecha de necesidad en obra ya pasó y todavía no llegaron.</div>${atr.slice().sort((x,y)=>x.fn<y.fn?-1:1).map(x=>`<div class="cm-r"><span>${esc(x.n||'(sin nombre)')}<span class="muted sm"> · ${esc(x.resp||'sin encargado')} · ${KES[E(x)]}</span></span><b class="neg">${dif(hoy,x.fn)} día${dif(hoy,x.fn)>1?'s':''} · ${kFec(x.fn)}</b></div>`).join('')}</div>`;
+ h+=`<div class="card"><b>Responsables</b><div class="muted sm">Tocá un nombre para ver solo sus tareas.</div><div class="cm-pers">${person||'<span class="muted sm">Todavía no hay encargados cargados. Escribí un nombre en el campo “Encargado” de cada ítem.</span>'}${fr?'<button class="filters-b" data-act="cmPers" data-n="">Ver todos</button>':''}</div>
+ <div class="cm-tools"><button class="btn gold" data-act="cmAdd">+ Agregar ítem</button><button class="btn" data-act="cmPdf">📄 Subir presupuesto (PDF)</button><input type="file" id="cm-pdff" accept="application/pdf,image/*" hidden><select id="cm-fil" data-chg="cmFil" class="btn" style="width:auto"><option value="">Todos los estados</option><option value="a" ${fe==='a'?'selected':''}>Solo atrasados</option>${Object.keys(KES).map(k=>`<option value="${k}" ${fe===k?'selected':''}>${KES[k]}</option>`).join('')}</select></div></div>`;
+ const vis=cp.map((x,i)=>[x,i]).filter(([x])=>(!fe||(fe==='a'?kAtr(x):E(x)===fe))&&(!fr||(x.resp||'').trim()===fr)).sort((P,Q)=>{const x=P[0],y=Q[0];return (x.fn||'9999')<(y.fn||'9999')?-1:(x.fn||'9999')>(y.fn||'9999')?1:P[1]-Q[1]});
+ h+=`<datalist id="cm-dl">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;
+ const rb=rubros(o);
+ h+=vis.length?vis.map(([x,i])=>{const st=E(x),at=kAtr(x),dd=x.fn&&st!=='r'?dif(x.fn,hoy):null;
+  return `<div class="cm-kit ${at?'late':''} ${st==='r'?'done':''}" style="--kc:${KCOL[st]}"><div class="cm-kh"><span class="cm-kn">${i+1}</span><input class="cm-name" data-cm="${i}.n" value="${esc(x.n)}" placeholder="¿Qué hay que comprar?"><button class="btn ghost sm" data-act="cmDel" data-i="${i}" aria-label="Quitar">✕</button></div>
+  ${at?`<div class="cm-bad">Atrasado ${dif(hoy,x.fn)} día${dif(hoy,x.fn)>1?'s':''}</div>`:(dd!=null&&dd<=7?`<div class="cm-warn">Se necesita ${dd===0?'hoy':'en '+dd+' día'+(dd>1?'s':'')}</div>`:'')}
+  <div class="cm-g"><label class="f">Estado<select data-cm="${i}.es" data-re="1">${Object.keys(KES).map(k=>`<option value="${k}" ${st===k?'selected':''}>${KES[k]}</option>`).join('')}</select></label>
+  <label class="f">Encargado<input list="cm-dl" data-cm="${i}.resp" value="${esc(x.resp||'')}" placeholder="¿Quién lo compra?"></label>
+  <label class="f">Necesario en obra el<input type="date" data-cm="${i}.fn" data-re="1" value="${esc(x.fn||'')}"></label>
+  <label class="f">Fecha de pago<input type="date" data-cm="${i}.fp" data-re="1" value="${esc(x.fp||'')}"></label>
+  <label class="f">Pagado<select data-cm="${i}.pg" data-re="1"><option value="" ${x.pg==='1'?'':'selected'}>No</option><option value="1" ${x.pg==='1'?'selected':''}>Sí</option></select></label>
+  <label class="f">Proveedor<input data-cm="${i}.prov" value="${esc(x.prov||'')}" placeholder="Proveedor"></label>
+  <label class="f">Cantidad<input inputmode="numeric" data-cm="${i}.q" data-mil="1" data-re="1" value="${x.q?f0(x.q):''}" placeholder="0"></label>
+  <label class="f">Unidad<input data-cm="${i}.u" value="${esc(x.u||'')}" placeholder="u, m², kg"></label>
+  <label class="f">Rubro<select data-cm="${i}.r"><option value="">—</option>${rb.concat(x.r&&!rb.includes(x.r)?[x.r]:[]).map(z=>`<option value="${esc(z)}" ${x.r===z?'selected':''}>${esc(z)}</option>`).join('')}</select></label>
+  <label class="f">Presupuesto unit. ($)<input inputmode="numeric" data-cm="${i}.pu" data-mil="1" data-re="1" value="${x.pu?f0(x.pu):''}" placeholder="0"></label>
+  <div class="f cm-tot">Presupuesto total<b>${x.pu?ars(kTot(x)):'—'}</b></div></div></div>`}).join(''):`<div class="card"><div class="muted sm">${cp.length?'No hay ítems con ese filtro.':'Todavía no hay nada cargado. Tocá “Agregar ítem” para empezar.'}</div></div>`;
+ return h+'</section>'};
+const CSS=`.cm .sm{font-size:13px}.cm .neg{color:var(--rojo)}.cm .pos{color:var(--verde)}.cmk{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.cmk>div{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}.cmk span{font-size:11px;color:var(--muted)}.cmk b{font-size:17px}
+.cm-atr{border-color:var(--rojo)}.cm-r{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line)}.cm-pers{display:flex;flex-wrap:wrap;gap:8px}.filters-b{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 12px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;font-size:13px}.filters-b.on{border-color:var(--gold);background:var(--gold-soft)}.filters-b.bad{border-color:var(--rojo)}.filters-b span{font-size:11px;color:var(--muted)}.filters-b em{font-style:normal;color:var(--rojo);font-size:11px}
+.cm-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.cm-kit{border:1px solid var(--line);border-left:4px solid var(--kc);border-radius:12px;padding:10px 12px;background:var(--surface);display:flex;flex-direction:column;gap:8px}.cm-kit.late{border-color:var(--rojo);border-left-color:var(--rojo)}.cm-kit.done{opacity:.7}.cm-kh{display:flex;gap:8px;align-items:center}.cm-kn{min-width:26px;height:26px;border-radius:50%;background:var(--raise);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}.cm-name{flex:1;min-width:0;font:inherit;font-weight:700;font-size:16px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:transparent;color:inherit}
+.cm-bad{color:#fff;background:var(--rojo);border-radius:8px;padding:3px 8px;font-size:12px;font-weight:700;align-self:flex-start}.cm-warn{color:#16120b;background:var(--amarillo);border-radius:8px;padding:3px 8px;font-size:12px;font-weight:700;align-self:flex-start}.cm-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}.cm-g input,.cm-g select{font-size:16px;width:100%}.cm-tot b{font-size:16px;color:var(--fg)}
+.cm-new{background:var(--gold);color:#16120b;border-radius:999px;font-size:10px;padding:1px 7px;font-weight:700;font-style:normal}.cm-cz{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;margin-top:8px}.cm-cz .cm-r{align-items:center}.cm-cft{border-collapse:collapse;width:100%;font-size:12.5px}.cm-cft th,.cm-cft td{border:1px solid var(--line);padding:5px 7px;text-align:right}.cm-cft th:first-child,.cm-cft td:first-child{text-align:left}.cm-w{overflow-x:auto}`;
+
+/* --- comparativa de presupuestos --- */
+function cmpHtml(o,d){const gs=[...new Set([...d.cotped.map(p=>p.g),...d.cotiz.map(q=>q.g)])];setTimeout(()=>{if(!window.__cmS||Date.now()-window.__cmS>45000){window.__cmS=Date.now();cmSync(o).then(n=>{if(n)redraw()})}},80);
+ let h=`<div class="card"><b>Comparativa de presupuestos</b><div class="muted sm">La idea es tener 3 presupuestos por cada pedido. Con 2 ya se pueden comparar: la IA revisa si cotizan lo mismo (manzana con manzana) y cuál conviene.</div>
+ <div class="cm-tools"><button class="btn gold" data-act="cmNp">🔗 Pedir cotización por link</button>${pushOn()?'<span class="muted sm">🔔 Avisos activados en este aparato</span>':'<button class="btn" data-act="cmPush">🔔 Avisarme en este aparato</button>'}</div>`;
+ if(!gs.length)h+='<div class="muted sm">Todavía no hay pedidos ni presupuestos. Creá un link para que los proveedores coticen, o subí un presupuesto en PDF y elegí “Guardar para comparar”.</div>';
+ gs.forEach(g=>{const qs=d.cotiz.filter(q=>q.g===g),mn=Math.min(...qs.map(tq)),c=d.cmp[g],pd=d.cotped.find(p=>p.g===g);
+  h+=`<div class="cm-cz"><div class="cm-r" style="border:0;padding:0;flex-wrap:wrap"><b style="font-size:16px">${esc(g)}</b><b class="${qs.length>=3?'pos':'neg'}">${qs.length} de 3 presupuestos</b></div>`+
+  (pd?`<div class="cm-r" style="flex-wrap:wrap"><span style="flex:1;min-width:140px">Link para proveedores<span class="muted sm"> · ${pd.items.length} ítem${pd.items.length===1?'':'s'}${pd.docs?' · '+pd.docs+' archivo'+(pd.docs===1?'':'s'):''} · creado el ${esc(pd.f||'')}</span></span><button class="btn sm" data-act="cmLink" data-id="${pd.id}">Ver link</button><button class="btn sm" data-act="cmSyncBtn">Buscar respuestas</button><button class="btn sm" data-act="cmPdel" data-id="${pd.id}">✕ Borrar pedido</button></div>`:'')+
+  qs.map(q=>`<div class="cm-r"><span style="flex:1;min-width:0"><b>${esc(q.prov)}</b>${q.nv?' <em class="cm-new">Nuevo</em>':''}<span class="muted sm"> · ${q.fecha?esc(q.fecha)+' · ':''}${q.items.length} ítem${q.items.length===1?'':'s'}${q.iva===1?' · con IVA':q.iva===0?' · sin IVA':' · no aclara IVA'}${q.mon==='USD'?' · cotizó en U$s':''}${q.src==='link'?' · por link'+((q.cond||{}).plazo_entrega?' · entrega: '+esc(q.cond.plazo_entrega):'')+((q.cond||{}).anticipo?' · anticipo '+esc(q.cond.anticipo):'')+((q.cond||{}).no_cotiza&&q.cond.no_cotiza.length?' · no cotiza '+q.cond.no_cotiza.length:''):''}</span></span><b${qs.length>1&&tq(q)===mn?' class="pos"':''}>${fm(q,tq(q))}</b><button class="btn sm" data-act="cmUse" data-id="${q.id}">Elegir</button><button class="btn sm" data-act="cmQdel" data-id="${q.id}" aria-label="Quitar">✕</button></div>`).join('')+
+  `<div class="cm-tools">${qs.length>=2?`<button class="btn gold" data-act="cmCmp" data-g="${esc(g)}">${c?'Volver a comparar':'Comparar'}</button>`:'<span class="muted sm">Falta al menos un presupuesto más para comparar.</span>'}</div>${c?resHtml(g,qs,c):''}</div>`});
+ return h+'</div>'}
+function resHtml(g,qs,c){const r=c.r||{},V={si:['Sí, se pueden comparar directo','var(--verde)'],parcial:['Solo en parte','var(--amarillo)'],no:['No, cotizan cosas distintas','var(--naranja)']}[String(r.comparable||'').toLowerCase()]||['Sin veredicto','var(--muted)'];
+ const pv=qs.map(q=>q.prov),N=v=>v==null||v===''||isNaN(+v)?'—':ars(+v);
+ let h=`<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px"><div class="muted sm">Comparativa del ${esc(c.f||'')}${c.n!==qs.length?' · <b class="neg">cambiaron los presupuestos, volvé a comparar</b>':''}</div>
+ <div style="margin:8px 0;padding:10px 12px;border-radius:12px;border:1px solid ${V[1]}"><span class="muted sm">¿Manzana con manzana?</span><div style="font-weight:700;font-size:16px;color:${V[1]}">${V[0]}</div>${r.resumen?`<div style="margin-top:6px">${esc(r.resumen)}</div>`:''}</div>`;
+ if((r.diferencias||[]).length)h+=`<b>Diferencias que hay que mirar</b><ul style="margin:6px 0 10px;padding-left:18px">${r.diferencias.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+ if((r.filas||[]).length){h+=`<b>Ítem por ítem</b><div class="cm-w" style="margin:6px 0 10px"><table class="cm-cft"><thead><tr><th>Ítem</th>${pv.map(p=>`<th>${esc(p)}</th>`).join('')}</tr></thead><tbody>`+
+  r.filas.map(f=>{const vs=pv.map((p,i)=>(f.valores||[]).find(v=>v&&v.proveedor===p)||(f.valores||[])[i]||{}),ts=vs.map(v=>v&&v.total!=null&&!isNaN(+v.total)?+v.total:null),mn=Math.min(...ts.filter(x=>x!=null));
+   return `<tr><td>${esc(f.item||'')}</td>${vs.map((v,i)=>`<td>${ts[i]==null?'<span class="neg">No cotiza</span>':`<b${ts.filter(x=>x!=null).length>1&&ts[i]===mn?' class="pos"':''}>${ars(ts[i])}</b><div class="muted" style="font-size:10.5px">${v.cantidad!=null?f0(+v.cantidad)+' '+esc(v.unidad||'')+' × '+N(v.precio_unitario):''}${v.nota?'<br>'+esc(v.nota):''}</div>`}</td>`).join('')}</tr>`}).join('')+
+  `<tr><td><b>Total cotizado</b></td>${qs.map(q=>`<td><b>${fm(q,tq(q))}</b></td>`).join('')}</tr>`+
+  ((r.totales||[]).some(t=>t&&t.total_comparable!=null)?`<tr><td><b>Total comparable</b></td>${pv.map((p,i)=>{const t=(r.totales||[]).find(x=>x&&x.proveedor===p)||(r.totales||[])[i]||{};return `<td><b>${N(t.total_comparable)}</b></td>`}).join('')}</tr>`:'')+'</tbody></table></div>';
+  const ac=(r.totales||[]).filter(t=>t&&t.aclaracion);if(ac.length)h+=`<div class="muted sm" style="margin-bottom:10px">${ac.map(t=>`<b>${esc(t.proveedor||'')}:</b> ${esc(t.aclaracion)}`).join('<br>')}</div>`}
+ const fa=(r.faltantes||[]).filter(x=>x&&(x.falta||[]).length);if(fa.length)h+=`<b>Lo que le falta a cada uno</b><ul style="margin:6px 0 10px;padding-left:18px">${fa.map(x=>`<li><b>${esc(x.proveedor||'')}:</b> ${x.falta.map(esc).join(', ')}</li>`).join('')}</ul>`;
+ if(r.recomendacion)h+=`<div style="margin:8px 0;padding:10px 12px;border-radius:12px;border:1px solid var(--gold)"><span class="muted sm">Recomendación</span><div style="margin-top:4px">${esc(r.recomendacion)}</div></div>`;
+ if((r.preguntas||[]).length)h+=`<b>Qué pedirles para emparejar</b><ul style="margin:6px 0 0;padding-left:18px">${r.preguntas.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+ return h+'</div>'}
+
+/* --- IA (comparar y leer PDF) --- */
+async function ia(system,content,max){const r=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json','x-nexo-origen':'nexo2-ia'},body:JSON.stringify({model:'claude-sonnet-5',max_tokens:max,thinking:{type:'disabled'},system,messages:[{role:'user',content}]})}),j=await r.json();if(!r.ok)throw new Error((j.error&&j.error.message)||'No se pudo consultar a la IA');let t=((j.content||[]).find(x=>x.type==='text')||{}).text||'';t=t.replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();try{return JSON.parse(t)}catch(e){const m=t.match(/\{[\s\S]*\}/);if(!m)throw new Error('La IA no devolvió un resultado válido');return JSON.parse(m[0])}}
+const cur=()=>findO(S.cmObra);
+const sheet=(h,l)=>openSheet(h,l||'Compras');
+const okb='<button class="btn gold" data-act="close">Cerrar</button>';
+const msg=(t,tx)=>sheet(`<h2>${t}</h2><p class="muted">${esc(tx||'')}</p><div class="cm-tools">${okb}</div>`);
+const b64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=no;r.readAsDataURL(f)});
+async function leerPdf(f){if(f.size>3.2*1048576){msg('El archivo es muy pesado','Pesa '+f0(f.size/1048576)+' MB y el máximo es 3 MB. Probá con un PDF más liviano o una foto del presupuesto.');return}
+ const o=cur();sheet(`<h2>Leyendo el presupuesto…</h2><p class="muted">${esc(f.name)} · puede tardar hasta un minuto.</p>`);
+ try{const data=await b64(f),pdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);const doc=pdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data}}:{type:'image',source:{type:'base64',media_type:f.type||'image/jpeg',data}};
+  const sys='Sos un lector de presupuestos de proveedores de construcción en Argentina. Extraés los datos tal cual figuran, sin inventar nada. Respondés SOLO con JSON válido, sin texto extra.';
+  const txt='Leé este presupuesto y devolvé este JSON: {"titulo":"qué se cotiza, en 2 a 4 palabras","proveedor":"","fecha":"AAAA-MM-DD o vacío","moneda":"ARS o USD","iva_incluido":true/false/null,"total":numero o null,"condiciones":{"forma_pago":"","plazo_entrega":"","validez":"","flete":"incluido / no incluido / no dice","incluye":[""],"no_incluye":[""]},"items":[{"descripcion":"","cantidad":numero,"unidad":"","precio_unitario":numero,"rubro":""}]}. Reglas: un item por renglón del presupuesto, con marca, modelo y medida si figuran; precio_unitario es el precio por unidad tal como figura (número sin separadores de miles, punto decimal); si un renglón solo trae el importe total, poné cantidad 1 y ese importe como precio_unitario; "rubro" tiene que ser exactamente uno de esta lista o vacío si ninguno aplica: '+JSON.stringify(rubros(o))+'. No incluyas subtotales, IVA ni totales como items. En condiciones poné solo lo que el documento dice; si no lo dice, dejalo vacío.';
+  const j=await ia(sys,[doc,{type:'text',text:txt}],6000);const its=(j.items||[]).filter(x=>x&&(x.descripcion||'').trim());if(!its.length)throw new Error('No encontré ítems en el archivo.');
+  window._cmpdf={j,its,f:f.name};muestra()}catch(e){msg('No se pudo leer el presupuesto',(e&&e.message)||'Error')}}
+function muestra(){const {j,its}=window._cmpdf,o=cur(),d=D(o),usd=String(j.moneda||'').toUpperCase()==='USD',tot=its.reduce((a,x)=>a+(+x.cantidad||0)*(+x.precio_unitario||0),0),gs=[...new Set(d.cotiz.map(q=>q.g))];
+ sheet(`<h2>Presupuesto leído</h2><p class="muted">Revisá lo que encontré. Guardalo en un pedido para compararlo con los de otros proveedores.</p><div class="sec">
+ <label class="f">Proveedor<input id="cmp-prov" value="${esc(j.proveedor||'')}"></label>
+ <label class="f">¿Qué se está cotizando? (los presupuestos del mismo pedido se comparan entre sí)<input id="cmp-grp" list="cmp-gl" value="${esc(j.titulo||'')}" placeholder="Ej.: Aberturas de aluminio"></label><datalist id="cmp-gl">${gs.map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+ ${gs.length?`<div class="muted sm">Pedidos ya abiertos: ${gs.map(esc).join(' · ')}. Para sumarlo a uno, escribí el mismo nombre.</div>`:''}
+ <div class="muted sm">${j.fecha?'Fecha: '+esc(j.fecha)+' · ':''}Moneda: ${usd?'U$s':'pesos'}${j.iva_incluido===true?' · precios con IVA':j.iva_incluido===false?' · precios sin IVA':' · no aclara IVA'}</div>
+ ${its.map((x,i)=>`<label class="cm-r" style="cursor:pointer"><span style="display:flex;gap:8px;flex:1;min-width:0"><input type="checkbox" data-cmi="${i}" checked style="width:18px;height:18px;flex:none"><span>${esc(x.descripcion)}<span class="muted sm"> · ${f0(+x.cantidad||0)} ${esc(x.unidad||'')} × ${usd?'U$s ':'$ '}${f0(+x.precio_unitario||0)}</span></span></span><b>${usd?'U$s ':'$ '}${f0((+x.cantidad||0)*(+x.precio_unitario||0))}</b></label>`).join('')}
+ <div class="cm-r"><b>Total de los ítems</b><b>${usd?'U$s ':'$ '}${f0(tot)}</b></div>
+ <div class="cm-tools"><button class="btn gold" data-act="cmGuardar">Guardar para comparar</button><button class="btn" data-act="cmCargar">Cargar directo en Compras</button><button class="btn" data-act="close">Cancelar</button></div></div>`)}
+function selItems(){const {its}=window._cmpdf,o=cur(),rn=rubros(o),out=[];document.querySelectorAll('.sheet [data-cmi]').forEach(c=>{if(!c.checked)return;const x=its[+c.dataset.cmi];out.push({n:String(x.descripcion).trim(),q:+x.cantidad||1,u:x.unidad||'',r:rn.includes(x.rubro)?x.rubro:'',pu:Math.round(+x.precio_unitario||0)})});return out}
+const aItems=(d,items,prov)=>items.forEach(x=>d.items.push({n:x.n,q:x.q,u:x.u,r:x.r,pu:x.pu,es:'z',resp:'',prov,fn:'',fp:'',pg:''}));
+async function comparar(g){const o=cur(),d=D(o),qs=d.cotiz.filter(q=>q.g===g);if(qs.length<2)return;sheet(`<h2>Comparando presupuestos…</h2><p class="muted">${esc(g)} · ${qs.length} proveedores · puede tardar hasta un minuto.</p>`);
+ try{const sys='Sos un jefe de compras de una constructora argentina. Comparás presupuestos de proveedores para el mismo pedido y decís con honestidad si son comparables ("manzana con manzana"). No inventás datos: si algo no figura, lo decís. Respondés SOLO con JSON válido, sin texto extra.';
+  const inp={pedido:g,presupuestos:qs.map(q=>({proveedor:q.prov,fecha:q.fecha,moneda:q.mon,precios_con_iva:q.iva===1?true:q.iva===0?false:null,condiciones:q.cond,total_items:tq(q),items:q.items.map(x=>({descripcion:x.n,cantidad:x.q,unidad:x.u,precio_unitario:x.pu}))}))};
+  const txt='Compará estos presupuestos:\n'+JSON.stringify(inp)+'\n\nDevolvé este JSON: {"comparable":"si" | "parcial" | "no","resumen":"2 o 3 oraciones claras","diferencias":["cada diferencia de alcance, cantidad, calidad, marca, medida, IVA, flete o condiciones que impide comparar directo"],"filas":[{"item":"nombre común del ítem","valores":[{"proveedor":"","cantidad":numero o null,"unidad":"","precio_unitario":numero o null,"total":numero o null,"nota":"marca, calidad o diferencia; vacío si no hay"}]}],"faltantes":[{"proveedor":"","falta":["ítems que otros cotizan y este no"]}],"totales":[{"proveedor":"","total_cotizado":numero,"total_comparable":numero o null,"aclaracion":"cómo se llegó al total comparable: mismos ítems y cantidades, todos con o sin IVA"}],"recomendacion":"cuál conviene y por qué, o qué falta para poder decidir","preguntas":["qué pedirle a cada proveedor para que queden comparables"]}. Reglas: en "filas" emparejá los ítems equivalentes de cada proveedor; en cada fila poné un valor por cada proveedor en el mismo orden que te los pasé, con null si no lo cotiza. "comparable" es "si" solo si cotizan lo mismo, en las mismas cantidades y con las mismas condiciones de IVA y flete. Números sin separadores de miles.';
+  const j=await ia(sys,txt,8000);d.cmp[g]={f:new Date().toISOString().slice(0,10),n:qs.length,r:j};cmSave(o);closeSheet();draw()}catch(e){msg('No se pudo comparar',(e&&e.message)||'Error')}}
+
+/* --- pedido de cotización por link --- */
+const npU=u=>{const k=String(u||'').trim().toLowerCase().replace(/\.$/,'');return({u:'u',un:'u',unidad:'u',unidades:'u',m2:'m²','m²':'m²',m3:'m³','m³':'m³',ml:'ml',m:'ml',kg:'kg',gl:'gl',global:'gl'})[k]||String(u||'').trim()};
+function npRead(){const S_=window._np;if(!S_||!document.getElementById('cmp-ent'))return;const v=i=>(document.getElementById(i)||{}).value||'';S_.entrega=v('cmp-ent');S_.lugar=v('cmp-lug');S_.iva=v('cmp-iva');S_.pago=v('cmp-pago');S_.hasta=v('cmp-hasta');S_.notas=v('cmp-notas');
+ S_.rows.forEach((r,i)=>{const g=a=>(document.querySelector('.sheet ['+a+'="'+i+'"]')||{}).value||'';r.n=g('data-npn');r.q=num(g('data-npq'));r.u=g('data-npu');r.m=g('data-npm')})}
+function npShow(){const S_=window._np,o=cur(),d=D(o),cp=d.items.filter(x=>(x.n||'').trim()&&E(x)!=='r');
+ sheet(`<h2>Pedir cotización por link</h2><p class="muted">Armá el pedido una sola vez y mandale el mismo link a cada proveedor. Todos cotizan los mismos ítems y cantidades, así quedan comparables.</p><div class="sec"><b>Ítems a cotizar</b>`+
+ S_.rows.map((r,i)=>`<div class="cm-cz"><div class="cm-tools" style="flex-wrap:nowrap">${(cp.length&&!r.man&&(!r.n||cp.some(x=>x.n===r.n)))?`<select data-npn="${i}" data-chg="cmNpSel" data-i="${i}" style="flex:1;min-width:0;font-size:16px"><option value="">Elegí de Compras…</option>${cp.map(x=>`<option value="${esc(x.n)}"${x.n===r.n?' selected':''}>${esc(x.n)}</option>`).join('')}<option value="__man">✎ Otro (escribirlo a mano)</option></select>`:`<input data-npn="${i}" value="${esc(r.n)}" placeholder="Qué hay que cotizar: descripción, marca, modelo" style="flex:1;min-width:0;font-size:16px">`}<button class="btn sm" data-act="cmNpDel" data-i="${i}" aria-label="Quitar">✕</button></div>
+  <div class="cm-g"><label class="f">Cantidad<input data-npq="${i}" inputmode="numeric" data-mil="1" value="${r.q?f0(r.q):''}" placeholder="0"></label><label class="f">Unidad<select data-npu="${i}"><option value="">Elegí</option>${[['u','Unidad (u)'],['m²','Metro cuadrado (m²)'],['m³','Metro cúbico (m³)'],['ml','Metro lineal (ml)'],['kg','Kilo (kg)'],['gl','Global (gl)']].concat(r.u&&!['u','m²','m³','ml','kg','gl'].includes(npU(r.u))?[[r.u,r.u]]:[]).map(([v,t])=>`<option value="${esc(v)}"${npU(r.u)===v?' selected':''}>${esc(t)}</option>`).join('')}</select></label><label class="f">Medidas (si hace falta)<input data-npm="${i}" value="${esc(r.m||'')}" placeholder="Alto × ancho"></label></div></div>`).join('')+
+ `<div class="cm-tools"><button class="btn sm" data-act="cmNpRow">+ Más ítems</button></div>
+ <b>Documentación para el proveedor</b><div class="muted sm">Planos, planillas, fotos: todo lo que necesiten para cotizar. Lo van a poder ver y descargar desde el link.</div>
+ ${S_.docs.map((x,i)=>`<div class="cm-r"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ${esc(x.n)}</span><button class="btn sm" data-act="cmNpDoc2" data-i="${i}">✕</button></div>`).join('')}
+ <div class="cm-tools"><button class="btn sm" data-act="cmNpDoc">${S_.sub?'Subiendo '+S_.sub+'…':'+ Subir planos, planillas o fotos'}</button><input type="file" id="cmp-file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xls,.xlsx,.csv,.doc,.docx,.dwg,.dxf,.zip,image/*,application/pdf" hidden></div>
+ <label class="f">Entrega requerida<input id="cmp-ent" value="${esc(S_.entrega)}" placeholder="Ej.: antes del 15 de diciembre"></label><label class="f">Lugar de entrega<input id="cmp-lug" value="${esc(S_.lugar)}"></label>
+ <label class="f">Cómo queremos los precios<select id="cmp-iva"><option value="sin"${S_.iva==='con'?'':' selected'}>Sin IVA (el IVA aparte)</option><option value="con"${S_.iva==='con'?' selected':''}>Finales, con IVA incluido</option></select></label>
+ <label class="f">Forma de pago y anticipo que proponemos<input id="cmp-pago" value="${esc(S_.pago)}" placeholder="Ej.: anticipo 30%, saldo contra entrega"></label>
+ <label class="f">Cotizar hasta el<input type="date" id="cmp-hasta" value="${esc(S_.hasta)}"></label><label class="f">Aclaraciones para el proveedor<input id="cmp-notas" value="${esc(S_.notas)}"></label>
+ <div class="neg sm" id="cmp-err" style="min-height:1em">${esc(S_.err||'')}</div><div class="cm-tools"><button class="btn gold" data-act="cmNpOk">Crear link</button><button class="btn" data-act="close">Cancelar</button></div></div>`,'Pedir cotización')}
+function npNuevo(){const o=cur();window._np={rows:[{n:'',q:0,u:'',m:''}],docs:[],sub:0,err:'',entrega:'',lugar:o.nombre||'',iva:'sin',pago:'',hasta:'',notas:''};npShow()}
+async function npSubir(files){const S_=window._np,o=cur();if(!S_)return;npRead();S_.err='';const L=[...files];S_.sub=L.length;npShow();
+ for(const f of L){try{if(f.size>40e6)throw new Error('“'+f.name+'” pesa más de 40 MB');const u=await cmApi({op:'ct_up_url',obra:o.id,name:f.name,type:f.type||'application/octet-stream',size:f.size});if(!u.ok)throw new Error(u.error||'No se pudo preparar la subida');const x=await fetch(u.up,{method:'PUT',headers:{'Content-Type':f.type||'application/octet-stream'},body:f});if(!x.ok)throw new Error('falló la subida');S_.docs.push({n:f.name.slice(0,120),u:u.pub})}catch(e){S_.err='No se pudo subir: '+((e&&e.message)||f.name)}
+  if(window._np!==S_)return;S_.sub--;if(document.getElementById('cmp-ent')){npRead();npShow()}}}
+async function npCrear(){npRead();const S_=window._np,o=cur(),d=D(o),E_=document.getElementById('cmp-err'),items=S_.rows.filter(r=>(r.n||'').trim()&&r.n!=='__man'&&r.q>0).map(r=>({n:r.n.trim().slice(0,200),q:r.q,u:(r.u||'').trim().slice(0,20),m:(r.m||'').trim().slice(0,80)}));
+ if(S_.sub){E_.textContent='Esperá a que terminen de subir los archivos.';return}if(!items.length){E_.textContent='Cargá al menos un ítem con descripción y cantidad.';return}
+ let g=items[0].n.slice(0,60)+(items.length>1?' y '+(items.length-1)+' más':'');const us=new Set([...d.cotped.map(p=>p.g),...d.cotiz.map(q=>q.g)]);if(us.has(g)){let k=2;while(us.has(g+' ('+k+')'))k++;g=g+' ('+k+')'}
+ const id=rnd(14),k=rnd(24),ped={g,obra:o.nombre||'',url:'/nexo2.html',items,docs:S_.docs,entrega:S_.entrega,lugar:S_.lugar,iva:S_.iva,pago:S_.pago,hasta:S_.hasta,notas:S_.notas};
+ const b=document.querySelector('.sheet [data-act="cmNpOk"]');if(b){b.disabled=true;b.textContent='Creando…'}
+ try{const j=await codApi({op:'cz_crear',id,k,ped});if(!j.ok)throw new Error(j.error||'No se pudo crear el link');d.cotped.push({id,k,g,items,docs:S_.docs.length,iva:S_.iva,f:new Date().toISOString().slice(0,10)});cmSave(o);await cmFlush(o);draw();pushSync();linkShow(d.cotped[d.cotped.length-1],1)}
+ catch(e){msg('No se pudo crear el link',(e&&e.message)||'Error')}}
+function linkShow(p,nuevo){sheet(`<h2>${nuevo?'Link creado':'Link para proveedores'}</h2><p class="muted">${esc(p.g)} · mandale este mismo link a cada proveedor. Cuando cotizan, las respuestas aparecen solas en la comparativa.</p><div class="sec"><input id="cmp-lk" readonly value="${esc(plink(p))}" onclick="this.select()"><div class="cm-tools"><button class="btn gold" data-act="cmCopy" data-id="${p.id}">Copiar link</button><button class="btn" data-act="cmWa" data-id="${p.id}">Enviar por WhatsApp</button><button class="btn" data-act="close">Cerrar</button></div></div>`,'Link')}
+
+/* --- avisos push en este aparato --- */
+const PSW='/nexo2-sw.js';
+const pushOk=()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+const b64u=s=>{const p='='.repeat((4-s.length%4)%4),r=atob((s+p).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from([...r].map(c=>c.charCodeAt(0)))};
+const pushOn=()=>{try{return pushOk()&&Notification.permission==='granted'&&localStorage.getItem('nx_push_on_v1')==='1'}catch(e){return false}};
+async function pushSub(crear){if(!pushOk())return null;const reg=await navigator.serviceWorker.register(PSW,{scope:'/nexo2.html'});await navigator.serviceWorker.ready.catch(()=>{});let sub=await reg.pushManager.getSubscription();
+ if(!sub&&crear){const j=await codApi({op:'push_key'});if(!j.pub)throw new Error(j.error||'No se pudo preparar el aviso');sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(j.pub)})}return sub?sub.toJSON():null}
+async function pushSync(){try{if(!pushOk()||Notification.permission!=='granted')return;const sub=await pushSub(false);if(!sub)return;let L={};try{L=JSON.parse(localStorage.getItem('nx_push_ped_v1')||'{}')}catch(e){}
+ for(const o of OBRAS)for(const p of D(o).cotped){if(L[p.id]===sub.endpoint)continue;const j=await codApi({op:'cz_sub',id:p.id,k:p.k,sub});if(j.ok)L[p.id]=sub.endpoint}localStorage.setItem('nx_push_ped_v1',JSON.stringify(L))}catch(e){}}
+async function pushActivar(){if(!pushOk()){const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);msg('Este aparato todavía no puede recibir avisos',ios?'En iPhone y iPad los avisos funcionan solo con la app agregada a la pantalla de inicio: abrila en Safari, tocá Compartir → “Agregar a inicio”, abrila desde ese ícono y volvé a tocar este botón.':'Este navegador no permite avisos. Probá con Chrome o Edge.');return}
+ try{const pm=await Notification.requestPermission();if(pm!=='granted'){msg('Los avisos quedaron bloqueados','Para recibirlos tenés que permitir las notificaciones de esta app en los ajustes del navegador o del teléfono.');return}
+  const sub=await pushSub(true);if(!sub)throw new Error('No se pudo activar');localStorage.removeItem('nx_push_ped_v1');await pushSync();localStorage.setItem('nx_push_on_v1','1');draw();msg('Avisos activados en este aparato','Cuando un proveedor cargue su cotización te va a llegar una notificación, aunque la app esté cerrada.')}catch(e){msg('No se pudieron activar los avisos',(e&&e.message)||'Error')}}
+setTimeout(pushSync,4000);
+
+/* --- acciones --- */
+const it_=i=>D(cur()).items[+i];
+Object.assign(A,{
+ cmIr:ds=>{S.cmObra=ds.o;S.tab='compras';draw();scrollTo(0,0)},
+ cmObra:ds=>{S.cmObra=ds.o;CMF.fe='';CMF.fr='';draw()},
+ cmPers:ds=>{CMF.fr=ds.n||'';draw()},
+ cmAdd:()=>{const o=cur();D(o).items.push({n:'',q:0,u:'',r:'',pu:0,es:'p',resp:'',prov:'',fn:'',fp:'',pg:''});cmSave(o);draw();setTimeout(()=>{const a=document.querySelectorAll('.cm-name');const e=a[a.length-1];if(e){e.focus();e.scrollIntoView({block:'center'})}},60)},
+ cmDel:ds=>{const x=it_(ds.i);if(!x)return;openSheet(`<h2>¿Eliminar este ítem?</h2><p class="muted">${esc(x.n||'(sin nombre)')}</p><div class="cm-tools"><button class="btn gold" data-act="cmDelOk" data-i="${ds.i}">Eliminar</button><button class="btn" data-act="close">Cancelar</button></div>`,'Eliminar')},
+ cmDelOk:ds=>{const o=cur();D(o).items.splice(+ds.i,1);cmSave(o);closeSheet();draw()},
+ cmPdf:()=>{const i=document.getElementById('cm-pdff');if(i){i.value='';i.click()}},
+ cmNp:npNuevo,cmPush:pushActivar,
+ cmNpRow:()=>{npRead();window._np.rows.push({n:'',q:0,u:'',m:''});npShow()},
+ cmNpDel:ds=>{npRead();window._np.rows.splice(+ds.i,1);if(!window._np.rows.length)window._np.rows.push({n:'',q:0,u:'',m:''});npShow()},
+ cmNpDoc:()=>{const i=document.getElementById('cmp-file');if(i&&!window._np.sub){i.value='';i.click()}},
+ cmNpDoc2:ds=>{npRead();window._np.docs.splice(+ds.i,1);npShow()},
+ cmNpOk:npCrear,
+ cmLink:ds=>{const p=D(cur()).cotped.find(x=>x.id===ds.id);if(p)linkShow(p)},
+ cmCopy:(ds,el)=>{const p=D(cur()).cotped.find(x=>x.id===ds.id);if(!p)return;const u=plink(p),ok=()=>{el.textContent='Copiado ✓'},fb=()=>{const i=document.getElementById('cmp-lk');if(i){i.select();try{document.execCommand('copy');ok()}catch(x){}}};if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(u).then(ok).catch(fb);else fb()},
+ cmWa:ds=>{const p=D(cur()).cotped.find(x=>x.id===ds.id);if(p)window.open('https://wa.me/?text='+encodeURIComponent('Hola, te paso el pedido de cotización de '+ORG+' ('+p.g+'). Podés cargar tus precios acá: '+plink(p)),'_blank')},
+ cmSyncBtn:(ds,el)=>{el.textContent='Buscando…';cmSync(cur()).then(n=>{if(n)draw();else el.textContent='Sin respuestas nuevas'})},
+ cmPdel:ds=>{const o=cur(),p=D(o).cotped.find(x=>x.id===ds.id);if(!p)return;const n=D(o).cotiz.filter(q=>q.g===p.g).length;openSheet(`<h2>¿Borrar el pedido “${esc(p.g)}”?</h2><p class="muted">El link deja de funcionar para los proveedores${n?' y se borran también los '+n+' presupuesto'+(n===1?'':'s')+' de este pedido':''}. No se puede deshacer.</p><div class="cm-tools"><button class="btn gold" data-act="cmPdelOk" data-id="${p.id}">Borrar</button><button class="btn" data-act="close">Cancelar</button></div>`,'Borrar pedido')},
+ cmPdelOk:ds=>{const o=cur(),d=D(o),p=d.cotped.find(x=>x.id===ds.id);if(p){codApi({op:'cz_crear',id:p.id,k:p.k,ped:{g:p.g},cerrado:true}).catch(()=>{});d.cotped=d.cotped.filter(x=>x!==p);d.cotiz=d.cotiz.filter(q=>q.g!==p.g);delete d.cmp[p.g];cmSave(o)}closeSheet();draw()},
+ cmQdel:ds=>{const o=cur(),q=D(o).cotiz.find(x=>x.id===ds.id);if(!q)return;openSheet(`<h2>¿Quitar este presupuesto?</h2><p class="muted">${esc(q.prov)} · ${esc(q.g)} · ${fm(q,tq(q))}</p><div class="cm-tools"><button class="btn gold" data-act="cmQdelOk" data-id="${q.id}">Quitar</button><button class="btn" data-act="close">Cancelar</button></div>`,'Quitar')},
+ cmQdelOk:ds=>{const o=cur(),d=D(o),q=d.cotiz.find(x=>x.id===ds.id);if(q){if(q.src==='link'){const pd=d.cotped.find(p=>p.g===q.g);if(pd)(pd.ign=pd.ign||[]).push(q.id.slice(1))}d.cotiz=d.cotiz.filter(x=>x!==q);if(!d.cotiz.some(x=>x.g===q.g))delete d.cmp[q.g];cmSave(o)}closeSheet();draw()},
+ cmUse:ds=>{const q=D(cur()).cotiz.find(x=>x.id===ds.id);if(!q)return;openSheet(`<h2>¿Elegir a ${esc(q.prov)}?</h2><p class="muted">Voy a cargar sus ${q.items.length} ítems en Compras, con su precio, en estado “Cotizando”. Total ${fm(q,tq(q))}.</p><div class="cm-tools"><button class="btn gold" data-act="cmUseOk" data-id="${q.id}">Cargar en Compras</button><button class="btn" data-act="close">Cancelar</button></div>`,'Elegir')},
+ cmUseOk:ds=>{const o=cur(),d=D(o),q=d.cotiz.find(x=>x.id===ds.id);if(q){aItems(d,q.items,q.prov);cmSave(o)}closeSheet();draw();toast('Cargué los ítems en Compras')},
+ cmCmp:ds=>comparar(ds.g),
+ cmGuardar:()=>{const {j,f}=window._cmpdf,o=cur(),d=D(o),pv=((document.getElementById('cmp-prov')||{}).value||j.proveedor||'Proveedor').trim(),g=((document.getElementById('cmp-grp')||{}).value||j.titulo||'Sin nombre').trim()||'Sin nombre',it=selItems();if(!it.length)return;
+  d.cotiz.push({id:Date.now().toString(36),g,prov:pv,fecha:j.fecha||'',mon:String(j.moneda||'').toUpperCase()==='USD'?'USD':'ARS',iva:j.iva_incluido===true?1:j.iva_incluido===false?0:null,tot:j.total?Math.round(j.total):0,cond:j.condiciones||{},items:it,arch:f});delete d.cmp[g];cmSave(o);const n=d.cotiz.filter(q=>q.g===g).length;closeSheet();draw();toast('Guardado en “'+g+'” · '+n+' de 3 presupuestos')},
+ cmCargar:()=>{const {j}=window._cmpdf,o=cur(),d=D(o),pv=(document.getElementById('cmp-prov')||{}).value||j.proveedor||'',it=selItems();aItems(d,it,pv);cmSave(o);closeSheet();draw();toast('Cargué '+it.length+' ítem'+(it.length===1?'':'s')+' en Compras')}
+});
+CHG.cmFil=v=>{CMF.fe=v;draw()};
+CHG.cmNpSel=(v,el)=>{const i=+el.dataset.i;npRead();const r=window._np.rows[i];if(v==='__man'){r.man=1;r.n=''}else{const x=D(cur()).items.find(z=>z.n===v);r.n=v;if(x){if(x.q)r.q=x.q;if(x.u)r.u=x.u}}npShow();if(v==='__man'){const e=document.querySelector('.sheet [data-npn="'+i+'"]');if(e)e.focus()}};
+let _pd=0;const pend=()=>{_pd=1;setTimeout(tryDraw,260)};function tryDraw(){if(!_pd)return;const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&!ae.closest('#nav'))return;_pd=0;if(S.tab==='compras')draw()}
+document.addEventListener('focusout',()=>{if(_pd)setTimeout(tryDraw,260)});
+/* edición de campos del ítem (sin redibujar mientras se escribe) */
+document.addEventListener('input',e=>{const t=e.target;if(!t||!t.dataset)return;
+ if(t.dataset.mil){const p=t.selectionStart,len=t.value.length,v=num(t.value);t.value=v?f0(v):'';try{const np=Math.max(0,p+(t.value.length-len));t.setSelectionRange(np,np)}catch(x){}}
+ if(t.dataset.cm){const [i,k]=t.dataset.cm.split('.'),x=it_(i);if(!x)return;x[k]=(k==='q'||k==='pu')?num(t.value):t.value;if(k==='n'||k==='resp'||k==='prov'||k==='u')cmSave(cur())}});
+document.addEventListener('change',e=>{const t=e.target;if(!t||!t.dataset)return;
+ if(t.dataset.cm){const [i,k]=t.dataset.cm.split('.'),x=it_(i);if(!x)return;x[k]=(k==='q'||k==='pu')?num(t.value):t.value;cmSave(cur());if(t.dataset.re||k==='resp'||k==='n')pend()}
+ if(t.id==='cm-pdff'&&t.files[0])leerPdf(t.files[0]);if(t.id==='cmp-file'&&t.files.length)npSubir(t.files)});
+/* avisos: se actualizan solos mientras la app está abierta */
+setInterval(()=>{if(S.u&&ROLE()==='direccion'){if(!CMT||Date.now()-CMT>45000)cmLoadAll();paintBadge();
+ if(S.tab==='compras'&&OBRAS.some(o=>D(o).cotiz.some(q=>q.nv))){if(!window.__cmV)window.__cmV=Date.now();else if(Date.now()-window.__cmV>5000){OBRAS.forEach(o=>{const d=D(o);if(d.cotiz.some(q=>q.nv)){d.cotiz.forEach(q=>delete q.nv);cmSave(o)}});window.__cmV=0;paintBadge()}}else window.__cmV=0}},3000);
+window.iaCm=o=>{const a=CM[o.id];if(!a||!a.ok)return{nota:'Todavía no se cargó el panel de Compras de esta obra.'};const d=D(o),hoy=hoyL();
+ const it=d.items.map((x,i)=>({n:i+1,item:x.n||'(sin nombre)',cantidad:x.q||0,unidad:x.u||'',rubro:x.r||'',estado:KES[E(x)],encargado:x.resp||'sin encargado',proveedor:x.prov||'',necesario_en_obra:x.fn||'sin fecha',fecha_de_pago:x.fp||'sin fecha',pagado:x.pg==='1'?'sí':'no',atrasado:kAtr(x)?dif(hoy,x.fn)+' días':'no',presupuesto_unitario:x.pu||0,presupuesto_total:kTot(x)}));
+ const sem=d.items.filter(x=>E(x)!=='r'&&x.fn&&x.fn>=hoy&&dif(x.fn,hoy)<=7).length;
+ return{resumen:{items:it.length,por_comprar:d.items.filter(x=>E(x)==='p'||E(x)==='z').length,atrasados:d.items.filter(kAtr).length,vencen_en_7_dias:sem,recibidos_en_obra:d.items.filter(x=>E(x)==='r').length,sin_encargado:d.items.filter(x=>!(x.resp||'').trim()&&E(x)!=='r').length,presupuesto_total:d.items.reduce((s2,x)=>s2+kTot(x),0),pagado:d.items.filter(x=>x.pg==='1').reduce((s2,x)=>s2+kTot(x),0)},items:it,
+  pedidos_de_cotizacion:d.cotped.map(p=>({pedido:p.g,creado:p.f,items:p.items.map(x=>x.n+' ('+x.q+' '+x.u+')'),cotizaciones:d.cotiz.filter(q=>q.g===p.g).map(q=>({proveedor:q.prov,total:tq(q),moneda:q.mon,iva:q.iva===1?'incluido':q.iva===0?'aparte':'no aclara',entrega:(q.cond||{}).plazo_entrega||'',anticipo:(q.cond||{}).anticipo||'',nueva:!!q.nv}))})),
+  presupuestos_cargados_a_mano:d.cotiz.filter(q=>!d.cotped.some(p=>p.g===q.g)).map(q=>({pedido:q.g,proveedor:q.prov,total:tq(q),moneda:q.mon})),
+  comparativas:Object.entries(d.cmp).map(([g,c])=>({pedido:g,fecha:c.f,comparable:(c.r||{}).comparable,resumen:(c.r||{}).resumen,recomendacion:(c.r||{}).recomendacion}))}};
+window.iaLocalCm=(q,o)=>{const obs=o?[o]:OBRAS.filter(x=>(CM[x.id]||{}).ok);if(!obs.length)return null;const n=String(q).toLowerCase(),hoy=hoyL();let L=[];
+ obs.forEach(x=>{const d=D(x);if(/cotiz|proveedor/.test(n))d.cotiz.forEach(c=>L.push(`- **${x.nombre}** · ${c.g}: ${c.prov} · ${fm(c,tq(c))}${c.nv?' · nueva':''}`));else{const at=/atras/.test(n);d.items.filter(i=>E(i)!=='r'&&(!at||kAtr(i))).forEach(i=>L.push(`- **${x.nombre}** · ${i.n||'(sin nombre)'} · ${KES[E(i)]} · ${i.resp||'sin encargado'}${i.fn?' · se necesita el '+kFec(i.fn)+(kAtr(i)?' · atrasado '+dif(hoy,i.fn)+' días':''):''}`))}});
+ return L.length?L.slice(0,12).join('\n'):'No hay nada cargado en Compras para esa consulta.'};
+window.cmDatos=o=>{const a=CM[o.id];return a&&a.ok?D(o):null};window.cmCargaTodo=async()=>{await cmLoadAll();for(const o of OBRAS)await cmLoad(o)};
 })();
 </script>
 </body></html>
