@@ -4707,6 +4707,12 @@ async function bajar(){
   }
   sucio.forEach(k=>subir(k));
 }
+/* otra pestaña o ventana de este mismo aparato guardó cambios (por ej. Dirección generó el cronograma): este panel se recarga para mostrarlos */
+{let pend=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
+const puede=()=>{try{const a=JSON.parse(sessionStorage.getItem('nexo2_autorec')||'[]').filter(t=>Date.now()-t<120000);if(a.length>=3)return false;a.push(Date.now());sessionStorage.setItem('nexo2_autorec',JSON.stringify(a))}catch(e){}return true};
+const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearInterval(pend);pend=null;if(puede())location.reload()};
+window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
+document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
 window.nexoSubirYa=()=>{if(listo)sucio.forEach(k=>{clearTimeout(tim[k]);subir(k)})};
 bajar();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')bajar();else sucio.forEach(k=>{clearTimeout(tim[k]);subir(k)})});
