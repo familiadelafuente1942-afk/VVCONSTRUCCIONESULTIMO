@@ -4713,6 +4713,15 @@ const puede=()=>{try{const a=JSON.parse(sessionStorage.getItem('nexo2_autorec')|
 const rec=()=>{if(document.visibilityState!=='visible'||ocupado())return;clearInterval(pend);pend=null;if(puede())location.reload()};
 window.addEventListener('storage',e=>{if(e.storageArea!==localStorage||!MAP[e.key]||e.newValue==null||e.newValue===e.oldValue)return;if(!pend){pend=setInterval(rec,1500);setTimeout(rec,400)}});
 document.addEventListener('visibilitychange',()=>{if(pend)rec()})}
+/* versión de la app: todos los aparatos (PC, iPad, iPhone; Chrome o Safari) se ponen solos en la última versión */
+const NEXO_BUILD='20261113-150237';
+{let aviso=null;const ocupado=()=>document.querySelector('#layer .sheet,input:focus,textarea:focus');
+const act=()=>{try{sessionStorage.setItem('nexo2_ver_int',aviso||'')}catch(e){}A.actualizar()};
+const barra=()=>{if(document.getElementById('nx-ver'))return;const d=document.createElement('button');d.id='nx-ver';d.type='button';d.textContent='Hay una versión nueva de Nexo · Tocá para actualizar';d.style.cssText='position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translateX(-50%);z-index:99999;background:#b8893a;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px/1.2 inherit;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:92vw';d.onclick=act;document.body.appendChild(d)};
+async function ver(){if(document.visibilityState!=='visible')return;try{const r=await fetch('/nexo2-version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(!j||!j.v||j.v===NEXO_BUILD){const b=document.getElementById('nx-ver');if(b)b.remove();return}
+  aviso=j.v;let ya='';try{ya=sessionStorage.getItem('nexo2_ver_int')||''}catch(e){}
+  if(ya!==j.v&&!ocupado()){act();return}barra()}catch(e){}}
+setTimeout(ver,4000);setInterval(ver,60000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')ver()})}
 window.nexoSubirYa=()=>{if(listo)sucio.forEach(k=>{clearTimeout(tim[k]);subir(k)})};
 bajar();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')bajar();else sucio.forEach(k=>{clearTimeout(tim[k]);subir(k)})});
