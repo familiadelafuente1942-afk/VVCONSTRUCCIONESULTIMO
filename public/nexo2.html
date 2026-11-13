@@ -1500,7 +1500,7 @@ const certFecha=c=>['losa','fund','pileta'].includes(c.task.rubro)?c.task.end-2*
 const certEstado=c=>c.estado==='certificada'?'certificada':certFecha(c)-TODAY<30*DAY?'pendiente':'programada';
 /* ===== configuración de las obras guardada en este aparato: modelo, m², inicio, jefatura, jornal, obras nuevas ===== */
 const CFG_LS='nexo2_obras_cfg';
-const CFG_KEYS=['audNombre','nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','estudio','jornal','dot','late','margen','edits','invitados','imgUrl','sinImg','renders','rndOcultos','tpl','mod2','ov','resp','reanud','cero'];
+const CFG_KEYS=['audNombre','nombre','ubic','plantas','subsuelo','pileta','m2','nivel','inicio','jefe','estudio','jornal','dot','late','margen','edits','invitados','imgUrl','sinImg','renders','rndOcultos','tpl','mod2','ov','resp','reanud','cero','cg'];
 const BASE_OV={};let BASE_DEF={};
 const cfgPick=o=>{const r={};CFG_KEYS.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r};
 const CFG_ORIG=new Set(OBRAS.map(o=>o.id));
@@ -3662,7 +3662,7 @@ function ovRebase(o){if(!o.tpl)return;const sc={...o,tasks:[],cards:[],planos:[]
 function respaldoObra(o,motivo){const r={t:Date.now(),m:motivo,tpl:!!o.tpl,mod2:o.mod2?JSON.parse(JSON.stringify(o.mod2)):null,f:{inicio:o.inicio,m2:o.m2,plantas:o.plantas,subsuelo:!!o.subsuelo,pileta:!!o.pileta,nivel:o.nivel},ed:JSON.parse(JSON.stringify(o.edits||[])),base:JSON.parse(JSON.stringify(o.base)),ov:ovDiff(o),nT:o.tasks.length,nC:o.cards.length};
   o.resp=[r,...(o.resp||[])].slice(0,3);return r}
 A.respRest=ds=>{const o=findO(ds.o),r=(o.resp||[])[+ds.i];if(!o||!r||!esDir())return;if(!confirm('¿Restaurar el respaldo del '+fmtLargo(r.t)+'? Vuelve el cronograma, el modelo y el avance de ese momento.'))return;
-  Object.assign(o,r.f);o.edits=r.ed;if(r.tpl){o.tpl=true;o.mod2=r.mod2}else{delete o.tpl;delete o.mod2}o.base=JSON.parse(JSON.stringify(r.base));if(r.ov)o.ov=r.ov;else delete o.ov;o.resp=o.resp.filter((x,i)=>i!==+ds.i);
+  Object.assign(o,r.f);o.edits=r.ed;if(r.tpl){o.tpl=true;o.mod2=r.mod2}else{delete o.tpl;delete o.mod2}o.cg=Date.now();o.base=JSON.parse(JSON.stringify(r.base));if(r.ov)o.ov=r.ov;else delete o.ov;o.resp=o.resp.filter((x,i)=>i!==+ds.i);
   cfgGuardar();toast('Respaldo restaurado. Recargando…');setTimeout(()=>location.reload(),700)};
 function bannerPlantilla(o){return `<div class="infobox"><b>Esta obra usa el cronograma anterior.</b> Aplicá la plantilla «Vivienda unifamiliar» para tener fases, etapas, tareas por nivel, vistas y el semáforo de restricciones. Ves una vista previa y se hace un respaldo antes: no se pierden avances, fotos, informes ni tarjetas.<br><button class="btn sm gold" data-act="aplicarPlantilla" data-o="${o.id}" style="margin-top:8px">Aplicar plantilla base</button></div>`}
 
@@ -3722,7 +3722,7 @@ function tplAplicar(o,M,modo){
   const conAv=t=>!!(t.real&&t.real.av>0)||oldCards.some(c=>c.task===t&&c.items.some(i=>i.estado!=='falta'||i.respuesta));
   const keep=new Set();
   if(wasTpl&&modo==='mantener'){oldTasks.forEach(t=>{if(t.manual||conAv(t))keep.add(t.id)});oldBase.forEach(b=>{if(b.manual)keep.add(b.id)})}
-  const MM={...M,m2Niv:M.autoNiv?null:M.m2Niv};o.mod2=MM;o.inicio=M.inicio;o.m2=M.m2;o.plantas=Math.min(3,M.niveles);o.subsuelo=M.subsuelo;o.pileta=M.piscina;o.nivel=termKey[M.term]||'alto';o.edits=[];o.tpl=true;
+  const MM={...M,m2Niv:M.autoNiv?null:M.m2Niv};o.mod2=MM;o.inicio=M.inicio;o.m2=M.m2;o.plantas=Math.min(3,M.niveles);o.subsuelo=M.subsuelo;o.pileta=M.piscina;o.nivel=termKey[M.term]||'alto';o.edits=[];o.tpl=true;o.cg=Date.now();
   const T=tplT(o),gen=tplGenBase(o),gid=new Set(gen.map(g=>g.id));
   const etDe=t=>{const R=T.rubro_etapa||TPL_RUBRO,e=T.etapas.find(e=>R[e.codigo]===t.rubro)||T.etapas[T.etapas.length-1];return{etapaCod:e.codigo,etapa:tplEtNom(e.codigo,T),fase:e.fase}};
   const nb=gen.map(g=>keep.has(g.id)?(oldBase.find(b=>b.id===g.id)||g):g);
@@ -3750,7 +3750,7 @@ function tplAplicar(o,M,modo){
 SUBMIT.modelo2=(f,ev)=>{const o=findO(f.dataset.o);if(!o||!esDir()||!TM)return;tm2Read();const modo=(ev&&ev.submitter&&ev.submitter.dataset.modo)||'todo',ap=TM.aplicar;
   respaldoObra(o,ap?'Antes de generar el cronograma':'Antes de cambiar el modelo');
   let r;try{r=tplAplicar(o,TM.M,modo)}catch(e){console.error(e);toast('No se pudo aplicar el modelo y no se guardó nada. Recargando…');setTimeout(()=>location.reload(),1500);return}
-  TM=null;closeSheet();ovRebase(o);cfgGuardar();ovFlush();
+  TM=null;closeSheet();ovRebase(o);cfgGuardar();ovFlush();try{window.nexoSubirYa&&window.nexoSubirYa()}catch(e){}
   notify('jefe',o,`La Dirección ${ap?'generó el cronograma de':'actualizó el modelo de'} ${o.nombre}: ${r.n} tareas`,null);
   toast(`${ap?'Cronograma generado':'Modelo guardado'}: ${r.n} tareas${r.mov?` · ${plural(r.mov,'tarea anterior con avance pasó','tareas anteriores con avance pasaron')} a su equivalente`:''}${r.kept?` · ${plural(r.kept,'tarea se conservó como manual','tareas se conservaron como manuales')}`:''}. Respaldo guardado.`);draw()};
 A.modeloObra=ds=>{const o=findO(ds.o);MO=null;sheetModelo2(ds.o,!o.tpl)};
@@ -4651,15 +4651,32 @@ const rawSet=Storage.prototype.setItem,rawGet=Storage.prototype.getItem;
 const lget=k=>{try{return rawGet.call(localStorage,k)}catch(e){return null}};
 const lset=(k,v)=>{try{rawSet.call(localStorage,k,v)}catch(e){}};
 let listo=false;const sucio=new Set();const tim={};
+/* cambios sin subir: quedan anotados en el aparato para subirlos al volver a abrir (si la app se cerró antes de llegar a la nube) */
+const PEND='nexo2_sync_pend_';
+const marcar=k=>{sucio.add(k);lset(PEND+k,'1')};
+const limpio=k=>{sucio.delete(k);try{localStorage.removeItem(PEND+k)}catch(e){}};
+Object.keys(MAP).forEach(k=>{if(lget(PEND+k))sucio.add(k)});
+/* el cronograma generado más nuevo gana: un aparato con datos viejos no puede pisarlo */
+const CRONO=['tpl','mod2','ov','baseOv','edits','inicio','m2','plantas','subsuelo','pileta','nivel','resp','cg'];
+function fusion(viejo,nuevo){
+  try{const A=JSON.parse(viejo||'null'),B=JSON.parse(nuevo||'null');if(!A||!B)return nuevo;let ch=false;
+    const de=(G,id)=>(G.mod&&G.mod[id])||(G.nuevas||[]).find(x=>x&&x.id===id)||null;
+    const ids=new Set([...Object.keys(A.mod||{}),...(A.nuevas||[]).map(x=>x&&x.id)]);
+    ids.forEach(id=>{if(!id||(B.del||[]).includes(id))return;const a=de(A,id);if(!a||!a.cg)return;
+      let b=de(B,id);
+      if(!b){if((A.nuevas||[]).some(x=>x&&x.id===id))return;B.mod=B.mod||{};b=B.mod[id]={}}
+      if((+b.cg||0)>=+a.cg)return;
+      CRONO.forEach(k=>{if(a[k]!==undefined)b[k]=a[k];else delete b[k]});ch=true});
+    return ch?JSON.stringify(B):nuevo}catch(e){return nuevo}}
 async function subir(k){
   const v=lget(k);if(v==null||v===VACIO)return;
   const t=Date.now();
   try{const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:MAP[k],t,v})});
-    if(r.ok){lset('nexo2_sync_t_'+k,String(t));sucio.delete(k);falloAviso=false}else throw new Error('http')}catch(e){if(!falloAviso){falloAviso=true;try{toast('No se pudo guardar en la nube. El cambio quedó solo en este aparato; revisá la conexión.')}catch(x){}}}
+    if(r.ok){lset('nexo2_sync_t_'+k,String(t));if(lget(k)===v)limpio(k);else marcar(k);falloAviso=false}else throw new Error('http')}catch(e){if(!falloAviso){falloAviso=true;try{toast('No se pudo guardar en la nube. El cambio quedó solo en este aparato; revisá la conexión.')}catch(x){}}}
 }
 let falloAviso=false;
 Storage.prototype.setItem=function(k,v){
-  if(this===localStorage&&MAP[k]){const antes=lget(k);rawSet.call(this,k,v);if(antes!==v){sucio.add(k);if(listo){clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),700)}}return}
+  if(this===localStorage&&MAP[k]){const antes=lget(k);v=fusion(antes,v);rawSet.call(this,k,v);if(lget(k)!==v){try{toast('No se pudo guardar en este aparato (memoria llena). El cambio puede perderse al cerrar.')}catch(e){}}if(antes!==v){marcar(k);if(listo){clearTimeout(tim[k]);tim[k]=setTimeout(()=>subir(k),700)}}return}
   return rawSet.call(this,k,v);
 };
 async function bajar(){
@@ -4673,8 +4690,9 @@ async function bajar(){
         if(!d)continue;
         const lt=+lget('nexo2_sync_t_'+k)||0;
         if(d.t>lt){
-          if(d.v!==lget(k)){rawSet.call(localStorage,k,d.v);cambio=true}
-          lset('nexo2_sync_t_'+k,String(d.t));sucio.delete(k);
+          const loc=lget(k),f=fusion(loc,d.v);
+          if(f!==loc){rawSet.call(localStorage,k,f);cambio=true}
+          lset('nexo2_sync_t_'+k,String(d.t));if(f!==d.v)marcar(k);else limpio(k);
         }
       }
     }
@@ -4687,6 +4705,7 @@ async function bajar(){
   }
   sucio.forEach(k=>subir(k));
 }
+window.nexoSubirYa=()=>{if(listo)sucio.forEach(k=>{clearTimeout(tim[k]);subir(k)})};
 bajar();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')bajar();else sucio.forEach(k=>{clearTimeout(tim[k]);subir(k)})});
 setInterval(()=>{if(document.visibilityState==='visible'&&listo)bajar()},25000);
