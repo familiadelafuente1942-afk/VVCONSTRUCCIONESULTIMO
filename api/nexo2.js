@@ -500,6 +500,126 @@ export default async function handler(req, res) {
       res.status(400).json({ error: "Operación desconocida" }); return;
     }
 
+    // ===== Contratistas / subcontratistas (4.º panel): avisan faltantes, falta de definiciones, retrasos y adicionales DIRECTO a Dirección y Jefatura =====
+    if (typeof b.op === "string" && b.op.startsWith("ct_")) {
+      const str = (x, n) => String(x == null ? "" : x).slice(0, n);
+      const num = (x, lo, hi) => Math.min(hi, Math.max(lo, Number(x) || 0));
+      const idOk = (x) => String(x || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+      const TIPOS = ["material", "definicion", "retraso", "adicional", "otro"];
+      const ESTADOS = ["abierto", "gestion", "resuelto", "rechazado", "cerrado"];
+      const reg = (await leer(H, "ctcods")) || { items: [] };
+      const lista = Array.isArray(reg.items) ? reg.items : [];
+      const cr = b.cred || {};
+      let quien = "", ct = null;
+      if (b.op === "ct_login") {
+        const n = norm(b.codigo);
+        const x = n ? lista.find((c) => norm(c.cod) === n) : null;
+        if (!x) { await pausa(600); res.status(200).json({ ok: false }); return; }
+        res.status(200).json({ ok: true, ct: { id: x.id, obra: x.obra, obraNombre: x.obraNombre, nombre: x.nombre, rubro: x.rubro } }); return;
+      }
+      const obraAll = String(b.obra || "");
+      if (cr.rol === "ct") { const n = norm(cr.codigo); ct = n ? lista.find((c) => norm(c.cod) === n) : null; if (ct) quien = "ct"; }
+      else if (cr.rol === "dir" && dirOk(cr.codigo)) quien = "dir";
+      else if (cr.rol === "jefe" && norm(cr.codigo) && /^[A-Za-z0-9_-]{1,40}$/.test(obraAll) && norm((cods.obras[obraAll] || {}).j) === norm(cr.codigo)) quien = "jefe";
+      if (!quien) { await pausa(600); res.status(403).json({ error: "Volvé a ingresar tu código." }); return; }
+      const obra = quien === "ct" ? ct.obra : obraAll;
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(obra) && b.op !== "ct_list_all") { res.status(400).json({ error: "Obra inválida" }); return; }
+      const clave = "ctrec_" + obra;
+      const pubOk = (u) => typeof u === "string" && (u.startsWith(NEW_PUB) || u.startsWith(OLD_PUB));
+      const fts = (arr) => (Array.isArray(arr) ? arr : []).filter(pubOk).slice(0, 10);
+
+      if (b.op === "ct_up_url") {
+        const nm = str(b.name, 120), sz = Number(b.size) || 0;
+        if (sz <= 0 || sz > 15e6) { res.status(400).json({ error: "La foto debe pesar hasta 15 MB" }); return; }
+        const ext = ((/\.([A-Za-z0-9]{1,5})$/.exec(nm) || [])[1] || "jpg").toLowerCase();
+        const path = `${obra}/ct-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const firmar = () => fetch(`${URL_BASE}/storage/v1/object/upload/sign/nexo2-fotos/${path}`, { method: "POST", headers: H, body: "{}" });
+        let r = await firmar();
+        if (!r.ok) { await fetch(`${URL_BASE}/storage/v1/bucket`, { method: "POST", headers: H, body: JSON.stringify({ id: "nexo2-fotos", name: "nexo2-fotos", public: true }) }); r = await firmar(); }
+        if (!r.ok) { res.status(502).json({ error: "No se pudo preparar la subida" }); return; }
+        const j = await r.json(); const rel = String(j.url || "");
+        const up = rel.startsWith("http") ? rel : rel ? `${URL_BASE}/storage/v1${rel.startsWith("/") ? "" : "/"}${rel}` : j.token ? `${URL_BASE}/storage/v1/object/upload/sign/nexo2-fotos/${path}?token=${j.token}` : "";
+        if (!up) { res.status(502).json({ error: "No se pudo preparar la subida" }); return; }
+        res.status(200).json({ ok: true, up, pub: NEW_PUB + path }); return;
+      }
+      if (b.op === "ct_mine") {
+        if (quien !== "ct") { res.status(403).json({ error: "Solo para contratistas" }); return; }
+        const v = await leer(H, clave);
+        res.status(200).json({ ok: true, items: ((v && v.items) || []).filter((x) => x.ctId === ct.id) }); return;
+      }
+      if (b.op === "ct_new") {
+        if (quien !== "ct") { res.status(403).json({ error: "Solo para contratistas" }); return; }
+        const q = b.rec || {};
+        const tipo = TIPOS.includes(q.tipo) ? q.tipo : "otro";
+        if (!str(q.titulo, 200).trim()) { res.status(400).json({ error: "Escribí qué pasa" }); return; }
+        const t = Date.now();
+        const rec = {
+          id: "r" + t.toString(36) + Math.random().toString(36).slice(2, 5), obra, ctId: ct.id, ctNombre: ct.nombre, rubro: ct.rubro,
+          tipo, titulo: str(q.titulo, 200), desc: str(q.desc, 3000), tarea: str(q.tarea, 200), diasRetraso: num(q.diasRetraso, 0, 999),
+          monto: num(q.monto, 0, 1e12), fotos: fts(q.fotos), estado: "abierto", creado: t, editado: t,
+          hist: [{ t, por: "ct", nom: ct.nombre, tx: "Reclamo cargado" }],
+        };
+        const v = await leer(H, clave);
+        const items = ((v && v.items) || []); items.push(rec);
+        await escribir(H, clave, { items: items.slice(-500) });
+        res.status(200).json({ ok: true, rec }); return;
+      }
+      if (b.op === "ct_cmt") {
+        const id = idOk(b.id);
+        const v = await leer(H, clave);
+        const items = ((v && v.items) || []);
+        const it = items.find((x) => x.id === id);
+        if (!it) { res.status(404).json({ error: "No existe ese reclamo" }); return; }
+        if (quien === "ct" && it.ctId !== ct.id) { res.status(403).json({ error: "No es tu reclamo" }); return; }
+        const tx = str(b.txt, 2000).trim();
+        let est = ESTADOS.includes(b.estado) ? b.estado : "";
+        if (quien === "ct") { if (est && est !== "cerrado" && est !== "abierto") est = ""; }
+        else if (est === "cerrado") est = "";
+        if (!tx && !est) { res.status(400).json({ error: "Escribí una respuesta" }); return; }
+        if (quien !== "ct" && est === "rechazado" && !tx) { res.status(400).json({ error: "Explicá por qué no corresponde" }); return; }
+        const t = Date.now();
+        const por = quien === "ct" ? "ct" : quien;
+        const nom = quien === "ct" ? ct.nombre : quien === "dir" ? "Dirección" : "Jefatura de obra";
+        if (quien !== "ct" && !it.primeraResp) { it.primeraResp = t; it.primeraPor = por; }
+        if (est) { it.estado = est; if (est === "resuelto") { it.resuelto = t; it.resueltoPor = por; } if (est === "abierto") { it.resuelto = 0; it.reabierto = (it.reabierto || 0) + 1; } if (est === "cerrado") it.cerradoT = t; }
+        it.hist = (Array.isArray(it.hist) ? it.hist : []).concat([{ t, por, nom, tx, estado: est || undefined, fotos: fts(b.fotos) }]).slice(-100);
+        it.editado = t;
+        await escribir(H, clave, { items });
+        res.status(200).json({ ok: true, rec: it }); return;
+      }
+      if (b.op === "ct_list_obra") {
+        if (quien === "ct") { res.status(403).json({ error: "No autorizado" }); return; }
+        const v = await leer(H, clave);
+        res.status(200).json({ ok: true, items: (v && v.items) || [], cts: lista.filter((c) => c.obra === obra).map((c) => (quien === "dir" ? c : { id: c.id, nombre: c.nombre, rubro: c.rubro })) }); return;
+      }
+      if (b.op === "ct_list_all") {
+        if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
+        const ids = Array.from(new Set([...Object.keys(cods.obras || {}), ...lista.map((c) => c.obra)]));
+        const out = {};
+        await Promise.all(ids.map(async (id) => { const v = await leer(H, "ctrec_" + id); if (v && v.items && v.items.length) out[id] = v.items; }));
+        res.status(200).json({ ok: true, obras: out, cts: lista }); return;
+      }
+      if (b.op === "ct_cod_save") {
+        if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
+        const nombre = str(b.nombre, 80).trim(), rubro = str(b.rubro, 60).trim();
+        if (!nombre) { res.status(400).json({ error: "Poné el nombre del contratista" }); return; }
+        const usados = new Set([norm(dirVigente(cods)), ...lista.map((c) => norm(c.cod))]);
+        Object.values(cods.obras || {}).forEach((o) => ["clave", "j", "a", "e"].forEach((f) => { if (norm(o[f])) usados.add(norm(o[f])); }));
+        const AL = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let cod = "";
+        for (let k = 0; k < 50; k++) { cod = "CT-" + Array.from({ length: 5 }, () => AL[Math.floor(Math.random() * AL.length)]).join(""); if (!usados.has(norm(cod))) break; }
+        const x = { id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), obra, obraNombre: str(b.obraNombre, 120), nombre, rubro, cod, creado: Date.now() };
+        lista.push(x);
+        await escribir(H, "ctcods", { items: lista });
+        res.status(200).json({ ok: true, ct: x }); return;
+      }
+      if (b.op === "ct_cod_del") {
+        if (quien !== "dir") { res.status(403).json({ error: "Solo Dirección" }); return; }
+        await escribir(H, "ctcods", { items: lista.filter((c) => c.id !== idOk(b.id)) });
+        res.status(200).json({ ok: true }); return;
+      }
+      res.status(400).json({ error: "Operación desconocida" }); return;
+    }
+
     // ===== Gestión de obra (interna, solo Dirección): registros de retrasos con causa, fotos y perjuicio =====
     if (typeof b.op === "string" && b.op.startsWith("ges_")) {
       const obra = String(b.obra || "");
